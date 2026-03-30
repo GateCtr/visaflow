@@ -203,7 +203,7 @@ export const markSlotFound = mutation({
       logs: [
         ...(app.logs ?? []),
         makeLog(
-          `🎉 Créneau capturé ! Rendez-vous le ${args.date} à ${args.time}. Le client doit régler la prime de succès (${priceDetails.successFee}$) pour accéder aux détails. Ce créneau est réservé pour ${SLOT_HOLD_HOURS}h.`,
+          `🎉 Créneau consulaire capturé avec succès ! Réglez la prime de succès (${priceDetails.successFee}$) pour débloquer les détails du rendez-vous. Ce créneau est réservé pour ${SLOT_HOLD_HOURS}h.`,
           "admin"
         ),
       ],

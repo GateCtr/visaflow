@@ -454,7 +454,17 @@ export default function ClientApplicationDetail() {
               <h2 className="text-lg font-bold text-primary mb-4">Journal d'activité</h2>
               <div className="relative border-l-2 border-slate-100 ml-3 space-y-6 pb-2">
                 {[...app.logs].reverse().map((log: LogEntry, idx: number) => {
-                  const m = log.msg.toLowerCase();
+                  // Redact any log that might contain appointment specifics before the paywall is cleared
+                  const isSensitive =
+                    !isSuccessFeePaid &&
+                    (isSlotFound || isCompleted) &&
+                    /rendez-vous le \d|à \d{2}:\d{2}|location|date :/i.test(log.msg);
+
+                  const displayMsg = isSensitive
+                    ? "🔒 Détails du rendez-vous masqués — réglez la prime de succès pour les débloquer."
+                    : log.msg;
+
+                  const m = displayMsg.toLowerCase();
                   let Icon = Clock;
                   let dotColor = "bg-primary";
                   if (m.includes("créé") || m.includes("nouveau")) { Icon = FileText; dotColor = "bg-blue-500"; }
@@ -469,7 +479,7 @@ export default function ClientApplicationDetail() {
                       <div className={`absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full ${dotColor} border-2 border-white flex items-center justify-center`}>
                         <Icon className="w-2 h-2 text-white" />
                       </div>
-                      <p className="text-sm text-slate-700">{log.msg}</p>
+                      <p className={`text-sm ${isSensitive ? "text-slate-400 italic" : "text-slate-700"}`}>{displayMsg}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {formatDate(log.time)} · {log.author ?? "système"}
