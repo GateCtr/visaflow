@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import {
-  Shield,
   LayoutDashboard,
   FileText,
   PlusCircle,
@@ -13,6 +12,7 @@ import {
   ChevronRight,
   MessageCircle,
 } from "lucide-react";
+import { JoventyLogo } from "@/components/JoventyLogo";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -45,12 +45,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-white border-r border-border flex-shrink-0 flex flex-col z-20 sticky top-0 md:h-screen">
         <div className="p-6 border-b border-border flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Shield className="w-4 h-4 text-secondary" />
-            </div>
-            <span className="font-serif text-xl font-bold text-primary">Joventy</span>
-          </Link>
+          <JoventyLogo href="/" variant="light" size="sm" />
         </div>
 
         <div className="p-4">

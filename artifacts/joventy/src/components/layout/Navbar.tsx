@@ -1,7 +1,8 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { Shield, LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, User as UserIcon } from "lucide-react";
+import { JoventyLogo } from "@/components/JoventyLogo";
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -9,12 +10,7 @@ export function Navbar() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-panel border-b border-white/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-            <Shield className="w-5 h-5 text-secondary" />
-          </div>
-          <span className="font-serif text-2xl font-bold text-primary tracking-tight">Joventy</span>
-        </Link>
+        <JoventyLogo href="/" variant="light" size="md" />
 
         <nav className="hidden md:flex items-center gap-8">
           <Link href="/#services" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Nos Services</Link>

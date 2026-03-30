@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useSignIn } from "@clerk/clerk-react";
 import {
-  Shield,
   Eye,
   EyeOff,
   ArrowRight,
@@ -13,6 +12,7 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
+import { JoventyLogo } from "@/components/JoventyLogo";
 
 const OAUTH_STRATEGIES = [
   {
@@ -178,12 +178,7 @@ export default function Login() {
         </div>
 
         <div className="relative z-10">
-          <Link href="/" className="flex items-center gap-3 group w-fit">
-            <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center group-hover:bg-[#D4AF37]/30 transition-colors">
-              <Shield className="w-5 h-5 text-[#D4AF37]" />
-            </div>
-            <span className="text-white font-serif text-2xl font-bold">Joventy</span>
-          </Link>
+          <JoventyLogo href="/" variant="dark" size="md" />
         </div>
 
         <div className="relative z-10 space-y-8">
@@ -227,12 +222,7 @@ export default function Login() {
 
           {/* Mobile logo */}
           <div className="lg:hidden mb-8">
-            <Link href="/" className="flex items-center gap-2 w-fit">
-              <div className="w-9 h-9 rounded-xl bg-[#0A192F] flex items-center justify-center">
-                <Shield className="w-4 h-4 text-[#D4AF37]" />
-              </div>
-              <span className="text-[#0A192F] font-serif text-xl font-bold">Joventy</span>
-            </Link>
+            <JoventyLogo href="/" variant="sidebar" size="sm" />
           </div>
 
           {step === "credentials" ? (
@@ -422,7 +412,7 @@ export default function Login() {
                 <div className="w-14 h-14 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center mb-4">
                   {method === "phone"
                     ? <Phone className="w-7 h-7 text-[#D4AF37]" />
-                    : <Shield className="w-7 h-7 text-[#D4AF37]" />
+                    : <Mail className="w-7 h-7 text-[#D4AF37]" />
                   }
                 </div>
                 <h2 className="text-3xl font-serif font-bold text-[#0A192F]">Vérification</h2>
