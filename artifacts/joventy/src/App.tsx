@@ -128,8 +128,10 @@ function ClerkNavigationProvider({ children }: { children: ReactNode }) {
 function HashGuard() {
   const [, setLocation] = useLocation();
   useEffect(() => {
+    // Only intercept known Clerk internal hash routes
+    const clerkHashRoutes = ["#/continue", "#/factor-one", "#/factor-two", "#/reset-password"];
     const hash = window.location.hash;
-    if (hash && hash.startsWith("#/")) {
+    if (hash && clerkHashRoutes.some((r) => hash.startsWith(r))) {
       const path = hash.slice(1);
       window.history.replaceState(null, "", window.location.pathname);
       setLocation(path);
