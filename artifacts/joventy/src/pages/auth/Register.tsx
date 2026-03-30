@@ -10,6 +10,8 @@ import {
   User,
   FileText,
   Star,
+  Mail,
+  Phone,
 } from "lucide-react";
 
 const OAUTH_STRATEGIES = [
@@ -45,16 +47,20 @@ const OAUTH_STRATEGIES = [
   },
 ];
 
+type Method = "email" | "phone";
 type Step = "info" | "otp" | "done";
 
 export default function Register() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const [, setLocation] = useLocation();
 
+  const [method, setMethod] = useState<Method>("email");
   const [step, setStep] = useState<Step>("info");
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("+243");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -75,38 +81,57 @@ export default function Register() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const switchMethod = (m: Method) => {
+    setMethod(m);
+    setStep("info");
+    setOtpCode("");
+    setError("");
+  };
+
+  /* ---- EMAIL register ---- */
+  const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded) return;
     setIsLoading(true);
     setError("");
-
     try {
-      await signUp.create({
-        firstName,
-        lastName,
-        emailAddress: email,
-        password,
-      });
-
+      await signUp.create({ firstName, lastName, emailAddress: email, password });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("otp");
     } catch (err: any) {
-      const msg = err.errors?.[0]?.longMessage || err.errors?.[0]?.message || "Erreur lors de la création du compte";
-      setError(msg);
+      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || "Erreur lors de la création du compte");
     } finally {
       setIsLoading(false);
     }
   };
 
+  /* ---- PHONE register ---- */
+  const handlePhoneRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isLoaded) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      await signUp.create({ firstName, lastName, phoneNumber: phone });
+      await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+      setStep("otp");
+    } catch (err: any) {
+      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || "Numéro de téléphone invalide");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ---- OTP verify ---- */
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded) return;
     setIsLoading(true);
     setError("");
-
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code: otpCode });
+      const result = method === "phone"
+        ? await signUp.attemptPhoneNumberVerification({ code: otpCode })
+        : await signUp.attemptEmailAddressVerification({ code: otpCode });
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
@@ -120,9 +145,11 @@ export default function Register() {
     }
   };
 
+  const identifier = method === "phone" ? phone : email;
+
   return (
     <div className="min-h-screen flex">
-      {/* Left Panel — Navy Brand */}
+      {/* Left Panel */}
       <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-[#0A192F] flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full border border-[#D4AF37]" />
@@ -168,7 +195,7 @@ export default function Register() {
             ))}
           </div>
 
-          {/* Progress indicator */}
+          {/* Step progress */}
           <div className="space-y-2">
             <p className="text-slate-500 text-xs uppercase tracking-wider">Étape</p>
             <div className="flex gap-2">
@@ -191,7 +218,7 @@ export default function Register() {
         </div>
       </div>
 
-      {/* Right Panel — Form */}
+      {/* Right Panel */}
       <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-16 xl:px-24 py-12 bg-slate-50">
         <div className="w-full max-w-md mx-auto">
 
@@ -205,7 +232,7 @@ export default function Register() {
             </Link>
           </div>
 
-          {/* STEP 1: Registration form */}
+          {/* STEP 1: Form */}
           {step === "info" && (
             <>
               <div className="mb-8">
@@ -227,116 +254,189 @@ export default function Register() {
                 ))}
               </div>
 
-              <div className="relative my-6">
+              <div className="relative mb-6">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-slate-200" />
                 </div>
                 <div className="relative flex justify-center">
                   <span className="px-3 bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
-                    ou par email
+                    ou continuer avec
                   </span>
                 </div>
               </div>
 
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Prénom</label>
-                    <input
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Jean"
-                      required
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Nom</label>
-                    <input
-                      type="text"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Kabila"
-                      required
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
-                    />
-                  </div>
-                </div>
+              {/* Email / Phone toggle */}
+              <div className="flex rounded-xl bg-slate-100 p-1 mb-5">
+                <button
+                  type="button"
+                  onClick={() => switchMethod("email")}
+                  className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-medium transition-all ${
+                    method === "email"
+                      ? "bg-white text-[#0A192F] shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <Mail className="w-4 h-4" /> Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMethod("phone")}
+                  className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-medium transition-all ${
+                    method === "phone"
+                      ? "bg-white text-[#0A192F] shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <Phone className="w-4 h-4" /> Téléphone
+                </button>
+              </div>
 
+              {/* Name fields (shared) */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Adresse email</label>
+                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Prénom</label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="vous@exemple.com"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Jean"
                     required
                     className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Mot de passe</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 caractères"
-                      required
-                      minLength={8}
-                      className="w-full h-12 px-4 pr-12 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {password.length > 0 && (
-                    <div className="mt-2 flex gap-1">
-                      {[8, 12, 16].map((len) => (
-                        <div
-                          key={len}
-                          className={`h-1 flex-1 rounded-full transition-colors ${
-                            password.length >= len ? "bg-[#D4AF37]" : "bg-slate-200"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Nom</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Kabila"
+                    required
+                    className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
+                  />
                 </div>
+              </div>
 
-                {error && (
-                  <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
-                    {error}
+              {/* EMAIL-specific fields */}
+              {method === "email" && (
+                <form onSubmit={handleEmailRegister} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Adresse email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="vous@exemple.com"
+                      required
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Mot de passe</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Minimum 8 caractères"
+                        required
+                        minLength={8}
+                        className="w-full h-12 px-4 pr-12 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {password.length > 0 && (
+                      <div className="mt-2 flex gap-1">
+                        {[8, 12, 16].map((len) => (
+                          <div
+                            key={len}
+                            className={`h-1 flex-1 rounded-full transition-colors ${
+                              password.length >= len ? "bg-[#D4AF37]" : "bg-slate-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full h-12 rounded-xl bg-[#0A192F] hover:bg-[#0A192F]/90 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-                >
-                  {isLoading ? (
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      Créer mon compte <ArrowRight className="w-4 h-4" />
-                    </>
+                  {error && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>
                   )}
-                </button>
 
-                <p className="text-xs text-slate-400 text-center">
-                  En créant un compte, vous acceptez nos{" "}
-                  <span className="text-[#0A192F] hover:text-[#D4AF37] cursor-pointer transition-colors">
-                    conditions d'utilisation
-                  </span>
-                </p>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-12 rounded-xl bg-[#0A192F] hover:bg-[#0A192F]/90 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>Créer mon compte <ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+
+                  <p className="text-xs text-slate-400 text-center">
+                    En créant un compte, vous acceptez nos{" "}
+                    <span className="text-[#0A192F] hover:text-[#D4AF37] cursor-pointer transition-colors">
+                      conditions d'utilisation
+                    </span>
+                  </p>
+                </form>
+              )}
+
+              {/* PHONE-specific fields */}
+              {method === "phone" && (
+                <form onSubmit={handlePhoneRegister} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Numéro de téléphone</label>
+                    <div className="flex gap-2">
+                      <div className="flex items-center h-12 px-3 rounded-xl border border-slate-200 bg-white text-slate-500 text-sm font-medium whitespace-nowrap">
+                        🇨🇩 +243
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone.replace(/^\+243/, "")}
+                        onChange={(e) => setPhone("+243" + e.target.value.replace(/\D/g, ""))}
+                        placeholder="8X XXX XXXX"
+                        required
+                        className="flex-1 h-12 px-4 rounded-xl border border-slate-200 bg-white text-[#0A192F] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A192F]/10 focus:border-[#0A192F] transition-all"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      Un code SMS de confirmation vous sera envoyé.
+                    </p>
+                  </div>
+
+                  {error && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-12 rounded-xl bg-[#0A192F] hover:bg-[#0A192F]/90 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <><Phone className="w-4 h-4" /> Recevoir le code SMS <ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+
+                  <p className="text-xs text-slate-400 text-center">
+                    En créant un compte, vous acceptez nos{" "}
+                    <span className="text-[#0A192F] hover:text-[#D4AF37] cursor-pointer transition-colors">
+                      conditions d'utilisation
+                    </span>
+                  </p>
+                </form>
+              )}
 
               <p className="mt-6 text-center text-sm text-slate-500">
                 Déjà client ?{" "}
@@ -347,27 +447,32 @@ export default function Register() {
             </>
           )}
 
-          {/* STEP 2: OTP Verification */}
+          {/* STEP 2: OTP */}
           {step === "otp" && (
             <>
               <div className="mb-8">
                 <div className="w-14 h-14 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center mb-4">
-                  <Shield className="w-7 h-7 text-[#D4AF37]" />
+                  {method === "phone"
+                    ? <Phone className="w-7 h-7 text-[#D4AF37]" />
+                    : <Shield className="w-7 h-7 text-[#D4AF37]" />
+                  }
                 </div>
-                <h2 className="text-3xl font-serif font-bold text-[#0A192F]">Confirmez votre email</h2>
+                <h2 className="text-3xl font-serif font-bold text-[#0A192F]">Confirmez votre {method === "phone" ? "numéro" : "email"}</h2>
                 <p className="mt-2 text-slate-500">
-                  Un code à 6 chiffres a été envoyé à{" "}
-                  <span className="font-semibold text-[#0A192F]">{email}</span>
+                  Un code à 6 chiffres a été envoyé{" "}
+                  {method === "phone"
+                    ? <>par SMS au <span className="font-semibold text-[#0A192F]">{identifier}</span></>
+                    : <>à <span className="font-semibold text-[#0A192F]">{identifier}</span></>
+                  }
                 </p>
               </div>
 
               <form onSubmit={handleVerify} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">
-                    Code de vérification
-                  </label>
+                  <label className="block text-sm font-medium text-[#0A192F] mb-1.5">Code de vérification</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="000000"
@@ -379,9 +484,7 @@ export default function Register() {
                 </div>
 
                 {error && (
-                  <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
-                    {error}
-                  </div>
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>
                 )}
 
                 <button
@@ -392,9 +495,7 @@ export default function Register() {
                   {isLoading ? (
                     <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" /> Vérifier et continuer
-                    </>
+                    <><CheckCircle2 className="w-4 h-4" /> Vérifier et continuer</>
                   )}
                 </button>
 
@@ -406,7 +507,11 @@ export default function Register() {
                       onClick={async () => {
                         if (!isLoaded) return;
                         try {
-                          await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+                          if (method === "phone") {
+                            await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+                          } else {
+                            await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+                          }
                         } catch {}
                       }}
                       className="text-[#D4AF37] font-semibold hover:text-[#D4AF37]/80 transition-colors"
@@ -419,7 +524,7 @@ export default function Register() {
                     onClick={() => { setStep("info"); setOtpCode(""); setError(""); }}
                     className="text-sm text-slate-400 hover:text-[#0A192F] transition-colors"
                   >
-                    ← Modifier l'adresse email
+                    ← Modifier {method === "phone" ? "le numéro" : "l'adresse email"}
                   </button>
                 </div>
               </form>
@@ -433,9 +538,7 @@ export default function Register() {
                 <CheckCircle2 className="w-10 h-10 text-green-500" />
               </div>
               <h2 className="text-3xl font-serif font-bold text-[#0A192F] mb-2">Bienvenue !</h2>
-              <p className="text-slate-500 mb-2">
-                Votre compte a été créé avec succès.
-              </p>
+              <p className="text-slate-500 mb-2">Votre compte a été créé avec succès.</p>
               <p className="text-slate-400 text-sm">Redirection vers votre tableau de bord...</p>
               <div className="mt-6 flex justify-center">
                 <span className="w-6 h-6 border-2 border-[#0A192F]/20 border-t-[#0A192F] rounded-full animate-spin" />
