@@ -17,9 +17,10 @@ const priceDetails = v.object({
 
 const appointmentDetails = v.object({
   date: v.string(),
-  time: v.string(),
-  location: v.string(),
+  time: v.optional(v.string()),
+  location: v.optional(v.string()),
   confirmationCode: v.optional(v.string()),
+  notes: v.optional(v.string()),
 });
 
 export default defineSchema({
@@ -61,6 +62,7 @@ export default defineSchema({
     successFeeProofUrl: v.optional(v.string()),
     appointmentDetails: v.optional(appointmentDetails),
     rejectionReason: v.optional(v.string()),
+    slotExpiresAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])

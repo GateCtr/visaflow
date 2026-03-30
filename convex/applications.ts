@@ -143,6 +143,14 @@ export const uploadPaymentProof = mutation({
   },
 });
 
+export const generateReceiptUploadUrl = mutation({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const update = mutation({
   args: {
     id: v.id("applications"),

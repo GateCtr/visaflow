@@ -66,7 +66,7 @@ export default function ClientDashboard() {
           <div>
             <p className="text-sm font-medium text-muted-foreground">En Cours</p>
             <h3 className="text-2xl font-bold text-primary">
-              {applications.filter((a) => ["submitted", "in_review"].includes(a.status)).length}
+              {applications.filter((a) => ["documents_pending", "in_review", "slot_hunting", "slot_found_awaiting_success_fee", "submitted"].includes(a.status)).length}
             </h3>
           </div>
         </div>
@@ -77,7 +77,7 @@ export default function ClientDashboard() {
           <div>
             <p className="text-sm font-medium text-muted-foreground">Approuvés</p>
             <h3 className="text-2xl font-bold text-primary">
-              {applications.filter((a) => a.status === "approved").length}
+              {applications.filter((a) => a.status === "completed" || a.status === "approved").length}
             </h3>
           </div>
         </div>
