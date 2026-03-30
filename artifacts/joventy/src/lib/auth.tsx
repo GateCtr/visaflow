@@ -38,10 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded || !user) return;
-    const path = window.location.pathname.replace(/^\/[^/]+/, "") || "/";
-    if (user.role === "admin" && (path === "/login" || path === "/register" || path === "/dashboard")) {
+    // Strip the Vite BASE_URL prefix (e.g. "/joventy") to get the route path
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const path = window.location.pathname.replace(base, "") || "/";
+    const authPaths = ["/login", "/register", "/sso-callback", "/continue"];
+    if (user.role === "admin" && (authPaths.includes(path) || path === "/dashboard")) {
       setLocation("/admin");
-    } else if (user.role === "client" && (path === "/login" || path === "/register")) {
+    } else if (user.role === "client" && authPaths.includes(path)) {
       setLocation("/dashboard");
     }
   }, [isLoaded, user?.id, user?.role]);
