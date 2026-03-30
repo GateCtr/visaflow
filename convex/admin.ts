@@ -179,6 +179,10 @@ export const markSlotFound = mutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
 
+    if (app.status !== "slot_hunting") {
+      throw new Error("Le dossier doit être au statut 'slot_hunting' pour enregistrer un créneau.");
+    }
+
     const priceDetails = app.priceDetails ?? {
       engagementFee: 0,
       successFee: 0,
@@ -222,6 +226,10 @@ export const validateSuccessFee = mutation({
 
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
+
+    if (app.status !== "slot_found_awaiting_success_fee") {
+      throw new Error("Le dossier doit être au statut 'slot_found_awaiting_success_fee' pour valider la prime de succès.");
+    }
 
     const priceDetails = app.priceDetails ?? {
       engagementFee: 0,

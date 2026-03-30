@@ -176,6 +176,20 @@ export const remove = mutation({
     await ctx.storage.delete(doc.storageId as Id<"_storage">);
     await ctx.db.delete(args.documentId);
 
+    if (app) {
+      await ctx.db.patch(doc.applicationId, {
+        updatedAt: Date.now(),
+        logs: [
+          ...(app.logs ?? []),
+          {
+            msg: `🗑️ Document supprimé : ${doc.label}${isAdmin ? " (par l'admin)" : ""}`,
+            time: Date.now(),
+            author: isAdmin ? "admin" : (identity!.name ?? "client"),
+          },
+        ],
+      });
+    }
+
     return args.documentId;
   },
 });

@@ -300,7 +300,6 @@ export default function ClientApplicationDetail() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [msgText, setMsgText] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const { toast } = useToast();
 
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
