@@ -48,7 +48,7 @@ const OAUTH_STRATEGIES = [
   },
 ];
 
-type Method = "email-password" | "email-otp" | "phone";
+type Method = "email-password" | "phone";
 type Step = "info" | "otp" | "done";
 
 export default function Register() {
@@ -103,25 +103,6 @@ export default function Register() {
         firstName,
         lastName,
       });
-      if (err) { setError(err.longMessage || err.message); return; }
-      const { error: sendErr } = await signUp.verifications.sendEmailCode();
-      if (sendErr) { setError(sendErr.longMessage || sendErr.message); return; }
-      setStep("otp");
-    } catch (e: any) {
-      setError(e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || "Erreur lors de la création du compte");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* ---- EMAIL OTP register (no password) ---- */
-  const handleEmailOtpRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signUp) return;
-    setIsLoading(true);
-    setError("");
-    try {
-      const { error: err } = await signUp.create({ firstName, lastName, emailAddress: email });
       if (err) { setError(err.longMessage || err.message); return; }
       const { error: sendErr } = await signUp.verifications.sendEmailCode();
       if (sendErr) { setError(sendErr.longMessage || sendErr.message); return; }
@@ -192,9 +173,8 @@ export default function Register() {
 
   const identifier = method === "phone" ? phone : email;
 
-  const METHOD_TABS: { key: Method; label: string; icon: typeof Mail }[] = [
+  const METHOD_TABS: { key: Method; label: string; icon: typeof KeyRound }[] = [
     { key: "email-password", label: "Email + mdp", icon: KeyRound },
-    { key: "email-otp", label: "Email OTP", icon: Mail },
     { key: "phone", label: "Téléphone", icon: Phone },
   ];
 
@@ -319,7 +299,7 @@ export default function Register() {
                   >
                     <Icon className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">{label}</span>
-                    <span className="sm:hidden">{key === "email-password" ? "Email" : key === "email-otp" ? "OTP" : "Tel"}</span>
+                    <span className="sm:hidden">{key === "email-password" ? "Email" : "Tel"}</span>
                   </button>
                 ))}
               </div>
@@ -404,36 +384,6 @@ export default function Register() {
                     className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isLoading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Créer mon compte <ArrowRight className="w-4 h-4" /></>}
-                  </button>
-                  <p className="text-xs text-slate-400 text-center">
-                    En créant un compte, vous acceptez nos{" "}
-                    <span className="text-primary hover:text-accent cursor-pointer transition-colors">conditions d'utilisation</span>
-                  </p>
-                </form>
-              )}
-
-              {/* EMAIL OTP */}
-              {method === "email-otp" && (
-                <form onSubmit={handleEmailOtpRegister} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-primary mb-1.5">Adresse email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="vous@exemple.com"
-                      required
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
-                    />
-                    <p className="text-xs text-slate-400 mt-1.5">Un code de vérification vous sera envoyé par email.</p>
-                  </div>
-                  {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Mail className="w-4 h-4" /> Recevoir le code <ArrowRight className="w-4 h-4" /></>}
                   </button>
                   <p className="text-xs text-slate-400 text-center">
                     En créant un compte, vous acceptez nos{" "}
