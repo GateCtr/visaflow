@@ -21,7 +21,7 @@ export default function SSOCallback() {
       <AuthenticateWithRedirectCallback
         signInForceRedirectUrl="/dashboard"
         signUpForceRedirectUrl="/dashboard"
-        continueSignUpUrl="/dashboard"
+        continueSignUpUrl="/continue"
       />
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-6">
         <JoventyLogo variant="light" size="md" />

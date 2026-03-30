@@ -34,7 +34,10 @@ export default function ContinueSignUp() {
           const { error } = await signUp.update(updates);
           if (error) {
             setLocation("/login");
+            return;
           }
+          await signUp.finalize();
+          setLocation("/dashboard");
         } else {
           setLocation("/login");
         }
