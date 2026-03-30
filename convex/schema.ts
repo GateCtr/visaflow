@@ -1,6 +1,27 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const logEntry = v.object({
+  msg: v.string(),
+  time: v.number(),
+  author: v.optional(v.string()),
+});
+
+const priceDetails = v.object({
+  engagementFee: v.number(),
+  successFee: v.number(),
+  paidAmount: v.number(),
+  isEngagementPaid: v.boolean(),
+  isSuccessFeePaid: v.boolean(),
+});
+
+const appointmentDetails = v.object({
+  date: v.string(),
+  time: v.string(),
+  location: v.string(),
+  confirmationCode: v.optional(v.string()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -34,6 +55,12 @@ export default defineSchema({
     price: v.optional(v.number()),
     isPaid: v.boolean(),
     updatedAt: v.number(),
+    priceDetails: v.optional(priceDetails),
+    logs: v.optional(v.array(logEntry)),
+    paymentProofUrl: v.optional(v.string()),
+    successFeeProofUrl: v.optional(v.string()),
+    appointmentDetails: v.optional(appointmentDetails),
+    rejectionReason: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])

@@ -1,8 +1,19 @@
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
   return (identity.role as string) || "client";
+}
+
+function requireAdmin(identity: { [key: string]: unknown } | null) {
+  if (!identity || getRole(identity) !== "admin") {
+    throw new Error("Accès refusé — réservé aux administrateurs Joventy");
+  }
+}
+
+function makeLog(msg: string, author?: string) {
+  return { msg, time: Date.now(), author: author ?? "admin" };
 }
 
 export const getStats = query({
@@ -14,11 +25,7 @@ export const getStats = query({
 
     const all = await ctx.db.query("applications").collect();
     const now = new Date();
-    const startOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1
-    ).getTime();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
     const uniqueUserIds = new Set(all.map((a) => a.userId));
 
@@ -40,17 +47,31 @@ export const getStats = query({
         visaType: a.visaType,
         status: a.status,
         updatedAt: a.updatedAt,
+        priceDetails: a.priceDetails,
       }));
+
+    const totalRevenue = all.reduce((sum, a) => {
+      return sum + (a.priceDetails?.paidAmount ?? 0);
+    }, 0);
+
+    const pendingPaymentValidation = all.filter(
+      (a) =>
+        (a.paymentProofUrl && !a.priceDetails?.isEngagementPaid) ||
+        (a.successFeeProofUrl && !a.priceDetails?.isSuccessFeePaid)
+    ).length;
 
     return {
       totalApplications: all.length,
       pendingReview: all.filter((a) => a.status === "in_review").length,
       approvedThisMonth: all.filter(
-        (a) => a.status === "approved" && a.updatedAt >= startOfMonth
+        (a) => a.status === "completed" && a.updatedAt >= startOfMonth
       ).length,
       totalClients: uniqueUserIds.size,
       byDestination,
       recentApplications,
+      totalRevenue,
+      pendingPaymentValidation,
+      slotHunting: all.filter((a) => a.status === "slot_hunting").length,
     };
   },
 });
@@ -98,5 +119,207 @@ export const listClients = query({
     return Array.from(clientMap.values()).sort(
       (a, b) => a.firstSeen - b.firstSeen
     );
+  },
+});
+
+export const validateEngagementPayment = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const priceDetails = app.priceDetails ?? {
+      engagementFee: 0,
+      successFee: 0,
+      paidAmount: 0,
+      isEngagementPaid: false,
+      isSuccessFeePaid: false,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      status: "documents_pending",
+      isPaid: true,
+      priceDetails: {
+        ...priceDetails,
+        isEngagementPaid: true,
+        paidAmount: priceDetails.paidAmount + priceDetails.engagementFee,
+      },
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          `✅ Frais d'engagement (${priceDetails.engagementFee}$) validés. Dossier activé — envoi des documents requis.`,
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const markSlotFound = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    date: v.string(),
+    time: v.string(),
+    location: v.string(),
+    confirmationCode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const priceDetails = app.priceDetails ?? {
+      engagementFee: 0,
+      successFee: 0,
+      paidAmount: 0,
+      isEngagementPaid: false,
+      isSuccessFeePaid: false,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      status: "slot_found_awaiting_success_fee",
+      appointmentDetails: {
+        date: args.date,
+        time: args.time,
+        location: args.location,
+        confirmationCode: args.confirmationCode,
+      },
+      priceDetails,
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          `🎉 Créneau capturé ! Rendez-vous le ${args.date} à ${args.time}. Le client doit régler la prime de succès (${priceDetails.successFee}$) pour accéder aux détails.`,
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const validateSuccessFee = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const priceDetails = app.priceDetails ?? {
+      engagementFee: 0,
+      successFee: 0,
+      paidAmount: 0,
+      isEngagementPaid: false,
+      isSuccessFeePaid: false,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      status: "completed",
+      isPaid: true,
+      priceDetails: {
+        ...priceDetails,
+        isSuccessFeePaid: true,
+        paidAmount: priceDetails.paidAmount + priceDetails.successFee,
+      },
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          `✅ Prime de succès (${priceDetails.successFee}$) validée. Dossier complété — le client peut télécharger son kit d'entretien.`,
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const rejectApplication = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    await ctx.db.patch(args.applicationId, {
+      status: "rejected",
+      rejectionReason: args.reason,
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(`❌ Dossier rejeté. Raison : ${args.reason}`, "admin"),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const setSlotHunting = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    await ctx.db.patch(args.applicationId, {
+      status: "slot_hunting",
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          `🔍 Surveillance des créneaux activée. Notre système vérifie les disponibilités de l'ambassade en continu.`,
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const setInReview = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    adminNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const patch: Record<string, unknown> = {
+      status: "in_review",
+      updatedAt: Date.now(),
+      logs: [
+        ...(app.logs ?? []),
+        makeLog("📋 Dossier pris en charge — examen en cours par l'équipe Joventy.", "admin"),
+      ],
+    };
+    if (args.adminNotes) patch.adminNotes = args.adminNotes;
+
+    await ctx.db.patch(args.applicationId, patch);
+    return args.applicationId;
   },
 });
