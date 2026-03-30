@@ -197,8 +197,10 @@ export const listByApplication = query({
       .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
       .collect();
 
+    const visibleDocs = isAdmin ? docs : docs.filter((d) => !d.isAdminUpload);
+
     const withUrls = await Promise.all(
-      docs.map(async (doc) => {
+      visibleDocs.map(async (doc) => {
         const url = await ctx.storage.getUrl(doc.storageId as Id<"_storage">);
         return { ...doc, url };
       })

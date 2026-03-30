@@ -30,10 +30,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-function makeLog(msg: string) {
-  return { msg, time: Date.now(), author: "admin" };
-}
-
 function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <div
@@ -424,7 +420,6 @@ export default function AdminApplicationDetail() {
   const isRejected = app.status === "rejected";
 
   const docsByKey = Object.fromEntries(docs.filter((d) => !d.isAdminUpload).map((d) => [d.docKey, d]));
-  const adminDocsByKey = Object.fromEntries(docs.filter((d) => d.isAdminUpload).map((d) => [d.docKey, d]));
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
