@@ -16,6 +16,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import SSOCallback from "@/pages/auth/SSOCallback";
+import ContinueSignUp from "@/pages/auth/ContinueSignUp";
 import NotFound from "@/pages/not-found";
 
 import ClientDashboard from "@/pages/client/Dashboard";
@@ -73,7 +74,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/sso-callback" component={SSOCallback} />
-      <Route path="/continue" component={SSOCallback} />
+      <Route path="/continue" component={ContinueSignUp} />
 
       <Route path="/dashboard">
         {() => <ProtectedRoute component={ClientDashboard} />}
@@ -118,13 +119,12 @@ function ClerkNavigationProvider({ children }: { children: ReactNode }) {
     <ClerkProvider
       publishableKey={clerkPublishableKey}
       routerPush={(to) => {
-        // Clerk hash-based internal routes (e.g. #/continue) → redirect to login
-        // to prevent infinite loops; all valid post-auth routes are path-based
-        const path = to.startsWith("#") ? "/login" : to;
+        // Clerk hash-based internal routes (e.g. #/continue) → /continue handler
+        const path = to.startsWith("#") ? to.slice(1) : to;
         setLocation(path);
       }}
       routerReplace={(to) => {
-        const path = to.startsWith("#") ? "/login" : to;
+        const path = to.startsWith("#") ? to.slice(1) : to;
         setLocation(path);
       }}
     >
