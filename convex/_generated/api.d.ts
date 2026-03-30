@@ -10,7 +10,9 @@
 
 import type * as admin from "../admin.js";
 import type * as applications from "../applications.js";
+import type * as http from "../http.js";
 import type * as messages from "../messages.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -21,7 +23,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   applications: typeof applications;
+  http: typeof http;
   messages: typeof messages;
+  users: typeof users;
 }>;
 
 /**

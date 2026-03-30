@@ -11,7 +11,10 @@
   "private": true,
   "devDependencies": {
     "convex": "^1.21.2",
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "svix": "^1.89.0"
   }
 }
