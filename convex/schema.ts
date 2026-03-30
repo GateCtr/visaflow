@@ -33,5 +33,6 @@ export default defineSchema({
     senderName: v.string(),
     content: v.string(),
     isFromAdmin: v.boolean(),
+    readBy: v.optional(v.array(v.string())),
   }).index("by_application", ["applicationId"]),
 });

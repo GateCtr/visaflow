@@ -33,7 +33,14 @@ export default function AdminApplicationDetail() {
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
   const sendMessage = useMutation(api.messages.send);
+  const markAsRead = useMutation(api.messages.markAsRead);
   const updateApplication = useMutation(api.applications.update);
+
+  useEffect(() => {
+    if (appId && messages.length > 0) {
+      markAsRead({ applicationId: appId });
+    }
+  }, [appId, messages.length]);
 
   const form = useForm<UpdateFields>({
     defaultValues: {

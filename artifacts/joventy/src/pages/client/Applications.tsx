@@ -7,7 +7,7 @@ import { Plane, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function ClientApplications() {
-  const applications = useQuery(api.applications.list) ?? [];
+  const applications = useQuery(api.applications.list, {}) ?? [];
   const isLoading = applications === undefined;
 
   return (

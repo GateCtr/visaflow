@@ -22,11 +22,13 @@ import ClientDashboard from "@/pages/client/Dashboard";
 import ClientApplications from "@/pages/client/Applications";
 import NewApplication from "@/pages/client/NewApplication";
 import ClientApplicationDetail from "@/pages/client/ApplicationDetail";
+import ClientMessages from "@/pages/client/Messages";
 
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
 import AdminApplicationDetail from "@/pages/admin/ApplicationDetail";
 import AdminClients from "@/pages/admin/Clients";
+import AdminMessages from "@/pages/admin/Messages";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
@@ -86,6 +88,9 @@ function Router() {
       <Route path="/dashboard/applications/:id">
         {() => <ProtectedRoute component={ClientApplicationDetail} />}
       </Route>
+      <Route path="/dashboard/messages">
+        {() => <ProtectedRoute component={ClientMessages} />}
+      </Route>
 
       <Route path="/admin">
         {() => <ProtectedRoute adminOnly component={AdminDashboard} />}
@@ -98,6 +103,9 @@ function Router() {
       </Route>
       <Route path="/admin/clients">
         {() => <ProtectedRoute adminOnly component={AdminClients} />}
+      </Route>
+      <Route path="/admin/messages">
+        {() => <ProtectedRoute adminOnly component={AdminMessages} />}
       </Route>
 
       <Route component={NotFound} />
@@ -112,7 +120,7 @@ function ClerkNavigationProvider({ children }: { children: ReactNode }) {
       publishableKey={clerkPublishableKey}
       routerPush={(to) => setLocation(to)}
       routerReplace={(to) => setLocation(to)}
-      fallbackRedirectUrl="/dashboard"
+      signInFallbackRedirectUrl="/dashboard"
     >
       {children}
     </ClerkProvider>

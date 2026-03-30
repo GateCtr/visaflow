@@ -19,6 +19,13 @@ export default function ClientApplicationDetail() {
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
   const sendMessage = useMutation(api.messages.send);
+  const markAsRead = useMutation(api.messages.markAsRead);
+
+  useEffect(() => {
+    if (appId && messages.length > 0) {
+      markAsRead({ applicationId: appId });
+    }
+  }, [appId, messages.length]);
 
   useEffect(() => {
     if (scrollRef.current) {

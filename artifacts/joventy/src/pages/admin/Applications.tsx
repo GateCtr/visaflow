@@ -13,7 +13,7 @@ export default function AdminApplications() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const allApps = useQuery(api.applications.list) ?? [];
+  const allApps = useQuery(api.applications.list, {}) ?? [];
   const isLoading = allApps === undefined;
 
   const applications = allApps
