@@ -129,14 +129,28 @@ export default function Register() {
     setIsLoading(true);
     setError("");
     try {
-      const result = method === "phone"
+      let result = method === "phone"
         ? await signUp.attemptPhoneNumberVerification({ code: otpCode })
         : await signUp.attemptEmailAddressVerification({ code: otpCode });
+
+      // If some required fields are still missing (e.g. username), auto-complete them
+      if (result.status === "missing_requirements") {
+        const missing = result.missingFields ?? [];
+        const updates: Record<string, string> = {};
+        if (missing.includes("username")) {
+          updates.username = "user_" + Math.random().toString(36).slice(2, 10);
+        }
+        if (Object.keys(updates).length > 0) {
+          result = await signUp.update(updates);
+        }
+      }
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
         setStep("done");
-        setTimeout(() => setLocation("/dashboard"), 1500);
+        // AuthProvider will redirect from /register → /dashboard automatically
+        // once the session becomes active; adding a direct push as safety net
+        setLocation("/dashboard");
       }
     } catch (err: any) {
       setError(err.errors?.[0]?.message || "Code invalide ou expiré");
