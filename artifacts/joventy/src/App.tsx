@@ -2,7 +2,6 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useEffect, ReactNode } from "react";
 import {
   ClerkProvider,
-  AuthenticateWithRedirectCallback,
   useAuth as useClerkAuth,
 } from "@clerk/clerk-react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
@@ -16,6 +15,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import SSOCallback from "@/pages/auth/SSOCallback";
 import NotFound from "@/pages/not-found";
 
 import ClientDashboard from "@/pages/client/Dashboard";
@@ -72,23 +72,8 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
-      <Route path="/sso-callback">
-        {() => (
-          <AuthenticateWithRedirectCallback
-            afterSignInUrl="/dashboard"
-            afterSignUpUrl="/dashboard"
-          />
-        )}
-      </Route>
-      {/* Clerk hash-routing fallback for multi-step OAuth flows */}
-      <Route path="/continue">
-        {() => (
-          <AuthenticateWithRedirectCallback
-            afterSignInUrl="/dashboard"
-            afterSignUpUrl="/dashboard"
-          />
-        )}
-      </Route>
+      <Route path="/sso-callback" component={SSOCallback} />
+      <Route path="/continue" component={SSOCallback} />
 
       <Route path="/dashboard">
         {() => <ProtectedRoute component={ClientDashboard} />}
@@ -132,12 +117,25 @@ function ClerkNavigationProvider({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider
       publishableKey={clerkPublishableKey}
-      routerPush={(to) => setLocation(to.replace(/^#/, ""))}
-      routerReplace={(to) => setLocation(to.replace(/^#/, ""))}
+      routerPush={(to) => setLocation(to.replace(/^\/?#/, ""))}
+      routerReplace={(to) => setLocation(to.replace(/^\/?#/, ""))}
     >
       {children}
     </ClerkProvider>
   );
+}
+
+function HashGuard() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith("#/")) {
+      const path = hash.slice(1);
+      window.history.replaceState(null, "", window.location.pathname);
+      setLocation(path);
+    }
+  }, []);
+  return null;
 }
 
 function App() {
@@ -145,6 +143,7 @@ function App() {
 
   return (
     <WouterRouter base={base}>
+      <HashGuard />
       <ClerkNavigationProvider>
         <ConvexProviderWithClerk client={convex} useAuth={useClerkAuth}>
           <TooltipProvider>
