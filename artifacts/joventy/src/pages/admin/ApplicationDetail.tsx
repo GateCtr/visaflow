@@ -345,6 +345,8 @@ export default function AdminApplicationDetail() {
   const rejectApplication = useMutation(api.admin.rejectApplication);
   const setSlotHunting = useMutation(api.admin.setSlotHunting);
   const setInReview = useMutation(api.admin.setInReview);
+  const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
+  const [noteSaving, setNoteSaving] = useState(false);
 
   useEffect(() => {
     if (appId && messages.length > 0) {
@@ -416,7 +418,7 @@ export default function AdminApplicationDetail() {
   const isSuccessFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
   const hasEngagementProof = !!app.paymentProofUrl;
   const hasSuccessProof = !!app.successFeeProofUrl;
-  const isSlotHunting = app.status === "slot_hunting" || app.status === "in_review";
+  const isSlotHunting = app.status === "slot_hunting";
   const isSlotFound = app.status === "slot_found_awaiting_success_fee";
   const isCompleted = app.status === "completed";
   const isRejected = app.status === "rejected";
@@ -484,19 +486,35 @@ export default function AdminApplicationDetail() {
           <div className="p-6 space-y-6">
             {/* Engagement fee row */}
             <div className={`rounded-xl border p-5 ${isEngagementPaid ? "border-green-200 bg-green-50" : hasEngagementProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-sm font-semibold text-primary flex items-center gap-2">
-                    {isEngagementPaid
-                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      : hasEngagementProof
-                      ? <Clock className="w-4 h-4 text-amber-500" />
-                      : <Clock className="w-4 h-4 text-slate-400" />}
-                    Frais d'engagement — {app.priceDetails?.engagementFee ?? 0} USD
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {isEngagementPaid ? "Validé ✓" : hasEngagementProof ? "Reçu soumis — en attente de validation" : "Aucun reçu soumis"}
-                  </p>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  {hasEngagementProof && proofUrls?.engagementUrl && (
+                    <button
+                      className="flex-shrink-0 rounded-lg overflow-hidden border border-border w-14 h-14 bg-white hover:opacity-80 transition-opacity"
+                      onClick={() => setReceiptPreview(proofUrls.engagementUrl!)}
+                      title="Voir le reçu"
+                    >
+                      <img
+                        src={proofUrls.engagementUrl}
+                        alt="Reçu engagement"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </button>
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      {isEngagementPaid
+                        ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        : hasEngagementProof
+                        ? <Clock className="w-4 h-4 text-amber-500" />
+                        : <Clock className="w-4 h-4 text-slate-400" />}
+                      Frais d'engagement — {app.priceDetails?.engagementFee ?? 0} USD
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isEngagementPaid ? "Validé ✓" : hasEngagementProof ? "Reçu soumis — en attente de validation" : "Aucun reçu soumis"}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasEngagementProof && proofUrls?.engagementUrl && !isEngagementPaid && (
@@ -535,19 +553,35 @@ export default function AdminApplicationDetail() {
 
             {/* Success fee row */}
             <div className={`rounded-xl border p-5 ${isSuccessFeePaid ? "border-green-200 bg-green-50" : hasSuccessProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-sm font-semibold text-primary flex items-center gap-2">
-                    {isSuccessFeePaid
-                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      : hasSuccessProof
-                      ? <Clock className="w-4 h-4 text-amber-500" />
-                      : <Star className="w-4 h-4 text-slate-400" />}
-                    Prime de succès — {app.priceDetails?.successFee ?? 0} USD
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {isSuccessFeePaid ? "Validée ✓" : hasSuccessProof ? "Reçu soumis — en attente de validation" : "En attente du créneau"}
-                  </p>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  {hasSuccessProof && proofUrls?.successFeeUrl && (
+                    <button
+                      className="flex-shrink-0 rounded-lg overflow-hidden border border-border w-14 h-14 bg-white hover:opacity-80 transition-opacity"
+                      onClick={() => setReceiptPreview(proofUrls.successFeeUrl!)}
+                      title="Voir le reçu"
+                    >
+                      <img
+                        src={proofUrls.successFeeUrl}
+                        alt="Reçu prime de succès"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </button>
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      {isSuccessFeePaid
+                        ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        : hasSuccessProof
+                        ? <Clock className="w-4 h-4 text-amber-500" />
+                        : <Star className="w-4 h-4 text-slate-400" />}
+                      Prime de succès — {app.priceDetails?.successFee ?? 0} USD
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isSuccessFeePaid ? "Validée ✓" : hasSuccessProof ? "Reçu soumis — en attente de validation" : "En attente du créneau"}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasSuccessProof && proofUrls?.successFeeUrl && !isSuccessFeePaid && (
@@ -694,7 +728,29 @@ export default function AdminApplicationDetail() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase">Notes internes admin</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Notes internes admin</label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    disabled={noteSaving || !appId}
+                    onClick={async () => {
+                      if (!appId) return;
+                      setNoteSaving(true);
+                      try {
+                        await saveAdminNotes({ applicationId: appId, adminNotes: adminNoteInput });
+                        toast({ title: "Notes sauvegardées" });
+                      } catch (err: unknown) {
+                        toast({ variant: "destructive", title: err instanceof Error ? err.message : "Erreur sauvegarde" });
+                      } finally {
+                        setNoteSaving(false);
+                      }
+                    }}
+                  >
+                    {noteSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Sauvegarder"}
+                  </Button>
+                </div>
                 <Textarea
                   value={adminNoteInput}
                   onChange={(e) => setAdminNoteInput(e.target.value)}

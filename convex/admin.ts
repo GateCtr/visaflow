@@ -334,3 +334,24 @@ export const setInReview = mutation({
     return args.applicationId;
   },
 });
+
+export const saveAdminNotes = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    adminNotes: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    await ctx.db.patch(args.applicationId, {
+      adminNotes: args.adminNotes,
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
