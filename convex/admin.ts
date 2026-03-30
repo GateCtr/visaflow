@@ -187,8 +187,12 @@ export const markSlotFound = mutation({
       isSuccessFeePaid: false,
     };
 
+    const SLOT_HOLD_HOURS = 48;
+    const slotExpiresAt = Date.now() + SLOT_HOLD_HOURS * 3600 * 1000;
+
     await ctx.db.patch(args.applicationId, {
       status: "slot_found_awaiting_success_fee",
+      slotExpiresAt,
       appointmentDetails: {
         date: args.date,
         time: args.time,
@@ -199,7 +203,7 @@ export const markSlotFound = mutation({
       logs: [
         ...(app.logs ?? []),
         makeLog(
-          `🎉 Créneau capturé ! Rendez-vous le ${args.date} à ${args.time}. Le client doit régler la prime de succès (${priceDetails.successFee}$) pour accéder aux détails.`,
+          `🎉 Créneau capturé ! Rendez-vous le ${args.date} à ${args.time}. Le client doit régler la prime de succès (${priceDetails.successFee}$) pour accéder aux détails. Ce créneau est réservé pour ${SLOT_HOLD_HOURS}h.`,
           "admin"
         ),
       ],

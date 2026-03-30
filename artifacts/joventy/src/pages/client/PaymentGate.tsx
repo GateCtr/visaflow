@@ -64,6 +64,7 @@ export default function PaymentGate() {
         headers: { "Content-Type": file.type },
         body: file,
       });
+      if (!res.ok) throw new Error(`Échec de l'upload (${res.status})`);
       const { storageId } = await res.json();
       await uploadPaymentProof({ id: appId, proofUrl: storageId as string, paymentType });
       setDone(true);
