@@ -19,13 +19,15 @@ import {
 type Application = Doc<"applications">;
 type LogEntry = NonNullable<Application["logs"]>[number];
 
-const STEPS = [
-  { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
-  { key: "documents_pending", label: "Documents requis", icon: FileText },
-  { key: "in_review_slot_hunting", label: "Traitement & Recherche créneau", icon: Search },
-  { key: "slot_found_awaiting_success_fee", label: "Créneau trouvé !", icon: Star },
-  { key: "completed", label: "Dossier complété", icon: CheckCircle2 },
-];
+function getSteps(isEvisaModel: boolean) {
+  return [
+    { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
+    { key: "documents_pending", label: "Documents requis", icon: FileText },
+    { key: "in_review_slot_hunting", label: isEvisaModel ? "Traitement & Obtention visa" : "Traitement & Recherche créneau", icon: Search },
+    { key: "slot_found_awaiting_success_fee", label: isEvisaModel ? "Visa obtenu !" : "Créneau trouvé !", icon: Star },
+    { key: "completed", label: "Dossier complété", icon: CheckCircle2 },
+  ];
+}
 
 function getStepIndex(status: string): number {
   if (status === "awaiting_engagement_payment") return 0;
@@ -354,6 +356,7 @@ export default function ClientApplicationDetail() {
   const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
   const successCopy = pricing?.successCopy;
+  const STEPS = getSteps(isEvisaModel);
 
   // Appointment details are only shown AFTER success fee is paid (completed state), for appointment model
   const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isEvisaModel;
