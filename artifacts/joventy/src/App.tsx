@@ -134,10 +134,6 @@ function ClerkNavigationProvider({ children }: { children: ReactNode }) {
       publishableKey={clerkPublishableKey}
       routerPush={(to) => setLocation(to.replace(/^#/, ""))}
       routerReplace={(to) => setLocation(to.replace(/^#/, ""))}
-      signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/dashboard"
-      signInUrl="/login"
-      signUpUrl="/register"
     >
       {children}
     </ClerkProvider>
