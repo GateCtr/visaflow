@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { VISA_PRICING } from "./constants";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -14,6 +15,12 @@ function requireAdmin(identity: { [key: string]: unknown } | null) {
 
 function makeLog(msg: string, author?: string) {
   return { msg, time: Date.now(), author: author ?? "admin" };
+}
+
+function getEffectiveSuccessModel(app: { successModel?: string; destination?: string }): string {
+  if (app.successModel) return app.successModel;
+  const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
+  return pricing?.successModel ?? "appointment";
 }
 
 export const getStats = query({
@@ -183,7 +190,8 @@ export const markSlotFound = mutation({
       throw new Error("Le dossier doit être au statut 'slot_hunting' pour enregistrer un créneau.");
     }
 
-    if (app.successModel === "evisa") {
+    const effectiveModel = getEffectiveSuccessModel(app);
+    if (effectiveModel === "evisa") {
       throw new Error("Ce dossier utilise le modèle e-Visa — utilisez 'Visa Obtenu' plutôt que 'Créneau'.");
     }
 
@@ -239,7 +247,8 @@ export const markVisaObtained = mutation({
       throw new Error("Le dossier doit être au statut 'slot_hunting' pour enregistrer un visa obtenu.");
     }
 
-    if (app.successModel !== "evisa") {
+    const effectiveModel = getEffectiveSuccessModel(app);
+    if (effectiveModel !== "evisa") {
       throw new Error("Ce dossier utilise le modèle rendez-vous — utilisez 'Créneau' plutôt que 'Visa Obtenu'.");
     }
 
