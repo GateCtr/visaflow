@@ -181,7 +181,7 @@ function ClientDocRow({
 }) {
   const { toast } = useToast();
   const generateUrl = useMutation(api.documents.generateUploadUrl);
-  const addDocument = useMutation(api.documents.add);
+  const addDocument = useMutation(api.documents.uploadDocument);
   const [uploading, setUploading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);

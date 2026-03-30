@@ -83,6 +83,76 @@ function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => voi
   );
 }
 
+function AdminCustomDocUpload({ appId }: { appId: Id<"applications"> }) {
+  const { toast } = useToast();
+  const generateUrl = useMutation(api.documents.generateUploadUrl);
+  const uploadDocument = useMutation(api.documents.uploadDocument);
+
+  const [label, setLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    if (!label.trim()) {
+      toast({ variant: "destructive", title: "Intitulé requis", description: "Donnez un nom à ce document avant d'uploader." });
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploadUrl = await generateUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await res.json();
+      const docKey = `admin_${Date.now()}_${label.trim().toLowerCase().replace(/\s+/g, "_")}`;
+      await uploadDocument({ applicationId: appId, docKey, label: label.trim(), storageId });
+      toast({ title: "Document admin ajouté", description: label.trim() });
+      setLabel("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur lors de l'upload";
+      toast({ variant: "destructive", title: "Erreur", description: msg });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+      <p className="text-xs font-semibold text-primary mb-3 uppercase">Ajouter un document admin</p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Intitulé du document (ex: Attestation VISA, AIS Confirmation...)"
+          className="h-9 text-sm bg-white flex-1"
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleUpload(file);
+          }}
+        />
+        <Button
+          size="sm"
+          disabled={uploading || !label.trim()}
+          className="h-9 text-xs bg-primary text-white hover:bg-primary/90 gap-1 flex-shrink-0"
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+          {uploading ? "Upload..." : "Choisir fichier"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DocUploadRow({
   appId,
   docKey,
@@ -100,8 +170,8 @@ function DocUploadRow({
 }) {
   const { toast } = useToast();
   const generateUrl = useMutation(api.documents.generateUploadUrl);
-  const addDocument = useMutation(api.documents.add);
-  const verifyDocument = useMutation(api.documents.verify);
+  const uploadDocument = useMutation(api.documents.uploadDocument);
+  const verifyDocument = useMutation(api.documents.verifyDocument);
   const removeDocument = useMutation(api.documents.remove);
 
   const [uploading, setUploading] = useState(false);
@@ -121,7 +191,7 @@ function DocUploadRow({
         body: file,
       });
       const { storageId } = await res.json();
-      await addDocument({ applicationId: appId, docKey, label, storageId });
+      await uploadDocument({ applicationId: appId, docKey, label, storageId });
       toast({ title: "Document ajouté", description: label });
     } catch {
       toast({ variant: "destructive", title: "Erreur upload", description: "Veuillez réessayer." });
@@ -312,8 +382,9 @@ export default function AdminApplicationDetail() {
     try {
       await action();
       toast({ title: "✅ Succès", description: successMsg });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Erreur", description: e.message ?? "Action échouée" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Action échouée";
+      toast({ variant: "destructive", title: "Erreur", description: msg });
     }
   };
 
@@ -327,8 +398,9 @@ export default function AdminApplicationDetail() {
       await markSlotFound({ applicationId: appId, date: slotDate, time: slotTime, location: slotLocation, confirmationCode: slotCode || undefined });
       toast({ title: "🎉 Créneau enregistré", description: "Le client sera notifié." });
       setSlotDate(""); setSlotTime(""); setSlotCode("");
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Erreur", description: e.message });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";
+      toast({ variant: "destructive", title: "Erreur", description: msg });
     } finally {
       setSlotSaving(false);
     }
@@ -751,25 +823,26 @@ export default function AdminApplicationDetail() {
 
               {/* Admin-uploaded documents */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Documents uploadés par l'admin</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Documents admin (versions officielles, attestations, etc.)</p>
+                {/* Existing admin docs */}
                 <div>
-                  {pricing.requiredDocuments.map((doc) => (
-                    adminDocsByKey[doc.key] ? (
-                      <DocUploadRow
-                        key={`admin-${doc.key}`}
-                        appId={appId!}
-                        docKey={doc.key}
-                        label={`${doc.label} (version admin)`}
-                        required={false}
-                        existingDoc={adminDocsByKey[doc.key]}
-                        isAdminContext={true}
-                      />
-                    ) : null
+                  {docs.filter((d) => d.isAdminUpload).map((doc) => (
+                    <DocUploadRow
+                      key={`admin-${doc._id}`}
+                      appId={appId!}
+                      docKey={doc.docKey}
+                      label={doc.label}
+                      required={false}
+                      existingDoc={doc}
+                      isAdminContext={true}
+                    />
                   ))}
-                  {Object.keys(adminDocsByKey).length === 0 && (
+                  {docs.filter((d) => d.isAdminUpload).length === 0 && (
                     <p className="text-sm text-slate-400 italic py-2">Aucun document admin ajouté.</p>
                   )}
                 </div>
+                {/* Add new arbitrary admin doc */}
+                <AdminCustomDocUpload appId={appId!} />
               </div>
             </div>
           </div>
