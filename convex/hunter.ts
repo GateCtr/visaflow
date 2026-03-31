@@ -1,4 +1,5 @@
-import { internalMutation, mutation, internalQuery } from "./_generated/server";
+import { internalMutation, mutation, internalQuery, action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { coreMarkSlotFound } from "./slotFoundHelper";
 import { VISA_PRICING } from "./constants";
@@ -103,6 +104,16 @@ export const getActiveJobs = internalQuery({
   },
 });
 
+export const getApplicationHunterKey = internalQuery({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return null;
+    const hc = (app as { hunterConfig?: { twoCaptchaApiKey?: string } }).hunterConfig;
+    return { twoCaptchaApiKey: hc?.twoCaptchaApiKey ?? null };
+  },
+});
+
 export const markSlotFoundByHunter = internalMutation({
   args: {
     applicationId: v.id("applications"),
@@ -168,5 +179,32 @@ export const recordHeartbeat = internalMutation({
         updatedAt: Date.now(),
       });
     }
+  },
+});
+
+export const checkTwoCaptchaBalance = action({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const app = await ctx.runQuery(internal.hunter.getApplicationHunterKey, {
+      applicationId: args.applicationId,
+    });
+
+    if (!app) throw new Error("Dossier introuvable");
+    if (!app.twoCaptchaApiKey) throw new Error("Aucune clé 2captcha configurée pour ce dossier");
+
+    const res = await fetch(
+      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(app.twoCaptchaApiKey)}`
+    );
+    const text = (await res.text()).trim();
+    const balance = parseFloat(text);
+
+    if (isNaN(balance)) {
+      throw new Error(`Réponse 2captcha inattendue: ${text}`);
+    }
+
+    return { balance, checkedAt: Date.now() };
   },
 });

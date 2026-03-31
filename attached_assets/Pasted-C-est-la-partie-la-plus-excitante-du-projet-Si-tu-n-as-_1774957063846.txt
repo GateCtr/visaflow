@@ -1,0 +1,56 @@
+C'est la partie la plus excitante du projet. Si tu n'as que ta sœur pour l'instant, c'est l'idéal : ton robot sera **ultra-performant** car il ne partagera pas son attention (ni ton IP).
+
+Voici comment le **Joventy Hunter** va réagir et comment tes **10$** vont être consommés :
+
+---
+
+### 1. La Réaction du Robot (Le "Strike")
+Dès que le robot clique sur le bouton "Confirmer" et que la page affiche *"Success"*, il entre en mode **Protocole de Victoire** :
+
+1.  **Capture de Preuve :** Il prend un screenshot (capture d'écran) plein écran de la confirmation.
+2.  **Mise à jour de la Base :** Il envoie une mutation à **Convex** pour changer le statut du job de `HUNTING` à `CAPTURED`.
+3.  **Notification Flash :** Il t'envoie une alerte (Email, SMS ou via ton Dashboard).
+4.  **Auto-Stop :** Il arrête de scanner pour ce client. Il ne va pas risquer de se reconnecter inutilement.
+5.  **Génération du PDF :** Il télécharge la nouvelle "Confirmation de Rendez-vous" et la stocke dans ton dossier Cloud (ou ta base de données) pour que tu puisses l'imprimer pour ta sœur.
+
+---
+
+### 2. Le Budget 2Captcha (L'économie du Robot)
+
+**Grosse rectification :** Non, une vérification ne coûte absolument pas **1$** ! 
+
+Le prix de **2Captcha** pour un reCAPTCHA V2 (le plus courant) est d'environ **2,99$ pour 1 000 captchas résolus**.
+
+* **Coût par login :** Environ **$0,003** (3 millièmes de dollar).
+* **Avec 10$ :** Tu peux théoriquement résoudre plus de **3 300 captchas**.
+
+#### Combien le robot va consommer pour trouver la date ?
+Si on suit ton algorithme "Très Urgent" (toutes les 10-15 minutes) :
+* **6 checks par heure** = $0,018$ / heure.
+* **En 24 heures** = $0,43$ / jour.
+* **En 15 jours** = **$6,45$ environ.**
+
+> **Verdict :** Avec tes **10$**, tu as largement de quoi faire tourner le robot 24h/24 pendant plus de 20 jours pour un client unique. C'est l'investissement le plus rentable que tu puisses faire.
+
+---
+
+### 3. La Stratégie "Client Unique" (Ta Sœur)
+
+Puisque c'est ta seule cliente pour l'instant, on peut booster la sécurité :
+
+1.  **IP Propre :** Comme il n'y a qu'un compte, tu n'as même pas besoin de Proxy complexe au début. L'IP de Railway (ou ton IP locale si tu tournes en local) sera suffisante car elle ne se connectera qu'à **un seul compte**.
+2.  **Fréquence Optimale :** On peut descendre à un check toutes les **12-18 minutes**. C'est le "Sweet Spot" : assez rapide pour attraper un désistement, assez lent pour ne jamais être banni.
+3.  **Zéro Conflit :** Pas besoin d'algorithme de priorité. Le robot est 100% dédié à elle.
+
+---
+
+### 4. Le risque de "Fausse Alerte"
+Parfois, le site affiche une date, mais quand le robot clique, elle a déjà été prise par quelqu'un d'autre (une agence concurrente ou un autre bot).
+* **Réaction du Bot :** S'il échoue à réserver, il ne panique pas. Il enregistre l'échec dans les logs, se déconnecte proprement, et réessaie au prochain cycle (dans 15 minutes).
+
+---
+
+### 🚀 Conseil de "Vibe Coder" :
+Puisque tu es à Kinshasa, utilise tes **10$** sur 2Captcha via ta **carte prépayée**. Une fois que c'est chargé, tu es tranquille. 
+
+**On commence par coder la fonction qui vérifie le solde 2Captcha dans ton Dashboard pour être sûr que le robot ne s'arrête jamais par manque de fonds ?**

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useRoute } from "wouter";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
@@ -354,12 +354,16 @@ export default function AdminApplicationDetail() {
   const adjustSlotSuccessFee = useMutation(api.admin.adjustSlotSuccessFee);
   const setHunterConfig = useMutation(api.hunter.setHunterConfig);
   const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
+  const checkCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
   const [hunterUsername, setHunterUsername] = useState("");
   const [hunterPassword, setHunterPassword] = useState("");
   const [hunterTwoCaptchaKey, setHunterTwoCaptchaKey] = useState("");
   const [hunterScheduleUrl, setHunterScheduleUrl] = useState("");
   const [hunterActive, setHunterActive] = useState(false);
   const [hunterSaving, setHunterSaving] = useState(false);
+  const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
+  const [captchaBalanceChecking, setCaptchaBalanceChecking] = useState(false);
+  const [captchaBalanceError, setCaptchaBalanceError] = useState<string | null>(null);
   const [showHunterPassword, setShowHunterPassword] = useState(false);
   const [showTwoCaptchaKey, setShowTwoCaptchaKey] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -1051,6 +1055,21 @@ export default function AdminApplicationDetail() {
         {/* ===== JOVENTY HUNTER CONFIG ===== */}
         {isSlotOnly && isSlotHunting && (() => {
           const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; lastCheckAt?: number; checkCount?: number; lastResult?: string } }).hunterConfig;
+          const handleCheckCaptchaBalance = async () => {
+            if (!appId) return;
+            setCaptchaBalanceChecking(true);
+            setCaptchaBalanceError(null);
+            setCaptchaBalance(null);
+            try {
+              const result = await checkCaptchaBalance({ applicationId: appId });
+              setCaptchaBalance(result.balance);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : "Erreur inconnue";
+              setCaptchaBalanceError(msg);
+            } finally {
+              setCaptchaBalanceChecking(false);
+            }
+          };
           const handleSaveHunter = async () => {
             if (!appId) return;
             if (!hunterUsername.trim() || !hunterPassword.trim()) {
@@ -1167,24 +1186,62 @@ export default function AdminApplicationDetail() {
                       Clé API 2captcha
                       <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal normal-case">Résolution auto CAPTCHA</span>
                     </label>
-                    <div className="relative">
-                      <Input
-                        type={showTwoCaptchaKey ? "text" : "password"}
-                        value={hunterTwoCaptchaKey}
-                        onChange={(e) => setHunterTwoCaptchaKey(e.target.value)}
-                        placeholder="Clé 2captcha.com (optionnel)"
-                        className="h-10 bg-slate-50 pr-10 font-mono text-sm"
-                      />
+                    <div className="flex gap-2 items-center">
+                      <div className="relative flex-1">
+                        <Input
+                          type={showTwoCaptchaKey ? "text" : "password"}
+                          value={hunterTwoCaptchaKey}
+                          onChange={(e) => { setHunterTwoCaptchaKey(e.target.value); setCaptchaBalance(null); setCaptchaBalanceError(null); }}
+                          placeholder="Clé 2captcha.com (optionnel)"
+                          className="h-10 bg-slate-50 pr-10 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                          onClick={() => setShowTwoCaptchaKey((v) => !v)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
-                        onClick={() => setShowTwoCaptchaKey((v) => !v)}
+                        disabled={captchaBalanceChecking || !hunterTwoCaptchaKey.trim()}
+                        onClick={handleCheckCaptchaBalance}
+                        className="shrink-0 h-10 px-3 text-xs font-medium rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
                       >
-                        <Eye className="w-4 h-4" />
+                        {captchaBalanceChecking
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification...</>
+                          : "Vérifier solde"}
                       </button>
                     </div>
+                    {/* Balance result */}
+                    {captchaBalance !== null && (
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                        captchaBalance >= 5
+                          ? "bg-green-50 border-green-200 text-green-700"
+                          : captchaBalance >= 1
+                          ? "bg-amber-50 border-amber-200 text-amber-700"
+                          : "bg-red-50 border-red-200 text-red-700"
+                      }`}>
+                        <span className="text-base">{captchaBalance >= 5 ? "✅" : captchaBalance >= 1 ? "⚠️" : "🔴"}</span>
+                        <span>
+                          Solde 2captcha : <strong>${captchaBalance.toFixed(2)}</strong>
+                          {captchaBalance >= 5
+                            ? " — Bon niveau, le robot peut tourner plusieurs semaines"
+                            : captchaBalance >= 1
+                            ? " — À surveiller, pensez à recharger"
+                            : " — Solde critique ! Rechargez maintenant sur 2captcha.com"}
+                        </span>
+                      </div>
+                    )}
+                    {captchaBalanceError && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm border bg-red-50 border-red-200 text-red-600">
+                        <span>⚠️</span>
+                        <span>{captchaBalanceError}</span>
+                      </div>
+                    )}
                     <p className="text-[11px] text-slate-400">
-                      Si fournie, le robot soumettra automatiquement les CAPTCHAs à 2captcha.com pour les résoudre. Sans clé, le robot s'arrête et signale "captcha" à chaque blocage.
+                      Si fournie, le robot soumettra automatiquement les CAPTCHAs à 2captcha.com pour les résoudre. Coût : ~$0,003 / CAPTCHA · Budget $10 = +3 000 résolutions.
                     </p>
                   </div>
                   <div className="sm:col-span-2 space-y-1.5">
