@@ -104,6 +104,46 @@ export const VISA_PRICING = {
 
 export type Destination = keyof typeof VISA_PRICING;
 export type SuccessModel = "appointment" | "evisa";
+export type ServicePackage = "full_service" | "slot_only" | "dossier_only";
+
+export const SERVICE_PACKAGES = {
+  full_service: {
+    key: "full_service" as const,
+    label: "Service Complet",
+    tagline: "Recommandé",
+    description: "Joventy s'occupe de tout : constitution du dossier, recherche de créneau ou obtention du visa électronique.",
+    hasSuccessFee: true,
+    availableFor: "all" as const,
+    icon: "⭐",
+  },
+  slot_only: {
+    key: "slot_only" as const,
+    label: "Créneau Uniquement",
+    tagline: "Dossier prêt",
+    description: "Votre dossier est déjà constitué ? Joventy se charge uniquement de trouver et verrouiller votre créneau de rendez-vous consulaire.",
+    hasSuccessFee: true,
+    availableFor: ["usa", "turkey"] as const,
+    icon: "📅",
+  },
+  dossier_only: {
+    key: "dossier_only" as const,
+    label: "Constitution de Dossier",
+    tagline: "Tarif fixe",
+    description: "Joventy prépare et vérifie l'intégralité de votre dossier de demande de visa. Pas de prime de succès — tarif fixe.",
+    hasSuccessFee: false,
+    availableFor: "all" as const,
+    icon: "📋",
+  },
+} as const;
+
+export function getAvailablePackages(destination: string): ServicePackage[] {
+  const result: ServicePackage[] = ["full_service", "dossier_only"];
+  const slotPkg = SERVICE_PACKAGES.slot_only;
+  if ((slotPkg.availableFor as readonly string[]).includes(destination)) {
+    result.splice(1, 0, "slot_only");
+  }
+  return result;
+}
 
 export const APPLICATION_STATUSES = {
   awaiting_engagement_payment: {

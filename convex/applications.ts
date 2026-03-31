@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { VISA_PRICING, type Destination } from "./constants";
+import { VISA_PRICING, type Destination, type ServicePackage } from "./constants";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -100,6 +100,7 @@ export const create = mutation({
     returnDate: v.optional(v.string()),
     purpose: v.string(),
     notes: v.optional(v.string()),
+    servicePackage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -109,28 +110,34 @@ export const create = mutation({
     const pricing = VISA_PRICING[destKey];
     if (!pricing) throw new Error("Destination non supportée");
 
+    const pkg = (args.servicePackage ?? "full_service") as ServicePackage;
+    const isDossierOnly = pkg === "dossier_only";
+
     const priceDetails = {
       engagementFee: pricing.engagementFee,
-      successFee: pricing.successFee,
+      successFee: isDossierOnly ? 0 : pricing.successFee,
       paidAmount: 0,
       isEngagementPaid: false,
-      isSuccessFeePaid: false,
+      isSuccessFeePaid: isDossierOnly,
     };
 
+    const { servicePackage: _sp, ...appArgs } = args;
+
     const id = await ctx.db.insert("applications", {
-      ...args,
+      ...appArgs,
       userId: identity.subject,
       userFirstName: identity.givenName,
       userLastName: identity.familyName,
       userEmail: identity.email,
       status: "awaiting_engagement_payment",
       isPaid: false,
-      price: pricing.total,
+      price: isDossierOnly ? pricing.engagementFee : pricing.total,
       priceDetails,
       successModel: pricing.successModel,
+      servicePackage: pkg,
       logs: [
         makeLog(
-          `Dossier créé pour ${pricing.label} — ${args.visaType}. Frais d'engagement : ${pricing.engagementFee}$`,
+          `Dossier créé pour ${pricing.label} — ${args.visaType}. Package : ${pkg}. Frais d'engagement : ${pricing.engagementFee}$${isDossierOnly ? " (tarif fixe, pas de prime de succès)" : ""}`,
           identity.name ?? "client"
         ),
       ],

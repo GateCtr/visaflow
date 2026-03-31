@@ -190,6 +190,10 @@ export const markSlotFound = mutation({
       throw new Error("Le dossier doit être au statut 'slot_hunting' pour enregistrer un créneau.");
     }
 
+    if (app.servicePackage === "dossier_only") {
+      throw new Error("Ce dossier est en mode 'Constitution uniquement' — il n'a pas de créneau.");
+    }
+
     const effectiveModel = getEffectiveSuccessModel(app);
     if (effectiveModel === "evisa") {
       throw new Error("Ce dossier utilise le modèle e-Visa — utilisez 'Visa Obtenu' plutôt que 'Créneau'.");
@@ -245,6 +249,10 @@ export const markVisaObtained = mutation({
 
     if (app.status !== "slot_hunting") {
       throw new Error("Le dossier doit être au statut 'slot_hunting' pour enregistrer un visa obtenu.");
+    }
+
+    if (app.servicePackage === "dossier_only") {
+      throw new Error("Ce dossier est en mode 'Constitution uniquement' — il n'a pas de visa e-Visa.");
     }
 
     const effectiveModel = getEffectiveSuccessModel(app);
@@ -383,12 +391,58 @@ export const setSlotHunting = mutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
 
+    if (app.servicePackage === "dossier_only") {
+      throw new Error("Ce dossier est en mode 'Constitution uniquement' — utilisez 'Marquer dossier complété' à la place.");
+    }
+
     await ctx.db.patch(args.applicationId, {
       status: "slot_hunting",
       logs: [
         ...(app.logs ?? []),
         makeLog(
           `🔍 Surveillance des créneaux activée. Notre système vérifie les disponibilités de l'ambassade en continu.`,
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const completeDossierOnly = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    if (app.servicePackage !== "dossier_only") {
+      throw new Error("Cette action est réservée aux dossiers 'Constitution uniquement'.");
+    }
+
+    if (app.status === "completed") {
+      throw new Error("Ce dossier est déjà complété.");
+    }
+
+    const priceDetails = app.priceDetails ?? {
+      engagementFee: 0,
+      successFee: 0,
+      paidAmount: 0,
+      isEngagementPaid: false,
+      isSuccessFeePaid: true,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      status: "completed",
+      priceDetails: { ...priceDetails, isSuccessFeePaid: true },
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          "✅ Dossier constitué et validé par Joventy. Le client peut télécharger l'ensemble des documents du dossier.",
           "admin"
         ),
       ],

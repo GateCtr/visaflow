@@ -3,7 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { MOBILE_MONEY_INFO, VISA_PRICING } from "@convex/constants";
+import { MOBILE_MONEY_INFO, VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,8 @@ export default function PaymentGate() {
   const pricing = app ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
   const effectiveModel = (app as { successModel?: string } | undefined)?.successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = effectiveModel === "evisa";
+  const servicePackage = (app as { servicePackage?: string } | undefined)?.servicePackage ?? "full_service";
+  const isDossierOnly = servicePackage === "dossier_only";
 
   const amount =
     paymentType === "engagement"
@@ -138,7 +140,18 @@ export default function PaymentGate() {
         </div>
       </div>
 
-      {paymentType === "engagement" && (
+      {paymentType === "engagement" && isDossierOnly && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <p>
+            {SERVICE_PACKAGES.dossier_only.icon}{" "}
+            <strong>Package Constitution de Dossier — Tarif fixe.</strong> Vous payez uniquement les frais d'engagement de{" "}
+            <strong>{formatCurrency(amount)}</strong>. Aucune prime de succès ne sera demandée.
+          </p>
+        </div>
+      )}
+
+      {paymentType === "engagement" && !isDossierOnly && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start gap-3">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <p>

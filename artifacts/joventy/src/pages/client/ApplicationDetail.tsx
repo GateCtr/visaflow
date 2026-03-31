@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
 import { Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly, formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,15 @@ import {
 type Application = Doc<"applications">;
 type LogEntry = NonNullable<Application["logs"]>[number];
 
-function getSteps(isEvisaModel: boolean) {
+function getSteps(isEvisaModel: boolean, isDossierOnly: boolean) {
+  if (isDossierOnly) {
+    return [
+      { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
+      { key: "documents_pending", label: "Documents requis", icon: FileText },
+      { key: "in_review_slot_hunting", label: "Constitution du dossier", icon: Search },
+      { key: "completed", label: "Dossier constitué", icon: CheckCircle2 },
+    ];
+  }
   return [
     { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
     { key: "documents_pending", label: "Documents requis", icon: FileText },
@@ -27,6 +35,14 @@ function getSteps(isEvisaModel: boolean) {
     { key: "slot_found_awaiting_success_fee", label: isEvisaModel ? "Visa obtenu !" : "Créneau trouvé !", icon: Star },
     { key: "completed", label: "Dossier complété", icon: CheckCircle2 },
   ];
+}
+
+function getStepIndexDossierOnly(status: string): number {
+  if (status === "awaiting_engagement_payment") return 0;
+  if (status === "documents_pending") return 1;
+  if (status === "in_review" || status === "slot_hunting") return 2;
+  if (status === "completed") return 3;
+  return -1;
 }
 
 function getStepIndex(status: string): number {
@@ -340,7 +356,6 @@ export default function ClientApplicationDetail() {
   if (app === undefined) return <div className="p-12 text-center text-muted-foreground">Chargement des détails...</div>;
   if (!app) return <div className="p-12 text-center text-red-500">Dossier introuvable</div>;
 
-  const stepIndex = getStepIndex(app.status);
   const isRejected = app.status === "rejected";
   const isCompleted = app.status === "completed";
   const isSlotFound = app.status === "slot_found_awaiting_success_fee";
@@ -355,8 +370,11 @@ export default function ClientApplicationDetail() {
 
   const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
+  const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
+  const isDossierOnly = servicePackage === "dossier_only";
   const successCopy = pricing?.successCopy;
-  const STEPS = getSteps(isEvisaModel);
+  const STEPS = getSteps(isEvisaModel, isDossierOnly);
+  const stepIndex = isDossierOnly ? getStepIndexDossierOnly(app.status) : getStepIndex(app.status);
 
   // Appointment details are only shown AFTER success fee is paid (completed state), for appointment model
   const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isEvisaModel;
@@ -374,7 +392,19 @@ export default function ClientApplicationDetail() {
             Ref : JOV-{app._id.slice(-5).toUpperCase()} · Demandeur : {app.applicantName}
           </p>
         </div>
-        <StatusBadge status={app.status} />
+        <div className="flex flex-col items-end gap-2">
+          <StatusBadge status={app.status} />
+          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+            isDossierOnly
+              ? "bg-blue-100 text-blue-700"
+              : servicePackage === "slot_only"
+                ? "bg-purple-100 text-purple-700"
+                : "bg-orange-100 text-orange-700"
+          }`}>
+            {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.icon ?? "⭐"}{" "}
+            {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
+          </span>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -522,11 +552,31 @@ export default function ClientApplicationDetail() {
         </div>
       )}
 
-      {/* Interview kit — only when completed, appointment model */}
-      {isCompleted && !isEvisaModel && <InterviewKit app={app} />}
+      {/* Dossier only — completed card */}
+      {isCompleted && isDossierOnly && (
+        <div className="bg-blue-50 border-2 border-blue-400 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="text-4xl">📋</div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-blue-700 mb-1">
+                Votre dossier est prêt !
+              </h3>
+              <p className="text-sm text-slate-600 mb-2">
+                Joventy a constitué et vérifié l'intégralité de votre dossier de demande de visa. Tous les documents sont conformes aux exigences du consulat.
+              </p>
+              <p className="text-xs text-slate-500">
+                Prenez rendez-vous directement au consulat ou ambassade avec votre dossier complet.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interview kit — only when completed, appointment model, not dossier_only */}
+      {isCompleted && !isEvisaModel && !isDossierOnly && <InterviewKit app={app} />}
 
       {/* Visa PDF delivery — evisa model */}
-      {isCompleted && isEvisaModel && (
+      {isCompleted && isEvisaModel && !isDossierOnly && (
         <div className="bg-green-50 border-2 border-green-400 rounded-2xl p-6">
           <div className="flex items-start gap-4">
             <div className="text-4xl">🛂</div>

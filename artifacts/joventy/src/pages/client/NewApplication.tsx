@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { VISA_PRICING } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, getAvailablePackages, type ServicePackage } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package } from "lucide-react";
 
 const schema = z.object({
   destination: z.enum(["usa", "dubai", "turkey", "india"]),
@@ -37,6 +37,7 @@ const DESTINATIONS = [
 
 export default function NewApplication() {
   const [step, setStep] = useState(1);
+  const [selectedPackage, setSelectedPackage] = useState<ServicePackage>("full_service");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -58,7 +59,12 @@ export default function NewApplication() {
 
   const selectedDest = form.watch("destination");
   const pricing = selectedDest ? VISA_PRICING[selectedDest] : null;
+  const availablePackages = selectedDest ? getAvailablePackages(selectedDest) : (["full_service", "dossier_only"] as ServicePackage[]);
+  const isDossierOnly = selectedPackage === "dossier_only";
   const [isPending, setIsPending] = useState(false);
+
+  const effectiveSuccessFee = isDossierOnly ? 0 : (pricing?.successFee ?? 0);
+  const effectiveTotal = isDossierOnly ? (pricing?.engagementFee ?? 0) : (pricing?.total ?? 0);
 
   const onSubmit = async (data: FormValues) => {
     setIsPending(true);
@@ -72,6 +78,7 @@ export default function NewApplication() {
         returnDate: data.returnDate || undefined,
         purpose: data.purpose,
         notes: data.notes || undefined,
+        servicePackage: selectedPackage,
       });
       toast({ title: "Dossier créé !", description: "Réglez les frais d'engagement pour démarrer le traitement." });
       setLocation(`/dashboard/applications/${id}/payment`);
@@ -85,22 +92,25 @@ export default function NewApplication() {
   const nextStep = async () => {
     let fieldsToValidate: (keyof FormValues)[] = [];
     if (step === 1) fieldsToValidate = ["destination", "visaType"];
-    if (step === 2) fieldsToValidate = ["applicantName", "passportNumber", "travelDate", "purpose"];
+    if (step === 3) fieldsToValidate = ["applicantName", "passportNumber", "travelDate", "purpose"];
     const isValid = await form.trigger(fieldsToValidate);
     if (isValid) setStep(step + 1);
   };
 
   const STEP_LABELS = [
     { label: "Destination & Visa", icon: MapPin },
+    { label: "Package de service", icon: Package },
     { label: "Voyageur", icon: Plane },
     { label: "Tarif & Confirmation", icon: CreditCard },
   ];
+
+  const TOTAL_STEPS = 4;
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-serif font-bold text-primary">Nouveau Dossier</h1>
-        <p className="text-muted-foreground mt-1">Étape {step} sur 3</p>
+        <p className="text-muted-foreground mt-1">Étape {step} sur {TOTAL_STEPS}</p>
       </div>
 
       <div className="flex gap-2">
@@ -125,6 +135,7 @@ export default function NewApplication() {
       <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+
             {/* STEP 1 — Destination */}
             <div className={step === 1 ? "block space-y-6" : "hidden"}>
               <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
@@ -141,7 +152,12 @@ export default function NewApplication() {
                         {DESTINATIONS.map((dest) => (
                           <div
                             key={dest.id}
-                            onClick={() => { field.onChange(dest.id); form.setValue("visaType", ""); }}
+                            onClick={() => {
+                              field.onChange(dest.id);
+                              form.setValue("visaType", "");
+                              const pkgs = getAvailablePackages(dest.id);
+                              if (!pkgs.includes(selectedPackage)) setSelectedPackage("full_service");
+                            }}
                             className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                               field.value === dest.id
                                 ? "border-secondary bg-orange-50/50"
@@ -190,8 +206,90 @@ export default function NewApplication() {
               )}
             </div>
 
-            {/* STEP 2 — Traveller info */}
+            {/* STEP 2 — Package de service */}
             <div className={step === 2 ? "block space-y-6" : "hidden"}>
+              <h2 className="text-xl font-bold text-primary mb-1 flex items-center gap-2">
+                <Package className="w-5 h-5 text-secondary" /> Choisissez votre package
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Sélectionnez le niveau de service qui correspond à votre situation.
+              </p>
+              <div className="space-y-4">
+                {availablePackages.map((pkgKey) => {
+                  const pkg = SERVICE_PACKAGES[pkgKey];
+                  const isSelected = selectedPackage === pkgKey;
+                  const isRecommended = pkgKey === "full_service";
+                  return (
+                    <div
+                      key={pkgKey}
+                      onClick={() => setSelectedPackage(pkgKey)}
+                      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all ${
+                        isSelected
+                          ? "border-secondary bg-orange-50/60 shadow-sm"
+                          : "border-border hover:border-primary/30 bg-white"
+                      }`}
+                    >
+                      {isRecommended && (
+                        <span className="absolute -top-3 left-4 bg-secondary text-primary text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full tracking-wide">
+                          Recommandé
+                        </span>
+                      )}
+                      <div className="flex items-start gap-4">
+                        <span className="text-2xl mt-0.5">{pkg.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-bold text-primary text-base">{pkg.label}</p>
+                            {pkgKey === "slot_only" && (
+                              <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full uppercase">
+                                {pkg.tagline}
+                              </span>
+                            )}
+                            {pkgKey === "dossier_only" && (
+                              <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full uppercase">
+                                {pkg.tagline}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{pkg.description}</p>
+                          {pricing && (
+                            <div className="mt-3 flex flex-wrap gap-3">
+                              <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
+                                <span className="text-slate-500">Engagement : </span>
+                                <span className="font-bold text-primary">{formatCurrency(pricing.engagementFee)}</span>
+                              </div>
+                              {pkgKey !== "dossier_only" ? (
+                                <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
+                                  <span className="text-slate-500">Prime de succès : </span>
+                                  <span className="font-bold text-primary">{formatCurrency(pricing.successFee)}</span>
+                                </div>
+                              ) : (
+                                <div className="text-xs bg-green-100 text-green-700 rounded-lg px-3 py-1.5 font-semibold">
+                                  Pas de prime de succès — tarif fixe
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-1 transition-all ${
+                            isSelected ? "border-secondary bg-secondary" : "border-slate-300"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-2 h-2 rounded-full bg-white" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* STEP 3 — Traveller info */}
+            <div className={step === 3 ? "block space-y-6" : "hidden"}>
               <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                 <Plane className="w-5 h-5 text-secondary" /> Informations du voyageur
               </h2>
@@ -236,11 +334,22 @@ export default function NewApplication() {
               )} />
             </div>
 
-            {/* STEP 3 — Pricing + Confirmation */}
-            <div className={step === 3 ? "block space-y-6" : "hidden"}>
+            {/* STEP 4 — Pricing + Confirmation */}
+            <div className={step === 4 ? "block space-y-6" : "hidden"}>
               <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-secondary" /> Tarif & Confirmation
               </h2>
+
+              {/* Package reminder badge */}
+              {pricing && (
+                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mb-2">
+                  <span className="text-xl">{SERVICE_PACKAGES[selectedPackage].icon}</span>
+                  <div>
+                    <p className="text-sm font-bold text-primary">{SERVICE_PACKAGES[selectedPackage].label}</p>
+                    <p className="text-xs text-muted-foreground">{SERVICE_PACKAGES[selectedPackage].description}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Pricing table */}
               {pricing && (
@@ -254,20 +363,30 @@ export default function NewApplication() {
                       </div>
                       <span className="text-xl font-bold text-secondary">{formatCurrency(pricing.engagementFee)}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">Prime de succès</p>
-                        <p className="text-xs text-slate-300">
-                          {pricing.successModel === "evisa"
-                            ? "Due uniquement si votre visa est obtenu"
-                            : "Due uniquement si votre créneau de RDV est obtenu"}
-                        </p>
+                    {isDossierOnly ? (
+                      <div className="flex justify-between items-center text-green-300">
+                        <div>
+                          <p className="font-semibold">Prime de succès</p>
+                          <p className="text-xs text-green-400">Non applicable — tarif fixe pour ce package</p>
+                        </div>
+                        <span className="text-xl font-bold line-through opacity-50">{formatCurrency(pricing.successFee)}</span>
                       </div>
-                      <span className="text-xl font-bold text-white">{formatCurrency(pricing.successFee)}</span>
-                    </div>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold">Prime de succès</p>
+                          <p className="text-xs text-slate-300">
+                            {pricing.successModel === "evisa"
+                              ? "Due uniquement si votre visa est obtenu"
+                              : "Due uniquement si votre créneau de RDV est obtenu"}
+                          </p>
+                        </div>
+                        <span className="text-xl font-bold text-white">{formatCurrency(effectiveSuccessFee)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-3 border-t border-white/10">
-                      <p className="font-bold text-lg">Total programme</p>
-                      <span className="text-2xl font-bold text-secondary">{formatCurrency(pricing.total)}</span>
+                      <p className="font-bold text-lg">{isDossierOnly ? "Total (tarif fixe)" : "Total programme"}</p>
+                      <span className="text-2xl font-bold text-secondary">{formatCurrency(effectiveTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -296,6 +415,7 @@ export default function NewApplication() {
               <div className="bg-slate-50 p-4 rounded-xl border border-border text-sm space-y-1">
                 <p><strong>Destination :</strong> {selectedDest?.toUpperCase()}</p>
                 <p><strong>Visa :</strong> {form.watch("visaType")}</p>
+                <p><strong>Package :</strong> {SERVICE_PACKAGES[selectedPackage].label}</p>
                 <p><strong>Demandeur :</strong> {form.watch("applicantName")}</p>
                 <p><strong>Passeport :</strong> {form.watch("passportNumber")}</p>
               </div>
@@ -318,7 +438,7 @@ export default function NewApplication() {
                 </Button>
               ) : <div />}
 
-              {step < 3 ? (
+              {step < TOTAL_STEPS ? (
                 <Button type="button" onClick={nextStep} className="bg-primary px-8">
                   Suivant <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>

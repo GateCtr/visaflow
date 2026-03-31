@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
+  Package,
 } from "lucide-react";
 
 function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => void }) {
@@ -344,6 +345,7 @@ export default function AdminApplicationDetail() {
   const setSlotHunting = useMutation(api.admin.setSlotHunting);
   const setInReview = useMutation(api.admin.setInReview);
   const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
+  const completeDossierOnly = useMutation(api.admin.completeDossierOnly);
   const [noteSaving, setNoteSaving] = useState(false);
   const [visaUploading, setVisaUploading] = useState(false);
   const [visaNotes, setVisaNotes] = useState("");
@@ -444,6 +446,8 @@ export default function AdminApplicationDetail() {
   const isRejected = app.status === "rejected";
   const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
+  const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
+  const isDossierOnly = servicePackage === "dossier_only";
 
   const docsByKey = Object.fromEntries(docs.filter((d) => !d.isAdminUpload).map((d) => [d.docKey, d]));
 
@@ -463,7 +467,19 @@ export default function AdminApplicationDetail() {
                 Ref : JOV-{app._id.slice(-5).toUpperCase()} · {app.applicantName}
               </p>
             </div>
-            <StatusBadge status={app.status} />
+            <div className="flex flex-col items-end gap-2">
+              <StatusBadge status={app.status} />
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                isDossierOnly
+                  ? "bg-blue-100 text-blue-700"
+                  : servicePackage === "slot_only"
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-orange-100 text-orange-700"
+              }`}>
+                <Package className="w-3 h-3" />
+                {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm">
@@ -687,7 +703,7 @@ export default function AdminApplicationDetail() {
                     <Search className="w-3.5 h-3.5" /> Mettre en révision
                   </Button>
                 )}
-                {app.status !== "slot_hunting" && isEngagementPaid && (
+                {!isDossierOnly && app.status !== "slot_hunting" && isEngagementPaid && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -700,6 +716,21 @@ export default function AdminApplicationDetail() {
                     }
                   >
                     <Star className="w-3.5 h-3.5" /> Activer recherche créneau
+                  </Button>
+                )}
+
+                {isDossierOnly && isEngagementPaid && !isCompleted && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() =>
+                      handleAction(
+                        () => completeDossierOnly({ applicationId: appId! }),
+                        "Dossier marqué complété."
+                      )
+                    }
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Marquer dossier complété
                   </Button>
                 )}
 
