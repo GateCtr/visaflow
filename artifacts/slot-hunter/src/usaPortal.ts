@@ -6,11 +6,77 @@ type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_f
 
 const USA_BASE = "https://www.usvisaappt.com";
 const USA_LOGIN_URL = `${USA_BASE}/identity/user/login`;
+const USA_REFRESH_URL = `${USA_BASE}/identity/user/refreshToken`;
 const USA_PAYMENT_URL = `${USA_BASE}/visaworkflowprocessor/workflow/getUserHistoryApplicantPaymentStatus`;
 const USA_APPT_REQUESTS_URL = `${USA_BASE}/visauserapi/appointmentrequest/getallbyuser`;
 const USA_SITE_KEY = "6LdVVDAqAAAAAK4DS06UwosT8o1SA_3WhzUDAWAp";
 const USA_LOGIN_PAGE = "https://www.usvisaappt.com/visaapplicantui/login";
 const USA_MISSION_ID = 323;
+
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+interface CachedToken {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  userID: number;
+  fullName: string;
+}
+
+const tokenCache = new Map<string, CachedToken>();
+
+function parseJwtExpiry(token: string): number {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return 0;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: number };
+    return decoded.exp ? decoded.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function isCachedTokenValid(cached: CachedToken): boolean {
+  return Date.now() < cached.expiresAt - TOKEN_REFRESH_BUFFER_MS;
+}
+
+async function refreshUsaToken(cached: CachedToken): Promise<CachedToken | null> {
+  console.log("[usa] Renouvellement token via refresh token...");
+  try {
+    const res = await fetch(USA_REFRESH_URL, {
+      method: "POST",
+      headers: { ...BROWSER_HEADERS },
+      body: JSON.stringify({ refreshToken: cached.refreshToken }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[usa] Refresh token refusé (HTTP ${res.status}) — reconnexion complète requise`);
+      return null;
+    }
+
+    const newAccessToken = res.headers.get("authorization");
+    const newRefreshToken = res.headers.get("refreshtoken") ?? cached.refreshToken;
+
+    if (!newAccessToken) {
+      console.warn("[usa] Refresh: aucun token dans la réponse");
+      return null;
+    }
+
+    const expiresAt = parseJwtExpiry(newAccessToken) || Date.now() + 55 * 60 * 1000;
+    console.log("[usa] Token renouvelé avec succès");
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresAt,
+      userID: cached.userID,
+      fullName: cached.fullName,
+    };
+  } catch (err) {
+    console.warn("[usa] Erreur lors du refresh:", err);
+    return null;
+  }
+}
 
 interface UsaLoginResponse {
   userName: string;
@@ -78,6 +144,65 @@ export async function solveCaptchaForUsa(captchaApiKey: string): Promise<string 
     console.error("[usa] Échec résolution reCAPTCHA");
   }
   return token;
+}
+
+export async function getUsaSession(
+  username: string,
+  password: string,
+  captchaApiKey?: string
+): Promise<UsaSession | null> {
+  const cacheKey = username.toLowerCase();
+  const cached = tokenCache.get(cacheKey);
+
+  if (cached) {
+    if (isCachedTokenValid(cached)) {
+      const remainingMin = Math.round((cached.expiresAt - Date.now()) / 60000);
+      console.log(`[usa] Token en cache valide pour ${cached.fullName} (expire dans ~${remainingMin} min)`);
+      return {
+        accessToken: cached.accessToken,
+        refreshToken: cached.refreshToken,
+        userID: cached.userID,
+        fullName: cached.fullName,
+        applicationId: null,
+        pendingAppoStatus: null,
+      };
+    }
+
+    console.log("[usa] Token expiré — tentative de renouvellement...");
+    const refreshed = await refreshUsaToken(cached);
+    if (refreshed) {
+      tokenCache.set(cacheKey, refreshed);
+      return {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        userID: refreshed.userID,
+        fullName: refreshed.fullName,
+        applicationId: null,
+        pendingAppoStatus: null,
+      };
+    }
+    console.log("[usa] Refresh échoué — reconnexion complète");
+    tokenCache.delete(cacheKey);
+  }
+
+  let captchaToken: string | null = null;
+  if (captchaApiKey) {
+    captchaToken = await solveCaptchaForUsa(captchaApiKey);
+  }
+
+  const session = await loginUsaPortal(username, password, captchaToken);
+  if (!session) return null;
+
+  const expiresAt = parseJwtExpiry(session.accessToken) || Date.now() + 55 * 60 * 1000;
+  tokenCache.set(cacheKey, {
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    expiresAt,
+    userID: session.userID,
+    fullName: session.fullName,
+  });
+
+  return session;
 }
 
 export async function loginUsaPortal(
@@ -246,22 +371,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "error";
   }
 
-  let captchaToken: string | null = null;
-  if (twoCaptchaApiKey) {
-    captchaToken = await solveCaptchaForUsa(twoCaptchaApiKey);
-    if (!captchaToken) {
-      console.warn("[usa] reCAPTCHA non résolu — tentative de login sans token");
-    }
-  } else {
-    console.warn("[usa] Clé 2captcha absente — login sans captchaToken");
-  }
-
-  const session = await loginUsaPortal(username, password, captchaToken);
+  const session = await getUsaSession(username, password, twoCaptchaApiKey);
   if (!session) {
     await sendHeartbeat({
       applicationId: job.id,
       result: "error",
-      errorMessage: "Login API USA échoué — identifiants incorrects ou portail indisponible",
+      errorMessage: "Connexion API USA échouée — identifiants incorrects ou portail indisponible",
     });
     return "login_failed";
   }
