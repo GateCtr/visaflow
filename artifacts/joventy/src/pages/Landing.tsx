@@ -7,7 +7,8 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 import {
   ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
-  Calendar, ClipboardList, ChevronRight,
+  Calendar, ClipboardList, ChevronRight, XCircle, HelpCircle,
+  Landmark, CreditCard, BadgeCheck,
 } from "lucide-react";
 
 const DESTINATIONS = [
@@ -264,6 +265,113 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* ═══ CE QUE FAIT JOVENTY ═══ */}
+      <section className="py-20 bg-white border-b border-border">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Transparence totale</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">
+              Joventy, c'est quoi exactement ?
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              Nous sommes une <strong>agence d'assistance visa</strong> basée à Kinshasa — pas un consulat, pas une ambassade.
+              Notre rôle est de vous accompagner dans votre démarche, pas de vous délivrer un visa.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+            {/* Ce que Joventy fait */}
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center flex-shrink-0">
+                  <BadgeCheck className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-green-900">Ce que Joventy fait pour vous</h3>
+              </div>
+              <ul className="space-y-3">
+                {[
+                  "Remplit vos formulaires officiels (DS-160, VFS, portails e-Visa)",
+                  "Vérifie que vos pièces justificatives sont conformes aux exigences consulaires",
+                  "Recherche activement un créneau de rendez-vous consulaire (USA, Turquie)",
+                  "Soumet votre dossier e-Visa auprès du gouvernement (Dubaï, Inde)",
+                  "Vous accompagne par chat dédié à chaque étape du dossier",
+                  "Vous transmet le résultat dès obtention (convocation ou e-Visa PDF)",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-green-800">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Ce que Joventy ne fait pas */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-slate-600 flex items-center justify-center flex-shrink-0">
+                  <Landmark className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">Ce que Joventy ne fait pas</h3>
+              </div>
+              <ul className="space-y-3">
+                {[
+                  { text: "Joventy n'est pas un consulat et ne délivre pas de visas", note: "La décision d'accord ou de refus appartient exclusivement à l'ambassade ou au gouvernement étranger." },
+                  { text: "Joventy ne garantit pas l'approbation finale du visa", note: "Nous garantissons uniquement le service : si nous ne trouvons pas de créneau ou si l'e-Visa est refusé, vous ne payez pas la prime de succès." },
+                  { text: "Les frais consulaires ne sont pas inclus dans nos tarifs", note: "MRV USA (185$), frais VFS Turquie (100-300$), e-Visa EAU (~90$), e-Visa Inde (~25-80$) sont payés directement par le client au gouvernement concerné." },
+                ].map((item) => (
+                  <li key={item.text} className="flex items-start gap-3">
+                    <XCircle className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">{item.text}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.note}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Modèle de frais */}
+          <div className="bg-primary rounded-2xl p-6 sm:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <CreditCard className="w-5 h-5 text-secondary" />
+              <h3 className="text-lg font-bold text-white">Comment fonctionne le paiement ?</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                {
+                  num: "1",
+                  title: "Frais d'engagement",
+                  desc: "Payés à la création du dossier. Couvrent l'analyse, la vérification de vos pièces et le démarrage du service.",
+                  color: "bg-white/10 border-white/20",
+                },
+                {
+                  num: "2",
+                  title: "Prime de succès",
+                  desc: "Due uniquement si Joventy obtient un résultat (créneau ou e-Visa). Si échec : vous ne payez rien de plus.",
+                  color: "bg-secondary/20 border-secondary/30",
+                  highlight: true,
+                },
+                {
+                  num: "3",
+                  title: "Frais consulaires",
+                  desc: "Payés directement par vous au consulat/gouvernement étranger. Non collectés par Joventy. Montants variables selon la destination.",
+                  color: "bg-white/10 border-white/20",
+                },
+              ].map((item) => (
+                <div key={item.num} className={`rounded-xl border p-5 ${item.color}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mb-3 ${item.highlight ? "bg-secondary text-primary" : "bg-white/20 text-white"}`}>
+                    {item.num}
+                  </div>
+                  <h4 className={`font-bold text-sm mb-2 ${item.highlight ? "text-secondary" : "text-white"}`}>{item.title}</h4>
+                  <p className="text-xs text-white/65 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ═══ COMMENT ÇA MARCHE ═══ */}
       <section className="py-24 bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -486,6 +594,54 @@ export default function Landing() {
                     <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ FAQ ═══ */}
+      <section className="py-24 bg-muted">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 mb-3">
+              <HelpCircle className="w-5 h-5 text-secondary" />
+              <p className="text-secondary font-semibold text-sm uppercase tracking-widest">Questions fréquentes</p>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary">Ce que vous devez savoir</h2>
+          </div>
+
+          <div className="space-y-4">
+            {[
+              {
+                q: "Joventy garantit-il l'obtention du visa ?",
+                a: "Non. Joventy garantit le service, pas le visa. La décision finale appartient exclusivement à l'ambassade ou au gouvernement étranger. En revanche, si nous n'obtenons pas de résultat (créneau de rendez-vous ou e-Visa), vous ne payez pas la prime de succès — seuls les frais d'engagement restent dus.",
+              },
+              {
+                q: "Que se passe-t-il si mon visa est refusé après un rendez-vous ?",
+                a: "Si vous avez obtenu un créneau de rendez-vous (USA, Turquie), Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy. Nous vous accompagnons cependant pour préparer au mieux votre dossier.",
+              },
+              {
+                q: "Les frais consulaires (MRV, VFS, e-Visa) sont-ils inclus dans vos tarifs ?",
+                a: "Non. Les frais consulaires sont payés directement par vous au gouvernement ou à l'organisme concerné (banque pour le MRV USA, centre VFS pour la Turquie, portail officiel pour Dubaï et l'Inde). Ces montants varient selon la destination et ne transitent pas par Joventy.",
+              },
+              {
+                q: "Mes documents et informations personnelles sont-ils en sécurité ?",
+                a: "Oui. Vos données sont stockées de manière chiffrée et ne sont jamais partagées à des tiers. Elles sont utilisées uniquement pour constituer votre dossier de visa. Nous traitons vos informations avec le même niveau de confidentialité qu'une institution financière.",
+              },
+              {
+                q: "Combien de temps prend le traitement d'un dossier ?",
+                a: "Pour les e-Visas (Dubaï, Inde) : résultat en 48 à 72 heures ouvrables en général. Pour les créneaux consulaires (USA, Turquie) : le délai dépend de la disponibilité sur le portail, qui varie selon la période. Joventy surveille en continu et vous notifie dès qu'un créneau est capturé.",
+              },
+            ].map((item) => (
+              <div key={item.q} className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+                <h3 className="font-bold text-primary mb-3 flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-secondary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-secondary text-xs font-bold">?</span>
+                  </span>
+                  {item.q}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed pl-9">{item.a}</p>
               </div>
             ))}
           </div>
