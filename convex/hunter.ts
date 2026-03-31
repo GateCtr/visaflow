@@ -89,6 +89,7 @@ export const getActiveJobs = internalQuery({
           visaType: app.visaType,
           applicantName: app.applicantName,
           travelDate: app.travelDate,
+          urgencyTier: (app as { urgencyTier?: string }).urgencyTier ?? "standard",
           slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
           hunterConfig: (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string } }).hunterConfig,
           portalUrl: (pricing as { portalUrl?: string } | undefined)?.portalUrl ?? null,
