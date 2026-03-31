@@ -589,7 +589,7 @@ export default function AdminApplicationDetail() {
             </div>
 
             {/* Success fee row */}
-            <div className={`rounded-xl border p-5 ${isSuccessFeePaid ? "border-green-200 bg-green-50" : hasSuccessProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+            <div className={`rounded-xl border p-5 ${isDossierOnly ? "border-slate-200 bg-slate-50 opacity-60" : isSuccessFeePaid ? "border-green-200 bg-green-50" : hasSuccessProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   {hasSuccessProof && proofUrls?.successFeeUrl && (
@@ -608,15 +608,23 @@ export default function AdminApplicationDetail() {
                   )}
                   <div>
                     <p className="text-sm font-semibold text-primary flex items-center gap-2">
-                      {isSuccessFeePaid
-                        ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        : hasSuccessProof
-                        ? <Clock className="w-4 h-4 text-amber-500" />
-                        : <Star className="w-4 h-4 text-slate-400" />}
-                      Prime de succès — {app.priceDetails?.successFee ?? 0} USD
+                      {isDossierOnly
+                        ? <span className="w-4 h-4 text-slate-400 inline-flex items-center justify-center text-xs">—</span>
+                        : isSuccessFeePaid
+                          ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          : hasSuccessProof
+                            ? <Clock className="w-4 h-4 text-amber-500" />
+                            : <Star className="w-4 h-4 text-slate-400" />}
+                      Prime de succès — {isDossierOnly ? "Non applicable" : `${app.priceDetails?.successFee ?? 0} USD`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isSuccessFeePaid ? "Validée ✓" : hasSuccessProof ? "Reçu soumis — en attente de validation" : "En attente du créneau"}
+                      {isDossierOnly
+                        ? "Package Constitution de Dossier — tarif fixe, pas de prime de succès"
+                        : isSuccessFeePaid
+                          ? "Validée ✓"
+                          : hasSuccessProof
+                            ? "Reçu soumis — en attente de validation"
+                            : "En attente du créneau"}
                     </p>
                   </div>
                 </div>

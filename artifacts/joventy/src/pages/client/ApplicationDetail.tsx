@@ -628,12 +628,19 @@ export default function ClientApplicationDetail() {
                       {formatCurrency(app.priceDetails?.engagementFee)}{isEngagementPaid ? " ✓" : ""}
                     </span>
                   </p>
-                  <p className="text-sm flex items-center gap-1">
-                    {isSuccessFeePaid ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
-                    Prime de succès : <span className={isSuccessFeePaid ? "text-green-700 font-semibold" : "text-slate-500"}>
-                      {formatCurrency(app.priceDetails?.successFee)}{isSuccessFeePaid ? " ✓" : ""}
-                    </span>
-                  </p>
+                  {isDossierOnly ? (
+                    <p className="text-sm flex items-center gap-1 text-slate-400 line-through">
+                      <Lock className="w-3.5 h-3.5" />
+                      Prime de succès : <span>Non applicable</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm flex items-center gap-1">
+                      {isSuccessFeePaid ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                      Prime de succès : <span className={isSuccessFeePaid ? "text-green-700 font-semibold" : "text-slate-500"}>
+                        {formatCurrency(app.priceDetails?.successFee)}{isSuccessFeePaid ? " ✓" : ""}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
               {!isEvisaModel && (

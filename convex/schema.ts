@@ -65,7 +65,11 @@ export default defineSchema({
     slotExpiresAt: v.optional(v.number()),
     successModel: v.optional(v.string()),
     visaDocumentStorageId: v.optional(v.string()),
-    servicePackage: v.optional(v.string()),
+    servicePackage: v.optional(v.union(
+      v.literal("full_service"),
+      v.literal("slot_only"),
+      v.literal("dossier_only")
+    )),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
