@@ -15,6 +15,7 @@ import type * as documents from "../documents.js";
 import type * as http from "../http.js";
 import type * as hunter from "../hunter.js";
 import type * as messages from "../messages.js";
+import type * as reviews from "../reviews.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
 import type * as users from "../users.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   hunter: typeof hunter;
   messages: typeof messages;
+  reviews: typeof reviews;
   slotFoundHelper: typeof slotFoundHelper;
   users: typeof users;
 }>;
