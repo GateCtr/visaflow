@@ -9,22 +9,25 @@ export default function MentionsLegales() {
     >
       <h2>1. Éditeur du site</h2>
       <p>
-        Le site <strong>joventy.cd</strong> est édité par la société <strong>Joventy SARL</strong>,
-        entreprise de droit congolais immatriculée au Registre du Commerce et du Crédit Mobilier (RCCM)
-        de Kinshasa, en République Démocratique du Congo.
+        Le site <strong>joventy.cd</strong> est un site vitrine institutionnel présentant un service
+        édité par <strong>Akollad Groupe S.A.S.</strong>, holding technologique de droit congolais
+        dont le siège est établi à Kinshasa, République Démocratique du Congo.
       </p>
       <ul>
-        <li><strong>Dénomination sociale :</strong> Joventy SARL</li>
-        <li><strong>Forme juridique :</strong> Société à Responsabilité Limitée (SARL)</li>
-        <li><strong>Siège social :</strong> Kinshasa, Commune de Gombe — République Démocratique du Congo</li>
-        <li><strong>Objet social :</strong> Assistance administrative et conseil pour les demandes de visa</li>
+        <li><strong>Dénomination sociale :</strong> Akollad Groupe S.A.S.</li>
+        <li><strong>Forme juridique :</strong> Société par Actions Simplifiée (S.A.S.)</li>
+        <li><strong>Siège social :</strong> Kinshasa, République Démocratique du Congo</li>
+        <li><strong>RCCM :</strong> CD/KNG/RCCM/25-A-07960</li>
+        <li><strong>Numéro d'Impôt :</strong> A2557944L</li>
+        <li><strong>Identifiant National :</strong> 01-J6100-N86614P</li>
+        <li><strong>Site groupe :</strong> <a href="https://akollad.com" target="_blank" rel="noreferrer">akollad.com</a></li>
         <li><strong>Email :</strong> <a href="mailto:contact@joventy.cd">contact@joventy.cd</a></li>
         <li><strong>WhatsApp :</strong> <a href="https://wa.me/243840808122">+243 840 808 122</a></li>
       </ul>
 
       <h2>2. Directeur de la publication</h2>
       <p>
-        Le directeur de la publication du site est le représentant légal de Joventy SARL.
+        Le directeur de la publication du site est le représentant légal d'Akollad Groupe S.A.S.
         Pour toute question relative au contenu du site, vous pouvez le contacter à l'adresse
         e-mail : <a href="mailto:contact@joventy.cd">contact@joventy.cd</a>.
       </p>
@@ -50,13 +53,13 @@ export default function MentionsLegales() {
       <h2>4. Propriété intellectuelle</h2>
       <p>
         L'ensemble du contenu du site joventy.cd (textes, images, logos, graphismes, icônes,
-        structure, logiciels, bases de données, etc.) est la propriété exclusive de Joventy SARL
+        structure, logiciels, bases de données, etc.) est la propriété exclusive d'Akollad Groupe S.A.S.
         ou de ses partenaires, et est protégé par les lois en vigueur sur la propriété intellectuelle.
       </p>
       <p>
         Toute reproduction, représentation, modification, publication ou adaptation de tout ou
         partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est
-        <strong> interdite, sauf autorisation écrite préalable</strong> de Joventy SARL.
+        <strong> interdite, sauf autorisation écrite préalable</strong> d'Akollad Groupe S.A.S.
       </p>
       <p>
         Le non-respect de cette interdiction constitue une contrefaçon pouvant engager la

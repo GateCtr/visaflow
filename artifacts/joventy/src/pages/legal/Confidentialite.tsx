@@ -16,8 +16,10 @@ export default function Confidentialite() {
       <h2>1. Responsable du traitement</h2>
       <p>
         Le responsable du traitement de vos données personnelles est :<br />
-        <strong>Joventy SARL</strong>, dont le siège social est situé à Kinshasa,
-        Commune de Gombe, République Démocratique du Congo.<br />
+        <strong>Akollad Groupe S.A.S.</strong>, holding technologique dont le siège est établi à
+        Kinshasa, République Démocratique du Congo (RCCM : CD/KNG/RCCM/25-A-07960 —
+        N° Impôt : A2557944L — ID : 01-J6100-N86614P).<br />
+        Site groupe : <a href="https://akollad.com" target="_blank" rel="noreferrer">akollad.com</a> —
         Contact : <a href="mailto:contact@joventy.cd">contact@joventy.cd</a>
       </p>
 

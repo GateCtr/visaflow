@@ -800,7 +800,7 @@ export default function Landing() {
           </div>
 
           <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/35">
-            <p>© {new Date().getFullYear()} Joventy SARL · Assistance visa premium · Kinshasa, République Démocratique du Congo</p>
+            <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/60 underline underline-offset-2">Akollad Groupe S.A.S.</a> · Kinshasa, RDC</p>
             <p>Paiement via M-Pesa, Airtel Money & Orange Money 🇨🇩</p>
           </div>
         </div>
