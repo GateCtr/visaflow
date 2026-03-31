@@ -182,7 +182,7 @@ export default function Landing() {
             alt="Hero background"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/85 via-primary/90 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/60 via-primary/75 to-background" />
         </div>
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -193,7 +193,7 @@ export default function Landing() {
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-bold text-white tracking-tight leading-tight mb-6">
             Votre visa, géré par des experts.{" "}
-            <span className="text-gradient-brand">Vous payez si ça marche.</span>
+            <span className="text-secondary drop-shadow-md">Vous payez si ça marche.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">

@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "qYmr8jGByDuCtynJiypen"
+uri = "file://artifacts/joventy/public/images/hero-bg.png"
+type = "image"
+title = "generated_image"
