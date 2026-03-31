@@ -23,6 +23,7 @@ export default function AdminClients() {
         ) : clients.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">Aucun client trouvé.</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
@@ -56,6 +57,7 @@ export default function AdminClients() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </div>
     </div>

@@ -57,6 +57,7 @@ export default function AdminApplications() {
         ) : applications.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">Aucun dossier trouvé.</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
@@ -88,6 +89,7 @@ export default function AdminApplications() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </div>
     </div>
