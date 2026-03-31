@@ -57,9 +57,15 @@ http.route({
 
     if (type === "user.created" || type === "user.updated") {
       const emailAddresses = data.email_addresses as Array<{
+        id: string;
         email_address: string;
       }>;
-      const email = emailAddresses?.[0]?.email_address ?? "";
+      const primaryEmailId = data.primary_email_address_id as string | undefined;
+      const primaryEmailObj = primaryEmailId
+        ? (emailAddresses?.find((e) => e.id === primaryEmailId) ?? emailAddresses?.[0])
+        : emailAddresses?.[0];
+      const email = primaryEmailObj?.email_address ?? "";
+
       const publicMetadata = data.public_metadata as Record<string, unknown>;
       const role = (publicMetadata?.role as string) ?? "client";
 

@@ -1,0 +1,112 @@
+{
+  "data": {
+    "backup_code_enabled": false,
+    "banned": false,
+    "bypass_client_trust": false,
+    "create_organization_enabled": true,
+    "created_at": 1774905574778,
+    "delete_self_enabled": true,
+    "email_addresses": [
+      {
+        "created_at": 1774905574707,
+        "email_address": "sabowaryan@gmail.com",
+        "id": "idn_3BgL4MoaASPHcCYlD1LwPpYDq7d",
+        "linked_to": [
+          {
+            "id": "idn_3BgL4NPxg7dUA69Pe8tQG8LJwuS",
+            "type": "oauth_google"
+          }
+        ],
+        "matches_sso_connection": false,
+        "object": "email_address",
+        "reserved": false,
+        "updated_at": 1774905574803,
+        "verification": {
+          "attempts": null,
+          "expire_at": null,
+          "object": "verification_from_oauth",
+          "status": "verified",
+          "strategy": "from_oauth_google"
+        }
+      }
+    ],
+    "enterprise_accounts": [],
+    "external_accounts": [
+      {
+        "approved_scopes": "email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid profile",
+        "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJCn8teyyzxup3Tl3aXNT47h1WyXOP6W991MuAkjTgMXCFR0xFS=s1000-c",
+        "created_at": 1774905574689,
+        "email_address": "sabowaryan@gmail.com",
+        "email_address_verified": true,
+        "external_account_id": "eac_3BgL4My0pmUs0XhsuFoYztMp4XJ",
+        "family_name": "Sabowa",
+        "first_name": "Ryan",
+        "given_name": "Ryan",
+        "google_id": "115518649722744368189",
+        "id": "idn_3BgL4NPxg7dUA69Pe8tQG8LJwuS",
+        "identification_id": "idn_3BgL4NPxg7dUA69Pe8tQG8LJwuS",
+        "image_url": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKQ244dGV5eXp4dXAzVGwzYVhOVDQ3aDFXeVhPUDZXOTkxTXVBa2pUZ01YQ0ZSMHhGUz1zMTAwMC1jIiwicyI6IlI0UDZoNUNEa1Q1ODJid3ZxemVQUzMwUmZXb2QvdFVtVkh1RmwrU1d5NlUifQ",
+        "label": null,
+        "last_name": "Sabowa",
+        "object": "google_account",
+        "picture": "https://lh3.googleusercontent.com/a/ACg8ocJCn8teyyzxup3Tl3aXNT47h1WyXOP6W991MuAkjTgMXCFR0xFS=s1000-c",
+        "provider": "oauth_google",
+        "provider_user_id": "115518649722744368189",
+        "public_metadata": {},
+        "updated_at": 1774905574689,
+        "username": null,
+        "verification": {
+          "attempts": null,
+          "expire_at": 1774906165364,
+          "object": "verification_oauth",
+          "status": "verified",
+          "strategy": "oauth_google"
+        }
+      }
+    ],
+    "external_id": null,
+    "first_name": "Ryan",
+    "has_image": true,
+    "id": "user_3BgL4S4SmJ6bxcRjOSpouKLTaBa",
+    "image_url": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zQmdMNE9UdzFjek5uQkZpOElHaUhUNDBxZ3kifQ",
+    "last_active_at": 1774905574775,
+    "last_name": "Sabowa",
+    "last_sign_in_at": null,
+    "legal_accepted_at": null,
+    "locale": null,
+    "locked": false,
+    "lockout_expires_in_seconds": null,
+    "mfa_disabled_at": null,
+    "mfa_enabled_at": null,
+    "object": "user",
+    "passkeys": [],
+    "password_enabled": false,
+    "password_last_updated_at": null,
+    "phone_numbers": [],
+    "primary_email_address_id": "idn_3BgL4MoaASPHcCYlD1LwPpYDq7d",
+    "primary_phone_number_id": null,
+    "primary_web3_wallet_id": null,
+    "private_metadata": {},
+    "profile_image_url": "https://images.clerk.dev/oauth_google/img_3BgL4OTw1czNnBFi8IGiHT40qgy",
+    "public_metadata": {},
+    "requires_password_reset": false,
+    "saml_accounts": [],
+    "totp_enabled": false,
+    "two_factor_enabled": false,
+    "unsafe_metadata": {},
+    "updated_at": 1774905574852,
+    "username": null,
+    "verification_attempts_remaining": 100,
+    "web3_wallets": []
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "2c0f:e00:6ba:4100:e8ca:8571:8041:63d8",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_3Be7YfuvOGfdns1St4UYorgLUwB",
+  "object": "event",
+  "timestamp": 1774905574924,
+  "type": "user.created"
+}
