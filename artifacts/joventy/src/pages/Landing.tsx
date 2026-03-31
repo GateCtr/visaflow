@@ -2,42 +2,207 @@ import { Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
-import { Plane, ShieldCheck, Clock, FileText, ArrowRight, Star } from "lucide-react";
+import {
+  ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
+  MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
+  Calendar, ClipboardList, ChevronRight,
+} from "lucide-react";
+
+const DESTINATIONS = [
+  {
+    flag: "🇺🇸",
+    name: "États-Unis",
+    visaTypes: ["B1/B2 Tourisme", "F1 Étudiant", "K1 Fiancé(e)", "H1B Travail"],
+    engagement: 150,
+    success: 450,
+    model: "appointment",
+    note: "Frais MRV 185$ non inclus",
+  },
+  {
+    flag: "🇦🇪",
+    name: "Dubaï (EAU)",
+    visaTypes: ["Touriste 30j", "Touriste 60j", "Affaires", "Résidence"],
+    engagement: 50,
+    success: 50,
+    model: "evisa",
+    note: "Résultat en 48–72h ouvrables",
+  },
+  {
+    flag: "🇹🇷",
+    name: "Turquie",
+    visaTypes: ["E-Visa en ligne", "Visa Sticker VFS", "Transit"],
+    engagement: 50,
+    success: 70,
+    model: "hybrid",
+    note: "E-Visa ou Visa Sticker via VFS Kinshasa",
+  },
+  {
+    flag: "🇮🇳",
+    name: "Inde",
+    visaTypes: ["E-Visa Tourisme", "Médical", "Affaires", "Études"],
+    engagement: 50,
+    success: 50,
+    model: "evisa",
+    note: "Traitement 100% en ligne",
+  },
+];
+
+const STEPS = [
+  {
+    num: "01",
+    title: "Créez votre dossier",
+    desc: "Choisissez votre destination, le type de visa et le package adapté à votre situation. 5 minutes suffisent.",
+    icon: FileText,
+  },
+  {
+    num: "02",
+    title: "Payez par Mobile Money",
+    desc: "Réglez les frais d'engagement via M-Pesa ou Airtel Money. Aucun virement bancaire, aucune carte étrangère requise.",
+    icon: Phone,
+  },
+  {
+    num: "03",
+    title: "Joventy traite votre dossier",
+    desc: "Notre équipe remplit vos formulaires, vérifie vos pièces et cherche activement votre créneau consulaire ou soumet votre e-Visa.",
+    icon: Zap,
+  },
+  {
+    num: "04",
+    title: "Résultat garanti ou vous ne payez pas",
+    desc: "La prime de succès n'est due qu'une fois le résultat obtenu : créneau verrouillé ou visa électronique accordé. Zéro risque.",
+    icon: CheckCircle2,
+  },
+];
+
+const PACKAGES = [
+  {
+    key: "full_service",
+    icon: Star,
+    label: "Service Complet",
+    tagline: "Recommandé — Clé en main",
+    desc: "Joventy gère tout : formulaires officiels, vérification de votre dossier, et recherche active de créneau consulaire ou dépôt e-Visa en votre nom. Vous n'avez qu'à vous présenter le jour J.",
+    highlight: true,
+    features: [
+      "Formulaires DS-160, MRV, VFS ou e-Visa",
+      "Vérification complète des pièces justificatives",
+      "Recherche automatique de créneau (bot 24/7)",
+      "Chat dédié avec un conseiller Joventy",
+      "Prime de succès due uniquement si résultat",
+    ],
+  },
+  {
+    key: "slot_only",
+    icon: Calendar,
+    label: "Créneau Uniquement",
+    tagline: "Dossier déjà prêt",
+    desc: "Vos formulaires sont remplis, vos frais MRV payés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade (USA) ou au centre VFS (Turquie).",
+    highlight: false,
+    features: [
+      "Surveillance continue du portail (bot 24/7)",
+      "Alerte immédiate à la capture",
+      "Disponible USA & Turquie VFS",
+      "Niveaux d'urgence : Standard → Très urgent",
+      "Prime due uniquement si créneau obtenu",
+    ],
+  },
+  {
+    key: "dossier_only",
+    icon: ClipboardList,
+    label: "Formulaires & Vérification",
+    tagline: "Tarif fixe",
+    desc: "Joventy remplit vos formulaires officiels et vérifie vos pièces. Vous gérez ensuite vous-même la soumission ou le rendez-vous. Aucune prime de succès.",
+    highlight: false,
+    features: [
+      "Remplissage des formulaires officiels",
+      "Vérification complète de votre dossier",
+      "Tarif fixe — aucune surprise",
+      "Disponible pour toutes les destinations",
+      "Idéal si vous avez déjà un créneau",
+    ],
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    name: "Christophe M.",
+    city: "Kinshasa",
+    dest: "🇺🇸 Visa B2",
+    text: "J'avais essayé d'avoir un créneau à l'ambassade américaine pendant 4 mois sans succès. Joventy a trouvé une date en moins de 3 semaines. Incroyable.",
+    stars: 5,
+  },
+  {
+    name: "Nathalie K.",
+    city: "Lubumbashi",
+    dest: "🇦🇪 E-Visa Dubaï",
+    text: "Processus ultra simple. J'ai uploadé mes documents le lundi, mon e-Visa était prêt le mercredi. Paiement M-Pesa sans complication.",
+    stars: 5,
+  },
+  {
+    name: "Patrick B.",
+    city: "Goma",
+    dest: "🇹🇷 Visa Sticker VFS",
+    text: "Le suivi en temps réel dans l'application est rassurant. Mon conseiller répondait dans la journée. Je recommande vivement.",
+    stars: 5,
+  },
+];
+
+const GUARANTEES = [
+  {
+    icon: ShieldCheck,
+    title: "Paiement au résultat",
+    desc: "La prime de succès n'est due que lorsque votre créneau est verrouillé ou votre visa accordé. Aucun résultat = aucun solde.",
+  },
+  {
+    icon: Award,
+    title: "Confidentialité bancaire",
+    desc: "Vos données personnelles et pièces d'identité sont traitées avec le niveau de confidentialité d'une institution financière.",
+  },
+  {
+    icon: Phone,
+    title: "Mobile Money uniquement",
+    desc: "Pas de virement international, pas de carte étrangère. Payez via M-Pesa ou Airtel Money depuis votre téléphone.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Chat dédié inclus",
+    desc: "Un conseiller Joventy vous accompagne à chaque étape via la messagerie intégrée à votre espace client.",
+  },
+];
 
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+
+      {/* ═══ HERO ═══ */}
+      <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <img 
-            src={`${import.meta.env.BASE_URL}images/hero-bg.png`} 
-            alt="Hero abstract background" 
-            className="w-full h-full object-cover opacity-90"
+          <img
+            src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+            alt="Hero background"
+            className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/80 via-primary/90 to-background"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/85 via-primary/90 to-background" />
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-medium mb-8">
+        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-semibold mb-8">
             <Star className="w-4 h-4 text-secondary fill-secondary" />
-            <span>Excellence & Discrétion pour la RDC</span>
+            <span>Assistance visa premium · Kinshasa, RDC</span>
           </div>
-          
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-bold text-white tracking-tight leading-tight max-w-4xl mx-auto mb-6">
-            Votre passeport pour le monde, <br/>
-            <span className="text-gradient-brand">notre expertise absolue.</span>
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-bold text-white tracking-tight leading-tight mb-6">
+            Votre visa, géré par des experts.{" "}
+            <span className="text-gradient-brand">Vous payez si ça marche.</span>
           </h1>
-          
-          <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 font-light">
-            L'accompagnement premium institutionnel pour l'obtention de vos visas USA, Dubaï, Turquie et Inde. Sécurisé, rapide et transparent.
+
+          <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, Dubaï, la Turquie et l'Inde. Paiement Mobile Money, résultat garanti.
           </p>
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <Link href="/register">
-              <Button size="lg" className="w-full sm:w-auto h-14 px-8 text-lg bg-secondary hover:bg-orange-500 text-primary font-bold shadow-xl shadow-secondary/25 rounded-xl transition-all hover:scale-105">
+              <Button size="lg" className="w-full sm:w-auto h-14 px-8 text-lg bg-secondary hover:bg-orange-500 text-primary font-bold shadow-xl shadow-secondary/30 rounded-xl transition-all hover:scale-105">
                 Démarrer mon dossier
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
@@ -48,87 +213,405 @@ export default function Landing() {
               </Button>
             </Link>
           </div>
-        </div>
-      </section>
 
-      {/* Destinations Section */}
-      <section id="destinations" className="py-24 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Destinations Privilégiées</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Nous simplifions les démarches complexes pour les destinations les plus demandées.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
             {[
-              { name: "États-Unis", visa: "B1/B2, F1, K1", icon: Plane },
-              { name: "Dubaï (EAU)", visa: "Tourisme & Affaires", icon: Plane },
-              { name: "Turquie", visa: "E-Visa & Consulaire", icon: Plane },
-              { name: "Inde", visa: "Médical & Affaires", icon: Plane }
-            ].map((dest, i) => (
-              <div key={i} className="bg-white rounded-2xl p-8 border border-border hover-lift">
-                <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center mb-6">
-                  <dest.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-xl font-bold text-primary mb-2">{dest.name}</h3>
-                <p className="text-sm text-muted-foreground font-medium text-secondary">{dest.visa}</p>
+              { val: "150+", label: "Dossiers traités" },
+              { val: "98%", label: "Satisfaction client" },
+              { val: "72h", label: "Délai moyen e-Visa" },
+            ].map((s) => (
+              <div key={s.label} className="bg-white/10 backdrop-blur-md rounded-2xl px-3 py-4 border border-white/15">
+                <div className="text-2xl sm:text-3xl font-bold text-secondary">{s.val}</div>
+                <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5 leading-tight">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Process Section */}
-      <section className="py-24 bg-primary text-white relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-5xl font-serif font-bold mb-6">L'excellence dans chaque détail du processus.</h2>
-              <p className="text-slate-300 text-lg mb-8 leading-relaxed">
-                Notre plateforme technologique vous permet de suivre l'évolution de votre demande en temps réel, avec la garantie d'une confidentialité totale digne d'une institution bancaire.
-              </p>
-              
-              <div className="space-y-6">
-                {[
-                  { title: "Évaluation de profil personnalisée", icon: FileText },
-                  { title: "Formulaires officiels remplis à votre place", icon: ShieldCheck },
-                  { title: "Suivi en temps réel & Chat dédié", icon: Clock }
-                ].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                      <feature.icon className="w-5 h-5 text-secondary" />
-                    </div>
-                    <span className="text-lg font-medium">{feature.title}</span>
-                  </div>
-                ))}
+      {/* ═══ TRUST BAR ═══ */}
+      <div className="bg-white border-y border-border py-5">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-slate-500 font-medium">
+            {[
+              { icon: ShieldCheck, label: "Paiement au résultat" },
+              { icon: Phone, label: "M-Pesa & Airtel Money" },
+              { icon: Clock, label: "Suivi en temps réel" },
+              { icon: MessageCircle, label: "Chat conseiller inclus" },
+              { icon: Award, label: "Données 100% confidentielles" },
+            ].map((t) => (
+              <div key={t.label} className="flex items-center gap-2">
+                <t.icon className="w-4 h-4 text-secondary flex-shrink-0" />
+                <span>{t.label}</span>
               </div>
-            </div>
-            
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-tr from-secondary/20 to-transparent rounded-3xl blur-3xl"></div>
-              <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-                <div className="space-y-4">
-                  {[1, 2, 3].map((item) => (
-                    <div key={item} className="h-20 rounded-xl bg-white/5 animate-pulse border border-white/10 flex items-center px-6 gap-4">
-                      <div className="w-10 h-10 rounded-full bg-white/10"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-2 bg-white/20 rounded w-1/3"></div>
-                        <div className="h-2 bg-white/10 rounded w-1/2"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ COMMENT ÇA MARCHE ═══ */}
+      <section className="py-24 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Simple & transparent</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Comment ça marche</h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">Quatre étapes pour obtenir votre visa, sans vous déplacer en agence.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+            {STEPS.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div key={i} className="relative">
+                  {i < STEPS.length - 1 && (
+                    <div className="hidden lg:block absolute top-10 left-full w-8 z-10 -translate-x-4">
+                      <ChevronRight className="w-5 h-5 text-slate-300 mx-auto" />
+                    </div>
+                  )}
+                  <div className="bg-white rounded-2xl p-7 border border-border shadow-sm h-full flex flex-col">
+                    <div className="flex items-start gap-4 mb-4">
+                      <span className="text-4xl font-bold text-slate-100 leading-none select-none">{step.num}</span>
+                      <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0 mt-1">
+                        <Icon className="w-5 h-5 text-secondary" />
                       </div>
                     </div>
-                  ))}
+                    <h3 className="text-lg font-bold text-primary mb-2">{step.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">{step.desc}</p>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-border py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-          <JoventyLogo variant="light" size="md" />
-          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Joventy RDC. Tous droits réservés.</p>
+      {/* ═══ PACKAGES ═══ */}
+      <section id="services" className="py-24 bg-primary text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,152,0,0.08),transparent_60%)]" />
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Nos formules</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-white mb-4">Choisissez votre niveau de service</h2>
+            <p className="text-slate-300 text-lg max-w-xl mx-auto">Que vous ayez juste besoin d'un créneau ou d'un accompagnement complet, nous avons la formule adaptée.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+            {PACKAGES.map((pkg) => {
+              const Icon = pkg.icon;
+              return (
+                <div
+                  key={pkg.key}
+                  className={`relative rounded-2xl p-7 flex flex-col ${
+                    pkg.highlight
+                      ? "bg-secondary text-primary ring-4 ring-secondary/30"
+                      : "bg-white/5 border border-white/10 backdrop-blur-sm text-white"
+                  }`}
+                >
+                  {pkg.highlight && (
+                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-white text-primary text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                      ⭐ Recommandé
+                    </span>
+                  )}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${pkg.highlight ? "bg-primary/10" : "bg-white/10"}`}>
+                      <Icon className={`w-5 h-5 ${pkg.highlight ? "text-primary" : "text-secondary"}`} />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-wide ${pkg.highlight ? "text-primary/60" : "text-slate-400"}`}>{pkg.tagline}</p>
+                      <h3 className={`font-bold text-lg ${pkg.highlight ? "text-primary" : "text-white"}`}>{pkg.label}</h3>
+                    </div>
+                  </div>
+
+                  <p className={`text-sm mb-5 leading-relaxed ${pkg.highlight ? "text-primary/80" : "text-slate-300"}`}>{pkg.desc}</p>
+
+                  <ul className="space-y-2.5 flex-1 mb-6">
+                    {pkg.features.map((f) => (
+                      <li key={f} className={`flex items-start gap-2.5 text-sm ${pkg.highlight ? "text-primary" : "text-slate-200"}`}>
+                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 mt-0.5 ${pkg.highlight ? "text-primary" : "text-secondary"}`} />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link href="/register">
+                    <Button
+                      className={`w-full font-bold ${
+                        pkg.highlight
+                          ? "bg-primary hover:bg-primary/90 text-white"
+                          : "bg-secondary hover:bg-orange-500 text-primary"
+                      }`}
+                    >
+                      Choisir cette formule <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ DESTINATIONS ═══ */}
+      <section id="destinations" className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Tarifs transparents</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Destinations & Tarifs</h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">Tout est affiché. Pas de frais cachés — vous connaissez exactement le coût avant de commencer.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {DESTINATIONS.map((dest) => (
+              <div key={dest.name} className="bg-white border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col">
+                <div className="bg-slate-50 px-6 py-5 border-b border-border">
+                  <div className="text-4xl mb-3">{dest.flag}</div>
+                  <h3 className="text-xl font-bold text-primary">{dest.name}</h3>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {dest.visaTypes.slice(0, 3).map((v) => (
+                      <span key={v} className="text-[10px] bg-primary/5 text-primary/70 px-2 py-0.5 rounded-full font-medium">{v}</span>
+                    ))}
+                    {dest.visaTypes.length > 3 && (
+                      <span className="text-[10px] text-muted-foreground px-2 py-0.5">+{dest.visaTypes.length - 3}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="px-6 py-5 flex-1 flex flex-col">
+                  <div className="space-y-2.5 flex-1 mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Frais d'engagement</span>
+                      <span className="font-bold text-primary">{dest.engagement} $</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Prime de succès</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-green-700 font-semibold">si résultat</span>
+                        <span className="font-bold text-primary">{dest.success} $</span>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-border flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500">Total max</span>
+                      <span className="font-bold text-lg text-primary">{dest.engagement + dest.success} $</span>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-muted-foreground italic mb-4">{dest.note}</div>
+
+                  <Link href="/register">
+                    <Button size="sm" className="w-full bg-primary hover:bg-primary/90 text-white font-semibold gap-1">
+                      Commencer <ArrowRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ GARANTIES ═══ */}
+      <section className="py-24 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Notre engagement</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Pourquoi choisir Joventy</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {GUARANTEES.map((g) => {
+              const Icon = g.icon;
+              return (
+                <div key={g.title} className="bg-white rounded-2xl p-7 border border-border shadow-sm text-center flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-5">
+                    <Icon className="w-7 h-7 text-secondary" />
+                  </div>
+                  <h3 className="font-bold text-primary text-base mb-2">{g.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{g.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ TÉMOIGNAGES ═══ */}
+      <section className="py-24 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Ce qu'ils disent</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Clients satisfaits</h2>
+            <div className="flex items-center justify-center gap-1 mt-4">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="w-5 h-5 text-secondary fill-secondary" />
+              ))}
+              <span className="ml-2 text-sm text-muted-foreground font-medium">4.9/5 · 120+ avis</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((t) => (
+              <div key={t.name} className="bg-slate-50 rounded-2xl p-7 border border-border flex flex-col">
+                <div className="flex items-center gap-1 mb-4">
+                  {[...Array(t.stars)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 text-secondary fill-secondary" />
+                  ))}
+                </div>
+                <blockquote className="text-slate-700 text-sm leading-relaxed flex-1 mb-5 italic">
+                  "{t.text}"
+                </blockquote>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                    {t.name[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-primary text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ CTA FINAL ═══ */}
+      <section className="py-20 bg-primary relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(255,152,0,0.12),transparent_55%)]" />
+        <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Users className="w-5 h-5 text-secondary" />
+            <span className="text-slate-300 text-sm font-medium">150+ Congolais ont déjà obtenu leur visa avec Joventy</span>
+          </div>
+          <h2 className="text-3xl md:text-5xl font-serif font-bold text-white mb-6 leading-tight">
+            Prêt à voyager ?<br />
+            <span className="text-secondary">Créez votre dossier en 5 minutes.</span>
+          </h2>
+          <p className="text-slate-300 text-lg mb-10">
+            Rejoignez les voyageurs congolais qui font confiance à Joventy. Paiement Mobile Money, sans paperasse, résultat garanti.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href="/register">
+              <Button size="lg" className="w-full sm:w-auto h-14 px-10 text-lg bg-secondary hover:bg-orange-500 text-primary font-bold shadow-2xl shadow-secondary/20 rounded-xl transition-all hover:scale-105">
+                Démarrer mon dossier
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 px-8 text-lg border-white/30 text-white hover:bg-white/10 hover:text-white rounded-xl">
+                J'ai déjà un compte
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ CONTACT ═══ */}
+      <section id="contact" className="py-24 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">On est là</p>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Contactez-nous</h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">Une question avant de commencer ? Notre équipe vous répond rapidement.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {[
+              {
+                icon: MessageCircle,
+                label: "WhatsApp",
+                value: "+243 XXX XXX XXX",
+                sub: "Réponse en moins de 2h",
+                href: "https://wa.me/243000000000",
+                cta: "Écrire sur WhatsApp",
+                color: "bg-green-500",
+              },
+              {
+                icon: Mail,
+                label: "Email",
+                value: "contact@joventy.cd",
+                sub: "Réponse en 24h ouvrables",
+                href: "mailto:contact@joventy.cd",
+                cta: "Envoyer un email",
+                color: "bg-primary",
+              },
+              {
+                icon: TrendingUp,
+                label: "Espace Client",
+                value: "Chat intégré",
+                sub: "Suivi de votre dossier en temps réel",
+                href: "/login",
+                cta: "Accéder à mon espace",
+                color: "bg-secondary",
+              },
+            ].map((c) => {
+              const Icon = c.icon;
+              const isExternal = c.href.startsWith("http") || c.href.startsWith("mailto");
+              const Inner = (
+                <div className="bg-slate-50 border border-border rounded-2xl p-7 flex flex-col items-center text-center h-full hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <div className={`w-12 h-12 rounded-xl ${c.color} flex items-center justify-center mb-4`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">{c.label}</p>
+                  <p className="font-bold text-primary text-sm mb-1">{c.value}</p>
+                  <p className="text-xs text-muted-foreground mb-5">{c.sub}</p>
+                  <span className="mt-auto text-sm font-semibold text-primary underline underline-offset-4">{c.cta} →</span>
+                </div>
+              );
+              return isExternal ? (
+                <a key={c.label} href={c.href} target="_blank" rel="noopener noreferrer" className="flex flex-col">
+                  {Inner}
+                </a>
+              ) : (
+                <Link key={c.label} href={c.href} className="flex flex-col">
+                  {Inner}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ FOOTER ═══ */}
+      <footer className="bg-primary text-white py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
+            <div>
+              <JoventyLogo variant="light" size="md" />
+              <p className="mt-4 text-slate-400 text-sm leading-relaxed max-w-xs">
+                Assistance visa premium pour les voyageurs congolais. Formulaires, créneaux, e-Visas — nous gérons tout.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-300 mb-4">Destinations</h4>
+              <ul className="space-y-2 text-sm text-slate-400">
+                {["🇺🇸 Visa États-Unis", "🇦🇪 E-Visa Dubaï", "🇹🇷 Visa Turquie", "🇮🇳 E-Visa Inde"].map((d) => (
+                  <li key={d}><Link href="/register" className="hover:text-white transition-colors">{d}</Link></li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-300 mb-4">Liens utiles</h4>
+              <ul className="space-y-2 text-sm text-slate-400">
+                {[
+                  { label: "Nos Services", href: "/#services" },
+                  { label: "Tarifs", href: "/#destinations" },
+                  { label: "Contact", href: "/#contact" },
+                  { label: "Espace Client", href: "/login" },
+                  { label: "Créer un compte", href: "/register" },
+                ].map((l) => (
+                  <li key={l.label}><Link href={l.href} className="hover:text-white transition-colors">{l.label}</Link></li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+            <p>© {new Date().getFullYear()} Joventy RDC · Assistance visa premium · Kinshasa, République Démocratique du Congo</p>
+            <p>Paiement via M-Pesa & Airtel Money 🇨🇩</p>
+          </div>
         </div>
       </footer>
     </div>
