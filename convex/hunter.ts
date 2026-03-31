@@ -97,6 +97,7 @@ export const getActiveJobs = internalQuery({
           portalDashboardUrl: (pricing as { portalDashboardUrl?: string } | undefined)?.portalDashboardUrl ?? null,
           portalAppointmentUrl: (pricing as { portalAppointmentUrl?: string } | undefined)?.portalAppointmentUrl ?? null,
           portalScheduleUrl: (pricing as { portalScheduleUrl?: string } | undefined)?.portalScheduleUrl ?? null,
+          lastCheckAt: (app as { hunterConfig?: { lastCheckAt?: number } }).hunterConfig?.lastCheckAt ?? null,
         };
       });
   },

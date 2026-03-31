@@ -47,7 +47,9 @@ pnpm dev
 - **User-Agent rotation** : 12 profils Chrome/Edge/Safari/Firefox (Windows/Mac/Linux/Mobile)
 - **Frappe humaine** : 80–250ms par caractère, pauses aléatoires
 - **Mouvement souris** : trajectoire naturelle avant chaque clic
-- **Jitter intervals** : 8–22 min selon urgence (non-répétitifs)
+- **Joventy Shuffle** : scheduling par `nextCheckDue` (`lastCheckAt + tierInterval`) — aucun dossier ne repasse avant son délai
+- **Silence Radio** : 3–5 min de cooldown IP entre chaque incursion consécutive (anti-ban)
+- **Jitter intervals** : non-répétitifs, par tier d'urgence
 - **Sessions courtes** : max 5 min, fermeture forcée si dépassé
 - **2captcha** : résolution automatique des reCAPTCHA si clé configurée
 - **Seuil d'échecs** : 3 échecs consécutifs → pause automatique du dossier
@@ -55,8 +57,8 @@ pnpm dev
 ## File d'attente prioritaire
 
 ```
-tres_urgent  → vérification toutes les  8–10 min
-urgent       → vérification toutes les 11–14 min
-prioritaire  → vérification toutes les 15–18 min
-standard     → vérification toutes les 19–22 min
+tres_urgent  → re-check min  8 min — max 12 min  (+ silence 3-5 min entre clients)
+urgent       → re-check min 15 min — max 20 min
+prioritaire  → re-check min 25 min — max 35 min
+standard     → re-check min 45 min — max 60 min
 ```

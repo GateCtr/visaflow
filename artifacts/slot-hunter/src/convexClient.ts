@@ -40,12 +40,14 @@ export interface HunterJob {
     scheduleUrl?: string;
     checkCount?: number;
     lastResult?: string;
+    lastCheckAt?: number;
   };
   portalUrl: string | null;
   portalName: string | null;
   portalDashboardUrl: string | null;
   portalAppointmentUrl: string | null;
   portalScheduleUrl: string | null;
+  lastCheckAt: number | null;
 }
 
 const RETRYABLE_HTTP_CODES = new Set([429, 500, 502, 503, 504]);

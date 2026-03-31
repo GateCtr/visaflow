@@ -4,127 +4,110 @@ dotenv.config();
 import { getActiveJobs, sendHeartbeat, type HunterJob } from "./convexClient.js";
 import { runHunterSession, type SessionResult } from "./navigator.js";
 
-const MIN_INTERVAL_MS = 8 * 60 * 1000;
-const MAX_INTERVAL_MS = 22 * 60 * 1000;
-const INITIAL_DELAY_MIN_MS = 2000;
-const INITIAL_DELAY_MAX_MS = 8000;
-const MAX_LOGIN_FAILURES = 3;
-
+// ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
 const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
-  tres_urgent: { min: 8 * 60 * 1000, max: 10 * 60 * 1000 },
-  urgent: { min: 11 * 60 * 1000, max: 14 * 60 * 1000 },
-  prioritaire: { min: 15 * 60 * 1000, max: 18 * 60 * 1000 },
-  standard: { min: 19 * 60 * 1000, max: 22 * 60 * 1000 },
+  tres_urgent:  { min:  8 * 60_000, max: 12 * 60_000 },
+  urgent:       { min: 15 * 60_000, max: 20 * 60_000 },
+  prioritaire:  { min: 25 * 60_000, max: 35 * 60_000 },
+  standard:     { min: 45 * 60_000, max: 60 * 60_000 },
 };
 
+// ─── Silence Radio : IP cooldown entre deux incursions consécutives ─────────
+const SILENCE_RADIO_MIN_MS = 3 * 60_000;
+const SILENCE_RADIO_MAX_MS = 5 * 60_000;
+
+// ─── Polling quand aucun job n'est dû ───────────────────────────────────────
+const IDLE_POLL_MIN_MS = 60_000;
+const IDLE_POLL_MAX_MS = 90_000;
+
+const URGENCY_ORDER: Record<string, number> = {
+  tres_urgent: 0,
+  urgent: 1,
+  prioritaire: 2,
+  standard: 3,
+};
+
+const MAX_LOGIN_FAILURES = 3;
+
 const consecutiveLoginFailures = new Map<string, number>();
-const lastIntervals = new Map<string, number>();
 const pausedJobs = new Set<string>();
+const lastIntervalUsed = new Map<string, number>();
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
   const ts = new Date().toISOString();
   console.log(`[${ts}] [${level}] ${msg}`);
 }
 
-function randomInterval(urgencyTier: string): number {
+function getIntervalMs(urgencyTier: string): number {
   const cfg = URGENCY_INTERVAL[urgencyTier] ?? URGENCY_INTERVAL.standard;
+  const last = lastIntervalUsed.get(urgencyTier);
   let interval = cfg.min + Math.random() * (cfg.max - cfg.min);
 
-  const last = lastIntervals.get(urgencyTier);
-  if (last) {
+  if (last !== undefined) {
     let attempts = 0;
-    while (Math.abs(interval - last) < 60_000 && attempts < 5) {
+    while (Math.abs(interval - last) < 90_000 && attempts < 6) {
       interval = cfg.min + Math.random() * (cfg.max - cfg.min);
       attempts++;
     }
   }
 
-  lastIntervals.set(urgencyTier, interval);
+  lastIntervalUsed.set(urgencyTier, interval);
   return Math.round(interval);
 }
 
+function getSilenceRadioMs(): number {
+  return Math.round(SILENCE_RADIO_MIN_MS + Math.random() * (SILENCE_RADIO_MAX_MS - SILENCE_RADIO_MIN_MS));
+}
+
 function formatMs(ms: number): string {
-  const min = Math.floor(ms / 60000);
-  const sec = Math.round((ms % 60000) / 1000);
+  const min = Math.floor(ms / 60_000);
+  const sec = Math.round((ms % 60_000) / 1000);
   return `${min}m${sec}s`;
 }
 
-async function processJob(job: HunterJob): Promise<void> {
-  if (pausedJobs.has(job.id)) {
-    log("INFO", `Skipping paused job: ${job.applicantName}`);
-    return;
-  }
+function getNextCheckDue(job: HunterJob): number {
+  const lastCheck = job.lastCheckAt ?? job.hunterConfig.lastCheckAt;
+  if (!lastCheck) return 0;
+  const cfg = URGENCY_INTERVAL[job.urgencyTier] ?? URGENCY_INTERVAL.standard;
+  return lastCheck + getIntervalMs(job.urgencyTier);
+}
 
-  if (!job.portalUrl) {
-    log("WARN", `[${job.applicantName}] No portalUrl configured — skipping (set hunterConfig.portalUrl in admin)`);
-    try {
-      await sendHeartbeat({
-        applicationId: job.id,
-        result: "error",
-        errorMessage: "Aucun portalUrl configuré pour ce dossier — skippé par le hunter",
-      });
-    } catch { /* ignore */ }
-    return;
-  }
+function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
+  const now = Date.now();
 
-  const initialDelay = INITIAL_DELAY_MIN_MS + Math.random() * (INITIAL_DELAY_MAX_MS - INITIAL_DELAY_MIN_MS);
-  log("INFO", `[${job.applicantName}] Waiting ${Math.round(initialDelay)}ms before session...`);
-  await new Promise((r) => setTimeout(r, initialDelay));
+  const due = jobs.filter((j) =>
+    !pausedJobs.has(j.id) &&
+    j.hunterConfig?.isActive === true &&
+    !!j.portalUrl &&
+    getNextCheckDue(j) <= now,
+  );
 
-  log("INFO", `[${job.applicantName}] Hunt start (${job.destination} / ${job.urgencyTier})`);
+  if (due.length === 0) return null;
 
-  let result: SessionResult;
-  try {
-    result = await runHunterSession(job);
-  } catch (err) {
-    result = "error";
-    log("ERROR", `[${job.applicantName}] Uncaught error: ${err}`);
-  }
+  due.sort((a, b) => {
+    const tierDiff = (URGENCY_ORDER[a.urgencyTier] ?? 3) - (URGENCY_ORDER[b.urgencyTier] ?? 3);
+    if (tierDiff !== 0) return tierDiff;
+    return getNextCheckDue(a) - getNextCheckDue(b);
+  });
 
-  log("INFO", `[${job.applicantName}] Result: ${result}`);
+  return due[0];
+}
 
-  switch (result) {
-    case "slot_found":
-      consecutiveLoginFailures.delete(job.id);
-      pausedJobs.add(job.id);
-      log("INFO", `[${job.applicantName}] SLOT FOUND — removed from queue`);
-      break;
+function getTimeUntilNextDue(jobs: HunterJob[]): number {
+  const now = Date.now();
 
-    case "login_failed": {
-      const loginFails = (consecutiveLoginFailures.get(job.id) ?? 0) + 1;
-      consecutiveLoginFailures.set(job.id, loginFails);
-      log("WARN", `[${job.applicantName}] Login failure #${loginFails}/${MAX_LOGIN_FAILURES}`);
+  const active = jobs.filter((j) =>
+    !pausedJobs.has(j.id) &&
+    j.hunterConfig?.isActive === true &&
+    !!j.portalUrl,
+  );
 
-      if (loginFails >= MAX_LOGIN_FAILURES) {
-        pausedJobs.add(job.id);
-        log("ERROR", `[${job.applicantName}] ${MAX_LOGIN_FAILURES} consecutive login failures — pausing server-side`);
-        try {
-          await sendHeartbeat({
-            applicationId: job.id,
-            result: "error",
-            errorMessage: `Auto-paused: ${loginFails} login failures consécutives — vérifier les identifiants`,
-            shouldPause: true,
-          });
-        } catch (err) {
-          log("WARN", `[${job.applicantName}] Failed to send pause heartbeat: ${err}`);
-        }
-      }
-      break;
-    }
+  if (active.length === 0) return IDLE_POLL_MAX_MS;
 
-    case "error":
-      log("WARN", `[${job.applicantName}] Transient error (timeout/network/parsing) — will retry next cycle`);
-      break;
+  const minDue = Math.min(...active.map((j) => getNextCheckDue(j)));
+  const waitMs = Math.max(minDue - now, 0);
 
-    case "captcha":
-      log("WARN", `[${job.applicantName}] Blocked by CAPTCHA — will retry next cycle`);
-      break;
-
-    case "not_found":
-      consecutiveLoginFailures.delete(job.id);
-      log("INFO", `[${job.applicantName}] No slot found this cycle`);
-      break;
-  }
+  return Math.min(Math.max(waitMs, IDLE_POLL_MIN_MS), IDLE_POLL_MAX_MS);
 }
 
 function syncAdminResets(freshJobs: HunterJob[]): void {
@@ -133,7 +116,7 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
   for (const jobId of pausedJobs) {
     const freshJob = freshJobs.find((j) => j.id === jobId);
     if (freshJob && freshJob.hunterConfig.isActive) {
-      log("INFO", `[${freshJob.applicantName}] Admin reset detected — resuming (clearing login failure count)`);
+      log("INFO", `[${freshJob.applicantName}] Admin reset détecté — reprise`);
       pausedJobs.delete(jobId);
       consecutiveLoginFailures.delete(jobId);
     }
@@ -146,39 +129,51 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
   }
 }
 
-async function runCycle(): Promise<void> {
-  log("INFO", "=== Starting hunt cycle ===");
+async function handleResult(job: HunterJob, result: SessionResult): Promise<void> {
+  log("INFO", `[${job.applicantName}] Résultat: ${result}`);
 
-  let jobs: HunterJob[];
-  try {
-    jobs = await getActiveJobs();
-  } catch (err) {
-    log("ERROR", `Failed to fetch jobs: ${err}`);
-    return;
-  }
+  switch (result) {
+    case "slot_found":
+      consecutiveLoginFailures.delete(job.id);
+      pausedJobs.add(job.id);
+      log("INFO", `[${job.applicantName}] ✅ CRÉNEAU TROUVÉ — dossier retiré de la file`);
+      break;
 
-  syncAdminResets(jobs);
+    case "login_failed": {
+      const loginFails = (consecutiveLoginFailures.get(job.id) ?? 0) + 1;
+      consecutiveLoginFailures.set(job.id, loginFails);
+      log("WARN", `[${job.applicantName}] Échec login #${loginFails}/${MAX_LOGIN_FAILURES}`);
 
-  const activeJobs = jobs.filter((j) => !pausedJobs.has(j.id));
-  log("INFO", `${activeJobs.length} active jobs (${pausedJobs.size} paused locally)`);
-
-  if (activeJobs.length === 0) {
-    log("INFO", "No active jobs — sleeping until next poll");
-    return;
-  }
-
-  for (let i = 0; i < activeJobs.length; i++) {
-    const job = activeJobs[i];
-    await processJob(job);
-
-    if (i < activeJobs.length - 1) {
-      const interval = randomInterval(job.urgencyTier);
-      log("INFO", `Waiting ${formatMs(interval)} before next job...`);
-      await new Promise((r) => setTimeout(r, interval));
+      if (loginFails >= MAX_LOGIN_FAILURES) {
+        pausedJobs.add(job.id);
+        log("ERROR", `[${job.applicantName}] ${MAX_LOGIN_FAILURES} échecs consécutifs — auto-pause`);
+        try {
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "error",
+            errorMessage: `Auto-paused: ${loginFails} login failures consécutives — vérifier les identifiants`,
+            shouldPause: true,
+          });
+        } catch (err) {
+          log("WARN", `[${job.applicantName}] Heartbeat pause échoué: ${err}`);
+        }
+      }
+      break;
     }
-  }
 
-  log("INFO", "=== Hunt cycle complete ===");
+    case "error":
+      log("WARN", `[${job.applicantName}] Erreur transitoire — prochain cycle prévu selon tier`);
+      break;
+
+    case "captcha":
+      log("WARN", `[${job.applicantName}] Bloqué par CAPTCHA — prochain cycle prévu selon tier`);
+      break;
+
+    case "not_found":
+      consecutiveLoginFailures.delete(job.id);
+      log("INFO", `[${job.applicantName}] Aucun créneau disponible`);
+      break;
+  }
 }
 
 async function main(): Promise<void> {
@@ -186,25 +181,73 @@ async function main(): Promise<void> {
   const convexUrl = process.env.CONVEX_SITE_URL;
   const hunterKey = process.env.HUNTER_API_KEY;
 
-  log("INFO", "=== Joventy Hunter starting ===");
+  log("INFO", "=== Joventy Hunter démarrage (Joventy Shuffle v2) ===");
   log("INFO", `Mode: ${dryRun ? "DRY RUN" : "PRODUCTION"}`);
-  log("INFO", `Convex: ${convexUrl ? "configured" : "MISSING"}`);
-  log("INFO", `Hunter API Key: ${hunterKey ? "configured" : "MISSING"}`);
-  log("INFO", `Proxy: ${process.env.PROXY_URL ? "configured" : "none"}`);
-  log("INFO", `Interval range: ${formatMs(MIN_INTERVAL_MS)}–${formatMs(MAX_INTERVAL_MS)} (varies by urgency)`);
-  log("INFO", `Pause after: ${MAX_LOGIN_FAILURES} consecutive login_failed results (transient errors don't count)`);
+  log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
+  log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
+  log("INFO", `Proxy: ${process.env.PROXY_URL ? "configuré" : "aucun"}`);
+  log("INFO", "Intervalles tier — très_urgent:8-12m  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
+  log("INFO", `Silence radio inter-clients: ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)}`);
+  log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
   if (!convexUrl || !hunterKey) {
-    log("ERROR", "CONVEX_SITE_URL and HUNTER_API_KEY are required — exiting");
+    log("ERROR", "CONVEX_SITE_URL et HUNTER_API_KEY sont requis — arrêt");
     process.exit(1);
   }
 
   while (true) {
+    let jobs: HunterJob[];
     try {
-      await runCycle();
+      jobs = await getActiveJobs();
     } catch (err) {
-      log("ERROR", `Cycle crashed (will retry in 30s): ${err}`);
+      log("ERROR", `Échec récupération jobs: ${err} — retry dans 30s`);
       await new Promise((r) => setTimeout(r, 30_000));
+      continue;
+    }
+
+    syncAdminResets(jobs);
+
+    const due = findNextDueJob(jobs);
+
+    if (!due) {
+      const waitMs = getTimeUntilNextDue(jobs);
+      const activeCount = jobs.filter((j) => !pausedJobs.has(j.id) && j.hunterConfig?.isActive).length;
+
+      if (activeCount === 0) {
+        log("INFO", "Aucun dossier actif — polling dans 90s");
+      } else {
+        const tierCounts = jobs
+          .filter((j) => !pausedJobs.has(j.id) && j.hunterConfig?.isActive)
+          .reduce<Record<string, number>>((acc, j) => {
+            acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
+            return acc;
+          }, {});
+        const tierStr = Object.entries(tierCounts).map(([t, n]) => `${n}×${t}`).join(", ");
+        log("INFO", `Aucun dossier dû (${tierStr}) — prochain check dans ${formatMs(waitMs)}`);
+      }
+
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+
+    const overdueMs = Date.now() - getNextCheckDue(due);
+    const overdueStr = overdueMs > 0 ? ` (+${formatMs(overdueMs)} de retard)` : "";
+    log("INFO", `▶ [${due.applicantName}] Check ${due.urgencyTier}${overdueStr}`);
+
+    let result: SessionResult;
+    try {
+      result = await runHunterSession(due);
+    } catch (err) {
+      result = "error";
+      log("ERROR", `[${due.applicantName}] Erreur session non capturée: ${err}`);
+    }
+
+    await handleResult(due, result);
+
+    if (result !== "slot_found") {
+      const silenceMs = getSilenceRadioMs();
+      log("INFO", `📻 Silence radio ${formatMs(silenceMs)} (cooldown IP)...`);
+      await new Promise((r) => setTimeout(r, silenceMs));
     }
   }
 }

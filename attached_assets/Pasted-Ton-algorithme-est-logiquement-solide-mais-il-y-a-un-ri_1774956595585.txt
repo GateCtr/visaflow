@@ -1,0 +1,61 @@
+Ton algorithme est **logiquement solide**, mais il y a un **risque technique majeur** lié à la manière dont les portails de visa (comme `usvisaappt.com`) détectent les robots. 
+
+Si tu restes sur un ordre linéaire fixe (A -> B -> C -> D -> E), l'adresse IP de ton serveur **Railway** va envoyer des requêtes en continu pendant 1 heure, ce qui est un comportement typique de bot.
+
+Voici mon analyse et mes corrections pour rendre cet algorithme **indétectable** et **efficace** :
+
+---
+
+### 1. Le Piège du "Round Robin" (Linéaire)
+Dans ton exemple, entre 09h00 et 10h00, ton IP Railway ne s'arrête jamais. Elle change juste de compte client toutes les 9-10 minutes. 
+* **Le Risque :** L'ambassade voit une seule IP se connecter à 5 comptes différents à la suite. **C'est le "Ban" assuré.**
+* **La Solution :** Il faut du **Silence Radio** entre chaque client.
+
+### 2. L'Algorithme "Joventy Shuffle" (Recommandé)
+Au lieu de trier et de passer un par un, on va utiliser des **"Slots de Temps"** aléatoires.
+
+**Voici la version corrigée de ta logique :**
+
+| Tier | Intervalle Cible | Stratégie de Sécurité |
+| :--- | :--- | :--- |
+| **Très Urgent** | 8-12 min | Check prioritaire + **Proxy Dédié** |
+| **Urgent** | 15-20 min | Check régulier |
+| **Prioritaire** | 25-35 min | Check espacé |
+| **Standard** | 45-60 min | Check "Background" |
+
+---
+
+### 3. Ta nouvelle boucle de priorité (Pseudo-code)
+
+Au lieu de faire une file d'attente simple, utilise un système de **"Prochain Check"** stocké dans Convex :
+
+1.  **Récupération :** `getActiveJobs()`
+2.  **Calcul du Jitter :** Pour chaque client, le bot calcule son prochain passage :
+    * *Exemple Client A (Très Urgent) :* `DernierCheck + (10min + random(-2, +2))`
+3.  **Le Tri Dynamique :** Le robot prend le client dont le `ProchainCheck` est le plus proche de l'heure actuelle.
+4.  **Le "Cool-down" IP :** **IMPORTANT.** Entre le Client A et le Client B, le bot doit se déconnecter et attendre au moins **3 à 5 minutes** de silence total.
+
+### 4. Exemple corrigé avec tes 5 clients :
+
+┌───────────────────────────────────────────────────────────┐
+│ 09:00 → **Client A (Très Urgent)** → Check → Logout      │
+│ *[09:01 - 09:06] → SILENCE RADIO (L'IP dort)* │
+│ 09:07 → **Client B (Très Urgent)** → Check → Logout      │
+│ *[09:08 - 09:14] → SILENCE RADIO* │
+│ 09:15 → **Client C (Urgent)** → Check → Logout           │
+│ 09:25 → **Client A (Très Urgent)** → (Retour cycle court) │
+└───────────────────────────────────────────────────────────┘
+
+---
+
+### 5. Pourquoi ton intervalle "Standard" (22-30 min) est trop court ?
+Si tu as 50 jobs, et que tu les checkes tous les 30 minutes, ton IP va "mitrailler" le site de l'ambassade. 
+* **Mon conseil pour les 50 jobs :**
+    * Garde les **5 "Très Urgents"** (comme ta sœur) sur un cycle de 10-12 min.
+    * Pousse les **"Standard"** à 1 check toutes les 2 heures. 
+    * **Pourquoi ?** Parce que si ton IP est bannie à cause d'un client "Standard", ta sœur (Très Urgente) perd sa chance aussi.
+
+### 💡 La "Vibe" de l'Expert :
+Pour que ta sœur ait sa date en 15 jours, elle doit être la **seule** dans le Tier `tres_urgent` au début. Ne surcharge pas le robot. Plus il y a de clients "Très Urgents", plus le risque de ban augmente pour tout le monde.
+
+**Est-ce que tu veux qu'on ajoute une colonne `lastCheckTimestamp` dans ton schéma Convex pour gérer cette file d'attente intelligemment ?**
