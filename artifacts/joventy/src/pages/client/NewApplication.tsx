@@ -86,7 +86,7 @@ function getPackageInfo(
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
         description: "Vos formulaires sont remplis et vos frais MRV acquittés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade américaine.",
-        slotNote: "Prérequis : DS-160 soumis + frais MRV (185 $) payés.",
+        slotNote: "Prérequis : DS-160 soumis. Frais MRV (185 $) requis — le reçu peut être fourni ultérieurement.",
       };
     }
     if (destination === "turkey") {
@@ -567,8 +567,9 @@ export default function NewApplication() {
                       <FileText className="w-4 h-4 text-secondary" /> Références USTravelDocs (USA)
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Vous devez avoir complété le DS-160 et payé les frais MRV avant de soumettre.
+                      Vous devez avoir complété le DS-160 avant de soumettre.
                       Ces références permettent à Joventy de réserver le créneau en votre nom.
+                      Le reçu MRV peut être renseigné plus tard par vous ou automatiquement par notre robot.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -586,7 +587,8 @@ export default function NewApplication() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-primary">
-                        N° de reçu MRV (frais visa) <span className="text-red-500">*</span>
+                        N° de reçu MRV (frais visa)
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">(optionnel)</span>
                       </label>
                       <Input
                         placeholder="Ex : CGCD25XXXXXXXXXX"
@@ -594,7 +596,7 @@ export default function NewApplication() {
                         value={slotRefs.mrvReceiptNumber}
                         onChange={(e) => updateRef("mrvReceiptNumber", e.target.value)}
                       />
-                      <p className="text-[10px] text-muted-foreground">Reçu généré après paiement des frais MRV (185 $ ou 205 $)</p>
+                      <p className="text-[10px] text-muted-foreground">Reçu généré après paiement des frais MRV (185 $ ou 205 $). Si non disponible, notre robot peut le renseigner automatiquement.</p>
                     </div>
                     {isStudentExchange && (
                       <div className="space-y-1.5 sm:col-span-2">
