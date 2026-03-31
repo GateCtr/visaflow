@@ -144,7 +144,6 @@ export default function PaymentGate() {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start gap-3">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <p>
-            {SERVICE_PACKAGES.dossier_only.icon}{" "}
             <strong>Package Constitution de Dossier — Tarif fixe.</strong> Vous payez uniquement les frais d'engagement de{" "}
             <strong>{formatCurrency(amount)}</strong>. Aucune prime de succès ne sera demandée.
           </p>

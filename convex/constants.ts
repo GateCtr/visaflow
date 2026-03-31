@@ -114,7 +114,6 @@ export const SERVICE_PACKAGES = {
     description: "Joventy s'occupe de tout : constitution du dossier, recherche de créneau ou obtention du visa électronique.",
     hasSuccessFee: true,
     availableFor: "all" as const,
-    icon: "⭐",
   },
   slot_only: {
     key: "slot_only" as const,
@@ -123,7 +122,6 @@ export const SERVICE_PACKAGES = {
     description: "Votre dossier est déjà constitué ? Joventy se charge uniquement de trouver et verrouiller votre créneau de rendez-vous consulaire.",
     hasSuccessFee: true,
     availableFor: ["usa", "turkey"] as const,
-    icon: "📅",
   },
   dossier_only: {
     key: "dossier_only" as const,
@@ -132,7 +130,6 @@ export const SERVICE_PACKAGES = {
     description: "Joventy prépare et vérifie l'intégralité de votre dossier de demande de visa. Pas de prime de succès — tarif fixe.",
     hasSuccessFee: false,
     availableFor: "all" as const,
-    icon: "📋",
   },
 } as const;
 

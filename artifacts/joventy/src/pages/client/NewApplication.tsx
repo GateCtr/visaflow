@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
   destination: z.enum(["usa", "dubai", "turkey", "india"]),
@@ -29,11 +29,17 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa", name: "États-Unis 🇺🇸", desc: "Visas non-immigrants et immigrants" },
-  { id: "dubai", name: "Dubaï 🇦🇪", desc: "Visas touristiques et résidents" },
-  { id: "turkey", name: "Turquie 🇹🇷", desc: "E-Visa et consulaire" },
-  { id: "india", name: "Inde 🇮🇳", desc: "Visas électroniques et standards" },
+  { id: "usa", name: "États-Unis", desc: "Visas non-immigrants et immigrants" },
+  { id: "dubai", name: "Dubaï", desc: "Visas touristiques et résidents" },
+  { id: "turkey", name: "Turquie", desc: "E-Visa et consulaire" },
+  { id: "india", name: "Inde", desc: "Visas électroniques et standards" },
 ];
+
+const PACKAGE_ICONS: Record<string, React.ElementType> = {
+  full_service: Star,
+  slot_only: Calendar,
+  dossier_only: ClipboardList,
+};
 
 export default function NewApplication() {
   const [step, setStep] = useState(1);
@@ -235,7 +241,7 @@ export default function NewApplication() {
                         </span>
                       )}
                       <div className="flex items-start gap-4">
-                        <span className="text-2xl mt-0.5">{pkg.icon}</span>
+                        {(() => { const Icon = PACKAGE_ICONS[pkgKey] ?? Star; return <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 bg-primary/10"><Icon className="w-5 h-5 text-primary" /></div>; })()}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-bold text-primary text-base">{pkg.label}</p>
@@ -343,7 +349,7 @@ export default function NewApplication() {
               {/* Package reminder badge */}
               {pricing && (
                 <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mb-2">
-                  <span className="text-xl">{SERVICE_PACKAGES[selectedPackage].icon}</span>
+                  {(() => { const Icon = PACKAGE_ICONS[selectedPackage] ?? Star; return <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary/10"><Icon className="w-4 h-4 text-primary" /></div>; })()}
                   <div>
                     <p className="text-sm font-bold text-primary">{SERVICE_PACKAGES[selectedPackage].label}</p>
                     <p className="text-xs text-muted-foreground">{SERVICE_PACKAGES[selectedPackage].description}</p>

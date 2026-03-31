@@ -401,7 +401,7 @@ export default function AdminApplicationDetail() {
     setSlotSaving(true);
     try {
       await markSlotFound({ applicationId: appId, date: slotDate, time: slotTime, location: slotLocation, confirmationCode: slotCode || undefined });
-      toast({ title: "🎉 Créneau enregistré", description: "Le client sera notifié." });
+      toast({ title: "Créneau enregistré", description: "Le client sera notifié." });
       setSlotDate(""); setSlotTime(""); setSlotCode("");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";
@@ -420,7 +420,7 @@ export default function AdminApplicationDetail() {
       if (!res.ok) throw new Error("Échec de l'upload");
       const { storageId } = await res.json() as { storageId: string };
       await markVisaObtained({ applicationId: appId, storageId, notes: visaNotes || undefined });
-      toast({ title: "🎉 Visa enregistré", description: "Le client recevra son visa après paiement de la prime." });
+      toast({ title: "Visa enregistré", description: "Le client recevra son visa après paiement de la prime." });
       setVisaNotes("");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";

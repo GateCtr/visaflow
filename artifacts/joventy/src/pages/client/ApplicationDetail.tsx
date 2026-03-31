@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Send, Calendar, Plane, CreditCard, ShieldCheck,
   CheckCircle2, Clock, Star, Download, ArrowRight,
-  FileText, Search, Lock, XCircle, Upload, Loader2, Eye
+  FileText, Search, Lock, XCircle, Upload, Loader2, Eye,
+  Sparkles, ClipboardCheck, Stamp
 } from "lucide-react";
 
 type Application = Doc<"applications">;
@@ -401,7 +402,11 @@ export default function ClientApplicationDetail() {
                 ? "bg-purple-100 text-purple-700"
                 : "bg-orange-100 text-orange-700"
           }`}>
-            {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.icon ?? "⭐"}{" "}
+            {isDossierOnly
+              ? <ClipboardCheck className="w-3 h-3" />
+              : servicePackage === "slot_only"
+                ? <Calendar className="w-3 h-3" />
+                : <Star className="w-3 h-3" />}
             {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
           </span>
         </div>
@@ -511,7 +516,9 @@ export default function ClientApplicationDetail() {
       {isSlotFound && !hasSuccessProofPending && (
         <div className="bg-green-50 border-2 border-green-400 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="text-4xl">🎉</div>
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-6 h-6 text-green-600" />
+            </div>
             <div>
               <h3 className="text-xl font-bold text-green-700 mb-1">
                 {successCopy?.clientCtaTitle ?? "Résultat obtenu !"}
@@ -556,7 +563,9 @@ export default function ClientApplicationDetail() {
       {isCompleted && isDossierOnly && (
         <div className="bg-blue-50 border-2 border-blue-400 rounded-2xl p-6">
           <div className="flex items-start gap-4">
-            <div className="text-4xl">📋</div>
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <ClipboardCheck className="w-6 h-6 text-blue-600" />
+            </div>
             <div className="flex-1">
               <h3 className="text-xl font-bold text-blue-700 mb-1">
                 Votre dossier est prêt !
@@ -579,7 +588,9 @@ export default function ClientApplicationDetail() {
       {isCompleted && isEvisaModel && !isDossierOnly && (
         <div className="bg-green-50 border-2 border-green-400 rounded-2xl p-6">
           <div className="flex items-start gap-4">
-            <div className="text-4xl">🛂</div>
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <Stamp className="w-6 h-6 text-green-600" />
+            </div>
             <div className="flex-1">
               <h3 className="text-xl font-bold text-green-700 mb-1">
                 {successCopy?.completedNote ?? "Votre visa est disponible !"}
@@ -715,7 +726,7 @@ export default function ClientApplicationDetail() {
               {/* slot_only notice */}
               {servicePackage === "slot_only" && (
                 <div className="flex items-start gap-3 bg-purple-50 border border-purple-200 rounded-xl p-4 text-sm text-purple-800 mb-4">
-                  <span className="text-lg">📅</span>
+                  <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0 text-purple-500" />
                   <p>
                     <strong>Package Créneau Uniquement :</strong> Vous avez indiqué que votre dossier est déjà constitué.
                     Les documents ci-dessous sont <strong>optionnels</strong> — vous pouvez les soumettre directement au consulat.
