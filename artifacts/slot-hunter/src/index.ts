@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, type HunterJob } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, type HunterJob } from "./convexClient.js";
 import { runHunterSession, type SessionResult } from "./navigator.js";
 import { randomDelay } from "./browser.js";
 
@@ -14,9 +14,9 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
 const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
   tres_urgent: { min: 8 * 60 * 1000, max: 10 * 60 * 1000 },
-  urgent: { min: 12 * 60 * 1000, max: 15 * 60 * 1000 },
-  prioritaire: { min: 18 * 60 * 1000, max: 20 * 60 * 1000 },
-  standard: { min: 22 * 60 * 1000, max: 30 * 60 * 1000 },
+  urgent: { min: 11 * 60 * 1000, max: 14 * 60 * 1000 },
+  prioritaire: { min: 15 * 60 * 1000, max: 18 * 60 * 1000 },
+  standard: { min: 19 * 60 * 1000, max: 22 * 60 * 1000 },
 };
 
 const consecutiveFailures = new Map<string, number>();
@@ -87,7 +87,17 @@ async function processJob(job: HunterJob): Promise<void> {
       log("WARN", `[${job.applicantName}] Failure #${failures}/${MAX_CONSECUTIVE_FAILURES}`);
       if (failures >= MAX_CONSECUTIVE_FAILURES) {
         pausedJobs.add(job.id);
-        log("ERROR", `[${job.applicantName}] Max failures reached — paused until admin resets`);
+        log("ERROR", `[${job.applicantName}] Max failures reached — pausing server-side via heartbeat`);
+        try {
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "error",
+            errorMessage: `Auto-paused: ${failures} login failures consécutives`,
+            shouldPause: true,
+          });
+        } catch (err) {
+          log("WARN", `[${job.applicantName}] Failed to send pause heartbeat: ${err}`);
+        }
       }
       break;
     }

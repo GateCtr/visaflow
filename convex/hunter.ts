@@ -138,6 +138,7 @@ export const recordHeartbeat = internalMutation({
     applicationId: v.id("applications"),
     result: v.union(v.literal("not_found"), v.literal("captcha"), v.literal("error")),
     errorMessage: v.optional(v.string()),
+    shouldPause: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const app = await ctx.db.get(args.applicationId);
@@ -149,11 +150,22 @@ export const recordHeartbeat = internalMutation({
     await ctx.db.patch(args.applicationId, {
       hunterConfig: {
         ...existing,
+        isActive: args.shouldPause ? false : existing.isActive,
         lastCheckAt: Date.now(),
         checkCount: (existing.checkCount ?? 0) + 1,
         lastResult: args.result,
       },
       updatedAt: Date.now(),
     });
+
+    if (args.shouldPause) {
+      await ctx.db.patch(args.applicationId, {
+        logs: [
+          ...((app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? []),
+          { msg: "Hunter auto-paused: 3 login failures consécutives", time: Date.now(), author: "Joventy Hunter" },
+        ],
+        updatedAt: Date.now(),
+      });
+    }
   },
 });

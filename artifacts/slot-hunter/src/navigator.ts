@@ -1,7 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { launchBrowser, humanType, humanClick, humanScroll, randomDelay, isDryRun } from "./browser.js";
 import { detectAndSolveCaptcha } from "./captcha.js";
-import { reportSlotFound, sendHeartbeat, type HunterJob } from "./convexClient.js";
+import { reportSlotFound, sendHeartbeat, uploadScreenshot, type HunterJob } from "./convexClient.js";
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -234,14 +234,20 @@ async function parseSlotsFromDom(page: Page): Promise<SlotInfo | null> {
   });
 }
 
-async function captureScreenshot(page: Page): Promise<string | null> {
+async function captureAndUploadScreenshot(page: Page): Promise<string | null> {
   try {
     const screenshotBuffer = await page.screenshot({ fullPage: false, type: "png" });
     const base64 = screenshotBuffer.toString("base64");
-    console.log(`[navigator] Screenshot captured (${Math.round(base64.length / 1024)}kb)`);
-    return null;
+    console.log(`[navigator] Screenshot captured (${Math.round(base64.length / 1024)}kb) — uploading...`);
+    const storageId = await uploadScreenshot(base64);
+    if (storageId) {
+      console.log(`[navigator] Screenshot uploaded → storageId: ${storageId}`);
+    } else {
+      console.warn("[navigator] Screenshot upload returned null storageId");
+    }
+    return storageId;
   } catch (e) {
-    console.warn("[navigator] Screenshot failed:", e);
+    console.warn("[navigator] Screenshot capture/upload failed:", e);
     return null;
   }
 }
@@ -298,6 +304,13 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
       }
 
       if (loginResult === "failed") {
+        try {
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "error",
+            errorMessage: "Login failed — credentials incorrect or portal unavailable",
+          });
+        } catch { /* ignore heartbeat errors */ }
         return "login_failed";
       }
 
@@ -308,7 +321,7 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
 
       if (slot) {
         console.log(`[navigator] Slot FOUND for ${job.applicantName}: ${slot.date} ${slot.time}`);
-        const screenshotId = await captureScreenshot(page);
+        const screenshotId = await captureAndUploadScreenshot(page);
 
         await reportSlotFound({
           applicationId: job.id,

@@ -121,6 +121,7 @@ export async function sendHeartbeat(payload: {
   applicationId: string;
   result: "not_found" | "captcha" | "error";
   errorMessage?: string;
+  shouldPause?: boolean;
 }): Promise<void> {
   const url = `${CONVEX_SITE_URL}/hunter/heartbeat`;
   const res = await fetchWithRetry(url, {
@@ -135,5 +136,30 @@ export async function sendHeartbeat(payload: {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`sendHeartbeat failed: ${res.status} ${text}`);
+  }
+}
+
+export async function uploadScreenshot(base64: string): Promise<string | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/upload-screenshot`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ base64, contentType: "image/png" }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[convexClient] Screenshot upload failed: ${res.status}`);
+      return null;
+    }
+
+    const data = (await res.json()) as { ok: boolean; storageId?: string };
+    return data.storageId ?? null;
+  } catch (err) {
+    console.warn("[convexClient] Screenshot upload error:", err);
+    return null;
   }
 }

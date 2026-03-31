@@ -158,6 +158,7 @@ http.route({
       applicationId: string;
       result: "not_found" | "captcha" | "error";
       errorMessage?: string;
+      shouldPause?: boolean;
     };
 
     try {
@@ -178,12 +179,55 @@ http.route({
       applicationId: body.applicationId as Id<"applications">,
       result: body.result,
       errorMessage: body.errorMessage,
+      shouldPause: body.shouldPause,
     });
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
+  }),
+});
+
+http.route({
+  path: "/hunter/upload-screenshot",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { base64: string; contentType?: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.base64) {
+      return new Response("Missing required field: base64", { status: 400 });
+    }
+
+    try {
+      const binaryStr = atob(body.base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: body.contentType ?? "image/png" });
+      const storageId = await ctx.storage.store(blob);
+
+      return new Response(JSON.stringify({ ok: true, storageId }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/upload-screenshot error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 
