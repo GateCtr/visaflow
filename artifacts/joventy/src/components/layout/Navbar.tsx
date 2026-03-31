@@ -34,21 +34,25 @@ export function Navbar() {
 
           <nav className="hidden md:flex items-center gap-8">
             {[
-              { label: "Nos Services", href: "/#services" },
-              { label: "Destinations", href: "/#destinations" },
-              { label: "Contact", href: "/#contact" },
+              { label: "Nos Services", anchor: "services" },
+              { label: "Destinations", anchor: "destinations" },
+              { label: "Contact", anchor: "contact" },
             ].map((link) => (
-              <Link
+              <a
                 key={link.label}
-                href={link.href}
-                className={`text-sm font-medium transition-colors ${
+                href={`#${link.anchor}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className={`text-sm font-medium transition-colors cursor-pointer ${
                   solid
                     ? "text-muted-foreground hover:text-primary"
                     : "text-white/80 hover:text-white"
                 }`}
               >
                 {link.label}
-              </Link>
+              </a>
             ))}
           </nav>
 
@@ -132,15 +136,23 @@ export function Navbar() {
       >
         <nav className="flex flex-col divide-y divide-border">
           {[
-            { label: "Nos Services", href: "/#services" },
-            { label: "Destinations", href: "/#destinations" },
-            { label: "Contact", href: "/#contact" },
+            { label: "Nos Services", anchor: "services" },
+            { label: "Destinations", anchor: "destinations" },
+            { label: "Contact", anchor: "contact" },
           ].map((link) => (
-            <Link key={link.label} href={link.href} onClick={close}>
+            <a
+              key={link.label}
+              href={`#${link.anchor}`}
+              onClick={(e) => {
+                e.preventDefault();
+                close();
+                document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
               <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
                 {link.label}
               </span>
-            </Link>
+            </a>
           ))}
         </nav>
 
