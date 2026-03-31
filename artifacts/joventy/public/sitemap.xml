@@ -2,43 +2,43 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://joventy.cd/</loc>
+    <loc>https://www.joventy.cd/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/login</loc>
+    <loc>https://www.joventy.cd/login</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/register</loc>
+    <loc>https://www.joventy.cd/register</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/mentions-legales</loc>
+    <loc>https://www.joventy.cd/mentions-legales</loc>
     <changefreq>yearly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/confidentialite</loc>
+    <loc>https://www.joventy.cd/confidentialite</loc>
     <changefreq>yearly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/conditions</loc>
+    <loc>https://www.joventy.cd/conditions</loc>
     <changefreq>yearly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://joventy.cd/remboursement</loc>
+    <loc>https://www.joventy.cd/remboursement</loc>
     <changefreq>yearly</changefreq>
     <priority>0.8</priority>
   </url>

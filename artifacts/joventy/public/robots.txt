@@ -7,4 +7,4 @@ Disallow: /admin
 Disallow: /sso-callback
 Disallow: /continue
 
-Sitemap: https://joventy.cd/sitemap.xml
+Sitemap: https://www.joventy.cd/sitemap.xml
