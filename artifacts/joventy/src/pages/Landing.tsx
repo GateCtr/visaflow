@@ -520,9 +520,9 @@ export default function Landing() {
               {
                 icon: MessageCircle,
                 label: "WhatsApp",
-                value: "+243 XXX XXX XXX",
+                value: "+243 840 808 122",
                 sub: "Réponse en moins de 2h",
-                href: "https://wa.me/243000000000",
+                href: "https://wa.me/243840808122",
                 cta: "Écrire sur WhatsApp",
                 color: "bg-green-500",
               },
