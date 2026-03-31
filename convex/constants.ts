@@ -46,8 +46,8 @@ export const VISA_PRICING = {
     label: "Dubaï (EAU)",
     flag: "🇦🇪",
     engagementFee: 50,
-    successFee: 50,
-    total: 100,
+    successFee: 70,
+    total: 120,
     successModel: "evisa" as const,
     visaTypes: ["Touriste 30j", "Touriste 60j", "Résidence", "Affaires"],
     requiredDocuments: [

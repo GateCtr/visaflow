@@ -25,7 +25,7 @@ const DESTINATIONS = [
     name: "Dubaï (EAU)",
     visaTypes: ["Touriste 30j", "Touriste 60j", "Affaires", "Résidence"],
     engagement: 50,
-    success: 50,
+    success: 70,
     model: "evisa",
     note: "Résultat en 48–72h ouvrables",
   },
