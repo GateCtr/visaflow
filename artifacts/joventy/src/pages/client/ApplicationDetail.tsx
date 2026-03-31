@@ -5,6 +5,7 @@ import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
 import { Id } from "@convex/_generated/dataModel";
 import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
+import { DocumentChecklist } from "@/components/DocumentChecklist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly, formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
   Send, Calendar, Plane, CreditCard, ShieldCheck,
   CheckCircle2, Clock, Star, Download, ArrowRight,
   FileText, Search, Lock, XCircle, Upload, Loader2, Eye,
-  Sparkles, ClipboardCheck, Stamp, MessageSquareHeart
+  Sparkles, ClipboardCheck, Stamp, MessageSquareHeart, ChevronDown
 } from "lucide-react";
 
 type Application = Doc<"applications">;
@@ -321,6 +322,7 @@ export default function ClientApplicationDetail() {
   const [msgText, setMsgText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showDocGuide, setShowDocGuide] = useState(false);
 
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
@@ -749,6 +751,29 @@ export default function ClientApplicationDetail() {
                 </span>
               </div>
 
+              {/* Guide des documents rétractable */}
+              <div className="mb-5 rounded-xl border border-blue-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowDocGuide((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 transition-colors text-left"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    📋 Guide complet des documents requis — {app.visaType}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-blue-500 transition-transform ${showDocGuide ? "rotate-180" : ""}`} />
+                </button>
+                {showDocGuide && (
+                  <div className="p-4 bg-white">
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Ce guide liste tous les documents par catégorie : ce que vous devez uploader ici, ce que Joventy prépare, et les frais que vous réglez directement.
+                    </p>
+                    <DocumentChecklist destination={app.destination} visaType={app.visaType} />
+                  </div>
+                )}
+              </div>
+
               {/* slot_only notice */}
               {servicePackage === "slot_only" && (
                 <div className="flex items-start gap-3 bg-purple-50 border border-purple-200 rounded-xl p-4 text-sm text-purple-800 mb-4">
@@ -783,8 +808,18 @@ export default function ClientApplicationDetail() {
             </div>
           )}
 
-          {/* Required documents checklist (when not yet paying or no pricing) */}
-          {(!isEngagementPaid) && <RequiredDocsList destination={app.destination} />}
+          {/* Guide complet des documents (avant paiement et toujours accessible) */}
+          {!isEngagementPaid && (
+            <div className="bg-white p-6 rounded-2xl border border-border shadow-sm">
+              <h2 className="text-lg font-bold text-primary mb-1 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-secondary" /> Guide des documents — {app.visaType}
+              </h2>
+              <p className="text-sm text-muted-foreground mb-5">
+                Voici l'ensemble des documents nécessaires pour votre dossier, classés par catégorie.
+              </p>
+              <DocumentChecklist destination={app.destination} visaType={app.visaType} />
+            </div>
+          )}
 
           {/* Activity log */}
           {app.logs && app.logs.length > 0 && (
