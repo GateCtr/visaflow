@@ -30,6 +30,10 @@ import {
   AlertTriangle,
   Package,
   Pencil,
+  Bot,
+  Play,
+  Pause,
+  Trash2,
 } from "lucide-react";
 
 function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => void }) {
@@ -348,6 +352,13 @@ export default function AdminApplicationDetail() {
   const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
   const completeDossierOnly = useMutation(api.admin.completeDossierOnly);
   const adjustSlotSuccessFee = useMutation(api.admin.adjustSlotSuccessFee);
+  const setHunterConfig = useMutation(api.hunter.setHunterConfig);
+  const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
+  const [hunterUsername, setHunterUsername] = useState("");
+  const [hunterPassword, setHunterPassword] = useState("");
+  const [hunterActive, setHunterActive] = useState(false);
+  const [hunterSaving, setHunterSaving] = useState(false);
+  const [showHunterPassword, setShowHunterPassword] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [visaUploading, setVisaUploading] = useState(false);
   const [showAdjustFee, setShowAdjustFee] = useState(false);
@@ -374,6 +385,12 @@ export default function AdminApplicationDetail() {
       setAdminNoteInput(app.adminNotes ?? "");
       const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
       if (pricing) setSlotLocation(pricing.embassyAddress ?? "");
+      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean } }).hunterConfig;
+      if (hc) {
+        setHunterUsername(hc.embassyUsername);
+        setHunterPassword(hc.embassyPassword);
+        setHunterActive(hc.isActive);
+      }
     }
   }, [app?._id]);
 
@@ -1017,6 +1034,155 @@ export default function AdminApplicationDetail() {
             </div>
           </div>
         )}
+
+        {/* ===== JOVENTY HUNTER CONFIG ===== */}
+        {isSlotOnly && isSlotHunting && (() => {
+          const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; lastCheckAt?: number; checkCount?: number; lastResult?: string } }).hunterConfig;
+          const handleSaveHunter = async () => {
+            if (!appId) return;
+            if (!hunterUsername.trim() || !hunterPassword.trim()) {
+              toast({ variant: "destructive", title: "Champs requis", description: "Identifiant et mot de passe USTravelDocs sont obligatoires." });
+              return;
+            }
+            setHunterSaving(true);
+            try {
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive });
+              toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : "Erreur";
+              toast({ variant: "destructive", title: "Erreur", description: msg });
+            } finally {
+              setHunterSaving(false);
+            }
+          };
+          const handleResetHunter = async () => {
+            if (!appId) return;
+            setHunterSaving(true);
+            try {
+              await resetHunterConfig({ applicationId: appId });
+              setHunterUsername(""); setHunterPassword(""); setHunterActive(false);
+              toast({ title: "Config Hunter supprimée", description: "Les identifiants ont été effacés." });
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : "Erreur";
+              toast({ variant: "destructive", title: "Erreur", description: msg });
+            } finally {
+              setHunterSaving(false);
+            }
+          };
+          const lastResultLabel: Record<string, string> = {
+            not_found: "Aucun créneau disponible",
+            captcha: "Bloqué par CAPTCHA",
+            error: "Erreur technique",
+            slot_captured: "Créneau capturé !",
+          };
+          return (
+            <div className="bg-white rounded-2xl border border-purple-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-purple-100 bg-purple-50 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-purple-600" />
+                <h2 className="font-bold text-purple-800 text-base">Joventy Hunter</h2>
+                <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: hc?.isActive ? "#dcfce7" : "#f1f5f9", color: hc?.isActive ? "#166534" : "#64748b" }}>
+                  {hc?.isActive ? "Actif" : hc ? "En pause" : "Non configuré"}
+                </span>
+              </div>
+              <div className="p-6 space-y-5">
+                <p className="text-sm text-slate-600">
+                  Configurez les identifiants du portail USTravelDocs du client. Le robot recherchera automatiquement un créneau et vous notifiera dès qu'un slot est capturé.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase">Identifiant USTravelDocs (email)</label>
+                    <Input
+                      value={hunterUsername}
+                      onChange={(e) => setHunterUsername(e.target.value)}
+                      placeholder="email@exemple.com"
+                      className="h-10 bg-slate-50"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase">Mot de passe USTravelDocs</label>
+                    <div className="relative">
+                      <Input
+                        type={showHunterPassword ? "text" : "password"}
+                        value={hunterPassword}
+                        onChange={(e) => setHunterPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="h-10 bg-slate-50 pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                        onClick={() => setShowHunterPassword((v) => !v)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setHunterActive((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${hunterActive ? "bg-purple-600" : "bg-slate-300"}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hunterActive ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                  <span className="text-sm font-medium text-slate-700">
+                    {hunterActive ? "Robot actif — en recherche de créneau" : "Robot en pause"}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={handleSaveHunter}
+                    disabled={hunterSaving}
+                    className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {hunterSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : (hunterActive ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />)}
+                    {hunterSaving ? "Sauvegarde..." : "Sauvegarder la configuration"}
+                  </Button>
+                  {hc && (
+                    <Button
+                      variant="outline"
+                      onClick={handleResetHunter}
+                      disabled={hunterSaving}
+                      className="gap-2 border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Effacer les identifiants
+                    </Button>
+                  )}
+                </div>
+
+                {hc && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dernier passage</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Horodatage</p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {hc.lastCheckAt ? formatDate(hc.lastCheckAt) : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Résultat</p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {hc.lastResult ? (lastResultLabel[hc.lastResult] ?? hc.lastResult) : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Tentatives totales</p>
+                        <p className="text-sm font-bold text-purple-700">{hc.checkCount ?? 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ===== RESULT PANEL — E-Visa model (Dubaï, Inde) ===== */}
         {isEvisaModel && (isSlotHunting || isSlotFound) && !isCompleted && (

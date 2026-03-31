@@ -13,6 +13,7 @@ import type * as applications from "../applications.js";
 import type * as constants from "../constants.js";
 import type * as documents from "../documents.js";
 import type * as http from "../http.js";
+import type * as hunter from "../hunter.js";
 import type * as messages from "../messages.js";
 import type * as users from "../users.js";
 
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   constants: typeof constants;
   documents: typeof documents;
   http: typeof http;
+  hunter: typeof hunter;
   messages: typeof messages;
   users: typeof users;
 }>;

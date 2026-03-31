@@ -5,6 +5,18 @@ import { Webhook } from "svix";
 
 const http = httpRouter();
 
+function requireHunterKey(request: Request): Response | null {
+  const apiKey = process.env.HUNTER_API_KEY;
+  if (!apiKey) {
+    return new Response("Hunter API key not configured on server", { status: 500 });
+  }
+  const provided = request.headers.get("X-Hunter-Key");
+  if (!provided || provided !== apiKey) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  return null;
+}
+
 http.route({
   path: "/clerk-webhook",
   method: "POST",
@@ -65,6 +77,112 @@ http.route({
     }
 
     return new Response("OK", { status: 200 });
+  }),
+});
+
+http.route({
+  path: "/hunter/jobs",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const jobs = await ctx.runQuery(internal.hunter.getActiveJobs);
+    return new Response(JSON.stringify(jobs), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/slot-found",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      date: string;
+      time: string;
+      location: string;
+      confirmationCode?: string;
+      screenshotStorageId?: string;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.applicationId || !body.date || !body.time || !body.location) {
+      return new Response("Missing required fields: applicationId, date, time, location", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.hunter.markSlotFoundByHunter, {
+        applicationId: body.applicationId as never,
+        date: body.date,
+        time: body.time,
+        location: body.location,
+        confirmationCode: body.confirmationCode,
+        screenshotStorageId: body.screenshotStorageId,
+      });
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/slot-found error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+http.route({
+  path: "/hunter/heartbeat",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      result: "not_found" | "captcha" | "error";
+      errorMessage?: string;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.applicationId || !body.result) {
+      return new Response("Missing required fields: applicationId, result", { status: 400 });
+    }
+
+    if (!["not_found", "captcha", "error"].includes(body.result)) {
+      return new Response("result must be one of: not_found, captcha, error", { status: 400 });
+    }
+
+    await ctx.runMutation(internal.hunter.recordHeartbeat, {
+      applicationId: body.applicationId as never,
+      result: body.result,
+      errorMessage: body.errorMessage,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }),
 });
 

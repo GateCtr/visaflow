@@ -32,6 +32,15 @@ const slotBookingRefs = v.object({
   vfsRefNumber: v.optional(v.string()),
 });
 
+const hunterConfig = v.object({
+  embassyUsername: v.string(),
+  embassyPassword: v.string(),
+  isActive: v.boolean(),
+  lastCheckAt: v.optional(v.number()),
+  checkCount: v.optional(v.number()),
+  lastResult: v.optional(v.string()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -86,6 +95,7 @@ export default defineSchema({
       v.literal("tres_urgent")
     )),
     slotBookingRefs: v.optional(slotBookingRefs),
+    hunterConfig: v.optional(hunterConfig),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
