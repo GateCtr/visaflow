@@ -1,6 +1,7 @@
 import { internalMutation, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { coreMarkSlotFound } from "./slotFoundHelper";
+import { VISA_PRICING } from "./constants";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -78,15 +79,20 @@ export const getActiveJobs = internalQuery({
         const hc = (app as { hunterConfig?: { isActive?: boolean } }).hunterConfig;
         return hc?.isActive === true;
       })
-      .map((app) => ({
-        id: app._id,
-        destination: app.destination,
-        visaType: app.visaType,
-        applicantName: app.applicantName,
-        travelDate: app.travelDate,
-        slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
-        hunterConfig: (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string } }).hunterConfig,
-      }));
+      .map((app) => {
+        const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
+        return {
+          id: app._id,
+          destination: app.destination,
+          visaType: app.visaType,
+          applicantName: app.applicantName,
+          travelDate: app.travelDate,
+          slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
+          hunterConfig: (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string } }).hunterConfig,
+          portalUrl: (pricing as { portalUrl?: string } | undefined)?.portalUrl ?? null,
+          portalName: (pricing as { portalName?: string } | undefined)?.portalName ?? null,
+        };
+      });
   },
 });
 

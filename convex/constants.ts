@@ -16,6 +16,8 @@ export const VISA_PRICING = {
       { key: "mrv_receipt", label: "Reçu paiement MRV (185$)", required: true },
     ],
     embassyAddress: "502 Gombe, Kinshasa, Ambassade des États-Unis",
+    portalUrl: "https://ais.usvisa-info.com/fr-cd/niv",
+    portalName: "CGI Federal / AIS (USTravelDocs)",
     processingType: "appointment",
     successCopy: {
       triggerLabel: "Créneau capturé",
@@ -40,6 +42,8 @@ export const VISA_PRICING = {
       { key: "hotel_booking", label: "Réservation hôtel confirmée", required: false },
     ],
     embassyAddress: "Portail GDRFA / ICP — 100% électronique",
+    portalUrl: "https://smartservices.ica.gov.ae/echannels/web/client/default.html",
+    portalName: "ICA UAE Smart Services (e-Visa EAU)",
     processingType: "evisa",
     successCopy: {
       triggerLabel: "Visa obtenu",
@@ -66,6 +70,8 @@ export const VISA_PRICING = {
       { key: "travel_insurance", label: "Assurance voyage (normes turques)", required: true },
     ],
     embassyAddress: "VFS Global — Avenue de la Gombe, Kinshasa",
+    portalUrl: "https://visa.vfsglobal.com/cod/fr/tur",
+    portalName: "VFS Global Turquie (COD → TUR)",
     processingType: "hybrid",
     successCopy: {
       triggerLabel: "Créneau VFS capturé",
@@ -91,6 +97,8 @@ export const VISA_PRICING = {
       { key: "medical_recommendation", label: "Lettre de recommandation médecin RDC (Médical)", required: false },
     ],
     embassyAddress: "Ambassade de l'Inde — Avenue de la Gombe, Kinshasa",
+    portalUrl: "https://indianvisaonline.gov.in/evisa/tvoa.html",
+    portalName: "Indian Visa Online (e-Visa Inde)",
     processingType: "evisa",
     successCopy: {
       triggerLabel: "E-Visa obtenu",

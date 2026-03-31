@@ -1094,13 +1094,28 @@ export default function AdminApplicationDetail() {
                 </span>
               </div>
               <div className="p-6 space-y-5">
+                {/* Portail cible */}
+                {(pricing as { portalUrl?: string; portalName?: string } | undefined)?.portalUrl && (
+                  <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-4 py-2.5 border border-slate-200">
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide shrink-0">Portail cible :</span>
+                    <a
+                      href={(pricing as { portalUrl?: string }).portalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary font-semibold underline underline-offset-2 truncate"
+                    >
+                      {(pricing as { portalName?: string; portalUrl?: string }).portalName ?? (pricing as { portalUrl?: string }).portalUrl}
+                    </a>
+                  </div>
+                )}
+
                 <p className="text-sm text-slate-600">
-                  Configurez les identifiants du portail USTravelDocs du client. Le robot recherchera automatiquement un créneau et vous notifiera dès qu'un slot est capturé.
+                  Configurez les identifiants du portail visa du client. Le robot recherchera automatiquement un créneau et vous notifiera dès qu'un slot est capturé.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Identifiant USTravelDocs (email)</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase">Identifiant portail (email)</label>
                     <Input
                       value={hunterUsername}
                       onChange={(e) => setHunterUsername(e.target.value)}
@@ -1109,7 +1124,7 @@ export default function AdminApplicationDetail() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Mot de passe USTravelDocs</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase">Mot de passe portail</label>
                     <div className="relative">
                       <Input
                         type={showHunterPassword ? "text" : "password"}
