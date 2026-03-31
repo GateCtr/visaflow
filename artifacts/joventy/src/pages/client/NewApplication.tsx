@@ -161,6 +161,23 @@ export default function NewApplication() {
   const activeTier = SLOT_URGENCY_TIERS[selectedUrgencyTier];
   const [isPending, setIsPending] = useState(false);
 
+  const [slotRefs, setSlotRefs] = useState({
+    ds160Confirmation: "",
+    mrvReceiptNumber: "",
+    sevisId: "",
+    petitionReceiptNumber: "",
+    petitionerName: "",
+    vfsRefNumber: "",
+  });
+
+  const isPetitionBased = /k-?1|k-?3|h-?1b?|h-?2|h-?3|l-?1a?|l-?1b?|o-?1|o-?2|p-?[123]|r-?1/i.test(selectedVisaType);
+  const isStudentExchange = /f-?1|m-?1|j-?1/i.test(selectedVisaType);
+  const showSlotRefsUSA = isSlotOnly && selectedDest === "usa";
+  const showSlotRefsTurkey = isSlotOnly && selectedDest === "turkey";
+
+  const updateRef = (key: keyof typeof slotRefs, val: string) =>
+    setSlotRefs((prev) => ({ ...prev, [key]: val }));
+
   useEffect(() => {
     if (isTurkeyEvisa && selectedPackage === "slot_only") {
       setSelectedPackage("full_service");
@@ -185,6 +202,14 @@ export default function NewApplication() {
         notes: data.notes || undefined,
         servicePackage: selectedPackage,
         slotUrgencyTier: isSlotOnly ? selectedUrgencyTier : undefined,
+        slotBookingRefs: isSlotOnly ? {
+          ds160Confirmation: slotRefs.ds160Confirmation.trim() || undefined,
+          mrvReceiptNumber: slotRefs.mrvReceiptNumber.trim() || undefined,
+          sevisId: slotRefs.sevisId.trim() || undefined,
+          petitionReceiptNumber: slotRefs.petitionReceiptNumber.trim() || undefined,
+          petitionerName: slotRefs.petitionerName.trim() || undefined,
+          vfsRefNumber: slotRefs.vfsRefNumber.trim() || undefined,
+        } : undefined,
       });
       toast({ title: "Dossier créé !", description: "Réglez les frais d'engagement pour démarrer le traitement." });
       setLocation(`/dashboard/applications/${id}/payment`);
@@ -533,6 +558,118 @@ export default function NewApplication() {
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {/* Booking refs — USA slot_only */}
+              {showSlotRefsUSA && (
+                <div className="mt-2 space-y-4 border border-blue-200 bg-blue-50/60 rounded-xl p-5 animate-in fade-in">
+                  <div>
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-0.5">
+                      <FileText className="w-4 h-4 text-secondary" /> Références USTravelDocs (USA)
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Vous devez avoir complété le DS-160 et payé les frais MRV avant de soumettre.
+                      Ces références permettent à Joventy de réserver le créneau en votre nom.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-primary">
+                        N° de confirmation DS-160 <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Ex : AA00XXXXX"
+                        className="h-10 text-sm"
+                        value={slotRefs.ds160Confirmation}
+                        onChange={(e) => updateRef("ds160Confirmation", e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Le code barcode imprimé sur la page de confirmation DS-160 (ceac.state.gov)</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-primary">
+                        N° de reçu MRV (frais visa) <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Ex : CGCD25XXXXXXXXXX"
+                        className="h-10 text-sm"
+                        value={slotRefs.mrvReceiptNumber}
+                        onChange={(e) => updateRef("mrvReceiptNumber", e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Reçu généré après paiement des frais MRV (185 $ ou 205 $)</p>
+                    </div>
+                    {isStudentExchange && (
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-semibold text-primary">
+                          SEVIS ID <span className="text-red-500">*</span>
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">(Visa F-1 / J-1 / M-1)</span>
+                        </label>
+                        <Input
+                          placeholder="Ex : N0000000000"
+                          className="h-10 text-sm"
+                          value={slotRefs.sevisId}
+                          onChange={(e) => updateRef("sevisId", e.target.value)}
+                        />
+                        <p className="text-[10px] text-muted-foreground">Numéro imprimé sur votre I-20 (F/M) ou DS-2019 (J), format N + 10 chiffres</p>
+                      </div>
+                    )}
+                    {isPetitionBased && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-primary">
+                            N° de reçu USCIS (I-797) <span className="text-red-500">*</span>
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">(K-1 / H-1B / L-1 / O / P / R)</span>
+                          </label>
+                          <Input
+                            placeholder="Ex : IOE0000000000 ou WAC2500000000"
+                            className="h-10 text-sm"
+                            value={slotRefs.petitionReceiptNumber}
+                            onChange={(e) => updateRef("petitionReceiptNumber", e.target.value)}
+                          />
+                          <p className="text-[10px] text-muted-foreground">13 caractères — sur l'avis d'approbation I-797 du pétitionnaire</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-primary">
+                            Nom du pétitionnaire <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            placeholder="Nom de l'employeur ou du partenaire US"
+                            className="h-10 text-sm"
+                            value={slotRefs.petitionerName}
+                            onChange={(e) => updateRef("petitionerName", e.target.value)}
+                          />
+                          <p className="text-[10px] text-muted-foreground">Exactement comme sur l'avis I-797</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Booking refs — Turkey slot_only */}
+              {showSlotRefsTurkey && (
+                <div className="mt-2 space-y-3 border border-red-200 bg-red-50/40 rounded-xl p-5 animate-in fade-in">
+                  <div>
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-0.5">
+                      <FileText className="w-4 h-4 text-secondary" /> Références VFS Global Turquie
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Le centre VFS Global Kinshasa utilise vos informations de passeport (déjà renseignées ci-dessus).
+                      Si vous avez déjà un numéro de référence VFS, indiquez-le ci-dessous.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-primary">
+                      N° de référence VFS (optionnel)
+                    </label>
+                    <Input
+                      placeholder="Ex : VFS-CD-XXXXXXX"
+                      className="h-10 text-sm"
+                      value={slotRefs.vfsRefNumber}
+                      onChange={(e) => updateRef("vfsRefNumber", e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground">Si vous avez déjà créé un compte VFS Global, indiquez votre référence</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* STEP 4 — Pricing + Confirmation */}

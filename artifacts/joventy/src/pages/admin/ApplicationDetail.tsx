@@ -547,6 +547,41 @@ export default function AdminApplicationDetail() {
               </div>
             )}
           </div>
+
+          {/* Slot booking references — slot_only only */}
+          {isSlotOnly && (app as { slotBookingRefs?: Record<string, string | undefined> }).slotBookingRefs && (() => {
+            const refs = (app as { slotBookingRefs?: Record<string, string | undefined> }).slotBookingRefs!;
+            const rows: { label: string; value: string | undefined; hint?: string }[] = [
+              { label: "DS-160 Barcode / Confirmation", value: refs.ds160Confirmation, hint: "ceac.state.gov" },
+              { label: "Reçu MRV (frais visa)", value: refs.mrvReceiptNumber },
+              { label: "SEVIS ID", value: refs.sevisId, hint: "F-1 / J-1 / M-1" },
+              { label: "Reçu USCIS I-797 (pétition)", value: refs.petitionReceiptNumber },
+              { label: "Nom du pétitionnaire", value: refs.petitionerName },
+              { label: "Référence VFS", value: refs.vfsRefNumber },
+            ].filter((r) => r.value);
+            if (rows.length === 0) return null;
+            return (
+              <div className="mt-4 border border-blue-200 bg-blue-50/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-bold text-primary">Références de réservation</span>
+                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full font-medium">
+                    {app.destination.toUpperCase()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {rows.map((r) => (
+                    <div key={r.label} className="bg-white rounded-lg px-3 py-2 border border-blue-100">
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wide mb-0.5">
+                        {r.label}{r.hint && <span className="ml-1 normal-case text-blue-500">({r.hint})</span>}
+                      </p>
+                      <p className="font-mono text-sm font-semibold text-primary break-all">{r.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ===== PAYMENT PANEL ===== */}

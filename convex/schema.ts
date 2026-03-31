@@ -23,6 +23,15 @@ const appointmentDetails = v.object({
   notes: v.optional(v.string()),
 });
 
+const slotBookingRefs = v.object({
+  ds160Confirmation: v.optional(v.string()),
+  mrvReceiptNumber: v.optional(v.string()),
+  sevisId: v.optional(v.string()),
+  petitionReceiptNumber: v.optional(v.string()),
+  petitionerName: v.optional(v.string()),
+  vfsRefNumber: v.optional(v.string()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -76,6 +85,7 @@ export default defineSchema({
       v.literal("urgent"),
       v.literal("tres_urgent")
     )),
+    slotBookingRefs: v.optional(slotBookingRefs),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])

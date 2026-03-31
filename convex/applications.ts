@@ -111,6 +111,14 @@ export const create = mutation({
       v.literal("urgent"),
       v.literal("tres_urgent")
     )),
+    slotBookingRefs: v.optional(v.object({
+      ds160Confirmation: v.optional(v.string()),
+      mrvReceiptNumber: v.optional(v.string()),
+      sevisId: v.optional(v.string()),
+      petitionReceiptNumber: v.optional(v.string()),
+      petitionerName: v.optional(v.string()),
+      vfsRefNumber: v.optional(v.string()),
+    })),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -157,7 +165,7 @@ export const create = mutation({
       isSuccessFeePaid: isDossierOnly,
     };
 
-    const { servicePackage: _sp, slotUrgencyTier: _sut, ...appArgs } = args;
+    const { servicePackage: _sp, slotUrgencyTier: _sut, slotBookingRefs: _sbr, ...appArgs } = args;
 
     const tierLabel = isSlotOnly
       ? ` — Urgence : ${SLOT_URGENCY_TIERS[(args.slotUrgencyTier ?? "standard") as SlotUrgencyTier].label}. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
@@ -176,6 +184,7 @@ export const create = mutation({
       successModel: pricing.successModel,
       servicePackage: pkg,
       slotUrgencyTier: isSlotOnly ? ((args.slotUrgencyTier ?? "standard") as SlotUrgencyTier) : undefined,
+      slotBookingRefs: isSlotOnly && args.slotBookingRefs ? args.slotBookingRefs : undefined,
       logs: [
         makeLog(
           `Dossier créé pour ${pricing.label} — ${args.visaType}. Package : ${pkg}.${tierLabel}`,
