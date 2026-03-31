@@ -748,12 +748,16 @@ export default function Landing() {
       {/* ═══ FOOTER ═══ */}
       <footer className="bg-primary text-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
+            <div className="md:col-span-1">
               <JoventyLogo variant="dark" size="md" />
               <p className="mt-4 text-white/55 text-sm leading-relaxed max-w-xs">
                 Assistance visa premium pour les voyageurs congolais. Formulaires, créneaux, e-Visas — nous gérons tout.
               </p>
+              <div className="mt-5 flex flex-col gap-1.5 text-xs text-white/40">
+                <a href="mailto:contact@joventy.cd" className="hover:text-white transition-colors">✉ contact@joventy.cd</a>
+                <a href="https://wa.me/243840808122" className="hover:text-white transition-colors">📱 +243 840 808 122</a>
+              </div>
             </div>
 
             <div>
@@ -779,10 +783,24 @@ export default function Landing() {
                 ))}
               </ul>
             </div>
+
+            <div>
+              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Légal</h4>
+              <ul className="space-y-2 text-sm text-white/50">
+                {[
+                  { label: "Mentions légales", href: "/mentions-legales" },
+                  { label: "Politique de confidentialité", href: "/confidentialite" },
+                  { label: "Conditions d'utilisation", href: "/conditions" },
+                  { label: "Politique de remboursement", href: "/remboursement" },
+                ].map((l) => (
+                  <li key={l.label}><Link href={l.href} className="hover:text-white transition-colors">{l.label}</Link></li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/35">
-            <p>© {new Date().getFullYear()} Joventy RDC · Assistance visa premium · Kinshasa, République Démocratique du Congo</p>
+            <p>© {new Date().getFullYear()} Joventy SARL · Assistance visa premium · Kinshasa, République Démocratique du Congo</p>
             <p>Paiement via M-Pesa, Airtel Money & Orange Money 🇨🇩</p>
           </div>
         </div>
