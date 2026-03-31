@@ -1,7 +1,9 @@
-import { chromium as playwrightChromium } from "playwright-extra";
+import { chromium as baseChromium } from "playwright";
+import { addExtra } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { Browser, BrowserContext, Page, LaunchOptions } from "playwright";
 
+const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
 
 const PROXY_URL = process.env.PROXY_URL;
@@ -56,11 +58,12 @@ export async function launchBrowser(): Promise<{ browser: Browser; context: Brow
     "--window-size=" + viewport.width + "," + viewport.height,
   ];
 
-  const browser = await (playwrightChromium as unknown as { launch: (opts: unknown) => Promise<Browser> }).launch({
+  const launchOptions: LaunchOptions = {
     headless: true,
     args: launchArgs,
     proxy: proxyConfig,
-  });
+  };
+  const browser = await playwrightChromium.launch(launchOptions) as unknown as Browser;
 
   const context = await browser.newContext({
     userAgent: ua,

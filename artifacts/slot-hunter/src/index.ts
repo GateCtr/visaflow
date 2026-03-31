@@ -55,6 +55,18 @@ async function processJob(job: HunterJob): Promise<void> {
     return;
   }
 
+  if (!job.portalUrl) {
+    log("WARN", `[${job.applicantName}] No portalUrl configured — skipping (set hunterConfig.portalUrl in admin)`);
+    try {
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "error",
+        errorMessage: "Aucun portalUrl configuré pour ce dossier — skippé par le hunter",
+      });
+    } catch { /* ignore */ }
+    return;
+  }
+
   const initialDelay = INITIAL_DELAY_MIN_MS + Math.random() * (INITIAL_DELAY_MAX_MS - INITIAL_DELAY_MIN_MS);
   log("INFO", `[${job.applicantName}] Waiting ${Math.round(initialDelay)}ms before session...`);
   await new Promise((r) => setTimeout(r, initialDelay));
@@ -191,12 +203,9 @@ async function main(): Promise<void> {
     try {
       await runCycle();
     } catch (err) {
-      log("ERROR", `Cycle crashed (will retry): ${err}`);
+      log("ERROR", `Cycle crashed (will retry in 30s): ${err}`);
+      await new Promise((r) => setTimeout(r, 30_000));
     }
-
-    const sleepMs = MIN_INTERVAL_MS + Math.random() * (MAX_INTERVAL_MS - MIN_INTERVAL_MS);
-    log("INFO", `Sleeping ${formatMs(sleepMs)} before next cycle...`);
-    await new Promise((r) => setTimeout(r, sleepMs));
   }
 }
 
