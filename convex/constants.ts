@@ -69,7 +69,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Les autorités des Émirats ont accordé votre visa électronique. Réglez la prime de succès pour recevoir votre e-Visa PDF prêt à imprimer.",
       completedNote: "Votre visa électronique est disponible ci-dessous — prêt à imprimer avant le départ.",
     },
-    notes: "E-Visa 100% électronique. Résultat en 48-72h ouvrables.",
+    notes: "E-Visa 100% électronique. Résultat en 48-72h ouvrables. Les frais gouvernementaux e-Visa EAU (~90$) sont payés séparément par le client.",
   },
   turkey: {
     label: "Turquie",
@@ -100,7 +100,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a réservé un créneau au centre de dépôt VFS Global. Réglez la prime de succès pour recevoir votre convocation de dépôt.",
       completedNote: "Votre convocation VFS et les instructions de dépôt sont disponibles ci-dessous.",
     },
-    notes: "E-Visa uniquement si le client possède déjà un visa USA ou Schengen valide. Sinon : Visa Sticker via VFS.",
+    notes: "E-Visa uniquement si le client possède déjà un visa USA ou Schengen valide. Sinon : Visa Sticker via VFS. Les frais consulaires (100$ entrée unique / 300$ multi-entrées) et frais VFS sont payés séparément par le client.",
   },
   india: {
     label: "Inde",
@@ -130,7 +130,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Le gouvernement indien a accordé votre e-Visa. Réglez la prime de succès pour recevoir votre document officiel à imprimer avant l'embarquement.",
       completedNote: "Votre e-Visa Inde est disponible ci-dessous — à imprimer et présenter à l'embarquement.",
     },
-    notes: "Pour le Médical : vérification accréditation hôpital incluse. Pour les Études longue durée : entretien physique à l'Ambassade possible.",
+    notes: "Pour le Médical : vérification accréditation hôpital incluse. Pour les Études longue durée : entretien physique à l'Ambassade possible. Les frais e-Visa gouvernement indien (~25-80$ selon durée) sont payés séparément par le client.",
   },
 } as const;
 

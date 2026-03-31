@@ -27,7 +27,7 @@ const DESTINATIONS = [
     engagement: 50,
     success: 70,
     model: "evisa",
-    note: "Résultat en 48–72h ouvrables",
+    note: "Frais e-Visa EAU (~90$) non inclus",
   },
   {
     flag: "🇹🇷",
@@ -36,7 +36,7 @@ const DESTINATIONS = [
     engagement: 50,
     success: 70,
     model: "hybrid",
-    note: "E-Visa ou Visa Sticker via VFS Kinshasa",
+    note: "Frais consulaires VFS (100-300$) non inclus",
   },
   {
     flag: "🇮🇳",
@@ -45,7 +45,7 @@ const DESTINATIONS = [
     engagement: 50,
     success: 50,
     model: "evisa",
-    note: "Traitement 100% en ligne",
+    note: "Frais e-Visa gouvernement (~25-80$) non inclus",
   },
 ];
 
