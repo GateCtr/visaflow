@@ -1,12 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Poppins', sans-serif;
-  --font-serif: 'Poppins', sans-serif;
-  --font-display: 'Poppins', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-serif: 'Plus Jakarta Sans', sans-serif;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -42,40 +42,40 @@
 }
 
 :root {
-  /* Joventy Brand Palette — Blue & Orange */
+  /* ── Joventy Brand Palette ────────────────────────────────── */
 
-  /* #1E4FA3 — Brand Blue */
-  --primary: 218 69% 38%;
+  /* PRIMARY : Bleu marine riche #1A3F96 */
+  --primary: 222 72% 34%;
   --primary-foreground: 0 0% 100%;
 
-  /* #FF7A00 — CTA Orange */
-  --secondary: 29 100% 50%;
+  /* SECONDARY : Orange chaleureux #F97316 */
+  --secondary: 25 95% 53%;
   --secondary-foreground: 0 0% 100%;
 
-  /* #1DA1D2 — Cyan Accent */
-  --accent: 196 76% 47%;
-  --accent-foreground: 0 0% 100%;
+  /* ACCENT : Bleu ciel #38BDF8 — badges, highlights */
+  --accent: 199 89% 60%;
+  --accent-foreground: 222 72% 20%;
 
-  /* #F5F7FA — Page background */
-  --background: 216 20% 97%;
-  --foreground: 220 15% 16%;
+  /* BACKGROUND : Blanc légèrement bleuté */
+  --background: 210 40% 98%;
+  --foreground: 222 47% 13%;
 
   --card: 0 0% 100%;
-  --card-foreground: 220 15% 16%;
+  --card-foreground: 222 47% 13%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 220 15% 16%;
+  --popover-foreground: 222 47% 13%;
 
-  /* #6B7280 — muted text */
-  --muted: 220 14% 94%;
-  --muted-foreground: 220 9% 46%;
+  /* MUTED : Gris bleuté très doux */
+  --muted: 214 32% 94%;
+  --muted-foreground: 215 16% 48%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 214 20% 88%;
-  --input: 214 20% 88%;
-  --ring: 218 69% 38%;
+  --border: 214 32% 89%;
+  --input: 214 32% 89%;
+  --ring: 222 72% 34%;
 
   --radius: 0.75rem;
 }
@@ -84,29 +84,74 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
-    @apply bg-background text-foreground font-sans antialiased selection:bg-primary/20 selection:text-primary;
+    @apply bg-background text-foreground font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-sans font-semibold text-primary;
+    @apply font-bold text-primary;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
   }
 }
 
-/* Custom Utilities */
 @layer utilities {
+  /* ── Navigation ───────────────────────────────────────────── */
   .glass-panel {
-    @apply bg-white/80 backdrop-blur-lg border border-white/20 shadow-xl shadow-primary/5;
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
+
+  /* ── Gradients ────────────────────────────────────────────── */
   .bg-brand-gradient {
-    background: linear-gradient(135deg, #1E4FA3 0%, #1DA1D2 100%);
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
   }
   .text-gradient-brand {
-    background: linear-gradient(135deg, #1E4FA3, #1DA1D2);
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  .text-gradient-warm {
+    background: linear-gradient(135deg, hsl(var(--secondary)), #FBBF24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Cards ────────────────────────────────────────────────── */
+  .card-elevated {
+    @apply bg-card rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200;
+  }
+  .card-flat {
+    @apply bg-muted rounded-2xl border border-border;
+  }
+
+  /* ── Interaction ──────────────────────────────────────────── */
   .hover-lift {
-    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/10;
+    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/10;
+  }
+
+  /* ── Badges / Labels ──────────────────────────────────────── */
+  .badge-accent {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+    background: hsl(var(--accent) / 0.12);
+    color: hsl(var(--primary));
+  }
+  .section-label {
+    @apply block text-secondary font-semibold text-xs uppercase tracking-widest mb-3;
+  }
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-primary mb-4;
+    letter-spacing: -0.02em;
   }
 }

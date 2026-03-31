@@ -196,7 +196,7 @@ export default function Landing() {
             <span className="text-secondary drop-shadow-md">Vous payez si ça marche.</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
             Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, Dubaï, la Turquie et l'Inde. Paiement Mobile Money, résultat garanti.
           </p>
 
@@ -223,7 +223,7 @@ export default function Landing() {
             ].map((s) => (
               <div key={s.label} className="bg-white/10 backdrop-blur-md rounded-2xl px-3 py-4 border border-white/15">
                 <div className="text-2xl sm:text-3xl font-bold text-secondary">{s.val}</div>
-                <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5 leading-tight">{s.label}</div>
+                <div className="text-[11px] sm:text-xs text-white/65 mt-0.5 leading-tight">{s.label}</div>
               </div>
             ))}
           </div>
@@ -233,7 +233,7 @@ export default function Landing() {
       {/* ═══ TRUST BAR ═══ */}
       <div className="bg-white border-y border-border py-5">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-slate-500 font-medium">
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground font-medium">
             {[
               { icon: ShieldCheck, label: "Paiement au résultat" },
               { icon: Phone, label: "M-Pesa & Airtel Money" },
@@ -251,11 +251,11 @@ export default function Landing() {
       </div>
 
       {/* ═══ COMMENT ÇA MARCHE ═══ */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-24 bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Simple & transparent</p>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Comment ça marche</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Comment ça marche</h2>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">Quatre étapes pour obtenir votre visa, sans vous déplacer en agence.</p>
           </div>
 
@@ -266,12 +266,12 @@ export default function Landing() {
                 <div key={i} className="relative">
                   {i < STEPS.length - 1 && (
                     <div className="hidden lg:block absolute top-10 left-full w-8 z-10 -translate-x-4">
-                      <ChevronRight className="w-5 h-5 text-slate-300 mx-auto" />
+                      <ChevronRight className="w-5 h-5 text-border mx-auto" />
                     </div>
                   )}
                   <div className="bg-white rounded-2xl p-7 border border-border shadow-sm h-full flex flex-col">
                     <div className="flex items-start gap-4 mb-4">
-                      <span className="text-4xl font-bold text-slate-100 leading-none select-none">{step.num}</span>
+                      <span className="text-4xl font-bold text-muted-foreground/30 leading-none select-none">{step.num}</span>
                       <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0 mt-1">
                         <Icon className="w-5 h-5 text-secondary" />
                       </div>
@@ -293,7 +293,7 @@ export default function Landing() {
           <div className="text-center mb-16">
             <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Nos formules</p>
             <h2 className="text-3xl md:text-4xl font-serif font-bold text-white mb-4">Choisissez votre niveau de service</h2>
-            <p className="text-slate-300 text-lg max-w-xl mx-auto">Que vous ayez juste besoin d'un créneau ou d'un accompagnement complet, nous avons la formule adaptée.</p>
+            <p className="text-white/70 text-lg max-w-xl mx-auto">Que vous ayez juste besoin d'un créneau ou d'un accompagnement complet, nous avons la formule adaptée.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
@@ -318,16 +318,16 @@ export default function Landing() {
                       <Icon className={`w-5 h-5 ${pkg.highlight ? "text-primary" : "text-secondary"}`} />
                     </div>
                     <div>
-                      <p className={`text-xs font-semibold uppercase tracking-wide ${pkg.highlight ? "text-primary/60" : "text-slate-400"}`}>{pkg.tagline}</p>
+                      <p className={`text-xs font-semibold uppercase tracking-wide ${pkg.highlight ? "text-primary/60" : "text-white/55"}`}>{pkg.tagline}</p>
                       <h3 className={`font-bold text-lg ${pkg.highlight ? "text-primary" : "text-white"}`}>{pkg.label}</h3>
                     </div>
                   </div>
 
-                  <p className={`text-sm mb-5 leading-relaxed ${pkg.highlight ? "text-primary/80" : "text-slate-300"}`}>{pkg.desc}</p>
+                  <p className={`text-sm mb-5 leading-relaxed ${pkg.highlight ? "text-primary/80" : "text-white/70"}`}>{pkg.desc}</p>
 
                   <ul className="space-y-2.5 flex-1 mb-6">
                     {pkg.features.map((f) => (
-                      <li key={f} className={`flex items-start gap-2.5 text-sm ${pkg.highlight ? "text-primary" : "text-slate-200"}`}>
+                      <li key={f} className={`flex items-start gap-2.5 text-sm ${pkg.highlight ? "text-primary" : "text-white/85"}`}>
                         <CheckCircle2 className={`w-4 h-4 flex-shrink-0 mt-0.5 ${pkg.highlight ? "text-primary" : "text-secondary"}`} />
                         {f}
                       </li>
@@ -364,7 +364,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {DESTINATIONS.map((dest) => (
               <div key={dest.name} className="bg-white border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col">
-                <div className="bg-slate-50 px-6 py-5 border-b border-border">
+                <div className="bg-muted px-6 py-5 border-b border-border">
                   <div className="text-4xl mb-3">{dest.flag}</div>
                   <h3 className="text-xl font-bold text-primary">{dest.name}</h3>
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -391,7 +391,7 @@ export default function Landing() {
                       </div>
                     </div>
                     <div className="pt-2 border-t border-border flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500">Total max</span>
+                      <span className="text-xs font-semibold text-muted-foreground">Total max</span>
                       <span className="font-bold text-lg text-primary">{dest.engagement + dest.success} $</span>
                     </div>
                   </div>
@@ -411,7 +411,7 @@ export default function Landing() {
       </section>
 
       {/* ═══ GARANTIES ═══ */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-24 bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Notre engagement</p>
@@ -451,13 +451,13 @@ export default function Landing() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {TESTIMONIALS.map((t) => (
-              <div key={t.name} className="bg-slate-50 rounded-2xl p-7 border border-border flex flex-col">
+              <div key={t.name} className="bg-muted rounded-2xl p-7 border border-border flex flex-col">
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(t.stars)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 text-secondary fill-secondary" />
                   ))}
                 </div>
-                <blockquote className="text-slate-700 text-sm leading-relaxed flex-1 mb-5 italic">
+                <blockquote className="text-foreground text-sm leading-relaxed flex-1 mb-5 italic">
                   "{t.text}"
                 </blockquote>
                 <div className="flex items-center gap-3">
@@ -481,13 +481,13 @@ export default function Landing() {
         <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-6">
             <Users className="w-5 h-5 text-secondary" />
-            <span className="text-slate-300 text-sm font-medium">150+ Congolais ont déjà obtenu leur visa avec Joventy</span>
+            <span className="text-white/70 text-sm font-medium">150+ Congolais ont déjà obtenu leur visa avec Joventy</span>
           </div>
           <h2 className="text-3xl md:text-5xl font-serif font-bold text-white mb-6 leading-tight">
             Prêt à voyager ?<br />
             <span className="text-secondary">Créez votre dossier en 5 minutes.</span>
           </h2>
-          <p className="text-slate-300 text-lg mb-10">
+          <p className="text-white/70 text-lg mb-10">
             Rejoignez les voyageurs congolais qui font confiance à Joventy. Paiement Mobile Money, sans paperasse, résultat garanti.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -548,7 +548,7 @@ export default function Landing() {
               const Icon = c.icon;
               const isExternal = c.href.startsWith("http") || c.href.startsWith("mailto");
               const Inner = (
-                <div className="bg-slate-50 border border-border rounded-2xl p-7 flex flex-col items-center text-center h-full hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                <div className="bg-muted border border-border rounded-2xl p-7 flex flex-col items-center text-center h-full hover:shadow-md hover:-translate-y-1 transition-all duration-200">
                   <div className={`w-12 h-12 rounded-xl ${c.color} flex items-center justify-center mb-4`}>
                     <Icon className="w-6 h-6 text-white" />
                   </div>
@@ -577,15 +577,15 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
             <div>
-              <JoventyLogo variant="light" size="md" />
-              <p className="mt-4 text-slate-400 text-sm leading-relaxed max-w-xs">
+              <JoventyLogo variant="dark" size="md" />
+              <p className="mt-4 text-white/55 text-sm leading-relaxed max-w-xs">
                 Assistance visa premium pour les voyageurs congolais. Formulaires, créneaux, e-Visas — nous gérons tout.
               </p>
             </div>
 
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-300 mb-4">Destinations</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Destinations</h4>
+              <ul className="space-y-2 text-sm text-white/50">
                 {["🇺🇸 Visa États-Unis", "🇦🇪 E-Visa Dubaï", "🇹🇷 Visa Turquie", "🇮🇳 E-Visa Inde"].map((d) => (
                   <li key={d}><Link href="/register" className="hover:text-white transition-colors">{d}</Link></li>
                 ))}
@@ -593,8 +593,8 @@ export default function Landing() {
             </div>
 
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-300 mb-4">Liens utiles</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Liens utiles</h4>
+              <ul className="space-y-2 text-sm text-white/50">
                 {[
                   { label: "Nos Services", href: "/#services" },
                   { label: "Tarifs", href: "/#destinations" },
@@ -608,7 +608,7 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+          <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/35">
             <p>© {new Date().getFullYear()} Joventy RDC · Assistance visa premium · Kinshasa, République Démocratique du Congo</p>
             <p>Paiement via M-Pesa & Airtel Money 🇨🇩</p>
           </div>
