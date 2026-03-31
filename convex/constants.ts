@@ -16,8 +16,8 @@ export const VISA_PRICING = {
       { key: "mrv_receipt", label: "Reçu paiement MRV (185$)", required: true },
     ],
     embassyAddress: "502 Gombe, Kinshasa, Ambassade des États-Unis",
-    portalUrl: "https://ais.usvisa-info.com/fr-cd/niv",
-    portalName: "CGI Federal / AIS (USTravelDocs)",
+    portalUrl: "https://www.usvisaappt.com/visaapplicantui/login",
+    portalName: "AVITS / VISAPP (usvisaappt.com)",
     processingType: "appointment",
     successCopy: {
       triggerLabel: "Créneau capturé",

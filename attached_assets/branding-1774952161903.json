@@ -1,0 +1,151 @@
+{
+  "colorScheme": "light",
+  "fonts": [
+    {
+      "family": "Inter",
+      "role": "body"
+    },
+    {
+      "family": "Poppins",
+      "role": "heading"
+    },
+    {
+      "family": "Roboto",
+      "role": "unknown"
+    }
+  ],
+  "colors": {
+    "primary": "#14A38B",
+    "secondary": "#808B9F",
+    "accent": "#0D192E",
+    "background": "#FFFFFF",
+    "textPrimary": "#0D192E",
+    "link": "#0D192E"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Inter",
+      "heading": "Poppins"
+    },
+    "fontStacks": {
+      "heading": [
+        "Roboto",
+        "Helvetica Neue",
+        "sans-serif"
+      ],
+      "body": [
+        "Roboto",
+        "Helvetica Neue",
+        "sans-serif"
+      ],
+      "paragraph": [
+        "Inter",
+        "sans-serif"
+      ]
+    },
+    "fontSizes": {
+      "h1": "12px",
+      "h2": "12px",
+      "body": "14px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": "6px"
+  },
+  "components": {
+    "input": {
+      "background": "transparent",
+      "textColor": "#0D192E",
+      "borderColor": null,
+      "borderRadius": "5px",
+      "borderRadiusCorners": {
+        "topLeft": "5px",
+        "topRight": "5px",
+        "bottomRight": "5px",
+        "bottomLeft": "5px"
+      },
+      "shadow": "none"
+    },
+    "buttonPrimary": {
+      "background": "#0D192E",
+      "textColor": "#FFFFFF",
+      "borderRadius": "8px",
+      "borderRadiusCorners": {
+        "topLeft": "8px",
+        "topRight": "8px",
+        "bottomRight": "8px",
+        "bottomLeft": "8px"
+      },
+      "shadow": "none"
+    },
+    "buttonSecondary": {
+      "background": "#FFFFFF",
+      "textColor": "#0D192E",
+      "borderColor": "#808B9F",
+      "borderRadius": "8px",
+      "borderRadiusCorners": {
+        "topLeft": "8px",
+        "topRight": "8px",
+        "bottomRight": "8px",
+        "bottomLeft": "8px"
+      },
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": "https://www.usvisaappt.com/visaapplicantui/assets/images/logo.svg",
+    "favicon": "https://www.usvisaappt.com/visaapplicantui/favicon.ico",
+    "ogImage": null,
+    "logoAlt": "VISAPP"
+  },
+  "__llm_logo_reasoning": {
+    "selectedIndex": 0,
+    "reasoning": "Selected #0 because it is the only visible logo candidate, matches the domain, and is positioned prominently on the page.",
+    "confidence": 0.85,
+    "source": "llm"
+  },
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": 1,
+      "text": "SIGN IN",
+      "reasoning": "The 'SIGN IN' button has a dark background color (#0D192E) which is more vibrant and stands out as a primary action compared to the lighter 'SIGN UP' button."
+    },
+    "secondary": {
+      "index": 0,
+      "text": "New user? SIGN UP",
+      "reasoning": "The 'SIGN UP' button has a lighter background (#FFFFFF) and serves as a secondary action, complementing the primary 'SIGN IN' button."
+    },
+    "confidence": 0.95
+  },
+  "personality": {
+    "tone": "professional",
+    "energy": "medium",
+    "targetAudience": "Individuals applying for US visas"
+  },
+  "designSystem": {
+    "framework": "bootstrap",
+    "componentLibrary": ""
+  },
+  "confidence": {
+    "buttons": 0.95,
+    "colors": 0.9,
+    "overall": 0.925
+  },
+  "__llm_metadata": {
+    "logoSelection": {
+      "llmCalled": true,
+      "llmSucceeded": true,
+      "finalSource": "llm",
+      "rawLogoSelection": {
+        "selectedLogoIndex": 0,
+        "selectedLogoReasoning": "Selected #0 because it is the only visible logo candidate, matches the domain, and is positioned prominently on the page.",
+        "confidence": 0.85
+      }
+    },
+    "buttonClassification": {
+      "llmCalled": true,
+      "llmSucceeded": true
+    }
+  }
+}
