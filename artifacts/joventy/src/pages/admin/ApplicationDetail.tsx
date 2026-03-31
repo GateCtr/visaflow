@@ -619,7 +619,7 @@ export default function AdminApplicationDetail() {
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isDossierOnly
-                        ? "Package Constitution de Dossier — tarif fixe, pas de prime de succès"
+                        ? "Package Formulaires & Vérification — tarif fixe, pas de prime de succès"
                         : isSuccessFeePaid
                           ? "Validée ✓"
                           : hasSuccessProof

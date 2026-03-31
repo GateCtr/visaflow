@@ -25,8 +25,8 @@ function getSteps(isEvisaModel: boolean, isDossierOnly: boolean) {
     return [
       { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
       { key: "documents_pending", label: "Documents requis", icon: FileText },
-      { key: "in_review_slot_hunting", label: "Constitution du dossier", icon: Search },
-      { key: "completed", label: "Dossier constitué", icon: CheckCircle2 },
+      { key: "in_review_slot_hunting", label: "Vérification & Formulaires", icon: Search },
+      { key: "completed", label: "Formulaires complétés", icon: CheckCircle2 },
     ];
   }
   return [

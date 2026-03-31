@@ -66,7 +66,7 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: "Clé en main",
-        description: `Joventy s'occupe de tout : constitution du dossier et obtention de votre ${name}. Soumission 100 % en ligne — aucun rendez-vous nécessaire.`,
+        description: `Joventy remplit les formulaires officiels, vérifie les pièces que vous fournissez et soumet votre demande de ${name} en ligne. Aucun rendez-vous nécessaire.`,
       };
     }
     const creneauLabel =
@@ -76,7 +76,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: "Clé en main",
-      description: `Joventy gère votre dossier de A à Z : préparation complète des documents et recherche active d'un ${creneauLabel}. Vous n'avez qu'à vous présenter.`,
+      description: `Joventy remplit les formulaires, vérifie les pièces que vous fournissez et recherche activement un ${creneauLabel}. Vous n'avez qu'à vous présenter le jour J.`,
     };
   }
 
@@ -85,7 +85,7 @@ function getPackageInfo(
       return {
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
-        description: "Votre DS-160 est soumis et les frais MRV acquittés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade américaine.",
+        description: "Vos formulaires sont remplis et vos frais MRV acquittés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade américaine.",
         slotNote: "Prérequis : DS-160 soumis + frais MRV (185 $) payés.",
       };
     }
@@ -93,7 +93,7 @@ function getPackageInfo(
       return {
         label: "Créneau VFS",
         tagline: "Dépôt uniquement",
-        description: "Votre dossier est complet ? Joventy réserve votre créneau de dépôt au centre VFS Global Kinshasa pour votre Visa Sticker Turquie.",
+        description: "Vos formulaires sont remplis et votre dossier prêt ? Joventy réserve votre créneau de dépôt au centre VFS Global Kinshasa pour votre Visa Sticker Turquie.",
         slotNote: "Pour le Visa Sticker (VFS) uniquement — pas applicable à l'e-Visa.",
       };
     }
@@ -109,7 +109,7 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: base.tagline,
-        description: `Joventy prépare et vérifie votre dossier de demande. Vous soumettez ensuite directement sur le ${portal}. Tarif fixe — aucune prime de succès.`,
+        description: `Joventy remplit les formulaires officiels et vérifie les pièces que vous fournissez. Vous soumettez ensuite vous-même sur le ${portal}. Tarif fixe — aucune prime de succès.`,
       };
     }
     const rdv =
@@ -119,7 +119,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: base.tagline,
-      description: `Joventy constitue et vérifie intégralement votre dossier de visa ${pricing.label}. Vous gérez ensuite votre rendez-vous ${rdv} de façon autonome. Tarif fixe — aucune prime de succès.`,
+      description: `Joventy remplit les formulaires requis et vérifie les pièces que vous fournissez pour votre visa ${pricing.label}. Vous gérez ensuite votre rendez-vous ${rdv} de façon autonome. Tarif fixe — aucune prime de succès.`,
     };
   }
 

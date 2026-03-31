@@ -91,7 +91,7 @@ export default function Landing() {
               <div className="space-y-6">
                 {[
                   { title: "Évaluation de profil personnalisée", icon: FileText },
-                  { title: "Constitution du dossier sans faille", icon: ShieldCheck },
+                  { title: "Formulaires officiels remplis à votre place", icon: ShieldCheck },
                   { title: "Suivi en temps réel & Chat dédié", icon: Clock }
                 ].map((feature, i) => (
                   <div key={i} className="flex items-center gap-4">
