@@ -1,5 +1,12 @@
 import { internalMutation, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { VISA_PRICING } from "./constants";
+
+function getEffectiveSuccessModel(app: { successModel?: string; destination?: string }): string {
+  if (app.successModel) return app.successModel;
+  const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
+  return pricing?.successModel ?? "appointment";
+}
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -104,8 +111,18 @@ export const markSlotFoundByHunter = internalMutation({
   handler: async (ctx, args) => {
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
+
     if (app.status !== "slot_hunting") {
       throw new Error("Le dossier n'est plus en recherche de créneau");
+    }
+
+    if (app.servicePackage === "dossier_only") {
+      throw new Error("Ce dossier est en mode 'Constitution uniquement' — il n'a pas de créneau.");
+    }
+
+    const effectiveModel = getEffectiveSuccessModel(app);
+    if (effectiveModel === "evisa") {
+      throw new Error("Ce dossier utilise le modèle e-Visa — utilisez 'Visa Obtenu' plutôt que 'Créneau'.");
     }
 
     const priceDetails = app.priceDetails ?? {
@@ -129,6 +146,7 @@ export const markSlotFoundByHunter = internalMutation({
         time: args.time,
         location: args.location,
         confirmationCode: args.confirmationCode,
+        screenshotStorageId: args.screenshotStorageId,
       },
       priceDetails,
       hunterConfig: existing ? {

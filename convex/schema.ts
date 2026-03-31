@@ -21,6 +21,7 @@ const appointmentDetails = v.object({
   location: v.optional(v.string()),
   confirmationCode: v.optional(v.string()),
   notes: v.optional(v.string()),
+  screenshotStorageId: v.optional(v.string()),
 });
 
 const slotBookingRefs = v.object({
