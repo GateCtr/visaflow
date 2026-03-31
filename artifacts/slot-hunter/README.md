@@ -56,7 +56,7 @@ pnpm dev
 
 ```
 tres_urgent  → vérification toutes les  8–10 min
-urgent       → vérification toutes les 12–15 min
-prioritaire  → vérification toutes les 18–20 min
-standard     → vérification toutes les 22–30 min
+urgent       → vérification toutes les 11–14 min
+prioritaire  → vérification toutes les 15–18 min
+standard     → vérification toutes les 19–22 min
 ```
