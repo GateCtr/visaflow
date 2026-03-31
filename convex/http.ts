@@ -177,8 +177,8 @@ http.route({
       return new Response("Missing required fields: applicationId, result", { status: 400 });
     }
 
-    if (!["not_found", "captcha", "error"].includes(body.result)) {
-      return new Response("result must be one of: not_found, captcha, error", { status: 400 });
+    if (!["not_found", "captcha", "error", "payment_required"].includes(body.result)) {
+      return new Response("result must be one of: not_found, captcha, error, payment_required", { status: 400 });
     }
 
     await ctx.runMutation(internal.hunter.recordHeartbeat, {

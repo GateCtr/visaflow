@@ -136,7 +136,7 @@ export async function reportSlotFound(payload: {
 
 export async function sendHeartbeat(payload: {
   applicationId: string;
-  result: "not_found" | "captcha" | "error";
+  result: "not_found" | "captcha" | "error" | "payment_required";
   errorMessage?: string;
   shouldPause?: boolean;
 }): Promise<void> {

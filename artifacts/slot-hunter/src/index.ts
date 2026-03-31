@@ -169,6 +169,11 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
       log("WARN", `[${job.applicantName}] Bloqué par CAPTCHA — prochain cycle prévu selon tier`);
       break;
 
+    case "payment_required":
+      consecutiveLoginFailures.delete(job.id);
+      log("WARN", `[${job.applicantName}] 💳 Paiement portail requis — frais consulaires non validés par le portail`);
+      break;
+
     case "not_found":
       consecutiveLoginFailures.delete(job.id);
       log("INFO", `[${job.applicantName}] Aucun créneau disponible`);

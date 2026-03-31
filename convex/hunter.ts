@@ -151,7 +151,12 @@ export const markSlotFoundByHunter = internalMutation({
 export const recordHeartbeat = internalMutation({
   args: {
     applicationId: v.id("applications"),
-    result: v.union(v.literal("not_found"), v.literal("captcha"), v.literal("error")),
+    result: v.union(
+      v.literal("not_found"),
+      v.literal("captcha"),
+      v.literal("error"),
+      v.literal("payment_required"),
+    ),
     errorMessage: v.optional(v.string()),
     shouldPause: v.optional(v.boolean()),
   },
@@ -178,6 +183,19 @@ export const recordHeartbeat = internalMutation({
         logs: [
           ...((app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? []),
           { msg: "Hunter auto-paused: 3 login failures consécutives", time: Date.now(), author: "Joventy Hunter" },
+        ],
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (args.result === "payment_required") {
+      const msg = args.errorMessage
+        ? `⚠️ Paiement portail requis : ${args.errorMessage}`
+        : "⚠️ Le portail exige le paiement des frais consulaires avant d'accéder au calendrier des créneaux.";
+      await ctx.db.patch(args.applicationId, {
+        logs: [
+          ...((app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? []),
+          { msg, time: Date.now(), author: "Joventy Hunter" },
         ],
         updatedAt: Date.now(),
       });

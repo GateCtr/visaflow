@@ -7,7 +7,7 @@ function getSessionTimeoutMs(): number {
   return Math.round((3 + Math.random() * 2) * 60 * 1000);
 }
 
-export type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed";
+export type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed" | "payment_required";
 
 interface SlotInfo {
   date: string;
@@ -117,6 +117,74 @@ async function loginToPortal(
 
   console.log(`[navigator] Login appears successful (URL: ${page.url()})`);
   return "ok";
+}
+
+async function detectPaymentBarrier(page: Page, destination: string): Promise<string | null> {
+  const currentUrl = page.url().toLowerCase();
+
+  const paymentUrls = ["payment", "/pay", "checkout", "billing", "fee-required", "outstanding"];
+  if (paymentUrls.some((kw) => currentUrl.includes(kw))) {
+    console.warn(`[navigator] URL de paiement détectée : ${page.url()}`);
+    return "URL portail redirigée vers une page de paiement";
+  }
+
+  const barrier = await page.evaluate((dest: string) => {
+    const text = (document.body?.innerText ?? "").toLowerCase();
+
+    const genericKeywords = [
+      "payment required",
+      "pay the visa fee",
+      "fee not paid",
+      "outstanding fee",
+      "outstanding balance",
+      "make payment",
+      "complete payment",
+      "proceed to payment",
+      "pay now to continue",
+      "you must pay",
+      "fee payment pending",
+      "payer les frais",
+      "paiement requis",
+      "frais non payés",
+      "frais consulaires",
+      "règlement requis",
+    ];
+
+    const usaKeywords = [
+      "mrv receipt not found",
+      "mrv fee",
+      "receipt not valid",
+      "pay the mrv fee",
+      "visa fee receipt",
+      "fee receipt required",
+    ];
+
+    const vfsKeywords = [
+      "service fee required",
+      "vfs fee",
+      "pay service charge",
+      "service charge required",
+    ];
+
+    const keywords =
+      dest === "usa"
+        ? [...genericKeywords, ...usaKeywords]
+        : dest === "turkey"
+          ? [...genericKeywords, ...vfsKeywords]
+          : genericKeywords;
+
+    for (const kw of keywords) {
+      if (text.includes(kw)) return kw;
+    }
+    return null;
+  }, destination);
+
+  if (barrier) {
+    console.warn(`[navigator] Barrière de paiement portail détectée : "${barrier}"`);
+    return `Frais de service requis par le portail (détection : "${barrier}")`;
+  }
+
+  return null;
 }
 
 async function scanForAvailableSlots(
@@ -463,6 +531,20 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
 
       await humanScroll(page);
       await randomDelay(1500, 3000);
+
+      const paymentBarrier = await detectPaymentBarrier(page, job.destination);
+      if (paymentBarrier) {
+        console.warn(`[navigator] 💳 Paiement portail requis pour ${job.applicantName} — arrêt session`);
+        await logoutFromPortal(page);
+        try {
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "payment_required",
+            errorMessage: paymentBarrier,
+          });
+        } catch { /* ignore heartbeat errors */ }
+        return "payment_required";
+      }
 
       const slot = await scanForAvailableSlots(page, job);
 
