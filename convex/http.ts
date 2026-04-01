@@ -78,6 +78,26 @@ http.route({
         role: type === "user.created" ? role : undefined,
       });
 
+      // Write role into Clerk publicMetadata so JWT template can include it
+      if (type === "user.created") {
+        const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+        if (clerkSecretKey && !publicMetadata?.role) {
+          try {
+            await fetch(`https://api.clerk.com/v1/users/${data.id}/metadata`, {
+              method: "PATCH",
+              headers: {
+                "Authorization": `Bearer ${clerkSecretKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ public_metadata: { role: "client" } }),
+            });
+            console.log(`Set publicMetadata.role=client for user ${data.id}`);
+          } catch (err) {
+            console.error("Failed to set publicMetadata.role on Clerk:", err);
+          }
+        }
+      }
+
       if (type === "user.created" && email) {
         await ctx.runAction(internal.emails.sendWelcomeClient, {
           email,
