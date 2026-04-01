@@ -114,6 +114,7 @@ export default function AdminBotTest() {
 
   const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const checkTwoCaptchaBalanceRaw = useAction(api.hunter.checkTwoCaptchaBalanceRaw);
   const [captchaBalance, setCaptchaBalance] = useState<{ value: string; ok: boolean } | null>(null);
   const [captchaBalanceLoading, setCaptchaBalanceLoading] = useState(false);
 
@@ -122,18 +123,18 @@ export default function AdminBotTest() {
     setCaptchaBalanceLoading(true);
     setCaptchaBalance(null);
     try {
-      const res = await fetch(
-        `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(testForm.captchaKey.trim())}`
-      );
-      const text = (await res.text()).trim();
-      const balance = parseFloat(text);
-      if (!isNaN(balance)) {
-        setCaptchaBalance({ value: `$${balance.toFixed(2)} de solde`, ok: balance > 0 });
+      const result = await checkTwoCaptchaBalanceRaw({ apiKey: testForm.captchaKey.trim() });
+      if (result.ok && result.balance !== null) {
+        setCaptchaBalance({
+          value: `$${result.balance.toFixed(2)} de solde`,
+          ok: result.balance > 0,
+        });
       } else {
-        setCaptchaBalance({ value: text, ok: false });
+        setCaptchaBalance({ value: result.error ?? "Erreur inconnue", ok: false });
       }
     } catch (err) {
-      setCaptchaBalance({ value: "Erreur réseau", ok: false });
+      const msg = err instanceof Error ? err.message : "Erreur inconnue";
+      setCaptchaBalance({ value: msg, ok: false });
     } finally {
       setCaptchaBalanceLoading(false);
     }

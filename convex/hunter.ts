@@ -230,6 +230,26 @@ export const checkTwoCaptchaBalance = action({
   },
 });
 
+export const checkTwoCaptchaBalanceRaw = action({
+  args: { apiKey: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const res = await fetch(
+      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(args.apiKey.trim())}`
+    );
+    const text = (await res.text()).trim();
+    const balance = parseFloat(text);
+
+    if (isNaN(balance)) {
+      return { ok: false, error: text, balance: null };
+    }
+
+    return { ok: true, error: null, balance };
+  },
+});
+
 export const pingPortal = action({
   args: { destination: v.string() },
   handler: async (ctx, args) => {
