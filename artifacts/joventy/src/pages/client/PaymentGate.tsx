@@ -7,7 +7,7 @@ import { MOBILE_MONEY_INFO, VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, 
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, Upload, Copy, AlertCircle, ArrowRight, Clock } from "lucide-react";
+import { CheckCircle2, Upload, Copy, AlertCircle, ArrowRight, Clock, FileText } from "lucide-react";
 
 const MPESA_NUMBER = MOBILE_MONEY_INFO.mpesa.number;
 const AIRTEL_NUMBER = MOBILE_MONEY_INFO.airtel.number;
@@ -52,11 +52,13 @@ export default function PaymentGate() {
       ? !!app?.paymentProofUrl
       : !!app?.successFeeProofUrl;
 
+  const isPdf = file?.type === "application/pdf";
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    setPreview(URL.createObjectURL(f));
+    setPreview(f.type === "application/pdf" ? null : URL.createObjectURL(f));
   };
 
   const handleCopy = (text: string) => {
@@ -238,11 +240,17 @@ export default function PaymentGate() {
             className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-secondary transition-colors"
             onClick={() => fileRef.current?.click()}
           >
-            {preview ? (
+            {file ? (
               <div className="space-y-2">
-                <img src={preview} alt="Reçu" className="max-h-40 mx-auto rounded-lg object-contain" />
-                <p className="text-sm text-green-700 font-semibold">{file?.name}</p>
-                <p className="text-xs text-muted-foreground">Cliquez pour changer l'image</p>
+                {preview && !isPdf ? (
+                  <img src={preview} alt="Reçu" className="max-h-40 mx-auto rounded-lg object-contain" />
+                ) : (
+                  <div className="w-14 h-14 mx-auto bg-red-50 border border-red-200 rounded-xl flex items-center justify-center">
+                    <FileText className="w-7 h-7 text-red-500" />
+                  </div>
+                )}
+                <p className="text-sm text-green-700 font-semibold">{file.name}</p>
+                <p className="text-xs text-muted-foreground">Cliquez pour changer le fichier</p>
               </div>
             ) : (
               <div className="space-y-2">

@@ -301,7 +301,21 @@ function ClientDocRow({
               <span className="text-sm font-semibold">{label}</span>
               <button onClick={() => setPreviewOpen(false)} className="text-muted-foreground text-lg leading-none">✕</button>
             </div>
-            <img src={existingDoc.url} alt={label} className="w-full max-h-[70vh] object-contain" />
+            <img
+              src={existingDoc.url}
+              alt={label}
+              className="w-full max-h-[70vh] object-contain"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+                (e.currentTarget.nextElementSibling as HTMLElement).style.display = "block";
+              }}
+            />
+            <p className="hidden p-6 text-center text-sm text-muted-foreground">
+              Aperçu non disponible pour ce format.{" "}
+              <a href={existingDoc.url} target="_blank" rel="noreferrer" className="text-primary underline">
+                Ouvrir dans un nouvel onglet
+              </a>
+            </p>
             <div className="p-3 border-t flex justify-end">
               <a href={existingDoc.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
                 Ouvrir dans un nouvel onglet
@@ -318,6 +332,7 @@ export default function ClientApplicationDetail() {
   const [, params] = useRoute("/dashboard/applications/:id");
   const appId = params?.id as Id<"applications"> | undefined;
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [msgText, setMsgText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -353,6 +368,8 @@ export default function ClientApplicationDetail() {
     try {
       await sendMessage({ applicationId: appId, content: msgText });
       setMsgText("");
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible d'envoyer le message. Réessayez." });
     } finally {
       setIsSending(false);
     }
