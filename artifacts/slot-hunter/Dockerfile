@@ -22,4 +22,9 @@ RUN cd artifacts/slot-hunter && npx playwright install chromium
 
 COPY artifacts/slot-hunter ./artifacts/slot-hunter
 
+# Exécuter en utilisateur non-root — réduit la surface d'attaque
+# en cas de compromission du process Playwright.
+RUN useradd -m -u 1001 slothunter && chown -R slothunter:slothunter /app
+USER slothunter
+
 CMD ["pnpm", "--filter", "@workspace/slot-hunter", "run", "start"]
