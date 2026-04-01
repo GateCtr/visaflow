@@ -186,12 +186,34 @@ export async function getUsaSession(
     tokenCache.delete(cacheKey);
   }
 
-  let captchaToken: string | null = null;
-  if (captchaApiKey) {
-    captchaToken = await solveCaptchaForUsa(captchaApiKey);
+  // Tenter d'abord sans CAPTCHA (l'API l'accepte souvent sans token)
+  let session: UsaSession | null = null;
+  let lastError = "";
+
+  try {
+    console.log("[usa] Tentative login sans CAPTCHA...");
+    session = await loginUsaPortal(username, password, null);
+  } catch (err) {
+    lastError = err instanceof Error ? err.message : String(err);
+    console.warn(`[usa] Login sans captcha échoué (${lastError}) — essai avec CAPTCHA...`);
   }
 
-  const session = await loginUsaPortal(username, password, captchaToken);
+  if (!session && captchaApiKey) {
+    console.log("[usa] Résolution CAPTCHA via 2captcha...");
+    const captchaToken = await solveCaptchaForUsa(captchaApiKey);
+    if (!captchaToken) {
+      throw new Error(`Login sans captcha: ${lastError} | Résolution 2captcha: échec (vérifier balance et clé API)`);
+    }
+    try {
+      session = await loginUsaPortal(username, password, captchaToken);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Login (sans captcha): ${lastError} | Login (avec captcha): ${errMsg}`);
+    }
+  } else if (!session) {
+    throw new Error(lastError || "Login échoué (raison inconnue)");
+  }
+
   if (!session) return null;
 
   const expiresAt = parseJwtExpiry(session.accessToken) || Date.now() + 55 * 60 * 1000;
@@ -211,7 +233,7 @@ export async function loginUsaPortal(
   password: string,
   captchaToken: string | null
 ): Promise<UsaSession | null> {
-  console.log(`[usa] Connexion API pour ${username}...`);
+  console.log(`[usa] Connexion API pour ${username} (captcha: ${captchaToken ? "oui" : "non"})...`);
 
   const body: Record<string, unknown> = {
     userName: username,
@@ -232,38 +254,46 @@ export async function loginUsaPortal(
     });
   } catch (err) {
     console.error("[usa] Erreur réseau lors du login:", err);
-    return null;
+    throw new Error(`Réseau: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Lire le corps de la réponse dans tous les cas pour logger le vrai message d'erreur
+  let rawBody = "";
+  let data: UsaLoginResponse | null = null;
+  try {
+    rawBody = await response.text();
+    data = JSON.parse(rawBody) as UsaLoginResponse;
+  } catch {
+    // pas du JSON
   }
 
   if (!response.ok) {
-    console.error(`[usa] Login HTTP ${response.status}`);
-    return null;
+    const detail = data?.msg ?? rawBody.slice(0, 200);
+    console.error(`[usa] Login HTTP ${response.status} — détail: ${detail}`);
+    throw new Error(`HTTP ${response.status}: ${detail}`);
+  }
+
+  if (!data) {
+    console.error("[usa] Réponse login invalide (JSON parse échoué)");
+    throw new Error("Réponse non-JSON du portail USA");
   }
 
   const accessToken = response.headers.get("authorization");
   const refreshToken = response.headers.get("refreshtoken");
 
-  let data: UsaLoginResponse;
-  try {
-    data = (await response.json()) as UsaLoginResponse;
-  } catch {
-    console.error("[usa] Réponse login invalide (JSON parse échoué)");
-    return null;
-  }
-
-  if (data.msg && data.msg.toLowerCase().includes("invalid")) {
+  if (data.msg && (data.msg.toLowerCase().includes("invalid") || data.msg.toLowerCase().includes("incorrect"))) {
     console.error(`[usa] Login refusé par le portail: ${data.msg}`);
-    return null;
+    throw new Error(`Portail: ${data.msg}`);
   }
 
   if (data.isActive !== "ACTIVE") {
-    console.warn(`[usa] Compte inactif: isActive=${data.isActive}`);
-    return null;
+    console.warn(`[usa] Compte inactif: isActive=${data.isActive}, msg=${data.msg}`);
+    throw new Error(`Compte non actif (isActive=${data.isActive})`);
   }
 
   if (!accessToken) {
     console.error("[usa] JWT absent du header 'authorization'");
-    return null;
+    throw new Error("JWT manquant dans la réponse — login incomplet");
   }
 
   console.log(`[usa] Connecté en tant que ${data.fullName} (userID: ${data.userID})`);
@@ -372,7 +402,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "error";
   }
 
-  const session = await getUsaSession(username, password, twoCaptchaApiKey);
+  let session: UsaSession | null = null;
+  try {
+    session = await getUsaSession(username, password, twoCaptchaApiKey);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[usa] getUsaSession échoué: ${msg}`);
+    await sendHeartbeat({
+      applicationId: job.id,
+      result: "error",
+      errorMessage: msg.slice(0, 300),
+    });
+    return "login_failed";
+  }
   if (!session) {
     await sendHeartbeat({
       applicationId: job.id,

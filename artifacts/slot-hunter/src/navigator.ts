@@ -461,9 +461,9 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
       console.error(`[navigator] Erreur test USA:`, msg);
       await reportBotTestResult({
         testId: test._id,
-        result: "error",
+        result: "login_failed",
         latencyMs: Date.now() - startMs,
-        errorMessage: msg.slice(0, 300),
+        errorMessage: msg.slice(0, 600),
       });
     }
     return;
