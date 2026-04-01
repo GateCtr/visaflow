@@ -1,5 +1,5 @@
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
-import { launchBrowser, randomDelay } from "./browser.js";
+import { randomDelay } from "./browser.js";
 import { reportSlotFound, sendHeartbeat, uploadFile, type HunterJob } from "./convexClient.js";
 
 type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed" | "payment_required";
@@ -35,10 +35,45 @@ const USA_SANITY_CHECK_URL = (applicationId: string) =>
   `${USA_INTEGRATION_URL}/visa/sanitycheck/${applicationId}?stepType=slotBooking`;
 const USA_FCS_CHECK_URL = (applicationId: string) =>
   `${USA_PAYMENT_URL}/feecollection/checkFcs/${applicationId}`;
-const USA_WORKFLOW_STATUS_URL = (applicationId: string) =>
-  `${USA_WORKFLOW_URL}/workflow/status/complete/${applicationId}`;
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+// ─────────────────────────────────────────────────────────────
+// Circuit-breaker : erreurs HTTP critiques pendant le scan
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Levée quand le serveur renvoie 429 — rate limit actif.
+ * Le scan DOIT s'arrêter immédiatement pour éviter un ban.
+ */
+class RateLimitError extends Error {
+  constructor(public readonly endpoint: string, public readonly retryAfterMs?: number) {
+    super(`Rate-limit (429) sur ${endpoint}`);
+    this.name = "RateLimitError";
+  }
+}
+
+/**
+ * Levée quand le serveur renvoie 403 — compte potentiellement signalé ou bloqué.
+ * Le scan doit s'arrêter et alerter.
+ */
+class AccountBlockedError extends Error {
+  constructor(public readonly endpoint: string) {
+    super(`Accès refusé (403) sur ${endpoint} — compte potentiellement bloqué`);
+    this.name = "AccountBlockedError";
+  }
+}
+
+/**
+ * Levée quand le serveur renvoie 401 en cours de scan — token JWT expiré.
+ * La session doit être rafraîchie avant toute nouvelle tentative.
+ */
+class TokenExpiredError extends Error {
+  constructor() {
+    super("Token JWT expiré en cours de scan (401)");
+    this.name = "TokenExpiredError";
+  }
+}
 
 // Clé AES du portail USA — extraite du bundle Angular public (visaapplicantui/main.js)
 // nosemgrep: generic-api-key — clé publique, visible dans le JS client du portail
@@ -161,22 +196,30 @@ export interface UsaSession {
   pendingAppoStatus: number | null;
 }
 
-const BROWSER_HEADERS = {
-  "Accept": "application/json, text/plain, */*",
-  "Accept-Language": "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
-  "Cache-Control": "no-cache",
-  "Content-Type": "application/json",
-  "Pragma": "no-cache",
-  "Access-Control-Allow-Credentials": "true",
-  "Access-Control-Allow-Headers": "Origin, Content-Type, X-Auth-Token, content-type,-CSRF-Token, Authorization",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Max-Age": "1000",
-  "Origin": "https://www.usvisaappt.com",
-  "Referer": "https://www.usvisaappt.com/visaapplicantui/login",
-  "Sec-Fetch-Dest": "empty",
-  "Sec-Fetch-Mode": "cors",
-  "Sec-Fetch-Site": "same-origin",
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+// Referers spécifiques à chaque étape de navigation du portail Angular.
+// Chaque appel API reçoit le referer de la page qui l'a déclenché (comme un vrai navigateur).
+const REFERER_LOGIN      = "https://www.usvisaappt.com/visaapplicantui/login";
+const REFERER_DASHBOARD  = "https://www.usvisaappt.com/visaapplicantui/home/dashboard";
+const REFERER_REQUESTS   = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests";
+const REFERER_CREATE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment";
+
+// Headers d'un vrai navigateur Chrome 124 sur Windows — identiques à ceux capturés par DevTools.
+// IMPORTANT : ne jamais inclure de headers CORS côté requête (Access-Control-Allow-*) —
+// ce sont des headers de RÉPONSE que seul le serveur envoie, jamais le navigateur.
+const BROWSER_HEADERS: Record<string, string> = {
+  "Accept":             "application/json, text/plain, */*",
+  "Accept-Language":    "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
+  "Cache-Control":      "no-cache",
+  "Pragma":             "no-cache",
+  "Origin":             "https://www.usvisaappt.com",
+  "Referer":            REFERER_LOGIN,  // referer par défaut = page de login, surchargé par authHeaders()
+  "Sec-CH-UA":          '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "Sec-CH-UA-Mobile":   "?0",
+  "Sec-CH-UA-Platform": '"Windows"',
+  "Sec-Fetch-Dest":     "empty",
+  "Sec-Fetch-Mode":     "cors",
+  "Sec-Fetch-Site":     "same-origin",
+  "User-Agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 };
 
 
@@ -360,12 +403,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   primaryApplicant: string | null;
   message: string;
 }> {
-  const headers = {
-    ...BROWSER_HEADERS,
-    "Authorization": `Bearer ${session.accessToken}`,
-    "Referer": "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests",
-  };
-
+  const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
   let data: UsaPaymentStatus | null = null;
 
   try {
@@ -427,11 +465,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
 }
 
 export async function getUsaAppointmentRequests(session: UsaSession): Promise<UsaAppointmentRequest[]> {
-  const headers = {
-    ...BROWSER_HEADERS,
-    "Authorization": `Bearer ${session.accessToken}`,
-    "Referer": "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests",
-  };
+  const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
 
   try {
     const res = await fetch(USA_APPT_REQUESTS_URL, { method: "GET", headers });
@@ -567,12 +601,25 @@ interface UsaTimeSlot {
 // Fonctions utilitaires de scan API
 // ─────────────────────────────────────────────────────────────
 
-function authHeaders(accessToken: string): Record<string, string> {
-  return {
+/**
+ * Headers de base authentifiés.
+ * @param accessToken  JWT Bearer
+ * @param referer      Page en cours dans le portail (simule la navigation réelle)
+ * @param withBody     true = requête avec corps JSON → ajoute Content-Type
+ *                     false = requête GET sans corps → pas de Content-Type (les navigateurs ne l'envoient pas)
+ */
+function authHeaders(
+  accessToken: string,
+  referer: string = REFERER_DASHBOARD,
+  withBody = true
+): Record<string, string> {
+  const h: Record<string, string> = {
     ...BROWSER_HEADERS,
     "Authorization": `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
+    "Referer": referer,
   };
+  if (withBody) h["Content-Type"] = "application/json";
+  return h;
 }
 
 /**
@@ -580,9 +627,15 @@ function authHeaders(accessToken: string): Record<string, string> {
  * Le bundle Angular envoie `APP_ID_TOBE={applicationId}; missionId=323` sur toutes les requêtes
  * de slot — sans ces cookies, le serveur peut rejeter la requête ou la traiter comme suspecte.
  */
-function sessionHeaders(accessToken: string, applicationId: string, missionId = USA_MISSION_ID): Record<string, string> {
+function sessionHeaders(
+  accessToken: string,
+  applicationId: string,
+  missionId = USA_MISSION_ID,
+  referer: string = REFERER_CREATE_APT,
+  withBody = true
+): Record<string, string> {
   return {
-    ...authHeaders(accessToken),
+    ...authHeaders(accessToken, referer, withBody),
     "Cookie": `APP_ID_TOBE=${applicationId}; missionId=${missionId}`,
   };
 }
@@ -594,11 +647,10 @@ function sessionHeaders(accessToken: string, applicationId: string, missionId = 
  */
 async function callLandingPage(session: UsaSession): Promise<void> {
   if (!session.applicationId) return;
+  // GET depuis le dashboard — pas de Content-Type, Referer = dashboard parent
+  const headers = sessionHeaders(session.accessToken, session.applicationId, USA_MISSION_ID, REFERER_DASHBOARD, false);
   try {
-    const res = await fetch(USA_LANDING_PAGE_URL, {
-      method: "GET",
-      headers: sessionHeaders(session.accessToken, session.applicationId),
-    });
+    const res = await fetch(USA_LANDING_PAGE_URL, { method: "GET", headers });
     console.log(`[usa] getLandingPageDeatils → HTTP ${res.status}`);
   } catch (err) {
     console.warn("[usa] getLandingPageDeatils ignoré :", err);
@@ -613,12 +665,10 @@ async function callLandingPage(session: UsaSession): Promise<void> {
 async function callSanityCheck(session: UsaSession): Promise<void> {
   if (!session.applicationId) return;
   const url = USA_SANITY_CHECK_URL(session.applicationId);
+  // POST sans corps — le portail envoie Content-Type mais pas de body
+  const headers = sessionHeaders(session.accessToken, session.applicationId, USA_MISSION_ID, REFERER_CREATE_APT, true);
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: sessionHeaders(session.accessToken, session.applicationId),
-      body: null,
-    });
+    const res = await fetch(url, { method: "POST", headers });
     console.log(`[usa] sanityCheck(slotBooking) → HTTP ${res.status}`);
   } catch (err) {
     console.warn("[usa] sanityCheck ignoré :", err);
@@ -634,11 +684,10 @@ async function callSanityCheck(session: UsaSession): Promise<void> {
 async function checkFcsPayment(session: UsaSession): Promise<boolean> {
   if (!session.applicationId) return true; // laisser passer si pas d'appId
   const url = USA_FCS_CHECK_URL(session.applicationId);
+  // GET — pas de Content-Type
+  const headers = sessionHeaders(session.accessToken, session.applicationId, USA_MISSION_ID, REFERER_CREATE_APT, false);
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: sessionHeaders(session.accessToken, session.applicationId),
-    });
+    const res = await fetch(url, { method: "GET", headers });
     if (!res.ok) {
       console.warn(`[usa] checkFcs → HTTP ${res.status} — scan maintenu par prudence`);
       return true; // scan quand même
@@ -674,7 +723,10 @@ async function getUsaApplicationDetails(
 ): Promise<UsaAppDetails | null> {
   const url = USA_APP_DETAILS_URL(applicationId, session.userID);
   try {
-    const res = await fetch(url, { headers: authHeaders(session.accessToken) });
+    // GET — pas de Content-Type, Referer = page de création de RDV
+    const res = await fetch(url, {
+      headers: sessionHeaders(session.accessToken, applicationId, USA_MISSION_ID, REFERER_CREATE_APT, false),
+    });
     if (!res.ok) {
       console.warn(`[usa] getApplicationDetails HTTP ${res.status}`);
       return null;
@@ -693,13 +745,22 @@ async function getUsaApplicationDetails(
  * GET /visaadministrationapi/v1/ofcuser/ofclist/{missionId}
  */
 async function getUsaOfcList(session: UsaSession, missionId: number): Promise<UsaOfc[]> {
+  // GET — pas de Content-Type; les cookies applicationId+missionId doivent être présents
   const hdrs = session.applicationId
-    ? sessionHeaders(session.accessToken, session.applicationId, missionId)
-    : authHeaders(session.accessToken);
+    ? sessionHeaders(session.accessToken, session.applicationId, missionId, REFERER_CREATE_APT, false)
+    : authHeaders(session.accessToken, REFERER_CREATE_APT, false);
   try {
-    const res = await fetch(USA_OFC_LIST_URL(missionId), {
-      headers: hdrs,
-    });
+    const res = await fetch(USA_OFC_LIST_URL(missionId), { headers: hdrs });
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("retry-after") ?? "60", 10);
+      throw new RateLimitError("getOfcList", retryAfter * 1000);
+    }
+    if (res.status === 403) {
+      throw new AccountBlockedError("getOfcList");
+    }
+    if (res.status === 401) {
+      throw new TokenExpiredError();
+    }
     if (!res.ok) {
       console.warn(`[usa] getOfcList HTTP ${res.status}`);
       return [];
@@ -742,8 +803,34 @@ async function findFirstSlotForOfc(
     applicationId: appDetails.applicationId,
   };
 
-  // Toutes les requêtes de slot incluent les cookies APP_ID_TOBE + missionId
-  const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId);
+  // Toutes les requêtes de slot incluent les cookies APP_ID_TOBE + missionId (POST avec body)
+  const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId, USA_MISSION_ID, REFERER_CREATE_APT, true);
+
+  /**
+   * Vérifie le status HTTP et lève une erreur circuit-breaker si critique.
+   * 429 → RateLimitError (ban imminent), 403 → AccountBlockedError, 401 → TokenExpiredError.
+   * Retourne false si le statut est une erreur non-critique (scan de cet OFC abandonne).
+   */
+  function checkSlotResponse(res: Response, endpoint: string): boolean {
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("retry-after") ?? "60", 10);
+      console.error(`[usa] ⛔ RATE LIMIT (429) sur ${endpoint} — abandon scan complet`);
+      throw new RateLimitError(endpoint, retryAfter * 1000);
+    }
+    if (res.status === 403) {
+      console.error(`[usa] ⛔ ACCÈS REFUSÉ (403) sur ${endpoint} — compte potentiellement bloqué`);
+      throw new AccountBlockedError(endpoint);
+    }
+    if (res.status === 401) {
+      console.error(`[usa] ⛔ TOKEN EXPIRÉ (401) sur ${endpoint} — arrêt scan`);
+      throw new TokenExpiredError();
+    }
+    if (!res.ok) {
+      console.log(`[usa] ${endpoint} HTTP ${res.status} pour OFC ${ofc.postName}`);
+      return false;
+    }
+    return true;
+  }
 
   // 1. Premier mois disponible
   let firstMonth: UsaFirstAvailableMonthResponse;
@@ -753,12 +840,10 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify(basePayload),
     });
-    if (!res.ok) {
-      console.log(`[usa] getFirstAvailableMonth HTTP ${res.status} pour OFC ${ofc.postName}`);
-      return null;
-    }
+    if (!checkSlotResponse(res, "getFirstAvailableMonth")) return null;
     firstMonth = await res.json() as UsaFirstAvailableMonthResponse;
   } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getFirstAvailableMonth erreur: ${err}`);
     return null;
   }
@@ -786,13 +871,11 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify({ ...basePayload, fromDate, toDate }),
     });
-    if (!res.ok) {
-      console.log(`[usa] getSlotDates HTTP ${res.status} pour ${ofc.postName}`);
-      return null;
-    }
+    if (!checkSlotResponse(res, "getSlotDates")) return null;
     const raw = await res.json();
     slotDates = Array.isArray(raw) ? raw as UsaSlotDate[] : [];
   } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getSlotDates erreur: ${err}`);
     return null;
   }
@@ -813,13 +896,11 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify({ ...basePayload, fromDate, toDate, selectedDate: targetDate }),
     });
-    if (!res.ok) {
-      console.log(`[usa] getSlotTime HTTP ${res.status} pour ${targetDate}`);
-      return null;
-    }
+    if (!checkSlotResponse(res, "getSlotTime")) return null;
     const raw = await res.json();
     timeSlots = Array.isArray(raw) ? raw as UsaTimeSlot[] : [];
   } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getSlotTime erreur: ${err}`);
     return null;
   }
@@ -1043,7 +1124,22 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   };
 
   // 2. Récupérer la liste des OFCs pour la mission
-  const ofcList = await getUsaOfcList(session, USA_MISSION_ID);
+  let ofcList: UsaOfc[];
+  try {
+    ofcList = await getUsaOfcList(session, USA_MISSION_ID);
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getOfcList` });
+      return "error";
+    }
+    if (err instanceof AccountBlockedError || err instanceof TokenExpiredError) {
+      const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+      if (cacheKey) tokenCache.delete(cacheKey);
+      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: err.message });
+      return "error";
+    }
+    throw err;
+  }
   if (ofcList.length === 0) {
     console.warn("[usa] Aucun OFC trouvé — vérifier missionId ou droits d'accès");
     await sendHeartbeat({
@@ -1057,9 +1153,50 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   // 3. Scanner chaque OFC à la recherche d'un créneau
   for (const ofc of ofcList) {
     console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
-    await randomDelay(800, 1500);
+    // Délai humain entre OFCs — un vrai utilisateur prend 1.5-4s pour passer d'un bureau à l'autre
+    await randomDelay(1500, 4000);
 
-    const found = await findFirstSlotForOfc(session, ofc, effectiveDetails);
+    let found: SlotFound | null;
+    try {
+      found = await findFirstSlotForOfc(session, ofc, effectiveDetails);
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);
+        console.error(`[usa] ⛔ RATE LIMIT détecté — scan interrompu (retry-after: ${waitSec}s)`);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: `Rate limit (429) — ${err.message}. Reprendre dans ~${waitSec}s.`,
+        });
+        return "error";
+      }
+      if (err instanceof AccountBlockedError) {
+        console.error(`[usa] ⛔ COMPTE POTENTIELLEMENT BLOQUÉ — ${err.message}`);
+        // Vider le cache pour forcer une reconnexion au prochain cycle
+        const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+        if (cacheKey) tokenCache.delete(cacheKey);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: `Compte bloqué (403) — ${err.message}`,
+        });
+        return "error";
+      }
+      if (err instanceof TokenExpiredError) {
+        console.error(`[usa] ⛔ TOKEN EXPIRÉ en cours de scan — arrêt, reconnexion au prochain cycle`);
+        const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+        if (cacheKey) tokenCache.delete(cacheKey);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: "Token JWT expiré en cours de scan — reconnexion requise",
+        });
+        return "error";
+      }
+      // Erreur inattendue — loguer et continuer sur le prochain OFC
+      console.error(`[usa] Erreur inattendue sur OFC ${ofc.postName}: ${err}`);
+      continue;
+    }
     if (found) {
       // ── 1. Booking automatique ──────────────────────────────
       const booking = await bookUsaSlot(session, found);
@@ -1104,124 +1241,4 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
   await sendHeartbeat({ applicationId: job.id, result: "not_found" });
   return "not_found";
-}
-
-async function scanUsaSlotsWithBrowser(job: HunterJob, session: UsaSession): Promise<SessionResult> {
-  const { browser, page } = await launchBrowser();
-
-  try {
-    const bearerToken = `Bearer ${session.accessToken}`;
-
-    await page.setExtraHTTPHeaders({
-      "Authorization": bearerToken,
-    });
-
-    const slotRef: { value: { date: string; location: string } | null } = { value: null };
-
-    page.on("response", async (response) => {
-      const url = response.url();
-      if (
-        url.includes("appointment") ||
-        url.includes("schedule") ||
-        url.includes("slot") ||
-        url.includes("available") ||
-        url.includes("dates") ||
-        url.includes("calendar")
-      ) {
-        try {
-          const body = await response.text();
-          if (body && body.length < 50000) {
-            const parsed = JSON.parse(body);
-            const hasSlot = detectUsaSlotInResponse(parsed);
-            if (hasSlot && !slotRef.value) {
-              slotRef.value = hasSlot;
-              console.log(`[usa] 🎯 CRÉNEAU DÉTECTÉ via API interception: ${JSON.stringify(hasSlot)}`);
-            }
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    });
-
-    const dashboardUrl = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests";
-    await page.goto(dashboardUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await randomDelay(2000, 4000);
-
-    const scheduleUrl = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/Appointment-scheduled";
-    await page.goto(scheduleUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await randomDelay(3000, 6000);
-
-    if (slotRef.value) {
-      await reportSlotFound({
-        applicationId: job.id,
-        date: slotRef.value.date,
-        time: "",
-        location: slotRef.value.location || `Ambassade USA Kinshasa (Mission ${USA_MISSION_ID})`,
-      });
-      return "slot_found";
-    }
-
-    console.log("[usa] Aucun créneau disponible détecté");
-    await sendHeartbeat({ applicationId: job.id, result: "not_found" });
-    return "not_found";
-  } catch (err) {
-    console.error("[usa] Erreur scan créneaux:", err);
-    await sendHeartbeat({
-      applicationId: job.id,
-      result: "error",
-      errorMessage: `Erreur scan USA: ${String(err).slice(0, 200)}`,
-    });
-    return "error";
-  } finally {
-    try { await browser.close(); } catch { /* ignore */ }
-  }
-}
-
-function detectUsaSlotInResponse(data: unknown): { date: string; location: string } | null {
-  if (!data || typeof data !== "object") return null;
-
-  const obj = data as Record<string, unknown>;
-
-  if (obj.appointmentDate && obj.appointmentTime) {
-    return {
-      date: `${String(obj.appointmentDate)} ${String(obj.appointmentTime)}`,
-      location: String(obj.location ?? obj.facilityName ?? `Mission ${USA_MISSION_ID}`),
-    };
-  }
-
-  if (Array.isArray(data)) {
-    for (const item of data) {
-      const found = detectUsaSlotInResponse(item);
-      if (found) return found;
-    }
-  }
-
-  if (obj.availableDates && Array.isArray(obj.availableDates) && obj.availableDates.length > 0) {
-    return {
-      date: String(obj.availableDates[0]),
-      location: `Ambassade USA Kinshasa (Mission ${USA_MISSION_ID})`,
-    };
-  }
-
-  if (obj.slots && Array.isArray(obj.slots) && obj.slots.length > 0) {
-    const slot = obj.slots[0] as Record<string, unknown>;
-    return {
-      date: String(slot.date ?? slot.appointmentDate ?? ""),
-      location: `Ambassade USA Kinshasa (Mission ${USA_MISSION_ID})`,
-    };
-  }
-
-  for (const key of Object.keys(obj)) {
-    if (
-      key.toLowerCase().includes("available") &&
-      Array.isArray(obj[key]) &&
-      (obj[key] as unknown[]).length > 0
-    ) {
-      return {
-        date: `Créneau disponible (${key})`,
-        location: `Ambassade USA Kinshasa (Mission ${USA_MISSION_ID})`,
-      };
-    }
-  }
-
-  return null;
 }
