@@ -244,11 +244,11 @@ export async function loginUsaPortal(
   const body: Record<string, unknown> = {
     userName: username,
     password,
-    missionId: USA_MISSION_ID,
-    // Champ CAPTCHA — noms possibles : captchaToken, recaptchaToken, g-recaptcha-response
-    // À confirmer via DevTools Network → Request Payload du POST /identity/user/login
+    // missionId retiré du login — requis seulement pour la réservation de créneau, pas l'auth
     ...(captchaToken ? { recaptchaToken: captchaToken, captchaToken } : {}),
   };
+
+  console.log(`[usa] Body login: ${JSON.stringify({ ...body, password: "***" })}`);
 
   let response: Response;
   try {
