@@ -82,15 +82,23 @@ export default function Register() {
       setLoadingOAuth(strategy);
     });
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    const { error } = await signIn.sso({
-      strategy,
-      redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
-      redirectUrl: `${window.location.origin}${base}/dashboard`,
-    });
-    if (error) {
-      setError(error.longMessage ?? error.message ?? "Erreur OAuth");
-      setLoadingOAuth(null);
+    try {
+      const { error } = await signIn.sso({
+        strategy,
+        redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
+        redirectUrl: `${window.location.origin}${base}/dashboard`,
+      });
+      // Si on arrive ici, la redirection n'a pas eu lieu
+      if (error) {
+        setError(error.longMessage ?? error.message ?? "Erreur OAuth");
+      } else {
+        setError("La redirection n'a pas démarré. Vérifiez la config Google dans le Clerk Dashboard.");
+      }
+    } catch (e: any) {
+      const msg = e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? e?.message;
+      setError(msg || "Erreur de connexion Google.");
     }
+    setLoadingOAuth(null);
   };
 
   const switchMethod = (m: Method) => {
