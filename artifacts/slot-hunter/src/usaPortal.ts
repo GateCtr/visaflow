@@ -12,6 +12,20 @@ const USA_PAYMENT_URL = `${USA_BASE}/visaworkflowprocessor/workflow/getUserHisto
 const USA_APPT_REQUESTS_URL = `${USA_BASE}/visauserapi/appointmentrequest/getallbyuser`;
 const USA_MISSION_ID = 323;
 
+// Endpoints de scan de créneaux — extraits du bundle Angular public
+const USA_ADMIN_URL = `${USA_BASE}/visaadministrationapi/v1`;
+const USA_APPOINTMENT_URL = `${USA_BASE}/visaappointmentapi`;
+const USA_NOTIFICATION_URL = `${USA_BASE}/visanotificationapi`;
+
+const USA_OFC_LIST_URL = (missionId: number) =>
+  `${USA_ADMIN_URL}/ofcuser/ofclist/${missionId}`;
+const USA_FIRST_AVAILABLE_MONTH_URL = `${USA_ADMIN_URL}/modifyslot/getFirstAvailableMonth`;
+const USA_SLOT_DATES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotDates`;
+const USA_SLOT_TIMES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotTime`;
+const USA_APP_DETAILS_URL = (applicationId: string, applicantId: number) =>
+  `${USA_APPOINTMENT_URL}/appointments/getApplicationDetails?applicationId=${applicationId}&applicantId=${applicantId}`;
+const USA_CONFIRMATION_LETTER_URL = `${USA_NOTIFICATION_URL}/template/appointmentLetter`;
+
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // Clé AES du portail USA — extraite du bundle Angular public (visaapplicantui/main.js)
@@ -490,10 +504,343 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "slot_found";
   }
 
-  console.log(`[usa] Paiement confirmé (pendingAppoStatus=1) — lancement scan créneaux...`);
+  console.log(`[usa] Paiement confirmé (pendingAppoStatus=1) — lancement scan créneaux via API directe...`);
 
-  const slotResult = await scanUsaSlotsWithBrowser(job, session);
+  const slotResult = await scanUsaSlotsViaAPI(job, session);
   return slotResult;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Types pour les réponses des endpoints de slot (bundle Angular)
+// ─────────────────────────────────────────────────────────────
+
+interface UsaOfc {
+  postUserId: number;
+  postName: string;
+  officeType: string;  // "OFC" | "POST"
+  postCode?: string;
+}
+
+interface UsaAppDetails {
+  applicantId: number;
+  applicationId: string;
+  visaType: string;
+  visaClass: string;
+  locationType?: string;
+}
+
+interface UsaFirstAvailableMonthResponse {
+  present: boolean;
+  date: string;  // "YYYY-MM-DD"
+}
+
+interface UsaSlotDate {
+  date: string;        // "YYYY-MM-DD"
+  slotsAvailable: number;
+  [key: string]: unknown;
+}
+
+interface UsaTimeSlot {
+  slotId: number;
+  date: string;        // "YYYY-MM-DD"
+  startTime: string;   // "HH:mm" ou "YYYY-MM-DDTHH:mm:ss"
+  endTime: string;
+  slotsAvailable?: number;
+  [key: string]: unknown;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fonctions utilitaires de scan API
+// ─────────────────────────────────────────────────────────────
+
+function authHeaders(accessToken: string): Record<string, string> {
+  return {
+    ...BROWSER_HEADERS,
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
+function toYMD(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function lastDayOfMonth(d: Date): string {
+  return toYMD(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+/**
+ * Récupère les détails de la demande (applicantId, visaType, visaClass)
+ * depuis GET /visaappointmentapi/appointments/getApplicationDetails
+ */
+async function getUsaApplicationDetails(
+  session: UsaSession,
+  applicationId: string
+): Promise<UsaAppDetails | null> {
+  const url = USA_APP_DETAILS_URL(applicationId, session.userID);
+  try {
+    const res = await fetch(url, { headers: authHeaders(session.accessToken) });
+    if (!res.ok) {
+      console.warn(`[usa] getApplicationDetails HTTP ${res.status}`);
+      return null;
+    }
+    const data = await res.json() as UsaAppDetails;
+    console.log(`[usa] App details: applicantId=${data.applicantId}, visaType=${data.visaType}, visaClass=${data.visaClass}`);
+    return data;
+  } catch (err) {
+    console.warn(`[usa] getApplicationDetails erreur: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Récupère la liste des OFCs autorisés pour une mission.
+ * GET /visaadministrationapi/v1/ofcuser/ofclist/{missionId}
+ */
+async function getUsaOfcList(session: UsaSession, missionId: number): Promise<UsaOfc[]> {
+  try {
+    const res = await fetch(USA_OFC_LIST_URL(missionId), {
+      headers: authHeaders(session.accessToken),
+    });
+    if (!res.ok) {
+      console.warn(`[usa] getOfcList HTTP ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    const list = Array.isArray(data) ? data as UsaOfc[] : [];
+    console.log(`[usa] OFCs disponibles (mission ${missionId}): ${list.map(o => o.postName).join(", ") || "aucun"}`);
+    return list.filter(o => o.officeType === "OFC");
+  } catch (err) {
+    console.warn(`[usa] getOfcList erreur: ${err}`);
+    return [];
+  }
+}
+
+/**
+ * Pour un OFC donné, cherche le premier mois avec des créneaux disponibles,
+ * puis les dates et horaires dans ce mois.
+ * Retourne le premier créneau trouvé ou null.
+ */
+async function findFirstSlotForOfc(
+  session: UsaSession,
+  ofc: UsaOfc,
+  appDetails: UsaAppDetails
+): Promise<{ date: string; time: string; slotId: number; ofcName: string } | null> {
+  const basePayload = {
+    postUserId: ofc.postUserId,
+    applicantId: appDetails.applicantId,
+    visaType: appDetails.visaType,
+    visaClass: appDetails.visaClass,
+    locationType: "OFC",
+    applicationId: appDetails.applicationId,
+  };
+
+  // 1. Premier mois disponible
+  let firstMonth: UsaFirstAvailableMonthResponse;
+  try {
+    const res = await fetch(USA_FIRST_AVAILABLE_MONTH_URL, {
+      method: "POST",
+      headers: authHeaders(session.accessToken),
+      body: JSON.stringify(basePayload),
+    });
+    if (!res.ok) {
+      console.log(`[usa] getFirstAvailableMonth HTTP ${res.status} pour OFC ${ofc.postName}`);
+      return null;
+    }
+    firstMonth = await res.json() as UsaFirstAvailableMonthResponse;
+  } catch (err) {
+    console.warn(`[usa] getFirstAvailableMonth erreur: ${err}`);
+    return null;
+  }
+
+  if (!firstMonth.present || !firstMonth.date) {
+    console.log(`[usa] Aucun créneau disponible pour OFC ${ofc.postName}`);
+    return null;
+  }
+
+  console.log(`[usa] 📅 Premier mois disponible pour ${ofc.postName}: ${firstMonth.date}`);
+
+  // 2. Dates disponibles dans ce mois
+  const monthStart = new Date(firstMonth.date);
+  monthStart.setHours(0, 0, 0, 0);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const fromDate = monthStart > tomorrow ? toYMD(monthStart) : toYMD(tomorrow);
+  const toDate = lastDayOfMonth(monthStart);
+
+  let slotDates: UsaSlotDate[];
+  try {
+    const res = await fetch(USA_SLOT_DATES_URL, {
+      method: "POST",
+      headers: authHeaders(session.accessToken),
+      body: JSON.stringify({ ...basePayload, fromDate, toDate }),
+    });
+    if (!res.ok) {
+      console.log(`[usa] getSlotDates HTTP ${res.status} pour ${ofc.postName}`);
+      return null;
+    }
+    const raw = await res.json();
+    slotDates = Array.isArray(raw) ? raw as UsaSlotDate[] : [];
+  } catch (err) {
+    console.warn(`[usa] getSlotDates erreur: ${err}`);
+    return null;
+  }
+
+  if (slotDates.length === 0) {
+    console.log(`[usa] Aucune date disponible pour ${ofc.postName} entre ${fromDate} et ${toDate}`);
+    return null;
+  }
+
+  console.log(`[usa] 📆 ${slotDates.length} date(s) avec créneaux pour ${ofc.postName}: ${slotDates.slice(0, 3).map(d => d.date).join(", ")}`);
+
+  // 3. Horaires pour la première date disponible
+  const targetDate = slotDates[0].date;
+  let timeSlots: UsaTimeSlot[];
+  try {
+    const res = await fetch(USA_SLOT_TIMES_URL, {
+      method: "POST",
+      headers: authHeaders(session.accessToken),
+      body: JSON.stringify({ ...basePayload, fromDate, toDate, selectedDate: targetDate }),
+    });
+    if (!res.ok) {
+      console.log(`[usa] getSlotTime HTTP ${res.status} pour ${targetDate}`);
+      return null;
+    }
+    const raw = await res.json();
+    timeSlots = Array.isArray(raw) ? raw as UsaTimeSlot[] : [];
+  } catch (err) {
+    console.warn(`[usa] getSlotTime erreur: ${err}`);
+    return null;
+  }
+
+  if (timeSlots.length === 0) {
+    console.log(`[usa] Aucun horaire disponible pour ${ofc.postName} le ${targetDate}`);
+    return null;
+  }
+
+  const slot = timeSlots[0];
+  const rawTime = slot.startTime ?? "";
+  const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
+
+  console.log(`[usa] 🎯 CRÉNEAU TROUVÉ — ${ofc.postName} le ${targetDate} à ${time} (slotId=${slot.slotId})`);
+  return {
+    date: targetDate,
+    time,
+    slotId: slot.slotId,
+    ofcName: ofc.postName,
+  };
+}
+
+/**
+ * Télécharge la lettre de confirmation de RDV au format PDF.
+ * POST /visanotificationapi/template/appointmentLetter
+ * Retourne le contenu PDF en Buffer, ou null en cas d'erreur.
+ */
+export async function downloadUsaConfirmationPdf(
+  session: UsaSession,
+  applicationId: string
+): Promise<Buffer | null> {
+  console.log(`[usa] Téléchargement confirmation PDF pour application ${applicationId}...`);
+  try {
+    const res = await fetch(USA_CONFIRMATION_LETTER_URL, {
+      method: "POST",
+      headers: {
+        ...authHeaders(session.accessToken),
+        "Accept": "application/pdf",
+      },
+      body: JSON.stringify({ applicationId }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[usa] downloadConfirmationPdf HTTP ${res.status}`);
+      return null;
+    }
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("pdf") && !contentType.includes("octet-stream")) {
+      const text = await res.text();
+      console.warn(`[usa] Réponse inattendue (non-PDF): ${text.slice(0, 200)}`);
+      return null;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buf = Buffer.from(arrayBuffer);
+    console.log(`[usa] Confirmation PDF téléchargée: ${buf.length} bytes`);
+    return buf;
+  } catch (err) {
+    console.warn(`[usa] downloadConfirmationPdf erreur: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Scan direct des créneaux USA via API — sans Playwright.
+ * Utilise les endpoints découverts dans le bundle Angular du portail :
+ *  - getFirstAvailableMonth → getSlotDates → getSlotTime
+ * Remplace scanUsaSlotsWithBrowser (fragile, lent, consomme Chromium).
+ */
+async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<SessionResult> {
+  if (!session.applicationId) {
+    console.error("[usa] applicationId manquant dans la session — impossible de scanner");
+    await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "applicationId manquant" });
+    return "error";
+  }
+
+  // 1. Récupérer les détails de la demande (applicantId, visaType, visaClass)
+  const appDetails = await getUsaApplicationDetails(session, session.applicationId);
+  if (!appDetails) {
+    console.warn("[usa] getApplicationDetails échoué — tentative avec userID comme applicantId");
+  }
+
+  const effectiveDetails: UsaAppDetails = appDetails ?? {
+    applicantId: session.userID,
+    applicationId: session.applicationId,
+    visaType: "B",      // valeur par défaut pour visa touriste/affaires USA
+    visaClass: "200",   // classe standard
+    locationType: "OFC",
+  };
+
+  // 2. Récupérer la liste des OFCs pour la mission
+  const ofcList = await getUsaOfcList(session, USA_MISSION_ID);
+  if (ofcList.length === 0) {
+    console.warn("[usa] Aucun OFC trouvé — vérifier missionId ou droits d'accès");
+    await sendHeartbeat({
+      applicationId: job.id,
+      result: "not_found",
+      errorMessage: `Aucun OFC disponible pour mission ${USA_MISSION_ID}`,
+    });
+    return "not_found";
+  }
+
+  // 3. Scanner chaque OFC à la recherche d'un créneau
+  for (const ofc of ofcList) {
+    console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
+    await randomDelay(800, 1500);
+
+    const slot = await findFirstSlotForOfc(session, ofc, effectiveDetails);
+    if (slot) {
+      await reportSlotFound({
+        applicationId: job.id,
+        date: slot.date,
+        time: slot.time,
+        location: `${slot.ofcName} — Ambassade USA (mission ${USA_MISSION_ID}, slotId=${slot.slotId})`,
+      });
+
+      // Tenter de télécharger la confirmation si déjà réservé
+      const pdf = await downloadUsaConfirmationPdf(session, session.applicationId);
+      if (pdf) {
+        console.log(`[usa] ✅ Confirmation PDF disponible (${pdf.length} bytes) — à uploader vers Convex`);
+        // TODO: uploader le PDF vers Convex Storage et notifier
+      }
+
+      return "slot_found";
+    }
+  }
+
+  console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
+  await sendHeartbeat({ applicationId: job.id, result: "not_found" });
+  return "not_found";
 }
 
 async function scanUsaSlotsWithBrowser(job: HunterJob, session: UsaSession): Promise<SessionResult> {
