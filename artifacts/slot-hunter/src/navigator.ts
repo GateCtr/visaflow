@@ -2,7 +2,7 @@ import type { Browser, Page } from "playwright";
 import { launchBrowser, humanType, humanClick, humanScroll, randomDelay, isDryRun } from "./browser.js";
 import { detectAndSolveCaptcha } from "./captcha.js";
 import { reportSlotFound, sendHeartbeat, uploadScreenshot, reportBotTestResult, type HunterJob, type BotTest } from "./convexClient.js";
-import { runUsaApiSession } from "./usaPortal.js";
+import { runUsaApiSession, getUsaSession } from "./usaPortal.js";
 
 function getSessionTimeoutMs(): number {
   return Math.round((3 + Math.random() * 2) * 60 * 1000);
@@ -428,6 +428,48 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
     return;
   }
 
+  // ─── USA : login API directe (sans navigateur, sans 2captcha) ─────────────
+  if (test.destination === "usa") {
+    console.log(`[navigator] Test USA → login API directe`);
+    try {
+      const session = await getUsaSession(
+        test.testUsername!,
+        test.testPassword!,
+        test.twoCaptchaApiKey
+      );
+      const latencyMs = Date.now() - startMs;
+
+      if (session) {
+        console.log(`[navigator] Test USA RÉUSSI — connecté en tant que ${session.fullName} (${latencyMs}ms)`);
+        await reportBotTestResult({
+          testId: test._id,
+          result: "login_success",
+          latencyMs,
+          httpStatus: 200,
+        });
+      } else {
+        console.warn(`[navigator] Test USA échoué — API login null`);
+        await reportBotTestResult({
+          testId: test._id,
+          result: "login_failed",
+          latencyMs,
+          errorMessage: "Identifiants incorrects ou CAPTCHA requis (résolution 2captcha échouée)",
+        });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[navigator] Erreur test USA:`, msg);
+      await reportBotTestResult({
+        testId: test._id,
+        result: "error",
+        latencyMs: Date.now() - startMs,
+        errorMessage: msg.slice(0, 300),
+      });
+    }
+    return;
+  }
+
+  // ─── Autres destinations : Playwright browser login ─────────────────────
   const jobLike: HunterJob = {
     id: `bot-test-${test._id}`,
     destination: test.destination,
