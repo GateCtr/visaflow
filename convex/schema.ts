@@ -135,6 +135,7 @@ export default defineSchema({
     testUsername: v.optional(v.string()),
     testPassword: v.optional(v.string()),
     twoCaptchaApiKey: v.optional(v.string()),
+    testType: v.optional(v.string()),  // "login" (défaut) | "logout"
     status: v.string(),
     result: v.optional(v.string()),
     latencyMs: v.optional(v.number()),

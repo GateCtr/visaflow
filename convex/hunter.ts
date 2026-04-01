@@ -310,6 +310,7 @@ export const createBotTest = mutation({
     testUsername: v.optional(v.string()),
     testPassword: v.optional(v.string()),
     twoCaptchaApiKey: v.optional(v.string()),
+    testType: v.optional(v.string()),  // "login" (défaut) | "logout"
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -325,6 +326,7 @@ export const createBotTest = mutation({
       testUsername: args.testUsername,
       testPassword: args.testPassword,
       twoCaptchaApiKey: args.twoCaptchaApiKey,
+      testType: args.testType ?? "login",
       status: "pending",
       requestedAt: Date.now(),
       requestedBy: identity!.subject,

@@ -21,6 +21,7 @@ import {
   Copy,
   Check,
   Maximize2,
+  LogOut,
 } from "lucide-react";
 
 type Destination = keyof typeof VISA_PRICING;
@@ -46,6 +47,11 @@ const RESULT_META: Record<string, { label: string; color: string; icon: React.Re
     label: "Connexion réussie",
     color: "text-emerald-600",
     icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+  },
+  logout_success: {
+    label: "Déconnexion réussie",
+    color: "text-slate-600",
+    icon: <LogOut className="w-4 h-4 text-slate-500" />,
   },
   login_failed: {
     label: "Identifiants incorrects",
@@ -178,9 +184,32 @@ export default function AdminBotTest() {
         testUsername: testForm.username || undefined,
         testPassword: testForm.password || undefined,
         twoCaptchaApiKey: testForm.captchaKey || undefined,
+        testType: "login",
       });
       setTestSuccess(true);
       setTestForm((f) => ({ ...f, username: "", password: "", captchaKey: "" }));
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setTestSubmitting(false);
+    }
+  }
+
+  async function handleLogoutBotTest() {
+    if (!testForm.username) {
+      setTestError("Entrez l'identifiant (email) pour déconnecter la session.");
+      return;
+    }
+    setTestSubmitting(true);
+    setTestError(null);
+    setTestSuccess(false);
+    try {
+      await createBotTest({
+        destination: testForm.destination,
+        testUsername: testForm.username,
+        testType: "logout",
+      });
+      setTestSuccess(true);
     } catch (err) {
       setTestError(err instanceof Error ? err.message : "Erreur inconnue");
     } finally {
@@ -411,23 +440,37 @@ export default function AdminBotTest() {
             </div>
           )}
 
-          <button
-            onClick={handleSubmitBotTest}
-            disabled={testSubmitting}
-            className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-primary/90 disabled:opacity-60 transition-colors"
-          >
-            {testSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Envoi…
-              </>
-            ) : (
-              <>
-                <FlaskConical className="w-4 h-4" />
-                Lancer le test
-              </>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleSubmitBotTest}
+              disabled={testSubmitting}
+              className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-primary/90 disabled:opacity-60 transition-colors"
+            >
+              {testSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Envoi…
+                </>
+              ) : (
+                <>
+                  <FlaskConical className="w-4 h-4" />
+                  Lancer le test
+                </>
+              )}
+            </button>
+
+            {testForm.destination === "usa" && testForm.username && (
+              <button
+                onClick={handleLogoutBotTest}
+                disabled={testSubmitting}
+                title="Déconnecter la session active de ce compte sur le portail USA"
+                className="flex items-center gap-2 bg-slate-100 text-slate-700 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-red-50 hover:text-red-700 border border-slate-200 hover:border-red-200 disabled:opacity-60 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Déconnecter session
+              </button>
             )}
-          </button>
+          </div>
         </section>
 
         <section className="bg-white rounded-2xl border border-border p-6 shadow-sm">

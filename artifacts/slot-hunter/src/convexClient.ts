@@ -164,6 +164,7 @@ export interface BotTest {
   testUsername?: string;
   testPassword?: string;
   twoCaptchaApiKey?: string;
+  testType?: string;  // "login" (défaut) | "logout"
   status: string;
 }
 

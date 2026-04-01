@@ -2,7 +2,7 @@ import type { Browser, Page } from "playwright";
 import { launchBrowser, humanType, humanClick, humanScroll, randomDelay, isDryRun } from "./browser.js";
 import { detectAndSolveCaptcha } from "./captcha.js";
 import { reportSlotFound, sendHeartbeat, uploadScreenshot, reportBotTestResult, type HunterJob, type BotTest } from "./convexClient.js";
-import { runUsaApiSession, getUsaSession } from "./usaPortal.js";
+import { runUsaApiSession, getUsaSession, logoutUsaPortal } from "./usaPortal.js";
 
 function getSessionTimeoutMs(): number {
   return Math.round((3 + Math.random() * 2) * 60 * 1000);
@@ -383,6 +383,32 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
   }
 
   const startMs = Date.now();
+
+  // Gérer le logout USA séparément — pas besoin de navigateur
+  if (test.testType === "logout" && test.destination === "usa" && test.testUsername) {
+    try {
+      console.log(`[navigator] Déconnexion USA pour ${test.testUsername}...`);
+      await logoutUsaPortal(test.testUsername);
+      const latencyMs = Date.now() - startMs;
+      await reportBotTestResult({
+        testId: test._id,
+        result: "logout_success",
+        latencyMs,
+        httpStatus: 200,
+      });
+    } catch (err) {
+      const latencyMs = Date.now() - startMs;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[navigator] Erreur logout USA:`, msg);
+      await reportBotTestResult({
+        testId: test._id,
+        result: "error",
+        latencyMs,
+        errorMessage: msg,
+      });
+    }
+    return;
+  }
 
   if (!test.testUsername || !test.testPassword) {
     const browserRef: { current: Browser | null } = { current: null };

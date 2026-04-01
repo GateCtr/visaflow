@@ -6,6 +6,7 @@ type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_f
 
 const USA_BASE = "https://www.usvisaappt.com";
 const USA_LOGIN_URL = `${USA_BASE}/identity/user/login`;
+const USA_LOGOUT_URL = `${USA_BASE}/identity/user/logout`;
 const USA_REFRESH_URL = `${USA_BASE}/identity/user/refreshToken`;
 const USA_PAYMENT_URL = `${USA_BASE}/visaworkflowprocessor/workflow/getUserHistoryApplicantPaymentStatus`;
 const USA_APPT_REQUESTS_URL = `${USA_BASE}/visauserapi/appointmentrequest/getallbyuser`;
@@ -215,6 +216,37 @@ export async function getUsaSession(
   });
 
   return session;
+}
+
+/**
+ * Déconnecte l'utilisateur du portail USA et vide le cache de token.
+ * Appelle POST /identity/user/logout avec le Bearer token en en-tête.
+ */
+export async function logoutUsaPortal(username: string): Promise<void> {
+  const cacheKey = username.toLowerCase();
+  const cached = tokenCache.get(cacheKey);
+
+  if (cached) {
+    console.log(`[usa] Déconnexion de ${username} du portail...`);
+    try {
+      const res = await fetch(USA_LOGOUT_URL, {
+        method: "POST",
+        headers: {
+          ...BROWSER_HEADERS,
+          Authorization: `Bearer ${cached.accessToken}`,
+        },
+        body: null,
+      });
+      console.log(`[usa] Logout HTTP ${res.status} — ${username}`);
+    } catch (err) {
+      console.warn(`[usa] Erreur réseau lors du logout (ignorée):`, err);
+    } finally {
+      tokenCache.delete(cacheKey);
+      console.log(`[usa] Cache token supprimé pour ${username}`);
+    }
+  } else {
+    console.log(`[usa] Aucune session active pour ${username} — rien à déconnecter`);
+  }
 }
 
 export async function loginUsaPortal(
