@@ -20,6 +20,7 @@ const OAUTH_STRATEGIES = [
   {
     strategy: "oauth_google" as const,
     label: "Google",
+    disabled: false,
     icon: (
       <svg viewBox="0 0 24 24" className="w-5 h-5">
         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -32,6 +33,7 @@ const OAUTH_STRATEGIES = [
   {
     strategy: "oauth_apple" as const,
     label: "Apple",
+    disabled: true,
     icon: (
       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
         <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
@@ -41,6 +43,7 @@ const OAUTH_STRATEGIES = [
   {
     strategy: "oauth_facebook" as const,
     label: "Facebook",
+    disabled: true,
     icon: (
       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2">
         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -70,7 +73,8 @@ export default function Register() {
   const [loadingOAuth, setLoadingOAuth] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const handleOAuth = async (strategy: "oauth_google" | "oauth_apple" | "oauth_facebook") => {
+  const handleOAuth = async (strategy: "oauth_google" | "oauth_apple" | "oauth_facebook", isDisabled?: boolean) => {
+    if (isDisabled) return;
     if (!signUp || loadingOAuth) return;
     flushSync(() => {
       setError("");
@@ -182,9 +186,9 @@ export default function Register() {
 
   const identifier = method === "phone" ? phone : email;
 
-  const METHOD_TABS: { key: Method; label: string; icon: typeof KeyRound }[] = [
+  const METHOD_TABS: { key: Method; label: string; icon: typeof KeyRound; disabled?: boolean }[] = [
     { key: "email-password", label: "Email + mdp", icon: KeyRound },
-    { key: "phone", label: "Téléphone", icon: Phone },
+    { key: "phone", label: "Téléphone", icon: Phone, disabled: true },
   ];
 
   return (
@@ -270,16 +274,19 @@ export default function Register() {
 
               {/* OAuth */}
               <div className="grid grid-cols-3 gap-3 mb-6">
-                {OAUTH_STRATEGIES.map(({ strategy, label, icon }) => {
+                {OAUTH_STRATEGIES.map(({ strategy, label, icon, disabled: isProviderDisabled }) => {
                   const isThis = loadingOAuth === strategy;
-                  const isDisabled = !!loadingOAuth || isLoading;
+                  const isDisabled = isProviderDisabled || !!loadingOAuth || isLoading;
                   return (
                     <button
                       key={strategy}
-                      onClick={() => handleOAuth(strategy)}
+                      onClick={() => handleOAuth(strategy, isProviderDisabled)}
                       disabled={isDisabled}
+                      title={isProviderDisabled ? "Bientôt disponible" : undefined}
                       className={`relative flex items-center justify-center gap-2 h-12 rounded-xl border text-sm font-medium transition-all duration-200 shadow-sm
-                        ${isThis
+                        ${isProviderDisabled
+                          ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed opacity-50 grayscale"
+                          : isThis
                           ? "bg-primary/5 border-primary/30 text-primary scale-[0.98]"
                           : isDisabled
                           ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
@@ -290,6 +297,11 @@ export default function Register() {
                         <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                       ) : icon}
                       <span>{label}</span>
+                      {isProviderDisabled && (
+                        <span className="absolute -top-2 -right-1 text-[9px] font-semibold bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full leading-none">
+                          Bientôt
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -308,13 +320,17 @@ export default function Register() {
 
               {/* Method tabs */}
               <div className="flex rounded-xl bg-slate-100 p-1 mb-5 gap-1">
-                {METHOD_TABS.map(({ key, label, icon: Icon }) => (
+                {METHOD_TABS.map(({ key, label, icon: Icon, disabled: tabDisabled }) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => switchMethod(key)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-medium transition-all ${
-                      method === key
+                    onClick={() => !tabDisabled && switchMethod(key)}
+                    disabled={tabDisabled}
+                    title={tabDisabled ? "Bientôt disponible" : undefined}
+                    className={`relative flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-medium transition-all ${
+                      tabDisabled
+                        ? "text-slate-300 cursor-not-allowed"
+                        : method === key
                         ? "bg-white text-primary shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
@@ -322,6 +338,11 @@ export default function Register() {
                     <Icon className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">{label}</span>
                     <span className="sm:hidden">{key === "email-password" ? "Email" : "Tel"}</span>
+                    {tabDisabled && (
+                      <span className="absolute -top-2 -right-1 text-[9px] font-semibold bg-slate-200 text-slate-400 px-1.5 py-0.5 rounded-full leading-none">
+                        Bientôt
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
