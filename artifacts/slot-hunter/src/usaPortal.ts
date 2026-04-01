@@ -458,25 +458,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "login_failed";
   }
 
-  // ── Résolution du dossier cible ────────────────────────────────────────────
-  // Si l'admin a renseigné un portalApplicationId, on l'utilise directement.
-  // Sinon, on interroge le portail pour récupérer le dossier actif du compte.
-  // Ceci est indispensable quand un compte portail gère plusieurs personnes.
-  const manualAppId = job.hunterConfig.portalApplicationId?.trim() || null;
-
-  if (manualAppId) {
-    console.log(`[usa] portalApplicationId spécifié manuellement: ${manualAppId}`);
-    session.applicationId = manualAppId;
-    session.pendingAppoStatus = 3; // En attente de RDV — pas encore de créneau
-  }
-
+  // ── Résolution du dossier actif ────────────────────────────────────────────
+  // Le portail retourne toujours l'applicationId du dossier actif de la session.
+  // Une session = un compte = un dossier principal → pas d'ambiguïté.
   const requestStatus = await checkUsaAppointmentRequestStatus(session);
-
-  // Si ID manuel fourni, on conserve l'applicationId forcé ; sinon on prend celui du portail.
-  if (!manualAppId) {
-    session.applicationId = requestStatus.applicationId;
-  }
-  session.pendingAppoStatus = requestStatus.pendingAppoStatus ?? session.pendingAppoStatus;
+  session.applicationId = requestStatus.applicationId;
+  session.pendingAppoStatus = requestStatus.pendingAppoStatus;
 
   if (requestStatus.status === "error") {
     console.error(`[usa] Erreur lecture statut demande : ${requestStatus.message}`);

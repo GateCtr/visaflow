@@ -358,8 +358,6 @@ export default function AdminApplicationDetail() {
   const [hunterUsername, setHunterUsername] = useState("");
   const [hunterPassword, setHunterPassword] = useState("");
   const [hunterTwoCaptchaKey, setHunterTwoCaptchaKey] = useState("");
-  const [hunterScheduleUrl, setHunterScheduleUrl] = useState("");
-  const [hunterPortalAppId, setHunterPortalAppId] = useState("");
   const [hunterActive, setHunterActive] = useState(false);
   const [hunterSaving, setHunterSaving] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
@@ -393,22 +391,17 @@ export default function AdminApplicationDetail() {
       setAdminNoteInput(app.adminNotes ?? "");
       const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
       if (pricing) setSlotLocation(pricing.embassyAddress ?? "");
-      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; scheduleUrl?: string; portalApplicationId?: string } }).hunterConfig;
-      const destPricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
-      const defaultScheduleUrl = (destPricing as { portalScheduleUrl?: string } | undefined)?.portalScheduleUrl ?? "";
+      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string } }).hunterConfig;
       if (hc) {
         setHunterUsername(hc.embassyUsername);
         setHunterPassword(hc.embassyPassword);
         setHunterActive(hc.isActive);
         setHunterTwoCaptchaKey(hc.twoCaptchaApiKey ?? "");
-        setHunterScheduleUrl(hc.scheduleUrl ?? defaultScheduleUrl);
-        setHunterPortalAppId(hc.portalApplicationId ?? "");
       } else {
         setHunterUsername("");
         setHunterPassword("");
         setHunterActive(false);
         setHunterTwoCaptchaKey("");
-        setHunterScheduleUrl(defaultScheduleUrl);
       }
     }
   }, [app?._id]);
@@ -1080,7 +1073,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, scheduleUrl: hunterScheduleUrl || undefined, portalApplicationId: hunterPortalAppId.trim() || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1094,7 +1087,7 @@ export default function AdminApplicationDetail() {
             setHunterSaving(true);
             try {
               await resetHunterConfig({ applicationId: appId });
-              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false); setHunterScheduleUrl("");
+              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false);
               toast({ title: "Config Hunter supprimée", description: "Les identifiants ont été effacés." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1244,37 +1237,6 @@ export default function AdminApplicationDetail() {
                     )}
                     <p className="text-[11px] text-slate-400">
                       Si fournie, le robot soumettra automatiquement les CAPTCHAs à 2captcha.com pour les résoudre. Coût : ~$0,003 / CAPTCHA · Budget $10 = +3 000 résolutions.
-                    </p>
-                  </div>
-                  <div className="sm:col-span-2 space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1.5">
-                      URL page créneaux
-                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-normal normal-case">Modifiable si changée par le portail</span>
-                    </label>
-                    <Input
-                      value={hunterScheduleUrl}
-                      onChange={(e) => setHunterScheduleUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="h-10 bg-slate-50 font-mono text-xs"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      URL que le robot visite pour chercher les créneaux disponibles. Pré-remplie automatiquement selon la destination — modifier uniquement si le portail change d'adresse.
-                    </p>
-                  </div>
-
-                  <div className="sm:col-span-2 space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1.5">
-                      ID dossier portail
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal normal-case">Requis si plusieurs personnes sur ce compte</span>
-                    </label>
-                    <Input
-                      value={hunterPortalAppId}
-                      onChange={(e) => setHunterPortalAppId(e.target.value)}
-                      placeholder="ex: APP-2024-001234 ou laisser vide"
-                      className="h-10 bg-slate-50 font-mono text-xs"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      Identifiant du dossier spécifique sur le portail de l'ambassade (visible dans l'URL une fois connecté). <strong className="text-amber-600">Obligatoire</strong> quand un seul compte portail gère plusieurs demandeurs — sinon le robot prend le premier dossier du compte. Laisser vide pour un compte à dossier unique.
                     </p>
                   </div>
                 </div>
