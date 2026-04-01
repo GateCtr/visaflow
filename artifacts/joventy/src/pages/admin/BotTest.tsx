@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 
@@ -18,6 +18,9 @@ import {
   Bot,
   RefreshCw,
   Info,
+  Copy,
+  Check,
+  Maximize2,
 } from "lucide-react";
 
 type Destination = keyof typeof VISA_PRICING;
@@ -109,6 +112,16 @@ export default function AdminBotTest() {
   const [testSuccess, setTestSuccess] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
 
+  const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = useCallback((text: string, id: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }, []);
+
   async function handlePing(destination: Destination) {
     setPingResults((prev) => ({ ...prev, [destination]: "loading" }));
     try {
@@ -151,6 +164,7 @@ export default function AdminBotTest() {
   }
 
   return (
+    <>
     <div className="max-w-5xl mx-auto space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
@@ -476,11 +490,32 @@ export default function AdminBotTest() {
                         <td className="py-2.5 pr-4 whitespace-nowrap text-muted-foreground">
                           {test.latencyMs != null ? formatLatency(test.latencyMs) : "—"}
                         </td>
-                        <td className="py-2.5 max-w-[220px]">
+                        <td className="py-2.5 max-w-[260px]">
                           {test.errorMessage ? (
-                            <span className="text-xs text-red-600 block truncate" title={test.errorMessage}>
-                              {test.errorMessage}
-                            </span>
+                            <div className="flex items-start gap-1.5 group">
+                              <span className="text-xs text-red-600 leading-relaxed line-clamp-2 flex-1 min-w-0">
+                                {test.errorMessage}
+                              </span>
+                              <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => handleCopy(test.errorMessage!, test._id)}
+                                  title="Copier le message"
+                                  className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                                >
+                                  {copiedId === test._id
+                                    ? <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    : <Copy className="w-3.5 h-3.5" />
+                                  }
+                                </button>
+                                <button
+                                  onClick={() => setExpandedDetail(test.errorMessage!)}
+                                  title="Voir le message complet"
+                                  className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                                >
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
                           ) : test.httpStatus ? (
                             <span className="text-xs text-muted-foreground">HTTP {test.httpStatus}</span>
                           ) : (
@@ -496,5 +531,51 @@ export default function AdminBotTest() {
           )}
         </section>
     </div>
+
+    {/* Modal — message complet */}
+    {expandedDetail && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        onClick={() => setExpandedDetail(null)}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <h3 className="font-semibold text-primary text-sm flex items-center gap-2">
+              <XCircle className="w-4 h-4 text-red-500" />
+              Message d'erreur complet
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleCopy(expandedDetail, "modal")}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+              >
+                {copiedId === "modal"
+                  ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> Copié !</>
+                  : <><Copy className="w-3.5 h-3.5" /> Copier</>
+                }
+              </button>
+              <button
+                onClick={() => setExpandedDetail(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-5 overflow-auto max-h-[60vh]">
+            <pre className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl p-4 whitespace-pre-wrap break-words font-mono leading-relaxed select-all">
+              {expandedDetail}
+            </pre>
+          </div>
+          <div className="px-5 py-3 border-t border-border bg-slate-50 text-xs text-muted-foreground">
+            Cliquez en dehors pour fermer · <kbd className="bg-white border border-border rounded px-1 py-0.5 font-mono text-[10px]">Ctrl+A</kbd> pour tout sélectionner
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
