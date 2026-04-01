@@ -2,7 +2,7 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM = "Joventy <noreply@joventy.cd>";
+const FROM = "Joventy <hello@joventy.cd>";
 const APP_URL = "https://joventy.cd";
 
 function getAdminEmail(): string {
@@ -388,7 +388,7 @@ export const sendNewMessageClient = internalAction({
   },
 });
 
-/* ──────────────────────── 10. NOUVEAU MESSAGE CLIENT → ADMIN ─── */
+/* ────────────────────────────── 10. NOUVEAU MESSAGE CLIENT → ADMIN ─── */
 export const sendNewMessageAdmin = internalAction({
   args: {
     applicantName: v.string(),
@@ -418,6 +418,45 @@ export const sendNewMessageAdmin = internalAction({
       to: getAdminEmail(),
       subject: `💬 Message de ${args.senderName} — ${args.applicantName} (${destLabel(args.destination)})`,
       html: htmlWrapper("Nouveau message client", body),
+    });
+  },
+});
+
+/* ───────────────────────────── 11. BIENVENUE NOUVELLE INSCRIPTION ─── */
+export const sendWelcomeClient = internalAction({
+  args: {
+    email: v.string(),
+    firstName: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const prenom = args.firstName ? escHtml(args.firstName) : "là";
+
+    const body = `
+      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Bienvenue sur Joventy</p>
+      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Bienvenue ${prenom} ! 🎉</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;">
+        Votre compte Joventy est maintenant actif. Vous pouvez dès à présent déposer votre demande de visa et suivre l'avancement de votre dossier en temps réel.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px;margin:20px 0;">
+        <p style="margin:0;color:#1e3a5f;font-size:14px;line-height:1.7;">
+          <strong>Ce que vous pouvez faire :</strong><br/>
+          ✅ Déposer une demande de visa (USA, Dubaï, Turquie, Inde)<br/>
+          ✅ Suivre votre dossier en temps réel<br/>
+          ✅ Échanger directement avec notre équipe<br/>
+          ✅ Recevoir une alerte dès qu'un créneau est trouvé
+        </p>
+      </div>
+      <p style="color:#475569;font-size:14px;line-height:1.7;">
+        En cas de question, notre équipe est disponible via la messagerie intégrée ou par WhatsApp au <strong>+243 840 808 122</strong>.
+      </p>
+      ${cta(`${APP_URL}/dashboard`, "Accéder à mon espace")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.email,
+      subject: "Bienvenue sur Joventy — votre compte est actif",
+      html: htmlWrapper("Bienvenue sur Joventy", body),
     });
   },
 });

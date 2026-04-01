@@ -77,6 +77,13 @@ http.route({
         imageUrl: (data.image_url as string) || undefined,
         role: type === "user.created" ? role : undefined,
       });
+
+      if (type === "user.created" && email) {
+        await ctx.runAction(internal.emails.sendWelcomeClient, {
+          email,
+          firstName: (data.first_name as string) || undefined,
+        });
+      }
     } else if (type === "user.deleted") {
       await ctx.runMutation(internal.users.remove, {
         clerkId: data.id as string,
