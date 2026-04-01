@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useLocation } from "wouter";
-import { useSignUp, useClerk } from "@clerk/react";
+import { useSignUp } from "@clerk/react";
 import {
   Eye,
   EyeOff,
@@ -57,7 +57,6 @@ type Step = "info" | "otp" | "done";
 
 export default function Register() {
   const { signUp } = useSignUp();
-  const clerk = useClerk();
   const [, setLocation] = useLocation();
 
   const [method, setMethod] = useState<Method>("email-password");
@@ -76,14 +75,19 @@ export default function Register() {
 
   const handleOAuth = async (strategy: "oauth_google" | "oauth_apple" | "oauth_facebook", isDisabled?: boolean) => {
     if (isDisabled) return;
-    if (!signUp || loadingOAuth) return;
+    if (loadingOAuth) return;
+    const clerkJs = (window as any).Clerk;
+    if (!clerkJs?.client?.signIn) {
+      setError("Service d'authentification non prêt. Réessayez dans un instant.");
+      return;
+    }
     flushSync(() => {
       setError("");
       setLoadingOAuth(strategy);
     });
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-      await clerk.client!.signIn.authenticateWithRedirect({
+      await clerkJs.client.signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}${base}/sso-callback`,
         redirectUrlComplete: `${window.location.origin}${base}/dashboard`,
