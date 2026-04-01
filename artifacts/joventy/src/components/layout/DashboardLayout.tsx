@@ -37,7 +37,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/dashboard/messages", label: "Messagerie", icon: MessageCircle, badge: unreadTotal },
   ];
 
-  const pendingReviews = useQuery(api.reviews.listAll);
+  const pendingReviews = useQuery(isAdmin ? api.reviews.listAll : "skip");
   const pendingReviewCount = pendingReviews?.filter((r) => !r.isApproved).length ?? 0;
 
   const adminLinks = [

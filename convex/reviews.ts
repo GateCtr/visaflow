@@ -68,12 +68,12 @@ export const listAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Non authentifié");
+    if (!identity) return null;
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Accès refusé");
+    if (!user || user.role !== "admin") return null;
 
     const reviews = await ctx.db.query("reviews").order("desc").collect();
     return await Promise.all(

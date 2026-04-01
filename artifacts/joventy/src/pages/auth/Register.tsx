@@ -82,10 +82,9 @@ export default function Register() {
       setLoadingOAuth(strategy);
     });
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    console.log("[Joventy] OAuth start:", strategy, `${window.location.origin}${base}/sso-callback`);
     try {
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("TIMEOUT: Google OAuth n'a pas répondu. Vérifiez que Google est activé dans Clerk Dashboard → Configure → Social Connections.")), 15000)
+        setTimeout(() => reject(new Error("La connexion Google n'a pas répondu. Vérifiez que Google OAuth est activé dans votre Clerk Dashboard.")), 15000)
       );
       const { error } = await Promise.race([
         signIn.sso({
@@ -95,18 +94,16 @@ export default function Register() {
         }),
         timeout,
       ]);
-      console.log("[Joventy] sso() resolved, error:", error);
       if (error) {
         setError(error.longMessage ?? error.message ?? "Erreur OAuth");
-      } else {
-        setError("La redirection n'a pas démarré. Vérifiez que Google OAuth est configuré dans le Clerk Dashboard.");
+        setLoadingOAuth(null);
       }
+      // Pas d'erreur = redirect en cours, on laisse le spinner (la page va changer)
     } catch (e: any) {
-      console.error("[Joventy] sso() threw:", e);
       const msg = e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? e?.message;
       setError(msg || "Erreur de connexion Google.");
+      setLoadingOAuth(null);
     }
-    setLoadingOAuth(null);
   };
 
   const switchMethod = (m: Method) => {
