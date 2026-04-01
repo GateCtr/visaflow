@@ -79,19 +79,27 @@ export default function Login() {
       setLoadingOAuth(strategy);
     });
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    console.log("[Joventy] OAuth start:", strategy, `${window.location.origin}${base}/sso-callback`);
     try {
-      const { error } = await signIn.sso({
-        strategy,
-        redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
-        redirectUrl: `${window.location.origin}${base}/dashboard`,
-      });
-      // Si on arrive ici, la redirection n'a pas eu lieu
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT: Google OAuth n'a pas répondu. Vérifiez que Google est activé dans Clerk Dashboard → Configure → Social Connections.")), 15000)
+      );
+      const { error } = await Promise.race([
+        signIn.sso({
+          strategy,
+          redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
+          redirectUrl: `${window.location.origin}${base}/dashboard`,
+        }),
+        timeout,
+      ]);
+      console.log("[Joventy] sso() resolved, error:", error);
       if (error) {
         setError(error.longMessage ?? error.message ?? "Erreur OAuth");
       } else {
-        setError("La redirection n'a pas démarré. Vérifiez la config Google dans le Clerk Dashboard.");
+        setError("La redirection n'a pas démarré. Vérifiez que Google OAuth est configuré dans le Clerk Dashboard.");
       }
     } catch (e: any) {
+      console.error("[Joventy] sso() threw:", e);
       const msg = e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? e?.message;
       setError(msg || "Erreur de connexion Google.");
     }
