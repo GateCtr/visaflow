@@ -39,6 +39,10 @@ const hunterConfig = v.object({
   isActive: v.boolean(),
   twoCaptchaApiKey: v.optional(v.string()),
   scheduleUrl: v.optional(v.string()),
+  // ID du dossier spécifique sur le portail (ex: "APP-2024-001234")
+  // Obligatoire quand un compte portail gère plusieurs personnes.
+  // S'il est absent, le robot prend automatiquement le premier dossier actif.
+  portalApplicationId: v.optional(v.string()),
   lastCheckAt: v.optional(v.number()),
   checkCount: v.optional(v.number()),
   lastResult: v.optional(v.string()),

@@ -38,6 +38,7 @@ export interface HunterJob {
     isActive: boolean;
     twoCaptchaApiKey?: string;
     scheduleUrl?: string;
+    portalApplicationId?: string;
     checkCount?: number;
     lastResult?: string;
     lastCheckAt?: number;
