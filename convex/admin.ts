@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { VISA_PRICING } from "./constants";
 import { coreMarkSlotFound, getEffectiveSuccessModel as getSuccessModel } from "./slotFoundHelper";
@@ -171,6 +172,15 @@ export const validateEngagementPayment = mutation({
       updatedAt: Date.now(),
     });
 
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendEngagementValidatedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        applicationId: args.applicationId,
+      });
+    }
+
     return args.applicationId;
   },
 });
@@ -237,6 +247,16 @@ export const markVisaObtained = mutation({
       ],
       updatedAt: Date.now(),
     });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendVisaObtainedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        successFee: priceDetails.successFee,
+        applicationId: args.applicationId,
+      });
+    }
 
     return args.applicationId;
   },
@@ -308,6 +328,15 @@ export const validateSuccessFee = mutation({
       updatedAt: Date.now(),
     });
 
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendDossierCompletedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        applicationId: args.applicationId,
+      });
+    }
+
     return args.applicationId;
   },
 });
@@ -333,6 +362,16 @@ export const rejectApplication = mutation({
       ],
       updatedAt: Date.now(),
     });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendApplicationRejectedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        reason: args.reason,
+        applicationId: args.applicationId,
+      });
+    }
 
     return args.applicationId;
   },
@@ -362,6 +401,15 @@ export const setSlotHunting = mutation({
       ],
       updatedAt: Date.now(),
     });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendSlotHuntingStartedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        applicationId: args.applicationId,
+      });
+    }
 
     return args.applicationId;
   },
@@ -408,6 +456,15 @@ export const completeDossierOnly = mutation({
       ],
       updatedAt: Date.now(),
     });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendDossierCompletedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        applicationId: args.applicationId,
+      });
+    }
 
     return args.applicationId;
   },

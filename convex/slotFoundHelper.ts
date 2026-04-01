@@ -1,5 +1,6 @@
 import { GenericMutationCtx } from "convex/server";
 import { DataModel, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { VISA_PRICING } from "./constants";
 
 export function getEffectiveSuccessModel(app: { successModel?: string; destination?: string }): string {
@@ -69,6 +70,17 @@ export async function coreMarkSlotFound(
     ],
     updatedAt: Date.now(),
   });
+
+  if (app.userEmail) {
+    await ctx.scheduler.runAfter(0, internal.emails.sendSlotFoundClient, {
+      to: app.userEmail,
+      applicantName: app.applicantName,
+      destination: app.destination,
+      successFee: priceDetails.successFee,
+      slotDate: args.date,
+      applicationId: args.applicationId,
+    });
+  }
 
   return args.applicationId;
 }

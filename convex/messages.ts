@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -63,6 +64,24 @@ export const send = mutation({
     });
 
     await ctx.db.patch(args.applicationId, { updatedAt: Date.now() });
+
+    if (isAdmin && app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendNewMessageClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        messagePreview: args.content,
+        applicationId: args.applicationId,
+      });
+    } else if (!isAdmin) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendNewMessageAdmin, {
+        applicantName: app.applicantName,
+        destination: app.destination,
+        senderName,
+        messagePreview: args.content,
+        applicationId: args.applicationId,
+      });
+    }
   },
 });
 

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -196,6 +197,30 @@ export const create = mutation({
       ],
       updatedAt: Date.now(),
     });
+
+    const userFullName = [identity.givenName, identity.familyName].filter(Boolean).join(" ");
+    const userEmail = identity.email as string | undefined;
+
+    await ctx.scheduler.runAfter(0, internal.emails.sendNewApplicationAdmin, {
+      applicantName: args.applicantName,
+      destination: args.destination,
+      visaType: args.visaType,
+      userEmail,
+      userFullName: userFullName || undefined,
+      servicePackage: pkg,
+      applicationId: id,
+    });
+
+    if (userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendApplicationConfirmationClient, {
+        to: userEmail,
+        applicantName: args.applicantName,
+        destination: args.destination,
+        visaType: args.visaType,
+        engagementFee,
+        applicationId: id,
+      });
+    }
 
     return id;
   },
