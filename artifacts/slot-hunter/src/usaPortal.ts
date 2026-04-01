@@ -245,12 +245,10 @@ export async function loginUsaPortal(
     userName: username,
     password,
     missionId: USA_MISSION_ID,
+    // Champ CAPTCHA — noms possibles : captchaToken, recaptchaToken, g-recaptcha-response
+    // À confirmer via DevTools Network → Request Payload du POST /identity/user/login
+    ...(captchaToken ? { recaptchaToken: captchaToken, captchaToken } : {}),
   };
-
-  if (captchaToken) {
-    // Champ attendu par le portail USA (vérifier via DevTools si ça change)
-    body.recaptchaToken = captchaToken;
-  }
 
   let response: Response;
   try {

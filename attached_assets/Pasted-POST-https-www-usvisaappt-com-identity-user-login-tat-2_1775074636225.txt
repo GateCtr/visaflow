@@ -1,0 +1,94 @@
+POST
+	https://www.usvisaappt.com/identity/user/login
+État
+200
+VersionHTTP/2
+Transfert4,05 Ko (taille 437 o)
+Politique de référentstrict-origin-when-cross-origin
+Priorité de la requêteHighest
+Résolution DNSSystème
+
+    	
+    access-control-allow-credentials
+    	true
+    access-control-allow-headers
+    	*
+    access-control-allow-methods
+    	POST, GET, PUT, OPTIONS, DELETE
+    access-control-allow-origin
+    	*
+    access-control-expose-headers
+    	Authorization, Refreshtoken, Set-Cookie, csrfToken
+    access-control-max-age
+    	3600
+    authorization
+    	eyJraWQiOiJcL0JWK0NGK3NLTVVZMTRhcVVXOXZDV2tzUFpzMFNQaFBXQ3F6UVFHbnNMaz0iLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJiODE2OTQxZC1kYjJmLTRmOTctOWFlOS02MmMwY2ZiMTFiMjQiLCJjb2duaXRvOmdyb3VwcyI6WyJBcHBsaWNhbnQiXSwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAudXMtZ292LXdlc3QtMS5hbWF6b25hd3MuY29tXC91cy1nb3Ytd2VzdC0xX3Q5SmY0MnRZdyIsImNvZ25pdG86dXNlcm5hbWUiOiJzY3JlZW50YXBpbmNAZ21haWwuY29tIiwiY3VzdG9tOnVzZXJJZCI6IjM5NTIwNjEiLCJvcmlnaW5fanRpIjoiMmJiNDY3YTgtMjRjMS00MzBmLWI3YzYtOGQxNmQ3MzRlNDEzIiwiYXVkIjoiN3F…lIjoxNzc1MDc0NTk5LCJleHAiOjE3NzUwNzgxOTksImlhdCI6MTc3NTA3NDU5OSwianRpIjoiYmI2YTUzNWQtMTE4NS00NDIwLThkMzMtMjNkZjFhNzIxZjdhIiwiZW1haWwiOiJzY3JlZW50YXBpbmNAZ21haWwuY29tIn0.TX6E-OLDmN2-d9UFENPSmbMVmmXMRgHafADhGJVxkV9Gjyf3Ju_0MUgKehZjqFX5FXCNZ6_zzYSHK2QhsjZgdaoI4QttVlYcSWY93a1c0mSNcV0uBsBbHAZcZe2PpsKZLUt3goNdoLLfupGBYPRkOje4kShAu7kpXhq2SFLUzoP5ub7ze7331cRKrHzh1oacgBGmHBSDA8AX3ywIRjT33nGtnfivBsMT4Ci8rwOzeoNmF2d8-rSgmf4n4rUhcRLG5n5DM3RKx33224gN9GRoiy2Qjudd9tNoujW3kxNqBm3Uxqqa1KGS-Itp16p-Zz3a8lnaS8Ul9cE9_kqr9bH8XQ
+    cache-control
+    	no-cache, no-store, max-age=0, must-revalidate
+    content-type
+    	application/json
+    date
+    	Wed, 01 Apr 2026 20:16:39 GMT
+    expires
+    	0
+    pragma
+    	no-cache
+    refreshtoken
+    	eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAifQ.rQ6U2D0U3aKCIuuNiT1_9G85LhJD3Okdz2PTnymrlupXWVRDvcg1v4jQ-ynEzHjN5-gl-OTg42OCrKcisY-P_dC8FJ-9D9L7S6CST-4hQb0HlYVc381IrNfYmrI88gb95iHksB679L5_BZlOKZK3ziwnww4xT66oOhEs_4mS4BXQyHq0HtsL7wi0eKfhqoGgPRerTK8cbX7gdU11y4MD5lQ54rguVo0k99aU6C0aUti5FHPExwJWRyXe1cZCafxrnn_OY2p73-UzeLXiRQIMFzcVXj3HfGC-jVmKfB3iX8ZNFN3yRbgGh9XtgRzmkTF3Eh6Z_D_FALtIE9Z5MUk9Xw.rDnSFpf4-ZHarfJb.nHqbxHHZfc0dg5rLjicZrMp4up6VvTyJkCsUI5kOYABivmsKRN_5cmQS_3d1UXbCZZZmcNFSraRNpqI4PV_x6llIK…xpRG9JnpGzRhfWlceTeZ92X71q3vQ7trHZRx7K2PuO6YptdcI9kAKQlmZClaup8AxL3VD61bYd8ETpT_RggVKBJGYNjizD4ZFroY5zLeLGkkc_f4PB7HkKh8vJlzvWAUrJNM2IuMm42c62kQOjWWAul1K4w5l-nnMOaUiRN1ichAXuFg0GQL7MIAYIaKOs8pDpk2iCsot68EjvIamvHCg6AH5gccGDXlWZS1Lbl-W2Rxe6m8CwrytpbonBtFDohfeCvwCsJN0T5bua-QfbrE2ES6HEZd24qZixFIjTi5Iza-Awo0Cs1iZp6ge0lYQaATd7uxuLiuIJHnSmxMbbjhqaMMo0gbR7PzEGCYq4qqT3doSit8d1gEGQimvrztWUNDDqFHHriC-Xf33-wvH-Vl0eEHBrlBJGnmkXfuA6QCALsE1yCEqoraDkLLvZxYIq9DQmPqtdkEYOiLs77af1GzaFWD2mJAAO60jjdht1kk.7uJM6QPX2viIYpfOWFSRRw
+    vary
+    	Origin
+    vary
+    	Access-Control-Request-Method
+    vary
+    	Access-Control-Request-Headers
+    x-content-type-options
+    	nosniff
+    X-Firefox-Spdy
+    	h2
+    x-frame-options
+    	DENY
+    x-xss-protection
+    	1; mode=block
+    	
+    Accept
+    	application/json, text/plain, */*
+    Accept-Encoding
+    	gzip, deflate, br, zstd
+    Accept-Language
+    	fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7
+    Access-Control-Allow-Credentials
+    	true
+    Access-Control-Allow-Headers
+    	Origin, Content-Type, X-Auth-Token, content-type,-CSRF-Token, Authorization
+    Access-Control-Allow-Origin
+    	*
+    Access-Control-Max-Age
+    	1000
+    Connection
+    	keep-alive
+    Content-Length
+    	154
+    Content-Type
+    	application/json
+    Cookie
+    	_ga_CSLL4ZEK4L=GS2.1.s1775058674$o3$g1$t1775058676$j58$l0$h0; _ga=GA1.1.487397875.1775053822
+    DNT
+    	1
+    Host
+    	www.usvisaappt.com
+    Origin
+    	https://www.usvisaappt.com
+    Priority
+    	u=0
+    Referer
+    	https://www.usvisaappt.com/visaapplicantui/login
+    Sec-Fetch-Dest
+    	empty
+    Sec-Fetch-Mode
+    	cors
+    Sec-Fetch-Site
+    	same-origin
+    Sec-GPC
+    	1
+    User-Agent
+    	Mozilla/5.0 (Windows NT 10.0
