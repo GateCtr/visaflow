@@ -271,7 +271,7 @@ export const getVisaDocumentUrl = query({
     const app = await ctx.db.get(args.applicationId);
     if (!app) return null;
 
-    const isAdmin = (identity.role as string) === "admin";
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
 
     if (!isAdmin) {
       if (app.userId !== identity.subject) return null;
@@ -446,6 +446,7 @@ export const completeDossierOnly = mutation({
 
     await ctx.db.patch(args.applicationId, {
       status: "completed",
+      isPaid: true,
       priceDetails: { ...priceDetails, isSuccessFeePaid: true },
       logs: [
         ...(app.logs ?? []),
