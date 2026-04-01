@@ -114,6 +114,30 @@ export default function AdminBotTest() {
 
   const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [captchaBalance, setCaptchaBalance] = useState<{ value: string; ok: boolean } | null>(null);
+  const [captchaBalanceLoading, setCaptchaBalanceLoading] = useState(false);
+
+  async function checkCaptchaBalance() {
+    if (!testForm.captchaKey.trim()) return;
+    setCaptchaBalanceLoading(true);
+    setCaptchaBalance(null);
+    try {
+      const res = await fetch(
+        `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(testForm.captchaKey.trim())}`
+      );
+      const text = (await res.text()).trim();
+      const balance = parseFloat(text);
+      if (!isNaN(balance)) {
+        setCaptchaBalance({ value: `$${balance.toFixed(2)} de solde`, ok: balance > 0 });
+      } else {
+        setCaptchaBalance({ value: text, ok: false });
+      }
+    } catch (err) {
+      setCaptchaBalance({ value: "Erreur réseau", ok: false });
+    } finally {
+      setCaptchaBalanceLoading(false);
+    }
+  }
 
   const handleCopy = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -304,13 +328,35 @@ export default function AdminBotTest() {
                 Clé 2Captcha{" "}
                 <span className="text-muted-foreground font-normal">(optionnel)</span>
               </label>
-              <input
-                type="text"
-                value={testForm.captchaKey}
-                onChange={(e) => setTestForm((f) => ({ ...f, captchaKey: e.target.value }))}
-                placeholder="API key 2captcha.com"
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30"
-              />
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={testForm.captchaKey}
+                  onChange={(e) => {
+                    setTestForm((f) => ({ ...f, captchaKey: e.target.value }));
+                    setCaptchaBalance(null);
+                  }}
+                  placeholder="API key 2captcha.com"
+                  className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30"
+                />
+                <button
+                  type="button"
+                  onClick={checkCaptchaBalance}
+                  disabled={!testForm.captchaKey.trim() || captchaBalanceLoading}
+                  className="flex-shrink-0 text-xs px-3 py-2 rounded-lg border border-border bg-slate-50 hover:bg-slate-100 disabled:opacity-40 transition-colors whitespace-nowrap"
+                >
+                  {captchaBalanceLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Vérifier solde"}
+                </button>
+              </div>
+              {captchaBalance && (
+                <p className={`mt-1.5 text-xs font-medium flex items-center gap-1 ${captchaBalance.ok ? "text-emerald-600" : "text-red-600"}`}>
+                  {captchaBalance.ok
+                    ? <CheckCircle2 className="w-3.5 h-3.5" />
+                    : <XCircle className="w-3.5 h-3.5" />
+                  }
+                  {captchaBalance.value}
+                </p>
+              )}
             </div>
 
             <div>

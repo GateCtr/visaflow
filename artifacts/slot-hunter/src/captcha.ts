@@ -29,14 +29,34 @@ async function submitCaptchaTask(
     json: "1",
   });
 
-  const res = await fetch(`${TWO_CAPTCHA_BASE}/in.php?${params.toString()}`);
-  const data = (await res.json()) as { status: number; request: string };
+  console.log(`[captcha] Soumission à 2captcha — siteKey: ${siteKey.slice(0, 12)}... pageUrl: ${pageUrl}`);
 
-  if (data.status !== 1) {
-    console.error("[captcha] Submission failed:", data.request);
-    return null;
+  let res: Response;
+  try {
+    res = await fetch(`${TWO_CAPTCHA_BASE}/in.php?${params.toString()}`);
+  } catch (err) {
+    console.error("[captcha] Réseau 2captcha inaccessible:", err);
+    throw new Error(`2captcha réseau: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  let data: { status: number; request: string };
+  try {
+    data = (await res.json()) as { status: number; request: string };
+  } catch {
+    const raw = await res.text().catch(() => "(non lisible)");
+    console.error("[captcha] Réponse 2captcha non-JSON:", raw.slice(0, 200));
+    throw new Error(`2captcha réponse invalide: ${raw.slice(0, 100)}`);
+  }
+
+  if (data.status !== 1) {
+    // Codes d'erreur 2captcha courants :
+    // ERROR_WRONG_USER_KEY, ERROR_KEY_DOES_NOT_EXIST, ERROR_ZERO_BALANCE,
+    // ERROR_CAPTCHA_UNSOLVABLE, ERROR_IP_NOT_ALLOWED
+    console.error("[captcha] Soumission refusée par 2captcha:", data.request);
+    throw new Error(`2captcha erreur: ${data.request}`);
+  }
+
+  console.log(`[captcha] Tâche soumise, ID: ${data.request}`);
   return data.request;
 }
 
@@ -128,7 +148,13 @@ export async function detectAndSolveCaptcha(
   const pageUrl = page.url();
   console.log(`[captcha] Submitting to 2captcha (siteKey: ${siteKey.slice(0, 10)}...)`);
 
-  const captchaId = await submitCaptchaTask(twoCaptchaApiKey, siteKey, pageUrl);
+  let captchaId: string | null = null;
+  try {
+    captchaId = await submitCaptchaTask(twoCaptchaApiKey, siteKey, pageUrl);
+  } catch (err) {
+    console.error("[captcha] Soumission 2captcha échouée:", err instanceof Error ? err.message : String(err));
+    return "failed";
+  }
   if (!captchaId) return "failed";
 
   const token = await pollCaptchaSolution(twoCaptchaApiKey, captchaId);

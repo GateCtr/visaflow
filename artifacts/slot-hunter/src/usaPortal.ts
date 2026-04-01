@@ -136,15 +136,18 @@ const BROWSER_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 };
 
-export async function solveCaptchaForUsa(captchaApiKey: string): Promise<string | null> {
+export async function solveCaptchaForUsa(captchaApiKey: string): Promise<string> {
   console.log("[usa] Résolution reCAPTCHA via 2captcha (site key USA)...");
-  const token = await solveCaptchaForSite(captchaApiKey, USA_SITE_KEY, USA_LOGIN_PAGE);
-  if (token) {
+  try {
+    const token = await solveCaptchaForSite(captchaApiKey, USA_SITE_KEY, USA_LOGIN_PAGE);
+    if (!token) throw new Error("2captcha a retourné un token vide");
     console.log("[usa] reCAPTCHA résolu avec succès");
-  } else {
-    console.error("[usa] Échec résolution reCAPTCHA");
+    return token;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[usa] Échec résolution reCAPTCHA:", msg);
+    throw new Error(`Résolution CAPTCHA: ${msg}`);
   }
-  return token;
 }
 
 export async function getUsaSession(
@@ -199,10 +202,13 @@ export async function getUsaSession(
   }
 
   if (!session && captchaApiKey) {
-    console.log("[usa] Résolution CAPTCHA via 2captcha...");
-    const captchaToken = await solveCaptchaForUsa(captchaApiKey);
-    if (!captchaToken) {
-      throw new Error(`Login sans captcha: ${lastError} | Résolution 2captcha: échec (vérifier balance et clé API)`);
+    let captchaToken: string;
+    try {
+      console.log("[usa] Résolution CAPTCHA via 2captcha...");
+      captchaToken = await solveCaptchaForUsa(captchaApiKey);
+    } catch (captchaErr) {
+      const captchaMsg = captchaErr instanceof Error ? captchaErr.message : String(captchaErr);
+      throw new Error(`Login (sans captcha): ${lastError} | ${captchaMsg}`);
     }
     try {
       session = await loginUsaPortal(username, password, captchaToken);
