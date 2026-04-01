@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useLocation } from "wouter";
-import { useSignUp } from "@clerk/react";
+import { useSignUp, useClerk } from "@clerk/react";
 import {
   Eye,
   EyeOff,
@@ -57,6 +57,7 @@ type Step = "info" | "otp" | "done";
 
 export default function Register() {
   const { signUp } = useSignUp();
+  const clerk = useClerk();
   const [, setLocation] = useLocation();
 
   const [method, setMethod] = useState<Method>("email-password");
@@ -82,7 +83,7 @@ export default function Register() {
     });
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-      await signUp.authenticateWithRedirect({
+      await clerk.client!.signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}${base}/sso-callback`,
         redirectUrlComplete: `${window.location.origin}${base}/dashboard`,
