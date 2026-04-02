@@ -52,6 +52,8 @@ function destLabel(destination: string): string {
   return map[destination] ?? destination;
 }
 
+const LOGO_URL = `${APP_URL}/images/logo.png`;
+
 function htmlWrapper(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -60,33 +62,48 @@ function htmlWrapper(title: string, body: string): string {
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f7fb;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7fb;padding:32px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-        <!-- Header -->
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
+    <tr><td align="center" style="padding:0 16px;">
+      <table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;">
+
+        <!-- LOGO HEADER -->
         <tr>
-          <td style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:32px 40px;">
-            <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Joventy</h1>
-            <p style="margin:4px 0 0;color:#93c5fd;font-size:13px;">Visa Premium · République Démocratique du Congo</p>
+          <td style="background:#ffffff;padding:28px 40px 24px;border-radius:16px 16px 0 0;border:1px solid #e2e8f0;border-bottom:none;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <img src="${LOGO_URL}" alt="Joventy" height="38" style="display:block;height:38px;border:0;outline:none;text-decoration:none;"/>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
-        <!-- Body -->
+
+        <!-- ACCENT LINE -->
         <tr>
-          <td style="padding:36px 40px 28px;">
+          <td style="background:#1d4ed8;height:3px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+
+        <!-- BODY -->
+        <tr>
+          <td style="background:#ffffff;padding:36px 40px 32px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
             ${body}
           </td>
         </tr>
-        <!-- Footer -->
+
+        <!-- FOOTER -->
         <tr>
-          <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;">
-            <p style="margin:0;color:#64748b;font-size:11px;line-height:1.6;">
-              Akollad Groupe — RCCM&nbsp;: CD/KNG/RCCM/25-A-07960 · N°&nbsp;Impôt&nbsp;: A2557944L · ID&nbsp;: 01-J6100-N86614P<br/>
-              <a href="https://akollad.com" style="color:#2563eb;text-decoration:none;">akollad.com</a> ·
-              <a href="${APP_URL}" style="color:#2563eb;text-decoration:none;">joventy.cd</a>
+          <td style="background:#f8fafc;padding:20px 40px;border:1px solid #e2e8f0;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;">
+            <p style="margin:0;color:#94a3b8;font-size:11px;line-height:1.8;text-align:center;">
+              Akollad Groupe &nbsp;·&nbsp; RCCM CD/KNG/RCCM/25-A-07960 &nbsp;·&nbsp; N° Impôt A2557944L &nbsp;·&nbsp; ID 01-J6100-N86614P<br/>
+              <a href="https://joventy.cd" style="color:#64748b;text-decoration:none;">joventy.cd</a>
+              &nbsp;&middot;&nbsp;
+              <a href="https://akollad.com" style="color:#64748b;text-decoration:none;">akollad.com</a>
             </p>
           </td>
         </tr>
+
       </table>
     </td></tr>
   </table>
@@ -95,7 +112,13 @@ function htmlWrapper(title: string, body: string): string {
 }
 
 function cta(href: string, text: string): string {
-  return `<a href="${href}" style="display:inline-block;margin-top:20px;padding:14px 28px;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">${text}</a>`;
+  return `<table cellpadding="0" cellspacing="0" style="margin-top:28px;">
+    <tr>
+      <td style="background:#1d4ed8;border-radius:8px;">
+        <a href="${href}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:-0.1px;">${text} →</a>
+      </td>
+    </tr>
+  </table>`;
 }
 
 function escHtml(text: string): string {
@@ -109,19 +132,38 @@ function escHtml(text: string): string {
 
 function info(label: string, value: string): string {
   return `<tr>
-    <td style="padding:6px 0;color:#64748b;font-size:13px;width:160px;">${label}</td>
-    <td style="padding:6px 0;color:#1e293b;font-size:13px;font-weight:500;">${value}</td>
+    <td style="padding:10px 14px;color:#64748b;font-size:13px;width:150px;border-bottom:1px solid #f1f5f9;vertical-align:top;">${label}</td>
+    <td style="padding:10px 14px;color:#0f172a;font-size:13px;font-weight:600;border-bottom:1px solid #f1f5f9;">${value}</td>
   </tr>`;
 }
 
 function infoTable(rows: string): string {
-  return `<table style="width:100%;border-collapse:collapse;margin:16px 0;">${rows}</table>`;
+  return `<table style="width:100%;border-collapse:collapse;margin:20px 0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">${rows}</table>`;
+}
+
+function paymentBox(): string {
+  return `<table cellpadding="0" cellspacing="0" style="width:100%;margin:20px 0;">
+    <tr>
+      <td style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#0369a1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Modes de paiement</p>
+        <p style="margin:0;color:#0c4a6e;font-size:13px;line-height:1.8;">
+          M-Pesa &nbsp;<strong>0820 344 541</strong><br/>
+          Airtel Money &nbsp;<strong>0990 775 880</strong><br/>
+          Orange Money &nbsp;<strong>+243 840 808 122</strong>
+        </p>
+      </td>
+    </tr>
+  </table>`;
 }
 
 function urgentBanner(text: string): string {
-  return `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px 18px;margin:20px 0;">
-    <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">⏰ ${text}</p>
-  </div>`;
+  return `<table cellpadding="0" cellspacing="0" style="width:100%;margin:20px 0;">
+    <tr>
+      <td style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0;color:#78350f;font-size:14px;font-weight:600;line-height:1.6;">⏱&nbsp; ${text}</p>
+      </td>
+    </tr>
+  </table>`;
 }
 
 /* ─────────────────────────────── 1. NOUVEAU DOSSIER → ADMIN ─── */
@@ -145,8 +187,7 @@ export const sendNewApplicationAdmin = internalAction({
       (args.userEmail ? info("Email client", args.userEmail) : "");
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Nouveau dossier reçu</p>
-      <h2 style="margin:0 0 24px;color:#1e293b;font-size:22px;">Un client vient de déposer un dossier</h2>
+      <h2 style="margin:0 0 24px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Nouveau dossier reçu</h2>
       ${infoTable(rows)}
       ${cta(`${APP_URL}/admin/applications/${args.applicationId}`, "Voir le dossier")}
     `;
@@ -177,11 +218,11 @@ export const sendApplicationConfirmationClient = internalAction({
       info("Frais d'engagement", `${args.engagementFee} USD`);
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Confirmation de dépôt</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Votre dossier a bien été créé</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Merci d'avoir fait confiance à Joventy. Votre demande de visa est enregistrée. La prochaine étape consiste à régler les <strong>frais d'engagement (${args.engagementFee}&nbsp;USD)</strong> pour activer votre dossier.</p>
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Votre dossier a bien été créé</h2>
+      <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Référence : JOV-${args.applicationId.slice(-5).toUpperCase()}</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre demande de visa est enregistrée. La prochaine étape est de régler les <strong>frais d'engagement (${args.engagementFee}&nbsp;USD)</strong> pour activer votre dossier.</p>
       ${infoTable(rows)}
-      <p style="color:#64748b;font-size:13px;margin:16px 0 0;">Paiements acceptés : M-Pesa <strong>0820 344 541</strong> · Airtel <strong>0990 775 880</strong> · Orange <strong>+243 840 808 122</strong></p>
+      ${paymentBox()}
       ${cta(`${APP_URL}/dashboard`, "Accéder à mon espace")}
     `;
     await sendEmail({
@@ -213,10 +254,9 @@ export const sendEngagementValidatedClient = internalAction({
         : "L'équipe Joventy va maintenant examiner votre dossier. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite.";
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Paiement validé</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Votre paiement a été confirmé ✅</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Excellent ! Vos frais d'engagement pour le visa <strong>${destLabel(args.destination)}</strong> de <strong>${args.applicantName}</strong> ont été validés par notre équipe. Votre dossier est maintenant <strong>actif</strong>.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">${nextStepText}</p>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Paiement confirmé ✅</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Vos frais d'engagement pour le visa <strong>${destLabel(args.destination)}</strong> de <strong>${args.applicantName}</strong> ont été validés. Votre dossier est maintenant <strong>actif</strong>.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0;">${nextStepText}</p>
       ${cta(`${APP_URL}/dashboard`, "Voir mon dossier")}
     `;
     await sendEmail({
@@ -238,10 +278,9 @@ export const sendSlotHuntingStartedClient = internalAction({
   },
   handler: async (_ctx, args) => {
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Chasse aux créneaux</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Notre bot surveille l'ambassade 🔍</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Notre système de surveillance automatique est maintenant <strong>actif</strong> pour votre visa <strong>${destLabel(args.destination)}</strong>. Nous vérifions en continu la disponibilité des créneaux de rendez-vous à l'ambassade.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Dès qu'un créneau est disponible, vous serez alerté immédiatement par email. <strong>Restez connecté à votre espace Joventy</strong> pour suivre l'évolution en temps réel.</p>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Surveillance activée 🔍</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Notre système est maintenant <strong>actif</strong> pour votre visa <strong>${destLabel(args.destination)}</strong>. Nous vérifions en continu la disponibilité des créneaux à l'ambassade.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0;">Dès qu'un créneau est disponible, vous serez alerté immédiatement. <strong>Restez connecté à votre espace Joventy</strong> pour suivre l'évolution en temps réel.</p>
       ${cta(`${APP_URL}/dashboard`, "Suivre mon dossier")}
     `;
     await sendEmail({
@@ -265,13 +304,12 @@ export const sendSlotFoundClient = internalAction({
   },
   handler: async (_ctx, args) => {
     const body = `
-      <p style="margin:0 0 4px;color:#16a34a;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Créneau trouvé</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Un rendez-vous est disponible pour vous ! 🎉</h2>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Un rendez-vous est disponible 🎉</h2>
       ${urgentBanner("Vous avez 48 heures pour régler la prime de succès et sécuriser ce créneau.")}
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Notre système a capturé un créneau d'entretien à l'ambassade pour votre visa <strong>${destLabel(args.destination)}</strong>${args.slotDate ? ` (le <strong>${args.slotDate}</strong>)` : ""}.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Pour débloquer tous les détails du rendez-vous et recevoir votre kit d'entretien, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong> dans les 48 heures.</p>
-      <p style="color:#64748b;font-size:13px;margin:16px 0 8px;"><strong>Paiements :</strong> M-Pesa <strong>0820 344 541</strong> · Airtel <strong>0990 775 880</strong> · Orange <strong>+243 840 808 122</strong></p>
-      ${cta(`${APP_URL}/dashboard`, "Payer et débloquer mon rendez-vous")}
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Notre système a capturé un créneau d'entretien à l'ambassade pour votre visa <strong>${destLabel(args.destination)}</strong>${args.slotDate ? ` — date : <strong>${args.slotDate}</strong>` : ""}.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 4px;">Pour débloquer tous les détails et recevoir votre kit d'entretien, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong> dans les 48 heures.</p>
+      ${paymentBox()}
+      ${cta(`${APP_URL}/dashboard`, "Débloquer mon rendez-vous")}
     `;
     await sendEmail({
       from: FROM,
@@ -293,13 +331,12 @@ export const sendVisaObtainedClient = internalAction({
   },
   handler: async (_ctx, args) => {
     const body = `
-      <p style="margin:0 0 4px;color:#16a34a;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Visa obtenu</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Votre visa ${destLabel(args.destination)} est prêt ! 🎉</h2>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Votre visa ${destLabel(args.destination)} est prêt 🎉</h2>
       ${urgentBanner("Réglez la prime de succès pour recevoir votre document officiel.")}
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Excellente nouvelle ! L'équipe Joventy a obtenu votre visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong>.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Pour télécharger votre document officiel, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong>.</p>
-      <p style="color:#64748b;font-size:13px;margin:16px 0 8px;"><strong>Paiements :</strong> M-Pesa <strong>0820 344 541</strong> · Airtel <strong>0990 775 880</strong> · Orange <strong>+243 840 808 122</strong></p>
-      ${cta(`${APP_URL}/dashboard`, "Payer et télécharger mon visa")}
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Excellente nouvelle ! L'équipe Joventy a obtenu votre visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong>.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 4px;">Pour télécharger votre document officiel, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong>.</p>
+      ${paymentBox()}
+      ${cta(`${APP_URL}/dashboard`, "Télécharger mon visa")}
     `;
     await sendEmail({
       from: FROM,
@@ -320,10 +357,9 @@ export const sendDossierCompletedClient = internalAction({
   },
   handler: async (_ctx, args) => {
     const body = `
-      <p style="margin:0 0 4px;color:#16a34a;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Dossier complété</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Félicitations, votre dossier est finalisé ! 🏆</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Votre dossier visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong> est <strong>entièrement complété</strong>. Vous pouvez maintenant télécharger votre kit complet depuis votre espace Joventy.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Merci de nous avoir fait confiance. Nous vous souhaitons un excellent voyage !</p>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Félicitations, dossier complété ! 🏆</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Votre dossier visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong> est <strong>entièrement finalisé</strong>. Votre kit complet est disponible dans votre espace Joventy.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0;">Merci de nous avoir fait confiance. Nous vous souhaitons un excellent voyage ! ✈️</p>
       ${cta(`${APP_URL}/dashboard`, "Accéder à mon kit")}
     `;
     await sendEmail({
@@ -346,13 +382,16 @@ export const sendApplicationRejectedClient = internalAction({
   },
   handler: async (_ctx, args) => {
     const body = `
-      <p style="margin:0 0 4px;color:#dc2626;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Dossier refusé</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Information concernant votre dossier</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Après examen, votre dossier de visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong> n'a pas pu être traité pour la raison suivante :</p>
-      <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:14px 18px;margin:16px 0;border-radius:0 6px 6px 0;">
-        <p style="margin:0;color:#991b1b;font-size:14px;">${escHtml(args.reason)}</p>
-      </div>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Si vous pensez qu'il s'agit d'une erreur ou si vous souhaitez plus d'informations, contactez-nous via la messagerie de votre espace client.</p>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Information sur votre dossier</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">Après examen, votre dossier de visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong> n'a pas pu être traité pour la raison suivante :</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+        <tr>
+          <td style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;">
+            <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.6;">${escHtml(args.reason)}</p>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0;">Si vous pensez qu'il s'agit d'une erreur, contactez-nous via la messagerie de votre espace client.</p>
       ${cta(`${APP_URL}/dashboard`, "Contacter Joventy")}
     `;
     await sendEmail({
@@ -381,12 +420,15 @@ export const sendNewMessageClient = internalAction({
     );
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Nouveau message</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">L'équipe Joventy vous a écrit</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">Vous avez reçu un nouveau message concernant votre dossier <strong>${destLabel(args.destination)}</strong> :</p>
-      <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin:16px 0;">
-        <p style="margin:0;color:#1e293b;font-size:14px;line-height:1.7;font-style:italic;">"${preview}"</p>
-      </div>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Nouveau message de Joventy</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">L'équipe Joventy vous a envoyé un message concernant votre dossier <strong>${destLabel(args.destination)}</strong> :</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;font-style:italic;">"${preview}"</p>
+          </td>
+        </tr>
+      </table>
       ${cta(`${APP_URL}/dashboard`, "Lire et répondre")}
     `;
     await sendEmail({
@@ -415,12 +457,19 @@ export const sendNewMessageAdmin = internalAction({
     );
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Message client</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Nouveau message d'un client</h2>
-      <p style="color:#475569;font-size:15px;">De : <strong>${escHtml(args.senderName)}</strong> — Dossier : <strong>${escHtml(args.applicantName)}</strong> (${destLabel(args.destination)})</p>
-      <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin:16px 0;">
-        <p style="margin:0;color:#1e293b;font-size:14px;line-height:1.7;font-style:italic;">"${preview}"</p>
-      </div>
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Message d'un client</h2>
+      ${infoTable(
+        info("Expéditeur", escHtml(args.senderName)) +
+        info("Dossier", escHtml(args.applicantName)) +
+        info("Destination", destLabel(args.destination))
+      )}
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;font-style:italic;">"${preview}"</p>
+          </td>
+        </tr>
+      </table>
       ${cta(`${APP_URL}/admin/applications/${args.applicationId}`, "Répondre au client")}
     `;
     await sendEmail({
@@ -442,23 +491,22 @@ export const sendWelcomeClient = internalAction({
     const prenom = args.firstName ? escHtml(args.firstName) : "là";
 
     const body = `
-      <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Bienvenue sur Joventy</p>
-      <h2 style="margin:0 0 16px;color:#1e293b;font-size:22px;">Bienvenue ${prenom} ! 🎉</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;">
-        Votre compte Joventy est maintenant actif. Vous pouvez dès à présent déposer votre demande de visa et suivre l'avancement de votre dossier en temps réel.
-      </p>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px;margin:20px 0;">
-        <p style="margin:0;color:#1e3a5f;font-size:14px;line-height:1.7;">
-          <strong>Ce que vous pouvez faire :</strong><br/>
-          ✅ Déposer une demande de visa (USA, Dubaï, Turquie, Inde)<br/>
-          ✅ Suivre votre dossier en temps réel<br/>
-          ✅ Échanger directement avec notre équipe<br/>
-          ✅ Recevoir une alerte dès qu'un créneau est trouvé
-        </p>
-      </div>
-      <p style="color:#475569;font-size:14px;line-height:1.7;">
-        En cas de question, notre équipe est disponible via la messagerie intégrée ou par WhatsApp au <strong>+243 840 808 122</strong>.
-      </p>
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Bienvenue sur Joventy${prenom !== "là" ? `, ${prenom}` : ""} 👋</h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">Votre compte est actif. Déposez votre demande de visa et suivez l'avancement de votre dossier en temps réel depuis votre espace personnel.</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#1e40af;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Avec Joventy vous pouvez</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Déposer une demande de visa (USA, Dubaï, Turquie, Inde)</td></tr>
+              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Suivre votre dossier en temps réel</td></tr>
+              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Échanger directement avec notre équipe</td></tr>
+              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Être alerté dès qu'un créneau est trouvé</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0;">Besoin d'aide ? Écrivez-nous via la messagerie intégrée ou sur WhatsApp au <strong>+243 840 808 122</strong>.</p>
       ${cta(`${APP_URL}/dashboard`, "Accéder à mon espace")}
     `;
 
