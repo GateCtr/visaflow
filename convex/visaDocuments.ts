@@ -5,6 +5,7 @@ export type DocCategory =
   | "embassy";  // À présenter physiquement à l'ambassade / centre VFS
 
 export interface VisaDoc {
+  key?: string;       // Clé stable pour le stockage (obligatoire pour category "upload")
   label: string;
   category: DocCategory;
   required: boolean;
@@ -37,17 +38,17 @@ function group(docs: VisaDoc[]): VisaDocGroup[] {
 // USA
 // ─────────────────────────────────────────────
 const USA_B1B2: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum après la date d'entrée prévue)" },
-  { category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente (< 6 mois)" },
-  { category: "upload",  required: true,  label: "Relevés bancaires des 3 à 6 derniers mois (solde minimum conseillé : 5 000 $)" },
-  { category: "upload",  required: true,  label: "Attestation de travail sur papier en-tête (avec salaire, poste, ancienneté) ou RCCM pour les indépendants" },
-  { category: "upload",  required: false, label: "Lettre d'invitation d'un proche résidant aux USA (si applicable)", notes: "Nom, adresse, statut légal du contact aux USA" },
-  { category: "upload",  required: false, label: "Preuves d'attaches en RDC : titre de propriété, acte de mariage, acte de naissance d'enfants", notes: "Démontre que vous avez des raisons de revenir en RDC" },
-  { category: "upload",  required: false, label: "Réservation d'hôtel ou itinéraire de voyage aux USA" },
+  { key: "passport_scan",      category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum après la date d'entrée prévue)" },
+  { key: "photo_id",           category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente (< 6 mois)" },
+  { key: "proof_of_funds",     category: "upload",  required: true,  label: "Relevés bancaires des 3 à 6 derniers mois (solde minimum conseillé : 5 000 $)" },
+  { key: "employment_letter",  category: "upload",  required: true,  label: "Attestation de travail sur papier en-tête (avec salaire, poste, ancienneté) ou RCCM pour les indépendants" },
+  { key: "invitation_letter",  category: "upload",  required: false, label: "Lettre d'invitation d'un proche résidant aux USA (si applicable)", notes: "Nom, adresse, statut légal du contact aux USA" },
+  { key: "ties_rdc",           category: "upload",  required: false, label: "Preuves d'attaches en RDC : titre de propriété, acte de mariage, acte de naissance d'enfants", notes: "Démontre que vous avez des raisons de revenir en RDC" },
+  { key: "hotel_reservation",  category: "upload",  required: false, label: "Réservation d'hôtel ou itinéraire de voyage aux USA" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire DS-160 (demande de visa non-immigrant USA)" },
   { category: "joventy", required: true,  label: "Vérification complète de la conformité du dossier avant soumission" },
   { category: "joventy", required: true,  label: "Réservation du créneau de rendez-vous à l'ambassade des États-Unis (Kinshasa)" },
-  { category: "direct",  required: true,  label: "Frais MRV : 185 $ — payés via la banque partenaire désignée par l'ambassade", notes: "Le reçu MRV est obligatoire pour le rendez-vous. Joventy vous indique la procédure." },
+  { category: "direct",  required: true,  label: "Frais MRV : 265 $ — payés via la banque partenaire désignée par l'ambassade", notes: "Le reçu MRV est obligatoire pour le rendez-vous. Joventy vous indique la procédure." },
   { category: "direct",  required: false, label: "Assurance voyage (recommandée mais non exigée pour le B1/B2)" },
   { category: "embassy", required: true,  label: "Passeport original (+ anciens passeports si vous en avez)" },
   { category: "embassy", required: true,  label: "Imprimé de la confirmation de rendez-vous" },
@@ -56,19 +57,19 @@ const USA_B1B2: VisaDoc[] = [
 ];
 
 const USA_F1: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
-  { category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente" },
-  { category: "upload",  required: true,  label: "Formulaire I-20 délivré par l'université américaine", notes: "Le I-20 contient votre numéro SEVIS, indispensable pour les frais SEVIS" },
-  { category: "upload",  required: true,  label: "Lettre d'admission officielle de l'établissement américain" },
-  { category: "upload",  required: true,  label: "Relevés bancaires couvrant au moins 1 an de frais de scolarité + vie (ou garant financier)" },
-  { category: "upload",  required: true,  label: "Diplômes et relevés de notes des 2-3 dernières années d'études" },
-  { category: "upload",  required: false, label: "Résultats TOEFL / IELTS / DELF (si exigés par l'université)" },
-  { category: "upload",  required: false, label: "Lettre de motivation (Statement of Purpose) expliquant votre projet d'études" },
+  { key: "passport_scan",       category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
+  { key: "photo_id",            category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente" },
+  { key: "i20_form",            category: "upload",  required: true,  label: "Formulaire I-20 délivré par l'université américaine", notes: "Le I-20 contient votre numéro SEVIS, indispensable pour les frais SEVIS" },
+  { key: "admission_letter",    category: "upload",  required: true,  label: "Lettre d'admission officielle de l'établissement américain" },
+  { key: "proof_of_funds",      category: "upload",  required: true,  label: "Relevés bancaires couvrant au moins 1 an de frais de scolarité + vie (ou garant financier)" },
+  { key: "diplomas_transcripts",category: "upload",  required: true,  label: "Diplômes et relevés de notes des 2-3 dernières années d'études" },
+  { key: "language_tests",      category: "upload",  required: false, label: "Résultats TOEFL / IELTS / DELF (si exigés par l'université)" },
+  { key: "motivation_letter",   category: "upload",  required: false, label: "Lettre de motivation (Statement of Purpose) expliquant votre projet d'études" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire DS-160 (demande de visa étudiant F1)" },
   { category: "joventy", required: true,  label: "Vérification complète du dossier avant soumission" },
   { category: "joventy", required: true,  label: "Réservation du créneau de rendez-vous à l'ambassade des États-Unis" },
   { category: "direct",  required: true,  label: "Frais SEVIS (I-901) : 350 $ — réglés sur fmjfee.com avec votre numéro SEVIS (du I-20)", notes: "À payer avant le rendez-vous consulaire" },
-  { category: "direct",  required: true,  label: "Frais MRV : 185 $ — via banque partenaire de l'ambassade" },
+  { category: "direct",  required: true,  label: "Frais MRV : 265 $ — via banque partenaire de l'ambassade" },
   { category: "embassy", required: true,  label: "Passeport original" },
   { category: "embassy", required: true,  label: "Original du I-20 signé par vous et l'université" },
   { category: "embassy", required: true,  label: "Reçu de paiement SEVIS (I-901)" },
@@ -76,16 +77,16 @@ const USA_F1: VisaDoc[] = [
 ];
 
 const USA_K1: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
-  { category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente" },
-  { category: "upload",  required: true,  label: "Avis d'approbation I-129F de l'USCIS (envoyé par votre fiancé(e) américain(e))", notes: "Ce document prouve que votre pétition est approuvée par le gouvernement américain" },
-  { category: "upload",  required: true,  label: "Acte de naissance (traduit en anglais si nécessaire)" },
-  { category: "upload",  required: true,  label: "Extrait de casier judiciaire / Certificat de bonne vie et mœurs (PNC Kinshasa, validité 6 mois)" },
-  { category: "upload",  required: true,  label: "Preuves de la relation romantique : photos ensemble, historique de communications (WhatsApp, emails, appels)" },
-  { category: "upload",  required: true,  label: "Preuve de rencontre physique dans les 2 années précédant la demande (billets d'avion, tampons passeport, photos datées)" },
-  { category: "upload",  required: true,  label: "Documents financiers du pétitionnaire US : formulaire I-864 (Affidavit of Support), W-2 ou tax returns, relevés bancaires" },
-  { category: "upload",  required: false, label: "Acte de divorce ou acte de décès (si l'un ou l'autre a déjà été marié(e))" },
-  { category: "upload",  required: false, label: "Preuve d'intention de se marier dans les 90 jours (invitation de mariage, etc.)" },
+  { key: "passport_scan",       category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
+  { key: "photo_id",            category: "upload",  required: true,  label: "Photo d'identité 5×5 cm, fond blanc, récente" },
+  { key: "i129f_approval",      category: "upload",  required: true,  label: "Avis d'approbation I-129F de l'USCIS (envoyé par votre fiancé(e) américain(e))", notes: "Ce document prouve que votre pétition est approuvée par le gouvernement américain" },
+  { key: "birth_certificate",   category: "upload",  required: true,  label: "Acte de naissance (traduit en anglais si nécessaire)" },
+  { key: "criminal_record",     category: "upload",  required: true,  label: "Extrait de casier judiciaire / Certificat de bonne vie et mœurs (PNC Kinshasa, validité 6 mois)" },
+  { key: "relationship_proof",  category: "upload",  required: true,  label: "Preuves de la relation romantique : photos ensemble, historique de communications (WhatsApp, emails, appels)" },
+  { key: "meeting_proof",       category: "upload",  required: true,  label: "Preuve de rencontre physique dans les 2 années précédant la demande (billets d'avion, tampons passeport, photos datées)" },
+  { key: "petitioner_financial",category: "upload",  required: true,  label: "Documents financiers du pétitionnaire US : formulaire I-864 (Affidavit of Support), W-2 ou tax returns, relevés bancaires" },
+  { key: "divorce_death_cert",  category: "upload",  required: false, label: "Acte de divorce ou acte de décès (si l'un ou l'autre a déjà été marié(e))" },
+  { key: "marriage_intent",     category: "upload",  required: false, label: "Preuve d'intention de se marier dans les 90 jours (invitation de mariage, etc.)" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire DS-160 (demande de visa K1)" },
   { category: "joventy", required: true,  label: "Vérification complète et coordination du dossier K1 (très complexe)" },
   { category: "joventy", required: true,  label: "Réservation du créneau de rendez-vous à l'ambassade des États-Unis à Kinshasa" },
@@ -99,13 +100,13 @@ const USA_K1: VisaDoc[] = [
 ];
 
 const USA_H1B: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD" },
-  { category: "upload",  required: true,  label: "Photo 5×5 fond blanc" },
-  { category: "upload",  required: true,  label: "Formulaire I-797 (Notice of Action) d'approbation H1-B délivré par l'USCIS", notes: "Fourni par votre employeur américain" },
-  { category: "upload",  required: true,  label: "Lettre de l'employeur américain détaillant le poste, salaire, durée du contrat" },
-  { category: "upload",  required: true,  label: "Diplômes universitaires et relevés de notes (le H1-B exige une licence ou équivalent)" },
-  { category: "upload",  required: true,  label: "CV complet avec expériences professionnelles" },
-  { category: "upload",  required: false, label: "Relevés bancaires personnels" },
+  { key: "passport_scan",       category: "upload",  required: true,  label: "Scan passeport HD" },
+  { key: "photo_id",            category: "upload",  required: true,  label: "Photo 5×5 fond blanc" },
+  { key: "i797_approval",       category: "upload",  required: true,  label: "Formulaire I-797 (Notice of Action) d'approbation H1-B délivré par l'USCIS", notes: "Fourni par votre employeur américain" },
+  { key: "employer_letter",     category: "upload",  required: true,  label: "Lettre de l'employeur américain détaillant le poste, salaire, durée du contrat" },
+  { key: "diplomas_transcripts",category: "upload",  required: true,  label: "Diplômes universitaires et relevés de notes (le H1-B exige une licence ou équivalent)" },
+  { key: "cv",                  category: "upload",  required: true,  label: "CV complet avec expériences professionnelles" },
+  { key: "proof_of_funds",      category: "upload",  required: false, label: "Relevés bancaires personnels" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire DS-160" },
   { category: "joventy", required: true,  label: "Vérification et coordination du dossier" },
   { category: "joventy", required: true,  label: "Réservation du créneau de rendez-vous à l'ambassade" },
@@ -117,13 +118,13 @@ const USA_H1B: VisaDoc[] = [
 // TURKEY
 // ─────────────────────────────────────────────
 const TURKEY_VFS: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité minimale 7 mois après la date d'entrée prévue)" },
-  { category: "upload",  required: true,  label: "Photo d'identité conforme aux normes turques (fond blanc, récente)" },
-  { category: "upload",  required: true,  label: "Relevés bancaires des 3 derniers mois (solde minimum : 5 000 $)", notes: "Compte personnel ou professionnel — originaux ou relevés officiel de la banque" },
-  { category: "upload",  required: true,  label: "Attestation de travail sur en-tête (avec salaire et poste) ou RCCM / Identification nationale pour les entrepreneurs" },
-  { category: "upload",  required: true,  label: "Réservation de billet d'avion aller-retour (confirmation de réservation, pas forcément payée)" },
-  { category: "upload",  required: true,  label: "Réservation hôtel confirmée pour toute la durée du séjour" },
-  { category: "upload",  required: false, label: "Certificat de casier judiciaire (Certificat de bonne vie et mœurs — recommandé)", notes: "Validité 6 mois, délivré par la PNC ou la commune" },
+  { key: "passport_scan",     category: "upload",  required: true,  label: "Scan passeport HD (validité minimale 7 mois après la date d'entrée prévue)" },
+  { key: "photo_id",          category: "upload",  required: true,  label: "Photo d'identité conforme aux normes turques (fond blanc, récente)" },
+  { key: "proof_of_funds",    category: "upload",  required: true,  label: "Relevés bancaires des 3 derniers mois (solde minimum : 5 000 $)", notes: "Compte personnel ou professionnel — originaux ou relevés officiel de la banque" },
+  { key: "employment_letter", category: "upload",  required: true,  label: "Attestation de travail sur en-tête (avec salaire et poste) ou RCCM / Identification nationale pour les entrepreneurs" },
+  { key: "flight_reservation",category: "upload",  required: true,  label: "Réservation de billet d'avion aller-retour (confirmation de réservation, pas forcément payée)" },
+  { key: "hotel_reservation", category: "upload",  required: true,  label: "Réservation hôtel confirmée pour toute la durée du séjour" },
+  { key: "criminal_record",   category: "upload",  required: false, label: "Certificat de casier judiciaire (Certificat de bonne vie et mœurs — recommandé)", notes: "Validité 6 mois, délivré par la PNC ou la commune" },
   { category: "joventy", required: true,  label: "Vérification complète de la conformité du dossier selon les exigences VFS Turquie" },
   { category: "joventy", required: true,  label: "Réservation du créneau de dépôt au centre VFS Global à Kinshasa" },
   { category: "joventy", required: true,  label: "Accompagnement et suivi du statut de la demande" },
@@ -137,8 +138,8 @@ const TURKEY_VFS: VisaDoc[] = [
 ];
 
 const TURKEY_EVISA: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6+ mois)", notes: "Vous devez déjà posséder un visa USA ou Schengen valide pour être éligible à l'e-Visa turc" },
-  { category: "upload",  required: true,  label: "Scan de votre visa USA ou Schengen valide (condition sine qua non)" },
+  { key: "passport_scan",     category: "upload",  required: true,  label: "Scan passeport HD (validité 6+ mois)", notes: "Vous devez déjà posséder un visa USA ou Schengen valide pour être éligible à l'e-Visa turc" },
+  { key: "existing_visa_scan",category: "upload",  required: true,  label: "Scan de votre visa USA ou Schengen valide (condition sine qua non)" },
   { category: "joventy", required: true,  label: "Soumission du dossier e-Visa sur le portail officiel turque (evisa.gov.tr)" },
   { category: "joventy", required: true,  label: "Suivi et transmission de l'e-Visa dès approbation (généralement 24-72h)" },
   { category: "direct",  required: true,  label: "Frais e-Visa Turquie : ~60 $ — payés sur le portail officiel evisa.gov.tr", notes: "Tarif susceptible de changer selon la nationalité et la période" },
@@ -148,11 +149,11 @@ const TURKEY_EVISA: VisaDoc[] = [
 // DUBAI (EAU)
 // ─────────────────────────────────────────────
 const DUBAI_TOURIST: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (page principale + pages tampons), validité 6 mois minimum" },
-  { category: "upload",  required: true,  label: "Photo d'identité fond blanc JPEG, taille inférieure à 100 ko (format exigé par le portail ICA UAE)" },
-  { category: "upload",  required: true,  label: "Réservation de billet d'avion aller-retour (confirmation de réservation)" },
-  { category: "upload",  required: false, label: "Réservation hôtel (recommandée, parfois exigée selon profil)", notes: "Renforce votre dossier si votre profil est jugé à risque" },
-  { category: "upload",  required: false, label: "Relevés bancaires des 3 derniers mois (si demandés lors de l'examen du dossier)" },
+  { key: "passport_scan",    category: "upload",  required: true,  label: "Scan passeport HD (page principale + pages tampons), validité 6 mois minimum" },
+  { key: "photo_id",         category: "upload",  required: true,  label: "Photo d'identité fond blanc JPEG, taille inférieure à 100 ko (format exigé par le portail ICA UAE)" },
+  { key: "flight_reservation",category: "upload", required: true,  label: "Réservation de billet d'avion aller-retour (confirmation de réservation)" },
+  { key: "hotel_reservation",category: "upload",  required: false, label: "Réservation hôtel (recommandée, parfois exigée selon profil)", notes: "Renforce votre dossier si votre profil est jugé à risque" },
+  { key: "proof_of_funds",   category: "upload",  required: false, label: "Relevés bancaires des 3 derniers mois (si demandés lors de l'examen du dossier)" },
   { category: "joventy", required: true,  label: "Soumission du dossier e-Visa sur le portail officiel ICA UAE" },
   { category: "joventy", required: true,  label: "Suivi du statut de la demande (résultat attendu en 48-72h ouvrables)" },
   { category: "joventy", required: true,  label: "Transmission du e-Visa PDF officiel dès approbation" },
@@ -162,19 +163,19 @@ const DUBAI_TOURIST: VisaDoc[] = [
 
 const DUBAI_BUSINESS: VisaDoc[] = [
   ...DUBAI_TOURIST.filter(d => d.label !== "Réservation hôtel (recommandée, parfois exigée selon profil)"),
-  { category: "upload",  required: true,  label: "Lettre d'invitation d'une société basée aux EAU ou attestation de participation à un événement professionnel" },
-  { category: "upload",  required: true,  label: "RCCM ou documents d'enregistrement de votre entreprise en RDC" },
+  { key: "business_invitation",   category: "upload",  required: true,  label: "Lettre d'invitation d'une société basée aux EAU ou attestation de participation à un événement professionnel" },
+  { key: "business_registration", category: "upload",  required: true,  label: "RCCM ou documents d'enregistrement de votre entreprise en RDC" },
 ];
 
 // ─────────────────────────────────────────────
 // INDE
 // ─────────────────────────────────────────────
 const INDIA_TOURIST: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum, au moins 2 pages vierges)" },
-  { category: "upload",  required: true,  label: "Photo d'identité fond blanc récente (format numérique, JPG, 10-300 ko)" },
-  { category: "upload",  required: true,  label: "Réservation de billet d'avion aller-retour" },
-  { category: "upload",  required: true,  label: "Réservation hôtel pour au moins la première nuit" },
-  { category: "upload",  required: false, label: "Relevés bancaires (recommandés pour appuyer le dossier)" },
+  { key: "passport_scan",    category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum, au moins 2 pages vierges)" },
+  { key: "photo_id",         category: "upload",  required: true,  label: "Photo d'identité fond blanc récente (format numérique, JPG, 10-300 ko)" },
+  { key: "flight_reservation",category: "upload", required: true,  label: "Réservation de billet d'avion aller-retour" },
+  { key: "hotel_reservation",category: "upload",  required: true,  label: "Réservation hôtel pour au moins la première nuit" },
+  { key: "proof_of_funds",   category: "upload",  required: false, label: "Relevés bancaires (recommandés pour appuyer le dossier)" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire officiel e-Visa Inde (indianvisaonline.gov.in)" },
   { category: "joventy", required: true,  label: "Soumission et suivi du dossier" },
   { category: "joventy", required: true,  label: "Transmission du e-Visa PDF approuvé (imprimer avant l'embarquement)" },
@@ -182,12 +183,12 @@ const INDIA_TOURIST: VisaDoc[] = [
 ];
 
 const INDIA_MEDICAL: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
-  { category: "upload",  required: true,  label: "Photo d'identité fond blanc (format numérique)" },
-  { category: "upload",  required: true,  label: "Lettre de recommandation médicale du médecin traitant en RDC (en anglais ou avec traduction)" },
-  { category: "upload",  required: true,  label: "Lettre d'admission / invitation de l'hôpital ou de la clinique indienne agréée", notes: "Doit mentionner : nom de l'établissement, type de traitement, durée estimée, coût prévisionnel" },
-  { category: "upload",  required: true,  label: "Documents médicaux récents : comptes-rendus, analyses, imageries médicales" },
-  { category: "upload",  required: false, label: "Preuves de moyens financiers pour couvrir les frais médicaux" },
+  { key: "passport_scan",       category: "upload",  required: true,  label: "Scan passeport HD (validité 6 mois minimum)" },
+  { key: "photo_id",            category: "upload",  required: true,  label: "Photo d'identité fond blanc (format numérique)" },
+  { key: "medical_referral",    category: "upload",  required: true,  label: "Lettre de recommandation médicale du médecin traitant en RDC (en anglais ou avec traduction)" },
+  { key: "hospital_invitation", category: "upload",  required: true,  label: "Lettre d'admission / invitation de l'hôpital ou de la clinique indienne agréée", notes: "Doit mentionner : nom de l'établissement, type de traitement, durée estimée, coût prévisionnel" },
+  { key: "medical_records",     category: "upload",  required: true,  label: "Documents médicaux récents : comptes-rendus, analyses, imageries médicales" },
+  { key: "proof_of_funds",      category: "upload",  required: false, label: "Preuves de moyens financiers pour couvrir les frais médicaux" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire e-Medical Visa Inde" },
   { category: "joventy", required: true,  label: "Vérification accréditation de l'hôpital indien (service inclus)" },
   { category: "joventy", required: true,  label: "Soumission et suivi — transmission du e-Visa dès approbation" },
@@ -196,11 +197,11 @@ const INDIA_MEDICAL: VisaDoc[] = [
 ];
 
 const INDIA_STUDENT: VisaDoc[] = [
-  { category: "upload",  required: true,  label: "Scan passeport HD" },
-  { category: "upload",  required: true,  label: "Photo d'identité fond blanc" },
-  { category: "upload",  required: true,  label: "Lettre d'admission de l'université ou de l'institution indienne" },
-  { category: "upload",  required: true,  label: "Relevés bancaires couvrant les frais de scolarité + vie (1 an minimum)" },
-  { category: "upload",  required: true,  label: "Diplômes et relevés de notes précédents" },
+  { key: "passport_scan",       category: "upload",  required: true,  label: "Scan passeport HD" },
+  { key: "photo_id",            category: "upload",  required: true,  label: "Photo d'identité fond blanc" },
+  { key: "admission_letter",    category: "upload",  required: true,  label: "Lettre d'admission de l'université ou de l'institution indienne" },
+  { key: "proof_of_funds",      category: "upload",  required: true,  label: "Relevés bancaires couvrant les frais de scolarité + vie (1 an minimum)" },
+  { key: "diplomas_transcripts",category: "upload",  required: true,  label: "Diplômes et relevés de notes précédents" },
   { category: "joventy", required: true,  label: "Remplissage du formulaire de visa étudiant Inde" },
   { category: "joventy", required: true,  label: "Coordination et vérification du dossier" },
   { category: "joventy", required: true,  label: "Note : pour les études longues durée (Regular Visa), un entretien physique à l'Ambassade de l'Inde à Kinshasa est possible" },
@@ -241,4 +242,11 @@ export function getVisaDocs(destination: string, visaType: string): VisaDoc[] {
 
 export function getVisaDocGroups(destination: string, visaType: string): VisaDocGroup[] {
   return group(getVisaDocs(destination, visaType));
+}
+
+/** Retourne uniquement les documents de catégorie "upload" avec une clé stable. */
+export function getUploadDocs(destination: string, visaType: string): Array<{ key: string; label: string; required: boolean; notes?: string }> {
+  return getVisaDocs(destination, visaType)
+    .filter(d => d.category === "upload" && d.key)
+    .map(d => ({ key: d.key!, label: d.label, required: d.required, notes: d.notes }));
 }

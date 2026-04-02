@@ -5,6 +5,7 @@ import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
 import { Id } from "@convex/_generated/dataModel";
 import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
+import { getUploadDocs } from "@convex/visaDocuments";
 import { DocumentChecklist } from "@/components/DocumentChecklist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly, formatCurrency } from "@/lib/format";
@@ -170,9 +171,9 @@ function InterviewKit({ app, confirmationLetterUrl }: { app: Application; confir
         {/* Required documents */}
         {pricing && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-2">Documents à apporter</p>
+            <p className="text-xs text-muted-foreground uppercase font-semibold mb-2">Documents à uploader</p>
             <ul className="space-y-1">
-              {pricing.requiredDocuments.map((doc) => (
+              {getUploadDocs(app.destination, app.visaType).map((doc) => (
                 <li key={doc.key} className="flex items-center gap-2 text-xs">
                   <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${doc.required ? "text-green-600" : "text-slate-400"}`} />
                   <span>{doc.label}{!doc.required && " (optionnel)"}</span>
@@ -824,7 +825,7 @@ export default function ClientApplicationDetail() {
                   <FileText className="w-4 h-4 text-secondary" /> Mes Documents
                 </h2>
                 <span className="text-xs text-muted-foreground">
-                  {docs.filter((d) => !d.isAdminUpload).length}/{pricing.requiredDocuments.length} fourni(s)
+                  {docs.filter((d) => !d.isAdminUpload).length}/{getUploadDocs(app.destination, app.visaType).length} fourni(s)
                 </span>
               </div>
 
@@ -863,7 +864,7 @@ export default function ClientApplicationDetail() {
               )}
 
               <div>
-                {pricing.requiredDocuments.map((doc) => {
+                {getUploadDocs(app.destination, app.visaType).map((doc) => {
                   const uploaded = docs.find((d) => d.docKey === doc.key && !d.isAdminUpload);
                   return (
                     <ClientDocRow
@@ -871,7 +872,7 @@ export default function ClientApplicationDetail() {
                       appId={appId!}
                       docKey={doc.key}
                       label={doc.label}
-                      required={doc.required}
+                      required={servicePackage === "slot_only" ? false : doc.required}
                       existingDoc={uploaded}
                     />
                   );

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
+import { getUploadDocs } from "@convex/visaDocuments";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -1425,7 +1426,7 @@ export default function AdminApplicationDetail() {
                 <h2 className="font-bold text-primary text-base">Coffre-fort Documents</h2>
               </div>
               <span className="text-xs text-muted-foreground">
-                {docs.filter((d) => !d.isAdminUpload).length}/{pricing.requiredDocuments.length} fourni(s)
+                {docs.filter((d) => !d.isAdminUpload).length}/{getUploadDocs(app.destination, app.visaType).length} fourni(s)
               </span>
             </div>
 
@@ -1445,13 +1446,13 @@ export default function AdminApplicationDetail() {
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Documents du client</p>
                 <div>
-                  {pricing.requiredDocuments.map((doc) => (
+                  {getUploadDocs(app.destination, app.visaType).map((doc) => (
                     <DocUploadRow
                       key={doc.key}
                       appId={appId!}
                       docKey={doc.key}
                       label={doc.label}
-                      required={doc.required}
+                      required={servicePackage === "slot_only" ? false : doc.required}
                       existingDoc={docsByKey[doc.key]}
                       isAdminContext={true}
                     />
