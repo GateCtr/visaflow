@@ -1,0 +1,276 @@
+Captcha Solver API
+Proxy API
+Proxy API
+On the Proxy API page, you will find everything you need to get started with proxies, including in-depth technical documentation on each type of proxy we offer. From beginner guides on running a basic query to a comprehensive integration process, code examples, and recommended third-party tools, we've got you covered.
+
+If you cannot find what you're looking for or need assistance, contact us at support@2captcha.com or create a ticket.
+
+The 2Captcha proxy network provides real user IPs from 220+ countries for browsing and data collection. Residential proxies use real IP addresses assigned by Internet Service Providers (ISPs) and are linked to physical devices worldwide at the country or city level. This makes it easy to replicate human behavior and avoid blocks when using these proxies.
+
+2Captcha proxies are fully equipped, automatically rotating, and easy to set up. Find everything you need about Residential and Rotating Proxies integration in this API documentation.
+
+API Methods
+The 2Captcha API provides convenient methods for managing proxies and retrieving information about available resources. Below is a list of available methods:
+
+Account Management:
+proxy - retrieve general account information
+balance - check the current account balance
+Available Locations:
+
+countries - retrieve a list of available countries
+regions - retrieve a list of available regions
+cities - retrieve a list of available cities
+asns - retrieve a list of ASNs
+Whitelist Management:
+
+generate_white_list_connections - generate IP addresses for secure connections
+Retrieving General Account Information
+This method allows you to obtain key details about your account, including the current status, the amount of used traffic, and the list of whitelisted IP addresses.
+
+API Endpoint: https://api.2captcha.com/proxy?key=<API_KEY>
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+Request example:
+https://api.2captcha.com/proxy?key=1abc234de56fab7c89012d34e56fa7b8
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": {
+        "username": "u2135p19s84m750n5",
+        "status": 1,
+        "total_flow": 1000,
+        "use_flow": 925.679,
+        "last_flow": 925.679,
+        "ip_white": [
+            "203.0.113.42"
+        ]
+    }
+}
+Account Balance
+This method allows you to retrieve the current account balance.
+
+API Endpoint: https://api.2captcha.com/proxy/balance?key=<API_KEY>
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+Request example:
+https://api.2captcha.com/proxy/balance?key=1abc234de56fab7c89012d34e56fa7b8
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "balance": 1000
+}
+Available Countries
+This method retrieves a list of countries where 2Captcha proxies are available.
+
+API Endpoint: https://api.2captcha.com/proxy/locations/countries?key=<API_KEY>&page=0
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+page	No	Page number
+Request example:
+https://api.2captcha.com/proxy/locations/countries?key=1abc234de56fab7c89012d34e56fa7b8&page=0
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": [
+        {
+            "id": 231,
+            "code": "ae",
+            "title": "United Arab Emirates"
+        },
+        {
+            "id": 232,
+            "code": "gb",
+            "title": "United Kingdom"
+        },
+        {
+            "id": 233,
+            "code": "us",
+            "title": "United States"
+        },
+        ...
+    ],
+    "total": 208
+}
+Available Regions
+This method retrieves a list of regions where 2Captcha proxies are available, along with their corresponding countries.
+
+API Endpoint: https://api.2captcha.com/proxy/locations/regions?key=<API_KEY>&page=0
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+page	No	Page number
+Request example:
+https://api.2captcha.com/proxy/locations/regions?key=1abc234de56fab7c89012d34e56fa7b8&page=0
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": [
+        {
+            "id": 3391,
+            "countryId": 231,
+            "region": "dubai"
+        },
+        {
+            "id": 2336,
+            "countryId": 232,
+            "region": "england"
+        },
+        {
+            "id": 1450,
+            "countryId": 233,
+            "region": "colorado"
+        },
+        ...
+    ],
+    "total": 967
+}
+Available Cities
+This method retrieves a list of cities where 2Captcha proxies are available, along with their corresponding regions and country codes.
+
+API Endpoint: https://api.2captcha.com/proxy/locations/cities?key=<API_KEY>&page=0
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+page	No	Page number
+Request example:
+https://api.2captcha.com/proxy/locations/cities?key=1abc234de56fab7c89012d34e56fa7b8&page=0
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": [
+        {
+            "id": 39364,
+            "city": "amiens",
+            "regionId": 4828,
+            "region": "hautsdefrance",
+            "countryCode": "fr"
+        },
+        {
+            "id": 63141,
+            "city": "amman",
+            "regionId": 965,
+            "region": "amman",
+            "countryCode": "jo"
+        },
+        {
+            "id": 76411,
+            "city": "ampang",
+            "regionId": 1944,
+            "region": "selangor",
+            "countryCode": "my"
+        },
+        ...
+    ],
+    "total": 3145
+}
+List of ASNs
+This method retrieves a list of Autonomous Systems (ASNs) through which 2Captcha proxies are provided. Each Autonomous System belongs to a specific Internet Service Provider (ISP) and has a unique ASN number.
+
+API Endpoint: https://api.2captcha.com/proxy/locations/asns?key=<API_KEY>&page=0
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+page	No	Page number
+Request example:
+https://api.2captcha.com/proxy/locations/asns?key=1abc234de56fab7c89012d34e56fa7b8&page=0
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": [
+        {
+            "id": 4463,
+            "title": "Sprint",
+            "countryCode": "us",
+            "code": "AS1239"
+        },
+        {
+            "id": 1943,
+            "title": "KCOM GROUP LIMITED",
+            "countryCode": "gb",
+            "code": "AS12390"
+        },
+        {
+            "id": 2749,
+            "title": "Brutele SC",
+            "countryCode": "be",
+            "code": "AS12392"
+        },
+        ...
+    ],
+    "total": 9830
+}
+Generate Whitelist Connections
+This method retrieves a list of IP addresses in the ip:port format that can be used without authentication but only from the specified IP address.
+
+You can select a specific country when generating the list to ensure that all your traffic is routed through proxies in the chosen location.
+If no country is specified, the system will automatically assign random IP addresses from different countries (mix). In this case, the connection country may change over time.
+
+API Endpoint: https://api.2captcha.com/proxy/generate_white_list_connections?key=<API_KEY>&country=au&protocol=http&connection_count=2000&ip=<WHITE_LIST_IP>
+Method: GET
+
+Request Parameters:
+
+Parameter	Required	Description
+key	Yes	Your API key
+ip	Yes	The IPv4 address must be added to the whitelist beforehand.
+protocol	Yes	Connection protocol. Supported protocols: http, https, socks5
+country	No	Country code.
+Important: The list of countries for whitelist connections differs from the general list of countries. The current list of available countries is displayed on the ip-whitelist page in the connection generator.
+Default: A random country (mix), which will change automatically over time.
+connection_count	No	Number of generated connections (from 1 to 2000).
+Default: 1
+Request example:
+https://api.2captcha.com/proxy/generate_white_list_connections?key=1abc234de56fab7c89012d34e56fa7b8&country=au&protocol=http&connection_count=5&ip=203.0.113.42
+
+Response example:
+json
+Copy
+{
+    "status": "OK",
+    "data": [
+        "192.0.2.103:24008",
+        "198.51.100.179:16679",
+        "203.0.113.95:30507",
+        "192.0.2.96:37614",
+        "198.51.100.163:25494"
+    ]
+}
