@@ -285,7 +285,9 @@ Analyse exhaustive du bundle Angular (`main.dc91e3f7b5f67caa.js`) comparée au c
 
 ### Haute priorité (amélioration sécurité)
 - [x] ~~Add `Accept-Encoding: gzip, deflate, br, zstd`~~ ✅ corrigé
-- [x] ~~Add `LanguageId: 1`~~ ✅ corrigé
+- [x] ~~`LanguageId` sur tous les appels~~ ✅ **BUG CORRIGÉ** (2026-04-02) — Le header ne doit être présent que sur `/getLandingPageDeatils` et `/generatewizardtemplate`. Il était dans `getBrowserHeaders()` (= toutes les requêtes). Retiré de `getBrowserHeaders()`, ajouté exclusivement dans `callLandingPage()`.
+- [x] ~~`appointmentId` absent du payload de booking~~ ✅ **BUG CORRIGÉ** (2026-04-02) — `appointmentId` (bundle: `selectedSlotDetails.appointmentId`) était absent du PUT `/appointments/schedule`. Ajouté dans `UsaAppointmentRequest`, `UsaSession`, propagé depuis `checkUsaAppointmentRequestStatus()`, injecté dans `bookUsaSlot()`.
+- [x] ~~`appointmentTime` en format 24h~~ ✅ **BUG CORRIGÉ** (2026-04-02) — Le portail envoie le format 12h AM/PM `"9:00 AM"` (via `setUItime()`). Le bot envoyait `"09:00"` (24h brut). Fonction `formatUItime()` ajoutée, reproduit exactement `setUItime()` du bundle Angular.
 - [x] ~~Ajouter `X-XSRF-TOKEN: {csrfToken}` aux headers PUT~~ ✅ corrigé — `bookUsaSlot()` envoie maintenant `CookieName` + `X-XSRF-TOKEN`
 - [x] ~~Ajouter jitter ±5 min sur `TOKEN_REFRESH_BUFFER_MS`~~ ✅ corrigé — `CachedToken.jitterMs` [−300s, +300s] par compte
 

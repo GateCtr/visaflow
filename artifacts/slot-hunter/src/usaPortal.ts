@@ -222,6 +222,15 @@ interface UsaAppointmentRequest {
    * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
    * À utiliser de préférence à userID comme param applicantId de getApplicationDetails. */
   applicantId?: number;
+  /** appointmentId interne du dossier en attente de créneau.
+   * Bundle Angular : this.selectedSlotDetails.appointmentId
+   * OBLIGATOIRE dans le payload PUT /appointments/schedule — le serveur l'utilise
+   * pour identifier quelle demande de RDV associer au créneau réservé.
+   * Sans lui, le payload est incorrect et le booking peut échouer silencieusement. */
+  appointmentId?: number;
+  /** applicantUUID interne — également requis dans le payload de booking.
+   * Bundle Angular : this.selectedSlotDetails.applicantUUID */
+  applicantUUID?: number;
 }
 
 
@@ -244,6 +253,13 @@ export interface UsaSession {
    * Utilisé comme param ?applicantId= dans getApplicationDetails à la place du userID
    * si le serveur le retourne — sinon on retombe sur userID comme fallback. */
   applicantId?: number;
+  /** appointmentId interne du dossier en attente de créneau.
+   * Bundle Angular : this.selectedSlotDetails.appointmentId
+   * Inclus obligatoirement dans le payload PUT /appointments/schedule. */
+  appointmentId?: number;
+  /** applicantUUID interne — requis dans le payload de booking.
+   * Bundle Angular : this.selectedSlotDetails.applicantUUID */
+  applicantUUID?: number;
 }
 
 // Referers spécifiques à chaque étape de navigation du portail Angular.
@@ -306,9 +322,10 @@ function getBrowserHeaders(): Record<string, string> {
     "Accept-Encoding":    "gzip, deflate, br, zstd",
     "Accept-Language":    "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
     "Cache-Control":      "no-cache",
-    // LanguageId : envoyé par le portail Angular sur toutes les requêtes authentifiées
-    // (visible dans le bundle : LanguageId:`${Ue}` dans l'intercepteur HTTP)
-    "LanguageId":         "1",
+    // NOTE : LanguageId N'est PAS ajouté ici.
+    // L'intercepteur Angular ne l'envoie QUE pour /getLandingPageDeatils et /generatewizardtemplate.
+    // Toutes les autres requêtes (slots, booking, login…) NE reçoivent PAS ce header.
+    // → ajouté explicitement dans callLandingPage() uniquement.
     "Pragma":             "no-cache",
     "Origin":             "https://www.usvisaappt.com",
     "Referer":            REFERER_LOGIN,
@@ -577,6 +594,12 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   /** applicantId interne retourné par le serveur — à propager dans session.applicantId.
    * Utilisé à la place de session.userID dans le call ?applicantId= de getApplicationDetails. */
   applicantId?: number;
+  /** appointmentId interne — à propager dans session.appointmentId.
+   * Obligatoire dans le payload PUT /appointments/schedule (bundle: selectedSlotDetails.appointmentId). */
+  appointmentId?: number;
+  /** applicantUUID interne — à propager dans session.applicantUUID.
+   * Obligatoire dans le payload PUT /appointments/schedule (bundle: selectedSlotDetails.applicantUUID). */
+  applicantUUID?: number;
 }> {
   const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
   let data: UsaAppointmentRequest | null = null;
@@ -618,8 +641,14 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   // applicantId interne (bundle : selectedSlotDetails.applicantId) — peut être absent de la réponse.
   const serverApplicantId: number | undefined =
     typeof data.applicantId === "number" ? data.applicantId : undefined;
+  // appointmentId — CRITIQUE pour le payload de booking (bundle: selectedSlotDetails.appointmentId).
+  const serverAppointmentId: number | undefined =
+    typeof data.appointmentId === "number" ? data.appointmentId : undefined;
+  // applicantUUID — requis dans le payload de booking (bundle: selectedSlotDetails.applicantUUID).
+  const serverApplicantUUID: number | undefined =
+    typeof data.applicantUUID === "number" ? data.applicantUUID : undefined;
 
-  console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}${serverApplicantId !== undefined ? ` applicantId=${serverApplicantId}` : ""}`);
+  console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}${serverApplicantId !== undefined ? ` applicantId=${serverApplicantId}` : ""}${serverAppointmentId !== undefined ? ` appointmentId=${serverAppointmentId}` : ""}${serverApplicantUUID !== undefined ? ` applicantUUID=${serverApplicantUUID}` : ""}`);
 
   // Interprétation de pendingAppoStatus — tirée du bundle Angular (getAppIdByUserId) :
   //   0           → aucune demande / paiement non confirmé (portal: synchronizeAccount)
@@ -641,6 +670,8 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
       message: `Aucune demande active ou paiement non confirmé (pendingAppoStatus: ${appoStatus})`,
       missionId: serverMissionId,
       applicantId: serverApplicantId,
+      appointmentId: serverAppointmentId,
+      applicantUUID: serverApplicantUUID,
     };
   }
 
@@ -653,6 +684,8 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
       message: `Créneau déjà attribué pour ${applicant} (applicationId: ${appId})`,
       missionId: serverMissionId,
       applicantId: serverApplicantId,
+      appointmentId: serverAppointmentId,
+      applicantUUID: serverApplicantUUID,
     };
   }
 
@@ -665,6 +698,8 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
     message: `Paiement confirmé (status=${appoStatus}) — scan créneaux pour ${applicant}`,
     missionId: serverMissionId,
     applicantId: serverApplicantId,
+    appointmentId: serverAppointmentId,
+    applicantUUID: serverApplicantUUID,
   };
 }
 
@@ -775,6 +810,15 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // applicantId interne (bundle : selectedSlotDetails.applicantId) — propagé si le serveur le retourne.
   if (requestStatus.applicantId !== undefined) {
     session.applicantId = requestStatus.applicantId;
+  }
+  // appointmentId interne — OBLIGATOIRE dans le payload de booking.
+  // Bundle Angular : this.selectedSlotDetails.appointmentId → envoyé dans le PUT /appointments/schedule.
+  if (requestStatus.appointmentId !== undefined) {
+    session.appointmentId = requestStatus.appointmentId;
+  }
+  // applicantUUID interne — requis dans le payload de booking.
+  if (requestStatus.applicantUUID !== undefined) {
+    session.applicantUUID = requestStatus.applicantUUID;
   }
 
   if (requestStatus.status === "error") {
@@ -913,7 +957,12 @@ function sessionHeaders(
 async function callLandingPage(session: UsaSession): Promise<void> {
   if (!session.applicationId) return;
   // GET depuis le dashboard — pas de Content-Type, Referer = dashboard parent
-  const headers = sessionHeaders(session.accessToken, session.applicationId, session.missionId, REFERER_DASHBOARD, false);
+  // Bundle intercepteur : /getLandingPageDeatils reçoit LanguageId:{Ue} en plus des headers standards.
+  // Toutes les AUTRES requêtes NE reçoivent PAS LanguageId — c'est une condition explicite dans l'intercepteur.
+  const headers = {
+    ...sessionHeaders(session.accessToken, session.applicationId, session.missionId, REFERER_DASHBOARD, false),
+    "LanguageId": "1",
+  };
   try {
     const res = await usaFetch(USA_LANDING_PAGE_URL, { method: "GET", headers });
     console.log(`[usa] getLandingPageDeatils → HTTP ${res.status}`);
@@ -1254,6 +1303,46 @@ async function findFirstSlotForOfc(
 }
 
 // ─────────────────────────────────────────────────────────────
+// Conversion temps 24h → format UItime Angular (12h AM/PM)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Reproduit exactement setUItime() du bundle Angular (portail US Visa).
+ *
+ * Angular reçoit startTime en ISO (ex. "2026-05-15T09:00:00.000Z"),
+ * extrait la partie temps via datePipe("hh:mm") en 12h ET l'heure 24h brute,
+ * puis appelle setUItime(display12h, hour24raw) pour produire le label "9:00 AM".
+ *
+ * Format de sortie : H:mm AM/PM (sans zéro initial sur l'heure).
+ *   "09:00" → "9:00 AM"
+ *   "14:00" → "2:00 PM"
+ *   "12:00" → "12:00 PM"
+ *   "00:00" → "12:00 AM"
+ *
+ * Ce format est envoyé tel quel dans le payload PUT /appointments/schedule
+ * en tant que `appointmentTime`.  Envoyer le format 24h ("14:00") serait incorrect.
+ */
+function formatUItime(startTime: string): string {
+  // Extraire "HH:mm" depuis une ISO ou une string "HH:mm:ss" / "HH:mm"
+  let timePart: string;
+  if (startTime.includes("T")) {
+    timePart = startTime.split("T")[1].slice(0, 5); // "09:00"
+  } else {
+    timePart = startTime.slice(0, 5);               // "09:00"
+  }
+
+  const match = timePart.match(/^([01]\d|2[0-3]):([0-5]\d)/);
+  if (!match) return timePart; // fallback si format inattendu
+
+  const hour24 = parseInt(match[1], 10);
+  const minutes = match[2];
+  const hour12  = hour24 % 12 || 12;      // 0 → 12, 13 → 1, 12 → 12
+  const suffix  = hour24 < 12 ? " AM" : " PM";
+
+  return `${hour12}:${minutes}${suffix}`;  // ex. "9:00 AM", "2:00 PM"
+}
+
+// ─────────────────────────────────────────────────────────────
 // Types & fonction de booking automatique
 // ─────────────────────────────────────────────────────────────
 
@@ -1302,11 +1391,16 @@ async function bookUsaSlot(
   session: UsaSession,
   found: { slot: UsaTimeSlot; bookingBase: Record<string, unknown>; date: string; time: string }
 ): Promise<UsaBookingResult> {
-  // Le bundle Angular construit le payload en ajoutant explicitement
-  // appointmentDt (= slot.slotDate) et appointmentTime (= slot.UItime = HH:mm)
-  // ainsi que appointmentStatus: "SCHEDULED"
+  // Le bundle Angular construit le payload en ajoutant explicitement :
+  //   appointmentId        → this.selectedSlotDetails.appointmentId (ID interne de la demande)
+  //   applicantUUID        → this.selectedSlotDetails.applicantUUID (UUID interne du dossier)
+  //   appointmentDt        → slot.slotDate
+  //   appointmentTime      → slot.UItime (format 12h AM/PM via setUItime(), ex. "9:00 AM")
+  //   appointmentStatus    → "SCHEDULED"
   const slotDate = (found.slot as Record<string, unknown>).slotDate as string | undefined ?? found.date;
-  const appointmentTime = found.time; // HH:mm extrait de slot.startTime
+  // CRITIQUE : UItime format — le portail envoie "9:00 AM" et non "09:00".
+  // formatUItime() reproduit exactement setUItime() du bundle Angular.
+  const appointmentTime = formatUItime(found.slot.startTime ?? found.time);
 
   const payload = {
     ...found.bookingBase,
@@ -1317,12 +1411,21 @@ async function bookUsaSlot(
     appointmentLocationType: "OFC" as const,
     appointmentStatus: "SCHEDULED" as const,
     appointmentDt: slotDate,        // nom attendu par le portail (slotDate de l'API)
-    appointmentTime,                // HH:mm attendu par le portail (UItime côté Angular)
+    appointmentTime,                // format 12h AM/PM (UItime côté Angular), ex. "9:00 AM"
+    // appointmentId : OBLIGATOIRE — identifie la demande de RDV à planifier.
+    // Bundle : this.selectedSlotDetails.appointmentId ?? parseInt(sessionStorage("appointmentId"))
+    // Propagé depuis getUserHistoryApplicantPaymentStatus via session.appointmentId.
+    ...(session.appointmentId !== undefined ? { appointmentId: session.appointmentId } : {}),
+    // applicantUUID : requis dans le payload de booking.
+    // Si déjà présent dans found.bookingBase (via appDetails.applicantUUID), il est conservé.
+    // Ici on s'assure de la présence depuis session si found.bookingBase ne l'a pas retourné.
+    ...(session.applicantUUID !== undefined ? { applicantUUID: session.applicantUUID } : {}),
   } as unknown as UsaBookingPayload;
 
   console.log(
     `[usa] 📝 Tentative de booking — slotId=${payload.slotId}, appointmentDt=${slotDate}, ` +
-    `appointmentTime=${appointmentTime}, OFC postUserId=${payload.postUserId}`
+    `appointmentTime=${appointmentTime}, appointmentId=${session.appointmentId ?? "N/A"}, ` +
+    `OFC postUserId=${payload.postUserId}`
   );
 
   try {
