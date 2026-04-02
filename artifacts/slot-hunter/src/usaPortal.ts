@@ -1195,24 +1195,51 @@ async function bookUsaSlot(
 /**
  * Télécharge la lettre de confirmation de RDV au format PDF.
  * POST /visanotificationapi/template/appointmentLetter
+ *
+ * Séquence Angular :
+ *   1. sanityCheck(appId, "appointmentLetter")  → fire-and-forget
+ *   2. POST /template/appointmentLetter          → blob PDF
+ *   3. createObjectURL(blob) + a.download        → téléchargement navigateur
+ *
+ * Payload : { applicationId, missionId, appointmentId? }
+ * Headers : Accept: application/pdf  +  cookies missionId/APP_ID_TOBE via sessionHeaders.
  * Retourne le contenu PDF en Buffer, ou null en cas d'erreur.
  */
 export async function downloadUsaConfirmationPdf(
   session: UsaSession,
-  applicationId: string
+  applicationId: string,
+  appointmentId?: number | string
 ): Promise<Buffer | null> {
-  console.log(`[usa] Téléchargement confirmation PDF pour application ${applicationId}...`);
+  console.log(`[usa] Téléchargement confirmation PDF — applicationId=${applicationId}, appointmentId=${appointmentId ?? "n/a"}...`);
+
+  // Étape 1 : sanityCheck avec stepType="appointmentLetter" (fire-and-forget, comme le bundle Angular)
+  // Le portail l'appelle juste avant de générer la lettre, sans attendre la réponse.
+  if (session.applicationId) {
+    const sanityUrl = USA_SANITY_CHECK_URL(session.applicationId);
+    const sanityHeaders = sessionHeaders(session.accessToken, session.applicationId, session.missionId, REFERER_CREATE_APT, true);
+    fetch(sanityUrl + "?stepType=appointmentLetter", { method: "POST", headers: sanityHeaders })
+      .then(r => console.log(`[usa] sanityCheck(appointmentLetter) → HTTP ${r.status}`))
+      .catch(e => console.warn("[usa] sanityCheck(appointmentLetter) ignoré:", e));
+  }
+
+  // Étape 2 : POST appointmentLetter → blob PDF
+  // Payload aligné sur le bundle : { applicationId, missionId } + appointmentId si disponible.
+  const letterPayload: Record<string, unknown> = {
+    applicationId,
+    missionId: session.missionId,
+  };
+  if (appointmentId !== undefined) letterPayload.appointmentId = appointmentId;
+
   try {
     const res = await fetch(USA_CONFIRMATION_LETTER_URL, {
       method: "POST",
-      // sessionHeaders : inclut les cookies APP_ID_TOBE + missionId, obligatoires après booking.
-      // Referer = page de scheduling (le PDF est téléchargé immédiatement après confirmation).
-      // Accept = application/pdf : overwrite "application/json" de authHeaders.
+      // sessionHeaders inclut les cookies APP_ID_TOBE + missionId.
+      // Accept: application/pdf écrase le "application/json" de sessionHeaders.
       headers: {
         ...sessionHeaders(session.accessToken, applicationId, session.missionId, REFERER_CREATE_APT),
         "Accept": "application/pdf",
       },
-      body: JSON.stringify({ applicationId }),
+      body: JSON.stringify(letterPayload),
     });
 
     if (!res.ok) {
@@ -1423,7 +1450,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       // Uniquement si le booking a réussi : le portail ne génère la lettre que sur un RDV confirmé.
       let pdfStorageId: string | undefined;
       if (booking.success) {
-        const pdf = await downloadUsaConfirmationPdf(session, session.applicationId);
+        const pdf = await downloadUsaConfirmationPdf(session, session.applicationId, booking.appointmentId);
         if (pdf) {
           console.log(`[usa] 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
           const b64 = pdf.toString("base64");
