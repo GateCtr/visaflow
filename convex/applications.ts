@@ -278,7 +278,6 @@ export const uploadPaymentProof = mutation({
 
     await ctx.db.patch(args.id, patch);
 
-    const label = args.paymentType === "engagement" ? "frais d'engagement" : "prime de succès";
     await ctx.scheduler.runAfter(0, internal.notifications.create, {
       userId: "ADMIN",
       type: "payment_proof_submitted",
