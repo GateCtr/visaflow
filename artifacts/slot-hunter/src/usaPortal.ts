@@ -10,7 +10,8 @@ const USA_LOGIN_URL = `${USA_BASE}/identity/user/login`;
 const USA_LOGOUT_URL = `${USA_BASE}/identity/user/logout`;
 const USA_REFRESH_URL = `${USA_BASE}/identity/user/refreshToken`;
 const USA_PAYMENT_STATUS_URL = `${USA_BASE}/visaworkflowprocessor/workflow/getUserHistoryApplicantPaymentStatus`;
-const USA_APPT_REQUESTS_URL = `${USA_BASE}/visauserapi/appointmentrequest/getallbyuser`;
+// Bundle Angular : "/appointmentrequest/getallbyuser?type=GROUPREQUEST" pour les utilisateurs réguliers.
+const USA_APPT_REQUESTS_URL = `${USA_BASE}/visauserapi/appointmentrequest/getallbyuser?type=GROUPREQUEST`;
 const USA_MISSION_ID = 323;
 
 // Endpoints de scan de créneaux — extraits du bundle Angular public
@@ -217,6 +218,10 @@ interface UsaAppointmentRequest {
   primaryApplicant: string;
   cancellable: boolean;
   messagetext: string | null;
+  /** applicantId interne (si retourné par getUserHistoryApplicantPaymentStatus).
+   * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
+   * À utiliser de préférence à userID comme param applicantId de getApplicationDetails. */
+  applicantId?: number;
 }
 
 
@@ -234,6 +239,11 @@ export interface UsaSession {
   /** missionId retourné par le serveur (cookie "missionId" dans le portail Angular).
    * Priorité sur USA_MISSION_ID si présent — garantit qu'on utilise la valeur serveur. */
   missionId: number;
+  /** applicantId interne retourné par getUserHistoryApplicantPaymentStatus.
+   * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
+   * Utilisé comme param ?applicantId= dans getApplicationDetails à la place du userID
+   * si le serveur le retourne — sinon on retombe sur userID comme fallback. */
+  applicantId?: number;
 }
 
 // Referers spécifiques à chaque étape de navigation du portail Angular.
@@ -564,6 +574,9 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   message: string;
   /** missionId tel que retourné par le serveur — à propager dans session.missionId */
   missionId: number;
+  /** applicantId interne retourné par le serveur — à propager dans session.applicantId.
+   * Utilisé à la place de session.userID dans le call ?applicantId= de getApplicationDetails. */
+  applicantId?: number;
 }> {
   const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
   let data: UsaAppointmentRequest | null = null;
@@ -602,8 +615,11 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   const appId = data.applicationId ?? null;
   const appoStatus = data.pendingAppoStatus ?? null;
   const applicant = data.primaryApplicant ?? null;
+  // applicantId interne (bundle : selectedSlotDetails.applicantId) — peut être absent de la réponse.
+  const serverApplicantId: number | undefined =
+    typeof data.applicantId === "number" ? data.applicantId : undefined;
 
-  console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}`);
+  console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}${serverApplicantId !== undefined ? ` applicantId=${serverApplicantId}` : ""}`);
 
   // Interprétation de pendingAppoStatus — tirée du bundle Angular (getAppIdByUserId) :
   //   0           → aucune demande / paiement non confirmé (portal: synchronizeAccount)
@@ -624,6 +640,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
       primaryApplicant: applicant,
       message: `Aucune demande active ou paiement non confirmé (pendingAppoStatus: ${appoStatus})`,
       missionId: serverMissionId,
+      applicantId: serverApplicantId,
     };
   }
 
@@ -635,6 +652,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
       primaryApplicant: applicant,
       message: `Créneau déjà attribué pour ${applicant} (applicationId: ${appId})`,
       missionId: serverMissionId,
+      applicantId: serverApplicantId,
     };
   }
 
@@ -646,6 +664,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
     primaryApplicant: applicant,
     message: `Paiement confirmé (status=${appoStatus}) — scan créneaux pour ${applicant}`,
     missionId: serverMissionId,
+    applicantId: serverApplicantId,
   };
 }
 
@@ -753,6 +772,10 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   session.pendingAppoStatus = requestStatus.pendingAppoStatus;
   // Priorité au missionId serveur (équivalent au cookie "missionId" que le portail Angular lit).
   session.missionId = requestStatus.missionId;
+  // applicantId interne (bundle : selectedSlotDetails.applicantId) — propagé si le serveur le retourne.
+  if (requestStatus.applicantId !== undefined) {
+    session.applicantId = requestStatus.applicantId;
+  }
 
   if (requestStatus.status === "error") {
     console.error(`[usa] Erreur lecture statut demande : ${requestStatus.message}`);
@@ -963,7 +986,12 @@ async function getUsaApplicationDetails(
   session: UsaSession,
   applicationId: string
 ): Promise<UsaAppDetails | null> {
-  const url = USA_APP_DETAILS_URL(applicationId, session.userID);
+  // Bundle Angular : getappointmentByApplicationId(y, w) → ?applicationId=w&applicantId=y
+  // y = applicantId interne (selectedSlotDetails.applicantId) ≠ userID de login dans la plupart des cas.
+  // On utilise session.applicantId (propagé depuis getUserHistoryApplicantPaymentStatus) si disponible,
+  // sinon session.userID comme fallback (le serveur peut l'accepter pour auth ou lookup).
+  const applicantIdParam = session.applicantId ?? session.userID;
+  const url = USA_APP_DETAILS_URL(applicationId, applicantIdParam);
   try {
     // GET — pas de Content-Type, Referer = page de création de RDV
     const res = await usaFetch(url, {
@@ -974,7 +1002,7 @@ async function getUsaApplicationDetails(
       return null;
     }
     const data = await res.json() as UsaAppDetails;
-    console.log(`[usa] App details: applicantId=${data.applicantId}, visaType=${data.visaType}, visaClass=${data.visaClass}`);
+    console.log(`[usa] App details: applicantId=${data.applicantId}, visaType=${data.visaType}, visaClass=${data.visaClass} (param applicantId=${applicantIdParam})`);
     return data;
   } catch (err) {
     console.warn(`[usa] getApplicationDetails erreur: ${err}`);
@@ -1179,10 +1207,22 @@ async function findFirstSlotForOfc(
   const targetDate = slotDates[0].date;
   let timeSlots: UsaTimeSlot[];
   try {
+    // Bundle Angular : le payload getSlotTime est {postUserId, applicantId, slotDate, visaType, visaClass, applicationId}
+    // SANS fromDate/toDate (contrairement à getSlotDates).
+    // Envoyer fromDate/toDate ici est un écart détectable par rapport au vrai portail.
+    const slotTimePayload = {
+      postUserId: basePayload.postUserId,
+      applicantId: basePayload.applicantId,
+      visaType: basePayload.visaType,
+      visaClass: basePayload.visaClass,
+      locationType: basePayload.locationType,
+      applicationId: basePayload.applicationId,
+      slotDate: targetDate,
+    };
     const res = await usaFetch(USA_SLOT_TIMES_URL, {
       method: "POST",
       headers: hdrs,
-      body: JSON.stringify({ ...basePayload, fromDate, toDate, slotDate: targetDate }),
+      body: JSON.stringify(slotTimePayload),
     });
     if (!checkSlotResponse(res, "getSlotTime")) return null;
     const raw = await res.json();

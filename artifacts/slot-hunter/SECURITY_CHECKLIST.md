@@ -168,12 +168,31 @@
   3. `checkFcsPayment`
   4. `getApplicationDetails`
   5. `getOfcList`
-  6. `getSlotDates`
-  7. `getSlotTime`
-  8. PUT `/appointments/schedule`
-  9. `callSanityCheck(appointmentLetter)`
-  10. POST `/appointmentLetter`
+  6. `getFirstAvailableMonth` (pre-scan)
+  7. `getSlotDates`
+  8. `getSlotTime`
+  9. PUT `/appointments/schedule`
+  10. `callSanityCheck(appointmentLetter)`
+  11. POST `/appointmentLetter`
 - **Statut :** ✅ COUVERT — ordre respecté dans `runUsaApiSession()`.
+
+### 5.6 Analyse Bundle → Bot (audit complet 2026-04-02)
+Analyse exhaustive du bundle Angular (`main.dc91e3f7b5f67caa.js`) comparée au code du bot. **3 bugs trouvés et corrigés** :
+
+| # | Composante | Bug | Correction |
+|---|---|---|---|
+| B1 | `getSlotTime` payload | Bot envoyait `fromDate`+`toDate` absents du bundle (bundle: `{postUserId, applicantId, slotDate, visaType, visaClass, applicationId}` uniquement) | `slotTimePayload` dédié — sans `fromDate`/`toDate` |
+| B2 | `getallbyuser` URL | `?type=GROUPREQUEST` manquant (bundle: `"/appointmentrequest/getallbyuser?type=GROUPREQUEST"`) | Param ajouté à `USA_APPT_REQUESTS_URL` |
+| B3 | `getApplicationDetails` param `applicantId=` | Bot envoyait `session.userID` (ID login) au lieu de l'`applicantId` interne. Bundle: paramètre = `selectedSlotDetails.applicantId` | `session.applicantId` propagé depuis `getUserHistoryApplicantPaymentStatus`; fallback `userID` si absent |
+
+**Points confirmés conformes au bundle :**
+- `RANDOME_ID` = routing Angular client-side uniquement (`/principal/{n}/appointment...`) — jamais envoyé au serveur ✅
+- `getUserHistoryApplicantPaymentStatus` : retourne `pendingAppoStatus`, `applicationId`, `missionId` — logique bot correcte ✅
+- `APP_ID_TOBE` + `missionId` cookies : définis via `setCookieByDeleteOld` après login — reproduit dans `sessionHeaders` ✅
+- `getFirstAvailableMonth` payload = `{postUserId, applicantId, visaType, visaClass, locationType, applicationId}` ✅
+- `getSlotDates` payload = `{...base, fromDate, toDate}` ✅
+- PUT `/appointments/schedule` = `bookSlot(h)` ✅
+- `locationType: "OFC"` forcé dans payload ✅
 
 ### 5.2 Délais inter-requêtes
 - **Statut :** ✅ COUVERT — `randomDelay()` avec paramètres min/max variables entre chaque appel.
