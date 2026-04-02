@@ -104,6 +104,12 @@ interface CachedToken {
   expiresAt: number;
   userID: number;
   fullName: string;
+  /** Index dans USA_UA_POOL assigné lors du login — réutilisé pour toute la durée du JWT.
+   * Un même JWT vu depuis des UAs différents est une empreinte bot détectable. */
+  uaIndex?: number;
+  /** Proxy résidentiel assigné lors du login — réutilisé pour toute la durée du JWT.
+   * Un même JWT vu depuis des IPs différentes est détectable côté serveur. */
+  proxyUrl?: string;
 }
 
 const tokenCache = new Map<string, CachedToken>();
@@ -172,6 +178,9 @@ async function refreshUsaToken(cached: CachedToken, username: string): Promise<C
       expiresAt,
       userID: cached.userID,
       fullName: cached.fullName,
+      // Proxy + UA hérités du token précédent — sticky pour toute la chaîne de refresh.
+      uaIndex: cached.uaIndex,
+      proxyUrl: cached.proxyUrl,
     };
   } catch (err) {
     console.warn("[usa] Erreur lors du refresh:", err);
@@ -380,6 +389,8 @@ export async function getUsaSession(
     if (!session) return null;
 
     const expiresAt = parseJwtExpiry(session.accessToken) || Date.now() + 55 * 60 * 1000;
+    // uaIndex et proxyUrl sont volontairement absents ici — runUsaApiSession les injecte
+    // immédiatement après (il connaît le proxy + UA assignés pour ce nouveau token).
     tokenCache.set(cacheKey, {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
@@ -644,12 +655,38 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "error";
   }
 
-  // ── Anti-détection : UA rotatif + proxy résidentiel ──────────────────────
-  pickSessionUa();
-  const sessionProxy = await proxyPool.getProxy();
+  // ── Proxy + UA sticky sur la durée du JWT ────────────────────────────────
+  // Principe : un même JWT doit toujours être présenté depuis la même IP et avec
+  // le même User-Agent. Changer d'IP ou d'UA en cours de token = empreinte bot.
+  //
+  //  • Cache hit (token valide) → réutiliser le proxy et l'UA du cache
+  //  • Nouveau token (login ou expiry) → assigner un nouveau proxy + UA,
+  //    puis les stocker dans le cache juste après le login réussi.
+  const cacheKeySticky = username.toLowerCase();
+  const cachedSticky = tokenCache.get(cacheKeySticky);
+  const hasStickyCache = cachedSticky !== undefined && isCachedTokenValid(cachedSticky);
+
+  let sessionProxy: string | undefined;
+  let sessionUaIdx: number;
+
+  if (hasStickyCache && cachedSticky) {
+    sessionProxy  = cachedSticky.proxyUrl;
+    sessionUaIdx  = cachedSticky.uaIndex ?? Math.floor(Math.random() * USA_UA_POOL.length);
+    const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
+    console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
+  } else {
+    // Nouveau token → nouvelle identité réseau + navigateur
+    sessionProxy = await proxyPool.getProxy();
+    sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
+    console.log(`[usa] Nouveau token → nouvelle identité (UA idx ${sessionUaIdx})`);
+  }
+
+  // Activer le proxy et l'UA choisis pour TOUTE cette session
+  _sessionUa = USA_UA_POOL[sessionUaIdx];
+  console.log(`[usa] UA: ${_sessionUa.ua.match(/(?:Chrome|Edg)\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60)}`);
   setUsaSessionProxy(sessionProxy);
   if (!sessionProxy) {
-    console.warn("[usa] ⚠️ Aucun proxy résidentiel disponible — appels API via IP Railway directe");
+    console.warn("[usa] ⚠️ Aucun proxy résidentiel — appels API via IP Railway directe");
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -674,6 +711,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     });
     return "login_failed";
   }
+
+  // ── Sticky proxy/UA : injecter dans le cache si nouveau token ────────────
+  // getUsaSession() a créé une nouvelle entrée cache sans proxy ni UA.
+  // On les injecte maintenant pour que les sessions suivantes (cache hit)
+  // réutilisent exactement la même identité réseau.
+  if (!hasStickyCache) {
+    const freshEntry = tokenCache.get(cacheKeySticky);
+    if (freshEntry) {
+      freshEntry.proxyUrl = sessionProxy;
+      freshEntry.uaIndex  = sessionUaIdx;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // ── Résolution du dossier actif ────────────────────────────────────────────
   // Le portail retourne toujours l'applicationId du dossier actif de la session.
