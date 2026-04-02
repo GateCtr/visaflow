@@ -6,16 +6,21 @@ import { runHunterSession, runBotTestSession, type SessionResult } from "./navig
 import { USA_ENC_SEC_KEY } from "./usaPortal.js";
 
 // ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
+// tres_urgent : réduit à 3-5 min (au lieu de 8-12) — safe car le token JWT USA
+// est mis en cache 55 min, donc aucun login supplémentaire. Le silence radio IP
+// (2-3 min) reste le vrai plancher effectif entre deux sessions consécutives.
 const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
-  tres_urgent:  { min:  8 * 60_000, max: 12 * 60_000 },
+  tres_urgent:  { min:  3 * 60_000, max:  5 * 60_000 },
   urgent:       { min: 15 * 60_000, max: 20 * 60_000 },
   prioritaire:  { min: 25 * 60_000, max: 35 * 60_000 },
   standard:     { min: 45 * 60_000, max: 60 * 60_000 },
 };
 
 // ─── Silence Radio : IP cooldown entre deux incursions consécutives ─────────
-const SILENCE_RADIO_MIN_MS = 3 * 60_000;
-const SILENCE_RADIO_MAX_MS = 5 * 60_000;
+// Réduit à 2-3 min pour tres_urgent (était 3-5) — la session USA API dure ~2 min,
+// donc l'intervalle effectif total reste ~5-6 min (safe, pas de re-login).
+const SILENCE_RADIO_MIN_MS = 2 * 60_000;
+const SILENCE_RADIO_MAX_MS = 3 * 60_000;
 
 // ─── Polling quand aucun job n'est dû ───────────────────────────────────────
 const IDLE_POLL_MIN_MS = 60_000;
