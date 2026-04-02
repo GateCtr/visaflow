@@ -191,14 +191,6 @@ interface UsaAppointmentRequest {
   messagetext: string | null;
 }
 
-interface UsaPaymentStatus {
-  applicationId: string;
-  missionId: number;
-  pendingAppoStatus: number;
-  primaryApplicant: string;
-  cancellable: boolean;
-  messagetext: string | null;
-}
 
 export interface UsaSession {
   accessToken: string;
@@ -216,7 +208,8 @@ const REFERER_DASHBOARD  = "https://www.usvisaappt.com/visaapplicantui/home/dash
 const REFERER_REQUESTS   = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests";
 const REFERER_CREATE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment";
 
-// Headers d'un vrai navigateur Chrome 124 sur Windows — identiques à ceux capturés par DevTools.
+// Headers d'un vrai navigateur Chrome 135 sur Windows — identiques à ceux capturés par DevTools.
+// Version alignée sur browser.ts (USER_AGENTS pool, avril 2026 : Chrome 134-136).
 // IMPORTANT : ne jamais inclure de headers CORS côté requête (Access-Control-Allow-*) —
 // ce sont des headers de RÉPONSE que seul le serveur envoie, jamais le navigateur.
 const BROWSER_HEADERS: Record<string, string> = {
@@ -226,13 +219,13 @@ const BROWSER_HEADERS: Record<string, string> = {
   "Pragma":             "no-cache",
   "Origin":             "https://www.usvisaappt.com",
   "Referer":            REFERER_LOGIN,  // referer par défaut = page de login, surchargé par authHeaders()
-  "Sec-CH-UA":          '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "Sec-CH-UA":          '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
   "Sec-CH-UA-Mobile":   "?0",
   "Sec-CH-UA-Platform": '"Windows"',
   "Sec-Fetch-Dest":     "empty",
   "Sec-Fetch-Mode":     "cors",
   "Sec-Fetch-Site":     "same-origin",
-  "User-Agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "User-Agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
 };
 
 
@@ -445,7 +438,7 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
   message: string;
 }> {
   const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
-  let data: UsaPaymentStatus | null = null;
+  let data: UsaAppointmentRequest | null = null;
 
   try {
     const res = await fetch(USA_PAYMENT_STATUS_URL, { method: "GET", headers });
@@ -468,7 +461,11 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
     if (!raw || typeof raw !== "object") {
       return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Aucune demande de RDV trouvée" };
     }
-    data = raw as UsaPaymentStatus;
+    // Le portail peut renvoyer un objet unique ou un tableau à un seul élément.
+    data = (Array.isArray(raw) ? raw[0] : raw) as UsaAppointmentRequest;
+    if (!data) {
+      return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Tableau vide — aucune demande de RDV" };
+    }
   } catch (err) {
     console.error("[usa] Erreur appel appointment status:", err);
     return { status: "error", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: String(err) };
@@ -1080,6 +1077,9 @@ async function bookUsaSlot(
   const payload = {
     ...found.bookingBase,
     ...found.slot,                  // slotId + tous les champs bruts de l'API
+    // Rétablir explicitement après le spread de found.slot pour éviter qu'un champ
+    // locationType retourné par l'API getSlotTime n'écrase notre valeur "OFC".
+    locationType: "OFC" as const,
     appointmentLocationType: "OFC" as const,
     appointmentStatus: "SCHEDULED" as const,
     appointmentDt: slotDate,        // nom attendu par le portail (slotDate de l'API)
