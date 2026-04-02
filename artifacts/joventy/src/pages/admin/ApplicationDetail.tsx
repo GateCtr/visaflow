@@ -358,6 +358,8 @@ export default function AdminApplicationDetail() {
   const [hunterUsername, setHunterUsername] = useState("");
   const [hunterPassword, setHunterPassword] = useState("");
   const [hunterTwoCaptchaKey, setHunterTwoCaptchaKey] = useState("");
+  const [hunterSlotDateFrom, setHunterSlotDateFrom] = useState("");
+  const [hunterSlotDateDeadline, setHunterSlotDateDeadline] = useState("");
   const [hunterActive, setHunterActive] = useState(false);
   const [hunterSaving, setHunterSaving] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
@@ -391,17 +393,21 @@ export default function AdminApplicationDetail() {
       setAdminNoteInput(app.adminNotes ?? "");
       const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
       if (pricing) setSlotLocation(pricing.embassyAddress ?? "");
-      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string } }).hunterConfig;
+      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; slotDateFrom?: string; slotDateDeadline?: string } }).hunterConfig;
       if (hc) {
         setHunterUsername(hc.embassyUsername);
         setHunterPassword(hc.embassyPassword);
         setHunterActive(hc.isActive);
         setHunterTwoCaptchaKey(hc.twoCaptchaApiKey ?? "");
+        setHunterSlotDateFrom(hc.slotDateFrom ?? "");
+        setHunterSlotDateDeadline(hc.slotDateDeadline ?? "");
       } else {
         setHunterUsername("");
         setHunterPassword("");
         setHunterActive(false);
         setHunterTwoCaptchaKey("");
+        setHunterSlotDateFrom("");
+        setHunterSlotDateDeadline("");
       }
     }
   }, [app?._id]);
@@ -1083,7 +1089,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1251,6 +1257,41 @@ export default function AdminApplicationDetail() {
                   </div>
                 </div>
 
+                {/* Plage de dates de recherche */}
+                <div className="space-y-2 border border-blue-100 bg-blue-50 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Fenêtre de réservation</p>
+                  <p className="text-[11px] text-blue-600">
+                    Laissez vide pour prendre le premier créneau disponible. Renseignez une ou les deux dates pour limiter la recherche.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Date minimum (ne pas réserver avant)</label>
+                      <Input
+                        type="date"
+                        value={hunterSlotDateFrom}
+                        onChange={(e) => setHunterSlotDateFrom(e.target.value)}
+                        className="h-9 bg-white text-sm"
+                      />
+                      <p className="text-[10px] text-slate-400">Ex : laisser 4 semaines pour préparer les documents</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Date limite absolue (ne pas dépasser)</label>
+                      <Input
+                        type="date"
+                        value={hunterSlotDateDeadline}
+                        onChange={(e) => setHunterSlotDateDeadline(e.target.value)}
+                        className="h-9 bg-white text-sm"
+                      />
+                      <p className="text-[10px] text-slate-400">Ex : 2 semaines avant la date de voyage</p>
+                    </div>
+                  </div>
+                  {hunterSlotDateDeadline && (
+                    <p className="text-[11px] text-blue-700 font-medium pt-1">
+                      ✓ Seuls les créneaux jusqu'au <strong>{new Date(hunterSlotDateDeadline + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</strong> seront acceptés.
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -1260,7 +1301,7 @@ export default function AdminApplicationDetail() {
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hunterActive ? "translate-x-6" : "translate-x-1"}`} />
                   </button>
                   <span className="text-sm font-medium text-slate-700">
-                    {hunterActive ? "Robot actif — en recherche de créneau" : "Robot en pause"}
+                    {hunterActive ? "Surveillance active — recherche en cours" : "Surveillance en pause"}
                   </span>
                 </div>
 

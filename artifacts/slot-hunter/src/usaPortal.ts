@@ -849,7 +849,9 @@ interface SlotFound {
 async function findFirstSlotForOfc(
   session: UsaSession,
   ofc: UsaOfc,
-  appDetails: UsaAppDetails
+  appDetails: UsaAppDetails,
+  dateFrom?: string,
+  dateDeadline?: string
 ): Promise<SlotFound | null> {
   const basePayload = {
     postUserId: ofc.postUserId,
@@ -912,14 +914,38 @@ async function findFirstSlotForOfc(
 
   console.log(`[usa] 📅 Premier mois disponible pour ${ofc.postName}: ${firstMonth.date}`);
 
+  // Vérification immédiate : si le premier mois disponible dépasse la date limite, inutile de continuer
+  if (dateDeadline && firstMonth.date > dateDeadline) {
+    console.log(`[usa] ⏭ OFC ${ofc.postName} ignoré — premier mois (${firstMonth.date}) après date limite (${dateDeadline})`);
+    return null;
+  }
+
   // 2. Dates disponibles dans ce mois
   const monthStart = new Date(firstMonth.date);
   monthStart.setHours(0, 0, 0, 0);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
-  const fromDate = monthStart > tomorrow ? toYMD(monthStart) : toYMD(tomorrow);
-  const toDate = lastDayOfMonth(monthStart);
+
+  // fromDate = max(demain, début du mois, date minimum admin si définie)
+  let fromDate = monthStart > tomorrow ? toYMD(monthStart) : toYMD(tomorrow);
+  if (dateFrom && dateFrom > fromDate) {
+    console.log(`[usa] 📅 Date minimum admin appliquée : ${dateFrom} (remplace ${fromDate})`);
+    fromDate = dateFrom;
+  }
+
+  // toDate = fin du mois (plafonné à dateDeadline si définie)
+  let toDate = lastDayOfMonth(monthStart);
+  if (dateDeadline && dateDeadline < toDate) {
+    toDate = dateDeadline;
+    console.log(`[usa] 📅 Date limite admin appliquée : toDate → ${toDate}`);
+  }
+
+  // Si fromDate dépasse toDate après application des filtres, aucun créneau possible ce mois
+  if (fromDate > toDate) {
+    console.log(`[usa] Aucune date dans la fenêtre autorisée pour ${ofc.postName} (${fromDate} → ${toDate})`);
+    return null;
+  }
 
   let slotDates: UsaSlotDate[];
   try {
@@ -937,8 +963,21 @@ async function findFirstSlotForOfc(
     return null;
   }
 
+  // Filtrer les dates hors fenêtre (dateFrom et dateDeadline)
+  if (dateFrom || dateDeadline) {
+    const before = slotDates.length;
+    slotDates = slotDates.filter(d => {
+      if (dateFrom && d.date < dateFrom) return false;
+      if (dateDeadline && d.date > dateDeadline) return false;
+      return true;
+    });
+    if (slotDates.length < before) {
+      console.log(`[usa] Filtre fenêtre : ${before - slotDates.length} date(s) hors plage ignorée(s)`);
+    }
+  }
+
   if (slotDates.length === 0) {
-    console.log(`[usa] Aucune date disponible pour ${ofc.postName} entre ${fromDate} et ${toDate}`);
+    console.log(`[usa] Aucune date disponible pour ${ofc.postName} dans la fenêtre ${fromDate} → ${toDate}`);
     return null;
   }
 
@@ -1227,6 +1266,13 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     return "not_found";
   }
 
+  // Fenêtre de réservation définie par l'admin (optionnel)
+  const slotDateFrom = job.hunterConfig.slotDateFrom;
+  const slotDateDeadline = job.hunterConfig.slotDateDeadline;
+  if (slotDateFrom || slotDateDeadline) {
+    console.log(`[usa] 📅 Fenêtre admin : ${slotDateFrom ?? "illimitée"} → ${slotDateDeadline ?? "illimitée"}`);
+  }
+
   // 3. Scanner chaque OFC à la recherche d'un créneau
   for (const ofc of ofcList) {
     console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
@@ -1235,7 +1281,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
     let found: SlotFound | null;
     try {
-      found = await findFirstSlotForOfc(session, ofc, effectiveDetails);
+      found = await findFirstSlotForOfc(session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline);
     } catch (err) {
       if (err instanceof RateLimitError) {
         const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);

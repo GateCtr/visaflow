@@ -43,6 +43,11 @@ const hunterConfig = v.object({
   // Obligatoire quand un compte portail gère plusieurs personnes.
   // S'il est absent, le robot prend automatiquement le premier dossier actif.
   portalApplicationId: v.optional(v.string()),
+  // Plage de dates de recherche : ne réserver que dans cette fenêtre
+  // Format ISO "YYYY-MM-DD". slotDateFrom = date minimum (ex: dans 14 jours).
+  // slotDateDeadline = date limite absolue (ex: date de voyage - 15 jours).
+  slotDateFrom: v.optional(v.string()),
+  slotDateDeadline: v.optional(v.string()),
   lastCheckAt: v.optional(v.number()),
   checkCount: v.optional(v.number()),
   lastResult: v.optional(v.string()),

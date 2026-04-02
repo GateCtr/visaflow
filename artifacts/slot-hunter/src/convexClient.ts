@@ -39,6 +39,8 @@ export interface HunterJob {
     twoCaptchaApiKey?: string;
     scheduleUrl?: string;
     portalApplicationId?: string;
+    slotDateFrom?: string;
+    slotDateDeadline?: string;
     checkCount?: number;
     lastResult?: string;
     lastCheckAt?: number;
