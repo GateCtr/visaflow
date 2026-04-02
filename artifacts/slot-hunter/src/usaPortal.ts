@@ -97,6 +97,7 @@ function encryptPortalCredentials(username: string, password: string): string {
 interface CachedToken {
   accessToken: string;
   refreshToken: string;
+  csrfToken: string;
   expiresAt: number;
   userID: number;
   fullName: string;
@@ -160,6 +161,9 @@ async function refreshUsaToken(cached: CachedToken): Promise<CachedToken | null>
     return {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
+      // Le CSRF token ne change pas lors du refresh (le bundle n'en capture pas un nouveau
+      // dans fetchNewRefreshToken — seul l'Authorization header est sauvegardé).
+      csrfToken: cached.csrfToken,
       expiresAt,
       userID: cached.userID,
       fullName: cached.fullName,
@@ -195,6 +199,10 @@ interface UsaAppointmentRequest {
 export interface UsaSession {
   accessToken: string;
   refreshToken: string;
+  /** Token CSRF retourné dans le header "Csrftoken" de la réponse de login.
+   * L'intercepteur Angular l'injecte sous la forme CookieName: XSRF-TOKEN={csrfToken}
+   * sur TOUS les PUT (source : bundle Angular, intercepteur HTTP). */
+  csrfToken: string;
   userID: number;
   fullName: string;
   applicationId: string | null;
@@ -247,6 +255,7 @@ export async function getUsaSession(
       return {
         accessToken: cached.accessToken,
         refreshToken: cached.refreshToken,
+        csrfToken: cached.csrfToken,
         userID: cached.userID,
         fullName: cached.fullName,
         applicationId: null,
@@ -262,6 +271,7 @@ export async function getUsaSession(
       return {
         accessToken: refreshed.accessToken,
         refreshToken: refreshed.refreshToken,
+        csrfToken: refreshed.csrfToken,
         userID: refreshed.userID,
         fullName: refreshed.fullName,
         applicationId: null,
@@ -300,6 +310,7 @@ export async function getUsaSession(
     tokenCache.set(cacheKey, {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      csrfToken: session.csrfToken,
       expiresAt,
       userID: session.userID,
       fullName: session.fullName,
@@ -406,6 +417,10 @@ export async function loginUsaPortal(
 
   const accessToken = response.headers.get("authorization");
   const refreshToken = response.headers.get("refreshtoken");
+  // "Csrftoken" : header de réponse de login capturé par le bundle Angular
+  // (localStorage.setItem("CSRFTOKEN", this.csrfToken) dans le portail).
+  // Réutilisé dans le header "CookieName: XSRF-TOKEN={csrfToken}" sur tous les PUT.
+  const csrfToken = response.headers.get("csrftoken") ?? "";
 
   if (data.msg && (data.msg.toLowerCase().includes("invalid") || data.msg.toLowerCase().includes("incorrect"))) {
     console.error(`[usa] Login refusé par le portail: ${data.msg}`);
@@ -423,11 +438,12 @@ export async function loginUsaPortal(
     throw new Error("JWT manquant dans la réponse — login incomplet");
   }
 
-  console.log(`[usa] Connecté en tant que ${data.fullName} (userID: ${data.userID})`);
+  console.log(`[usa] Connecté en tant que ${data.fullName} (userID: ${data.userID}) — csrfToken: ${csrfToken ? `${csrfToken.slice(0, 8)}...` : "(absent)"}`);
 
   return {
     accessToken,
     refreshToken: refreshToken ?? "",
+    csrfToken,
     userID: data.userID,
     fullName: data.fullName,
     applicationId: null,
@@ -1110,11 +1126,16 @@ async function bookUsaSlot(
   );
 
   try {
+    // L'intercepteur Angular ajoute sur TOUS les PUT :
+    //   CookieName: XSRF-TOKEN={csrfToken}   (localStorage["CSRFTOKEN"] côté portail)
+    // Source : bundle Angular, intercepteur HTTP, clause "PUT"==v.method.
+    const bookingHeaders = {
+      ...sessionHeaders(session.accessToken, payload.applicationId, session.missionId),
+      "CookieName": `XSRF-TOKEN=${session.csrfToken}`,
+    };
     const res = await fetch(USA_SCHEDULE_URL, {
       method: "PUT",
-      // session.missionId (valeur serveur) — doit correspondre au cookie Cookie: missionId=X
-      // du navigateur Angular. Même correction que pour les autres appels sessionHeaders.
-      headers: sessionHeaders(session.accessToken, payload.applicationId, session.missionId),
+      headers: bookingHeaders,
       body: JSON.stringify(payload),
     });
 
