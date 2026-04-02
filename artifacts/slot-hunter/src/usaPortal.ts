@@ -22,8 +22,17 @@ const USA_PAYMENT_URL = `${USA_BASE}/visapaymentapi/v1`;
 const USA_WORKFLOW_URL = `${USA_BASE}/visaworkflowprocessor`;
 const USA_INTEGRATION_URL = `${USA_BASE}/visaintegrationapi`; // sanity check
 
-const USA_OFC_LIST_URL = (missionId: number) =>
-  `${USA_ADMIN_URL}/ofcuser/ofclist/${missionId}`;
+// Bundle Angular (booking flow) : slotBookingService.getFilteredOfcPostList(De)
+//   → GET visaAdminUrl + "/lookupcdt/wizard/getpost" avec params :
+//     { visaCategory?, visaClass?, stateCode?, priority?, missionId }
+// Différent de getOfcListByMissionId (admin only) → GET /ofcuser/ofclist/{missionId}
+const USA_OFC_LIST_URL = (missionId: number, visaClass?: string, visaCategory?: string): string => {
+  const params = new URLSearchParams();
+  if (visaCategory) params.append("visaCategory", visaCategory);
+  if (visaClass && visaClass !== "nil") params.append("visaClass", visaClass);
+  params.append("missionId", String(missionId));
+  return `${USA_ADMIN_URL}/lookupcdt/wizard/getpost?${params.toString()}`;
+};
 const USA_FIRST_AVAILABLE_MONTH_URL = `${USA_ADMIN_URL}/modifyslot/getFirstAvailableMonth`;
 const USA_SLOT_DATES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotDates`;
 const USA_SLOT_TIMES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotTime`;
@@ -115,6 +124,10 @@ interface CachedToken {
    * Évite un pattern de login prédictible à intervalle fixe de ~55 min.
    * Calculé une fois au login — conservé lors des refreshs pour une dispersion cohérente. */
   jitterMs: number;
+  /** OFCs autorisés pour ce compte — extrait de loggedInApplicantUser.ofc au login.
+   * Bundle : S?.length>0 && (ofcList = ofcList.filter(B => S.some(se => se.postUserId===B.postUserId)))
+   * Vide (non filtré) si le compte n'a pas de restriction d'OFC. */
+  allowedOfcs?: Array<{ postUserId: number }>;
 }
 
 const tokenCache = new Map<string, CachedToken>();
@@ -214,6 +227,12 @@ interface UsaLoginResponse {
   mfa?: number | boolean;
   /** Premier login forcé à changer le mot de passe — le bot ne gère pas ce cas. */
   firstTimeLogin?: boolean;
+  /** OFCs autorisés pour ce compte.
+   * Bundle : localStorage.setItem("loggedInApplicantUser", JSON.stringify(F.body))
+   * Puis : S = JSON.parse(loggedInApplicantUser).ofc
+   *        ofcList = ofcList.filter(B => S.some(se => se.postUserId === B.postUserId))
+   * Si absent/vide : aucun filtre appliqué (compte sans restriction d'OFC). */
+  ofc?: Array<{ postUserId: number }>;
 }
 
 interface UsaAppointmentRequest {
@@ -265,6 +284,11 @@ export interface UsaSession {
   /** applicantUUID interne — requis dans le payload de booking.
    * Bundle Angular : this.selectedSlotDetails.applicantUUID */
   applicantUUID?: number;
+  /** OFCs autorisés pour ce compte — propagé depuis la réponse de login (data.ofc).
+   * Bundle : S = JSON.parse(loggedInApplicantUser).ofc
+   * Si non vide, seuls les OFCs dont postUserId figure dans cette liste sont scannés.
+   * Vide ou absent = aucune restriction (compte sans filtre OFC). */
+  allowedOfcs?: Array<{ postUserId: number }>;
 }
 
 // Referers spécifiques à chaque étape de navigation du portail Angular.
@@ -390,6 +414,7 @@ export async function getUsaSession(
         applicationId: null,
         pendingAppoStatus: null,
         missionId: USA_MISSION_ID,
+        allowedOfcs: cached.allowedOfcs ?? [],
       };
     }
 
@@ -406,6 +431,8 @@ export async function getUsaSession(
         applicationId: null,
         pendingAppoStatus: null,
         missionId: USA_MISSION_ID,
+        // Préserver les OFCs autorisés depuis le token précédent — le refresh ne recrée pas la session
+        allowedOfcs: cached.allowedOfcs ?? [],
       };
     }
     console.log("[usa] Refresh échoué — reconnexion complète");
@@ -447,6 +474,7 @@ export async function getUsaSession(
       refreshToken: session.refreshToken,
       csrfToken: session.csrfToken,
       expiresAt,
+      allowedOfcs: session.allowedOfcs ?? [],
       userID: session.userID,
       fullName: session.fullName,
       jitterMs,
@@ -595,6 +623,14 @@ export async function loginUsaPortal(
 
   console.log(`[usa] Connecté en tant que ${data.fullName} (userID: ${data.userID}) — csrfToken: ${csrfToken ? `${csrfToken.slice(0, 8)}...` : "(absent)"}`);
 
+  // Bundle : localStorage.setItem("loggedInApplicantUser", JSON.stringify(F.body))
+  // Les OFCs autorisés pour ce compte sont dans F.body.ofc (tableau de {postUserId}).
+  // Utilisés après getFilteredOfcPostList pour filtrer la liste des OFCs disponibles.
+  const allowedOfcs: Array<{ postUserId: number }> = Array.isArray(data.ofc) ? data.ofc : [];
+  if (allowedOfcs.length > 0) {
+    console.log(`[usa] OFCs autorisés pour ${data.fullName}: ${allowedOfcs.map(o => o.postUserId).join(", ")}`);
+  }
+
   return {
     accessToken,
     refreshToken: refreshToken ?? "",
@@ -604,6 +640,7 @@ export async function loginUsaPortal(
     applicationId: null,
     pendingAppoStatus: null,
     missionId: USA_MISSION_ID,
+    allowedOfcs,
   };
 }
 
@@ -1109,16 +1146,29 @@ async function getUsaApplicationDetails(
 }
 
 /**
- * Récupère la liste des OFCs autorisés pour une mission.
- * GET /visaadministrationapi/v1/ofcuser/ofclist/{missionId}
+ * Récupère la liste des OFCs disponibles pour une mission, filtrée par visa et OFCs autorisés.
+ *
+ * Bundle Angular (booking flow) :
+ *   slotBookingService.getFilteredOfcPostList(De)
+ *   → GET /lookupcdt/wizard/getpost?visaClass=...&missionId=...
+ *   1. Filtre par officeType === "OFC" (ofcOrPost)
+ *   2. Filtre par loggedInApplicantUser.ofc (si non vide)
+ *
+ * Différent de getOfcListByMissionId (admin) → GET /ofcuser/ofclist/{missionId}
  */
-async function getUsaOfcList(session: UsaSession, missionId: number): Promise<UsaOfc[]> {
+async function getUsaOfcList(
+  session: UsaSession,
+  missionId: number,
+  visaClass?: string,
+  visaCategory?: string,
+): Promise<UsaOfc[]> {
+  const url = USA_OFC_LIST_URL(missionId, visaClass, visaCategory);
   // GET — pas de Content-Type; les cookies applicationId+missionId doivent être présents
   const hdrs = session.applicationId
     ? sessionHeaders(session.accessToken, session.applicationId, missionId, REFERER_CREATE_APT, false)
     : authHeaders(session.accessToken, REFERER_CREATE_APT, false);
   try {
-    const res = await usaFetch(USA_OFC_LIST_URL(missionId), { headers: hdrs });
+    const res = await usaFetch(url, { headers: hdrs });
     if (res.status === 429) {
       const retryAfter = parseInt(res.headers.get("retry-after") ?? "60", 10);
       throw new RateLimitError("getOfcList", retryAfter * 1000);
@@ -1135,8 +1185,22 @@ async function getUsaOfcList(session: UsaSession, missionId: number): Promise<Us
     }
     const data = await res.json();
     const list = Array.isArray(data) ? data as UsaOfc[] : [];
-    console.log(`[usa] OFCs disponibles (mission ${missionId}): ${list.map(o => o.postName).join(", ") || "aucun"}`);
-    return list.filter(o => o.officeType === "OFC");
+
+    // Étape 1 : filtre par officeType — bundle: je.filter(B => B.officeType === this.ofcOrPost)
+    let filtered = list.filter(o => o.officeType === "OFC");
+
+    // Étape 2 : filtre par OFCs autorisés (loggedInApplicantUser.ofc)
+    // Bundle : S?.length>0 && (ofcList = ofcList.filter(B => S.some(se => se.postUserId===B.postUserId)))
+    const allowed = session.allowedOfcs ?? [];
+    if (allowed.length > 0) {
+      const allowedIds = new Set(allowed.map(o => o.postUserId));
+      const before = filtered.length;
+      filtered = filtered.filter(o => allowedIds.has(o.postUserId));
+      console.log(`[usa] Filtre OFCs autorisés du compte: ${before} → ${filtered.length} OFC(s)`);
+    }
+
+    console.log(`[usa] OFCs (mission ${missionId}${visaClass ? `, visaClass=${visaClass}` : ""}): ${filtered.map(o => o.postName).join(", ") || "aucun"}`);
+    return filtered;
   } catch (err) {
     // Re-lancer les erreurs circuit-breaker — elles doivent remonter jusqu'à scanUsaSlotsViaAPI.
     // Les avaler ici ferait continuer le scan silencieusement avec une liste vide, sans heartbeat.
@@ -1725,9 +1789,16 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
 
   // 2. Récupérer la liste des OFCs pour la mission
+  // Bundle : getFilteredOfcPostList({visaClass, missionId, ...}) → /lookupcdt/wizard/getpost
+  // visaClass et visaCategory passés comme params query pour pré-filtrer les OFCs par type de visa.
   let ofcList: UsaOfc[];
   try {
-    ofcList = await getUsaOfcList(session, session.missionId);
+    ofcList = await getUsaOfcList(
+      session,
+      session.missionId,
+      effectiveDetails.visaClass,
+      effectiveDetails.visaType,
+    );
   } catch (err) {
     if (err instanceof RateLimitError) {
       await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getOfcList` });

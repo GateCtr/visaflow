@@ -371,14 +371,14 @@ npx tsx bundle-analysis/compare.ts
 
 ### Warnings en cours (non-bloquants)
 
-| # | Endpoint | Warning | Action |
+| # | Endpoint | Warning | Statut |
 |---|---------|---------|--------|
-| W1 | login | 4 headers CORS non-standard non envoyés (serveur les ignore) | Ajouter si fingerprint problème |
-| W2 | login | `sessionStorage.clear()` vs tokenCache en mémoire | Comportement équivalent — aucune action |
-| W3 | paymentStatus | `appointmentId`/`applicantUUID` sourced depuis `getApplicationDetails` (confirmé) | ✅ Correct |
-| W4 | ofcList | Endpoint `/ofcuser/ofclist` vs `/lookupcdt/wizard/getpost` en booking | À investiguer si 0 créneaux retournés |
-| W5 | ofcList | `officeType === "OFC"` filtre implémenté | ✅ OK |
-| W6 | ofcList | Filtre OFCs autorisés par le compte (`loggedInApplicantUser.ofc`) | À implémenter si 403 sur OFCs non autorisés |
+| W1 | login | 4 headers CORS non-standard non envoyés (serveur les ignore) | 🔍 Risque faible — à ajouter si fingerprint détecté |
+| W2 | login | `sessionStorage.clear()` vs tokenCache en mémoire | ✅ Comportement équivalent — aucune action |
+| W3 | paymentStatus | `appointmentId`/`applicantUUID` confirmés depuis `getApplicationDetails` | ✅ Correct par design |
+| W4 | ofcList | Endpoint `/ofcuser/ofclist` vs `/lookupcdt/wizard/getpost` en booking | ✅ **CORRIGÉ** (2026-04-02) — bot utilise maintenant `/lookupcdt/wizard/getpost?visaClass=&missionId=` |
+| W5 | ofcList | `officeType === "OFC"` filtre | ✅ Implémenté |
+| W6 | ofcList | Filtre OFCs autorisés du compte (`loggedInApplicantUser.ofc`) | ✅ **CORRIGÉ** (2026-04-02) — `data.ofc` extrait au login → `session.allowedOfcs` → filtre appliqué dans `getUsaOfcList` |
 
 ### Sections couvertes par l'analyse
 

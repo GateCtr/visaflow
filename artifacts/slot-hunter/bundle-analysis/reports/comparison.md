@@ -2,14 +2,14 @@
 
 **Date :** 2026-04-02
 **Bundle :** `main.dc91e3f7b5f67caa.js`
-**Bot :** `usaPortal.ts` (1893 lignes)
+**Bot :** `usaPortal.ts` (1964 lignes)
 
 ## Résumé global
 
 | Statut | Nombre | Description |
 |--------|--------|-------------|
-| ✅ Conforme | 48 | Comportement identique au bundle |
-| ⚠️ Différence mineure | 6 | Écart non-critique mais à surveiller |
+| ✅ Conforme | 53 | Comportement identique au bundle |
+| ⚠️ Différence mineure | 3 | Écart non-critique mais à surveiller |
 | ❌ Divergence critique | 0 | Peut causer un 4xx/5xx ou un comportement incorrect |
 | ❓ Non vérifié | 0 | Contexte insuffisant pour confirmer |
 
@@ -23,7 +23,7 @@
 | 02 | 🟢 httpInterceptor | `ALL` | 5 | 0 | 0 | 0 |
 | 03 | 🟡 paymentStatus | `GET` | 4 | 1 | 0 | 0 |
 | 04 | 🟢 getApplicationDetails | `GET` | 6 | 0 | 0 | 0 |
-| 05 | 🟡 ofcList | `GET` | 1 | 3 | 0 | 0 |
+| 05 | 🟢 ofcList | `GET` | 6 | 0 | 0 | 0 |
 | 06 | 🟢 getFirstAvailableMonth | `POST` | 3 | 0 | 0 | 0 |
 | 07 | 🟢 getSlotDates | `POST` | 2 | 0 | 0 | 0 |
 | 08 | 🟢 getSlotTime | `POST` | 5 | 0 | 0 | 0 |
@@ -95,16 +95,18 @@
 
 ---
 
-## [05] 🟡 ofcList
+## [05] 🟢 ofcList
 
-**Méthode :** `GET`  **URL :** `/ofcuser/ofclist/{missionId} ou /lookupcdt/wizard/getpost`
+**Méthode :** `GET`  **URL :** `/lookupcdt/wizard/getpost?visaClass=...&missionId=...`
 
 | Point de vérification | Statut | Bundle Angular | Bot actuel | Note |
 |-----------------------|--------|---------------|------------|------|
-| Endpoint OFC List (booking flow vs admin list) | ⚠️ | Booking: `getFilteredOfcPostList()` → `/lookupcdt/wizard/getpost?params` Admin: … | `/ofcuser/ofclist/{missionId}` | Le portail Angular utilise /lookupcdt/wizard/getpost pour le… |
-| Filtre `officeType === "OFC"` sur la liste | ✅ | `je.filter(B => B.officeType === this.ofcOrPost)` (ofcOrPost="OFC") | `list.filter(o => o.officeType === "OFC")` | Filtre correct — évite de scanner les POST locations |
-| Champs réponse — `postUserId`, `ofcName`, `officeType` | ⚠️ | `De.postUserId` (value), `De.ofcName` (display), `B.officeType` (filter) | `postUserId`, `postName` (différent de `ofcName` !) — peut être correct pour /of… | Le nom du champ varie selon l'endpoint : `ofcName` pour /loo… |
-| Filtre OFCs autorisés par le compte (`loggedInApplicantUser.ofc`) | ⚠️ | `S = JSON.parse(loggedInApplicantUser).ofc; ofcList.filter(B => S.some(se => se.… | Non implémenté — le bot scan tous les OFCs disponibles | Si le compte est restreint à certains OFCs, le bot pourrait … |
+| Endpoint booking flow — `/lookupcdt/wizard/getpost?visaClass=...&missionId=...` | ✅ | `slotBookingService.getFilteredOfcPostList(De)` → GET `/lookupcdt/wizard/getpost… | `USA_OFC_LIST_URL(missionId, visaClass, visaCategory)` → `/lookupcdt/wizard/getp… | W4 CORRIGÉ — endpoint booking flow unifié avec le bundle Ang… |
+| Params query — `visaClass` et `missionId` envoyés dans l'URL | ✅ | `De.append('visaClass', visaClasskey)` + `De.append('missionId', parseInt(missio… | `URLSearchParams` avec visaClass + missionId | Pré-filtre serveur par type de visa — réduit les résultats n… |
+| Params transmis depuis `effectiveDetails` au call site `getUsaOfcList(...)` | ✅ | `selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory` | `effectiveDetails.visaClass, effectiveDetails.visaType` passés à getUsaOfcList | Résultat de getApplicationDetails propagé correctement |
+| Filtre `officeType === "OFC"` (Étape 1) | ✅ | `je.filter(B => B.officeType === this.ofcOrPost)` (ofcOrPost="OFC") | `list.filter(o => o.officeType === "OFC")` | Filtre correct — évite de scanner les POST locations |
+| Filtre OFCs autorisés du compte — `loggedInApplicantUser.ofc` (Étape 2) | ✅ | `S = JSON.parse(loggedInApplicantUser).ofc` → `ofcList.filter(B => S.some(se => … | `data.ofc` extrait au login → `session.allowedOfcs` → `filtered.filter(o => allo… | W6 CORRIGÉ — filtre appliqué si le compte a des OFCs restrei… |
+| Persistance `allowedOfcs` dans le cache token (CachedToken) | ✅ | `loggedInApplicantUser` stocké dans localStorage (persist entre pages Angular) | `allowedOfcs` stocké dans CachedToken + restauré sur cache hit et refresh | Évite de rescanner tous les OFCs à chaque refresh de token |
 
 ---
 

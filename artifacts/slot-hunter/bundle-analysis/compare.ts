@@ -492,53 +492,80 @@ function addComparison(comp: EndpointComparison): void {
     id: "05",
     name: "ofcList",
     method: "GET",
-    url: "/ofcuser/ofclist/{missionId} ou /lookupcdt/wizard/getpost",
+    url: "/lookupcdt/wizard/getpost?visaClass=...&missionId=...",
     checks: [],
     critical: 0, warnings: 0, ok: 0, unknown: 0,
   };
 
-  // 5.1 Endpoint utilisé
+  // 5.1 Endpoint utilisé — CORRIGÉ : bot utilise maintenant /lookupcdt/wizard/getpost (W4)
   const bundleFilteredOfc = findInBundle("lookupcdt/wizard/getpost");
-  const bundleOfcList = findInBundle("ofcuser/ofclist/");
-  const botOfcUrl = findInBot("ofcuser/ofclist");
+  const botLookupcdt = findInBot("lookupcdt/wizard/getpost");
   comp.checks.push({
-    point: "Endpoint OFC List (booking flow vs admin list)",
-    status: "⚠️",
-    bundleValue: "Booking: `getFilteredOfcPostList()` → `/lookupcdt/wizard/getpost?params`\nAdmin: `getOfcListByMissionId()` → `/ofcuser/ofclist/{missionId}`",
-    botValue: botOfcUrl ? "`/ofcuser/ofclist/{missionId}`" : "(non trouvé)",
-    note: "Le portail Angular utilise /lookupcdt/wizard/getpost pour le booking (avec filtre officeType). Bot utilise /ofcuser/ofclist/{missionId}. Différence potentielle si les réponses ont des structures différentes.",
+    point: "Endpoint booking flow — `/lookupcdt/wizard/getpost?visaClass=...&missionId=...`",
+    status: bundleFilteredOfc && botLookupcdt ? "✅" : "❌",
+    bundleValue: "`slotBookingService.getFilteredOfcPostList(De)` → GET `/lookupcdt/wizard/getpost`",
+    botValue: botLookupcdt ? '`USA_OFC_LIST_URL(missionId, visaClass, visaCategory)` → `/lookupcdt/wizard/getpost?visaClass=...&missionId=...`' : "(utilise encore /ofcuser/ofclist — ❌)",
+    note: "W4 CORRIGÉ — endpoint booking flow unifié avec le bundle Angular",
   });
 
-  // 5.2 Filtre officeType === "OFC"
+  // 5.2 Params query — visaClass + missionId
+  const botVisaClassParam = findInBot("params.append(\"visaClass\"");
+  const botMissionIdParam = findInBot("params.append(\"missionId\"");
+  comp.checks.push({
+    point: "Params query — `visaClass` et `missionId` envoyés dans l'URL",
+    status: botVisaClassParam && botMissionIdParam ? "✅" : "❌",
+    bundleValue: "`De.append('visaClass', visaClasskey)` + `De.append('missionId', parseInt(missionId))`",
+    botValue: botVisaClassParam && botMissionIdParam
+      ? "`URLSearchParams` avec visaClass + missionId"
+      : "(params absents)",
+    note: "Pré-filtre serveur par type de visa — réduit les résultats non pertinents",
+  });
+
+  // 5.3 visaClass et visaCategory passés depuis effectiveDetails au call site
+  const botCallSite = findInBot("effectiveDetails.visaClass");
+  comp.checks.push({
+    point: "Params transmis depuis `effectiveDetails` au call site `getUsaOfcList(...)`",
+    status: botCallSite ? "✅" : "❌",
+    bundleValue: "`selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory`",
+    botValue: botCallSite ? "`effectiveDetails.visaClass, effectiveDetails.visaType` passés à getUsaOfcList" : "(non transmis — params undefined)",
+    note: "Résultat de getApplicationDetails propagé correctement",
+  });
+
+  // 5.4 Filtre officeType === "OFC"
   const bundleOfcFilter = findInBundle('B.officeType===this.ofcOrPost');
   const botOfcFilter = findInBot('officeType === "OFC"');
   comp.checks.push({
-    point: "Filtre `officeType === \"OFC\"` sur la liste",
+    point: "Filtre `officeType === \"OFC\"` (Étape 1)",
     status: bundleOfcFilter && botOfcFilter ? "✅" : "⚠️",
     bundleValue: '`je.filter(B => B.officeType === this.ofcOrPost)` (ofcOrPost="OFC")',
     botValue: botOfcFilter ? '`list.filter(o => o.officeType === "OFC")`' : "(absent)",
     note: "Filtre correct — évite de scanner les POST locations",
   });
 
-  // 5.3 Champs réponse (postUserId, ofcName, officeType)
-  const bundleOfcFields = findInBundle("De.postUserId");
-  const botPostName = findInBot("postName");
+  // 5.5 Filtre des OFCs autorisés par le compte — CORRIGÉ (W6)
+  const bundleOfcUser = findInBundle('JSON.parse(z).ofc');
+  const botAllowedOfcs = findInBot("allowedOfcs");
+  const botAllowedFilter = findInBot("allowedIds.has(o.postUserId)");
   comp.checks.push({
-    point: "Champs réponse — `postUserId`, `ofcName`, `officeType`",
-    status: "⚠️",
-    bundleValue: "`De.postUserId` (value), `De.ofcName` (display), `B.officeType` (filter)",
-    botValue: botPostName ? '`postUserId`, `postName` (différent de `ofcName` !) — peut être correct pour /ofcuser/ofclist' : "(non trouvé)",
-    note: "Le nom du champ varie selon l'endpoint : `ofcName` pour /lookupcdt, `postName` pour /ofcuser. Vérifier quelle réponse retourne quoi.",
+    point: "Filtre OFCs autorisés du compte — `loggedInApplicantUser.ofc` (Étape 2)",
+    status: bundleOfcUser && botAllowedOfcs && botAllowedFilter ? "✅" : "❌",
+    bundleValue: '`S = JSON.parse(loggedInApplicantUser).ofc` → `ofcList.filter(B => S.some(se => se.postUserId===B.postUserId))`',
+    botValue: botAllowedOfcs && botAllowedFilter
+      ? '`data.ofc` extrait au login → `session.allowedOfcs` → `filtered.filter(o => allowedIds.has(o.postUserId))`'
+      : "(non implémenté — scanne tous les OFCs sans restriction)",
+    note: "W6 CORRIGÉ — filtre appliqué si le compte a des OFCs restreints (S.length > 0)",
   });
 
-  // 5.4 Filtre des OFCs autorisés par le compte (loggedInApplicantUser.ofc)
-  const bundleOfcUser = findInBundle('JSON.parse(z).ofc');
+  // 5.6 Propagation allowedOfcs dans CachedToken (persist entre sessions)
+  const botCacheAllowedOfcs = findInBot("allowedOfcs: session.allowedOfcs");
   comp.checks.push({
-    point: "Filtre OFCs autorisés par le compte (`loggedInApplicantUser.ofc`)",
-    status: "⚠️",
-    bundleValue: '`S = JSON.parse(loggedInApplicantUser).ofc; ofcList.filter(B => S.some(se => se.postUserId === B.postUserId))`',
-    botValue: "Non implémenté — le bot scan tous les OFCs disponibles",
-    note: "Si le compte est restreint à certains OFCs, le bot pourrait tenter de réserver sur un OFC non autorisé",
+    point: "Persistance `allowedOfcs` dans le cache token (CachedToken)",
+    status: botCacheAllowedOfcs ? "✅" : "⚠️",
+    bundleValue: "`loggedInApplicantUser` stocké dans localStorage (persist entre pages Angular)",
+    botValue: botCacheAllowedOfcs
+      ? "`allowedOfcs` stocké dans CachedToken + restauré sur cache hit et refresh"
+      : "(non persisté — relogin requis pour restaurer les OFCs)",
+    note: "Évite de rescanner tous les OFCs à chaque refresh de token",
   });
 
   addComparison(comp);

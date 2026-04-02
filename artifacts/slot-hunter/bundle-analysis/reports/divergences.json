@@ -2,8 +2,8 @@
   "generatedAt": "2026-04-02",
   "totalSections": 10,
   "totalCritical": 0,
-  "totalWarnings": 6,
-  "totalOk": 48,
+  "totalWarnings": 3,
+  "totalOk": 53,
   "totalUnknown": 0,
   "divergences": [
     {
@@ -40,35 +40,6 @@
           "bundleValue": "Non confirmés dans getUserHistoryApplicantPaymentStatus (viennent de getApplicationDetails)",
           "botValue": "Extraits avec fallback undefined si absents",
           "note": "CRITIQUE : la source principale de ces champs est getApplicationDetails (section 06), pas celle-ci"
-        }
-      ]
-    },
-    {
-      "id": "05",
-      "name": "ofcList",
-      "critical": 0,
-      "warnings": 3,
-      "checks": [
-        {
-          "point": "Endpoint OFC List (booking flow vs admin list)",
-          "status": "⚠️",
-          "bundleValue": "Booking: `getFilteredOfcPostList()` → `/lookupcdt/wizard/getpost?params`\nAdmin: `getOfcListByMissionId()` → `/ofcuser/ofclist/{missionId}`",
-          "botValue": "`/ofcuser/ofclist/{missionId}`",
-          "note": "Le portail Angular utilise /lookupcdt/wizard/getpost pour le booking (avec filtre officeType). Bot utilise /ofcuser/ofclist/{missionId}. Différence potentielle si les réponses ont des structures différentes."
-        },
-        {
-          "point": "Champs réponse — `postUserId`, `ofcName`, `officeType`",
-          "status": "⚠️",
-          "bundleValue": "`De.postUserId` (value), `De.ofcName` (display), `B.officeType` (filter)",
-          "botValue": "`postUserId`, `postName` (différent de `ofcName` !) — peut être correct pour /ofcuser/ofclist",
-          "note": "Le nom du champ varie selon l'endpoint : `ofcName` pour /lookupcdt, `postName` pour /ofcuser. Vérifier quelle réponse retourne quoi."
-        },
-        {
-          "point": "Filtre OFCs autorisés par le compte (`loggedInApplicantUser.ofc`)",
-          "status": "⚠️",
-          "bundleValue": "`S = JSON.parse(loggedInApplicantUser).ofc; ofcList.filter(B => S.some(se => se.postUserId === B.postUserId))`",
-          "botValue": "Non implémenté — le bot scan tous les OFCs disponibles",
-          "note": "Si le compte est restreint à certains OFCs, le bot pourrait tenter de réserver sur un OFC non autorisé"
         }
       ]
     }
