@@ -6,9 +6,8 @@ import { runHunterSession, runBotTestSession, type SessionResult } from "./navig
 import { USA_ENC_SEC_KEY } from "./usaPortal.js";
 
 // ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
-// tres_urgent : réduit à 3-5 min (au lieu de 8-12) — safe car le token JWT USA
-// est mis en cache 55 min, donc aucun login supplémentaire. Le silence radio IP
-// (2-3 min) reste le vrai plancher effectif entre deux sessions consécutives.
+// tres_urgent : 3-5 min hors rush, 1-2 min pendant les rush hours.
+// Safe car le token JWT USA est en cache 55 min → aucun re-login supplémentaire.
 const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
   tres_urgent:  { min:  3 * 60_000, max:  5 * 60_000 },
   urgent:       { min: 15 * 60_000, max: 20 * 60_000 },
@@ -16,9 +15,34 @@ const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
   standard:     { min: 45 * 60_000, max: 60 * 60_000 },
 };
 
+// ─── Rush Hours : fenêtres de sortie de créneaux — consulat USA Kinshasa ────
+// Heure locale Kinshasa = UTC+1. Estimations basées sur les patterns observés :
+//   00h00-02h00 → maintenance système / libération nocturne
+//   07h00-09h00 → ouverture de journée
+//   12h00-14h00 → pause déjeuner (annulations traitées)
+// Pendant ces fenêtres, tres_urgent passe à 1-2 min (toujours safe, token en cache).
+const RUSH_WINDOWS: { start: number; end: number }[] = [
+  { start:  0, end:  2 },
+  { start:  7, end:  9 },
+  { start: 12, end: 14 },
+];
+const RUSH_INTERVAL_MIN_MS =      60_000; // 1 min
+const RUSH_INTERVAL_MAX_MS =  2 * 60_000; // 2 min
+const RUSH_SILENCE_MIN_MS   =      45_000; // 45 s
+const RUSH_SILENCE_MAX_MS   =      90_000; // 90 s
+
+// Kinshasa = UTC+1
+function getKinshasaHour(): number {
+  return (new Date().getUTCHours() + 1) % 24;
+}
+
+function isRushHour(): boolean {
+  const h = getKinshasaHour();
+  return RUSH_WINDOWS.some(({ start, end }) => h >= start && h < end);
+}
+
 // ─── Silence Radio : IP cooldown entre deux incursions consécutives ─────────
-// Réduit à 2-3 min pour tres_urgent (était 3-5) — la session USA API dure ~2 min,
-// donc l'intervalle effectif total reste ~5-6 min (safe, pas de re-login).
+// Normal : 2-3 min. Rush hours : 45-90 s (session USA API ~2 min → cycle total ~3 min).
 const SILENCE_RADIO_MIN_MS = 2 * 60_000;
 const SILENCE_RADIO_MAX_MS = 3 * 60_000;
 
@@ -64,17 +88,38 @@ const scheduledNextDue = new Map<string, number>();
 /**
  * Génère un intervalle aléatoire pour un tier, en évitant de répéter
  * une valeur trop proche de la dernière utilisée pour ce tier.
+ * Pour tres_urgent pendant une rush hour : utilise RUSH_INTERVAL (1-2 min).
  * À appeler UNE SEULE FOIS par cycle (dans handleResult), pas dans getNextCheckDue.
  */
 const lastIntervalUsed = new Map<string, number>();
+let lastRushState: boolean | null = null; // pour logger les transitions rush ↔ normal
+
 function generateIntervalMs(urgencyTier: string): number {
-  const cfg = URGENCY_INTERVAL[urgencyTier] ?? URGENCY_INTERVAL.standard;
+  const rush = urgencyTier === "tres_urgent" && isRushHour();
+
+  // Logger les transitions rush ↔ normal
+  if (rush !== lastRushState) {
+    lastRushState = rush;
+    if (rush) {
+      const h = getKinshasaHour();
+      log("INFO", `⚡ RUSH HOUR activé (${h}h00 Kinshasa) — intervalle tres_urgent → 1-2 min`);
+    } else {
+      log("INFO", "📻 RUSH HOUR terminé — retour intervalle normal tres_urgent (3-5 min)");
+    }
+  }
+
+  const cfg = rush
+    ? { min: RUSH_INTERVAL_MIN_MS, max: RUSH_INTERVAL_MAX_MS }
+    : (URGENCY_INTERVAL[urgencyTier] ?? URGENCY_INTERVAL.standard);
+
   const last = lastIntervalUsed.get(urgencyTier);
+  // Anti-répétition : écart minimal 30s en rush, 90s en normal
+  const minGap = rush ? 30_000 : 90_000;
   let interval = cfg.min + Math.random() * (cfg.max - cfg.min);
 
   if (last !== undefined) {
     let attempts = 0;
-    while (Math.abs(interval - last) < 90_000 && attempts < 6) {
+    while (Math.abs(interval - last) < minGap && attempts < 6) {
       interval = cfg.min + Math.random() * (cfg.max - cfg.min);
       attempts++;
     }
@@ -85,6 +130,9 @@ function generateIntervalMs(urgencyTier: string): number {
 }
 
 function getSilenceRadioMs(): number {
+  if (isRushHour()) {
+    return Math.round(RUSH_SILENCE_MIN_MS + Math.random() * (RUSH_SILENCE_MAX_MS - RUSH_SILENCE_MIN_MS));
+  }
   return Math.round(SILENCE_RADIO_MIN_MS + Math.random() * (SILENCE_RADIO_MAX_MS - SILENCE_RADIO_MIN_MS));
 }
 
@@ -344,8 +392,9 @@ async function main(): Promise<void> {
   log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
   log("INFO", `Proxy: ${process.env.PROXY_URL ? "configuré" : "aucun"}`);
-  log("INFO", "Intervalles tier — très_urgent:8-12m  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
-  log("INFO", `Silence radio inter-clients: ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)}`);
+  log("INFO", "Intervalles tier — tres_urgent:3-5m (rush:1-2m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
+  log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
+  log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
   if (!convexUrl || !hunterKey) {
