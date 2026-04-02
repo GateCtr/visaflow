@@ -1064,6 +1064,10 @@ export default function AdminApplicationDetail() {
             try {
               const result = await checkCaptchaBalance({ applicationId: appId });
               setCaptchaBalance(result.balance);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((result as any).keySource === "global") {
+                console.info("[2captcha] Solde vérifié via clé globale Railway (TWOCAPTCHA_API_KEY)");
+              }
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur inconnue";
               setCaptchaBalanceError(msg);
@@ -1206,7 +1210,7 @@ export default function AdminApplicationDetail() {
                       </div>
                       <button
                         type="button"
-                        disabled={captchaBalanceChecking || !hunterTwoCaptchaKey.trim()}
+                        disabled={captchaBalanceChecking}
                         onClick={handleCheckCaptchaBalance}
                         className="shrink-0 h-10 px-3 text-xs font-medium rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
                       >

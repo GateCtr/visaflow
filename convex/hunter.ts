@@ -217,19 +217,22 @@ export const checkTwoCaptchaBalance = action({
     });
 
     if (!app) throw new Error("Dossier introuvable");
-    if (!app.twoCaptchaApiKey) throw new Error("Aucune clé 2captcha configurée pour ce dossier");
+
+    // Priorité : clé par dossier → clé globale Railway (TWOCAPTCHA_API_KEY)
+    const apiKey = app.twoCaptchaApiKey ?? process.env.TWOCAPTCHA_API_KEY ?? null;
+    if (!apiKey) throw new Error("Aucune clé 2captcha configurée (ni par dossier, ni en variable Railway)");
 
     const res = await fetch(
-      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(app.twoCaptchaApiKey)}`
+      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(apiKey)}`
     );
     const text = (await res.text()).trim();
     const balance = parseFloat(text);
 
     if (isNaN(balance)) {
-      throw new Error(`Réponse 2captcha inattendue: ${text}`);
+      throw new Error(`Réponse 2captcha: ${text}`);
     }
 
-    return { balance, checkedAt: Date.now() };
+    return { balance, checkedAt: Date.now(), keySource: app.twoCaptchaApiKey ? "dossier" : "global" };
   },
 });
 
