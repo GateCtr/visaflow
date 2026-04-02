@@ -376,9 +376,10 @@ npx tsx bundle-analysis/compare.ts
 | W1 | login | 4 headers CORS non-standard non envoyés (serveur les ignore) | 🔍 Risque faible — à ajouter si fingerprint détecté |
 | W2 | login | `sessionStorage.clear()` vs tokenCache en mémoire | ✅ Comportement équivalent — aucune action |
 | W3 | paymentStatus | `appointmentId`/`applicantUUID` confirmés depuis `getApplicationDetails` | ✅ Correct par design |
-| W4 | ofcList | Endpoint `/ofcuser/ofclist` vs `/lookupcdt/wizard/getpost` en booking | ✅ **CORRIGÉ** (2026-04-02) — bot utilise maintenant `/lookupcdt/wizard/getpost?visaClass=&missionId=` |
+| W4 | ofcList | Endpoint `/ofcuser/ofclist` vs `/lookupcdt/wizard/getpost` en booking | ✅ **CORRIGÉ** (2026-04-02) — bot utilise `/lookupcdt/wizard/getpost?visaCategory=&visaClass=&stateCode=&priority=&missionId=` |
 | W5 | ofcList | `officeType === "OFC"` filtre | ✅ Implémenté |
 | W6 | ofcList | Filtre OFCs autorisés du compte (`loggedInApplicantUser.ofc`) | ✅ **CORRIGÉ** (2026-04-02) — `data.ofc` extrait au login → `session.allowedOfcs` → filtre appliqué dans `getUsaOfcList` |
+| W7 | ofcList | `stateCode` et `appointmentPriority` manquants dans l'URL OFC list | ✅ **CORRIGÉ** (2026-04-02) — `getTransformData(applicationId)` appelé à l'étape 2a → `session.stateCode` + `session.appointmentPriority` → passés comme `?stateCode=&priority=` |
 
 ### Sections couvertes par l'analyse
 

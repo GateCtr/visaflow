@@ -508,27 +508,42 @@ function addComparison(comp: EndpointComparison): void {
     note: "W4 CORRIGÉ — endpoint booking flow unifié avec le bundle Angular",
   });
 
-  // 5.2 Params query — visaClass + missionId
+  // 5.2 Params query — visaClass, visaCategory, stateCode, priority, missionId
   const botVisaClassParam = findInBot("params.append(\"visaClass\"");
   const botMissionIdParam = findInBot("params.append(\"missionId\"");
+  const botStateCodeParam = findInBot("params.append(\"stateCode\"");
+  const botPriorityParam  = findInBot("params.append(\"priority\"");
   comp.checks.push({
-    point: "Params query — `visaClass` et `missionId` envoyés dans l'URL",
-    status: botVisaClassParam && botMissionIdParam ? "✅" : "❌",
-    bundleValue: "`De.append('visaClass', visaClasskey)` + `De.append('missionId', parseInt(missionId))`",
-    botValue: botVisaClassParam && botMissionIdParam
-      ? "`URLSearchParams` avec visaClass + missionId"
-      : "(params absents)",
-    note: "Pré-filtre serveur par type de visa — réduit les résultats non pertinents",
+    point: "Params query — `visaClass`, `visaCategory`, `stateCode`, `priority`, `missionId`",
+    status: botVisaClassParam && botMissionIdParam && botStateCodeParam && botPriorityParam ? "✅" : "❌",
+    bundleValue: "`visaCategory?` + `visaClass?` + `stateCode?` + `priority?` + `missionId` (ordre exact bundle)",
+    botValue: botVisaClassParam && botMissionIdParam && botStateCodeParam && botPriorityParam
+      ? "`URLSearchParams` avec visaCategory + visaClass + stateCode + priority + missionId"
+      : `(params manquants : ${!botStateCodeParam ? "stateCode " : ""}${!botPriorityParam ? "priority " : ""})`,
+    note: "stateCode et priority viennent de getTransformData — ajoutés si présents (conditionnels)",
   });
 
-  // 5.3 visaClass et visaCategory passés depuis effectiveDetails au call site
+  // 5.3 getTransformData appelé avant getFilteredOfcPostList pour obtenir stateCode+priority
+  const botTransformDataCall = findInBot("getUsaTransformData");
+  const botTransformDataUrl  = findInBot("USA_TRANSFORM_DATA_URL");
+  comp.checks.push({
+    point: "Appel préalable `getTransformData` pour enrichir stateCode + appointmentPriority",
+    status: botTransformDataCall && botTransformDataUrl ? "✅" : "❌",
+    bundleValue: "`renderService.getTransformData(applicationId)` → [0].stateCode + [0].appointmentPriority avant getFilteredOfcPostList",
+    botValue: botTransformDataCall && botTransformDataUrl
+      ? "`getUsaTransformData(session, applicationId)` → session.stateCode + session.appointmentPriority"
+      : "(non appelé — stateCode/priority absents de l'URL OFC list)",
+    note: "W7 CORRIGÉ — getTransformData appelé à l'étape 2a avant la liste OFC",
+  });
+
+  // 5.4b visaClass et visaCategory passés depuis effectiveDetails au call site
   const botCallSite = findInBot("effectiveDetails.visaClass");
   comp.checks.push({
-    point: "Params transmis depuis `effectiveDetails` au call site `getUsaOfcList(...)`",
+    point: "Params transmis depuis `effectiveDetails` + session au call site `getUsaOfcList(...)`",
     status: botCallSite ? "✅" : "❌",
-    bundleValue: "`selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory`",
-    botValue: botCallSite ? "`effectiveDetails.visaClass, effectiveDetails.visaType` passés à getUsaOfcList" : "(non transmis — params undefined)",
-    note: "Résultat de getApplicationDetails propagé correctement",
+    bundleValue: "`selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory` + `this.stateCode` + `this.appointmentPriority`",
+    botValue: botCallSite ? "`effectiveDetails.visaClass, effectiveDetails.visaType, session.stateCode, session.appointmentPriority`" : "(non transmis)",
+    note: "Toutes les données de session propagées correctement vers getUsaOfcList",
   });
 
   // 5.4 Filtre officeType === "OFC"

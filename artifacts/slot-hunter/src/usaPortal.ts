@@ -26,13 +26,29 @@ const USA_INTEGRATION_URL = `${USA_BASE}/visaintegrationapi`; // sanity check
 //   → GET visaAdminUrl + "/lookupcdt/wizard/getpost" avec params :
 //     { visaCategory?, visaClass?, stateCode?, priority?, missionId }
 // Différent de getOfcListByMissionId (admin only) → GET /ofcuser/ofclist/{missionId}
-const USA_OFC_LIST_URL = (missionId: number, visaClass?: string, visaCategory?: string): string => {
+const USA_OFC_LIST_URL = (
+  missionId: number,
+  visaClass?: string,
+  visaCategory?: string,
+  stateCode?: string,
+  priority?: string,
+): string => {
   const params = new URLSearchParams();
   if (visaCategory) params.append("visaCategory", visaCategory);
   if (visaClass && visaClass !== "nil") params.append("visaClass", visaClass);
+  if (stateCode) params.append("stateCode", stateCode);
+  if (priority) params.append("priority", priority);
   params.append("missionId", String(missionId));
   return `${USA_ADMIN_URL}/lookupcdt/wizard/getpost?${params.toString()}`;
 };
+
+// Bundle Angular : renderService.getTransformData(applicationId, applicantId)
+//   → GET visaWorkFlowURL + "/workflow/getTransformData/${applicationId}"
+// Note : applicantId est dans la signature JS mais N'EST PAS dans l'URL (confirmé dans le bundle).
+// Retourne un tableau dont [0].transformData est un JSON stringifié contenant :
+//   stateCode, appointmentPriority, visaClass, paymentStatus, etc.
+const USA_TRANSFORM_DATA_URL = (applicationId: string) =>
+  `${USA_WORKFLOW_URL}/workflow/getTransformData/${applicationId}`;
 const USA_FIRST_AVAILABLE_MONTH_URL = `${USA_ADMIN_URL}/modifyslot/getFirstAvailableMonth`;
 const USA_SLOT_DATES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotDates`;
 const USA_SLOT_TIMES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotTime`;
@@ -289,6 +305,16 @@ export interface UsaSession {
    * Si non vide, seuls les OFCs dont postUserId figure dans cette liste sont scannés.
    * Vide ou absent = aucune restriction (compte sans filtre OFC). */
   allowedOfcs?: Array<{ postUserId: number }>;
+  /** Code géographique du dossier — extrait de transformData[0].stateCode après getTransformData.
+   * Bundle : this.stateCode = this.applicantData[0].stepTransformData.stateCode
+   * Ajouté comme param ?stateCode= dans l'URL OFC list. Ex: "Kinshasa". */
+  stateCode?: string;
+  /** Priorité du dossier — extrait de transformData[0].appointmentPriority après getTransformData.
+   * Bundle : this.appointmentPriority = this.applicantData[0].stepTransformData.appointmentPriority
+   * Ajouté comme param ?priority= dans l'URL OFC list.
+   * Valeurs possibles : "regular", "group", ou vide (absent = non transmis).
+   * Si "group" + reschedule → converti en "regular" (bundle : rescheduleYN&&"group"==ap→"regular"). */
+  appointmentPriority?: string;
 }
 
 // Referers spécifiques à chaque étape de navigation du portail Angular.
@@ -1156,13 +1182,75 @@ async function getUsaApplicationDetails(
  *
  * Différent de getOfcListByMissionId (admin) → GET /ofcuser/ofclist/{missionId}
  */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getUsaTransformData — récupère stateCode + appointmentPriority pour l'URL OFC
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * GET /visaworkflowprocessor/workflow/getTransformData/{applicationId}
+ *
+ * Bundle Angular : renderService.getTransformData(applicationId, applicantId)
+ *   Appelé sur la page /home/dashboard/requests ET dans le booking flow OFC step
+ *   quand this.ofcOrPost/this.appointmentType/this.stateCode ne sont pas encore définis.
+ *
+ * Retourne un tableau. [0].transformData est un JSON stringifié contenant (entre autres) :
+ *   - stateCode          → param ?stateCode= de l'URL OFC list
+ *   - appointmentPriority → param ?priority= de l'URL OFC list (si présent)
+ *   - visaClass, visaTypekey, paymentStatus, missionId, etc.
+ *
+ * Note bundle : malgré la signature JS getTransformData(y, w), seul y (applicationId)
+ * est utilisé dans l'URL — w (applicantId) n'est pas transmis au serveur.
+ */
+async function getUsaTransformData(
+  session: UsaSession,
+  applicationId: string,
+): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string } | null> {
+  const url = USA_TRANSFORM_DATA_URL(applicationId);
+  const hdrs = sessionHeaders(session.accessToken, applicationId, session.missionId, REFERER_REQUESTS, false);
+  try {
+    const res = await usaFetch(url, { headers: hdrs });
+    if (res.status === 429) throw new RateLimitError("getTransformData", parseInt(res.headers.get("retry-after") ?? "60", 10) * 1000);
+    if (res.status === 403) throw new AccountBlockedError("getTransformData");
+    if (res.status === 401) throw new TokenExpiredError();
+    if (!res.ok) {
+      console.warn(`[usa] getTransformData HTTP ${res.status} — ignoré (params OFC non enrichis)`);
+      return null;
+    }
+    const raw = await res.json();
+    const arr = Array.isArray(raw) ? raw : [];
+    if (arr.length === 0) return null;
+
+    // Bundle : B.stepTransformData = JSON.parse(B.transformData)
+    // On parse le JSON stringifié dans .transformData
+    let td: Record<string, unknown> = {};
+    try {
+      td = JSON.parse(arr[0].transformData as string) as Record<string, unknown>;
+    } catch {
+      console.warn("[usa] getTransformData: impossible de parser .transformData");
+    }
+
+    const stateCode        = typeof td.stateCode        === "string" ? td.stateCode        : undefined;
+    const appointmentPriority = typeof td.appointmentPriority === "string" ? td.appointmentPriority : undefined;
+    const paymentStatus    = typeof td.paymentStatus    === "string" ? td.paymentStatus    : undefined;
+
+    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
+    return { stateCode, appointmentPriority, paymentStatus };
+  } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    console.warn(`[usa] getTransformData erreur: ${err} — ignoré`);
+    return null;
+  }
+}
+
 async function getUsaOfcList(
   session: UsaSession,
   missionId: number,
   visaClass?: string,
   visaCategory?: string,
+  stateCode?: string,
+  priority?: string,
 ): Promise<UsaOfc[]> {
-  const url = USA_OFC_LIST_URL(missionId, visaClass, visaCategory);
+  const url = USA_OFC_LIST_URL(missionId, visaClass, visaCategory, stateCode, priority);
   // GET — pas de Content-Type; les cookies applicationId+missionId doivent être présents
   const hdrs = session.applicationId
     ? sessionHeaders(session.accessToken, session.applicationId, missionId, REFERER_CREATE_APT, false)
@@ -1199,7 +1287,13 @@ async function getUsaOfcList(
       console.log(`[usa] Filtre OFCs autorisés du compte: ${before} → ${filtered.length} OFC(s)`);
     }
 
-    console.log(`[usa] OFCs (mission ${missionId}${visaClass ? `, visaClass=${visaClass}` : ""}): ${filtered.map(o => o.postName).join(", ") || "aucun"}`);
+    const paramStr = [
+      visaClass    ? `visaClass=${visaClass}`   : null,
+      visaCategory ? `cat=${visaCategory}`      : null,
+      stateCode    ? `state=${stateCode}`        : null,
+      priority     ? `priority=${priority}`      : null,
+    ].filter(Boolean).join(" ");
+    console.log(`[usa] OFCs (mission ${missionId}${paramStr ? ` ${paramStr}` : ""}): ${filtered.map(o => o.postName).join(", ") || "aucun"}`);
     return filtered;
   } catch (err) {
     // Re-lancer les erreurs circuit-breaker — elles doivent remonter jusqu'à scanUsaSlotsViaAPI.
@@ -1788,16 +1882,51 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     }
   }
 
-  // 2. Récupérer la liste des OFCs pour la mission
-  // Bundle : getFilteredOfcPostList({visaClass, missionId, ...}) → /lookupcdt/wizard/getpost
-  // visaClass et visaCategory passés comme params query pour pré-filtrer les OFCs par type de visa.
+  // 2a. getTransformData — fournit stateCode et appointmentPriority pour l'URL OFC list.
+  // Bundle : this.stateCode = transformData[0].stateCode
+  //          this.appointmentPriority = transformData[0].appointmentPriority
+  // Ces deux champs sont ajoutés comme params ?stateCode= et ?priority= dans getFilteredOfcPostList.
+  // Non-bloquant : en cas d'échec, le scan continue sans ces params (OFC list moins filtrée).
+  if (session.applicationId) {
+    try {
+      const td = await getUsaTransformData(session, session.applicationId);
+      if (td) {
+        if (td.stateCode) session.stateCode = td.stateCode;
+        if (td.appointmentPriority) session.appointmentPriority = td.appointmentPriority;
+        // Vérification paymentStatus — avertissement si non VERIFIED
+        if (td.paymentStatus && td.paymentStatus !== "VERIFIED") {
+          console.warn(`[usa] ⚠️  paymentStatus=${td.paymentStatus} — le paiement n'est peut-être pas confirmé`);
+        }
+      }
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getTransformData` });
+        return "error";
+      }
+      if (err instanceof AccountBlockedError || err instanceof TokenExpiredError) {
+        const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+        if (cacheKey) tokenCache.delete(cacheKey);
+        await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: (err as Error).message });
+        return "error";
+      }
+      // Erreur réseau / parsing : non-bloquant, on continue
+      console.warn(`[usa] getTransformData ignoré (${err}) — OFC list sans stateCode/priority`);
+    }
+  }
+
+  // 2b. Récupérer la liste des OFCs pour la mission
+  // Bundle : getFilteredOfcPostList(De) → GET /lookupcdt/wizard/getpost?visaCategory=&visaClass=&stateCode=&priority=&missionId=
   let ofcList: UsaOfc[];
   try {
+    // Bundle : appointmentPriority "group" + reschedule → "regular" (bot = pas de reschedule donc on envoie tel quel)
+    const ofcPriority = session.appointmentPriority;
     ofcList = await getUsaOfcList(
       session,
       session.missionId,
       effectiveDetails.visaClass,
       effectiveDetails.visaType,
+      session.stateCode,
+      ofcPriority,
     );
   } catch (err) {
     if (err instanceof RateLimitError) {

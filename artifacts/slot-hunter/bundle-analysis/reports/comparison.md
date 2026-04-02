@@ -2,13 +2,13 @@
 
 **Date :** 2026-04-02
 **Bundle :** `main.dc91e3f7b5f67caa.js`
-**Bot :** `usaPortal.ts` (1964 lignes)
+**Bot :** `usaPortal.ts` (2093 lignes)
 
 ## Résumé global
 
 | Statut | Nombre | Description |
 |--------|--------|-------------|
-| ✅ Conforme | 53 | Comportement identique au bundle |
+| ✅ Conforme | 54 | Comportement identique au bundle |
 | ⚠️ Différence mineure | 3 | Écart non-critique mais à surveiller |
 | ❌ Divergence critique | 0 | Peut causer un 4xx/5xx ou un comportement incorrect |
 | ❓ Non vérifié | 0 | Contexte insuffisant pour confirmer |
@@ -23,7 +23,7 @@
 | 02 | 🟢 httpInterceptor | `ALL` | 5 | 0 | 0 | 0 |
 | 03 | 🟡 paymentStatus | `GET` | 4 | 1 | 0 | 0 |
 | 04 | 🟢 getApplicationDetails | `GET` | 6 | 0 | 0 | 0 |
-| 05 | 🟢 ofcList | `GET` | 6 | 0 | 0 | 0 |
+| 05 | 🟢 ofcList | `GET` | 7 | 0 | 0 | 0 |
 | 06 | 🟢 getFirstAvailableMonth | `POST` | 3 | 0 | 0 | 0 |
 | 07 | 🟢 getSlotDates | `POST` | 2 | 0 | 0 | 0 |
 | 08 | 🟢 getSlotTime | `POST` | 5 | 0 | 0 | 0 |
@@ -102,8 +102,9 @@
 | Point de vérification | Statut | Bundle Angular | Bot actuel | Note |
 |-----------------------|--------|---------------|------------|------|
 | Endpoint booking flow — `/lookupcdt/wizard/getpost?visaClass=...&missionId=...` | ✅ | `slotBookingService.getFilteredOfcPostList(De)` → GET `/lookupcdt/wizard/getpost… | `USA_OFC_LIST_URL(missionId, visaClass, visaCategory)` → `/lookupcdt/wizard/getp… | W4 CORRIGÉ — endpoint booking flow unifié avec le bundle Ang… |
-| Params query — `visaClass` et `missionId` envoyés dans l'URL | ✅ | `De.append('visaClass', visaClasskey)` + `De.append('missionId', parseInt(missio… | `URLSearchParams` avec visaClass + missionId | Pré-filtre serveur par type de visa — réduit les résultats n… |
-| Params transmis depuis `effectiveDetails` au call site `getUsaOfcList(...)` | ✅ | `selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory` | `effectiveDetails.visaClass, effectiveDetails.visaType` passés à getUsaOfcList | Résultat de getApplicationDetails propagé correctement |
+| Params query — `visaClass`, `visaCategory`, `stateCode`, `priority`, `missionId` | ✅ | `visaCategory?` + `visaClass?` + `stateCode?` + `priority?` + `missionId` (ordre… | `URLSearchParams` avec visaCategory + visaClass + stateCode + priority + mission… | stateCode et priority viennent de getTransformData — ajoutés… |
+| Appel préalable `getTransformData` pour enrichir stateCode + appointmentPriority | ✅ | `renderService.getTransformData(applicationId)` → [0].stateCode + [0].appointmen… | `getUsaTransformData(session, applicationId)` → session.stateCode + session.appo… | W7 CORRIGÉ — getTransformData appelé à l'étape 2a avant la l… |
+| Params transmis depuis `effectiveDetails` + session au call site `getUsaOfcList(...)` | ✅ | `selectedSlotDetails.visaClass` + `selectedSlotDetails.visaCategory` + `this.sta… | `effectiveDetails.visaClass, effectiveDetails.visaType, session.stateCode, sessi… | Toutes les données de session propagées correctement vers ge… |
 | Filtre `officeType === "OFC"` (Étape 1) | ✅ | `je.filter(B => B.officeType === this.ofcOrPost)` (ofcOrPost="OFC") | `list.filter(o => o.officeType === "OFC")` | Filtre correct — évite de scanner les POST locations |
 | Filtre OFCs autorisés du compte — `loggedInApplicantUser.ofc` (Étape 2) | ✅ | `S = JSON.parse(loggedInApplicantUser).ofc` → `ofcList.filter(B => S.some(se => … | `data.ofc` extrait au login → `session.allowedOfcs` → `filtered.filter(o => allo… | W6 CORRIGÉ — filtre appliqué si le compte a des OFCs restrei… |
 | Persistance `allowedOfcs` dans le cache token (CachedToken) | ✅ | `loggedInApplicantUser` stocké dans localStorage (persist entre pages Angular) | `allowedOfcs` stocké dans CachedToken + restauré sur cache hit et refresh | Évite de rescanner tous les OFCs à chaque refresh de token |
