@@ -31,6 +31,7 @@ const DESTINATIONS: { key: Destination; flag: string; label: string }[] = [
   { key: "dubai", flag: "🇦🇪", label: "Dubaï (EAU)" },
   { key: "turkey", flag: "🇹🇷", label: "Turquie" },
   { key: "india", flag: "🇮🇳", label: "Inde" },
+  { key: "schengen", flag: "🇪🇺", label: "Europe Schengen (CEV)" },
 ];
 
 interface PingResult {
@@ -391,21 +392,21 @@ export default function AdminBotTest() {
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                Identifiant portail{" "}
+                {testForm.destination === "schengen" ? "Email VOWINT" : "Identifiant portail"}{" "}
                 <span className="text-muted-foreground font-normal">(optionnel)</span>
               </label>
               <input
                 type="text"
                 value={testForm.username}
                 onChange={(e) => setTestForm((f) => ({ ...f, username: e.target.value }))}
-                placeholder="Email ou identifiant"
+                placeholder={testForm.destination === "schengen" ? "email@example.com (compte VOWINT)" : "Email ou identifiant"}
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30"
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                Mot de passe portail{" "}
+                {testForm.destination === "schengen" ? "Mot de passe VOWINT" : "Mot de passe portail"}{" "}
                 <span className="text-muted-foreground font-normal">(optionnel)</span>
               </label>
               <div className="relative">
@@ -426,6 +427,23 @@ export default function AdminBotTest() {
               </div>
             </div>
           </div>
+
+          {/* Note contextuelle Schengen */}
+          {testForm.destination === "schengen" && (
+            <div className="sm:col-span-2 flex items-start gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-sm">
+              <span className="text-lg mt-0.5">🇪🇺</span>
+              <div>
+                <p className="font-semibold text-indigo-800 mb-0.5">Test VOWINT / CEV Schengen</p>
+                <p className="text-xs text-indigo-600">
+                  Les identifiants sont les accès <strong>VOWINT</strong> (vowint.eu) du client — pas les accès CEV directement.
+                  <br />
+                  <strong>Sans clé 2captcha :</strong> ping VOWINT + accessibilité portail CEV depuis le serveur du bot.
+                  <br />
+                  <strong>Avec clé 2captcha :</strong> test complet — connexion VOWINT → clic « Prendre rendez-vous » → résolution hCaptcha → vérification disponibilité CEV (consomme ~0,003 $).
+                </p>
+              </div>
+            </div>
+          )}
 
           {testSuccess && (
             <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-lg mb-4">

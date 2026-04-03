@@ -3,6 +3,7 @@ import { launchBrowser, humanType, humanClick, humanScroll, randomDelay, isDryRu
 import { detectAndSolveCaptcha } from "./captcha.js";
 import { reportSlotFound, sendHeartbeat, uploadScreenshot, reportBotTestResult, type HunterJob, type BotTest } from "./convexClient.js";
 import { runUsaApiSession, getUsaSession, logoutUsaPortal } from "./usaPortal.js";
+import { runCevCheck } from "./cevBooking.js";
 
 function getSessionTimeoutMs(): number {
   return Math.round((3 + Math.random() * 2) * 60 * 1000);
@@ -488,6 +489,62 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
       await reportBotTestResult({
         testId: test._id,
         result: "login_failed",
+        latencyMs: Date.now() - startMs,
+        errorMessage: msg.slice(0, 600),
+      });
+    }
+    return;
+  }
+
+  // ─── Schengen : VOWINT + CEV via runCevCheck ─────────────────────────────
+  if (test.destination === "schengen" && test.testUsername && test.testPassword && test.twoCaptchaApiKey) {
+    console.log(`[navigator] Test Schengen → VOWINT login + CEV captcha (runCevCheck)`);
+    const fakeJob: HunterJob = {
+      id: `bot-test-${test._id}`,
+      destination: "schengen",
+      visaType: "test",
+      applicantName: `[TEST] schengen`,
+      travelDate: "",
+      urgencyTier: "standard",
+      slotBookingRefs: null,
+      hunterConfig: {
+        embassyUsername: test.testUsername,  // = email VOWINT
+        embassyPassword: test.testPassword,  // = mot de passe VOWINT
+        twoCaptchaApiKey: test.twoCaptchaApiKey,
+        isActive: true,
+      },
+      portalUrl: test.portalUrl,
+      portalName: test.portalName,
+      portalDashboardUrl: null,
+      portalAppointmentUrl: null,
+      portalScheduleUrl: null,
+      lastCheckAt: null,
+    };
+    try {
+      const cevResult = await runCevCheck(fakeJob);
+      const latencyMs = Date.now() - startMs;
+      console.log(`[navigator] Test Schengen terminé — ${cevResult} (${latencyMs}ms)`);
+
+      let result: "login_success" | "portal_ok" | "login_failed" | "error";
+      let errorMessage: string | undefined;
+
+      if (cevResult === "slot_found" || cevResult === "not_found" || cevResult === "rate_limited") {
+        // VOWINT login + CEV captcha ont fonctionné
+        result = "login_success";
+        if (cevResult === "slot_found") errorMessage = "Note : créneaux disponibles détectés lors du test";
+        if (cevResult === "rate_limited") errorMessage = "VOWINT OK — limite CEV atteinte (4 clics/h), créneaux non vérifiés";
+      } else {
+        result = "login_failed";
+        errorMessage = "Échec VOWINT ou CEV (vérifiez les identifiants VOWINT et la clé 2captcha)";
+      }
+
+      await reportBotTestResult({ testId: test._id, result, latencyMs, httpStatus: 200, errorMessage });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[navigator] Erreur test Schengen:`, msg);
+      await reportBotTestResult({
+        testId: test._id,
+        result: "error",
         latencyMs: Date.now() - startMs,
         errorMessage: msg.slice(0, 600),
       });
