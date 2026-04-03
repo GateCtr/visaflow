@@ -47,7 +47,7 @@ export async function completeCevCaptcha(
   hcaptchaToken: string,
   clientId: string
 ): Promise<CevCaptchaResult> {
-  botLog('cev_captcha_submit', { clientId, cookieLen: sessionCookies.length });
+  botLog({ applicationId: clientId, step: 'cev_captcha_submit', status: 'ok', data: { cookieLen: sessionCookies.length } });
 
   try {
     const res = await fetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
@@ -64,25 +64,25 @@ export async function completeCevCaptcha(
     });
 
     if (!res.ok) {
-      botLog('cev_captcha_error', { clientId, status: res.status });
+      botLog({ applicationId: clientId, step: 'cev_captcha_error', status: 'fail', data: { httpStatus: res.status } });
       return { status: 'session_error', error: `HTTP_${res.status}` };
     }
 
     const data = await res.json() as { validUntil?: string; redirectUrl?: string };
 
     if (!data.validUntil || !data.redirectUrl) {
-      botLog('cev_captcha_bad_response', { clientId, data });
+      botLog({ applicationId: clientId, step: 'cev_captcha_bad_response', status: 'fail', data: { response: String(data) } });
       return { status: 'session_error', error: 'BAD_RESPONSE' };
     }
 
     // /Integration/Error/NoAvailability → no slots right now
     if (data.redirectUrl.includes('NoAvailability')) {
-      botLog('cev_no_availability', { clientId, redirectUrl: data.redirectUrl });
+      botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { redirectUrl: data.redirectUrl } });
       return { status: 'no_availability' };
     }
 
     // Any other redirect = slots are available
-    botLog('cev_slots_available', { clientId, validUntil: data.validUntil, redirectUrl: data.redirectUrl });
+    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, redirectUrl: data.redirectUrl } });
 
     return {
       status: 'ready',
@@ -93,18 +93,15 @@ export async function completeCevCaptcha(
       },
     };
   } catch (err) {
-    botLog('cev_captcha_exception', { clientId, error: String(err) });
+    botLog({ applicationId: clientId, step: 'cev_captcha_exception', status: 'fail', data: { error: String(err) } });
     return { status: 'session_error', error: String(err) };
   }
 }
 
 /**
  * Poll /Home/AvailableTimeSlots with the session cookie.
- * Returns available slots or empty array if none.
- *
- * The POST body format for AvailableTimeSlots is not yet fully confirmed —
- * captured from the JS bundle: `callPost("/Home/AvailableTimeSlots", n, t, i)`
- * We send an empty object first; update once the exact schema is captured.
+ * Used during the window between captcha solves (session stays alive).
+ * No additional VOWINT clicks needed during this phase.
  */
 export async function pollCevSlots(
   session: CevSession,
@@ -125,20 +122,19 @@ export async function pollCevSlots(
       body: JSON.stringify(requestBody),
     });
 
-    if (res.status === 302 || res.redirected) {
-      const loc = res.url;
-      if (loc.includes('NoAvailability')) {
-        botLog('cev_no_slots', { clientId });
+    if (res.redirected) {
+      if (res.url.includes('NoAvailability')) {
+        botLog({ applicationId: clientId, step: 'cev_poll_no_slots', status: 'ok' });
         return { hasSlots: false, slots: [] };
       }
-      if (loc.includes('SessionExpired')) {
-        botLog('cev_session_expired', { clientId });
+      if (res.url.includes('SessionExpired')) {
+        botLog({ applicationId: clientId, step: 'cev_session_expired', status: 'warn' });
         return { hasSlots: false, slots: [], error: 'SESSION_EXPIRED' };
       }
     }
 
     if (!res.ok) {
-      botLog('cev_poll_error', { clientId, status: res.status });
+      botLog({ applicationId: clientId, step: 'cev_poll_error', status: 'fail', data: { httpStatus: res.status } });
       return { hasSlots: false, slots: [], error: `HTTP_${res.status}` };
     }
 
@@ -146,11 +142,10 @@ export async function pollCevSlots(
     const slots = parseSlots(raw);
     const hasSlots = slots.some(s => s.available);
 
-    botLog('cev_poll_result', { clientId, hasSlots, slotCount: slots.length });
-
+    botLog({ applicationId: clientId, step: 'cev_poll_result', status: 'ok', data: { hasSlots, slotCount: slots.length } });
     return { hasSlots, slots };
   } catch (err) {
-    botLog('cev_poll_exception', { clientId, error: String(err) });
+    botLog({ applicationId: clientId, step: 'cev_poll_exception', status: 'fail', data: { error: String(err) } });
     return { hasSlots: false, slots: [], error: String(err) };
   }
 }
@@ -165,14 +160,8 @@ export function isCevSessionValid(session: CevSession): boolean {
   return validUntil - now > bufferMs;
 }
 
-/**
- * Parse the raw response from /Home/AvailableTimeSlots.
- * Schema TBD — will be updated once first live capture is made.
- * Currently handles: array of objects, or object with slots array.
- */
 function parseSlots(raw: unknown): TimeSlot[] {
   if (!raw) return [];
-
   const items: unknown[] = Array.isArray(raw)
     ? raw
     : Array.isArray((raw as Record<string, unknown>).slots)
@@ -188,35 +177,4 @@ function parseSlots(raw: unknown): TimeSlot[] {
       raw: item,
     };
   });
-}
-
-/**
- * Playwright interception helper — call this in the Playwright session
- * that handles the VOWINT blob click to capture the CEV session POST params.
- *
- * Usage in playwright session:
- *   const cevParams = await interceptCevPost(page);
- *   // then use cevParams.cookies to poll
- */
-export function buildCevInterceptInstructions(): string {
-  return `
-// INJECT IN PLAYWRIGHT before clicking "Prendre rendez-vous":
-page.on('request', async (request) => {
-  if (request.url().includes('appointment.cloud.diplomatie.be/Captcha') &&
-      request.method() === 'POST') {
-    console.log('CEV_POST_INTERCEPTED:', {
-      url: request.url(),
-      postData: request.postData(),
-      headers: request.headers(),
-    });
-  }
-});
-
-page.on('response', async (response) => {
-  if (response.url().includes('appointment.cloud.diplomatie.be/Captcha')) {
-    const cookies = response.headers()['set-cookie'];
-    console.log('CEV_SESSION_COOKIES:', cookies);
-  }
-});
-  `.trim();
 }
