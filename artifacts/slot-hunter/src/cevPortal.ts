@@ -22,23 +22,31 @@ export interface CevPollResult {
   error?: string;
 }
 
+export type CevCaptchaResult =
+  | { status: 'no_availability' }
+  | { status: 'session_error'; error: string }
+  | { status: 'ready'; session: CevSession };
+
 /**
- * After Playwright has intercepted the POST from VOWINT blob → /Captcha,
- * this function takes the captured cookies from that response and uses them
- * to complete the hCaptcha step via 2captcha/capsolver.
+ * After Playwright has established a CEV session (POST from VOWINT blob → /Captcha),
+ * solve hCaptcha and submit. The redirectUrl in the response tells us immediately
+ * whether slots exist:
+ *
+ *   redirectUrl contains "NoAvailability" → no slots → status: 'no_availability'
+ *   redirectUrl is a calendar/home page   → slots exist → status: 'ready'
  *
  * Flow:
  *  VOWINT blob POST → /Captcha (sets ASP.NET session cookie)
- *  → solve hCaptcha externally
+ *  → solve hCaptcha externally (2captcha/capsolver)
  *  → POST /Captcha/SetCaptchaToken { captcha: token }
  *  → receive { validUntil, redirectUrl }
- *  → poll /Home/AvailableTimeSlots with session cookie
+ *  → redirectUrl determines availability immediately
  */
 export async function completeCevCaptcha(
   sessionCookies: string,
   hcaptchaToken: string,
   clientId: string
-): Promise<CevSession | null> {
+): Promise<CevCaptchaResult> {
   botLog('cev_captcha_submit', { clientId, cookieLen: sessionCookies.length });
 
   try {
@@ -57,26 +65,36 @@ export async function completeCevCaptcha(
 
     if (!res.ok) {
       botLog('cev_captcha_error', { clientId, status: res.status });
-      return null;
+      return { status: 'session_error', error: `HTTP_${res.status}` };
     }
 
     const data = await res.json() as { validUntil?: string; redirectUrl?: string };
 
     if (!data.validUntil || !data.redirectUrl) {
       botLog('cev_captcha_bad_response', { clientId, data });
-      return null;
+      return { status: 'session_error', error: 'BAD_RESPONSE' };
     }
 
-    botLog('cev_session_established', { clientId, validUntil: data.validUntil, redirectUrl: data.redirectUrl });
+    // /Integration/Error/NoAvailability → no slots right now
+    if (data.redirectUrl.includes('NoAvailability')) {
+      botLog('cev_no_availability', { clientId, redirectUrl: data.redirectUrl });
+      return { status: 'no_availability' };
+    }
+
+    // Any other redirect = slots are available
+    botLog('cev_slots_available', { clientId, validUntil: data.validUntil, redirectUrl: data.redirectUrl });
 
     return {
-      cookies: sessionCookies,
-      validUntil: data.validUntil,
-      redirectUrl: data.redirectUrl,
+      status: 'ready',
+      session: {
+        cookies: sessionCookies,
+        validUntil: data.validUntil,
+        redirectUrl: data.redirectUrl,
+      },
     };
   } catch (err) {
     botLog('cev_captcha_exception', { clientId, error: String(err) });
-    return null;
+    return { status: 'session_error', error: String(err) };
   }
 }
 

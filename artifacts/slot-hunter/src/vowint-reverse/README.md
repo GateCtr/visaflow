@@ -109,14 +109,29 @@ var ajaxUrl = currentLocation.protocol + '//' + 'appointment.cloud.diplomatie.be
 ```
 → La session est gérée par **cookie** (établi lors du POST initial au /Captcha)
 
-### Architecture de session :
-1. VOWINT génère un blob HTML avec formulaire POST → `appointment.cloud.diplomatie.be/Captcha`
-   - Le POST contient les paramètres de session VOWINT (token, AppId, etc.) — à capturer
-2. Le serveur CEV valide → pose un cookie de session
-3. L'utilisateur/bot résout hCaptcha → POST `Captcha/SetCaptchaToken` avec token hCaptcha
-4. Serveur répond : `{validUntil: "2026-04-03T14:00:00", redirectUrl: "/Home/..."}`
-5. Redirect → page de calendrier
-6. Bot peut poller `/Home/AvailableTimeSlots` avec le cookie de session
+### Architecture de session — CONFIRMÉE PAR TEST MANUEL :
+1. VOWINT génère un blob HTML → POST vers `appointment.cloud.diplomatie.be/Captcha` → cookie de session posé
+2. Bot résout hCaptcha (2captcha/capsolver) → POST `Captcha/SetCaptchaToken` avec token hCaptcha
+3. Serveur répond immédiatement : `{validUntil: "...", redirectUrl: "..."}`
+4. **Le `redirectUrl` indique DIRECTEMENT la disponibilité :**
+   - `redirectUrl` contient `"NoAvailability"` → aucun créneau disponible ✗
+   - `redirectUrl` pointe vers `/Home/...` ou calendrier → **créneaux disponibles ✓**
+5. Quand disponible : suivre `redirectUrl` pour accéder au calendrier et confirmer
+
+### Stratégie de polling optimale (respecte la limite 5 clics/heure) :
+```
+[Session CEV valide = validUntil - now > 60s]
+    ↓ Si session valide :
+        → poller /Home/AvailableTimeSlots avec cookie existant (aucun clic VOWINT)
+    ↓ Si session expirée (ou pas encore de session) :
+        → 1 clic "Prendre rendez-vous" sur VOWINT (utilise 1 des 5 clics/heure)
+        → intercepter cookie de session CEV
+        → résoudre hCaptcha ($0.003)
+        → POST SetCaptchaToken → lire redirectUrl
+        → si NoAvailability : conserver session + poller /Home/AvailableTimeSlots
+        → si disponible : procéder à la réservation immédiatement
+```
+→ Au maximum 5 solves hCaptcha/heure par application, polling illimité entre les solves
 
 ---
 
