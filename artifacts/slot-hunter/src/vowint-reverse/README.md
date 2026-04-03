@@ -88,7 +88,35 @@ Votre compte est bloqué pendant 60 minutes."
 ### Stack du système appointment.cloud.diplomatie.be :
 - **JSZip v3.10.1** (génération de documents ZIP/PDF de confirmation)
 - **loglevel** (logging)
-- Application React/Vue bundlée (webpack)
+- ASP.NET MVC + jQuery (même stack que VOWINT)
+- Un seul bundle JS : `/bundles/scripts/sharedScripts`
+
+### API endpoints complets (reverse engineered depuis le bundle) :
+
+```
+BASE = https://appointment.cloud.diplomatie.be/
+
+POST BASE/Captcha                       ← POST depuis blob VOWINT, établit la session (cookie)
+POST BASE/Captcha/SetCaptchaToken       ← {captcha: "hcaptcha_token"} → {validUntil, redirectUrl}
+POST BASE/Home/AvailableTimeSlots       ← JSON body → créneaux disponibles (POLLING ENDPOINT)
+POST BASE/Shared/DoCancelRequestAppointment ← {uniqueToken, cultureCode} → annulation
+```
+
+### ajaxUrl confirmé :
+```javascript
+// Injecté inline dans chaque page — PAS de token dans l'URL
+var ajaxUrl = currentLocation.protocol + '//' + 'appointment.cloud.diplomatie.be' + '/';
+```
+→ La session est gérée par **cookie** (établi lors du POST initial au /Captcha)
+
+### Architecture de session :
+1. VOWINT génère un blob HTML avec formulaire POST → `appointment.cloud.diplomatie.be/Captcha`
+   - Le POST contient les paramètres de session VOWINT (token, AppId, etc.) — à capturer
+2. Le serveur CEV valide → pose un cookie de session
+3. L'utilisateur/bot résout hCaptcha → POST `Captcha/SetCaptchaToken` avec token hCaptcha
+4. Serveur répond : `{validUntil: "2026-04-03T14:00:00", redirectUrl: "/Home/..."}`
+5. Redirect → page de calendrier
+6. Bot peut poller `/Home/AvailableTimeSlots` avec le cookie de session
 
 ---
 
