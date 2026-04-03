@@ -1,0 +1,68 @@
+URL de requête
+https://visaonweb.diplomatie.be/common/getVisaApplication?AppId=e978b2fd-472f-f111-a3ae-00505691de06
+Méthode de requête
+GET
+Code d'état
+200 OK
+Adresse distante
+193.191.208.217:443
+Règlement sur les URL de provenance
+strict-origin-when-cross-origin
+cache-control
+private, s-maxage=0
+content-length
+123021
+content-type
+application/json; charset=utf-8
+date
+Fri, 03 Apr 2026 10:32:21 GMT
+set-cookie
+_culture=fr-BE; expires=Wed, 01-Apr-2026 10:32:21 GMT; path=/
+set-cookie
+_culture=fr-BE; expires=Sun, 03-May-2026 10:32:21 GMT; path=/
+set-cookie
+TS0110ceb4=01f258f401352140df76a95d1393082e4d4305541bf5d59d7348fcb58c2789d4510c5f2d9c5b57f1386af6f31bd3f06a6b30f55349; Path=/; Domain=.visaonweb.diplomatie.be
+strict-transport-security
+max-age=16070400; includeSubDomains
+x-content-type-options
+nosniff
+x-permitted-cross-domain-policies
+master-only
+x-xss-protection
+1; mode=block
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+fr-CD,fr;q=0.9,sw-CD;q=0.8,sw;q=0.7,en-US;q=0.6,en;q=0.5,fr-FR;q=0.4
+cache-control
+no-cache
+connection
+keep-alive
+cookie
+__RequestVerificationToken=f277J8M-3a23Qrc13-Ht1f9IVDSwH3tfnR7jKAgQNI9EVkGTLbKy20GSeoet-WtHAq21r1DhtQCxkCAZ59mkJYLz8NZ2IjGJXbEAo06zb341; ServerId=eb66856f90f0d6ab; perf_dv6Tr4n=1; ASP.NET_SessionId=kl3jlcp4odlucq03mom1sn0k; TS0110ceb4=01f258f401352140df76a95d1393082e4d4305541bf5d59d7348fcb58c2789d4510c5f2d9c5b57f1386af6f31bd3f06a6b30f55349; OSOnline=6tE_HxPeWbebnQdyK8fGwzNPdfkANYShqogch4DUOMIZ-eHcnitdb0p2UD5BfEakoKemAEOXHiII-9Cp4n7_5WtuS04xlvdO0rgigMJEtQ4bo4PmigbOoFjPMX7-tvUf2hFOY8uq9jdrlNZE_d6Lql0n2YZS6hT5T0-kUaKUPGaCyKwcl5vX2Ys7v2i1zPx-ylH4-qdbYn8VzPpBFTXxrnS6P0nN9jRXKVEi33ZJ0WAO9KEWhMrS_RkeTnHexP-ZG3t2DRqpg4sRjNX7mB5JMy5Nc92Nf1ZXuPTXX4ZvRg7769pQ6hWpJ9CZXzpn8VctdYeQBSWijRDrVWUXOEssSFGBrOCoiMEGMHFLGFC6sPftckQ-jtGjzi3_4dXg-kt5xxaj6FQctpP6mDkTTe4cEEx0on7fmTf_CH0BuA2igOq4kp2Fj1DeVHxRCNkvBxHmFgsTTLf55MF935Q5ByI3pD3adMwhvwQEddHNxcQKhsdG4RJHc31YiD6Kb80pNg9vCy8Y9jf0v9CWHR8KYV9_kOYpHhe1yxOFzDXgDQ3WXtPyJHLz0VSD0aYBoHTaqdHhQWYA9blFukq44pXRaM3snJ7lC-1DVrKtkbz6o3g2SAMC3M48qkyJBCbl7M6dfwU9g0NbTNGic9uIluVVh93wWbqCSTlCYcqAQc-PwK4Q-v6I3ZDo2rvtepN1ZfJjxNf-R4YnGxZ0IAPOFmlG5nxn0uknc8RiW-EMvAsBW1BrL1IW9NckzcPTbRbbe6KSzFip2DExLGN7Raq7kg0-PvOyTw; _culture=fr-BE
+host
+visaonweb.diplomatie.be
+if-modified-since
+0
+pragma
+no-cache
+referer
+https://visaonweb.diplomatie.be/fr/VisaApplication/Edit/e978b2fd-472f-f111-a3ae-00505691de06
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?1
+sec-ch-ua-platform
+"Android"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36
+x-requested-with
+XMLHttpReques

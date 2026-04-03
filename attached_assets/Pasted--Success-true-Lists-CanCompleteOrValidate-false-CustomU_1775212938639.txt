@@ -1,0 +1,652 @@
+{Success: true, Lists: {,…},…}
+CanCompleteOrValidate
+: 
+false
+CustomUrlBiomod
+: 
+"biomodapp"
+ErrorMessage
+: 
+""
+Lists
+: 
+{,…}
+ActorSubTypes
+: 
+[{Value: 1, Text: "Demandeur de visa"}, {Value: 2, Text: "Autorité parentale"},…]
+0
+: 
+{Value: 1, Text: "Demandeur de visa"}
+1
+: 
+{Value: 2, Text: "Autorité parentale"}
+2
+: 
+{Value: 3, Text: "Tuteur légal"}
+3
+: 
+{Value: 4, Text: "Employeur"}
+4
+: 
+{Value: 5, Text: "Etablissement d'enseignement"}
+5
+: 
+{Value: 6, Text: "Hôtel ou hébergement temporaire"}
+6
+: 
+{Value: 7, Text: "Personne"}
+7
+: 
+{Value: 8, Text: "Entreprise"}
+8
+: 
+{Value: 9, Text: "Ecole"}
+9
+: 
+{Value: 10, Text: "Ressortissant de l'UE, de l'EEE ou de la Confédération suisse"}
+ActorTypes
+: 
+[{Value: 1, Text: "Applicant"}, {Value: 2, Text: "Guardian"}, {Value: 3, Text: "Occupation"},…]
+CivilStateTypes
+: 
+[{Value: 1, Text: "Célibataire"}, {Value: 2, Text: "Marié"}, {Value: 3, Text: "Séparé de fait"},…]
+CompanyList
+: 
+[{CompanyPrefix: "CAP", AppointmentUrl: "", DateCreated: "/Date(1665121905500)/",…},…]
+CountryNonSchengenTypes
+: 
+[{Iso: "", Vfa: null, Value: 0, Text: ""}, {Iso: "SSD", Vfa: null, Value: 4, Text: "SOUDAN DU SUD"},…]
+CountrySchengenTypes
+: 
+[{Value: 0, Text: ""}, {Value: 29, Text: "AUTRICHE"}, {Value: 32, Text: "BELGIQUE"},…]
+CountrySchengenTypesForVac
+: 
+null
+CountrySchengenVacs
+: 
+[{VacId: 19, ctCountryId: 142, OnlyNationals: false},…]
+CountryTypes
+: 
+[{Value: 0, Text: ""}, {Value: 15, Text: "AFGHANISTAN"}, {Value: 256, Text: "AFRIQUE DU SUD"},…]
+EUFamilyMemberRelationshipTypes
+: 
+[{Value: 22, Text: "Conjoint"}, {Value: 23, Text: "Enfant"},…]
+FamilyMemberRelationshipTypes
+: 
+[{Value: 1, Text: "Conjoint(e)"}, {Value: 2, Text: "Fils / Fille"},…]
+FingerprintExemptionTypes
+: 
+[{Value: 1, Text: "Pas d'installation d'équipement biométrique", ExemptionReasonRequired: false,…},…]
+GratuityTypes
+: 
+[{Value: 1, Text: "Aucune"}, {Value: 2, Text: "Passeport diplomatique ou de service"},…]
+LanguageForDossierTypes
+: 
+[{Value: 1, Text: "Indifférent"}, {Value: 2, Text: "Francais"}, {Value: 3, Text: "Néerlandais"},…]
+MainTransportationTypes
+: 
+[{Value: 1, Text: "Voiture"}, {Value: 2, Text: "Avion"}, {Value: 3, Text: "Train"},…]
+NationalityEUTypes
+: 
+[{Value: 0, Text: ""}, {Value: 129, Text: "ALLEMAGNE REPUBLIQUE FEDERALE"},…]
+NationalityNonEUTypes
+: 
+[{Iso: "", Vfa: null, Value: 0, Text: ""}, {Iso: "SSD", Vfa: "NA", Value: 3, Text: "SOUDAN DU SUD"},…]
+NationalityTypes
+: 
+[{Value: 0, Text: ""}, {Value: 72, Text: "AFGHANISTAN"}, {Value: 329, Text: "AFRIQUE DU SUD"},…]
+NationalityTypesOtherNationality
+: 
+[{Value: 72, Text: "AFGHANISTAN"}, {Value: 329, Text: "AFRIQUE DU SUD"}, {Value: 75, Text: "ALBANIE"},…]
+NotOwnApplicationsOnly
+: 
+false
+NumberOfEntryTypes
+: 
+[{Value: 1, Text: "Une"}, {Value: 2, Text: "Deux"}, {Value: 3, Text: "Multiple"}]
+OccupationTypes
+: 
+[{ActorSubType: null, Value: 1, Text: "Agriculteur"},…]
+PaymentExceptionNationalityTypes
+: 
+null
+PrintLanguage
+: 
+[{Key: "en-US", Value: "EN"}, {Key: "nl-BE", Value: "NL"}, {Key: "fr-BE", Value: "FR"}]
+PurposeOfTravelCategoryTypes
+: 
+[{Value: 1, Text: "Loisirs"}, {Value: 2, Text: "Déplacement à caractère académique"},…]
+PurposeOfTravelTypes
+: 
+[{,…}, {,…}, {Description: "Déplacement privé de courte durée dans un cadre familial ", Value: 3,…},…]
+PurposeOfTravelTypesByVisaType
+: 
+[]
+ReferenceTypes
+: 
+null
+RelationshipTypes
+: 
+[{Value: 2, Text: "Autorité parentale"}, {Value: 3, Text: "Tuteur légal"}]
+SexTypes
+: 
+[{Value: 1, Text: "Masculin"}, {Value: 2, Text: "Féminin"}, {Value: 3, Text: "Neutre"}]
+TravelDocumentTypes
+: 
+[{Value: 1, Text: "Ordinaire (passeport)"}, {Value: 2, Text: "Collectif (passeport)"},…]
+TravellerGroupQuestion
+: 
+[{Value: 0, Text: "-"}, {Value: 1, Text: "Non"}, {Value: 2, Text: "Oui"}]
+VacCountries
+: 
+[{Country: "AFRIQUE DU SUD", CountryId: 256}, {Country: "ALGERIE", CountryId: 75},…]
+VacList
+: 
+[{Value: 1, Text: "VOW Internet"}]
+VacTypes
+: 
+[{CountryId: 100, Country: "GRÈCE", Text: "Ambassade Athènes", Value: 128, ScanReady: false},…]
+VisaTypes
+: 
+[{Value: 1, Text: "A: Transit aéroportuaire"}, {Value: 2, Text: "C: Court séjour"}]
+vfaNationalityExceptionTypes
+: 
+null
+Picture
+: 
+"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"
+Success
+: 
+true
+VA
+: 
+{CONFIRMDELETESCAN: "Etes-vous sûr de supprimer le scan?", Choose: "Choisir", InfosToSent: null,…}
+AppId
+: 
+"e978b2fd-472f-f111-a3ae-00505691de06"
+ApplicationNumber
+: 
+null
+Application_AddComment
+: 
+null
+Application_Comment
+: 
+null
+Application_Currency
+: 
+0
+Application_CurrencyCode
+: 
+"EUR"
+Application_CurrencyId
+: 
+"4f961f36-6e7b-4b2b-a21f-0917e4212171"
+Application_DurationOfIntendedStay
+: 
+null
+Application_Fee
+: 
+null
+Application_FingerprintExemptionId
+: 
+null
+Application_FingerprintExemptionReason
+: 
+null
+Application_FingerprintExemptionReason_Mandatory
+: 
+false
+Application_FreeMovement
+: 
+false
+Application_GratuityId
+: 
+null
+Application_IntendedDateOfArrival
+: 
+null
+Application_IntendedDateOfDeparture
+: 
+null
+Application_LanguageForDossierId
+: 
+null
+Application_MainTransportationId
+: 
+null
+Application_MemberStateOfDestinationId
+: 
+null
+Application_MemberStateOfFirstEntryId
+: 
+null
+Application_NumberOfEntriesRequestedId
+: 
+null
+Application_PurposeOfTravelCategoryId
+: 
+null
+Application_PurposeOfTravelId
+: 
+null
+Application_PurposeOfTravelInfo
+: 
+null
+Application_Rate
+: 
+1
+Application_VisaTypeRequestedId
+: 
+null
+CONFIRMDELETESCAN
+: 
+"Etes-vous sûr de supprimer le scan?"
+CanViewBiometricInfo
+: 
+false
+Choose
+: 
+"Choisir"
+ClientDateTime
+: 
+null
+CompanyPrefix
+: 
+"VOW"
+Confirm_Email
+: 
+null
+CountryList
+: 
+null
+Css_BirthDate
+: 
+" "
+Css_DocumentNumber
+: 
+" "
+Css_FirstName
+: 
+" "
+Css_Gender
+: 
+" "
+Css_IssuingAuthorityCountry
+: 
+" "
+Css_LastName
+: 
+" "
+Css_Nationality
+: 
+" "
+Css_ValidUntil
+: 
+" "
+DateCreated
+: 
+null
+DateOfApplication
+: 
+"3/04/2026 12:32:22"
+EAppTakeDocUrl
+: 
+null
+EUFamilyMember
+: 
+{LastName: null, FirstName: null, BirthDate: null, NationalityId: null, Address: null,…}
+Edit
+: 
+false
+Fingerprints5yearsRule
+: 
+false
+GdprApproval
+: 
+1
+GroupId
+: 
+null
+Guardian_Parent1
+: 
+{Id: "00000000-0000-0000-0000-000000000000", ActorSubTypeId: null, Lastname: null, Firstname: null,…}
+Guardian_Parent2
+: 
+{Id: "00000000-0000-0000-0000-000000000000", ActorSubTypeId: null, Lastname: null, Firstname: null,…}
+HasFingerprints
+: 
+false
+Ignored
+: 
+null
+InfosToSent
+: 
+null
+IntendedDateOfArrivalInTheFuture
+: 
+false
+IsTravellerGroupQuestion
+: 
+0
+Language
+: 
+"fr-BE"
+MoneyTransactions
+: 
+null
+Mrz1
+: 
+null
+Mrz2
+: 
+null
+MrzModalAction
+: 
+null
+Mrz_BirthDate
+: 
+null
+Mrz_DocumentNumber
+: 
+null
+Mrz_FirstName
+: 
+null
+Mrz_Gender
+: 
+null
+Mrz_GenderId
+: 
+0
+Mrz_IssuingAuthorityCountry
+: 
+null
+Mrz_IssuingAuthorityCountryId
+: 
+null
+Mrz_LastName
+: 
+null
+Mrz_Nationality
+: 
+null
+Mrz_NationalityId
+: 
+null
+Mrz_ValidUntil
+: 
+null
+OSUniqueId
+: 
+null
+OnlyNationals
+: 
+false
+OsUniqueIdReadonly
+: 
+true
+Overwritten
+: 
+null
+PermitForDestinationCountry_CountryId
+: 
+null
+PermitForDestinationCountry_PermitValidFrom
+: 
+null
+PermitForDestinationCountry_PermitValidUntil
+: 
+null
+PermitForResidenceCountry_DocumentNumber
+: 
+null
+PermitForResidenceCountry_PermitValidUntil
+: 
+null
+PermitForResidenceRequired
+: 
+false
+Personal_Data_Address
+: 
+{Street: null, HouseNumber: null, City: null, PostalCode: null, CountryId: null}
+Personal_Data_BirthCity
+: 
+null
+Personal_Data_BirthCountryId
+: 
+null
+Personal_Data_BirthDate
+: 
+null
+Personal_Data_BirthLastName
+: 
+null
+Personal_Data_BirthNationalityId
+: 
+null
+Personal_Data_CivilStateId
+: 
+null
+Personal_Data_Email
+: 
+null
+Personal_Data_ExtendedMinor
+: 
+null
+Personal_Data_FirstName
+: 
+null
+Personal_Data_GenderId
+: 
+null
+Personal_Data_LastName
+: 
+null
+Personal_Data_Mobilenumber
+: 
+null
+Personal_Data_NationalityId
+: 
+null
+Personal_Data_OccupationId
+: 
+null
+Personal_Data_Other_Nationalities
+: 
+[]
+Personal_Data_PersonNumber
+: 
+null
+Personal_Data_Sponsor
+: 
+null
+Personal_Data_Telephonenumber
+: 
+null
+Personal_Occupation
+: 
+{Name: null, Address: {Street: null, HouseNumber: null, City: null, PostalCode: null, CountryId: null},…}
+PhoneValid
+: 
+true
+PostId
+: 
+null
+PreviousFingerPrint
+: 
+null
+PreviousFingerprint_CaptureDate
+: 
+null
+PreviousFingerprint_VisaNumber
+: 
+null
+PreviousSchengenVisa_DateOfIssue
+: 
+null
+PreviousSchengenVisa_DeliveredByCountryId
+: 
+null
+PreviousSchengenVisa_ValidUntil
+: 
+null
+PreviousSchengenVisa_VisaNumber
+: 
+null
+ReferencePersonId
+: 
+"77a3f4cf-7284-4908-bbbd-2af5fc2cb524"
+References
+: 
+[{Id: "77a3f4cf-7284-4908-bbbd-2af5fc2cb524", ActorType: 5, ActorSubType: 0, Invitation: true,…},…]
+SelectedVacCountry
+: 
+null
+ShowParent2
+: 
+false
+StatusId
+: 
+1
+StatusScan
+: 
+6
+StatusTranslated
+: 
+"Nouveau"
+SubGroupId
+: 
+null
+TravelDocument_DateOfIssue
+: 
+null
+TravelDocument_DocumentNumber
+: 
+null
+TravelDocument_DocumentTypeId
+: 
+null
+TravelDocument_IssuingAuthorityCountryId
+: 
+null
+TravelDocument_IssuingAuthorityPlace
+: 
+null
+TravelDocument_ValidUntil
+: 
+null
+VOWId
+: 
+"VOWINT5903406"
+VacId
+: 
+1
+Vac_AppointmentWebsite
+: 
+null
+anyDocument
+: 
+false
+anyDocumentTypeOne
+: 
+false
+bioModFetchOk
+: 
+true
+canTakeAppointment
+: 
+true
+ownApplication
+: 
+true
+rights
+: 
+[{Key: "showSaveButton", Value: true}, {Key: "showSubmitButton", Value: true},…]
+0
+: 
+{Key: "showSaveButton", Value: true}
+1
+: 
+{Key: "showSubmitButton", Value: true}
+2
+: 
+{Key: "showValidateButton", Value: false}
+3
+: 
+{Key: "showVerifyButton", Value: false}
+4
+: 
+{Key: "showCompleteButton", Value: false}
+5
+: 
+{Key: "showPrintReceiptButton", Value: false}
+6
+: 
+{Key: "showPrintVisaApplicationButton", Value: false}
+7
+: 
+{Key: "showSaveCommentButton", Value: false}
+8
+: 
+{Key: "isOsUniqueIdEditable", Value: false}
+9
+: 
+{Key: "canViewPaymentBlock", Value: false}
+10
+: 
+{Key: "canEditPaymentInfo", Value: true}
+11
+: 
+{Key: "isPaymentDone", Value: false}
+12
+: 
+{Key: "showBiometricInfo", Value: false}
+13
+: 
+{Key: "canViewComment", Value: false}
+14
+: 
+{Key: "showOnHoldButton", Value: false}
+15
+: 
+{Key: "showUpdateApplicationDate", Value: false}
+16
+: 
+{Key: "showEAppointmentButton", Value: false}
+17
+: 
+{Key: "showAppointementSystemOutsourcer", Value: false}
+18
+: 
+{Key: "showEAppointmentTakeDocButton", Value: false}
+19
+: 
+{Key: "showEAppointmentLabel", Value: false}
+20
+: 
+{Key: "showMrzDeleteScan", Value: false}
+21
+: 
+{Key: "showMrzIgnore", Value: false}
+22
+: 
+{Key: "showMrzOverwritte", Value: false}
+23
+: 
+{Key: "showPrintBarcodeButton", Value: false}
+24
+: 
+{Key: "showDecisionReadyButton", Value: false}
+25
+: 
+{Key: "showDocumentsRetrievedButton", Value: false}
+26
+: 
+{Key: "CanHandleDocument", Value: false}
+27
+: 
+{Key: "showBiomodAppLink", Value: false}
+28
+: 
+{Key: "showDeleteBiometric", Value: false}
