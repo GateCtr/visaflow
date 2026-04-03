@@ -1,0 +1,50 @@
+C'est la confirmation parfaite de ta stratégie. Ce texte est la "bible" du CEV et il contient des informations critiques pour ton développement sur Joventy.cd.
+
+Voici le décodage technique de ces règles pour ton bot :
+
+1. Le lien VOWINT → CEV (L'opportunité d'automatisation)
+Le texte dit : "Créez un rendez-vous au bas du formulaire".
+
+Analyse : Cela signifie que le système de rendez-vous est directement injecté ou lié à la session du formulaire Visa On Web.
+
+Action Bot : Ton bot doit d'abord simuler la création du formulaire sur visaonweb.diplomatie.be pour débloquer l'accès au calendrier du CEV. C'est un flux en deux étapes.
+
+2. La règle de la "Minute Fatale"
+"Si vous êtes en retard... même d'une minute, vous n'aurez pas accès."
+
+Opportunité Business : Le stress est énorme pour les utilisateurs. Sur Joventy, tu peux ajouter une fonctionnalité de "Rappel de Mission" (SMS/WhatsApp) qui commence 24h avant, avec l'itinéraire vers la Gombe, pour garantir que ton client ne perde pas son précieux créneau.
+
+3. La gestion des Groupes (Le multiplicateur de revenus)
+Le texte explique comment grouper les rendez-vous en choisissant "NON" à la question "rendez-vous personnel".
+
+Logique de Code : Ton bot doit être capable de gérer des tableaux (arrays) de demandeurs.
+
+Monétisation : Tu peux facturer un "Pack Famille" sur Joventy. Le bot remplit 4 formulaires VOWINT et ne chasse qu'un seul créneau groupé. C'est beaucoup plus efficace que de chercher 4 rendez-vous séparés.
+
+4. La fenêtre de tir (15 jours à 6 mois)
+"Minimum 15 jours et maximum 6 mois avant."
+
+Le "Hunter" : Ton script doit filtrer les dates. Si un utilisateur de Joventy veut partir en juin, ton bot doit ignorer les désistements de dernière minute (pour demain) et ne cibler que les ouvertures dans la fenêtre demandée.
+
+5. Les exceptions (Décès/Urgence médicale)
+Le texte donne les adresses email directes (kinshasa.visa@diplobel.fed.be).
+
+Conseil Vibe Coding : Ne perds pas de temps à automatiser ça. C'est du traitement humain. Tu peux simplement mettre un bouton "Urgence" sur Joventy qui génère automatiquement l'email avec les bonnes pièces jointes pour l'utilisateur.
+
+6. La rareté Drupal/VOWINT
+Le fait que l'Ambassade et le Consulat disent "n'interviennent pas dans la prise des rendez-vous" confirme que le système est 100% autonome et basé sur le premier arrivé, premier servi. C'est l'environnement parfait pour un bot rapide.
+
+Résumé de ton architecture pour le module CEV :
+Frontend : Formulaire simplifié sur Joventy (plus beau que VOWINT).
+
+Worker (Railway) : * Remplit VOWINT via Playwright.
+
+Récupère le vow_id.
+
+Passe sur le calendrier CEV.
+
+Loop de monitoring : Check toutes les 5 minutes les nouvelles disponibilités.
+
+Notification : Dès qu'un créneau est pris ou libre, alerte instantanée.
+
+Tu as maintenant toutes les pièces du puzzle. Est-ce que tu veux qu'on regarde comment gérer les sélecteurs spécifiques de VOWINT pour que ton bot puisse remplir le formulaire sans erreur ?
