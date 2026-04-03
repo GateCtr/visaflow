@@ -69,6 +69,22 @@ Playwright.on('request', req => {
 });
 ```
 
+### ⚠️ Rate limit confirmé : 5 clics/heure par demande
+```
+"Vous avez cliqué plus de 5 fois sur le bouton « Prendre rendez-vous »
+au cours de cette heure pour cette demande (ou ce groupe de demandes).
+Votre compte est bloqué pendant 60 minutes."
+```
+- Limite : **5 tentatives par heure** par AppId/compte
+- Blocage : **60 minutes** sur le compte VOWINT
+- Périmètre : par demande individuelle ou groupe de demandes
+
+**Impact sur la stratégie bot :**
+- Le bot NE DOIT PAS cliquer le bouton de RDV en boucle de polling
+- Il faut d'abord détecter la disponibilité via une route API légère (sans clic bouton)
+- Le clic final n'est fait QU'UNE FOIS quand un créneau est confirmé disponible
+- Utiliser des AppId/comptes distincts par client pour éviter le blocage croisé
+
 ### Stack du système appointment.cloud.diplomatie.be :
 - **JSZip v3.10.1** (génération de documents ZIP/PDF de confirmation)
 - **loglevel** (logging)

@@ -1,0 +1,88 @@
+URL de requête
+https://api.hcaptcha.com/checksiteconfig?v=189aeab628a0b8d957d713d81bfa72f83e1a494f&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1
+Méthode de requête
+POST
+Code d'état
+200 OK
+Adresse distante
+104.19.230.21:443
+Règlement sur les URL de provenance
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-headers
+Cache-Control, Content-Type, DNT, Referer, User-Agent
+access-control-allow-methods
+GET, HEAD, POST, OPTIONS
+access-control-allow-origin
+https://newassets.hcaptcha.com
+alt-svc
+h3=":443"; ma=86400
+cf-ray
+9e67df617b9a4193-CPT
+content-encoding
+br
+content-type
+application/json
+date
+Fri, 03 Apr 2026 11:53:23 GMT
+priority
+u=1,i
+server
+cloudflare
+server-timing
+cfExtPri
+set-cookie
+__cf_bm=vaJ4EMpLS5Z8LUWCX0RsgR6jL._stjQDPPtdjKcDa.k-1775217203.440871-1.0.1.1-QLvb5BEww.D_Ow4D1vDdzJm563X8v.QJ.PfZYfuWhWeU9M0rdVEm4MmA1E8BVRN8NCjOkN29LW16HWXDlQYFGbGduipTXh3daoqtwk6YBSoaGGm_i9.743z33hGmH48d; HttpOnly; Secure; Path=/; Domain=hcaptcha.com; Expires=Fri, 03 Apr 2026 12:23:23 GMT
+strict-transport-security
+max-age=31536000; includeSubDomains; preload
+vary
+Origin, Accept-Encoding
+x-content-type-options
+nosniff
+:authority
+api.hcaptcha.com
+:method
+POST
+:path
+/checksiteconfig?v=189aeab628a0b8d957d713d81bfa72f83e1a494f&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1
+:scheme
+https
+accept
+application/json
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+fr-CD,fr;q=0.9,sw-CD;q=0.8,sw;q=0.7,en-US;q=0.6,en;q=0.5,fr-FR;q=0.4
+cache-control
+no-cache
+content-length
+0
+content-type
+text/plain
+cookie
+hmt_id=13f74c34-4bea-4a01-992a-1f376743411a
+origin
+https://newassets.hcaptcha.com
+pragma
+no-cache
+priority
+u=1, i
+referer
+https://newassets.hcaptcha.com/
+sec-ch-ua
+"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile
+?1
+sec-ch-ua-platform
+"Android"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-site
+sec-fetch-storage-access
+active
+user-agent
+Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36
