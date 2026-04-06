@@ -465,10 +465,9 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
       return;
     }
 
-    // Cas 2 : ping HTTP fetch — CEV est le juge de paix (VOWINT peut être filtré DNS)
-    console.log(`[navigator] Test Schengen → ping HTTP fetch (CEV + VOWINT)`);
+    // Cas 2 : ping HTTP fetch — CEV uniquement (VOWINT bloque les requêtes non-navigateur)
+    console.log(`[navigator] Test Schengen → ping HTTP fetch (CEV)`);
     try {
-      // ── CEV Belgique — accessible depuis tous les environnements ────────────
       let cevOk = false;
       let cevStatus: number | undefined;
       let cevNote = "";
@@ -479,44 +478,17 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
         cevOk = res.status < 500;
         cevStatus = res.status;
       } catch (e) {
-        cevNote = e instanceof Error ? e.message.slice(0, 80) : String(e);
+        cevNote = e instanceof Error ? e.message.slice(0, 100) : String(e);
       }
-
-      // ── VOWINT — peut être filtré DNS depuis certains environnements ────────
-      let vowintOk = false;
-      let vowintStatus: number | undefined;
-      let vowintNote = "";
-      try {
-        const res = await fetch("https://app.vowint.eu/fowint/", {
-          signal: AbortSignal.timeout(12_000),
-        });
-        vowintOk = res.status < 500;
-        vowintStatus = res.status;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const isDns = msg.includes("ENOTFOUND") || msg.includes("EAI_AGAIN") || msg.includes("getaddrinfo");
-        vowintNote = isDns
-          ? "DNS non résolu ici — accessible depuis Railway ✓"
-          : msg.slice(0, 80);
-      }
-
       const latencyMs = Date.now() - startMs;
-
-      // La réussite globale dépend de CEV (VOWINT DNS restriction n'est pas un échec)
-      const vowintIsDnsOnly = !vowintOk && vowintNote.includes("Railway");
-      const overallOk = cevOk && (vowintOk || vowintIsDnsOnly);
-
-      const cevPart = `CEV: ${cevOk ? `HTTP ${cevStatus} ✓` : (cevNote || `HTTP ${cevStatus} ✗`)}`;
-      const vowintPart = `VOWINT: ${vowintOk ? `HTTP ${vowintStatus} ✓` : vowintNote || `HTTP ${vowintStatus} ✗`}`;
-      const summary = `${cevPart} | ${vowintPart}`;
-
-      console.log(`[navigator] Ping Schengen — ${summary} (${latencyMs}ms)`);
+      const note = `CEV: ${cevOk ? `HTTP ${cevStatus} ✓` : (cevNote || `HTTP ${cevStatus} ✗`)} | VOWINT: testé uniquement via test complet (navigateur requis)`;
+      console.log(`[navigator] Ping Schengen — ${note} (${latencyMs}ms)`);
       await reportBotTestResult({
         testId: test._id,
-        result: overallOk ? "portal_ok" : "portal_unreachable",
+        result: cevOk ? "portal_ok" : "portal_unreachable",
         latencyMs,
-        httpStatus: cevOk ? cevStatus : undefined,
-        errorMessage: overallOk ? (vowintIsDnsOnly ? summary : undefined) : summary,
+        httpStatus: cevStatus,
+        errorMessage: cevOk ? note : `CEV inaccessible: ${cevNote || `HTTP ${cevStatus}`}`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
