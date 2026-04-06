@@ -508,17 +508,17 @@ export default function AdminBotTest() {
               <p className="text-sm">Aucun test effectué pour l'instant.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[420px] rounded-lg border border-border">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-xs text-muted-foreground border-b border-border">
-                    <th className="pb-2 text-left font-medium">Date</th>
-                    <th className="pb-2 text-left font-medium">Destination</th>
-                    <th className="pb-2 text-left font-medium">Type</th>
-                    <th className="pb-2 text-left font-medium">Statut</th>
-                    <th className="pb-2 text-left font-medium">Résultat</th>
-                    <th className="pb-2 text-left font-medium">Latence</th>
-                    <th className="pb-2 text-left font-medium">Détail</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Date</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Destination</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Type</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Statut</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Résultat</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Latence</th>
+                    <th className="pb-2 pt-2 px-1 text-left font-medium">Détail</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
