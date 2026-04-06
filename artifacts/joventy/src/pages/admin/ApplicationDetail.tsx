@@ -639,7 +639,7 @@ export default function AdminApplicationDetail() {
               { label: "Reçu USCIS I-797 (pétition)", value: refs.petitionReceiptNumber },
               { label: "Nom du pétitionnaire", value: refs.petitionerName },
               { label: "Référence VFS", value: refs.vfsRefNumber },
-              { label: "N° dossier VOWINT", value: refs.vowintAppId, hint: "CEV Schengen" },
+              { label: "URL page RDV VOWINT", value: refs.vowintAppId, hint: "CEV Schengen" },
             ].filter((r) => r.value);
             if (rows.length === 0) return null;
             return (
@@ -1305,19 +1305,19 @@ export default function AdminApplicationDetail() {
                       🇪🇺 Configuration VOWINT (CEV Schengen)
                     </p>
                     <p className="text-[11px] text-indigo-600">
-                      Les identifiants portail ci-dessus sont les accès VOWINT (vowint.eu) du client.
-                      Renseignez son numéro de dossier VOWINT et le pays Schengen cible.
+                      Les identifiants portail ci-dessus sont les accès VOWINT (<strong>visaonweb.diplomatie.be</strong>) du client.
+                      Collez l'URL complète de la page de demande sur VOWINT et renseignez le pays Schengen cible.
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-indigo-700 uppercase">N° dossier VOWINT</label>
+                        <label className="text-xs font-medium text-indigo-700 uppercase">URL page RDV VOWINT</label>
                         <Input
                           value={hunterVowintAppId}
                           onChange={(e) => setHunterVowintAppId(e.target.value)}
-                          placeholder="APP-2024-001234"
+                          placeholder="https://visaonweb.diplomatie.be/Application/Detail/12345"
                           className="h-9 bg-white text-sm font-mono"
                         />
-                        <p className="text-[10px] text-indigo-400">Visible sur la confirmation VOWINT du client</p>
+                        <p className="text-[10px] text-indigo-400">URL complète de la page avec le bouton "Prendre rendez-vous" sur VOWINT</p>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-indigo-700 uppercase">Pays Schengen cible</label>

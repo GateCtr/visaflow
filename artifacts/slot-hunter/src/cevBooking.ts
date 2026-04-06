@@ -196,12 +196,40 @@ async function establishCevSession(
   });
 
   try {
-    // Naviguer vers la page de demande VOWINT (AppointmentUrl stockée en Convex)
-    await page.goto(config.vowintAppointmentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // === ÉTAPE 0 : Login VOWINT sur visaonweb.diplomatie.be ===
+    botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
+    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+
+    const loginUrl = page.url();
+    const loginTitle = await page.title();
+    if (loginTitle.toLowerCase().includes('login') || loginUrl.toLowerCase().includes('login')) {
+      await page.fill('input#UserName', config.vowintUsername);
+      await page.fill('input#Password', config.vowintPassword);
+      // VOWINT utilise AJAX/form submit sans redirection complète — on attend networkidle
+      await page.click('button[type="submit"]');
+      await page.waitForLoadState('networkidle', { timeout: 15_000 });
+
+      const afterUrl = page.url();
+      const afterTitle = await page.title();
+      if (afterUrl.toLowerCase().includes('login') || afterTitle.toLowerCase().includes('login')) {
+        // Toujours sur login → mauvais credentials
+        botLog({ applicationId: config.clientId, step: 'cev_vowint_login_failed', status: 'fail', data: { afterUrl, afterTitle } });
+        return null;
+      }
+      botLog({ applicationId: config.clientId, step: 'cev_vowint_login_ok', status: 'ok', data: { afterUrl, afterTitle } });
+    }
+
+    // === ÉTAPE 1 : Naviguer vers la page de demande (si URL spécifique fournie) ===
+    const isSpecificUrl = config.vowintAppointmentUrl &&
+      config.vowintAppointmentUrl !== 'https://visaonweb.diplomatie.be' &&
+      config.vowintAppointmentUrl.startsWith('https://');
+    if (isSpecificUrl) {
+      await page.goto(config.vowintAppointmentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    }
 
     // Attendre le bouton "Prendre rendez-vous"
-    const btnSelector = 'a[href*="appointment"], button:has-text("rendez-vous"), a:has-text("rendez-vous")';
-    await page.waitForSelector(btnSelector, { timeout: 15_000 });
+    const btnSelector = 'a[href*="appointment"], button:has-text("rendez-vous"), a:has-text("rendez-vous"), .btn-appointment, [data-action="appointment"]';
+    await page.waitForSelector(btnSelector, { timeout: 20_000 });
 
     // Écouter l'ouverture d'un nouvel onglet (blob: URL)
     const [newPage] = await Promise.all([
@@ -563,9 +591,11 @@ export async function runCevCheck(job: HunterJob): Promise<SchengenSessionResult
 
   botLog({ applicationId: job.id, step: 'cev_check_start', status: 'ok', data: { clickCount: clickCount + 1 } });
 
-  const vowintAppointmentUrl = hc.vowintAppId
-    ? `https://vowint.eu/appointment/${hc.vowintAppId}`
-    : 'https://vowint.eu/dashboard';
+  // Si vowintAppId est une URL complète (ex: https://visaonweb.diplomatie.be/Application/Detail/12345),
+  // l'utiliser directement. Sinon on démarre depuis la racine VOWINT et on browse le dashboard.
+  const vowintAppointmentUrl = hc.vowintAppId?.startsWith('https://')
+    ? hc.vowintAppId
+    : 'https://visaonweb.diplomatie.be';
 
   let result: BookingResult;
   try {

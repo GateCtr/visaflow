@@ -435,7 +435,7 @@ export default function AdminBotTest() {
               <div>
                 <p className="font-semibold text-indigo-800 mb-0.5">Test VOWINT / CEV Schengen</p>
                 <p className="text-xs text-indigo-600">
-                  Les identifiants sont les accès <strong>VOWINT</strong> (vowint.eu) du client — pas les accès CEV directement.
+                  Les identifiants sont les accès <strong>VOWINT</strong> (visaonweb.diplomatie.be) du client — pas les accès CEV directement.
                   <br />
                   <strong>Sans clé 2captcha :</strong> ping VOWINT + accessibilité portail CEV depuis le serveur du bot.
                   <br />
