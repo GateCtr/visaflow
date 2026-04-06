@@ -616,12 +616,12 @@ export default function Landing() {
                   "{t.text}"
                 </blockquote>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
-                    {t.name[0]}
+                  <div className="w-11 h-11 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center text-2xl flex-shrink-0">
+                    {t.dest.split(" ")[0]}
                   </div>
                   <div>
                     <p className="font-bold text-primary text-sm">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
+                    <p className="text-xs text-muted-foreground">{t.city} · {t.dest.split(" ").slice(1).join(" ")}</p>
                   </div>
                 </div>
               </div>
@@ -793,7 +793,7 @@ export default function Landing() {
             <div>
               <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Destinations</h4>
               <ul className="space-y-2 text-sm text-white/50">
-                {["🇺🇸 Visa États-Unis", "🇦🇪 E-Visa Dubaï", "🇹🇷 Visa Turquie", "🇮🇳 E-Visa Inde"].map((d) => (
+                {["🇺🇸 Visa États-Unis", "🇪🇺 Visa Schengen", "🇦🇪 E-Visa Dubaï", "🇹🇷 Visa Turquie", "🇮🇳 E-Visa Inde"].map((d) => (
                   <li key={d}><Link href="/register" className="hover:text-white transition-colors">{d}</Link></li>
                 ))}
               </ul>
