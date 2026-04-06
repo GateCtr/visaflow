@@ -217,6 +217,28 @@ export const recordHeartbeat = internalMutation({
   },
 });
 
+export const recordCevClick = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    windowStart: v.number(),
+    clickCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const existing = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig;
+    if (!existing) return;
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        cevClickWindowStart: args.windowStart,
+        cevClickCount: args.clickCount,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const checkTwoCaptchaBalance = action({
   args: { applicationId: v.id("applications") },
   handler: async (ctx, args) => {

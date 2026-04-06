@@ -218,6 +218,28 @@ export async function uploadScreenshot(base64: string): Promise<string | null> {
 }
 
 /**
+ * Enregistre un clic sur le bouton RDV CEV (pour tracking du rate limit 4 clics/heure).
+ * Fire-and-forget — ne bloque pas le chemin critique.
+ */
+export function recordCevClick(payload: {
+  applicationId: string;
+  windowStart: number;
+  clickCount: number;
+}): void {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-click`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Hunter-Key": HUNTER_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }).catch((err) =>
+    console.warn("[convexClient] recordCevClick fire-and-forget error:", err)
+  );
+}
+
+/**
  * Log fire-and-forget d'un événement du cycle de vie du bot.
  * N'attend jamais la réponse — ne bloque pas le chemin critique.
  */

@@ -952,7 +952,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       username,
       applicationId: session.applicationId,
       missionId: session.missionId,
-      allowedOfcs: session.allowedOfcs?.map((o) => o.postName) ?? [],
+      allowedOfcs: session.allowedOfcs?.map((o) => o.postUserId) ?? [],
     },
   });
 

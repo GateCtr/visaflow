@@ -128,6 +128,44 @@ Index: `by_application`
 
 Indexes: `by_application`, `by_application_key`
 
+## Slot Hunter — CEV/Schengen Flow (Belgique via VOWINT)
+
+### Architecture VOWINT → CEV (confirmé par inspection live)
+
+```
+visaonweb.diplomatie.be  →  appointment.cloud.diplomatie.be
+     (VOWINT)                         (CEV)
+```
+
+**Flux complet vérifié :**
+1. `GET https://visaonweb.diplomatie.be` → redirige vers login
+2. `POST` formulaire : `input#UserName`, `input#Password`, `button[type="submit"]`
+3. `GET /en/VisaApplication/IndexByUserId` → tableau AngularJS avec les dossiers
+4. Clic `[ng-click*="groupVAEapp"]` → nouvel onglet vers `appointment.cloud.diplomatie.be/Captcha`
+5. Cookie `ASP.NET_SessionId` extrait via `context.cookies()` (jar navigateur, pas headers)
+6. hCaptcha sitekey : `5f64399c-14a8-415e-ad1a-7ebccdc4943a`
+7. POST `appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken` avec token 2captcha
+8. Réponse : `{ validUntil, redirectUrl }` → redirectUrl = page des créneaux
+
+**Données test :**
+- Compte VOWINT : `screentapinc@gmail.com` (VOWINT secret Replit)
+- Application : VOWINT5903406 — NGOBI ESTHER (ID Convex : `e978b2fd-472f-f111-a3ae-00505691de06`)
+- Integration URL CEV : `https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/{appGuid}/59eba882-4cc3-4ede-ba31-935d81f9393c/adbc8e5f-ecaf-435b-849e-f533a09c7dcb/en-US`
+
+**Fichiers clés :**
+- `artifacts/slot-hunter/src/cevBooking.ts` — `establishCevSession()` + `runCevCheck()` + `runCevBookingSession()`
+- `artifacts/slot-hunter/src/cevPortal.ts` — `completeCevCaptcha()` + `pollCevSlots()`
+- `convex/hunter.ts` — `recordCevClick` (rate limit 4 clics/h), `recordHeartbeat`, `markSlotFoundByHunter`
+- `convex/http.ts` — `/hunter/cev-click`, `/hunter/heartbeat`, `/hunter/slot-found`, `/hunter/log`
+
+**Envvars requises pour le bot :**
+- `VOWINT_TEST_PASSWORD` — mot de passe compte screentapinc@gmail.com
+- `TWOCAPTCHA_API_KEY` — clé API 2captcha (résolution hCaptcha)
+- `CONVEX_SITE_URL` — URL site actions Convex (e.g. `https://famous-albatross-420.convex.site`)
+- `HUNTER_API_KEY` — clé secrète pour l'endpoint `/hunter/*`
+
+**Rate limit CEV :** 4 clics/heure par application, suivi dans `hunterConfig.cevClickCount` + `cevClickWindowStart`
+
 ## Environment Variables Required
 
 | Variable | Description |

@@ -373,4 +373,35 @@ http.route({
   }),
 });
 
+http.route({
+  path: "/hunter/cev-click",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { applicationId: string; windowStart: number; clickCount: number };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.applicationId || body.windowStart == null || body.clickCount == null) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    await ctx.runMutation(internal.hunter.recordCevClick, {
+      applicationId: body.applicationId as Id<"applications">,
+      windowStart: body.windowStart,
+      clickCount: body.clickCount,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 export default http;

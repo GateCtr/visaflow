@@ -1,6 +1,6 @@
 import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
 import type { HunterJob } from './convexClient';
-import { botLog, uploadScreenshot } from './convexClient';
+import { botLog, uploadScreenshot, recordCevClick } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, isCevSessionValid, CevSession } from './cevPortal';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
@@ -96,7 +96,7 @@ export async function runCevBookingSession(
 
     context.on('response', async (res: Response) => {
       if (res.url().includes('appointment.cloud.diplomatie.be')) {
-        const entry = capturedCalls.findLast(c => c.url === res.url() && !c.responseStatus);
+        const entry = [...capturedCalls].reverse().find((c: CapturedNetworkCall) => c.url === res.url() && !c.responseStatus);
         if (entry) {
           entry.responseStatus = res.status();
           try {
@@ -161,97 +161,120 @@ export async function runCevBookingSession(
 }
 
 /**
- * Établit la session CEV en interceptant le POST depuis le bouton VOWINT.
- * Retourne les cookies de session ou null si échec.
+ * Établit la session CEV via VOWINT (visaonweb.diplomatie.be).
+ *
+ * Flux réel (découvert par inspection live du portail) :
+ *  1. Login VOWINT via formulaire #UserName / button[type="submit"]
+ *  2. Naviguer vers "My Applications" (/en/VisaApplication/IndexByUserId)
+ *     OU vers l'URL spécifique si vowintAppointmentUrl est fourni
+ *  3. Cliquer [ng-click*="groupVAEapp"] = bouton calendrier AngularJS (icône calendrier)
+ *  4. Nouveau onglet s'ouvre → appointment.cloud.diplomatie.be/Captcha
+ *  5. Extraire ASP.NET_SessionId depuis le jar du navigateur (context.cookies())
  */
 async function establishCevSession(
   page: Page,
   context: BrowserContext,
   config: CevBookingConfig,
-  capturedCalls: CapturedNetworkCall[]
+  _capturedCalls: CapturedNetworkCall[]
 ): Promise<{ cookies: string } | null> {
-  let cevSessionCookies: string | null = null;
-
-  // Intercepter la réponse de /Captcha pour capturer les cookies de session
-  context.on('response', async (res: Response) => {
-    if (
-      res.url().startsWith(`${CEV_BASE}/Captcha`) &&
-      res.request().method() === 'POST'
-    ) {
-      const setCookieHeader = res.headers()['set-cookie'];
-      if (setCookieHeader && !cevSessionCookies) {
-        // Normaliser les cookies en une seule string
-        const cookies = Array.isArray(setCookieHeader)
-          ? setCookieHeader.map(c => c.split(';')[0]).join('; ')
-          : setCookieHeader.split(';')[0];
-        cevSessionCookies = cookies;
-        botLog({
-          applicationId: config.clientId,
-          step: 'cev_session_cookie_captured',
-          status: 'ok',
-          data: { cookieLen: cookies.length },
-        });
-      }
-    }
-  });
-
   try {
-    // === ÉTAPE 0 : Login VOWINT sur visaonweb.diplomatie.be ===
+    // === ÉTAPE 0 : Login VOWINT ===
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
     await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
-    const loginUrl = page.url();
     const loginTitle = await page.title();
-    if (loginTitle.toLowerCase().includes('login') || loginUrl.toLowerCase().includes('login')) {
+    const loginUrl = page.url();
+    const isLoginPage = loginTitle.toLowerCase().includes('login') ||
+      loginTitle.toLowerCase().includes('connexion') ||
+      loginUrl.toLowerCase().includes('account/login');
+
+    if (isLoginPage) {
       await page.fill('input#UserName', config.vowintUsername);
       await page.fill('input#Password', config.vowintPassword);
-      // VOWINT utilise AJAX/form submit sans redirection complète — on attend networkidle
       await page.click('button[type="submit"]');
       await page.waitForLoadState('networkidle', { timeout: 15_000 });
 
       const afterUrl = page.url();
       const afterTitle = await page.title();
-      if (afterUrl.toLowerCase().includes('login') || afterTitle.toLowerCase().includes('login')) {
-        // Toujours sur login → mauvais credentials
+      const stillLogin = afterUrl.toLowerCase().includes('account/login') ||
+        afterTitle.toLowerCase().includes('login') ||
+        afterTitle.toLowerCase().includes('connexion');
+
+      if (stillLogin) {
         botLog({ applicationId: config.clientId, step: 'cev_vowint_login_failed', status: 'fail', data: { afterUrl, afterTitle } });
         return null;
       }
-      botLog({ applicationId: config.clientId, step: 'cev_vowint_login_ok', status: 'ok', data: { afterUrl, afterTitle } });
+      botLog({ applicationId: config.clientId, step: 'cev_vowint_login_ok', status: 'ok', data: { afterUrl } });
     }
 
-    // === ÉTAPE 1 : Naviguer vers la page de demande (si URL spécifique fournie) ===
-    const isSpecificUrl = config.vowintAppointmentUrl &&
+    // === ÉTAPE 1 : Naviguer vers la page des dossiers ===
+    // Si une URL spécifique est fournie et commence par https://, l'utiliser.
+    // Sinon → page "My Applications" par défaut.
+    const targetUrl = (config.vowintAppointmentUrl &&
       config.vowintAppointmentUrl !== 'https://visaonweb.diplomatie.be' &&
-      config.vowintAppointmentUrl.startsWith('https://');
-    if (isSpecificUrl) {
-      await page.goto(config.vowintAppointmentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      config.vowintAppointmentUrl.startsWith('https://'))
+      ? config.vowintAppointmentUrl
+      : 'https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId';
+
+    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+    // Attendre le rendu AngularJS (lazy-loaded)
+    await new Promise(r => setTimeout(r, 2_500));
+
+    botLog({ applicationId: config.clientId, step: 'cev_vowint_apps_page', status: 'ok', data: { url: page.url() } });
+
+    // === ÉTAPE 2 : Trouver le bouton calendrier "Prendre rendez-vous" ===
+    // VOWINT AngularJS : ng-click="groupVAEapp(...)" = bouton RDV (icône calendrier .fa-calendar)
+    const rdvBtn = await page.$('[ng-click*="groupVAEapp"]') ??
+                   await page.$('button:has(.fa-calendar)') ??
+                   await page.$('[ng-click*="appointment"]');
+
+    if (!rdvBtn) {
+      const allNgClicks = await page.$$eval('[ng-click]', (els: any[]) =>
+        els.map(e => e.getAttribute('ng-click'))
+      ).catch(() => []);
+      botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_not_found', status: 'fail', data: { allNgClicks } });
+      return null;
     }
 
-    // Attendre le bouton "Prendre rendez-vous"
-    const btnSelector = 'a[href*="appointment"], button:has-text("rendez-vous"), a:has-text("rendez-vous"), .btn-appointment, [data-action="appointment"]';
-    await page.waitForSelector(btnSelector, { timeout: 20_000 });
+    botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_found', status: 'ok' });
 
-    // Écouter l'ouverture d'un nouvel onglet (blob: URL)
+    // === ÉTAPE 3 : Cliquer et attendre le nouvel onglet CEV ===
     const [newPage] = await Promise.all([
       context.waitForEvent('page', { timeout: 15_000 }),
-      page.click(btnSelector),
+      rdvBtn.click(),
     ]);
 
-    // Attendre que la page CEV charge (elle sera redirigée vers /Captcha)
     await newPage.waitForLoadState('domcontentloaded', { timeout: 20_000 });
+    await new Promise(r => setTimeout(r, 2_000)); // laisser les cookies s'établir dans le jar
 
-    // Attendre max 5s que les cookies soient capturés
-    const deadline = Date.now() + 5_000;
-    while (!cevSessionCookies && Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 200));
+    const newPageUrl = newPage.url();
+    botLog({ applicationId: config.clientId, step: 'cev_new_tab_opened', status: 'ok', data: { url: newPageUrl } });
+
+    if (!newPageUrl.includes('appointment.cloud.diplomatie.be')) {
+      botLog({ applicationId: config.clientId, step: 'cev_wrong_tab', status: 'fail', data: { url: newPageUrl } });
+      return null;
     }
 
-    if (!cevSessionCookies) {
+    // === ÉTAPE 4 : Extraire ASP.NET_SessionId depuis le jar navigateur ===
+    const allCookies = await context.cookies();
+    const cevCookies = allCookies.filter(c =>
+      c.domain.includes('appointment.cloud.diplomatie.be')
+    );
+
+    if (cevCookies.length === 0) {
       botLog({ applicationId: config.clientId, step: 'cev_session_cookie_missing', status: 'fail' });
       return null;
     }
 
-    return { cookies: cevSessionCookies };
+    const cookieString = cevCookies.map(c => `${c.name}=${c.value}`).join('; ');
+    botLog({
+      applicationId: config.clientId,
+      step: 'cev_session_cookie_captured',
+      status: 'ok',
+      data: { cookieLen: cookieString.length, names: cevCookies.map(c => c.name).join(', ') },
+    });
+
+    return { cookies: cookieString };
 
   } catch (err) {
     botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: String(err) } });
@@ -309,7 +332,8 @@ async function completebookingViaUI(
 
     if (!dateClicked) {
       // Screenshot pour debug si aucun sélecteur ne marche
-      const screenshotB64 = await page.screenshot({ encoding: 'base64' }).catch(() => null);
+      const screenshotBuf = await page.screenshot().catch(() => null);
+      const screenshotB64 = screenshotBuf ? screenshotBuf.toString('base64') : null;
       const storageId = screenshotB64 ? await uploadScreenshot(screenshotB64) : null;
       botLog({ applicationId: config.clientId, step: 'cev_no_date_found', status: 'fail', data: { screenshotStorageId: storageId ?? '' } });
       return { success: false, error: 'NO_DATE_SELECTOR_MATCHED', screenshotStorageId: storageId ?? undefined };
@@ -368,8 +392,9 @@ async function completebookingViaUI(
     await page.waitForLoadState('networkidle', { timeout: 20_000 });
 
     // === Screenshot de confirmation ===
-    const screenshotB64 = await page.screenshot({ encoding: 'base64', fullPage: true }).catch(() => null);
-    const screenshotStorageId = screenshotB64 ? await uploadScreenshot(screenshotB64) : undefined;
+    const screenshotBuf2 = await page.screenshot({ fullPage: true }).catch(() => null);
+    const screenshotB64 = screenshotBuf2 ? screenshotBuf2.toString('base64') : null;
+    const screenshotStorageId = (screenshotB64 ? await uploadScreenshot(screenshotB64) : null) ?? undefined;
 
     // === Extraire le code de confirmation ===
     const confirmationCode = await extractConfirmationCode(page);
@@ -393,8 +418,9 @@ async function completebookingViaUI(
     };
 
   } catch (err) {
-    const screenshotB64 = await page.screenshot({ encoding: 'base64' }).catch(() => null);
-    const screenshotStorageId = screenshotB64 ? await uploadScreenshot(screenshotB64) : undefined;
+    const screenshotBuf3 = await page.screenshot().catch(() => null);
+    const screenshotStorageId3 = screenshotBuf3 ? await uploadScreenshot(screenshotBuf3.toString('base64')) : undefined;
+    const screenshotStorageId = screenshotStorageId3 ?? undefined;
     botLog({ applicationId: config.clientId, step: 'cev_booking_ui_error', status: 'fail', data: { error: String(err) } });
     return { success: false, error: String(err), screenshotStorageId };
   }
@@ -610,6 +636,14 @@ export async function runCevCheck(job: HunterJob): Promise<SchengenSessionResult
   } catch (err) {
     botLog({ applicationId: job.id, step: 'cev_check_exception', status: 'fail', data: { error: String(err) } });
     return 'error';
+  }
+
+  // Tracker le clic CEV si la session a été établie (bouton calendrier cliqué)
+  // CEV_SESSION_FAILED = aucun clic, pas de comptage
+  if (result.error !== 'CEV_SESSION_FAILED') {
+    const newCount = clickCount + 1;
+    const newWindowStart = (clickCount === 0 || now - windowStart >= WINDOW_MS) ? now : windowStart;
+    recordCevClick({ applicationId: job.id, windowStart: newWindowStart, clickCount: newCount });
   }
 
   if (result.success) {
