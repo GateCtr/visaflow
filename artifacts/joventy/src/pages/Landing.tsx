@@ -517,8 +517,10 @@ export default function Landing() {
                       {dest.badge}
                     </span>
                   )}
-                  <div className="text-4xl mb-3">{dest.flag}</div>
-                  <h3 className="text-xl font-bold text-primary">{dest.name}</h3>
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-4xl leading-none">{dest.flag}</span>
+                    <h3 className="text-xl font-bold text-primary leading-tight">{dest.name}</h3>
+                  </div>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {dest.visaTypes.slice(0, 3).map((v) => (
                       <span key={v} className="text-[10px] bg-primary/5 text-primary/70 px-2 py-0.5 rounded-full font-medium">{v}</span>
