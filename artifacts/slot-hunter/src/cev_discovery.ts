@@ -175,6 +175,23 @@ const context: BrowserContext = await browser.newContext({
   },
 });
 
+// Injecter le cookie d'accessibilité hCaptcha si configuré (bypass gratuit, priorité absolue)
+const ACCESSIBILITY_COOKIE = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim() ?? '';
+if (ACCESSIBILITY_COOKIE) {
+  await context.addCookies([{
+    name: 'hc_accessibility',
+    value: ACCESSIBILITY_COOKIE,
+    domain: '.hcaptcha.com',
+    path: '/',
+    secure: true,
+    httpOnly: false,
+    sameSite: 'None' as const,
+  }]);
+  log(`[DISCOVERY] Cookie hc_accessibility injecté (accessibilité bypass) ✅`);
+} else {
+  log(`[DISCOVERY] HCAPTCHA_ACCESSIBILITY_COOKIE absent — bypass accessibilité désactivé`);
+}
+
 // ==================== CAPTURE RÉSEAU GLOBALE ====================
 
 context.on('request', (req: Request) => {
@@ -333,10 +350,42 @@ note('hCaptcha Sitekey', `Depuis DOM: ${hcaptchaSitekey}\nConfirmé: 5f64399c-14
 
 log('\n=== ÉTAPE 4 : Résolution hCaptcha ===');
 const HCAPTCHA_SITEKEY = '5f64399c-14a8-415e-ad1a-7ebccdc4943a';
-const hcaptchaToken = await solveHcaptcha(HCAPTCHA_SITEKEY, cevUrl);
+let hcaptchaToken: string | null = null;
+
+// Priorité 0 : Accessibilité bypass (cookie hc_accessibility → hCaptcha auto-résout en DOM)
+if (ACCESSIBILITY_COOKIE) {
+  log('[DISCOVERY] Tentative bypass accessibilité (priorité 0)...');
+  for (let i = 0; i < 6; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const domToken = await cevPage.evaluate(() => {
+      const textarea = document.querySelector('textarea[name="h-captcha-response"]') as HTMLTextAreaElement | null;
+      const input = document.querySelector('input[name="h-captcha-response"]') as HTMLInputElement | null;
+      return (textarea?.value || input?.value) ?? null;
+    }).catch(() => null);
+    log(`  [Accessibilité ${(i+1)*5}s] token DOM: ${domToken ? domToken.slice(0, 30) + '...' : 'vide'}`);
+    if (domToken && domToken.length > 20) {
+      hcaptchaToken = domToken;
+      note('hCaptcha résolu via Accessibilité ✅ (GRATUIT)', `Bypass cookie hc_accessibility\nTentatives: ${i+1} (${(i+1)*5}s)\nToken (60 chars): ${domToken.slice(0, 60)}...\nLongueur: ${domToken.length}`);
+      break;
+    }
+  }
+  if (!hcaptchaToken) {
+    log('[DISCOVERY] Accessibilité bypass échoué — cookie expiré ou inactif');
+    note('Accessibilité bypass ÉCHEC', 'Cookie hc_accessibility injecté mais aucun token DOM détecté.\nVérifier : accounts.hcaptcha.com → "Always pass accessibility mode" activé.');
+  }
+}
+
+// Fallback : services API (Anti-Captcha → CapSolver)
+if (!hcaptchaToken) {
+  hcaptchaToken = await solveHcaptcha(HCAPTCHA_SITEKEY, cevUrl);
+}
 
 if (!hcaptchaToken) {
-  note('hCaptcha ÉCHEC', 'Token non obtenu — vérifier clé CapSolver et solde (capsolver.com)');
+  note('hCaptcha ÉCHEC — TOUTES les méthodes épuisées', [
+    'Options :',
+    '1. [GRATUIT] Configurer HCAPTCHA_ACCESSIBILITY_COOKIE (accounts.hcaptcha.com)',
+    '2. [PAYANT] Recharger ANTICAPTCHA_API_KEY (anti-captcha.com) — $5 = ~2500 résolutions',
+  ].join('\n'));
   await browser.close();
   process.exit(1);
 }

@@ -76,6 +76,21 @@ export async function runCevBookingSession(
       timezoneId: 'Africa/Kinshasa',
     });
 
+    // Injecter le cookie d'accessibilité hCaptcha si configuré (bypass gratuit)
+    const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
+    if (accessibilityCookie) {
+      await context.addCookies([{
+        name: 'hc_accessibility',
+        value: accessibilityCookie,
+        domain: '.hcaptcha.com',
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'None',
+      }]);
+      botLog({ applicationId: config.clientId, step: 'cev_hcaptcha_accessibility_cookie_injected', status: 'ok' });
+    }
+
     // === CAPTURE RÉSEAU : intercepte TOUS les appels sur appointment.cloud.diplomatie.be ===
     context.on('request', (req: Request) => {
       if (req.url().includes('appointment.cloud.diplomatie.be')) {
@@ -126,7 +141,15 @@ export async function runCevBookingSession(
     }
 
     // === ÉTAPE 2 : Résoudre hCaptcha ===
-    const hcaptchaToken = await solveHcaptcha(config.twoCaptchaApiKey, config.clientId, config.capsolverApiKey);
+    // Priorité 0 : Mode accessibilité hCaptcha (cookie hc_accessibility, gratuit)
+    let hcaptchaToken: string | null = null;
+    if (accessibilityCookie && cevSession.cevPage) {
+      hcaptchaToken = await solveHcaptchaViaAccessibility(cevSession.cevPage, config.clientId);
+    }
+    // Fallback : services externes (Anti-Captcha → CapSolver → 2captcha)
+    if (!hcaptchaToken) {
+      hcaptchaToken = await solveHcaptcha(config.twoCaptchaApiKey, config.clientId, config.capsolverApiKey);
+    }
     if (!hcaptchaToken) {
       await browser.close();
       return { success: false, error: 'HCAPTCHA_FAILED', capturedCalls };
@@ -177,7 +200,7 @@ async function establishCevSession(
   context: BrowserContext,
   config: CevBookingConfig,
   _capturedCalls: CapturedNetworkCall[]
-): Promise<{ cookies: string } | null> {
+): Promise<{ cookies: string; cevPage: Page } | null> {
   try {
     // === ÉTAPE 0 : Login VOWINT ===
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
@@ -275,7 +298,7 @@ async function establishCevSession(
       data: { cookieLen: cookieString.length, names: cevCookies.map(c => c.name).join(', ') },
     });
 
-    return { cookies: cookieString };
+    return { cookies: cookieString, cevPage: newPage };
 
   } catch (err) {
     botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: String(err) } });
@@ -461,17 +484,53 @@ async function extractConfirmationCode(page: Page): Promise<string | null> {
 }
 
 /**
- * Résout un hCaptcha pour appointment.cloud.diplomatie.be.
+ * Bypass hCaptcha via le mode accessibilité officiel de hCaptcha.
+ * Requiert le cookie hc_accessibility injecté dans le context browser avant navigation.
+ * Gratuit, pas de service tiers — hCaptcha auto-résout visuellement en ~5-10s.
  *
- * Stratégie (par ordre de priorité) :
- *  1. CapSolver (HCaptchaTaskProxyLess) — supporté nativement, pas de proxy requis
- *  2. 2captcha HCaptchaTaskProxyless — fallback si CapSolver absent
- *  3. 2captcha HCaptchaTask avec proxy — fallback si proxyless non disponible
+ * Activation : créer un compte sur accounts.hcaptcha.com, activer "Always pass
+ * accessibility mode", copier la valeur du cookie hc_accessibility et la placer
+ * dans HCAPTCHA_ACCESSIBILITY_COOKIE.
+ */
+async function solveHcaptchaViaAccessibility(cevPage: Page, clientId: string): Promise<string | null> {
+  botLog({ applicationId: clientId, step: 'cev_hcaptcha_accessibility_start', status: 'ok' });
+  try {
+    // Attendre max 30s que hCaptcha auto-remplisse le champ caché
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 5_000));
+
+      const token = await cevPage.evaluate(() => {
+        const textarea = document.querySelector('textarea[name="h-captcha-response"]') as HTMLTextAreaElement | null;
+        const input = document.querySelector('input[name="h-captcha-response"]') as HTMLInputElement | null;
+        return (textarea?.value || input?.value) ?? null;
+      });
+
+      if (token && token.length > 20) {
+        botLog({ applicationId: clientId, step: 'cev_hcaptcha_accessibility_solved', status: 'ok', data: { attempts: i + 1, tokenLen: token.length } });
+        return token;
+      }
+
+      botLog({ applicationId: clientId, step: 'cev_hcaptcha_accessibility_waiting', status: 'ok', data: { elapsed: (i + 1) * 5 } });
+    }
+
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_accessibility_timeout', status: 'warn', data: { hint: 'Cookie hc_accessibility peut être expiré — vérifier accounts.hcaptcha.com' } });
+    return null;
+  } catch (err) {
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_accessibility_exception', status: 'fail', data: { error: String(err) } });
+    return null;
+  }
+}
+
+/**
+ * Résout un hCaptcha pour appointment.cloud.diplomatie.be via services externes.
  *
  * Ordre de priorité :
  *  1. Anti-Captcha (ANTICAPTCHA_API_KEY) — supporte les domaines gouvernementaux
  *  2. CapSolver    (CAPSOLVER_API_KEY)    — note: sitekey CEV blacklistée en 2026-04
  *  3. 2captcha     (twoCaptchaApiKey)     — note: compte actuel ne supporte pas hCaptcha
+ *
+ * Priorité absolue (avant cette fonction) : solveHcaptchaViaAccessibility() si
+ * HCAPTCHA_ACCESSIBILITY_COOKIE est configuré.
  */
 async function solveHcaptcha(
   twoCaptchaApiKey: string,
