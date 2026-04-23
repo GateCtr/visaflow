@@ -1,0 +1,74 @@
+URL de requête
+https://appointment.cloud.diplomatie.be/Integration/VOW/SelectSlot
+Méthode de requête
+GET
+Code d'état
+302 Found
+Adresse distante
+52.174.36.176:443
+Règlement sur les URL de provenance
+no-referrer
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store, must-revalidate
+connection
+keep-alive
+content-length
+150
+content-security-policy
+default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true
+content-type
+text/html; charset=utf-8
+date
+Thu, 23 Apr 2026 10:53:10 GMT
+expires
+-1
+location
+/Integration/Error/NoAvailability
+pragma
+no-cache
+referrer-policy
+no-referrer
+request-context
+appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f
+strict-transport-security
+max-age=31536000; includeSubDomains
+x-content-type-options
+nosniff
+x-download-options
+noopen
+x-frame-options
+Deny
+x-xss-protection
+1; mode=block
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+fr-CD,fr;q=0.9,sw-CD;q=0.8,sw;q=0.7,en-US;q=0.6,en;q=0.5,fr-FR;q=0.4
+connection
+keep-alive
+cookie
+ASP.NET_SessionId=fesmia0jbzcir5q2yvivpaax; PreferredCulture=en-US
+host
+appointment.cloud.diplomatie.be
+sec-ch-ua
+"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"
+sec-ch-ua-mobile
+?1
+sec-ch-ua-platform
+"Android"
+sec-fetch-dest
+document
+sec-fetch-mode
+navigate
+sec-fetch-site
+same-origin
+sec-fetch-user
+?1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36
