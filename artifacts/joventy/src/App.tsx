@@ -39,6 +39,7 @@ import AdminClients from "@/pages/admin/Clients";
 import AdminMessages from "@/pages/admin/Messages";
 import AdminReviews from "@/pages/admin/Reviews";
 import AdminBotTest from "@/pages/admin/BotTest";
+import AdminCevSessions from "@/pages/admin/CevSessions";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -130,6 +131,9 @@ function Router() {
       </Route>
       <Route path="/admin/reviews">
         {() => <ProtectedRoute adminOnly component={AdminReviews} />}
+      </Route>
+      <Route path="/admin/cev-sessions">
+        {() => <ProtectedRoute adminOnly component={AdminCevSessions} />}
       </Route>
       <Route path="/admin/bot-test">
         {() => <ProtectedRoute adminOnly component={AdminBotTest} />}

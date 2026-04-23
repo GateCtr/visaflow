@@ -263,6 +263,53 @@ export function botLog(payload: {
   );
 }
 
+// ─── CEV Sessions (polling sans captcha) ────────────────────────────────────
+export interface CevSessionTask {
+  sessionId: string;
+  applicationId: string;
+  integrationUrl: string;
+  sessionCookie: string;
+  pollIntervalMs: number;
+}
+
+export async function getActiveCevSessions(): Promise<CevSessionTask[]> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] getActiveCevSessions failed: ${res.status}`);
+      return [];
+    }
+    return (await res.json()) as CevSessionTask[];
+  } catch (err) {
+    console.warn("[convexClient] getActiveCevSessions error:", err);
+    return [];
+  }
+}
+
+export async function recordCevSessionCheck(
+  sessionId: string,
+  result: "no_slot" | "slot_found" | "session_expired" | "error",
+  error?: string,
+): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/check`;
+  try {
+    await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId, result, error }),
+    });
+  } catch (err) {
+    console.warn("[convexClient] recordCevSessionCheck error:", err);
+  }
+}
+
 /**
  * Uploade n'importe quel fichier (image, PDF, etc.) vers Convex Storage.
  * @param base64 — contenu encodé en base64

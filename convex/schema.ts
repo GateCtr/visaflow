@@ -211,4 +211,42 @@ export default defineSchema({
   })
     .index("by_application", ["applicationId"])
     .index("by_ts", ["ts"]),
+
+  // Sessions CEV — cookie + URL d'intégration capturés manuellement par l'admin
+  // après résolution captcha sur le portail. Le bot poll ces sessions sans captcha.
+  cevSessions: defineTable({
+    applicationId: v.id("applications"),
+    // URL complète d'intégration avec les 4 GUIDs
+    // ex: /Integration/VOW/{partner}/{app}/{location}/{visa}/en-US
+    integrationUrl: v.string(),
+    // Cookie ASP.NET_SessionId (juste la valeur, sans le préfixe "ASP.NET_SessionId=")
+    sessionCookie: v.string(),
+    // active = polling en cours, expired = cookie mort, paused = admin a arrêté
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("paused")),
+    // Dernier résultat du poll
+    lastResult: v.optional(v.union(
+      v.literal("no_slot"),
+      v.literal("slot_found"),
+      v.literal("session_expired"),
+      v.literal("error")
+    )),
+    lastCheckAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    checkCount: v.optional(v.number()),
+    consecutiveErrors: v.optional(v.number()),
+    // Intervalle de polling en ms (défaut 30000, min 10000, max 600000)
+    pollIntervalMs: v.optional(v.number()),
+    createdAt: v.number(),
+    expiredAt: v.optional(v.number()),
+    // Note libre admin (ex: "session pour Marie Dupont, dossier urgent")
+    notes: v.optional(v.string()),
+    // Verrouillage atomique anti-doublon (timestamp jusqu'à quand la session
+    // est "claimée" par un worker — empêche multi-instances de la check en parallèle)
+    lockedUntil: v.optional(v.number()),
+    // Marqueur "déjà notifié pour ce slot" — évite le spam admin tant que la
+    // session n'a pas été expirée/recréée par l'admin
+    slotNotifiedAt: v.optional(v.number()),
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_status", ["status"]),
 });

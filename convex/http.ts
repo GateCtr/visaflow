@@ -129,6 +129,50 @@ http.route({
   }),
 });
 
+// ─── CEV Sessions: liste active pour le bot polling ─────────────────────────
+http.route({
+  path: "/hunter/cev-sessions",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    // Claim atomique : retourne uniquement les sessions dues + pose un lock 30s
+    const sessions = await ctx.runMutation(internal.cevSessions.internalClaimDue);
+    return new Response(JSON.stringify(sessions), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// ─── CEV Sessions: enregistrer le résultat d'un check ───────────────────────
+http.route({
+  path: "/hunter/cev-sessions/check",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const body = await request.json() as {
+      sessionId: string;
+      result: "no_slot" | "slot_found" | "session_expired" | "error";
+      error?: string;
+    };
+
+    await ctx.runMutation(internal.cevSessions.internalRecordCheck, {
+      sessionId: body.sessionId as Id<"cevSessions">,
+      result: body.result,
+      error: body.error,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 http.route({
   path: "/hunter/slot-found",
   method: "POST",

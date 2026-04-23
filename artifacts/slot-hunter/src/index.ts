@@ -1,11 +1,58 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck } from "./cevBooking.js";
+import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
+
+// ─── CEV Sessions polling — boucle parallèle indépendante ───────────────────
+// Tourne en background sans bloquer la boucle principale du bot Playwright.
+// Pour chaque session active : check toutes les pollIntervalMs (défaut 30s).
+// Coût : ~50ms par check, zéro captcha, zéro Playwright.
+async function startCevPollingLoop(): Promise<void> {
+  console.log("[CEV-POLL] Boucle de polling sessions CEV démarrée");
+  while (true) {
+    try {
+      // L'API fait le claim atomique côté Convex : on ne reçoit QUE des sessions
+      // dues qui sont maintenant lockées 30s pour empêcher un autre worker
+      // (instance dupliquée, redémarrage) de les check en parallèle.
+      const due = await getActiveCevSessions();
+
+      if (due.length > 0) {
+        console.log(`[CEV-POLL] ${due.length} session(s) claimée(s) à checker`);
+      }
+
+      // Check en parallèle (sessions indépendantes — chacune a son propre cookie)
+      await Promise.all(due.map(async (s) => {
+        const t0 = Date.now();
+        const r = await pollCevSlot(s.integrationUrl, s.sessionCookie);
+        const ms = Date.now() - t0;
+
+        if (r.status === "slot_found") {
+          console.log(`[CEV-POLL] 🚨 SLOT TROUVÉ session=${s.sessionId} (${ms}ms)`);
+          await recordCevSessionCheck(s.sessionId, "slot_found");
+        } else if (r.status === "session_expired") {
+          console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms)`);
+          await recordCevSessionCheck(s.sessionId, "session_expired");
+        } else if (r.status === "error") {
+          console.log(`[CEV-POLL] ❌ Erreur session=${s.sessionId}: ${r.error} (${ms}ms)`);
+          await recordCevSessionCheck(s.sessionId, "error", r.error);
+        } else {
+          // no_slot — log discret
+          await recordCevSessionCheck(s.sessionId, "no_slot");
+        }
+      }));
+    } catch (err) {
+      console.warn("[CEV-POLL] Erreur boucle:", err);
+    }
+
+    // Polling fréquent (5s) — la condition "due" filtre selon pollIntervalMs de chaque session
+    await new Promise((r) => setTimeout(r, 5_000));
+  }
+}
 
 // ─── Auto-détection IP publique du serveur ───────────────────────────────────
 async function detectServerIp(): Promise<string | null> {
@@ -425,6 +472,11 @@ async function main(): Promise<void> {
   log("INFO", `Mode: ${dryRun ? "DRY RUN" : "PRODUCTION"}`);
   log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
+
+  // Lancer la boucle de polling CEV en background (indépendante de Playwright)
+  startCevPollingLoop().catch((err) => {
+    console.error("[CEV-POLL] Boucle crashée:", err);
+  });
 
   // Détection IP serveur — utilisée automatiquement par le ProxyPool 2captcha
   const serverIp = await detectServerIp();

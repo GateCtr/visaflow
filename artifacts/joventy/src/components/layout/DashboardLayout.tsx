@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Bot,
+  KeyRound,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -47,6 +48,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/clients", label: "Clients", icon: Users },
     { href: "/admin/messages", label: "Messagerie", icon: MessageCircle, badge: unreadTotal },
     { href: "/admin/reviews", label: "Avis Clients", icon: MessageSquareHeart, badge: pendingReviewCount },
+    { href: "/admin/cev-sessions", label: "Sessions CEV", icon: KeyRound },
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
   ];
 

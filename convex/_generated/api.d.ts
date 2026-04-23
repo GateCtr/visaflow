@@ -11,6 +11,7 @@
 import type * as admin from "../admin.js";
 import type * as applications from "../applications.js";
 import type * as botLogs from "../botLogs.js";
+import type * as cevSessions from "../cevSessions.js";
 import type * as constants from "../constants.js";
 import type * as documents from "../documents.js";
 import type * as emails from "../emails.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   applications: typeof applications;
   botLogs: typeof botLogs;
+  cevSessions: typeof cevSessions;
   constants: typeof constants;
   documents: typeof documents;
   emails: typeof emails;
