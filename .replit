@@ -53,3 +53,15 @@ channel = "stable-25_05"
 [userenv.shared]
 VITE_CONVEX_URL = "https://famous-albatross-420.convex.cloud"
 CONVEX_SITE_URL = "https://famous-albatross-420.convex.site"
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3000
