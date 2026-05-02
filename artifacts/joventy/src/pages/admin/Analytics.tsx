@@ -184,11 +184,11 @@ export default function Analytics() {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-                  formatter={(v: number, name: string) => [v, name === "créés" ? "Créés" : "Résolus"]}
+                  formatter={(v: number, name: string) => [v, name === "crees" ? "Créés" : "Résolus"]}
                 />
-                <Legend formatter={(v) => v === "créés" ? "Créés" : "Résolus"} iconType="circle" />
-                <Line type="monotone" dataKey="créés" stroke="#1E4FA3" strokeWidth={2.5} dot={{ r: 3, fill: "#1E4FA3" }} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="résolus" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: "#10B981" }} activeDot={{ r: 5 }} />
+                <Legend formatter={(v) => v === "crees" ? "Créés" : "Résolus"} iconType="circle" />
+                <Line type="monotone" dataKey="crees" stroke="#1E4FA3" strokeWidth={2.5} dot={{ r: 3, fill: "#1E4FA3" }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="resolus" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: "#10B981" }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -595,7 +595,7 @@ export const getAnalytics = query({
     }));
 
     // ── Activité hebdomadaire (8 dernières semaines) ───────────────────────────
-    const weeks: { label: string; créés: number; résolus: number }[] = [];
+    const weeks: { label: string; crees: number; resolus: number }[] = [];
     for (let i = 7; i >= 0; i--) {
       const start = now - (i + 1) * 7 * 24 * 60 * 60 * 1000;
       const end = now - i * 7 * 24 * 60 * 60 * 1000;
@@ -603,8 +603,8 @@ export const getAnalytics = query({
       const label = `${d.getDate()}/${d.getMonth() + 1}`;
       weeks.push({
         label,
-        créés: all.filter(a => a._creationTime >= start && a._creationTime < end).length,
-        résolus: all.filter(a => a.updatedAt >= start && a.updatedAt < end &&
+        crees: all.filter(a => a._creationTime >= start && a._creationTime < end).length,
+        resolus: all.filter(a => a.updatedAt >= start && a.updatedAt < end &&
           (a.status === "completed" || a.status === "slot_found")).length,
       });
     }
