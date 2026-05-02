@@ -23,6 +23,7 @@ import type * as reviews from "../reviews.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
 import type * as users from "../users.js";
 import type * as visaDocuments from "../visaDocuments.js";
+import type * as whatsapp from "../whatsapp.js";
 
 import type {
   ApiFromModules,
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   slotFoundHelper: typeof slotFoundHelper;
   users: typeof users;
   visaDocuments: typeof visaDocuments;
+  whatsapp: typeof whatsapp;
 }>;
 
 /**
