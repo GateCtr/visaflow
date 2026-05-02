@@ -95,6 +95,27 @@ function section(title: string): void {
   console.log("─".repeat(64));
 }
 
+// ─── Extraction automatique de la clé AES depuis le bundle ─────────────────────
+function extractAesKeyFromBundle(bundleText: string): string | null {
+  const KEY_REGEX = /[A-Za-z0-9+/]{43}=/g;
+  const CONTEXT_KEYWORDS = ["PBKDF2", "pbkdf2", "encryptSecretKey", "secretKey", "encKey", "AES", "CryptoJS", "encrypt"];
+
+  for (const keyword of CONTEXT_KEYWORDS) {
+    const idx = bundleText.indexOf(keyword);
+    if (idx === -1) continue;
+    const window = bundleText.slice(Math.max(0, idx - 300), idx + 300);
+    const match = window.match(KEY_REGEX);
+    if (match && match[0].length === 44) return match[0];
+  }
+
+  const allMatches = [...bundleText.matchAll(KEY_REGEX)]
+    .map((m) => m[0])
+    .filter((s) => s.length === 44);
+  if (allMatches.length === 1) return allMatches[0];
+
+  return null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 1. BUNDLE INTEGRITY — AES key + captcha sitekey + endpoints
 // ════════════════════════════════════════════════════════════════════════════════
@@ -134,8 +155,12 @@ async function checkBundleIntegrity(): Promise<void> {
   if (bundleText.includes(EXPECTED_AES_KEY)) {
     record("B04", "Clé AES inchangée", "bundle", "PASS", `Clé confirmée dans ${bundleName}`, true);
   } else {
+    const extractedKey = extractAesKeyFromBundle(bundleText);
     record("B04", "Clé AES inchangée", "bundle", "FAIL",
-      `❌ La clé AES a changé ! Mettre à jour USA_ENC_SEC_KEY dans usaPortal.ts. Bundle: ${bundleName}`, true);
+      extractedKey
+        ? `❌ Clé changée ! Nouvelle clé extraite automatiquement: "${extractedKey}". Bundle: ${bundleName}`
+        : `❌ La clé AES a changé ET impossible de l'extraire automatiquement. Inspection manuelle requise. Bundle: ${bundleName}`,
+      true);
   }
 
   // 1d. reCAPTCHA sitekey

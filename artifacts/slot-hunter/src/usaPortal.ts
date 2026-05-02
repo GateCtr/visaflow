@@ -106,7 +106,17 @@ class TokenExpiredError extends Error {
 
 // Clé AES du portail USA — extraite du bundle Angular public (visaapplicantui/main.js)
 // nosemgrep: generic-api-key — clé publique, visible dans le JS client du portail
-export const USA_ENC_SEC_KEY = "OuoCdl8xQh/OX6LbmgLEtZxZrvnOmrubsMhPW1VPRjk=";
+// Déclarée en `let` pour permettre la mise à jour automatique si le bundle Angular change.
+export let USA_ENC_SEC_KEY = "OuoCdl8xQh/OX6LbmgLEtZxZrvnOmrubsMhPW1VPRjk=";
+
+/**
+ * Met à jour la clé AES en mémoire sans redémarrer le processus.
+ * Appelé automatiquement par checkPortalBundleKey() quand le bundle change.
+ * Tous les prochains appels à encryptPortalCredentials() utiliseront la nouvelle clé.
+ */
+export function updateAesKey(newKey: string): void {
+  USA_ENC_SEC_KEY = newKey;
+}
 
 /**
  * Chiffre les credentials en AES-256-CBC avec PBKDF2 (SHA1, 1000 itérations),

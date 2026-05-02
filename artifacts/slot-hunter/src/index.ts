@@ -5,7 +5,7 @@ import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getAct
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
-import { USA_ENC_SEC_KEY } from "./usaPortal.js";
+import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 
 // ─── CEV Sessions polling — boucle parallèle indépendante ───────────────────
@@ -377,10 +377,46 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
 }
 
 /**
+ * Tente d'extraire la clé AES depuis le bundle Angular en clair.
+ *
+ * Stratégie en deux passes :
+ *  1. Cherche une chaîne base64 (44 chars, terminée par "=") au voisinage
+ *     immédiat (<300 chars) des mots-clés chiffrement connus dans le bundle.
+ *  2. Si rien n'est trouvé, collecte toutes les chaînes base64 de 44 chars
+ *     présentes dans le bundle — le portail n'en contient généralement qu'une.
+ *
+ * Retourne la clé ou null si introuvable.
+ */
+function extractAesKeyFromBundle(bundleText: string): string | null {
+  const KEY_REGEX = /[A-Za-z0-9+/]{43}=/g;
+  const CONTEXT_KEYWORDS = ["PBKDF2", "pbkdf2", "encryptSecretKey", "secretKey", "encKey", "AES", "CryptoJS", "encrypt"];
+
+  // Passe 1 : chercher près des mots-clés de chiffrement
+  for (const keyword of CONTEXT_KEYWORDS) {
+    const idx = bundleText.indexOf(keyword);
+    if (idx === -1) continue;
+    const window = bundleText.slice(Math.max(0, idx - 300), idx + 300);
+    const match = window.match(KEY_REGEX);
+    if (match && match[0].length === 44) return match[0];
+  }
+
+  // Passe 2 : collecter toutes les chaînes base64 de 44 chars dans le bundle entier
+  const allMatches = [...bundleText.matchAll(KEY_REGEX)]
+    .map((m) => m[0])
+    .filter((s) => s.length === 44);
+  if (allMatches.length === 1) return allMatches[0]; // unique → c'est elle
+
+  return null;
+}
+
+/**
  * Vérifie une fois par jour que la clé AES du portail USA n'a pas changé.
- * Si la clé est absente du bundle actuel : pause immédiate de tous les jobs USA
- * et alerte dans les logs — la correction reste manuelle (remplacer USA_ENC_SEC_KEY
- * dans usaPortal.ts puis rebuild + redéployer le container).
+ *
+ * Comportement si la clé a changé :
+ *  - Tente d'extraire automatiquement la nouvelle clé depuis le bundle.
+ *  - Si trouvée → mise à jour en mémoire immédiate (updateAesKey), les jobs
+ *    reprennent sans interruption. Aucun rebuild/redéploiement requis.
+ *  - Si introuvable → pause de tous les jobs USA + alerte (cas exceptionnel).
  */
 async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
   const now = Date.now();
@@ -389,13 +425,7 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
 
   log("INFO", "🔍 Vérification bundle portail USA (quotidienne)...");
 
-  // UA aligné sur Chrome/135 — cohérent avec le reste du robot.
-  // Chrome/120 était stale (2023) et pouvait être refusé par un WAF moderne.
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
-  // IMPORTANT : lastBundleCheckAt est positionné ici (avant les appels réseau)
-  // pour éviter que deux boucles parallèles lancent la vérification simultanément.
-  // En cas d'erreur réseau transitoire, on retente dans BUNDLE_CHECK_RETRY_MS (30 min)
-  // plutôt que 24h en repositionnant lastBundleCheckAt dans le catch.
   const BUNDLE_CHECK_RETRY_MS = 30 * 60 * 1000;
 
   try {
@@ -432,14 +462,31 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
       return;
     }
 
-    // 4. Clé absente → alerte + pause de tous les jobs USA actifs
+    // 4. Clé absente → tenter l'extraction automatique
+    log("WARN", `🔍 Bundle check : clé AES introuvable dans ${bundleName} — extraction automatique en cours...`);
+    const newKey = extractAesKeyFromBundle(bundleText);
+
+    if (newKey) {
+      // ✅ Nouvelle clé extraite — mise à jour en mémoire, les jobs continuent
+      const oldKey = USA_ENC_SEC_KEY;
+      updateAesKey(newKey);
+      log("INFO", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      log("INFO", "🔑 CLÉ AES MISE À JOUR AUTOMATIQUEMENT — aucune action requise");
+      log("INFO", `   Bundle         : ${bundleName}`);
+      log("INFO", `   Ancienne clé   : ${oldKey}`);
+      log("INFO", `   Nouvelle clé   : ${newKey}`);
+      log("INFO", "   Les jobs USA reprennent avec la nouvelle clé immédiatement.");
+      log("INFO", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      return;
+    }
+
+    // 5. Extraction échouée → pause + alerte (cas exceptionnel — structure du bundle changée)
     log("ERROR", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    log("ERROR", "🔴 ALERTE BUNDLE : la clé AES du portail USA a changé !");
+    log("ERROR", "🔴 ALERTE BUNDLE : clé AES changée ET extraction automatique impossible !");
     log("ERROR", `   Bundle actuel  : ${bundleName}`);
     log("ERROR", `   Clé en code    : ${USA_ENC_SEC_KEY}`);
-    log("ERROR", "   ACTION REQUISE : exécuter check-portal-bundle.sh,");
-    log("ERROR", "   mettre à jour USA_ENC_SEC_KEY dans usaPortal.ts,");
-    log("ERROR", "   puis rebuild + redéployer le container Docker.");
+    log("ERROR", "   ACTION REQUISE : inspecter le bundle manuellement,");
+    log("ERROR", "   puis mettre à jour USA_ENC_SEC_KEY dans usaPortal.ts.");
     log("ERROR", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     const usaJobs = activeJobs.filter((j) => j.destination === "usa");
@@ -448,16 +495,15 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
         await sendHeartbeat({
           applicationId: job.id,
           result: "error",
-          errorMessage: `⚠️ Clé AES du portail USA changée (bundle: ${bundleName}). Mise à jour manuelle requise. Robot mis en pause automatiquement.`,
+          errorMessage: `⚠️ Clé AES du portail USA changée (bundle: ${bundleName}) et extraction automatique impossible. Intervention requise.`,
           shouldPause: true,
         });
-        log("WARN", `[${job.applicantName}] Mis en pause — clé AES périmée`);
+        log("WARN", `[${job.applicantName}] Mis en pause — clé AES périmée et non-extractible`);
       } catch (err) {
         log("WARN", `[${job.applicantName}] Erreur envoi pause heartbeat: ${err}`);
       }
     }
   } catch (err) {
-    // Erreur réseau transitoire — retry dans 30 min (pas dans 24h)
     lastBundleCheckAt = now - BUNDLE_CHECK_INTERVAL_MS + BUNDLE_CHECK_RETRY_MS;
     log("WARN", `🔍 Bundle check : erreur réseau — retry dans 30 min (${err})`);
   }
