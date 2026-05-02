@@ -19,6 +19,7 @@ import {
   Bot,
   KeyRound,
   BarChart2,
+  CalendarDays,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -46,6 +47,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
   const adminLinks = [
     { href: "/admin", label: "Tableau de Bord", icon: LayoutDashboard },
     { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
+    { href: "/admin/calendar", label: "Calendrier RDV", icon: CalendarDays },
     { href: "/admin/applications", label: "Tous les Dossiers", icon: FileText },
     { href: "/admin/clients", label: "Clients", icon: Users },
     { href: "/admin/messages", label: "Messagerie", icon: MessageCircle, badge: unreadTotal },

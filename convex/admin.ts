@@ -529,6 +529,37 @@ export const completeDossierOnly = mutation({
   },
 });
 
+export const getCalendarData = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") return null;
+
+    const all = await ctx.db.query("applications").collect();
+
+    const withAppointment = all.filter(
+      (a) => a.appointmentDetails?.date && (
+        a.status === "slot_found_awaiting_success_fee" ||
+        a.status === "completed"
+      )
+    );
+
+    return withAppointment.map((a) => ({
+      _id: a._id,
+      applicantName: a.applicantName,
+      destination: a.destination,
+      visaType: a.visaType,
+      status: a.status,
+      date: a.appointmentDetails!.date,
+      time: a.appointmentDetails?.time,
+      location: a.appointmentDetails?.location,
+      confirmationCode: a.appointmentDetails?.confirmationCode,
+      priceDetails: a.priceDetails,
+      userEmail: a.userEmail,
+      userWhatsapp: (a as { userWhatsapp?: string }).userWhatsapp,
+    }));
+  },
+});
+
 export const getAnalytics = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
