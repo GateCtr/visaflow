@@ -54,6 +54,34 @@ export const list = query({
   },
 });
 
+export const getByTrackingToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const app = await ctx.db
+      .query("applications")
+      .withIndex("by_tracking_token", (q) => q.eq("trackingToken", args.token))
+      .unique();
+    if (!app) return null;
+    const {
+      userEmail: _e,
+      userPhone: _p,
+      userWhatsapp: _w,
+      passportNumber: _n,
+      adminNotes: _an,
+      price: _pr,
+      priceDetails: _pd,
+      paymentProofUrl: _pp,
+      successFeeProofUrl: _sf,
+      visaDocumentStorageId: _vd,
+      logs: _l,
+      remindersSent: _rs,
+      trackingToken: _tt,
+      ...publicFields
+    } = app;
+    return publicFields;
+  },
+});
+
 export const get = query({
   args: { id: v.id("applications") },
   handler: async (ctx, args) => {
@@ -194,9 +222,14 @@ export const create = mutation({
       ? ` — Urgence : ${SLOT_URGENCY_TIERS[(args.slotUrgencyTier ?? "standard") as SlotUrgencyTier].label}. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
       : isDossierOnly ? " (tarif fixe, pas de prime de succès)" : "";
 
+    const trackingToken = Array.from({ length: 12 }, () =>
+      "abcdefghjkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 31)]
+    ).join("");
+
     const id = await ctx.db.insert("applications", {
       ...appArgs,
       userId: identity.subject,
+      trackingToken,
       userFirstName: identity.givenName,
       userLastName: identity.familyName,
       userEmail: identity.email,

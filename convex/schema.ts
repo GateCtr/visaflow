@@ -106,6 +106,7 @@ export default defineSchema({
     slotExpiresAt: v.optional(v.number()),
     successModel: v.optional(v.string()),
     remindersSent: v.optional(v.array(v.string())),
+    trackingToken: v.optional(v.string()),
     visaDocumentStorageId: v.optional(v.string()),
     servicePackage: v.optional(v.union(
       v.literal("full_service"),
@@ -131,7 +132,8 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
-    .index("by_updated", ["updatedAt"]),
+    .index("by_updated", ["updatedAt"])
+    .index("by_tracking_token", ["trackingToken"]),
 
   reviews: defineTable({
     applicationId: v.id("applications"),

@@ -35,6 +35,9 @@ import {
   Play,
   Pause,
   Trash2,
+  Link,
+  Copy,
+  Check,
 } from "lucide-react";
 
 function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => void }) {
@@ -374,6 +377,7 @@ export default function AdminApplicationDetail() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [visaUploading, setVisaUploading] = useState(false);
   const [showAdjustFee, setShowAdjustFee] = useState(false);
+  const [trackingLinkCopied, setTrackingLinkCopied] = useState(false);
   const [adjustFeeInput, setAdjustFeeInput] = useState("");
   const [adjustFeeReason, setAdjustFeeReason] = useState("");
   const [adjustFeeSaving, setAdjustFeeSaving] = useState(false);
@@ -564,6 +568,22 @@ export default function AdminApplicationDetail() {
                 <Package className="w-3 h-3" />
                 {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
               </span>
+              {(app as { trackingToken?: string }).trackingToken && (
+                <button
+                  onClick={() => {
+                    const token = (app as { trackingToken?: string }).trackingToken!;
+                    navigator.clipboard.writeText(`https://joventy.cd/suivi/${token}`);
+                    setTrackingLinkCopied(true);
+                    setTimeout(() => setTrackingLinkCopied(false), 2000);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  {trackingLinkCopied
+                    ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Lien copié !</span></>
+                    : <><Link className="w-3 h-3" />Lien de suivi</>
+                  }
+                </button>
+              )}
             </div>
           </div>
 

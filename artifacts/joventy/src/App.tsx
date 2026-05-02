@@ -19,6 +19,7 @@ import Register from "@/pages/auth/Register";
 import SSOCallback from "@/pages/auth/SSOCallback";
 import ContinueSignUp from "@/pages/auth/ContinueSignUp";
 import NotFound from "@/pages/not-found";
+import PublicTracking from "@/pages/PublicTracking";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
 import Confidentialite from "@/pages/legal/Confidentialite";
@@ -92,6 +93,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/sso-callback" component={SSOCallback} />
       <Route path="/continue" component={ContinueSignUp} />
+      <Route path="/suivi/:token" component={PublicTracking} />
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/confidentialite" component={Confidentialite} />
       <Route path="/conditions" component={Conditions} />
