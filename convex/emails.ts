@@ -166,6 +166,114 @@ function urgentBanner(text: string): string {
   </table>`;
 }
 
+/* ─────────────────────────── 0. RELANCE PAIEMENT → CLIENT ─── */
+export const sendPaymentReminderClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    visaType: v.string(),
+    engagementFee: v.number(),
+    applicationId: v.string(),
+    hoursElapsed: v.number(),
+    reminderNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const isUrgent = args.reminderNumber >= 2;
+    const subjectPrefix = isUrgent ? "⚠️ Dernière relance" : "🔔 Rappel";
+    const rows =
+      info("Demandeur", escHtml(args.applicantName)) +
+      info("Destination", destLabel(args.destination)) +
+      info("Type de visa", escHtml(args.visaType)) +
+      info("Frais d'engagement", `${args.engagementFee} USD`);
+
+    const urgencyText = isUrgent
+      ? `Votre dossier ${destLabel(args.destination)} risque d'être annulé si le paiement n'est pas reçu dans les prochaines heures.`
+      : `Votre dossier ${destLabel(args.destination)} est en attente de votre paiement depuis ${args.hoursElapsed} heures.`;
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        ${isUrgent ? "⚠️ Action requise — Paiement en attente" : "🔔 Rappel — Votre dossier vous attend"}
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        ${urgencyText}<br/><br/>
+        Réglez les <strong>frais d'engagement de ${args.engagementFee} USD</strong> pour activer le traitement de votre dossier.
+      </p>
+      ${infoTable(rows)}
+      ${urgentBanner("Paiement via M-Pesa, Airtel Money ou Orange Money — aucune carte internationale requise.")}
+      ${paymentBox()}
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}/payment`, "Régler maintenant")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Si vous avez déjà effectué le paiement, ignorez ce message — notre équipe traitera votre reçu dans les 2 heures ouvrables.
+      </p>
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `${subjectPrefix} — Paiement en attente pour votre dossier ${destLabel(args.destination)}`,
+      html: htmlWrapper("Rappel paiement — Joventy", body),
+    });
+  },
+});
+
+/* ─────────────────────── 0b. RELANCE PRIME DE SUCCÈS → CLIENT ─── */
+export const sendSuccessFeeReminderClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    slotDate: v.string(),
+    slotTime: v.optional(v.string()),
+    slotLocation: v.optional(v.string()),
+    successFee: v.number(),
+    applicationId: v.string(),
+    hoursElapsed: v.number(),
+    slotExpiresAt: v.number(),
+    reminderNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const isUrgent = args.reminderNumber >= 2;
+    const expiresDate = new Date(args.slotExpiresAt).toLocaleDateString("fr-FR", {
+      day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+    const rows =
+      info("Demandeur", escHtml(args.applicantName)) +
+      info("Destination", destLabel(args.destination)) +
+      info("Date RDV", escHtml(args.slotDate)) +
+      (args.slotTime ? info("Heure RDV", escHtml(args.slotTime)) : "") +
+      (args.slotLocation ? info("Lieu", escHtml(args.slotLocation)) : "") +
+      info("Prime de succès", `${args.successFee} USD`) +
+      info("Expire le", expiresDate);
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        ${isUrgent ? "⚠️ Créneau en danger — Prime requise d'urgence" : "🎯 Rappel — Votre créneau est réservé"}
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Un créneau de rendez-vous <strong>${destLabel(args.destination)}</strong> a été réservé pour vous.
+        ${isUrgent
+          ? `<br/><strong style="color:#dc2626;">Ce créneau sera libéré le ${expiresDate} si la prime n'est pas réglée.</strong>`
+          : `<br/>Réglez la prime de succès pour le confirmer définitivement.`
+        }
+      </p>
+      ${infoTable(rows)}
+      ${urgentBanner(`Créneau réservé — expire le ${expiresDate}. Réglez la prime avant cette échéance pour ne pas perdre votre place.`)}
+      ${paymentBox()}
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Confirmer mon créneau")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `${isUrgent ? "⚠️ URGENT" : "🎯 Rappel"} — Prime de succès en attente (${destLabel(args.destination)})`,
+      html: htmlWrapper("Rappel prime de succès — Joventy", body),
+    });
+  },
+});
+
 /* ─────────────────────────────── 1. NOUVEAU DOSSIER → ADMIN ─── */
 export const sendNewApplicationAdmin = internalAction({
   args: {

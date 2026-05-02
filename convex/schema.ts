@@ -105,6 +105,7 @@ export default defineSchema({
     rejectionReason: v.optional(v.string()),
     slotExpiresAt: v.optional(v.number()),
     successModel: v.optional(v.string()),
+    remindersSent: v.optional(v.array(v.string())),
     visaDocumentStorageId: v.optional(v.string()),
     servicePackage: v.optional(v.union(
       v.literal("full_service"),
