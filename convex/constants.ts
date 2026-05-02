@@ -2,9 +2,9 @@ export const VISA_PRICING = {
   usa: {
     label: "États-Unis",
     flag: "🇺🇸",
-    engagementFee: 150,
-    successFee: 450,
-    total: 600,
+    engagementFee: 250,
+    successFee: 750,
+    total: 1000,
     successModel: "appointment" as const,
     visaTypes: ["B1/B2 (Tourisme/Affaires)", "F1 (Étudiant)", "K1 (Fiancé(e))", "H1B (Travail)", "J1 (Échange)"],
     requiredDocuments: [
@@ -45,9 +45,9 @@ export const VISA_PRICING = {
   dubai: {
     label: "Dubaï (EAU)",
     flag: "🇦🇪",
-    engagementFee: 50,
-    successFee: 70,
-    total: 120,
+    engagementFee: 80,
+    successFee: 120,
+    total: 200,
     successModel: "evisa" as const,
     visaTypes: ["Touriste 30j", "Touriste 60j", "Résidence", "Affaires"],
     requiredDocuments: [
@@ -74,9 +74,9 @@ export const VISA_PRICING = {
   turkey: {
     label: "Turquie",
     flag: "🇹🇷",
-    engagementFee: 50,
-    successFee: 70,
-    total: 120,
+    engagementFee: 80,
+    successFee: 120,
+    total: 200,
     successModel: "appointment" as const,
     visaTypes: ["E-Visa (si visa USA/Schengen)", "Visa Sticker (VFS Kinshasa)"],
     requiredDocuments: [
@@ -135,9 +135,9 @@ export const VISA_PRICING = {
   schengen: {
     label: "Europe Schengen",
     flag: "🇪🇺",
-    engagementFee: 100,
-    successFee: 200,
-    total: 300,
+    engagementFee: 150,
+    successFee: 450,
+    total: 600,
     successModel: "appointment" as const,
     visaTypes: [
       "Visa C — Tourisme / Affaires",
@@ -183,9 +183,9 @@ export const SLOT_URGENCY_TIERS = {
     label: "Standard",
     tagline: "> 3 mois",
     desc: "Date souhaitée dans plus de 3 mois",
-    depositAmount: 50,
-    successAmount: 100,
-    total: 150,
+    depositAmount: 80,
+    successAmount: 170,
+    total: 250,
     variableNote: null,
   },
   prioritaire: {
@@ -193,9 +193,9 @@ export const SLOT_URGENCY_TIERS = {
     label: "Prioritaire",
     tagline: "1 à 3 mois",
     desc: "Date souhaitée dans 1 à 3 mois",
-    depositAmount: 80,
-    successAmount: 170,
-    total: 250,
+    depositAmount: 120,
+    successAmount: 230,
+    total: 350,
     variableNote: null,
   },
   urgent: {
@@ -203,9 +203,9 @@ export const SLOT_URGENCY_TIERS = {
     label: "Urgent",
     tagline: "3 à 6 semaines",
     desc: "Date souhaitée dans 3 à 6 semaines",
-    depositAmount: 100,
-    successAmount: 250,
-    total: 350,
+    depositAmount: 150,
+    successAmount: 300,
+    total: 450,
     variableNote: null,
   },
   tres_urgent: {
@@ -213,10 +213,10 @@ export const SLOT_URGENCY_TIERS = {
     label: "Très Urgent",
     tagline: "< 3 semaines / ASAP",
     desc: "Date souhaitée dans moins de 3 semaines ou dès que possible",
-    depositAmount: 150,
-    successAmount: 300,
-    total: 450,
-    variableNote: "Prime indicative — peut dépasser 450 $ selon disponibilité. Confirmée par Joventy.",
+    depositAmount: 200,
+    successAmount: 400,
+    total: 600,
+    variableNote: "Prime indicative — peut dépasser 600 $ selon disponibilité. Confirmée par Joventy.",
   },
 } as const;
 
