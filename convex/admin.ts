@@ -529,6 +529,118 @@ export const completeDossierOnly = mutation({
   },
 });
 
+export const getAnalytics = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") return null;
+
+    const all = await ctx.db.query("applications").collect();
+    const now = Date.now();
+
+    // ── Revenus par mois (6 derniers mois) ────────────────────────────────────
+    const months: { label: string; revenu: number; dossiers: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      const start = d.getTime();
+      const end = i === 0 ? now : (() => {
+        const e = new Date(d);
+        e.setMonth(e.getMonth() + 1);
+        return e.getTime();
+      })();
+      const label = d.toLocaleDateString("fr-FR", { month: "short" });
+      const slice = all.filter(a => a._creationTime >= start && a._creationTime < end);
+      months.push({
+        label,
+        revenu: slice.reduce((s, a) => s + (a.priceDetails?.paidAmount ?? 0), 0),
+        dossiers: slice.length,
+      });
+    }
+
+    // ── Taux de succès par destination ─────────────────────────────────────────
+    const destMap: Record<string, { total: number; success: number }> = {};
+    for (const a of all) {
+      if (!destMap[a.destination]) destMap[a.destination] = { total: 0, success: 0 };
+      destMap[a.destination].total += 1;
+      if (a.status === "completed" || a.status === "slot_found" || a.status === "slot_found_awaiting_success_fee") {
+        destMap[a.destination].success += 1;
+      }
+    }
+    const successByDest = Object.entries(destMap).map(([dest, d]) => ({
+      dest: dest.toUpperCase(),
+      taux: d.total > 0 ? Math.round((d.success / d.total) * 100) : 0,
+      total: d.total,
+      success: d.success,
+    })).sort((a, b) => b.total - a.total);
+
+    // ── Répartition des statuts ────────────────────────────────────────────────
+    const statusMap: Record<string, number> = {};
+    for (const a of all) {
+      statusMap[a.status] = (statusMap[a.status] ?? 0) + 1;
+    }
+    const STATUS_LABELS: Record<string, string> = {
+      pending: "En attente",
+      in_review: "En révision",
+      documents_pending: "Docs requis",
+      slot_hunting: "Chasse active",
+      slot_found: "Créneau trouvé",
+      slot_found_awaiting_success_fee: "Prime en attente",
+      completed: "Complété",
+      rejected: "Rejeté",
+    };
+    const statusDist = Object.entries(statusMap).map(([s, n]) => ({
+      label: STATUS_LABELS[s] ?? s,
+      value: n,
+    }));
+
+    // ── Activité hebdomadaire (8 dernières semaines) ───────────────────────────
+    const weeks: { label: string; créés: number; résolus: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const start = now - (i + 1) * 7 * 24 * 60 * 60 * 1000;
+      const end = now - i * 7 * 24 * 60 * 60 * 1000;
+      const d = new Date(start);
+      const label = `${d.getDate()}/${d.getMonth() + 1}`;
+      weeks.push({
+        label,
+        créés: all.filter(a => a._creationTime >= start && a._creationTime < end).length,
+        résolus: all.filter(a => a.updatedAt >= start && a.updatedAt < end &&
+          (a.status === "completed" || a.status === "slot_found")).length,
+      });
+    }
+
+    // ── KPIs globaux ───────────────────────────────────────────────────────────
+    const totalRevenue = all.reduce((s, a) => s + (a.priceDetails?.paidAmount ?? 0), 0);
+    const completed = all.filter(a => a.status === "completed" || a.status === "slot_found" || a.status === "slot_found_awaiting_success_fee");
+    const globalSuccessRate = all.length > 0 ? Math.round((completed.length / all.length) * 100) : 0;
+    const activeBots = all.filter(a => a.status === "slot_hunting" && a.hunterConfig?.isActive).length;
+
+    // Délai moyen de traitement (création → complétion) en jours
+    const completedWithTime = completed.filter(a => a._creationTime);
+    const avgProcessingDays = completedWithTime.length > 0
+      ? Math.round(completedWithTime.reduce((s, a) => s + (a.updatedAt - a._creationTime), 0) / completedWithTime.length / (1000 * 60 * 60 * 24))
+      : 0;
+
+    // ── Revenu par destination ─────────────────────────────────────────────────
+    const revenueByDest = Object.entries(
+      all.reduce((acc, a) => {
+        acc[a.destination] = (acc[a.destination] ?? 0) + (a.priceDetails?.paidAmount ?? 0);
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([dest, rev]) => ({ dest: dest.toUpperCase(), revenu: rev }))
+      .sort((a, b) => b.revenu - a.revenu);
+
+    return {
+      months,
+      successByDest,
+      statusDist,
+      weeks,
+      kpis: { totalRevenue, globalSuccessRate, activeBots, avgProcessingDays, totalDossiers: all.length },
+      revenueByDest,
+    };
+  },
+});
+
 export const setInReview = mutation({
   args: {
     applicationId: v.id("applications"),
