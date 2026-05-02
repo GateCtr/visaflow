@@ -82,6 +82,19 @@ export async function coreMarkSlotFound(
     });
   }
 
+  if ((app as { userWhatsapp?: string }).userWhatsapp) {
+    await ctx.scheduler.runAfter(0, internal.whatsapp.sendSlotFoundWhatsApp, {
+      to: (app as { userWhatsapp?: string }).userWhatsapp!,
+      applicantName: app.applicantName,
+      destination: app.destination,
+      slotDate: args.date,
+      slotTime: args.time,
+      slotLocation: args.location,
+      successFee: priceDetails.successFee,
+      applicationId: args.applicationId,
+    });
+  }
+
   await ctx.scheduler.runAfter(0, internal.notifications.create, {
     userId: app.userId,
     type: "slot_found",

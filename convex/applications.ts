@@ -133,6 +133,7 @@ export const create = mutation({
       v.literal("child_under_6"),
     )),
     cevTargetCountry: v.optional(v.string()),
+    userWhatsapp: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

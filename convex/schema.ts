@@ -82,6 +82,7 @@ export default defineSchema({
     userLastName: v.optional(v.string()),
     userEmail: v.optional(v.string()),
     userPhone: v.optional(v.string()),
+    userWhatsapp: v.optional(v.string()),
     destination: v.string(),
     visaType: v.string(),
     applicantName: v.string(),
