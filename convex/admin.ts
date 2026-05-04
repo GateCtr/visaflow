@@ -451,6 +451,24 @@ export const setSlotHunting = mutation({
         destination: app.destination,
         applicationId: args.applicationId,
       });
+
+      if (app.destination === "spain") {
+        const travelDateFormatted = app.travelDate
+          ? (() => {
+              const d = new Date(app.travelDate + "T12:00:00");
+              const dd = String(d.getDate()).padStart(2, "0");
+              const mm = String(d.getMonth() + 1).padStart(2, "0");
+              const yyyy = d.getFullYear();
+              return `${dd}${mm}${yyyy}`;
+            })()
+          : undefined;
+        await ctx.scheduler.runAfter(2000, internal.emails.sendSpainPreRegistrationClient, {
+          to: app.userEmail,
+          applicantName: app.applicantName,
+          applicationId: args.applicationId,
+          travelDate: travelDateFormatted,
+        });
+      }
     }
 
     await ctx.scheduler.runAfter(0, internal.notifications.create, {

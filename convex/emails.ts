@@ -589,6 +589,99 @@ export const sendNewMessageAdmin = internalAction({
   },
 });
 
+/* ──────────────── 11b. ESPAGNE — INSTRUCTIONS PRÉ-INSCRIPTION AMBASSADE ─── */
+export const sendSpainPreRegistrationClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    applicationId: v.string(),
+    travelDate: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const name = escHtml(args.applicantName);
+    const travelDateExample = args.travelDate
+      ? escHtml(args.travelDate)
+      : "JJMMAAAA (ex : 15092025)";
+
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Action requise — Inscription auprès de l'ambassade d'Espagne 🇪🇸</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">Bonjour <strong>${name}</strong>, notre robot de surveillance est maintenant actif. Pour qu'il puisse réserver votre créneau sur citaconsular.es, vous devez d'abord <strong>obtenir vos identifiants auprès de l'ambassade</strong> en suivant les 2 étapes ci-dessous.</p>
+
+      <!-- ÉTAPE 1 -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#fef9ee;border:1.5px solid #f59e0b;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#92400e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 1 — Envoyer un email à l'ambassade</p>
+            <p style="margin:0 0 10px;color:#78350f;font-size:14px;line-height:1.7;">Envoyez un email à :</p>
+            <p style="margin:0 0 14px;font-size:16px;font-weight:700;color:#1d4ed8;">emb.kinshasa.citasvis@maec.es</p>
+            <p style="margin:0 0 6px;color:#78350f;font-size:14px;">Objet de l'email :</p>
+            <p style="margin:0 0 14px;background:#fff;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-family:monospace;font-size:14px;font-weight:700;color:#92400e;letter-spacing:0.5px;">RENDEZ-VOUS VISA EST</p>
+            <p style="margin:0 0 8px;color:#78350f;font-size:14px;font-weight:600;">Corps du message (copiez ce modèle) :</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 14px;">
+              <tr>
+                <td style="background:#0f172a;border-radius:8px;padding:14px 16px;">
+                  <p style="margin:0;font-family:monospace;font-size:13px;color:#86efac;line-height:2;">
+                    NOM PRÉNOM EN MAJUSCULES SANS ACCENTS;<br/>
+                    NUMÉRO DE PASSEPORT (sans tirets);<br/>
+                    DATE DE DÉPART (${travelDateExample});<br/>
+                    EST
+                  </p>
+                  <p style="margin:10px 0 0;font-family:monospace;font-size:11px;color:#64748b;">Exemple : JEAN KABILA;AB123456;15092025;EST</p>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;color:#78350f;font-size:14px;font-weight:600;">Pièces jointes obligatoires :</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#92400e;font-size:13px;line-height:1.6;">📎&nbsp; <strong>Photo de vous tenant votre passeport ouvert</strong> (JPEG ou PDF, lisible, sans lunettes noires ni visage couvert)</td></tr>
+              <tr><td style="padding:3px 0;color:#92400e;font-size:13px;line-height:1.6;">📎&nbsp; Formulaire de candidature officiel <strong>avec votre photo</strong></td></tr>
+              <tr><td style="padding:3px 0;color:#92400e;font-size:13px;line-height:1.6;">📎&nbsp; Réservation de vol (confirmée)</td></tr>
+              <tr><td style="padding:3px 0;color:#92400e;font-size:13px;line-height:1.6;">📎&nbsp; Assurance santé / voyage (min. 30 000 €)</td></tr>
+            </table>
+            <p style="margin:12px 0 0;color:#b45309;font-size:12px;line-height:1.6;">⚠️ Ne renvoyez pas l'email avant 14 jours de délai. Un email séparé par personne. Taille totale des pièces jointes : max 1 Mo.</p>
+          </td>
+        </tr>
+      </table>
+
+      <!-- ÉTAPE 2 -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 2 — Transmettez vos identifiants à Joventy</p>
+            <p style="margin:0 0 10px;color:#166534;font-size:14px;line-height:1.7;">Une fois que l'ambassade vous a envoyé votre <strong>identifiant et mot de passe</strong> par email de confirmation, transmettez-les à votre conseiller Joventy via la messagerie de votre dossier.</p>
+            <p style="margin:0;color:#166534;font-size:14px;line-height:1.7;">Notre robot se connectera à citaconsular.es avec ces identifiants et réservera <strong>automatiquement</strong> le premier créneau disponible correspondant à vos dates.</p>
+          </td>
+        </tr>
+      </table>
+
+      <!-- INFOS PRATIQUES -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#475569;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">À savoir</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#475569;font-size:13px;line-height:1.6;">🕗&nbsp; Ambassade ouverte lun–ven 8h30–14h (Kinshasa)</td></tr>
+              <tr><td style="padding:3px 0;color:#475569;font-size:13px;line-height:1.6;">📋&nbsp; Délai de traitement : 15 à 45 jours après dépôt</td></tr>
+              <tr><td style="padding:3px 0;color:#475569;font-size:13px;line-height:1.6;">🗓&nbsp; Demandez entre 6 mois et 15 jours avant votre voyage</td></tr>
+              <tr><td style="padding:3px 0;color:#475569;font-size:13px;line-height:1.6;">🔍&nbsp; Suivi de dossier : <a href="https://sutramiteconsular.maec.es" style="color:#1d4ed8;">sutramiteconsular.maec.es</a></td></tr>
+              <tr><td style="padding:3px 0;color:#475569;font-size:13px;line-height:1.6;">💶&nbsp; Frais consulaires (90 €/adulte) payés directement à l'ambassade — non inclus dans le tarif Joventy</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0 0 4px;">Des questions ? Contactez-nous via la messagerie de votre dossier ou sur WhatsApp au <strong>+243 840 808 122</strong>.</p>
+      ${cta(`${APP_URL}/dashboard`, "Accéder à mon dossier")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "🇪🇸 Action requise — Inscription visa Espagne (étape obligatoire avant rendez-vous)",
+      html: htmlWrapper("Visa Espagne — Instructions d'inscription", body),
+    });
+  },
+});
+
 /* ───────────────────────────── 11. BIENVENUE NOUVELLE INSCRIPTION ─── */
 export const sendWelcomeClient = internalAction({
   args: {
