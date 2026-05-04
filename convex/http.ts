@@ -380,10 +380,31 @@ http.route({
 
     if (contentType.includes("application/json")) {
       try {
-        const j = await request.json() as Record<string, string>;
-        rawText = j.raw_text ?? j.text ?? j.body ?? j.Body ?? j.message ?? "";
-        bodyAppId = j.applicationId ?? null;
-        bodyFlow = j.flow ?? null;
+        // Record<string, unknown> car Resend envoie `to` en tableau string[]
+        const j = await request.json() as Record<string, unknown>;
+        rawText =
+          (j.raw_text as string | undefined) ??
+          (j.text as string | undefined) ??       // Resend inbound: champ "text"
+          (j.body as string | undefined) ??
+          (j.Body as string | undefined) ??
+          (j.message as string | undefined) ?? "";
+        bodyAppId = (j.applicationId as string | undefined) ?? null;
+        bodyFlow = (j.flow as string | undefined) ?? null;
+
+        // Resend inbound: champ "to" est un tableau ["otp+{appId}@joventy.cd"]
+        // Extrait l'applicationId depuis l'adresse destinataire si pas déjà fourni
+        if (!bodyAppId) {
+          const toField = j.to;
+          const toAddresses: string[] = Array.isArray(toField)
+            ? (toField as string[])
+            : typeof toField === "string"
+              ? [toField]
+              : [];
+          for (const addr of toAddresses) {
+            const m = addr.match(/otp\+([^@+\s]+)@/i);
+            if (m) { bodyAppId = m[1]; break; }
+          }
+        }
       } catch {
         return new Response("Invalid JSON", { status: 400 });
       }
