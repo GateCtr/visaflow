@@ -221,7 +221,7 @@ export async function uploadScreenshot(base64: string): Promise<string | null> {
 export async function requestOtpChallenge(payload: {
   applicationId: string;
   flow: "spain" | string;
-  channel?: "telegram" | string;
+  channel?: "email" | "sms" | "telegram" | string;
   ttlMs?: number;
   chatId?: string;
 }): Promise<{ challengeId: string; expiresAt: number } | null> {

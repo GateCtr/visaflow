@@ -342,6 +342,143 @@ http.route({
   }),
 });
 
+/**
+ * Endpoint universel d'ingestion OTP — reçoit le texte brut d'un email ou SMS,
+ * extrait le code et le soumet au défi en cours.
+ *
+ * Auth  : query param ?secret=OTP_INGEST_SECRET  (ou X-OTP-Key / X-Hunter-Key header)
+ * AppId : query param ?applicationId=  OU  adresse destinataire otp+{appId}@joventy.cd
+ *
+ * Body acceptés :
+ *   - application/json          { raw_text, text, body, Body, applicationId?, flow? }
+ *   - application/x-www-form-urlencoded  (Mailgun: body-plain, stripped-text)
+ *   - text/plain                corps brut
+ */
+http.route({
+  path: "/hunter/otp/ingest",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // ── Authentification ─────────────────────────────────────────────────────
+    const ingestSecret = process.env.OTP_INGEST_SECRET ?? process.env.HUNTER_API_KEY;
+    if (!ingestSecret) {
+      return new Response("OTP_INGEST_SECRET not configured", { status: 500 });
+    }
+    const url = new URL(request.url);
+    const secretParam = url.searchParams.get("secret");
+    const headerKey =
+      request.headers.get("X-OTP-Key") ??
+      request.headers.get("X-Hunter-Key");
+    if (secretParam !== ingestSecret && headerKey !== ingestSecret) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    // ── Lecture du corps ──────────────────────────────────────────────────────
+    const contentType = request.headers.get("Content-Type") ?? "";
+    let rawText = "";
+    let bodyAppId: string | null = null;
+    let bodyFlow: string | null = null;
+
+    if (contentType.includes("application/json")) {
+      try {
+        const j = await request.json() as Record<string, string>;
+        rawText = j.raw_text ?? j.text ?? j.body ?? j.Body ?? j.message ?? "";
+        bodyAppId = j.applicationId ?? null;
+        bodyFlow = j.flow ?? null;
+      } catch {
+        return new Response("Invalid JSON", { status: 400 });
+      }
+    } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+      try {
+        const form = await request.formData();
+        // Mailgun: body-plain > stripped-text > body-html
+        rawText =
+          (form.get("body-plain") as string | null) ??
+          (form.get("stripped-text") as string | null) ??
+          (form.get("body-html") as string | null) ??
+          (form.get("text") as string | null) ??
+          (form.get("body") as string | null) ?? "";
+        // Mailgun recipient field: "otp+{appId}@joventy.cd"
+        const recipient = (form.get("recipient") as string | null) ?? (form.get("To") as string | null) ?? "";
+        const recipientMatch = recipient.match(/otp\+([^@+\s]+)@/i);
+        if (recipientMatch) bodyAppId = recipientMatch[1];
+        bodyFlow = (form.get("flow") as string | null);
+      } catch {
+        rawText = await request.text().catch(() => "");
+      }
+    } else {
+      rawText = await request.text().catch(() => "");
+    }
+
+    // ── Résolution applicationId ──────────────────────────────────────────────
+    // Priorité : body > query param > encodé dans destinataire email
+    const qAppId = url.searchParams.get("applicationId");
+    const flow = bodyFlow ?? url.searchParams.get("flow") ?? "spain";
+
+    // Extrait depuis adresse destinataire dans query (e.g. ?to=otp+abc123@joventy.cd)
+    const toParam = url.searchParams.get("to") ?? "";
+    const toMatch = toParam.match(/otp\+([^@+\s]+)@/i);
+
+    const resolvedAppId = bodyAppId ?? qAppId ?? toMatch?.[1] ?? null;
+
+    if (!rawText.trim()) {
+      return new Response(JSON.stringify({ ok: false, error: "empty_text" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Ingestion ─────────────────────────────────────────────────────────────
+    const result = await ctx.runMutation(internal.hunter.ingestOtp, {
+      rawText,
+      applicationId: resolvedAppId ? resolvedAppId as Id<"applications"> : undefined,
+      flow,
+    });
+
+    console.log("[OTP ingest]", JSON.stringify({ ...result, rawText: rawText.slice(0, 80) }));
+
+    return new Response(JSON.stringify(result), {
+      status: result.ok ? 200 : 422,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// Alias GET pour les SMS forwarders qui ne supportent que GET
+http.route({
+  path: "/hunter/otp/ingest",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const ingestSecret = process.env.OTP_INGEST_SECRET ?? process.env.HUNTER_API_KEY;
+    if (!ingestSecret) return new Response("OTP_INGEST_SECRET not configured", { status: 500 });
+
+    const url = new URL(request.url);
+    if ((url.searchParams.get("secret") ?? url.searchParams.get("key")) !== ingestSecret) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const rawText = url.searchParams.get("text") ?? url.searchParams.get("body") ?? url.searchParams.get("sms") ?? "";
+    const qAppId = url.searchParams.get("applicationId");
+    const flow = url.searchParams.get("flow") ?? "spain";
+
+    if (!rawText.trim()) {
+      return new Response(JSON.stringify({ ok: false, error: "empty_text" }), {
+        status: 400, headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const result = await ctx.runMutation(internal.hunter.ingestOtp, {
+      rawText,
+      applicationId: qAppId ? qAppId as Id<"applications"> : undefined,
+      flow,
+    });
+
+    return new Response(JSON.stringify(result), {
+      status: result.ok ? 200 : 422,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 http.route({
   path: "/hunter/otp/submit",
   method: "POST",

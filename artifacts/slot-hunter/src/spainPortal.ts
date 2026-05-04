@@ -385,16 +385,30 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
 
   const hash = await page.evaluate(() => window.location.hash || "");
   if (hash.includes("confirmclient")) {
+    // OTP auto-ingéré : email forward ou SMS forwarder → webhook /hunter/otp/ingest → Convex
+    // Fallback dev : variable d'environnement SPAIN_OTP_CODE
     const directOtp = process.env.SPAIN_OTP_CODE?.trim();
     let otp = directOtp || "";
     if (!otp) {
+      const channel = (process.env.SPAIN_OTP_CHANNEL ?? "email") as "email" | "sms" | "telegram";
       await requestOtpChallenge({
         applicationId: job.id,
         flow: "spain",
-        channel: "telegram",
-        ttlMs: 120_000,
+        channel,
+        ttlMs: 90_000,
       });
-      otp = (await waitForOtpFromConvex(job.id, 120_000)) ?? "";
+      botLog({
+        applicationId: job.id,
+        step: "otp_waiting",
+        status: "ok",
+        data: {
+          channel,
+          ingestUrl: `${process.env.CONVEX_SITE_URL ?? ""}/hunter/otp/ingest`,
+          note: "OTP attendu via forward automatique — aucune action humaine requise",
+          flow: "spain",
+        },
+      });
+      otp = (await waitForOtpFromConvex(job.id, 90_000)) ?? "";
     }
     if (!otp) {
       return { status: "otp_required", note: "otp_code_missing" };

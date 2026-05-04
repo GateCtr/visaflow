@@ -294,6 +294,91 @@ export const recordCevClick = internalMutation({
   },
 });
 
+/**
+ * Extrait un code OTP depuis un texte brut (corps d'email ou SMS).
+ * Essaie les patterns du plus spécifique au plus générique.
+ */
+function extractOtpFromText(raw: string): string | null {
+  if (!raw) return null;
+  const t = raw.replace(/\s+/g, " ").trim();
+  const patterns: RegExp[] = [
+    // Mot-clé suivi du code (multi-langue)
+    /(?:code|otp|código|clave|contraseña|pin|token|codi|verif\w*|confirm\w*|secreto|acceso|access)[\s:«»'"→\-–—=]+(\d{4,8})/i,
+    // Code en fin de phrase
+    /[\s:«»'"](\d{6})\s*[.,!?]?\s*$/m,
+    // 6 chiffres (longueur OTP la plus courante)
+    /\b(\d{6})\b/,
+    // 4–8 chiffres en dernier recours
+    /\b(\d{4,8})\b/,
+  ];
+  for (const pattern of patterns) {
+    const m = t.match(pattern);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Ingère un OTP reçu par webhook (email forward ou SMS forwarder).
+ * Cherche le défi en cours pour cet applicationId (ou globalement si absent).
+ * Ne nécessite aucune intervention humaine.
+ */
+export const ingestOtp = internalMutation({
+  args: {
+    rawText: v.string(),
+    applicationId: v.optional(v.id("applications")),
+    flow: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const code = extractOtpFromText(args.rawText);
+    if (!code) return { ok: false as const, reason: "no_otp_found" };
+
+    const now = Date.now();
+    const targetFlow = args.flow ?? "spain";
+
+    let challenge: Awaited<ReturnType<typeof ctx.db.get>> | undefined;
+
+    if (args.applicationId) {
+      const rows = await ctx.db
+        .query("otpChallenges")
+        .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId!))
+        .order("desc")
+        .take(10);
+      challenge = rows.find(
+        (r) =>
+          (r.status === "pending" || r.status === "submitted") &&
+          r.expiresAt > now &&
+          r.flow === targetFlow,
+      );
+    }
+
+    if (!challenge) {
+      // Fallback global : défi le plus récent en cours toutes applications confondues
+      const pending = await ctx.db
+        .query("otpChallenges")
+        .withIndex("by_status", (q) => q.eq("status", "pending"))
+        .order("desc")
+        .take(30);
+      challenge = pending.find((r) => r.expiresAt > now && r.flow === targetFlow);
+    }
+
+    if (!challenge) return { ok: false as const, reason: "no_active_challenge" };
+    if (challenge.expiresAt <= now) {
+      await ctx.db.patch(challenge._id, { status: "expired" });
+      return { ok: false as const, reason: "challenge_expired" };
+    }
+
+    await ctx.db.patch(challenge._id, {
+      status: "submitted",
+      code,
+      submittedAt: now,
+    });
+
+    console.log(`[OTP ingest] ✅ Code ${code} soumis pour challenge ${challenge._id} (app ${challenge.applicationId})`);
+    return { ok: true as const, challengeId: challenge._id, code, applicationId: challenge.applicationId };
+  },
+});
+
 export const requestOtpChallenge = internalMutation({
   args: {
     applicationId: v.id("applications"),
