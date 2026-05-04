@@ -368,6 +368,7 @@ export default function AdminApplicationDetail() {
   const [hunterActive, setHunterActive] = useState(false);
   const [hunterVowintAppId, setHunterVowintAppId] = useState("");
   const [hunterCevCountry, setHunterCevCountry] = useState("");
+  const [hunterScheduleUrl, setHunterScheduleUrl] = useState("");
   const [hunterSaving, setHunterSaving] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaBalanceChecking, setCaptchaBalanceChecking] = useState(false);
@@ -401,7 +402,7 @@ export default function AdminApplicationDetail() {
       setAdminNoteInput(app.adminNotes ?? "");
       const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
       if (pricing) setSlotLocation(pricing.embassyAddress ?? "");
-      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string } }).hunterConfig;
+      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string; scheduleUrl?: string } }).hunterConfig;
       if (hc) {
         setHunterUsername(hc.embassyUsername);
         setHunterPassword(hc.embassyPassword);
@@ -411,6 +412,7 @@ export default function AdminApplicationDetail() {
         setHunterSlotDateDeadline(hc.slotDateDeadline ?? "");
         setHunterVowintAppId(hc.vowintAppId ?? "");
         setHunterCevCountry(hc.cevCountry ?? "");
+        setHunterScheduleUrl(hc.scheduleUrl ?? "");
       } else {
         setHunterUsername("");
         setHunterPassword("");
@@ -420,6 +422,7 @@ export default function AdminApplicationDetail() {
         setHunterSlotDateDeadline("");
         setHunterVowintAppId("");
         setHunterCevCountry("");
+        setHunterScheduleUrl("");
       }
     }
   }, [app?._id]);
@@ -1161,7 +1164,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1175,7 +1178,7 @@ export default function AdminApplicationDetail() {
             setHunterSaving(true);
             try {
               await resetHunterConfig({ applicationId: appId });
-              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false);
+              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false); setHunterScheduleUrl("");
               toast({ title: "Config Hunter supprimée", description: "Les identifiants ont été effacés." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1361,6 +1364,41 @@ export default function AdminApplicationDetail() {
                         <p className="text-[10px] text-indigo-400">Pays de l'ambassade/consulat demandé</p>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Espagne — URL Bookitit */}
+                {app.destination === "spain" && (
+                  <div className="space-y-3 border border-red-200 bg-red-50 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-red-800 uppercase tracking-wide flex items-center gap-1.5">
+                      🇪🇸 Configuration Bookitit (citaconsular.es)
+                    </p>
+                    <p className="text-[11px] text-red-600">
+                      Collez l'URL de réservation Bookitit spécifique à l'ambassade / consulat d'Espagne de Kinshasa. Cette URL est unique par service (ex : Visa Schengen C, Visa National D…). Le bot l'utilisera directement pour surveiller les créneaux.
+                    </p>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-red-700 uppercase">URL Bookitit de réservation</label>
+                      <Input
+                        value={hunterScheduleUrl}
+                        onChange={(e) => setHunterScheduleUrl(e.target.value)}
+                        placeholder="https://www.citaconsular.es/es/hosteds/widgetdefault/..."
+                        className="h-9 bg-white text-sm font-mono"
+                      />
+                      <p className="text-[10px] text-red-400">
+                        Trouvez l'URL en ouvrant citaconsular.es → sélectionnez l'ambassade de Kinshasa → copiez l'URL complète de la page de sélection de créneau.
+                      </p>
+                    </div>
+                    {hunterScheduleUrl && (
+                      <a
+                        href={hunterScheduleUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-red-700 underline underline-offset-2 font-medium"
+                      >
+                        <Link className="w-3 h-3" />
+                        Vérifier l'URL dans un nouvel onglet
+                      </a>
+                    )}
                   </div>
                 )}
 
