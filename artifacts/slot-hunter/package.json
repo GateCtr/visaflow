@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "build": "tsc --noEmit",
     "security:check": "tsx src/securityCheck.ts",
-    "security:check:full": "FULL_CHECK=true tsx src/securityCheck.ts"
+    "security:check:full": "FULL_CHECK=true tsx src/securityCheck.ts",
+    "es:citaconsular:discover": "tsx src/citaconsularDiscovery.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

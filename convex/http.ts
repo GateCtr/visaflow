@@ -18,6 +18,20 @@ function requireHunterKey(request: Request): Response | null {
   return null;
 }
 
+function requireOtpWebhookKey(request: Request): Response | null {
+  const otpKey = process.env.TELEGRAM_OTP_WEBHOOK_KEY;
+  // Fallback pragmatique : si non configurée, autoriser la clé hunter
+  const expected = otpKey || process.env.HUNTER_API_KEY;
+  if (!expected) {
+    return new Response("OTP webhook key not configured on server", { status: 500 });
+  }
+  const provided = request.headers.get("X-OTP-Key");
+  if (!provided || provided !== expected) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  return null;
+}
+
 http.route({
   path: "/clerk-webhook",
   method: "POST",
@@ -261,6 +275,103 @@ http.route({
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/otp/request",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      flow: string;
+      channel?: string;
+      ttlMs?: number;
+      chatId?: string;
+    };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+    if (!body.applicationId || !body.flow) {
+      return new Response("Missing required fields: applicationId, flow", { status: 400 });
+    }
+
+    const out = await ctx.runMutation(internal.hunter.requestOtpChallenge, {
+      applicationId: body.applicationId as Id<"applications">,
+      flow: body.flow,
+      channel: body.channel,
+      ttlMs: body.ttlMs,
+      chatId: body.chatId,
+    });
+
+    return new Response(JSON.stringify({ ok: true, ...out }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/otp/consume",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+    const u = new URL(request.url);
+    const applicationId = u.searchParams.get("applicationId");
+    const flow = u.searchParams.get("flow") ?? "spain";
+    if (!applicationId) {
+      return new Response("Missing required query param: applicationId", { status: 400 });
+    }
+
+    const out = await ctx.runMutation(internal.hunter.consumeOtpCode, {
+      applicationId: applicationId as Id<"applications">,
+      flow,
+    });
+    return new Response(JSON.stringify({ ok: true, ...out }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/otp/submit",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireOtpWebhookKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      flow?: string;
+      code: string;
+      chatId?: string;
+    };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+    if (!body.applicationId || !body.code) {
+      return new Response("Missing required fields: applicationId, code", { status: 400 });
+    }
+    const out = await ctx.runMutation(internal.hunter.submitOtpCode, {
+      applicationId: body.applicationId as Id<"applications">,
+      flow: body.flow ?? "spain",
+      code: body.code,
+      chatId: body.chatId,
+    });
+
+    return new Response(JSON.stringify(out), {
+      status: out.ok ? 200 : 422,
       headers: { "Content-Type": "application/json" },
     });
   }),

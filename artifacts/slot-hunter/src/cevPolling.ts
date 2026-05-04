@@ -12,6 +12,7 @@
 // Coût : ~50ms par check, zéro captcha, zéro Playwright.
 
 const BASE = "https://appointment.cloud.diplomatie.be";
+const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const USER_AGENT =
   "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36";
@@ -41,6 +42,57 @@ function fetchManual(url: string, cookie: string): Promise<Response> {
   });
 }
 
+function isVowintEAppointmentUrl(url: string): boolean {
+  return /^https:\/\/visaonweb\.diplomatie\.be\/Common\/GetEAppointmentUrl\?/i.test(url);
+}
+
+async function resolveEntryUrl(entryUrl: string, cookie: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  // Déjà une URL CEV directe: /Integration/VOW/... => pas besoin de résolution.
+  if (entryUrl.startsWith(`${BASE}/Integration/VOW/`)) {
+    return { ok: true, url: entryUrl };
+  }
+
+  // Option B: accepter un lien VOWINT /Common/GetEAppointmentUrl?id=...
+  // et tenter de récupérer la redirection CEV en lisant l'en-tête Location.
+  if (isVowintEAppointmentUrl(entryUrl)) {
+    try {
+      const r = await fetch(entryUrl, {
+        method: "GET",
+        headers: {
+          Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
+          "User-Agent": USER_AGENT,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9,fr;q=0.8",
+          Referer: `${VOWINT_BASE}/`,
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      const loc = r.headers.get("location");
+      if (loc && /appointment\.cloud\.diplomatie\.be\/Integration\/VOW\//i.test(loc)) {
+        const resolved = loc.startsWith("http") ? loc : `${BASE}${loc}`;
+        return { ok: true, url: resolved };
+      }
+
+      return {
+        ok: false,
+        error:
+          "GetEAppointmentUrl non résolu vers Integration/VOW (session VOWINT probablement requise).",
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `Échec résolution GetEAppointmentUrl: ${msg}` };
+    }
+  }
+
+  return {
+    ok: false,
+    error:
+      "URL d'entrée invalide. Attendu: https://appointment.cloud.diplomatie.be/Integration/VOW/... ou https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?...",
+  };
+}
+
 function classifyLocation(loc: string | null): "slot" | "no_slot" | "expired" | "captcha" | "login" | "unknown" {
   if (!loc) return "unknown";
   const lower = loc.toLowerCase();
@@ -59,7 +111,8 @@ const POSITIVE_SLOT_MARKERS = [
   "available-slot",      // class CSS spécifique
   "datepicker",          // calendrier interactif
   "appointment-slot",    // wording slot
-  "ng-controller=\"slotctrl",  // AngularJS controller (CEV utilise AngularJS)
+  "ng-controller=\"slotctrl",   // AngularJS controller (CEV utilise AngularJS)
+  "ng-controller='slotctrl",   // variante guillemets simples
   "data-slot-time",      // attribut data
   "id=\"slotform\"",     // form id classique
 ];
@@ -86,8 +139,15 @@ export async function pollCevSlot(
   sessionCookie: string,
 ): Promise<CevPollResult> {
   try {
+    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie);
+    if (!resolved.ok) {
+      return { status: "error", error: resolved.error };
+    }
+
+    const entryUrl = resolved.url;
+
     // Étape 1 : URL d'entrée
-    const r1 = await fetchManual(integrationUrl, sessionCookie);
+    const r1 = await fetchManual(entryUrl, sessionCookie);
 
     if (r1.status === 302) {
       const loc1 = r1.headers.get("location");

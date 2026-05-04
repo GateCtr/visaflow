@@ -5,18 +5,23 @@
  */
 import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
+import { tmpdir, homedir } from 'os';
 
 const VOWINT_USER = 'screentapinc@gmail.com';
-const VOWINT_PASS = process.env.VOWINT_TEST_PASSWORD!.trim();
+const VOWINT_PASS = process.env.VOWINT_TEST_PASSWORD?.trim();
+if (!VOWINT_PASS) {
+  console.error('[FATAL] VOWINT_TEST_PASSWORD manquant dans les variables d\'environnement');
+  process.exit(1);
+}
 // Anti-Captcha en priorité (supporte les domaines gouvernementaux)
 // CapSolver blackliste la sitekey CEV 5f64399c-14a8-415e-ad1a-7ebccdc4943a
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? '';
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? '';
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
-const SCREENSHOTS_DIR = '/tmp/cev_screenshots';
-const OUTPUT_FILE = '/home/runner/workspace/CEV_DISCOVERY.md';
+const SCREENSHOTS_DIR = join(tmpdir(), 'cev_screenshots');
+const OUTPUT_FILE = resolve(homedir(), 'CEV_DISCOVERY.md');
 
 if (!existsSync(SCREENSHOTS_DIR)) mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
@@ -239,24 +244,81 @@ await context.addInitScript(() => {
   Object.defineProperty(navigator, 'languages', { get: () => ['fr-BE', 'fr', 'en-US'] });
 });
 
+async function getHcaptchaSitekey(currentPage: Page): Promise<string | null> {
+  return currentPage.evaluate(() => {
+    const iframe = document.querySelector('iframe[src*="hcaptcha"]') as HTMLIFrameElement | null;
+    if (iframe) return iframe.src.match(/sitekey=([^&]+)/)?.[1] ?? null;
+    const keyed = document.querySelector('[data-sitekey]') as HTMLElement | null;
+    if (keyed) return keyed.getAttribute('data-sitekey');
+    return null;
+  }).catch(() => null);
+}
+
+async function injectHcaptchaToken(currentPage: Page, token: string) {
+  await currentPage.evaluate((tok: string) => {
+    const fields = document.querySelectorAll('textarea[name="h-captcha-response"], input[name="h-captcha-response"], input[name="HCaptchaToken"]');
+    fields.forEach((field: Element) => {
+      (field as HTMLInputElement).value = tok;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }, token).catch(() => {});
+}
+
+async function attemptVowintLogin(currentPage: Page, targetUrl: string, label: string): Promise<boolean> {
+  log(`[LOGIN] Tentative ${label} → ${targetUrl}`);
+  await currentPage.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await takeScreenshot(currentPage, `01_vowint_login_${label}`);
+  note(`VOWINT Login Page (${label})`, `URL: ${currentPage.url()}\nTitre: ${await currentPage.title()}`);
+
+  await currentPage.fill('input#UserName', VOWINT_USER);
+  await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+  await currentPage.fill('input#Password', VOWINT_PASS!);
+  await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+
+  const sitekey = await getHcaptchaSitekey(currentPage);
+  if (sitekey) {
+    note(`hCaptcha détecté (login ${label})`, `Sitekey: ${sitekey}`);
+    const token = await solveHcaptcha(sitekey, currentPage.url());
+    if (token) {
+      await injectHcaptchaToken(currentPage, token);
+      note(`hCaptcha injecté (login ${label})`, `Token injecté (60 chars): ${token.slice(0, 60)}...`);
+    } else {
+      note(`hCaptcha non résolu (login ${label})`, 'Soumission login tentée sans token.');
+    }
+  }
+
+  await currentPage.click('button[type="submit"]');
+  await currentPage.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  await takeScreenshot(currentPage, `02_vowint_after_login_${label}`);
+
+  const finalUrl = currentPage.url();
+  const loginError = await currentPage.locator('.validation-summary-errors, .field-validation-error, [class*="alert"]').first().textContent().catch(() => null);
+  const loggedIn = !/\/Account\/Login/i.test(finalUrl);
+
+  note(`VOWINT Après Login (${label})`, `URL: ${finalUrl}\nTitre: ${await currentPage.title()}\nSuccès: ${loggedIn ? 'oui' : 'non'}${loginError ? `\nMessage: ${loginError.trim()}` : ''}`);
+  return loggedIn;
+}
+
 // ==================== ÉTAPE 1 : LOGIN VOWINT ====================
 
 log('\n=== ÉTAPE 1 : Login VOWINT ===');
-await page.goto(VOWINT_BASE, { waitUntil: 'domcontentloaded', timeout: 30000 });
-await takeScreenshot(page, '01_vowint_login_page');
+const loginTargets = [
+  { url: VOWINT_BASE, label: 'home' },
+  { url: `${VOWINT_BASE}/en/Account/Login?ReturnUrl=%2Fen%2FVisaApplication%2FIndexByUserId`, label: 'en_return' },
+];
 
-note('VOWINT Login Page', `URL: ${page.url()}\nTitre: ${await page.title()}`);
+let loggedIn = false;
+for (const target of loginTargets) {
+  loggedIn = await attemptVowintLogin(page, target.url, target.label);
+  if (loggedIn) break;
+}
 
-// Saisie credentials avec délai humain
-await page.fill('input#UserName', VOWINT_USER);
-await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
-await page.fill('input#Password', VOWINT_PASS);
-await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-await page.click('button[type="submit"]');
-await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
-
-await takeScreenshot(page, '02_vowint_after_login');
-note('VOWINT Après Login', `URL: ${page.url()}\nTitre: ${await page.title()}`);
+if (!loggedIn) {
+  note('ERREUR LOGIN VOWINT', 'Impossible de se connecter après plusieurs tentatives (avec gestion hCaptcha).');
+  await browser.close();
+  process.exit(1);
+}
 
 // Vérifier les cookies VOWINT
 const vowintCookies = await context.cookies();
@@ -267,7 +329,16 @@ note('Cookies VOWINT après login', vowintCookies.map(c =>
 // ==================== ÉTAPE 2 : MY APPLICATIONS ====================
 
 log('\n=== ÉTAPE 2 : My Applications ===');
-await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: 'networkidle', timeout: 20000 });
+await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: 'networkidle', timeout: 20000 }).catch(() => {});
+if (/\/Account\/Login/i.test(page.url())) {
+  await page.goto(`${VOWINT_BASE}/fr/VisaApplication/IndexByUserId`, { waitUntil: 'networkidle', timeout: 20000 }).catch(() => {});
+}
+if (/\/Account\/Login/i.test(page.url())) {
+  note('ERREUR SESSION VOWINT', `Redirection persistante vers login: ${page.url()}`);
+  await takeScreenshot(page, '03_vowint_session_lost');
+  await browser.close();
+  process.exit(1);
+}
 await new Promise(r => setTimeout(r, 3000)); // attendre AngularJS
 await takeScreenshot(page, '03_vowint_my_applications');
 

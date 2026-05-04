@@ -5,3 +5,14 @@ bundle-analysis/bundle.js
 # Sections extraites (regénérées par extract-bundle.ts / extract-bot.ts)
 bundle-analysis/sections/
 bundle-analysis/bot-sections/
+# Sortie locale `pnpm run es:citaconsular:discover`
+citaconsular-discovery.json
+
+# Environment variables (all variants)
+.env
+.env.local
+.env*.local
+.env.development
+.env.production
+.env.test
+*.env

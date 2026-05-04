@@ -17,14 +17,20 @@ function requireAdmin(identity: { [key: string]: unknown } | null) {
 }
 
 const GUID_REGEX = /\/Integration\/VOW\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9a-f-]{36})\//i;
+const GET_EAPPOINTMENT_REGEX = /^https:\/\/visaonweb\.diplomatie\.be\/Common\/GetEAppointmentUrl\?id=[0-9a-f-]{36}$/i;
 
 function validateIntegrationUrl(url: string): string {
   const trimmed = url.trim();
-  if (!trimmed.startsWith("https://appointment.cloud.diplomatie.be/")) {
-    throw new Error("L'URL doit commencer par https://appointment.cloud.diplomatie.be/");
-  }
-  if (!GUID_REGEX.test(trimmed)) {
-    throw new Error("L'URL doit contenir 4 identifiants GUID (format /Integration/VOW/{guid}/{guid}/{guid}/{guid}/...)");
+  const isDirectIntegration =
+    trimmed.startsWith("https://appointment.cloud.diplomatie.be/") && GUID_REGEX.test(trimmed);
+  const isVowintRedirect = GET_EAPPOINTMENT_REGEX.test(trimmed);
+
+  if (!isDirectIntegration && !isVowintRedirect) {
+    throw new Error(
+      "URL invalide. Formats acceptés: " +
+      "1) https://appointment.cloud.diplomatie.be/Integration/VOW/{guid}/{guid}/{guid}/{guid}/... " +
+      "2) https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id={guid}",
+    );
   }
   return trimmed;
 }

@@ -48,4 +48,11 @@ Thumbs.db
 .cache/
 .local/
 
+# Environment variables (all variants)
+.env
 .env.local
+.env*.local
+.env.development
+.env.production
+.env.test
+*.env

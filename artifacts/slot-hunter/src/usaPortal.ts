@@ -1953,9 +1953,11 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     );
     botLog({
       applicationId: job.id,
-      step: "ofc_list",
+      step: "scan",
       status: "ok",
       data: {
+        flow: "usa",
+        phase: "ofc_list",
         count: ofcList.length,
         offices: ofcList.map((o) => ({ name: o.postName, postUserId: o.postUserId })),
         visaClass: effectiveDetails.visaClass,
@@ -1964,12 +1966,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     });
   } catch (err) {
     if (err instanceof RateLimitError) {
-      botLog({ applicationId: job.id, step: "rate_limit", status: "fail", data: { endpoint: "getOfcList", retryAfterMs: err.retryAfterMs } });
+      botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "rate_limit", endpoint: "getOfcList", retryAfterMs: err.retryAfterMs } });
       await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getOfcList` });
       return "error";
     }
     if (err instanceof AccountBlockedError || err instanceof TokenExpiredError) {
-      botLog({ applicationId: job.id, step: err instanceof AccountBlockedError ? "blocked" : "error", status: "fail", data: { error: (err as Error).message } });
+      botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: err instanceof AccountBlockedError ? "blocked" : "token_expired", error: (err as Error).message } });
       const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
       if (cacheKey) tokenCache.delete(cacheKey);
       await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: err.message });
@@ -1979,7 +1981,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
   if (ofcList.length === 0) {
     console.warn("[usa] Aucun OFC trouvé — vérifier missionId ou droits d'accès");
-    botLog({ applicationId: job.id, step: "ofc_list", status: "warn", data: { count: 0, missionId: session.missionId } });
+    botLog({ applicationId: job.id, step: "scan", status: "warn", data: { flow: "usa", phase: "ofc_list", count: 0, missionId: session.missionId } });
     await sendHeartbeat({
       applicationId: job.id,
       result: "not_found",
@@ -2008,7 +2010,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       if (err instanceof RateLimitError) {
         const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);
         console.error(`[usa] ⛔ RATE LIMIT détecté — scan interrompu (retry-after: ${waitSec}s)`);
-        botLog({ applicationId: job.id, step: "rate_limit", status: "fail", data: { endpoint: `findFirstSlotForOfc/${ofc.postName}`, retryAfterMs: err.retryAfterMs, waitSec } });
+        botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "rate_limit", endpoint: `findFirstSlotForOfc/${ofc.postName}`, retryAfterMs: err.retryAfterMs, waitSec } });
         await sendHeartbeat({
           applicationId: job.id,
           result: "error",
@@ -2018,7 +2020,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       }
       if (err instanceof AccountBlockedError) {
         console.error(`[usa] ⛔ COMPTE POTENTIELLEMENT BLOQUÉ — ${err.message}`);
-        botLog({ applicationId: job.id, step: "blocked", status: "fail", data: { endpoint: `findFirstSlotForOfc/${ofc.postName}`, error: (err as Error).message } });
+        botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "blocked", endpoint: `findFirstSlotForOfc/${ofc.postName}`, error: (err as Error).message } });
         const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
         if (cacheKey) tokenCache.delete(cacheKey);
         await sendHeartbeat({
@@ -2030,7 +2032,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       }
       if (err instanceof TokenExpiredError) {
         console.error(`[usa] ⛔ TOKEN EXPIRÉ en cours de scan — arrêt, reconnexion au prochain cycle`);
-        botLog({ applicationId: job.id, step: "error", status: "fail", data: { error: "Token JWT expiré", ofc: ofc.postName } });
+        botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "token_expired", error: "Token JWT expiré", ofc: ofc.postName } });
         const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
         if (cacheKey) tokenCache.delete(cacheKey);
         await sendHeartbeat({
@@ -2043,7 +2045,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       // Erreur inattendue — loguer et continuer sur le prochain OFC
       const unexpectedMsg = err instanceof Error ? err.message : String(err);
       console.error(`[usa] Erreur inattendue sur OFC ${ofc.postName}: ${err}`);
-      botLog({ applicationId: job.id, step: "error", status: "fail", data: { ofc: ofc.postName, error: unexpectedMsg.slice(0, 300) } });
+      botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "scan", ofc: ofc.postName, error: unexpectedMsg.slice(0, 300) } });
       continue;
     }
     if (found) {
@@ -2052,6 +2054,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         step: "slots_found",
         status: "ok",
         data: {
+          flow: "usa",
+          phase: "scan",
           ofc: found.ofcName,
           date: found.date,
           time: found.time,
@@ -2065,9 +2069,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       let booking: UsaBookingResult;
       botLog({
         applicationId: job.id,
-        step: "booking_attempt",
+        step: "scan",
         status: "ok",
-        data: { ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
+        data: { flow: "usa", phase: "booking_attempt", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
       });
       try {
         // ── 1. Booking automatique ────────────────────────────
@@ -2076,7 +2080,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         if (bookErr instanceof RateLimitError) {
           const waitSec = Math.round((bookErr.retryAfterMs ?? 60000) / 1000);
           console.error(`[usa] ⛔ RATE LIMIT lors du booking — scan interrompu (retry: ${waitSec}s)`);
-          botLog({ applicationId: job.id, step: "rate_limit", status: "fail", data: { endpoint: "booking", retryAfterMs: bookErr.retryAfterMs, waitSec } });
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "rate_limit", endpoint: "booking", retryAfterMs: bookErr.retryAfterMs, waitSec } });
           await sendHeartbeat({
             applicationId: job.id,
             result: "error",
@@ -2086,7 +2090,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         }
         if (bookErr instanceof AccountBlockedError) {
           console.error(`[usa] ⛔ COMPTE BLOQUÉ lors du booking — ${bookErr.message}`);
-          botLog({ applicationId: job.id, step: "blocked", status: "fail", data: { endpoint: "booking", error: (bookErr as Error).message } });
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "blocked", endpoint: "booking", error: (bookErr as Error).message } });
           const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
           if (cacheKey) tokenCache.delete(cacheKey);
           await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Compte bloqué (403) lors du booking` });
@@ -2094,7 +2098,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         }
         if (bookErr instanceof TokenExpiredError) {
           console.error(`[usa] ⛔ TOKEN EXPIRÉ lors du booking — reconnexion au prochain cycle`);
-          botLog({ applicationId: job.id, step: "error", status: "fail", data: { error: "Token JWT expiré lors du booking" } });
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "token_expired", error: "Token JWT expiré lors du booking" } });
           const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
           if (cacheKey) tokenCache.delete(cacheKey);
           await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Token JWT expiré lors du booking` });
@@ -2103,7 +2107,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         // Erreur réseau inattendue — traiter comme booking échoué et continuer
         const msg = bookErr instanceof Error ? bookErr.message : String(bookErr);
         console.error(`[usa] Erreur inattendue lors du booking: ${msg}`);
-        botLog({ applicationId: job.id, step: "booking_fail", status: "fail", data: { error: msg.slice(0, 300), ofc: found.ofcName, date: found.date } });
+        botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "booking_fail", error: msg.slice(0, 300), ofc: found.ofcName, date: found.date } });
         booking = { success: false, error: msg };
       }
 
@@ -2113,7 +2117,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       // Ne pas signaler le slot comme trouvé (on ne l'a pas obtenu) — scanner le prochain OFC.
       if (!booking.success && booking.statusCode === 409) {
         console.log("[usa] Conflit 409 — le créneau a été pris avant nous. Poursuite du scan...");
-        botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
+        botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "booking_fail", reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
         continue;
       }
 
@@ -2123,9 +2127,11 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       if (booking.success) {
         botLog({
           applicationId: job.id,
-          step: "booking_success",
+          step: "slots_found",
           status: "ok",
           data: {
+            flow: "usa",
+            phase: "booking_success",
             ofc: found.ofcName,
             date: found.date,
             time: found.time,
@@ -2142,18 +2148,18 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
             console.log(`[usa] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
             botLog({
               applicationId: job.id,
-              step: "confirmation_letter",
+              step: "slots_found",
               status: "ok",
-              data: { pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
+              data: { flow: "usa", phase: "confirmation_letter", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
             });
           }
         }
       } else {
         botLog({
           applicationId: job.id,
-          step: "booking_fail",
+          step: "error",
           status: "fail",
-          data: { ofc: found.ofcName, date: found.date, statusCode: booking.statusCode, error: booking.error },
+          data: { flow: "usa", phase: "booking_fail", ofc: found.ofcName, date: found.date, statusCode: booking.statusCode, error: booking.error },
         });
       }
 
@@ -2176,7 +2182,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
 
   console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
-  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName) } });
+  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName) } });
   await sendHeartbeat({ applicationId: job.id, result: "not_found" });
   return "not_found";
 }

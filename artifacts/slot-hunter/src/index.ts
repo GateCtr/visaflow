@@ -7,6 +7,7 @@ import { runCevCheck } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
+import { runSpainSession } from "./spainPortal.js";
 
 // ─── CEV Sessions polling — boucle parallèle indépendante ───────────────────
 // Tourne en background sans bloquer la boucle principale du bot Playwright.
@@ -620,6 +621,8 @@ async function main(): Promise<void> {
         result = cevResult === "slot_found" ? "slot_found"
                : cevResult === "error"      ? "error"
                : "not_found"; // 'not_found' et 'rate_limited' → pas de créneau, on reschedule normalement
+      } else if (due.destination === "spain" || due.destination === "espagne" || due.destination === "es") {
+        result = await runSpainSession(due);
       } else {
         result = await runHunterSession(due);
       }

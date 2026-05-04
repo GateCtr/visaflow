@@ -239,6 +239,123 @@ export const recordCevClick = internalMutation({
   },
 });
 
+export const requestOtpChallenge = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+    channel: v.optional(v.string()),
+    ttlMs: v.optional(v.number()),
+    chatId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const ttlMs = Math.max(30_000, Math.min(args.ttlMs ?? 120_000, 10 * 60_000));
+
+    const existing = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(10);
+
+    for (const row of existing) {
+      if (row.flow !== args.flow) continue;
+      if (row.status === "pending" || row.status === "submitted") {
+        await ctx.db.patch(row._id, {
+          status: row.expiresAt <= now ? "expired" : "cancelled",
+        });
+      }
+    }
+
+    const challengeId = await ctx.db.insert("otpChallenges", {
+      applicationId: args.applicationId,
+      flow: args.flow,
+      channel: args.channel ?? "telegram",
+      status: "pending",
+      chatId: args.chatId,
+      createdAt: now,
+      expiresAt: now + ttlMs,
+    });
+
+    return { challengeId, expiresAt: now + ttlMs };
+  },
+});
+
+export const submitOtpCode = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+    code: v.string(),
+    chatId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(20);
+
+    const target = rows.find(
+      (r) =>
+        r.flow === args.flow &&
+        (r.status === "pending" || r.status === "submitted"),
+    );
+
+    if (!target) return { ok: false, reason: "no_active_challenge" as const };
+    if (target.expiresAt <= now) {
+      await ctx.db.patch(target._id, { status: "expired" });
+      return { ok: false, reason: "challenge_expired" as const };
+    }
+
+    await ctx.db.patch(target._id, {
+      status: "submitted",
+      code: args.code.trim(),
+      chatId: args.chatId ?? target.chatId,
+      submittedAt: now,
+    });
+    return { ok: true, challengeId: target._id };
+  },
+});
+
+export const consumeOtpCode = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(20);
+
+    const target = rows.find(
+      (r) =>
+        r.flow === args.flow &&
+        (r.status === "pending" || r.status === "submitted"),
+    );
+    if (!target) return { status: "none" as const };
+    if (target.expiresAt <= now) {
+      await ctx.db.patch(target._id, { status: "expired" });
+      return { status: "expired" as const };
+    }
+    if (target.status !== "submitted" || !target.code) {
+      return { status: "pending" as const, expiresAt: target.expiresAt };
+    }
+
+    await ctx.db.patch(target._id, {
+      status: "consumed",
+      consumedAt: now,
+    });
+    return {
+      status: "ok" as const,
+      code: target.code,
+      challengeId: target._id,
+    };
+  },
+});
+
 export const checkTwoCaptchaBalance = action({
   args: { applicationId: v.id("applications") },
   handler: async (ctx, args) => {

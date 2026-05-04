@@ -218,6 +218,57 @@ export async function uploadScreenshot(base64: string): Promise<string | null> {
   return uploadFile(base64, "image/png");
 }
 
+export async function requestOtpChallenge(payload: {
+  applicationId: string;
+  flow: "spain" | string;
+  channel?: "telegram" | string;
+  ttlMs?: number;
+  chatId?: string;
+}): Promise<{ challengeId: string; expiresAt: number } | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/otp/request`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ok: boolean; challengeId: string; expiresAt: number };
+    return data.ok ? { challengeId: data.challengeId, expiresAt: data.expiresAt } : null;
+  } catch (err) {
+    console.warn("[convexClient] requestOtpChallenge error:", err);
+    return null;
+  }
+}
+
+export async function consumeOtpCode(payload: {
+  applicationId: string;
+  flow: "spain" | string;
+}): Promise<{ status: "ok"; code: string } | { status: "pending" | "expired" | "none" }> {
+  const q = new URLSearchParams({
+    applicationId: payload.applicationId,
+    flow: payload.flow,
+  });
+  const url = `${CONVEX_SITE_URL}/hunter/otp/consume?${q.toString()}`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return { status: "none" };
+    const data = (await res.json()) as { status?: "ok" | "pending" | "expired" | "none"; code?: string };
+    if (data.status === "ok" && data.code) return { status: "ok", code: data.code };
+    if (data.status === "pending" || data.status === "expired" || data.status === "none") return { status: data.status };
+    return { status: "none" };
+  } catch (err) {
+    console.warn("[convexClient] consumeOtpCode error:", err);
+    return { status: "none" };
+  }
+}
+
 /**
  * Enregistre un clic sur le bouton RDV CEV (pour tracking du rate limit 4 clics/heure).
  * Fire-and-forget — ne bloque pas le chemin critique.

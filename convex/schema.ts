@@ -253,4 +253,26 @@ export default defineSchema({
   })
     .index("by_application", ["applicationId"])
     .index("by_status", ["status"]),
+
+  // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)
+  otpChallenges: defineTable({
+    applicationId: v.id("applications"),
+    flow: v.string(), // e.g. "spain"
+    channel: v.string(), // e.g. "telegram"
+    status: v.union(
+      v.literal("pending"),
+      v.literal("submitted"),
+      v.literal("consumed"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+    ),
+    code: v.optional(v.string()),
+    chatId: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    submittedAt: v.optional(v.number()),
+    consumedAt: v.optional(v.number()),
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_status", ["status"]),
 });
