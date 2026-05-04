@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page, Response } from "playwright";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
-import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, type HunterJob } from "./convexClient.js";
+import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
 
 const CF_TITLE_RE =
   /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
@@ -219,6 +219,119 @@ async function captureAndUpload(page: Page): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** Attend que la page #summary ait fini son appel JSONP et rendu le contenu. */
+async function waitForSummaryReady(page: Page): Promise<void> {
+  await Promise.race([
+    page.waitForSelector("#idDivBktSummaryContent", { state: "visible", timeout: 12_000 }),
+    new Promise<void>((r) => setTimeout(r, 12_000)),
+  ]).catch(() => {});
+  await Promise.race([
+    page.waitForFunction(
+      () => (document.querySelector("#idDivBktSummaryAppointmentsContent")?.children.length ?? 0) > 0,
+      { timeout: 8_000 },
+    ),
+    new Promise<void>((r) => setTimeout(r, 8_000)),
+  ]).catch(() => {});
+}
+
+/** Extrait le numéro de localisateur (code de confirmation) depuis le DOM summary. */
+async function extractLocatorFromSummary(page: Page): Promise<string | null> {
+  try {
+    return await page.evaluate(() => {
+      const el = document.querySelector("#idDivBktSummaryAppointmentsContent");
+      if (!el) return null;
+      const text = el.textContent ?? "";
+      // Bookitit locators : code numérique 5-12 chiffres
+      const m = text.match(/\b(\d{5,12})\b/);
+      return m ? m[1] : null;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Génère un PDF de la confirmation en réutilisant exactement le même HTML
+ * que le bouton "Print" du widget (contenu de #idBktDefaultTicketContainer).
+ */
+async function captureConfirmationPdf(page: Page): Promise<string | null> {
+  try {
+    // Le TicketView rend son contenu dans #idBktDefaultTicketContainer lors de fillData()
+    await page.waitForSelector("#idBktDefaultTicketContainer", { timeout: 6_000 }).catch(() => {});
+
+    const ticketHtml = await page
+      .$eval("#idBktDefaultTicketContainer", (el) => (el as HTMLElement).innerHTML)
+      .catch(() => "");
+
+    let pdfBytes: Buffer;
+
+    if (ticketHtml) {
+      // Ouvre une page éphémère avec uniquement le HTML du ticket — propre et sans chrome
+      const ctx = page.context();
+      const ticketPage = await ctx.newPage();
+      await ticketPage.setContent(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Confirmation RDV</title></head><body style="margin:16px;font-family:sans-serif">${ticketHtml}</body></html>`,
+        { waitUntil: "domcontentloaded" },
+      );
+      pdfBytes = Buffer.from(await ticketPage.pdf({ format: "A4", printBackground: true }));
+      await ticketPage.close();
+    } else {
+      // Fallback : PDF de toute la page summary en mode print
+      await page.emulateMedia({ media: "print" });
+      pdfBytes = Buffer.from(await page.pdf({ format: "A4", printBackground: true }));
+      await page.emulateMedia({ media: "screen" });
+    }
+
+    return await uploadFile(pdfBytes.toString("base64"), "application/pdf");
+  } catch (e) {
+    console.warn("[spain] captureConfirmationPdf failed:", e);
+    return null;
+  }
+}
+
+/**
+ * Appelé après un booking réussi (status === "booked").
+ * Attend le rendu du summary, extrait le locateur, capte screenshot + PDF,
+ * uploade le PDF comme document, puis appelle reportSlotFound.
+ */
+async function postBookingCapture(
+  page: Page,
+  job: HunterJob,
+  slot: SpainSlot,
+  booking: BookingAttempt,
+): Promise<void> {
+  await waitForSummaryReady(page);
+
+  const locator = await extractLocatorFromSummary(page);
+  if (locator) {
+    botLog({ applicationId: job.id, step: "confirmation_locator", status: "ok", data: { locator } });
+  }
+
+  const screenshotStorageId = await captureAndUpload(page);
+
+  const pdfStorageId = await captureConfirmationPdf(page);
+  if (pdfStorageId) {
+    await attachConfirmationDoc({
+      applicationId: job.id,
+      storageId: pdfStorageId,
+      docKey: "booking_confirmation_pdf",
+      label: "Confirmation de rendez-vous (PDF)",
+    });
+    botLog({ applicationId: job.id, step: "confirmation_pdf", status: "ok", data: { pdfStorageId } });
+  } else {
+    botLog({ applicationId: job.id, step: "confirmation_pdf", status: "warn", data: { reason: "pdf_capture_failed" } });
+  }
+
+  await reportSlotFound({
+    applicationId: job.id,
+    date: slot.date,
+    time: slot.time,
+    location: `Espagne / ${slot.location} (${booking.note ?? "booked"})`,
+    confirmationCode: locator ?? undefined,
+    screenshotStorageId,
+  });
 }
 
 async function waitForOtpFromConvex(applicationId: string, timeoutMs = 90_000): Promise<string | null> {
@@ -583,14 +696,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
             await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
             return "error";
           }
-          const screenshotStorageId = await captureAndUpload(page);
-          await reportSlotFound({
-            applicationId: job.id,
-            date: apiSlot.date,
-            time: apiSlot.time,
-            location: `Espagne / ${apiSlot.location} (${booking.note})`,
-            screenshotStorageId,
-          });
+          await postBookingCapture(page, job, apiSlot, booking);
           return "slot_found";
         }
       }
@@ -641,14 +747,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
           return "error";
         }
-        const screenshotStorageId = await captureAndUpload(page);
-        await reportSlotFound({
-          applicationId: job.id,
-          date: slot.date,
-          time: slot.time,
-          location: `Espagne / ${slot.location} (${booking.note})`,
-          screenshotStorageId,
-        });
+        await postBookingCapture(page, job, slot, booking);
         return "slot_found";
       }
 
@@ -697,14 +796,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
           return "error";
         }
-        const screenshotStorageId = await captureAndUpload(page);
-        await reportSlotFound({
-          applicationId: job.id,
-          date: domSlot.date,
-          time: domSlot.time,
-          location: `Espagne / ${domSlot.location} (${booking.note})`,
-          screenshotStorageId,
-        });
+        await postBookingCapture(page, job, domSlot, booking);
         return "slot_found";
       }
 

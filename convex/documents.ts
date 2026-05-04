@@ -214,7 +214,16 @@ export const listByApplication = query({
       .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
       .collect();
 
-    const visibleDocs = isAdmin ? docs : docs.filter((d) => !d.isAdminUpload);
+    const successFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
+    const visibleDocs = isAdmin
+      ? docs
+      : docs.filter((d) => {
+          if (d.isAdminUpload) {
+            // Le PDF de confirmation devient visible une fois la prime de succès réglée
+            return d.docKey === "booking_confirmation_pdf" && successFeePaid;
+          }
+          return true;
+        });
 
     const withUrls = await Promise.all(
       visibleDocs.map(async (doc) => {

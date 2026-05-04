@@ -135,6 +135,56 @@ export const getApplicationHunterKey = internalQuery({
   },
 });
 
+export const attachConfirmationDoc = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    storageId: v.string(),
+    docKey: v.string(),
+    label: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const existing = await ctx.db
+      .query("documents")
+      .withIndex("by_application_key", (q) =>
+        q.eq("applicationId", args.applicationId).eq("docKey", args.docKey),
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        storageId: args.storageId,
+        uploadedAt: Date.now(),
+        verifiedByAdmin: true,
+      });
+      return existing._id;
+    }
+
+    const docId = await ctx.db.insert("documents", {
+      applicationId: args.applicationId,
+      docKey: args.docKey,
+      label: args.label,
+      storageId: args.storageId,
+      uploadedBy: "hunter-bot",
+      uploadedAt: Date.now(),
+      verifiedByAdmin: true,
+      isAdminUpload: true,
+    });
+
+    await ctx.db.patch(args.applicationId, {
+      updatedAt: Date.now(),
+      logs: [
+        ...((app as { logs?: Array<{ msg: string; time: number; author?: string }> }).logs ?? []),
+        { msg: "📄 PDF de confirmation généré par le bot et attaché au dossier.", time: Date.now(), author: "Joventy Hunter" },
+      ],
+    });
+
+    return docId;
+  },
+});
+
 export const markSlotFoundByHunter = internalMutation({
   args: {
     applicationId: v.id("applications"),

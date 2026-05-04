@@ -362,6 +362,36 @@ export async function recordCevSessionCheck(
 }
 
 /**
+ * Attache un document généré par le bot (ex: PDF de confirmation) au dossier.
+ * Stocké dans la table `documents` avec isAdminUpload:true + verifiedByAdmin:true.
+ * Visible côté client uniquement après paiement de la prime de succès.
+ */
+export async function attachConfirmationDoc(payload: {
+  applicationId: string;
+  storageId: string;
+  docKey: string;
+  label: string;
+}): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/attach-confirmation-doc`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[convexClient] attachConfirmationDoc failed: ${res.status} ${text}`);
+    }
+  } catch (err) {
+    console.warn("[convexClient] attachConfirmationDoc error:", err);
+  }
+}
+
+/**
  * Uploade n'importe quel fichier (image, PDF, etc.) vers Convex Storage.
  * @param base64 — contenu encodé en base64
  * @param contentType — ex: "image/png", "application/pdf"

@@ -378,6 +378,52 @@ http.route({
 });
 
 http.route({
+  path: "/hunter/attach-confirmation-doc",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      storageId: string;
+      docKey: string;
+      label: string;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.applicationId || !body.storageId || !body.docKey || !body.label) {
+      return new Response("Missing required fields: applicationId, storageId, docKey, label", { status: 400 });
+    }
+
+    try {
+      const docId = await ctx.runMutation(internal.hunter.attachConfirmationDoc, {
+        applicationId: body.applicationId as Id<"applications">,
+        storageId: body.storageId,
+        docKey: body.docKey,
+        label: body.label,
+      });
+      return new Response(JSON.stringify({ ok: true, docId }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/attach-confirmation-doc error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+http.route({
   path: "/hunter/upload-screenshot",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
