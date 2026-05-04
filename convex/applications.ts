@@ -8,6 +8,8 @@ function getRole(identity: { [key: string]: unknown } | null): string {
   if (identity.role) return identity.role as string;
   const pub = identity.publicMetadata as { role?: string } | undefined;
   if (pub?.role) return pub.role;
+  const pubSnake = identity["public_metadata"] as { role?: string } | undefined;
+  if (pubSnake?.role) return pubSnake.role;
   return "client";
 }
 

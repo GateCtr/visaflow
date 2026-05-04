@@ -6,9 +6,14 @@ import { VISA_PRICING } from "./constants";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
+  // Direct claim: "role": "{{user.public_metadata.role}}"
   if (identity.role) return identity.role as string;
+  // camelCase nested object: "publicMetadata": "{{user.public_metadata}}"
   const pub = identity.publicMetadata as { role?: string } | undefined;
   if (pub?.role) return pub.role;
+  // snake_case nested object: "public_metadata": "{{user.public_metadata}}"
+  const pubSnake = identity["public_metadata"] as { role?: string } | undefined;
+  if (pubSnake?.role) return pubSnake.role;
   return "client";
 }
 
