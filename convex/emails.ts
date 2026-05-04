@@ -606,7 +606,7 @@ export const sendWelcomeClient = internalAction({
           <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:18px 22px;">
             <p style="margin:0 0 10px;color:#1e40af;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Avec Joventy vous pouvez</p>
             <table cellpadding="0" cellspacing="0" style="width:100%;">
-              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Déposer une demande de visa (USA, Dubaï, Turquie, Inde)</td></tr>
+              <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Déposer une demande de visa (USA, Espagne, Dubaï, Turquie, Inde)</td></tr>
               <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Suivre votre dossier en temps réel</td></tr>
               <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Échanger directement avec notre équipe</td></tr>
               <tr><td style="padding:4px 0;color:#1e3a5f;font-size:14px;">✅&nbsp; Être alerté dès qu'un créneau est trouvé</td></tr>

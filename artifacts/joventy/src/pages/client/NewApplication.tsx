@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "dubai", "turkey", "india", "schengen"]),
+  destination: z.enum(["usa", "dubai", "turkey", "india", "schengen", "spain"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -29,11 +29,12 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa",      name: "États-Unis",        desc: "Rendez-vous consulaire — ambassade américaine",             processType: "appointment" as const },
-  { id: "schengen", name: "Europe Schengen 🇪🇺", desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",       processType: "appointment" as const },
-  { id: "dubai",    name: "Dubaï (EAU)",        desc: "E-Visa 100 % en ligne — résultat en 48-72 h",              processType: "evisa" as const },
-  { id: "turkey",   name: "Turquie",            desc: "E-Visa en ligne ou Visa Sticker via VFS Global",           processType: "hybrid" as const },
-  { id: "india",    name: "Inde",               desc: "E-Visa électronique ou visa régulier (études)",             processType: "evisa" as const },
+  { id: "usa",      name: "États-Unis",        desc: "Rendez-vous consulaire — ambassade américaine",                    processType: "appointment" as const },
+  { id: "schengen", name: "Europe Schengen 🇪🇺", desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",              processType: "appointment" as const },
+  { id: "spain",    name: "Espagne 🇪🇸",         desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)", processType: "appointment" as const },
+  { id: "dubai",    name: "Dubaï (EAU)",        desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                    processType: "evisa" as const },
+  { id: "turkey",   name: "Turquie",            desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                 processType: "hybrid" as const },
+  { id: "india",    name: "Inde",               desc: "E-Visa électronique ou visa régulier (études)",                  processType: "evisa" as const },
 ];
 
 const CEV_COUNTRIES = [
@@ -105,6 +106,8 @@ function getPackageInfo(
         ? "créneau à l'ambassade américaine de Kinshasa"
         : destination === "schengen"
         ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
+        : destination === "spain"
+        ? "créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es)"
         : "créneau de dépôt au centre VFS Global Kinshasa";
     return {
       label: base.label,
@@ -138,6 +141,14 @@ function getPackageInfo(
         slotNote: "Prérequis : dossier VOWINT déjà créé avec vos pièces. Frais consulaires CEV (90 €/adulte) payés au guichet — non inclus.",
       };
     }
+    if (destination === "spain") {
+      return {
+        label: "Créneau Ambassade",
+        tagline: "Rendez-vous uniquement",
+        description: "Vos formulaires sont prêts ? Joventy surveille le portail citaconsular.es et verrouille un créneau à l'ambassade d'Espagne dès qu'une place se libère.",
+        slotNote: "Prérequis : vos pièces justificatives prêtes. Frais consulaires espagnols (90 €/adulte) payés directement à l'ambassade — non inclus.",
+      };
+    }
     return { label: base.label, tagline: base.tagline, description: base.description };
   }
 
@@ -156,6 +167,10 @@ function getPackageInfo(
     const rdv =
       destination === "usa"
         ? "à l'ambassade américaine"
+        : destination === "spain"
+        ? "à l'ambassade d'Espagne"
+        : destination === "schengen"
+        ? "au Centre Européen des Visas (CEV)"
         : "au centre VFS Global";
     return {
       label: base.label,

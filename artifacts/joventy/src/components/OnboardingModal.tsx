@@ -24,7 +24,7 @@ const STEPS = [
       "Joventy s'occupe de tout : dossier, créneau ambassade, suivi en temps réel. Vous n'avez qu'à suivre les étapes.",
     visual: (
       <div className="flex items-center justify-center gap-3 mt-6">
-        {["USA", "Dubaï", "Turquie", "Inde"].map((dest) => (
+        {["USA", "Espagne", "Dubaï", "Turquie", "Inde"].map((dest) => (
           <span
             key={dest}
             className="px-3 py-1.5 rounded-full bg-white/20 text-white text-xs font-semibold border border-white/30"

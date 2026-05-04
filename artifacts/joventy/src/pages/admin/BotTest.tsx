@@ -32,6 +32,7 @@ const DESTINATIONS: { key: Destination; flag: string; label: string }[] = [
   { key: "turkey", flag: "🇹🇷", label: "Turquie" },
   { key: "india", flag: "🇮🇳", label: "Inde" },
   { key: "schengen", flag: "🇪🇺", label: "Europe Schengen (CEV)" },
+  { key: "spain", flag: "🇪🇸", label: "Espagne (citaconsular.es)" },
 ];
 
 interface PingResult {
