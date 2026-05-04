@@ -4,6 +4,9 @@ const TWO_CAPTCHA_BASE = "https://2captcha.com";
 const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 24;
 
+const CF_CHALLENGE_TITLE =
+  /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
+
 export type CaptchaResult = "solved" | "no_key" | "failed";
 
 export async function solveCaptchaForSite(
@@ -119,6 +122,173 @@ async function injectCaptchaSolution(page: Page, token: string): Promise<void> {
       }
     }
   }, token);
+}
+
+// ─── Cloudflare Turnstile ─────────────────────────────────────────────────────
+
+async function submitTurnstileTask(
+  apiKey: string,
+  siteKey: string,
+  pageUrl: string
+): Promise<string | null> {
+  const params = new URLSearchParams({
+    key: apiKey,
+    method: "turnstile",
+    sitekey: siteKey,
+    pageurl: pageUrl,
+    json: "1",
+  });
+
+  console.log(`[captcha] Turnstile → 2captcha siteKey: ${siteKey.slice(0, 14)}… page: ${pageUrl}`);
+
+  let res: Response;
+  try {
+    res = await fetch(`${TWO_CAPTCHA_BASE}/in.php?${params.toString()}`);
+  } catch (err) {
+    throw new Error(`2captcha réseau (Turnstile): ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  let data: { status: number; request: string };
+  try {
+    data = (await res.json()) as { status: number; request: string };
+  } catch {
+    const raw = await res.text().catch(() => "non lisible");
+    throw new Error(`2captcha réponse Turnstile invalide: ${raw.slice(0, 100)}`);
+  }
+
+  if (data.status !== 1) {
+    throw new Error(`2captcha Turnstile refusé: ${data.request}`);
+  }
+
+  console.log(`[captcha] Turnstile tâche soumise ID: ${data.request}`);
+  return data.request;
+}
+
+async function injectTurnstileSolution(page: Page, token: string): Promise<void> {
+  await page.evaluate((tok: string) => {
+    // 1. Injecter dans l'input caché CF standard
+    const hidden = document.querySelector<HTMLInputElement>(
+      '[name="cf-turnstile-response"], input[name="cf_challenge_response"]'
+    );
+    if (hidden) hidden.value = tok;
+
+    // 2. Appeler les callbacks déclarés sur le widget .cf-turnstile
+    const w = window as unknown as Record<string, unknown>;
+    const widgets = document.querySelectorAll<HTMLElement>(".cf-turnstile, [data-cf-turnstile]");
+    for (const widget of widgets) {
+      const cbName = widget.getAttribute("data-callback");
+      if (cbName && typeof w[cbName] === "function") {
+        try { (w[cbName] as (t: string) => void)(tok); } catch { /* ignore */ }
+      }
+    }
+
+    // 3. Soumettre le formulaire challenge si présent
+    const form = document.querySelector<HTMLFormElement>("#challenge-form, form[action*='cdn-cgi']");
+    if (form) {
+      // Placer le token dans un champ caché si pas encore trouvé
+      let tokenInput = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
+      if (!tokenInput) {
+        tokenInput = document.createElement("input");
+        tokenInput.type = "hidden";
+        tokenInput.name = "cf-turnstile-response";
+        form.appendChild(tokenInput);
+      }
+      tokenInput.value = tok;
+      form.submit();
+    }
+  }, token);
+}
+
+/**
+ * Extrait le sitekey Turnstile CF depuis la page de challenge.
+ * Cherche dans : iframe src param, attribut data-sitekey, HTML inline.
+ */
+async function extractTurnstileSitekey(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    // Depuis l'iframe challenges.cloudflare.com
+    const iframes = document.querySelectorAll<HTMLIFrameElement>(
+      'iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]'
+    );
+    for (const f of iframes) {
+      const src = f.getAttribute("src") ?? "";
+      // ?k=XXXX ou /k=XXXX
+      const m = src.match(/[?&/]k=([0-9a-zA-Z_-]{10,})/);
+      if (m) return m[1];
+    }
+    // Depuis un widget .cf-turnstile
+    const widget = document.querySelector<HTMLElement>(
+      ".cf-turnstile[data-sitekey], [data-cf-turnstile][data-sitekey]"
+    );
+    if (widget?.getAttribute("data-sitekey")) {
+      return widget.getAttribute("data-sitekey")!;
+    }
+    // Scan HTML brut (fallback)
+    const match = document.documentElement.innerHTML.match(
+      /"sitekey"\s*:\s*"([0-9a-zA-Z_-]{10,})"|data-sitekey="([0-9a-zA-Z_-]{10,})"/
+    );
+    return match ? (match[1] ?? match[2] ?? "") : "";
+  }).catch(() => "");
+}
+
+/**
+ * Détecte et tente de résoudre un challenge Cloudflare Turnstile via 2captcha.
+ * Utilisé APRÈS l'attente d'auto-résolution (voir waitAndResolveCloudflareTurnstile dans spainPortal).
+ */
+export async function detectAndSolveTurnstile(
+  page: Page,
+  twoCaptchaApiKey: string | undefined
+): Promise<CaptchaResult> {
+  let title = "";
+  try { title = await page.title(); } catch { /* ignore */ }
+
+  const hasCfBlock = CF_CHALLENGE_TITLE.test(title) || await page.evaluate(() =>
+    !!(
+      document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+      document.querySelector('iframe[src*="challenge-platform"]') ||
+      document.querySelector(".cf-turnstile") ||
+      document.getElementById("challenge-form")
+    )
+  ).catch(() => false);
+
+  if (!hasCfBlock) return "solved";
+
+  console.log(`[captcha] Turnstile CF détecté (titre: "${title}")`);
+
+  if (!twoCaptchaApiKey) {
+    console.warn("[captcha] Turnstile : 2captcha key absente — non résolu");
+    return "no_key";
+  }
+
+  const siteKey = await extractTurnstileSitekey(page);
+  if (!siteKey) {
+    console.error("[captcha] Turnstile : sitekey introuvable dans la page");
+    return "failed";
+  }
+
+  const pageUrl = page.url();
+  let taskId: string | null = null;
+  try {
+    taskId = await submitTurnstileTask(twoCaptchaApiKey, siteKey, pageUrl);
+  } catch (err) {
+    console.error("[captcha] Soumission Turnstile échouée:", err instanceof Error ? err.message : String(err));
+    return "failed";
+  }
+  if (!taskId) return "failed";
+
+  const token = await pollCaptchaSolution(twoCaptchaApiKey, taskId);
+  if (!token) return "failed";
+
+  await injectTurnstileSolution(page, token);
+  console.log("[captcha] Turnstile token injecté — attente rechargement page...");
+
+  // Attendre que CF redirige vers la page réelle après injection du token
+  try {
+    await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 });
+  } catch {
+    // Pas de navigation = token injecté mais CF n'a pas encore redirigé (normal si form.submit() n'a pas fonctionné)
+  }
+
+  return "solved";
 }
 
 export async function detectAndSolveCaptcha(

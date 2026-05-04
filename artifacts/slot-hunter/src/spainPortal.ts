@@ -1,7 +1,10 @@
 import type { APIRequestContext, Page, Response } from "playwright";
-import { detectAndSolveCaptcha } from "./captcha.js";
+import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
 import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, type HunterJob } from "./convexClient.js";
+
+const CF_TITLE_RE =
+  /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
 
 type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed" | "payment_required";
 
@@ -365,6 +368,90 @@ async function tryApiFirstSlot(
   return null;
 }
 
+/**
+ * Attend que Cloudflare se résout automatiquement (stealth + proxy résidentiel passent souvent).
+ * Phase 1 : attente passive 30s (vérification toutes les 3s).
+ * Phase 2 : tentative résolution active via 2captcha Turnstile.
+ * Retourne true si la page est accessible, false si toujours bloquée.
+ */
+async function waitAndResolveCloudflareTurnstile(
+  page: Page,
+  job: HunterJob,
+): Promise<boolean> {
+  let title = "";
+  try { title = await page.title(); } catch { /* ignore */ }
+
+  if (!CF_TITLE_RE.test(title)) return true;
+
+  botLog({
+    applicationId: job.id,
+    step: "cloudflare",
+    status: "warn",
+    data: { title, flow: "spain", phase: "detected" },
+  });
+  console.log(`[spain] ⚠️  Cloudflare challenge détecté (titre: "${title}") — attente auto-résolution…`);
+
+  // Phase 1 : attente passive jusqu'à 30s
+  const AUTO_WAIT_MS = 30_000;
+  const CHECK_INTERVAL_MS = 3_000;
+  const t0 = Date.now();
+
+  while (Date.now() - t0 < AUTO_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, CHECK_INTERVAL_MS));
+    try { title = await page.title(); } catch { title = ""; }
+    if (!CF_TITLE_RE.test(title)) {
+      const elapsed = Math.round((Date.now() - t0) / 1000);
+      console.log(`[spain] ✅ Cloudflare auto-résolu (${elapsed}s)`);
+      botLog({
+        applicationId: job.id,
+        step: "cloudflare",
+        status: "ok",
+        data: { method: "auto", resolvedAfterSec: elapsed, flow: "spain" },
+      });
+      return true;
+    }
+  }
+
+  // Phase 2 : résolution active via 2captcha Turnstile
+  console.log("[spain] 30s écoulées — tentative résolution Turnstile via 2captcha…");
+  const turnstileResult = await detectAndSolveTurnstile(page, job.hunterConfig.twoCaptchaApiKey);
+
+  if (turnstileResult === "solved") {
+    await new Promise((r) => setTimeout(r, 2500));
+    try { title = await page.title(); } catch { title = ""; }
+    if (!CF_TITLE_RE.test(title)) {
+      console.log("[spain] ✅ Cloudflare résolu via 2captcha Turnstile");
+      botLog({
+        applicationId: job.id,
+        step: "cloudflare",
+        status: "ok",
+        data: { method: "2captcha_turnstile", flow: "spain" },
+      });
+      return true;
+    }
+  }
+
+  // Toujours bloqué
+  const reason =
+    turnstileResult === "no_key" ? "2captcha_key_absente"
+    : turnstileResult === "failed" ? "turnstile_echec"
+    : "turnstile_non_resolu_apres_injection";
+
+  console.log(`[spain] ❌ CF Turnstile non résolu (${reason}) — heartbeat captcha`);
+  botLog({
+    applicationId: job.id,
+    step: "cloudflare",
+    status: "fail",
+    data: { reason, flow: "spain" },
+  });
+  await sendHeartbeat({
+    applicationId: job.id,
+    result: "captcha",
+    errorMessage: `Cloudflare Turnstile non résolu (${reason}) — retry au prochain cycle`,
+  });
+  return false;
+}
+
 export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
   const sessionPromise = (async (): Promise<SessionResult> => {
     const url = job.portalUrl ?? job.hunterConfig.scheduleUrl ?? "";
@@ -383,7 +470,11 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       return "error";
     }
 
-    const { browser, page } = await launchBrowser();
+    const { browser, page } = await launchBrowser({
+      locale: "es-ES",
+      timezoneId: "Europe/Madrid",
+      acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+    });
     botLog({
       applicationId: job.id,
       step: "login",
@@ -411,6 +502,11 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       console.log(`[spain] Navigation: ${url}`);
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
       await randomDelay(1500, 3000);
+
+      // ── Détection & résolution Cloudflare Turnstile ──────────────────────
+      const cfCleared = await waitAndResolveCloudflareTurnstile(page, job);
+      if (!cfCleared) return "captcha"; // heartbeat déjà envoyé dans la fonction
+
       botLog({
         applicationId: job.id,
         step: "login",
@@ -474,6 +570,19 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
             });
             return "payment_required";
           }
+          if (booking.status === "failed") {
+            botLog({
+              applicationId: job.id,
+              step: "booking",
+              status: "fail",
+              data: { note: booking.note, date: apiSlot.date, strategy: "api_first", flow: "spain" },
+            });
+            const errMsg = booking.note === "credentials_missing"
+              ? "⚠️ Créneau DISPONIBLE mais identifiants Bookitit manquants — saisissez embassyUsername/embassyPassword dans la config Hunter"
+              : `Réservation Bookitit impossible (api_first) : ${booking.note}`;
+            await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
+            return "error";
+          }
           const screenshotStorageId = await captureAndUpload(page);
           await reportSlotFound({
             applicationId: job.id,
@@ -519,6 +628,19 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           });
           return "payment_required";
         }
+        if (booking.status === "failed") {
+          botLog({
+            applicationId: job.id,
+            step: "booking",
+            status: "fail",
+            data: { note: booking.note, date: slot.date, strategy: "fallback_network", flow: "spain" },
+          });
+          const errMsg = booking.note === "credentials_missing"
+            ? "⚠️ Créneau DISPONIBLE mais identifiants Bookitit manquants — saisissez embassyUsername/embassyPassword dans la config Hunter"
+            : `Réservation Bookitit impossible (fallback_network) : ${booking.note}`;
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
+          return "error";
+        }
         const screenshotStorageId = await captureAndUpload(page);
         await reportSlotFound({
           applicationId: job.id,
@@ -561,6 +683,19 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
             errorMessage: "Étape paiement requise pour finaliser le booking Espagne",
           });
           return "payment_required";
+        }
+        if (booking.status === "failed") {
+          botLog({
+            applicationId: job.id,
+            step: "booking",
+            status: "fail",
+            data: { note: booking.note, date: domSlot.date, strategy: "fallback_dom", flow: "spain" },
+          });
+          const errMsg = booking.note === "credentials_missing"
+            ? "⚠️ Créneau DISPONIBLE mais identifiants Bookitit manquants — saisissez embassyUsername/embassyPassword dans la config Hunter"
+            : `Réservation Bookitit impossible (fallback_dom) : ${booking.note}`;
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
+          return "error";
         }
         const screenshotStorageId = await captureAndUpload(page);
         await reportSlotFound({

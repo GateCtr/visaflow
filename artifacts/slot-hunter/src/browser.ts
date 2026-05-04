@@ -162,7 +162,13 @@ export function randomViewport() {
   return VIEWPORTS[Math.floor(Math.random() * VIEWPORTS.length)];
 }
 
-export async function launchBrowser(): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
+export interface BrowserOverrides {
+  locale?: string;
+  timezoneId?: string;
+  acceptLanguage?: string;
+}
+
+export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
   const ua = randomUserAgent();
   const viewport = randomViewport();
 
@@ -171,6 +177,16 @@ export async function launchBrowser(): Promise<{ browser: Browser; context: Brow
     ? await proxyPool.getProxy()
     : PROXY_URL;
   const proxyConfig = proxyAddress ? { server: proxyAddress } : undefined;
+
+  const locale         = overrides?.locale         ?? "fr-FR";
+  const timezoneId     = overrides?.timezoneId     ?? "Africa/Kinshasa";
+  const acceptLanguage = overrides?.acceptLanguage ?? "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
+
+  // Dériver le tableau navigator.languages depuis la locale fournie
+  const langParts = locale.split("-");
+  const navLanguages = overrides?.locale
+    ? [locale, langParts[0], "en-US", "en"].filter((v, i, a) => a.indexOf(v) === i)
+    : ["fr-FR", "fr", "en-US", "en"];
 
   const launchArgs: string[] = [
     "--no-sandbox",
@@ -192,20 +208,18 @@ export async function launchBrowser(): Promise<{ browser: Browser; context: Brow
   const context = await browser.newContext({
     userAgent: ua,
     viewport,
-    locale: "fr-FR",
-    timezoneId: "Africa/Kinshasa",
-    extraHTTPHeaders: {
-      "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    },
+    locale,
+    timezoneId,
+    extraHTTPHeaders: { "Accept-Language": acceptLanguage },
     javaScriptEnabled: true,
     ignoreHTTPSErrors: false,
   });
 
-  await context.addInitScript(() => {
+  await context.addInitScript((langs: string[]) => {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-    Object.defineProperty(navigator, "languages", { get: () => ["fr-FR", "fr", "en-US", "en"] });
+    Object.defineProperty(navigator, "languages", { get: () => langs });
     (window as unknown as Record<string, unknown>).chrome = { runtime: {} };
-  });
+  }, navLanguages);
 
   const page = await context.newPage();
 
