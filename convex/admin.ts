@@ -468,6 +468,41 @@ export const setSlotHunting = mutation({
           applicationId: args.applicationId,
           travelDate: travelDateFormatted,
         });
+        const travelDateDisplay = travelDateFormatted ?? "JJMMAAAA";
+        const spainSystemMsg =
+`🇪🇸 ACTION REQUISE — Inscription auprès de l'ambassade d'Espagne
+
+Notre robot de surveillance est actif. Pour qu'il puisse réserver votre créneau sur citaconsular.es, vous devez d'abord obtenir vos identifiants auprès de l'ambassade en 2 étapes :
+
+─── ÉTAPE 1 — Envoyer un email à l'ambassade ───
+
+📧 Adresse : emb.kinshasa.citasvis@maec.es
+📌 Objet : RENDEZ-VOUS VISA EST
+
+Corps du message (copiez ce modèle, séparateurs point-virgule) :
+NOM PRÉNOM EN MAJUSCULES SANS ACCENTS;NUMÉRO PASSEPORT;${travelDateDisplay};EST
+
+Exemple : JEAN KABILA;AB123456;${travelDateDisplay};EST
+
+📎 Pièces jointes obligatoires :
+• Photo de vous tenant votre passeport ouvert (JPEG/PDF, lisible, sans lunettes ni visage couvert)
+• Formulaire de candidature officiel (avec votre photo)
+• Réservation de vol confirmée
+• Assurance santé/voyage Schengen (min. 30 000 €)
+
+⚠️ Ne renvoyez pas l'email avant 14 jours. Un email par personne. Max 1 Mo de pièces jointes.
+
+─── ÉTAPE 2 — Transmettez vos identifiants à Joventy ───
+
+Dès que l'ambassade vous envoie votre identifiant et mot de passe, répondez à ce message avec ces informations. Notre robot les utilisera pour réserver automatiquement le premier créneau disponible.
+
+ℹ️ Horaires ambassade : lun–ven 8h30–14h (Kinshasa)
+🔍 Suivi de dossier : sutramiteconsular.maec.es
+💶 Frais consulaires (90 €/adulte) payés directement à l'ambassade — non inclus dans le tarif Joventy`;
+        await ctx.scheduler.runAfter(3000, internal.messages.sendSystemMessage, {
+          applicationId: args.applicationId,
+          content: spainSystemMsg,
+        });
       }
     }
 

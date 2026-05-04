@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -92,6 +92,38 @@ export const send = mutation({
         userId: "ADMIN",
         type: "new_message",
         title: `Message de ${senderName}`,
+        body: args.content.length > 80 ? args.content.slice(0, 80) + "…" : args.content,
+        applicationId: args.applicationId,
+      });
+    }
+  },
+});
+
+export const sendSystemMessage = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+
+    await ctx.db.insert("messages", {
+      applicationId: args.applicationId,
+      senderId: "system",
+      senderName: "Joventy (Système)",
+      content: args.content,
+      isFromAdmin: true,
+      readBy: [],
+    });
+
+    await ctx.db.patch(args.applicationId, { updatedAt: Date.now() });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.notifications.create, {
+        userId: app.userId,
+        type: "new_message",
+        title: "Instructions Joventy — visa Espagne",
         body: args.content.length > 80 ? args.content.slice(0, 80) + "…" : args.content,
         applicationId: args.applicationId,
       });
