@@ -622,7 +622,15 @@ async function main(): Promise<void> {
                : cevResult === "error"      ? "error"
                : "not_found"; // 'not_found' et 'rate_limited' → pas de créneau, on reschedule normalement
       } else if (due.destination === "spain" || due.destination === "espagne" || due.destination === "es") {
-        result = await runSpainSession(due);
+        const spainUrl = due.portalUrl ?? (due.hunterConfig as { scheduleUrl?: string } | undefined)?.scheduleUrl ?? "";
+        if (!spainUrl) {
+          log("WARN", `[${due.applicantName}] ⚠️ Espagne — URL Bookitit manquante. Renseignez-la dans la config Hunter admin.`);
+          await sendHeartbeat({ applicationId: due.id, result: "error", errorMessage: "URL Bookitit Espagne manquante — configurez scheduleUrl dans le panneau admin" });
+          result = "error";
+        } else {
+          log("INFO", `[${due.applicantName}] 🇪🇸 Espagne → ${spainUrl}`);
+          result = await runSpainSession(due);
+        }
       } else {
         result = await runHunterSession(due);
       }

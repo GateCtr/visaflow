@@ -145,8 +145,8 @@ function getPackageInfo(
       return {
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
-        description: "Vos formulaires sont prêts ? Joventy surveille le portail citaconsular.es et verrouille un créneau à l'ambassade d'Espagne dès qu'une place se libère.",
-        slotNote: "Prérequis : vos pièces justificatives prêtes. Frais consulaires espagnols (90 €/adulte) payés directement à l'ambassade — non inclus.",
+        description: "Vous avez reçu vos identifiants citaconsular.es de l'ambassade ? Joventy surveille le portail Bookitit et verrouille votre créneau dès qu'une place se libère.",
+        slotNote: "Prérequis : inscription préalable par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) pour obtenir vos identifiants. Frais consulaires espagnols (90 €/adulte) payés à l'ambassade — non inclus.",
       };
     }
     return { label: base.label, tagline: base.tagline, description: base.description };

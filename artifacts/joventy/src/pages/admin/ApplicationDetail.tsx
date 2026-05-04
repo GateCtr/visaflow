@@ -1374,18 +1374,18 @@ export default function AdminApplicationDetail() {
                       🇪🇸 Configuration Bookitit (citaconsular.es)
                     </p>
                     <p className="text-[11px] text-red-600">
-                      Collez l'URL de réservation Bookitit spécifique à l'ambassade / consulat d'Espagne de Kinshasa. Cette URL est unique par service (ex : Visa Schengen C, Visa National D…). Le bot l'utilisera directement pour surveiller les créneaux.
+                      Le client doit d'abord s'inscrire par email à <strong>emb.kinshasa.citasvis@maec.es</strong> (objet : <em>RENDEZ-VOUS VISA EST</em>) avec photo+passeport, formulaire, réservation vol et assurance santé. L'ambassade renvoie un identifiant et mot de passe — renseignez-les dans les champs ci-dessus. Le bot prend ensuite le rendez-vous sur l'URL Bookitit ci-dessous.
                     </p>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-red-700 uppercase">URL Bookitit de réservation</label>
                       <Input
                         value={hunterScheduleUrl}
                         onChange={(e) => setHunterScheduleUrl(e.target.value)}
-                        placeholder="https://www.citaconsular.es/es/hosteds/widgetdefault/..."
+                        placeholder="https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5"
                         className="h-9 bg-white text-sm font-mono"
                       />
                       <p className="text-[10px] text-red-400">
-                        Trouvez l'URL en ouvrant citaconsular.es → sélectionnez l'ambassade de Kinshasa → copiez l'URL complète de la page de sélection de créneau.
+                        URL officielle Ambassade d'Espagne Kinshasa. Pré-remplie automatiquement si laissée vide — modifiez uniquement si l'ambassade change d'URL.
                       </p>
                     </div>
                     {hunterScheduleUrl && (
