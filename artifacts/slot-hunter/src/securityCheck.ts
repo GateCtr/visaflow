@@ -33,7 +33,21 @@ const CRITICAL_ENDPOINTS = [
   { name: "appointmentLetter", url: `${USA_BASE}/visanotificationapi/template/appointmentLetter`, method: "POST", expectedCodes: [400, 401, 403, 415, 422] },
 ];
 
-// Versions Chrome max tolérées (>10 versions d'écart = UA potentiellement stale)
+// ─── Espagne — citaconsular.es / Bookitit (à synchroniser si le portail change) ──
+// Widget key extrait de l'URL citaconsular.es (widgetdefault/{key}/)
+const SPAIN_WIDGET_KEY      = "25028fcd7126544630b8da0c6e60722b5";
+const SPAIN_WIDGET_PAGE_URL = `https://www.citaconsular.es/es/hosteds/widgetdefault/${SPAIN_WIDGET_KEY}/`;
+// ID du compte Bookitit de citaconsular.es — présent dans le global `oClientValues_{ID}`
+// injecté par le JS hôte (voir spainPortal.ts → getRuntimeContext)
+const SPAIN_CLIENT_VALUES_ID = "248295";
+// Candidats URL base Bookitit (ordered by likelihood — découverte via citaconsularDiscovery.ts)
+const SPAIN_BOOKITIT_CANDIDATES = [
+  "https://app.bookitit.com/onlinebookings/",
+  "https://www2.bookitit.com/onlinebookings/",
+  "https://www.citaconsular.es/onlinebookings/",
+];
+
+// ─── Versions Chrome max tolérées (>10 versions d'écart = UA potentiellement stale) ──
 const UA_POOL = [
   { version: 136, ua: "Chrome/136.0.0.0" },
   { version: 135, ua: "Chrome/135.0.0.0" },
@@ -566,6 +580,221 @@ async function checkEmerging2026(): Promise<void> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// 11. ESPAGNE — CITACONSULAR.ES (Bookitit)
+// Vérification quotidienne : accessibilité portail, widget key, API JSONP Bookitit
+// (getwidgetconfigurations + getagendas), présence Cloudflare Turnstile.
+// Détecte silencieusement tout changement structurel sans lancer de navigateur.
+// ════════════════════════════════════════════════════════════════════════════════
+
+/** Extrait la première URL base Bookitit trouvée dans un texte HTML/JS. */
+function extractBookititBase(text: string): string | null {
+  const m = text.match(/https?:\/\/[^"'\s\\]+\/onlinebookings\//i);
+  return m ? m[0] : null;
+}
+
+/** Appelle un endpoint Bookitit en JSONP (fetch léger, sans navigateur). */
+async function callBookititJsonp(
+  base: string,
+  endpoint: string,
+  params: Record<string, string>,
+): Promise<unknown | null> {
+  const cb = `cb${Date.now()}${Math.floor(Math.random() * 9_000 + 1_000)}`;
+  const q = new URLSearchParams({ ...params, callback: cb, _: String(Date.now()) });
+  const url = `${base}${endpoint}?${q.toString()}`;
+  const res = await safeFetch(url, {
+    headers: {
+      "Accept": "*/*",
+      "Referer": SPAIN_WIDGET_PAGE_URL,
+      "Origin": "https://www.citaconsular.es",
+    },
+  }, 15_000);
+  if (!res) return null;
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return null;
+  // JSONP wrapper: cbXXXX({...}); ou cbXXXX([...]);
+  const m = text.match(/^[\w$.]+\(([\s\S]*)\);?\s*$/);
+  if (!m) {
+    try { return JSON.parse(text); } catch { return null; }
+  }
+  try { return JSON.parse(m[1]); } catch { return null; }
+}
+
+/** Parcourt récursivement un objet JSON et extrait les valeurs dont la clé matche `keyRe`. */
+function collectIdsFromPayload(node: unknown, keyRe: RegExp): string[] {
+  const out = new Set<string>();
+  const walk = (n: unknown): void => {
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (!n || typeof n !== "object") return;
+    for (const [k, v] of Object.entries(n as Record<string, unknown>)) {
+      if (v && typeof v === "object") { walk(v); continue; }
+      if ((typeof v === "string" || typeof v === "number") && keyRe.test(k)) {
+        const s = String(v).trim();
+        if (s.length > 0) out.add(s);
+      }
+    }
+  };
+  walk(node);
+  return [...out];
+}
+
+async function checkSpainBookitit(): Promise<void> {
+  section("ESPAGNE — CITACONSULAR.ES (Bookitit)");
+
+  // ── SP01 : Portail citaconsular.es accessible ────────────────────────────────
+  const pageRes = await safeFetch(SPAIN_WIDGET_PAGE_URL, {
+    headers: {
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9,fr;q=0.7,en;q=0.5",
+    },
+  }, 20_000);
+
+  const httpStatus = pageRes?.status ?? null;
+  const accessible = httpStatus !== null && httpStatus < 500 && httpStatus !== 404;
+  record("SP01", "citaconsular.es portail accessible (HTTP)", "spain",
+    pageRes ? (accessible ? "PASS" : "FAIL") : "FAIL",
+    pageRes ? `HTTP ${httpStatus}` : "Timeout ou réseau inaccessible",
+    !accessible);
+
+  const htmlRaw = pageRes ? await pageRes.text().catch(() => "") : "";
+
+  // ── SP02 : Cloudflare actif (attendu comme WAF) ──────────────────────────────
+  const cfRay    = pageRes?.headers.get("cf-ray") ?? null;
+  const cfServer = pageRes?.headers.get("server")?.toLowerCase().includes("cloudflare") ?? false;
+  const cfCache  = pageRes?.headers.get("cf-cache-status") ?? null;
+  const cfInHtml = /cloudflare|cdn-cgi|cf-challenge|turnstile/i.test(htmlRaw);
+  const hasCf    = !!(cfRay || cfServer || cfCache || cfInHtml);
+  record("SP02", "Cloudflare actif (WAF attendu)", "spain",
+    hasCf ? "PASS" : "WARN",
+    hasCf
+      ? `CF actif — cf-ray: ${cfRay ?? "–"} | server:cloudflare: ${cfServer} | cf-cache: ${cfCache ?? "–"} | HTML: ${cfInHtml}`
+      : "⚠️  Cloudflare absent des headers ET du HTML — la protection WAF a peut-être été retirée ou changé de type",
+    false);
+
+  // ── SP03 : Widget key inchangé dans la réponse ───────────────────────────────
+  const widgetKeyInHtml = htmlRaw.includes(SPAIN_WIDGET_KEY);
+  record("SP03", `Widget key …${SPAIN_WIDGET_KEY.slice(-8)} inchangée`, "spain",
+    widgetKeyInHtml
+      ? "PASS"
+      : htmlRaw.length > 200
+        ? "FAIL"
+        : "WARN",
+    widgetKeyInHtml
+      ? "Widget key trouvée dans la réponse HTML"
+      : htmlRaw.length > 200
+        ? `Widget key absente du HTML (${htmlRaw.length} octets) — vérifier si l'URL du widget a changé`
+        : "Page inaccessible ou réponse trop courte (CF challenge seul) — vérification impossible",
+    widgetKeyInHtml ? false : htmlRaw.length > 200);
+
+  // ── SP04 : Cloudflare Turnstile — type de captcha connu ─────────────────────
+  const hasTurnstileClass  = /cf-turnstile|class="[^"]*turnstile/i.test(htmlRaw);
+  const hasTurnstileScript = /challenges\.cloudflare\.com\/turnstile|\/turnstile\/v0\//i.test(htmlRaw);
+  const hasTurnstile       = hasTurnstileClass || hasTurnstileScript;
+  const turnstileSitekey   = htmlRaw.match(/data-sitekey="([^"]{10,})"/)?.[1] ?? null;
+  record("SP04", "Cloudflare Turnstile présent (captcha type connu)", "spain",
+    hasTurnstile ? "PASS" : hasCf ? "WARN" : "SKIP",
+    hasTurnstile
+      ? `Turnstile détecté (class: ${hasTurnstileClass}, script: ${hasTurnstileScript}) — sitekey: ${turnstileSitekey ?? "non extraite du HTML CF"}`
+      : hasCf
+        ? "CF actif mais Turnstile absent du HTML — le challenge est peut-être JS-only (invisible) ou un autre type de CF challenge"
+        : "CF absent — skip",
+    false);
+
+  // ── SP05 : oClientValues_248295 présent dans le HTML ────────────────────────
+  const clientValuesKey = `oClientValues_${SPAIN_CLIENT_VALUES_ID}`;
+  const hasClientValues = htmlRaw.includes(clientValuesKey);
+  record("SP05", `${clientValuesKey} présent (ID Bookitit stable)`, "spain",
+    hasClientValues
+      ? "PASS"
+      : htmlRaw.length > 200
+        ? "WARN"
+        : "SKIP",
+    hasClientValues
+      ? `${clientValuesKey} trouvé — ID compte Bookitit inchangé`
+      : htmlRaw.length > 200
+        ? `${clientValuesKey} absent du HTML — CF intercepte avant le widget, ou l'ID Bookitit a changé (chercher oClientValues_XXXXX dans le JS)`
+        : "Page inaccessible — skip",
+    false);
+
+  // ── SP06 : URL base Bookitit extractable ────────────────────────────────────
+  // Tentative 1 : depuis le HTML renvoyé
+  let bookititBase = extractBookititBase(htmlRaw);
+  if (bookititBase) {
+    record("SP06", "URL base Bookitit `/onlinebookings/` extractable", "spain", "PASS",
+      `URL extraite du HTML : ${bookititBase}`, false);
+  } else {
+    // Tentative 2 : sonder les candidats connus directement
+    let foundCandidate: string | null = null;
+    for (const candidate of SPAIN_BOOKITIT_CANDIDATES) {
+      const probeUrl = `${candidate}getwidgetconfigurations/?widgetkey=${SPAIN_WIDGET_KEY}&callback=probe&_=${Date.now()}`;
+      const probe = await safeFetch(probeUrl, {
+        headers: { "Referer": SPAIN_WIDGET_PAGE_URL, "Accept": "*/*" },
+      }, 10_000);
+      if (probe && probe.status < 500 && probe.status !== 404) {
+        foundCandidate = candidate;
+        break;
+      }
+    }
+    bookititBase = foundCandidate;
+    record("SP06", "URL base Bookitit `/onlinebookings/` extractable", "spain",
+      foundCandidate ? "PASS" : "FAIL",
+      foundCandidate
+        ? `URL non extraite du HTML (CF intercepte) — candidat fonctionnel trouvé : ${foundCandidate}`
+        : `URL non extraite du HTML ET tous les candidats non répondent : [${SPAIN_BOOKITIT_CANDIDATES.join(", ")}]`,
+      !foundCandidate);
+  }
+
+  if (!bookititBase) {
+    record("SP07", "API Bookitit getwidgetconfigurations (JSONP)", "spain", "FAIL",
+      "URL base Bookitit non résolue — skip API checks. Relancer avec FULL_CHECK=true ou vérifier manuellement.", true);
+    record("SP08", "API Bookitit getagendas → IDs agenda présents", "spain", "SKIP",
+      "SP06 échoué — skip", false);
+    return;
+  }
+
+  // ── SP07 : API JSONP getwidgetconfigurations accessible ─────────────────────
+  const widgetConfig = await callBookititJsonp(bookititBase, "getwidgetconfigurations/", {
+    widgetkey: SPAIN_WIDGET_KEY,
+  });
+  const configObj = (widgetConfig && typeof widgetConfig === "object" && !Array.isArray(widgetConfig))
+    ? widgetConfig as Record<string, unknown>
+    : null;
+  const hasConfigServices = configObj
+    ? Array.isArray(configObj.Services) || Array.isArray(configObj.services)
+    : false;
+  record("SP07", "API Bookitit getwidgetconfigurations (JSONP)", "spain",
+    widgetConfig !== null ? "PASS" : "FAIL",
+    widgetConfig !== null
+      ? `Réponse JSONP valide depuis ${bookititBase} — services dans config: ${hasConfigServices}`
+      : `JSONP invalide ou timeout depuis ${bookititBase} — widget key changée ou API inaccessible`,
+    widgetConfig === null);
+
+  // ── SP08 : API JSONP getagendas → IDs agenda présents ───────────────────────
+  // On passe les services extraits de la config si disponibles, sinon chaîne vide
+  const serviceIds: string[] = configObj
+    ? collectIdsFromPayload(configObj.Services ?? configObj.services ?? [], /(service.*id|services.*id|^id$)/i).slice(0, 3)
+    : [];
+  const agendasPayload = await callBookititJsonp(bookititBase, "getagendas/", {
+    widgetkey: SPAIN_WIDGET_KEY,
+    services: serviceIds.join(","),
+    selectedPeople: "1",
+  });
+
+  if (agendasPayload === null) {
+    record("SP08", "API Bookitit getagendas → IDs agenda présents", "spain", "FAIL",
+      "Réponse JSONP invalide ou vide — getagendas inaccessible", true);
+    return;
+  }
+
+  const agendaIds = collectIdsFromPayload(agendasPayload, /(agenda.*id|agendas.*id|^id$)/i);
+  record("SP08", "API Bookitit getagendas → IDs agenda présents", "spain",
+    agendaIds.length > 0 ? "PASS" : "WARN",
+    agendaIds.length > 0
+      ? `${agendaIds.length} agenda(s) détecté(s) : [${agendaIds.slice(0, 5).join(", ")}${agendaIds.length > 5 ? "…" : ""}] — IDs stables`
+      : "getagendas répond mais aucun ID agenda extrait — structure de réponse inattendue (vérifier manuellement)",
+    false);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ════════════════════════════════════════════════════════════════════════════════
 async function main(): Promise<void> {
@@ -585,6 +814,7 @@ async function main(): Promise<void> {
   await checkEnvironment();
   await checkCircuitBreakers();
   await checkEmerging2026();
+  await checkSpainBookitit();
 
   // ─── Rapport final ───────────────────────────────────────────────────────────
   console.log("\n" + "═".repeat(64));
