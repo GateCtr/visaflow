@@ -35,6 +35,13 @@ function formatRelative(ts?: number): string {
 }
 
 function StatusBadge({ status, lastResult }: { status: string; lastResult?: string }) {
+  if (status === "needs_setup") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+        <Loader2 className="w-3 h-3 animate-spin" /> Configuration auto…
+      </span>
+    );
+  }
   if (status === "expired") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
@@ -123,18 +130,12 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="p-5 space-y-5">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3 text-sm">
-            <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div className="text-blue-900 space-y-2">
-              <p className="font-medium">Comment obtenir cookie + URL :</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Ouvre <code className="bg-white/60 px-1 rounded">visaonweb.diplomatie.be</code> sur Chrome/Edge</li>
-                <li>Login VOWINT, clique sur le bouton calendrier RDV du dossier</li>
-                <li>Résous le captcha hCaptcha manuellement</li>
-                <li>Une fois sur la page suivante, ouvre F12 → Network</li>
-                <li>Copie l'<strong>URL complète</strong> (avec les 4 GUIDs) depuis la barre d'adresse OU depuis Network</li>
-                <li>Copie le cookie <code className="bg-white/60 px-1 rounded">ASP.NET_SessionId</code> depuis Application → Cookies</li>
-              </ol>
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 flex gap-3 text-sm">
+            <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
+            <div className="text-violet-900 space-y-1.5">
+              <p className="font-medium">2 modes disponibles :</p>
+              <p className="text-xs"><strong>Mode auto (recommandé) :</strong> colle l'URL directe du client → le bot résout le hCaptcha automatiquement et démarre le polling sans intervention. Le cookie se renouvelle tout seul.</p>
+              <p className="text-xs"><strong>Mode manuel :</strong> fournis l'URL + le cookie ASP.NET_SessionId manuellement (cookie obtenu via F12 après résolution captcha dans le navigateur).</p>
             </div>
           </div>
 
@@ -158,28 +159,30 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">URL d'intégration complète *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">URL d'intégration directe *</label>
             <textarea
               value={integrationUrl}
               onChange={(e) => setIntegrationUrl(e.target.value)}
-              placeholder="https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-.../e978b2fd-.../59eba882-.../7da2dc08-.../en-US"
+              placeholder="https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-.../e978b2fd-.../59eba882-.../95d3b3f2-.../en-US"
               rows={3}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
             />
+            <p className="text-xs text-slate-500 mt-1">URL directe avec 4 GUIDs — transmise par le client ou extraite depuis VOWINT</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Cookie <code className="bg-slate-100 px-1 rounded text-xs">ASP.NET_SessionId</code> *
+              Cookie <code className="bg-slate-100 px-1 rounded text-xs">ASP.NET_SessionId</code>{" "}
+              <span className="text-slate-400 font-normal">(optionnel — laisse vide pour le mode auto)</span>
             </label>
             <input
               type="text"
               value={sessionCookie}
               onChange={(e) => setSessionCookie(e.target.value)}
-              placeholder="fesmia0jbzcir5q2yvivpaax"
+              placeholder="Laisser vide pour que le bot l'établisse automatiquement"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
             />
-            <p className="text-xs text-slate-500 mt-1">Coller juste la valeur (sans "ASP.NET_SessionId=")</p>
+            <p className="text-xs text-slate-500 mt-1">Si fourni : polling immédiat. Si absent : le bot résout le hCaptcha (~2 min) puis démarre.</p>
           </div>
 
           <div>
@@ -230,11 +233,11 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !applicationId || !integrationUrl || !sessionCookie}
+            disabled={submitting || !applicationId || !integrationUrl}
             className="px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            Activer le polling
+            {sessionCookie ? "Activer le polling" : "Lancer la config auto"}
           </button>
         </div>
       </div>

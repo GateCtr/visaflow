@@ -160,6 +160,49 @@ http.route({
   }),
 });
 
+// ─── CEV Sessions: sessions en attente d'établissement (needs_setup) ────────
+http.route({
+  path: "/hunter/cev-sessions/needs-setup",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const sessions = await ctx.runMutation(internal.cevSessions.internalClaimNeedsSetup);
+    return new Response(JSON.stringify(sessions), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// ─── CEV Sessions: activer une session après setup bot (nouveau cookie) ──────
+http.route({
+  path: "/hunter/cev-sessions/activate",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const body = await request.json() as {
+      sessionId: string;
+      sessionCookie: string;
+      validUntilMs?: number;
+    };
+
+    await ctx.runMutation(internal.cevSessions.internalActivateSession, {
+      sessionId: body.sessionId as Id<"cevSessions">,
+      sessionCookie: body.sessionCookie,
+      validUntilMs: body.validUntilMs,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── CEV Sessions: enregistrer le résultat d'un check ───────────────────────
 http.route({
   path: "/hunter/cev-sessions/check",

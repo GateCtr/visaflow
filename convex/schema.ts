@@ -225,8 +225,11 @@ export default defineSchema({
     integrationUrl: v.string(),
     // Cookie ASP.NET_SessionId (juste la valeur, sans le préfixe "ASP.NET_SessionId=")
     sessionCookie: v.string(),
-    // active = polling en cours, expired = cookie mort, paused = admin a arrêté
-    status: v.union(v.literal("active"), v.literal("expired"), v.literal("paused")),
+    // active       = polling en cours
+    // needs_setup  = URL fournie, cookie absent → bot doit établir la session
+    // expired      = cookie mort, bot tentera un re-setup automatique si possible
+    // paused       = admin a arrêté manuellement
+    status: v.union(v.literal("active"), v.literal("needs_setup"), v.literal("expired"), v.literal("paused")),
     // Dernier résultat du poll
     lastResult: v.optional(v.union(
       v.literal("no_slot"),

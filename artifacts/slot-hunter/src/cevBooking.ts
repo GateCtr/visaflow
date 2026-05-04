@@ -1,6 +1,6 @@
 import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
 import type { HunterJob } from './convexClient';
-import { botLog, uploadScreenshot, recordCevClick } from './convexClient';
+import { botLog, uploadScreenshot, recordCevClick, activateCevSession } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, isCevSessionValid, CevSession } from './cevPortal';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
@@ -940,4 +940,159 @@ export async function runCevCheck(job: HunterJob): Promise<SchengenSessionResult
 
   botLog({ applicationId: job.id, step: 'cev_check_error', status: 'warn', data: { error: result.error } });
   return 'error';
+}
+
+// ─── Direct URL session setup (pas de VOWINT — URL Integration/VOW directe) ──
+
+export interface CevDirectSetupResult {
+  success: boolean;
+  sessionCookie?: string;
+  validUntilMs?: number;
+  error?: string;
+}
+
+/**
+ * Établit une session CEV à partir d'une URL directe Integration/VOW sans passer
+ * par VOWINT. Utilisé quand le client fournit son lien direct appointment.cloud.
+ *
+ * Flux :
+ *  1. Playwright navigue vers l'URL VOW → redirect vers /Captcha
+ *  2. /Captcha pose le cookie ASP.NET_SessionId dans le jar navigateur
+ *  3. Résout hCaptcha (accessibility cookie → Anti-Captcha → CapSolver → 2captcha)
+ *  4. POST /Captcha/SetCaptchaToken → obtient { validUntil, redirectUrl }
+ *  5. Retourne le cookie et la validité pour stockage dans Convex
+ *
+ * Le cookie est valide ~30-60 min. Le bot re-lance ce setup automatiquement
+ * quand la session expire (status: "expired" → "needs_setup" via admin UI).
+ */
+export async function runCevDirectSessionSetup(
+  integrationUrl: string,
+  sessionId: string,
+  clientId: string,
+): Promise<CevDirectSetupResult> {
+  botLog({ applicationId: clientId, step: 'cev_direct_setup_start', status: 'ok', data: { integrationUrl } });
+
+  let browser = null;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      locale: 'fr-BE',
+      timezoneId: 'Africa/Kinshasa',
+    });
+
+    // Injecter le cookie d'accessibilité hCaptcha si configuré (bypass gratuit)
+    const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
+    if (accessibilityCookie) {
+      await context.addCookies([{
+        name: 'hc_accessibility',
+        value: accessibilityCookie,
+        domain: '.hcaptcha.com',
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'None',
+      }]);
+      botLog({ applicationId: clientId, step: 'cev_direct_accessibility_cookie_injected', status: 'ok' });
+    }
+
+    const page = await context.newPage();
+
+    // === ÉTAPE 1 : Naviguer vers l'URL directe → redirect vers /Captcha ===
+    await page.goto(integrationUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await new Promise(r => setTimeout(r, 2_000)); // laisser les cookies s'établir
+
+    const currentUrl = page.url();
+    botLog({ applicationId: clientId, step: 'cev_direct_navigation_done', status: 'ok', data: { currentUrl } });
+
+    // === ÉTAPE 2 : Extraire les cookies CEV depuis le jar navigateur ===
+    const allCookies = await context.cookies();
+    const cevCookies = allCookies.filter(c =>
+      c.domain.includes('appointment.cloud.diplomatie.be')
+    );
+
+    if (cevCookies.length === 0) {
+      botLog({ applicationId: clientId, step: 'cev_direct_no_cookie', status: 'fail', data: { currentUrl } });
+      await browser.close();
+      return { success: false, error: 'NO_SESSION_COOKIE_AFTER_NAVIGATION' };
+    }
+
+    const cookieString = cevCookies.map(c => `${c.name}=${c.value}`).join('; ');
+    const aspNetCookie = cevCookies.find(c => c.name === 'ASP.NET_SessionId');
+
+    botLog({
+      applicationId: clientId,
+      step: 'cev_direct_cookie_captured',
+      status: 'ok',
+      data: { names: cevCookies.map(c => c.name).join(', '), hasAspNet: !!aspNetCookie },
+    });
+
+    // === ÉTAPE 3 : Résoudre hCaptcha ===
+    let hcaptchaToken: string | null = null;
+
+    // Priorité 0 : Mode accessibilité (cookie hc_accessibility — gratuit)
+    if (accessibilityCookie) {
+      hcaptchaToken = await solveHcaptchaViaAccessibility(page, clientId);
+    }
+
+    // Fallback : services externes
+    if (!hcaptchaToken) {
+      const twoCaptchaApiKey = process.env.TWOCAPTCHA_API_KEY ?? '';
+      hcaptchaToken = await solveHcaptcha(twoCaptchaApiKey, clientId);
+    }
+
+    if (!hcaptchaToken) {
+      await browser.close();
+      botLog({ applicationId: clientId, step: 'cev_direct_captcha_failed', status: 'fail' });
+      return { success: false, error: 'HCAPTCHA_FAILED' };
+    }
+
+    // === ÉTAPE 4 : POST SetCaptchaToken avec le cookie de session ===
+    const captchaResult = await (await import('./cevPortal.js')).completeCevCaptcha(
+      cookieString, hcaptchaToken, clientId
+    );
+
+    await browser.close();
+
+    if (captchaResult.status === 'session_error') {
+      return { success: false, error: captchaResult.error };
+    }
+
+    // === ÉTAPE 5 : Extraire validUntil et persister la session dans Convex ===
+    const validUntilMs = captchaResult.status === 'ready'
+      ? new Date(captchaResult.session.validUntil).getTime()
+      : undefined;
+
+    // La valeur ASP.NET_SessionId seule suffit pour le polling (cevPolling.ts attend juste la valeur)
+    const cookieForStorage = aspNetCookie?.value ?? cookieString;
+
+    // Activer la session dans Convex
+    const activated = await activateCevSession(sessionId, cookieForStorage, validUntilMs);
+    if (!activated) {
+      botLog({ applicationId: clientId, step: 'cev_direct_activate_failed', status: 'fail' });
+      return { success: false, error: 'CONVEX_ACTIVATE_FAILED', sessionCookie: cookieForStorage, validUntilMs };
+    }
+
+    botLog({
+      applicationId: clientId,
+      step: 'cev_direct_setup_complete',
+      status: 'ok',
+      data: {
+        result: captchaResult.status,
+        validUntilMs: validUntilMs ?? 0,
+        cookiePreview: cookieForStorage.slice(0, 4) + '…',
+      },
+    });
+
+    return { success: true, sessionCookie: cookieForStorage, validUntilMs };
+
+  } catch (err) {
+    botLog({ applicationId: clientId, step: 'cev_direct_setup_crash', status: 'fail', data: { error: String(err) } });
+    try { if (browser) await (browser as Awaited<ReturnType<typeof chromium.launch>>).close(); } catch { /* ignore */ }
+    return { success: false, error: String(err) };
+  }
 }

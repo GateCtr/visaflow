@@ -361,6 +361,57 @@ export async function recordCevSessionCheck(
   }
 }
 
+export interface CevSetupTask {
+  sessionId: string;
+  applicationId: string;
+  integrationUrl: string;
+  pollIntervalMs: number;
+}
+
+export async function getPendingCevSetups(): Promise<CevSetupTask[]> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/needs-setup`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] getPendingCevSetups failed: ${res.status}`);
+      return [];
+    }
+    return (await res.json()) as CevSetupTask[];
+  } catch (err) {
+    console.warn("[convexClient] getPendingCevSetups error:", err);
+    return [];
+  }
+}
+
+export async function activateCevSession(
+  sessionId: string,
+  sessionCookie: string,
+  validUntilMs?: number,
+): Promise<boolean> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/activate`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId, sessionCookie, validUntilMs }),
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] activateCevSession failed: ${res.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[convexClient] activateCevSession error:", err);
+    return false;
+  }
+}
+
 /**
  * Attache un document généré par le bot (ex: PDF de confirmation) au dossier.
  * Stocké dans la table `documents` avec isAdminUpload:true + verifiedByAdmin:true.

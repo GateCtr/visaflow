@@ -1,13 +1,46 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
-import { runCevCheck } from "./cevBooking.js";
+import { runCevCheck, runCevDirectSessionSetup } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { runSpainSession } from "./spainPortal.js";
+
+// ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────
+// Tourne en background ; pour chaque session needs_setup claimée :
+// lance un Playwright qui navigue vers l'URL directe, résout hCaptcha, persiste le cookie.
+// Coût : ~60-120s par setup (captcha externe), zéro VOWINT requis.
+async function startCevSetupLoop(): Promise<void> {
+  console.log("[CEV-SETUP] Boucle de setup sessions CEV démarrée");
+  while (true) {
+    try {
+      const pending = await getPendingCevSetups();
+
+      if (pending.length > 0) {
+        console.log(`[CEV-SETUP] ${pending.length} session(s) à établir`);
+      }
+
+      // Séquentiellement (Playwright est lourd, pas en parallèle)
+      for (const s of pending) {
+        console.log(`[CEV-SETUP] Établissement session=${s.sessionId} url=${s.integrationUrl.slice(0, 60)}...`);
+        const r = await runCevDirectSessionSetup(s.integrationUrl, s.sessionId, s.applicationId);
+        if (r.success) {
+          console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
+        } else {
+          console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[CEV-SETUP] Erreur boucle:", err);
+    }
+
+    // Check toutes les 60s (setup long, inutile de boucler plus vite)
+    await new Promise((r) => setTimeout(r, 60_000));
+  }
+}
 
 // ─── CEV Sessions polling — boucle parallèle indépendante ───────────────────
 // Tourne en background sans bloquer la boucle principale du bot Playwright.
@@ -519,6 +552,11 @@ async function main(): Promise<void> {
   log("INFO", `Mode: ${dryRun ? "DRY RUN" : "PRODUCTION"}`);
   log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
+
+  // Lancer la boucle de setup CEV en background (établit les sessions needs_setup via Playwright)
+  startCevSetupLoop().catch((err) => {
+    console.error("[CEV-SETUP] Boucle crashée:", err);
+  });
 
   // Lancer la boucle de polling CEV en background (indépendante de Playwright)
   startCevPollingLoop().catch((err) => {

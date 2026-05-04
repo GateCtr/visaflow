@@ -51,11 +51,13 @@ function sanitizeCookie(cookie: string): string {
 }
 
 // ─── ADMIN: créer ou rafraîchir une session CEV ─────────────────────────────
+// sessionCookie est optionnel : si absent, la session est créée avec status "needs_setup"
+// → le bot Playwright établit la session automatiquement (résolution hCaptcha incluse).
 export const upsertSession = mutation({
   args: {
     applicationId: v.id("applications"),
     integrationUrl: v.string(),
-    sessionCookie: v.string(),
+    sessionCookie: v.optional(v.string()),
     notes: v.optional(v.string()),
     pollIntervalMs: v.optional(v.number()),
   },
@@ -67,17 +69,20 @@ export const upsertSession = mutation({
     if (!app) throw new Error("Dossier introuvable");
 
     const url = validateIntegrationUrl(args.integrationUrl);
-    const cookie = sanitizeCookie(args.sessionCookie);
+    const cookie = args.sessionCookie ? sanitizeCookie(args.sessionCookie) : "";
     const now = Date.now();
 
-    // Une seule session active par dossier — on remplace l'existante si présente
+    // Si cookie absent → needs_setup (bot établira la session automatiquement)
+    const status = cookie ? "active" : "needs_setup";
+
+    // Expirer les sessions actives/needs_setup existantes pour ce dossier
     const existing = await ctx.db
       .query("cevSessions")
       .withIndex("by_application", q => q.eq("applicationId", args.applicationId))
       .collect();
 
     for (const s of existing) {
-      if (s.status === "active") {
+      if (s.status === "active" || s.status === "needs_setup") {
         await ctx.db.patch(s._id, { status: "expired", expiredAt: now });
       }
     }
@@ -92,7 +97,7 @@ export const upsertSession = mutation({
       applicationId: args.applicationId,
       integrationUrl: url,
       sessionCookie: cookie,
-      status: "active",
+      status,
       checkCount: 0,
       consecutiveErrors: 0,
       pollIntervalMs,
@@ -100,7 +105,7 @@ export const upsertSession = mutation({
       notes: args.notes,
     });
 
-    return { sessionId: id };
+    return { sessionId: id, status };
   },
 });
 
@@ -108,7 +113,7 @@ export const upsertSession = mutation({
 export const setSessionStatus = mutation({
   args: {
     sessionId: v.id("cevSessions"),
-    status: v.union(v.literal("active"), v.literal("expired"), v.literal("paused")),
+    status: v.union(v.literal("active"), v.literal("needs_setup"), v.literal("expired"), v.literal("paused")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -155,6 +160,63 @@ export const listSessions = query({
       };
     }));
     return enriched;
+  },
+});
+
+// ─── INTERNAL: activer une session après setup bot (cookie nouvellement établi) ─
+export const internalActivateSession = internalMutation({
+  args: {
+    sessionId: v.id("cevSessions"),
+    sessionCookie: v.string(),
+    validUntilMs: v.optional(v.number()), // timestamp UTC ms d'expiration estimée
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return;
+
+    await ctx.db.patch(args.sessionId, {
+      sessionCookie: args.sessionCookie,
+      status: "active",
+      lastCheckAt: Date.now(),
+      consecutiveErrors: 0,
+      lockedUntil: 0,
+    });
+  },
+});
+
+// ─── INTERNAL: claim atomique des sessions needs_setup (bot doit établir la session)
+export const internalClaimNeedsSetup = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const LOCK_DURATION_MS = 5 * 60_000; // 5 min — setup Playwright peut prendre du temps
+
+    const sessions = await ctx.db
+      .query("cevSessions")
+      .withIndex("by_status", q => q.eq("status", "needs_setup"))
+      .collect();
+
+    const claimed: Array<{
+      sessionId: Id<"cevSessions">;
+      applicationId: Id<"applications">;
+      integrationUrl: string;
+      pollIntervalMs: number;
+    }> = [];
+
+    for (const s of sessions) {
+      const locked = (s.lockedUntil ?? 0) > now;
+      if (locked) continue;
+
+      await ctx.db.patch(s._id, { lockedUntil: now + LOCK_DURATION_MS });
+      claimed.push({
+        sessionId: s._id,
+        applicationId: s.applicationId,
+        integrationUrl: s.integrationUrl,
+        pollIntervalMs: s.pollIntervalMs ?? 30_000,
+      });
+    }
+
+    return claimed;
   },
 });
 
