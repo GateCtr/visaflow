@@ -476,9 +476,9 @@ async function tryApiFirstSlot(
     return null;
   }
 
-  // 4) Datetime scan rapide (mois courant + 2 suivants)
+  // 4) Datetime scan (mois courant + 8 suivants — conforme au bundle datetimelist.js)
   const baseDate = new Date();
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 9; i++) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
     const payload = await callJsonp(req, endpointBase, "datetime/", {
       ...initParams,
@@ -610,6 +610,20 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
     });
     const payloadHits: unknown[] = [];
     const bookititBases = new Set<string>();
+    let sessionInitParams: Record<string, string> = {};
+
+    const releaseTempBooking = async (): Promise<void> => {
+      const base = [...bookititBases][0];
+      if (!base || Object.keys(sessionInitParams).length === 0) return;
+      try {
+        const req = page.context().request;
+        await callJsonp(req, base, "freetempevent/", sessionInitParams);
+        botLog({ applicationId: job.id, step: "freetempevent", status: "ok", data: { base, flow: "spain" } });
+      } catch {
+        // fire-and-forget — ne pas bloquer le retour d'erreur
+      }
+    };
+
     const responseHandler = async (res: Response): Promise<void> => {
       const u = res.url();
       const base = getBookititBaseFromUrl(u);
@@ -671,6 +685,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           data: { bases: [...bookititBases], strategy: "api_first", flow: "spain" },
         });
         const runtime = await getRuntimeContext(page);
+        sessionInitParams = toStringMap(runtime.init);
         for (const base of bookititBases) {
           const apiSlot = await tryApiFirstSlot(page, base, runtime).catch(() => null);
           if (!apiSlot) continue;
@@ -698,6 +713,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
             return "payment_required";
           }
           if (booking.status === "failed") {
+            await releaseTempBooking();
             botLog({
               applicationId: job.id,
               step: "booking",
@@ -749,6 +765,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           return "payment_required";
         }
         if (booking.status === "failed") {
+          await releaseTempBooking();
           botLog({
             applicationId: job.id,
             step: "booking",
@@ -798,6 +815,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
           return "payment_required";
         }
         if (booking.status === "failed") {
+          await releaseTempBooking();
           botLog({
             applicationId: job.id,
             step: "booking",
