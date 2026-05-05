@@ -1,0 +1,143 @@
+analyse le bundle vowint comment est-ce que le captcha est reolu
+9 minutes ago
+
+Je vais récupérer et analyser le bundle JavaScript du portail CEV pour voir exactement comment le captcha est implémenté et résolu.
+
+Je télécharge maintenant le bundle JS principal du CEV pour analyser la fonction successfullCaptcha.
+
+Bundle 419KB téléchargé. J'analyse toutes les fonctions clés en parallèle.
+
+J'analyse maintenant le bundle complet en parallèle — fonction setCaptchaToken, handler de réponse, et flow complet.
+
+Excellent ! Le flux principal est maintenant clair. J'approfondis setupSessionTimeout, getAvailableTimeSlotsForPublic, le flow VOWINT captcha, et l'antiforging en parallèle.
+
+J'ai les données clés. Maintenant je vérifie le JS VOWINT, la structure de réponse AvailableTimeSlots, et le format exact du POST SetCaptchaToken.
+
+Je récupère les dernières données : page de booking (slots disponibles) et la réponse exacte de AvailableTimeSlots.
+
+J'ai tout ce qu'il faut. Voici l'analyse complète du bundle CEV.
+Analyse du bundle CEV — Comment le captcha est résolu
+1. Architecture globale
+
+VOWINT (visaonweb.diplomatie.be)
+    → clic bouton calendrier
+        → nouvel onglet : appointment.cloud.diplomatie.be/Integration/VOW/...
+            → redirect vers /Captcha
+                → hCaptcha résolu → POST /Captcha/SetCaptchaToken
+                    → redirect vers /Home/... (page de créneaux)
+
+2. Page /Captcha — HTML exact
+
+<div id="captchaDiv"
+     class="h-captcha"
+     data-sitekey="5f64399c-14a8-415e-ad1a-7ebccdc4943a"
+     data-callback="successfullCaptcha"        <!-- double 'l' volontaire -->
+     data-error-callback="onError">
+</div>
+
+Le widget hCaptcha appelle successfullCaptcha(token) dès que l'utilisateur valide.
+3. Fonction successfullCaptcha — code extrait du bundle (419KB)
+
+function successfullCaptcha(n) {
+    // Cache le widget et affiche un spinner
+    document.querySelector("#captchaText").style.display = "none";
+    document.querySelector("#captchaDiv").style.display  = "none";
+    document.querySelector("#loader").style.display      = "block";
+    document.querySelector("#loaderText").style.display  = "block";
+    // POST le token vers le serveur
+    SharedAjaxService.setCaptchaToken(ajaxUrl, { captcha: n }, function(n) {
+        setupSessionTimeout(n.validUntil, n.redirectUrl);
+        location.href = n.redirectUrl;   // redirect immédiat vers la page de créneaux
+    });
+}
+
+4. SharedAjaxService — définition complète extraite
+
+SharedAjaxService = function() {
+    // GET générique
+    function get(url, data, ok, err) {
+        return $.ajax({ url, type: "GET", cache: false, traditional: true, data, success: ok, error: err || console.error });
+    }
+    // POST générique (traditional: true = form-encoded, PAS JSON)
+    function post(url, data, ok, err) {
+        return $.ajax({ url, type: "POST", cache: false, traditional: true, data, success: ok, error: err || console.error });
+    }
+    const CAPTCHA_ENDPOINT  = "Captcha/SetCaptchaToken";
+    const CANCEL_ENDPOINT   = "Shared/DoCancelRequestAppointment";
+    return {
+        ajaxGet:                get,
+        ajaxPost:               post,
+        setCaptchaToken:        (base, data, ok, err) => post(base + CAPTCHA_ENDPOINT, data, ok, err),
+        appointmentCancelRequest:(base, data, ok, err) => post(base + CANCEL_ENDPOINT,  data, ok, err),
+    };
+}();
+
+Point critique : traditional: true → le body est form-encoded (captcha=TOKEN), pas JSON.
+5. Requête HTTP exacte vers SetCaptchaToken
+
+POST https://appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken
+Cookie: ASP.NET_SessionId=<valeur>
+Content-Type: application/x-www-form-urlencoded
+captcha=<token-hcaptcha>
+
+Pas de CSRF token — confirmé : la route n'exige pas __RequestVerificationToken.
+6. Réponse du serveur
+
+{
+  "validUntil": "2026-05-05T23:15:00",
+  "redirectUrl": "https://appointment.cloud.diplomatie.be/Home/IndexByGuid?guid=..."
+}
+
+    redirectUrl contient "NoAvailability" → aucun créneau dispo → le bot doit poller plus tard
+    redirectUrl contient une URL /Home/... → des créneaux existent → booking direct possible
+
+7. Timer de session — setupSessionTimeout
+
+function convertLocalTimeToUTC() {
+    const n = new Date();
+    return new Date(n.getTime() + n.getTimezoneOffset() * 60000);
+}
+function getValidUntilMilliseconds(validUntil) {
+    const now = convertLocalTimeToUTC();
+    const exp = new Date(validUntil);
+    return exp.getTime() - now.getTime();   // durée restante en ms
+}
+function setupSessionTimeout(validUntil, redirectUrl) {
+    const ms = getValidUntilMilliseconds(validUntil);
+    setTimeout(() => { location.href = redirectUrl ?? location.href; }, ms);
+}
+
+Ce que ça signifie pour le bot : validUntil est un ISO datetime UTC. La session dure typiquement ~15-30 min. Le bot doit relancer SetCaptchaToken (nouveau hCaptcha) avant l'expiration pour garder la session vivante.
+8. Polling créneaux — /Home/AvailableTimeSlots
+
+function callPost(url, data, ok, err) {
+    $.ajax({
+        url, type: "Post", cache: false,
+        contentType: "application/json",     // ← JSON ici (différent de SetCaptchaToken)
+        dataType: "json",
+        data: JSON.stringify(data),
+        success: ok, error: err
+    });
+}
+function getAvailableTimeSlotsForPublic(baseUrl, data, ok, err) {
+    callPost("/Home/AvailableTimeSlots", data, ok, err);
+}
+
+Ce que ça signifie pour le bot : POST /Home/AvailableTimeSlots avec body JSON {} (body vide), Content-Type: application/json, cookie ASP.NET_SessionId requis.
+9. Annulation RDV — DoCancelRequestAppointment
+
+POST https://appointment.cloud.diplomatie.be/Shared/DoCancelRequestAppointment
+Content-Type: application/x-www-form-urlencoded   (traditional: true)
+uniqueToken=<token>&cultureCode=en-US
+
+Réponse : { succeeded: bool, message: string }
+10. VOWINT login — Captcha requis ?
+
+La page de login VOWINT charge le script hCaptcha (js.hcaptcha.com/1/api.js) mais le formulaire HTML ne contient pas de widget captcha visible — juste UserName, Password, __RequestVerificationToken. Le captcha VOWINT n'est probablement déclenché qu'après des échecs répétés (lockout progressif), pas au premier login.
+Résumé pour le bot — ce qu'il faut implémenter correctement
+Étape	Endpoint	Content-Type	Cookie requis
+Résoudre hCaptcha	POST /Captcha/SetCaptchaToken	application/x-www-form-urlencoded	ASP.NET_SessionId
+Vérifier créneaux	POST /Home/AvailableTimeSlots	application/json	ASP.NET_SessionId
+Annuler RDV	POST /Shared/DoCancelRequestAppointment	application/x-www-form-urlencoded	ASP.NET_SessionId
+
+Le bot actuel dans cevPortal.ts fait déjà correctement le POST form-encoded pour SetCaptchaToken. La logique de validUntil est maintenant claire : c'est un datetime ISO UTC, et la session dure typiquement 15 minutes (defaultTimeout: 15 mentionné dans les logs précédents).
