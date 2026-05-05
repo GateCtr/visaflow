@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html" charset="utf-8" />
+    <title>VFS : Select Centre</title>
+
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/jquery.selectBox.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/SpryAccordion.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/jqtransform.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/themes/base/jquery-ui.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/bootstrap.min.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/bootstrap-theme.min.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/bootstrap-datetimepicker.min.css" rel="stylesheet"/>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/jquery.countdown.css" rel="stylesheet"/>
+
+
+
+
+
+
+    
+    
+    
+    <script src="/IRCC-AppointmentWave1/Scripts/jquery-3.7.1.min.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Content/CMS-Styles/js/jquery.selectBox.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Content/CMS-Styles/js/SpryAccordion.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Content/CMS-Styles/js/jquery.jqtransform.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Content/CMS-Styles/js/bootstrap.min.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Content/CMS-Styles/js/bootstrap-datetimepicker.min.js"></script>
+
+
+
+    <link href="/IRCC-AppointmentWave1/Content/App-Styles/css/jquery.modalbox.css" rel="stylesheet"/>
+
+    <script src="/IRCC-AppointmentWave1/Scripts/jquery-migrate-3.3.0.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Scripts/jquery.modalbox-1.5.0-min.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Scripts/jquery.magnific-popup.min.js"></script>
+
+    <script src="/IRCC-AppointmentWave1/Scripts/jquery.countdown.js"></script>
+
+    <link href="/IRCC-AppointmentWave1/Content/CMS-Styles/css/style.css" rel="stylesheet"/>
+
+    
+
+    
+    <style type="text/css">
+        #header-title {
+            display: none;
+        }
+
+        .help {
+            width: 30px;
+            float: right;
+            margin-right: 8px;
+        }
+
+        li {
+            list-style: none;
+        }
+    </style>
+
+    
+
+    <script type="text/javascript">
+        function noBack() { window.history.forward(); }
+        $.ajaxSetup({ cache: false });
+        $(document).ready(function () {
+
+
+            $('.input_capital').on('input', function (evt) {
+                $(this).val(function (_, val) {
+                    return val.toUpperCase();
+                });
+            });
+
+            //number only
+            function isNumber(evt) {
+                evt = (evt) ? evt : window.event;
+                var charCode = (evt.which) ? evt.which : evt.keyCode;
+                // if (charCode == 46 && charCode > 31 && (charCode < 48 || charCode > 57)) {
+                if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            $(".only_number").keypress(function (e) {
+                //if the letter is not digit then display error and don't type anything
+                if (e.which != 8 && e.which != 0 && (e.which < 48 || e.which > 57)) {
+                    //display error message
+                    $("#errmsg").html("Digits Only").show().fadeOut("slow");
+                    return false;
+                }
+            });
+
+            $(".openDialog").on("click", function (e) {
+                e.preventDefault();
+
+                $("<div></div>")
+                    .addClass("dialog")
+                    .attr("id", $(this)
+                        .attr("data-dialog-id"))
+                    .appendTo("body")
+                    .dialog({
+                        title: $(this).attr("data-dialog-title"),
+                        close: function () { window.location.reload(); },
+                        modal: true,
+                        width: 1036,
+                        height: 420,
+                        left: 0
+
+                    })
+                    .load(this.href);
+
+            });
+
+            //$(".close").live("click", function (e) {
+            //    e.preventDefault();
+            //    $(this).closest(".dialog").dialog("close");
+            //});
+        });
+
+
+    </script>
+
+    <style type="text/css" id="antiClickjack">
+        body {
+            display: none !important;
+        }
+    </style>
+    <script type="text/javascript">
+        if (self === top) {
+            var antiClickjack = document.getElementById("antiClickjack");
+            antiClickjack.parentNode.removeChild(antiClickjack);
+        } else {
+            top.location = self.location;
+        }
+    </script>
+
+</head>
+
+<body onload="noBack();">
+    <!--wrapper starts here-->
+    <!-- header starts here -->
+    
+        <div class="headervfs">
+            <div class="container">
+                <div class="logovfs" title="vfs global complaint management system" style="margin-left: 0px;"></div>
+                <a href="http://www.vfsglobal.com/" target="_blank"></a>
+                
+                <div class="header-titlevfs" id="header-title" style="float: right; margin-right: 13px;">
+                    <span>
+                        Apply for VISA to
+                        <img src="/IRCC-AppointmentWave1/content/cms-styles/images/missionimage.png" style="margin: 0 7px; vertical-align: -5px; border: 2px solid #fff" />
+                        india
+                    </span>
+                </div>
+                
+                <!-- Modal -->
+
+            </div>
+            <br clear="all">
+        </div>
+
+    <!-- header ends here -->
+    <!-- main container starts here -->
+    <div class="container">
+        <div class="main-container1">
+
+
+            <a class="openmodalbox" href="javascript:void(0);" title="Demo - Show hidden content (span.modalboxContent)">
+                <img class="help" style="cursor: pointer" title="help" src="/IRCC-AppointmentWave1/Content/App-Styles/images/help.png" />
+                <span class="modalboxContent">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="myModalLabel">Help</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+  <b>1.Schedule an appointment:</b>To schedule an appointment use Schedule an appointment link on the left menu. Scheduling an appointment involves following steps:
+</p>
+<ul>
+  <li>a.	Select Mission (option available only for CC User. For Individual /TA’s this option is disabled.)</li>
+  <li>b.	Select Country (option available only for CC User. For Individual /TA’s this option is disabled.)</li>
+  <li>c.	Select location : Center can be visa application center (VAC), Embassy</li>
+  <li>d.	Select Visa Category</li>
+  <li>e.	Click on “Continue” button to go to Applicant List Page. </li>
+  <li>f.	Applicant list: Initially applicant list will be empty. Login User need to add applicant/s before he/she proceed with appointment date selection. </li>
+  <li>g.	Date & time slot selection: After adding applicant/s, on click of continue, user will be taken to final calendar page where user will see appointment dates (in green) and holidays (in red).</li>
+  <li>h.	User can select the date and time slot and confirm.</li>
+  <li>i.	Appointment confirmation: Click on “Confirm” button in the final calendar page</li>
+  <li>j.	An email & SMS will be triggered to the applicant/s after appointment is confirmed. </li>
+</ul>
+<p>
+  <b>2.	Reschedule an appointment:</b> To reschedule an appointment, user need to have the reference number with valid future appointment. User can click on “reschedule an appointment” link.
+</p>
+<ul>
+  <li>a.	Enter the reference number and click on submit to get the applicant/s details</li>
+  <li>b.	User can select the applicant/s to reschedule and click on continue to proceed to final calendar to select date & time</li>
+  <li>c.	Upon selection date & time, can confirm the appointment by clicking confirm button.</li>
+  <li>d.	Appointment confirmation message will be displayed</li>
+  <li>e.	An email & SMS will be triggered to the applicant/s</li>
+</ul>
+<p>
+  <b>3.	Cancel an Appointment:</b> To cancel an appointment, user need to have the reference number with valid future appointment. User can click on “Cancel an appointment” link.
+</p>
+<ul>
+  <li>a.	Enter the reference number and click on submit to get the applicant/s details</li>
+  <li>b.	User can select the applicant/s to cancel and click on continue.</li>
+  <li>c.	Appointment cancellation confirmation message will be displayed</li>
+  <li>d.	An email & SMS will be triggered to the applicant/s</li>
+</ul>
+<p>
+  <b>4.	Print or Email Appointment Letter:</b>  To print an appointment letter, user need to have the reference number with valid future appointment. User can click on “Print an appointment” link.
+</p>
+<ul>
+  <li>a.	Enter the reference number and click on submit to get the applicant/s details</li>
+  <li>b.	User can select the applicant/s to print and click on “Download appointment letter” button.</li>
+  <li>c.	An email & SMS will be triggered to the applicant</li>
+
+</ul>
+<p>
+  <b>5.	Retrieve Incomplete Appointment:</b>  To retrieve an incomplete appointment, user need to have the reference number. User can click on “Retrieve Incomplete appointment” link.
+</p>
+<ul>
+  <li>d.	Enter the reference number and click on submit to get the applicant/s details</li>
+  <li>e.	Login User can also add applicant/s before he/she proceed with appointment date selection.</li>
+  <li>f.	User can select the applicant/s to schedule and click on continue to proceed to final calendar to select date & time</li>
+  <li>g.	Upon selection date & time, can confirm the appointment by clicking confirm button.</li>
+  <li>h.	Appointment confirmation message will be displayed</li>
+  <li>i.	An email & SMS will be triggered to the applicant/s</li>
+
+</ul>
+                    </div>
+                </span>
+            </a>
+
+            <div class="mandatory-txt">
+                
+
+
+
+                <span class="mandatory">    <div class="user-loggedin">
+<form action="/IRCC-AppointmentWave1/Account/LogOff" id="logoutForm" method="post"><input name="__RequestVerificationToken" type="hidden" value="qtU_deHZ6ZlXQ5sD97gAQ4sNoa-yCX-n0FJLzLG4aRUUv16WP8yiHB4jPy5TCPSaSNd2XVsfBtlE_oF6vkNrSCuLHFX1W8x27p4wr0W0XFwGnORh0" />            <label style="color: black; font-size: 10pt">Welcome </label>
+            <label class="header-user" style="color: black">Akollad Jove !</label>
+            <a href="javascript:document.getElementById('logoutForm').submit()">
+                <span style="color: black" class="header-txt">Logout</span></a>
+</form>    </div>
+ </span>
+
+
+            </div>
+
+            <!-- left panel starts here -->
+            
+            <div id="sidebar" class="leftpanel">
+
+    <div id="Accordion1" class="Accordion" tabindex="0">
+        <div class="AccordionPanel">
+            <div class="AccordionPanelTab" id="active">
+                <h3>Actions</h3>
+            </div>
+            <div class="AccordionPanelContent">
+                <div class="leftpanel-links">
+                    <ul class="leftNav-ul">
+                        
+
+
+                <li class="inactive-link"><a  href='/IRCC-AppointmentWave1/Home/SelectVAC?q=dePiaPfL2MJ7yDPEmQRU6fRZbx3aIpSal6PdG3Bxqq7rSNU6HabciCVot9dEwkhd'>Schedule Appointment</a></li> <!--Schedule = 1 -->
+                    <li class="inactive-link"><a  href='/IRCC-AppointmentWave1/Home/SearchAppointment?q=dePiaPfL2MJ7yDPEmQRU6W44VzsjlBfLhcKb1OIOczuYP8uTj8CadJ4UoAJWqxXc'>Reschedule Appointment</a></li> <!--Reschedule = 2 -->
+                    <li class="inactive-link"><a  href='/IRCC-AppointmentWave1/Home/SearchAppointment?q=dePiaPfL2MJ7yDPEmQRU6WnOkPrE9bJM5xT4iMTvaIzGfuQ9XBMKbeC7YmemmJ63'>Cancel Appointment</a></li> <!--Cancel = 3 -->
+                <li class="inactive-link"><a  href='/IRCC-AppointmentWave1/Home/SearchAppointment?q=dePiaPfL2MJ7yDPEmQRU6TIImdTosAUGrExVqg2QP1SufzZ67cxYVETmR40lbLsy'>Email Appointment Letter</a></li> <!--Print = 4 -->
+                <li class="inactive-link"><a  href='/IRCC-AppointmentWave1/Home/SearchAppointment?q=dePiaPfL2MJ7yDPEmQRU6buv0a4SqqvgSfMfLcEJhU/6UnikKwvVRTTaULbIYxyOyQzn4zK/139hZCYECOHJuw=='>Retrieve Incomplete Appointments</a></li> <!--RIC = 5 -->
+
+
+
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+            </div>
+            <!-- left panel ends here -->
+            
+<style>
+    .linkhead {
+        color: white;
+        font-size: 10px;
+        font-weight: normal;
+        background: #00305D;
+        padding: 6px;
+        margin-top: 0px;
+    }
+
+    .price-break-down-audit-NoData {
+        cursor: pointer;
+    }
+
+    .price-break-down-audit-layer-NoData {
+        position: absolute;
+        right: 20px;
+        border: 2px solid #999;
+        background: white;
+        padding: 1px 9px;
+        z-index: 950;
+    }
+
+    .price-break-down {
+        cursor: pointer;
+    }
+
+    .price-break-down-audit {
+        cursor: pointer;
+    }
+
+    th {
+        background: #00305D;
+        color: white;
+    }
+
+    .white-popup {
+        padding-bottom: 15px;
+        max-width: 389px;
+    }
+
+    .DisabledButton {
+        cursor: not-allowed !important;
+        background: grey;
+    }
+
+    .EnableButton {
+        cursor: pointer !important;
+        background: #00305d;
+    }
+</style>
+<div class="rightpanel">
+    <h1>Select Centre</h1>
+    <div class="page-nav">Schedule Appointment&nbsp;&nbsp;>&nbsp;&nbsp;<span>Select Centre</span></div>
+    <div class="mandatory-txt"><span class="mandatory" style="top: -4px;">*</span>Mandatory Fields</div>
+
+
+    <div class="frm-container" style="clear:both;">
+
+<form action="/IRCC-AppointmentWave1/Home/SelectVAC" id="VisaApplicationForm" method="post"><input name="__RequestVerificationToken" type="hidden" value="aDLi5cU8BQLG2q3U3qMt3c6-cvayCog05PcY8OQsenBl_srvtJ0xHaahYhmh84CSuIt1irCSV8tViYzDXPs23hIVDTLcWJxTrVKl_vgZa15VG_v30" /><input data-val="true" data-val-number="The field paraMissionId must be a number." data-val-required="The paraMissionId field is required." id="paraMissionId" name="paraMissionId" type="hidden" value="2" /><input data-val="true" data-val-number="The field paramCountryId must be a number." data-val-required="The paramCountryId field is required." id="paramCountryId" name="paramCountryId" type="hidden" value="82" /><input id="paramCenterId" name="paramCenterId" type="hidden" value="" /><input data-val="true" data-val-required="The IsApplicationTypeEnabled field is required." id="IsApplicationTypeEnabled" name="IsApplicationTypeEnabled" type="hidden" value="False" />            <div class="frm-container form-horizontal">
+                <input Length="975" id="MissionCountryLocationJSON" name="MissionCountryLocationJSON" type="hidden" value="[{&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Visiting Country&quot;,&quot;CountryJEs&quot;:null,&quot;ChildMissionJEs&quot;:null},{&quot;Id&quot;:2,&quot;Name&quot;:&quot;Canada&quot;,&quot;CountryJEs&quot;:[{&quot;Locations&quot;:null,&quot;ShowDocumentCheckList&quot;:false,&quot;MissionId&quot;:0,&quot;VisaCategories&quot;:null,&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Residing Country&quot;},{&quot;Locations&quot;:[{&quot;VisaCategories&quot;:[{&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Appointment Category&quot;}],&quot;TypeId&quot;:0,&quot;NoOfApplicants&quot;:[{&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Number of Applicants&quot;}],&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Centre&quot;},{&quot;VisaCategories&quot;:[{&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Appointment Category&quot;},{&quot;Id&quot;:437,&quot;Name&quot;:&quot;Biometric Enrolment &quot;}],&quot;TypeId&quot;:1,&quot;NoOfApplicants&quot;:[{&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Number of Applicants&quot;},{&quot;Id&quot;:1,&quot;Name&quot;:&quot;1&quot;},{&quot;Id&quot;:2,&quot;Name&quot;:&quot;2&quot;},{&quot;Id&quot;:3,&quot;Name&quot;:&quot;3&quot;},{&quot;Id&quot;:4,&quot;Name&quot;:&quot;4&quot;},{&quot;Id&quot;:5,&quot;Name&quot;:&quot;5&quot;}],&quot;Id&quot;:225,&quot;Name&quot;:&quot;Canada Visa Application Center - Kinshasa&quot;}],&quot;ShowDocumentCheckList&quot;:false,&quot;MissionId&quot;:0,&quot;VisaCategories&quot;:null,&quot;Id&quot;:82,&quot;Name&quot;:&quot;Democratic Republic of the Congo&quot;}],&quot;ChildMissionJEs&quot;:[{&quot;ParentMissionId&quot;:0,&quot;Id&quot;:0,&quot;Name&quot;:&quot;Select Sub-Mission&quot;}]}]" />
+
+                <font color="green"><p id="successMessage" style="font-size: small;text-align:center; margin-left: 19px;"><strong> </strong> </p></font>
+
+                <div class="tbl-contaniner">
+                    <br />
+                    
+                    <div class="frm-element-div" style="display:none">
+
+                        <div class="frm-label">
+                            <label for="MissionId">Select Visiting Country</label>
+                            <span class="mandatory">*</span>
+                        </div>
+                        <div class="frm-element">
+
+                            <select class="select_box" data-val="true" data-val-number="The field Select Visiting Country must be a number." data-val-range="Required" data-val-range-max="2147483647" data-val-range-min="1" data-val-required="Required" id="MissionId" name="MissionId"><option selected="selected" value="0">Select Visiting Country</option>
+<option value="2">Canada</option>
+</select>
+                            <input id="mid" name="MissionId" type="hidden" value="0" />
+                            <span class="field-validation-valid" data-valmsg-for="MissionId" data-valmsg-replace="true"></span>
+                        </div>
+                    </div>
+                    <div class="frm-element-div" style="display: none">
+                        <div class="frm-label">
+                            <label for="CountryId">Select Residing Country</label>
+                            <span class="mandatory">*</span>
+                        </div>
+                        <div class="frm-element">
+
+                            <select class="select_box" data-val="true" data-val-number="The field Select Residing Country must be a number." data-val-range="Required" data-val-range-max="2147483647" data-val-range-min="1" data-val-required="Required" id="CountryId" name="CountryId"><option selected="selected" value="0">Select Residing Country</option>
+<option value="82">Democratic Republic of the Congo</option>
+</select>
+                            <input id="cid" name="CountryId" type="hidden" value="0" />
+                            <span class="field-validation-valid" data-valmsg-for="CountryId" data-valmsg-replace="true"></span>
+                        </div>
+                    </div>
+                    
+
+                    <div class="frm-element-div">
+                        <div class="frm-label">
+                            <label for="LocationId">Select Centre</label>
+                            <span class="mandatory">*</span>
+                        </div>
+                        <div class="frm-element">
+
+                            <select class="select_box" data-val="true" data-val-number="The field Select Centre must be a number." data-val-range="Required" data-val-range-max="2147483647" data-val-range-min="1" data-val-required="Required" id="LocationId" name="LocationId" style="width:320px!important"><option selected="selected" value="0">Select Centre</option>
+</select>
+                            <input id="Lid" name="LocationId" type="hidden" value="0" />
+                            <span class="field-validation-valid" data-valmsg-for="LocationId" data-valmsg-replace="true"></span>
+
+                            <!-- <div style="clear: both"><span class="field-validation-error" id="LocationError"></span></div>-->
+                        </div>
+                    </div>
+                    <div class="frm-element-div">
+                        <div class="frm-label">
+                            <label for="NoOfApplicantId">No. of Applicants</label>
+                            <span class="mandatory">*</span>
+                        </div>
+                        <div class="frm-element">
+                            <select class="select_box drpNoOfApplicants" data-val="true" data-val-number="The field No. of Applicants must be a number." data-val-range="Required" data-val-range-max="2147483647" data-val-range-min="1" data-val-required="Required" id="NoOfApplicantId" name="NoOfApplicantId" style="width:320px!important"><option selected="selected" value="0">Select Number of Applicants</option>
+</select>
+                            <input id="NoOfAppId" name="NoOfApplicantId" type="hidden" value="0" />
+                            <span class="field-validation-valid" data-valmsg-for="NoOfApplicantId" data-valmsg-replace="true"></span>
+                        </div>
+                    </div>
+                    <div class="frm-element-div">
+                        <div class="frm-label">
+                            <label for="VisaCategoryId">Select Appointment Category</label>
+                            <span class="mandatory">*</span>
+                        </div>
+                        <div class="frm-element">
+
+                            <select class="select_box drpVisaCategory" data-val="true" data-val-number="The field Select Appointment Category must be a number." data-val-range="Required" data-val-range-max="2147483647" data-val-range-min="1" data-val-required="Required" id="VisaCategoryId" name="VisaCategoryId" style="width:320px!important"><option selected="selected" value="0">Select Appointment Category</option>
+</select>
+                            <span class="field-validation-valid" data-valmsg-for="VisaCategoryId" data-valmsg-replace="true"></span>
+                            
+                            <div style="clear: both;display:none" class="VisaCategorydetails">
+                                <span class="field-validation-error">Visa valid or expired since less than one year.</span>
+                            </div>
+                            <div style="clear: both"><span class="field-validation-error" id="VisaCategoryError" style="display:none">Please check to confirm that you have the required documents that will qualify you as an emergency category , failure to produce this will result to your appointment being nullified.</span></div>
+                        </div>
+
+
+                        <div class="frm-element dvPrime" style="display:none">
+
+                            <input class="rdnStandard" id="AppointmentType" name="AppointmentType" type="radio" value="StandardAppointment" />  Standard Appointment
+
+                            <input Checked="checked" class="rdnPrime" id="AppointmentType" name="AppointmentType" type="radio" value="PrimeAppointment" /> Prime time appointment
+
+                        </div>
+                    </div>
+
+
+
+
+
+                    <div class="frm-element-div">
+                        <div class="col-lg-4"></div>
+
+                        <div style="float: left; padding-top: 10px; display: none" id="dvEarliestDateLnk">
+
+
+
+                            <!--<span style="text-decoration: underline; color: blue;" class="sub-total price-break-down-audit-NoData">Click here to know the earliest available date</span>-->
+                            <div class="price-break-down-audit-layer-NoData" style="max-width: 400px;display:none;">
+                                <table class="table table-bordered recordstable">
+                                    <thead>
+                                    <th>
+                                        Information
+                                    </th>
+                                    <tr class="sub-total price-break-down " style="height:auto">
+                                        <td class="tdAvailable">
+                                            <label id="lblMessage" style="padding-right: 10px">Earliest slot available on</label>
+                                            <label id="lblDate" style="color: green; font-style: italic; font-weight: bold"></label>
+                                        </td>
+                                        <td id="tdNotAvailabale">
+                                            <label id="lblMessageNotAvailable" style="color: red">No slots available for this Visa Category</label>
+                                        </td>
+
+                                    </tr>
+                                    <tr id="trPrime">
+                                        <td id="tdPrimeSlot" style="display:none;">
+                                            <label id="lblMessagePrime" style="padding-right: 10px;font-style:italic;color:blue;">Earliest Prime slot available on</label>
+                                            <label id="lblDatePrime" style="color: green; font-style: italic; font-weight: bold"></label>
+                                        </td>
+                                        <td id="tdNotAvailabalePrime" style="display:none;">
+                                            <label id="lblMessageNotAvailablePrime" style="color: red">No Prime slots available for this Visa Category</label>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="tdAvailable">
+                                            <label id="lblDisclaimer" style="padding-right: 10px; font-style: italic; text-decoration: underline">Disclaimer :</label>
+                                            <label id="lblDisclaimerVal">Please be advised that date is subject to change depending upon selection done by multiple users</label>
+                                        </td>
+                                    </tr>
+                                    </thead>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="frm-element-div">
+                    <br />
+                    
+                    <input data-val="true" data-val-required="The IsAcknowledgeTermsAndConditions field is required." id="IAgree" name="IsAcknowledgeTermsAndConditions" type="checkbox" value="true" /><input name="IsAcknowledgeTermsAndConditions" type="hidden" value="false" />
+                    <span class="openmodalbox" href="javascript:void(0);" title="Disclaimer" style="cursor: pointer; color: black;">
+                        I Acknowledge terms and conditions<span class="modalboxContent">Please confirm that you consent to your personal data being processed by VFS Global and also to the transfer of your personal data to Canada for the purposes of scheduling an appointment for your application OR you have the consent of another person to make an appointment(s) on their behalf for the activities above. For more information on your rights and how to exercise them, please visit Privacy notice and Terms and Conditions links for the country from where you wish to book an appointment.</span>
+                    </span>
+                    <span class="mandatory">*</span>
+                </div>
+            </div>
+            <div class="frm-button">
+                <input type="submit" value="Continue" class="submitbtn" id="btnContinue" />
+            </div>
+            <div id="div_NearbyVAC" style="display:none;">
+                <font color="red">
+                    <p id="NearbyVAC_Text" style="font-size: small;text-align:left; ">Note: If an appointment is not available at your preffered VAC location, Please also check for availability at the alternate VAC location as listed below : </p>
+                    <p id="NearbyVAC_Value" style="font-size: small;text-align:left; ">  </p>
+                </font>
+            </div>
+            <div id="divDocumentList" title="Document Check List"></div>
+</form>    </div>
+</div>
+<script src="/IRCC-AppointmentWave1/Scripts/jquery-ui.js"></script>
+
+<script type="text/javascript">
+    var token = $('[name=__RequestVerificationToken]').val();
+    var headers = {};
+    headers["__RequestVerificationToken"] = token;
+
+    $(document).ready(function () {
+
+        //missioncountryIds from session
+        $paraMissionId = $("#paraMissionId");
+        $paramCountryId = $("#paramCountryId");
+        $paramCenterId = $("#paramCenterId");
+
+
+        var $country = $('#CountryId');
+        var $location = $('#LocationId');
+        var $mission = $('#MissionId');
+        var $childMission = $('#ChildMissionId');
+        var $visaCategory = $('#VisaCategoryId');
+        var $NoOfApplicant = $('#NoOfApplicantId');
+        var $hasQueryString = $('#HasQueryString');
+        var jsonStr = $("#MissionCountryLocationJSON").val();
+        var obj = $.parseJSON(jsonStr);
+        var selectedLocObject;
+        var missionCount = $mission.length;
+        var selectedMissionId = $mission.val();
+        var missionCount = $mission.length;
+
+        if ($paraMissionId.val() != "0" && $paramCountryId.val() != "0") {
+
+            var missionId = $paraMissionId.val();
+            var countryId = $paramCountryId.val();
+
+
+            // set the mission
+            $mission.val(missionId);
+
+            for (var i = 0; i < obj.length; i++) {
+
+                var objJson = obj[i];
+                if (objJson.Id == missionId) {
+
+                    //add countries based on missionID
+                    var lcns = objJson.CountryJEs || [];
+                    var html = $.map(lcns, function (lcn) {
+                        return '<option value="' + lcn.Id + '">' + lcn.Name + '</option>';
+                    }).join('');
+                    $country.html(html);
+
+                    //set the country based on countryId
+                    $country.val(countryId);
+
+                    //child mission
+                    var selectedChildMissionId = $childMission.val();
+                    var childMissions = objJson.ChildMissionJEs || [];
+                    if (childMissions.length > 1) {
+                        $('#childMission').show();
+                        var html = $.map(childMissions, function (cm) {
+                            return '<option value="' + cm.Id + '">' + cm.Name + '</option>';
+                        }).join('');
+                        $childMission.html(html);
+
+                        if (selectedChildMissionId > 0) {
+                            $childMission.val(selectedChildMissionId);
+                        }
+                    } else {
+                        $('#childMission').hide();
+                    }
+
+                    if ('True' == "True") {
+                        $mission.prop('disabled', true);
+                        $country.prop('disabled', true);
+                    }
+
+                    $("#mid").val(missionId);
+                    $("#cid").val(countryId);
+
+                    var countryId = $("#CountryId option:selected").val();
+
+                    var objJsonCountries = objJson.CountryJEs;
+
+                    for (var x = 0; x < objJsonCountries.length; x++) {
+
+                        objJsonCountry = objJsonCountries[x];
+                        if (objJsonCountry.Id == countryId) {
+
+                            //setting locations
+                            var lcns = objJsonCountry.Locations || [];
+                            if ($("#paramCenterId").val() != "") {
+                                $location.empty();
+                                $.each(lcns, function (index, optiondata) {
+                                    if ($("#paramCenterId").val() == optiondata.Id || optiondata.Id == "0")
+                                        $location.append("<option value='" + optiondata.Id + "'>" + optiondata.Name + "</option>");
+                                });
+                            } else {
+                                var html = $.map(lcns, function (l) {
+                                    return '<option value="' + l.Id + '">' + l.Name + '</option>';
+                                }).join('');
+                                $location.empty();
+                                $location.html(html);
+                                if (lcns.length == 2) {
+                                    $("#LocationId").val(lcns[1].Id)
+                                    LocationChanageFunction();
+                                }
+                            }
+
+                            if ($paramCenterId.val() != "") {
+                                $location.val($paramCenterId.val());
+                                $("#LocationId option:selected").val($paramCenterId.val())
+                                LocationChanageFunction();
+                            }
+
+                            //var lcns = objJsonCountry.Locations || [];
+                            //var html = $.map(lcns, function (l) {
+                            //    return '<option value="' + l.Id + '">' + l.Name + '</option>';
+                            //}).join('');
+
+                            //$location.empty();
+                            //$location.html(html);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        else {
+
+            if (missionCount <= 1) {
+                $mission.empty();
+                $.each(obj, function (i, val) {
+                    $mission.append('<option value="' + val.Id + '">' + val.Name + '</option>');
+                });
+                if (selectedMissionId > 0) {
+                    $mission.val(selectedMissionId);
+                }
+
+
+            }
+
+            var selectedCountryId = $country.val();
+            var selectedChildMissionId = $childMission.val();
+            $('#childMission').hide();
+
+
+            var selectedLocationId = $location.val();
+
+        }
+
+        $(document).on('change', '#LocationId', function () {
+            LocationChanageFunction();
+        });
+
+
+        function LocationChanageFunction() {
+            $visaCategory.empty();
+            $NoOfApplicant.empty();
+            var country = $("#CountryId option:selected").val();
+            var mission = $("#MissionId option:selected").val();
+            var location = $("#LocationId option:selected").val();
+
+            // new code
+            var visaCategories = [];
+            $.each(obj, function (index, m) {
+                if (m.Id == mission) {
+                    var cr = m.CountryJEs;
+                    $.each(cr, function (cindex, c) {
+                        if (c.Id == country) {
+                            var loc = c.Locations;
+                            $.each(loc, function (lindex, l) {
+                                if (l.Id == location) {
+                                    visaCategories = l.VisaCategories;
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            //new code
+
+            // old code.
+            //var visaCategories = obj[mission].CountryJEs[country].Locations[location].VisaCategories || [];
+
+            html = $.map(visaCategories, function (c) {
+                return '<option value="' + c.Id + '">' + c.Name + '</option>';
+            }).join('');
+            $visaCategory.html(html);
+            if (visaCategories.length > 2)
+                $("#VisaCategoryId")[0].selectedIndex = 0;
+            else
+                $("#VisaCategoryId")[0].selectedIndex = 1;
+
+            if (selectedLocationId > 0) {
+                $location.val(selectedLocationId);
+            }
+
+            //noOfApplicants new code
+            var noOfApplicants = [];
+            $.each(obj, function (index, m) {
+                if (m.Id == mission) {
+                    var cr = m.CountryJEs;
+                    $.each(cr, function (cindex, c) {
+                        if (c.Id == country) {
+                            var loc = c.Locations;
+                            $.each(loc, function (lindex, l) {
+                                if (l.Id == location) {
+                                    noOfApplicants = l.NoOfApplicants;
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            //new code
+
+            html = $.map(noOfApplicants, function (c) {
+                return '<option value="' + c.Id + '">' + c.Name + '</option>';
+            }).join('');
+            $NoOfApplicant.html(html);
+            if (noOfApplicants.length > 2)
+                $("#NoOfApplicantId")[0].selectedIndex = 0;
+            else
+                $("#NoOfApplicantId")[0].selectedIndex = 1;
+
+            var missionText = $("#MissionId option:selected").text();
+            var countryText = $("#CountryId option:selected").text();
+            missionId = $("#MissionId option:selected").val();
+            countryId = $("#CountryId option:selected").val();
+            // disable enable visacategory - start
+            if ($("#LocationId").val() != 0) {
+                $("#LocationError").text("");
+                $("#btnContinue").removeClass("DisabledButton");
+                $("#btnContinue").addClass("EnableButton");
+                $("#btnContinue").attr("disabled", false);
+                $("#dvEarliestDateLnk").hide();
+                $.ajax({
+                    type: 'POST',
+                    url: '/IRCC-AppointmentWave1/Account/CheckSeatAllotment',
+                    headers: headers,
+                    dataType: 'JSON',
+                    data: {
+                        countryId: $("#CountryId option:selected").val(),
+                        missionId: $("#MissionId option:selected").val(),
+                        LocationId: $('#LocationId').val(),
+                        Location: $('#LocationId option:selected').text(),
+                        NoOfApplicantId: $('#NoOfApplicantId option:selected').val()
+                    },
+                    cache: false,
+                    success: function (data) {
+                        if (data != "") {
+                            $("#LocationError").text(data);
+                            //$("#btnContinue").attr("disabled", true);
+                            //$("#btnContinue").removeClass("EnableButton");
+                            //$("#btnContinue").addClass("DisabledButton");
+                            //$(".drpVisaCategory").prop("disabled", true);
+                            //$(".drpNoOfApplicants").prop("disabled", true);
+                        }
+                        else {
+                           if (('' != null || '' != "") && ('false' === "true")) {
+                                $('#btnContinue').attr('disabled', 'disabled');
+                                $('.select_box').attr('disabled', 'disabled');
+                                $('#IAgree').attr('disabled', 'disabled');
+                            }
+                            else {
+                                $(".drpVisaCategory").prop("disabled", false);
+                                $(".drpNoOfApplicants").prop("disabled", false);
+                            }
+                        }
+                    }
+                });
+            }
+            else {
+                $("#LocationError").text("");
+                $("#btnContinue").attr("disabled", true);
+                $("#btnContinue").removeClass("EnableButton");
+                $("#btnContinue").addClass("DisabledButton");
+                $("#dvEarliestDateLnk").hide();
+                $(".drpVisaCategory").prop("disabled", true);
+                $(".drpNoOfApplicants").prop("disabled", true);
+            }
+
+            // disable enable visacategory - end
+
+
+            //var showDocumentCheckList = obj[mission].CountryJEs[country].ShowDocumentCheckList;
+            //if (showDocumentCheckList != null && showDocumentCheckList == true) {
+            //    $('#list').show();
+            //    $('#list').prop('disabled', true);
+            //} else {
+            //    $('#list').hide();
+            //}
+            //if ($("#VisaCategoryId")[0].selectedIndex > 0 && $("#NoOfApplicantId")[0].selectedIndex > 0)
+            //    $("#VisaCategoryId").change();
+            //else if ($("#NoOfApplicantId")[0].selectedIndex > 0)
+            //    $("#NoOfApplicantId").change();
+            //else if ($("#VisaCategoryId")[0].selectedIndex > 0)
+            //    $("#VisaCategoryId").change();
+
+            if ($("#VisaCategoryId option:selected").text() == 'Biometrics Emergency Appointment')
+                $("#VisaCategoryError").show();
+            else
+                $("#VisaCategoryError").hide();
+            debugger;
+            if ($("#LocationId").val() != 0) {
+                $.ajax({
+                    type: 'POST',
+                    url: '/IRCC-AppointmentWave1/Home/getNearbyVACNames',
+                    headers: headers,
+                    dataType: 'JSON',
+                    data: {
+                        countryId: $("#CountryId option:selected").val(),
+                        LocationId: $('#LocationId').val(),
+                    },
+                    cache: false,
+                    success: function (data) {
+                        if (data != "") {
+                            debugger;
+        
+                            $("#NearbyVAC_Value").text(data);
+                            $('#div_NearbyVAC').show();
+                        }
+                        else {
+                            $('#div_NearbyVAC').hide();
+                        }
+                    }
+                });
+            }
+        }
+
+        $(document).on('change', '#NationalityId', function () {
+            if ($("#NationalityId option:selected").text() == 'OTHERS') {
+                $("#NationalityError").show();
+                $("#nationalityrequired").hide();
+                $("#btnContinue").attr("disabled", true);
+                $("#btnContinue").removeClass("EnableButton");
+                $("#btnContinue").addClass("DisabledButton");
+                $("#LocationId").prop("disabled", true);
+                $(".drpVisaCategory").prop("disabled", true);
+                $(".drpNoOfApplicants").prop("disabled", true);
+                $("#dvEarliestDateLnk").hide();
+                //$("#btnContinue").css("background", "grey");
+            }
+            else {
+                $("#NationalityError").hide();
+                $("#nationalityrequired").show();
+                $("#btnContinue").attr("disabled", false);
+                $("#btnContinue").removeClass("DisabledButton");
+                $("#btnContinue").addClass("EnableButton");
+                $("#LocationId").prop("disabled", false);
+                $(".drpVisaCategory").prop("disabled", false);
+                $(".drpNoOfApplicants").prop("disabled", false);
+                //$("#btnContinue").css("background", "#00305d");
+
+                if ($("#VisaCategoryId")[0].selectedIndex > 0 && $("#NoOfApplicantId")[0].selectedIndex > 0)
+                    $("#VisaCategoryId").change();
+                else if ($("#NoOfApplicantId")[0].selectedIndex > 0)
+                    $("#NoOfApplicantId").change();
+                else if ($("#VisaCategoryId")[0].selectedIndex > 0)
+                    $("#VisaCategoryId").change();
+            }
+        });
+
+        $(document).on('change', '#CountryId', function () {
+            $location.empty();
+            $visaCategory.empty();
+            var country = $("#CountryId option:selected").index();
+            var mission = $("#MissionId option:selected").index();
+
+
+            var lcns = obj[mission].CountryJEs[country].Locations || [];
+            if ($("#paramCenterId").val() != "") {
+                $location.empty();
+                $.each(lcns, function (index, optiondata) {
+                    if ($("#paramCenterId").val() == optiondata.Id || optiondata.Id == "0")
+                        $location.append("<option value='" + optiondata.Id + "'>" + optiondata.Name + "</option>");
+                });
+            } else {
+                var html = $.map(lcns, function (l) {
+                    return '<option value="' + l.Id + '">' + l.Name + '</option>';
+                }).join('');
+                $location.empty();
+                $location.html(html);
+            }
+
+            var visaCategories = obj[mission].CountryJEs[country].VisaCategories || [];
+            html = $.map(visaCategories, function (c) {
+                return '<option value="' + c.Id + '">' + c.Name + '</option>';
+            }).join('');
+            $visaCategory.html(html);
+
+            if (selectedLocationId > 0) {
+                $location.val(selectedLocationId);
+            }
+            //var showDocumentCheckList = obj[mission].CountryJEs[country].ShowDocumentCheckList;
+            //if (showDocumentCheckList != null && showDocumentCheckList == true) {
+            //    $('#list').show();
+            //    $('#list').prop('disabled', true);
+            //} else {
+            //    $('#list').hide();
+            //}
+
+            var missionText = $("#MissionId option:selected").text();
+            var countryText = $("#CountryId option:selected").text();
+            missionId = $("#MissionId option:selected").val();
+            countryId = $("#CountryId option:selected").val();
+            if (missionId != 0 && countryId != 0) {
+                changeMissionCountry(missionText, countryText, missionId, countryId);
+            }
+        });
+
+        $mission.change(function () {
+            $country.empty();
+            $location.empty();
+            $childMission.empty();
+            $visaCategory.empty();
+            var mission = $("#MissionId option:selected").index();
+            //start: load child missions
+
+            var childMissions = obj[mission].ChildMissionJEs || [];
+            if (childMissions.length > 1) {
+                $('#childMission').show();
+
+                var html = $.map(childMissions, function (cm) {
+                    return '<option value="' + cm.Id + '">' + cm.Name + '</option>';
+                }).join('');
+                $childMission.html(html);
+
+                if (selectedChildMissionId > 0) {
+                    $childMission.val(selectedChildMissionId);
+                }
+            } else {
+                $('#childMission').hide();
+            }
+
+            //end
+
+            var lcns = obj[mission].CountryJEs || [];
+            var html = $.map(lcns, function (lcn) {
+                return '<option value="' + lcn.Id + '">' + lcn.Name + '</option>';
+            }).join('');
+            $country.html(html);
+
+            if (selectedCountryId > 0) {
+                $country.val(selectedCountryId);
+            }
+
+            var missionText = $("#MissionId option:selected").text();
+            var countryText = $("#CountryId option:selected").text();
+            missionId = $("#MissionId option:selected").val();
+            countryId = $("#CountryId option:selected").val();
+            if (missionId != 0 && countryId != 0) {
+                changeMissionCountry(missionText, countryText, missionId, countryId);
+            }
+        });
+
+
+        //$('#list').hide();
+        //$("#VisaCategoryId").change(function () {
+        //    $('#list').prop('disabled', false);
+        //});
+        $(".lnkDetail").on("click", function (e) {
+            var country = $("#CountryId option:selected").val();;
+            var mission = $("#MissionId option:selected").val();
+            var VisaType = $("#VisaCategoryId option:selected").val();
+            var name = $("#VisaCategoryId :selected").text(); //if user select the visacategory
+            var data1 = { "name": name };
+
+            $.ajax({
+                type: 'POST',
+                url: '/IRCC-AppointmentWave1/Home/GetDocumentDetails', //  calling json method
+                data: { MissionId: mission, CountryId: country, VisaTypeId: VisaType },
+                cache: false,
+                success: function (data) { //ajax call
+                    $("#divDocumentList").html(data);
+                    $("#divDocumentList").dialog({
+                        resizable: false,
+                        draggable: true,
+                        open: function (event, ui) {
+                            var wd = parseInt($('#divDocumentList').outerWidth()) + 400 + "px";
+                        }
+
+                    });
+                }
+            });
+        });
+
+
+        function changeMissionCountry(mission, country, mId, cId) {
+            $("#LocationId").attr("disabled", "disabled");
+            $("#VisaCategoryId").attr("disabled", "disabled");
+
+            $.ajax({
+                type: 'POST',
+              //  url: '', //  calling json method
+                headers: headers,
+                data: { mission: mission, country: country, countryId: cId, missionId: mId },
+                cache: false,
+                success: function (data) {
+                    window.location.reload();
+                }
+            });
+        }
+
+           if (('' != null || '' != "") && ('false' === "true")) {
+                                $('#btnContinue').attr('disabled', 'disabled');
+                                $('.select_box').attr('disabled', 'disabled');
+                                $('#IAgree').attr('disabled', 'disabled');
+
+
+
+                            }
+    });
+
+    $(document).ready(function () {
+        $("#VisaCategoryId").on("change", function () {
+            if ($("#VisaCategoryId option:selected").text() == 'Biometrics Emergency Appointment')
+                $("#VisaCategoryError").show();
+            else
+                $("#VisaCategoryError").hide();
+            $(".VisaCategorydetails").hide();
+            var noOfApplicantId = $('#NoOfApplicantId option:selected').val();
+            var centerId = $('#LocationId option:selected').val();
+            if ($("#VisaCategoryId").val() > 0 && noOfApplicantId > 0 && centerId > 0) {
+                $.ajax({
+                    type: 'POST',
+                    url: '/IRCC-AppointmentWave1/Account/GetEarliestVisaSlotDate',
+                    headers: headers,
+                    dataType: 'JSON',
+                    data: {
+                        countryId: $("#CountryId option:selected").val(),
+                        missionId: $("#MissionId option:selected").val(),
+                        LocationId: $('#LocationId').val(),
+                        VisaCategoryId: $("#VisaCategoryId").val(),
+                        NoOfApplicantId: $('#NoOfApplicantId option:selected').val(),
+                        NationalityId: $('#NationalityId option:selected').val()
+                    },
+                    cache: false,
+                    success: function (data) {
+                        if (data != "") {
+                            if (data.CanshowAdditionalFields == true) {
+                                // alert(data.CanshowAdditionalFields)
+                                $(".VisaCategorydetails").show();
+                            }
+                            $("#dvEarliestDateLnk").show();
+                            $(".price-break-down-audit-NoData").siblings(".price-break-down-audit-layer-NoData").hide();
+                            $(".tdAvailable").show();
+                            $("#tdNotAvailabale").hide();
+                            if (data.IsPrimeEnabled == true) {
+                                $(".dvPrime").show();
+                                $("#trPrime").show();
+                                if (data.PrimeDateDisplay == "" || data.PrimeDateDisplay == "NA") {
+                                    $("#tdNotAvailabalePrime").show();
+                                    $("#trPrime").show();
+                                    $("#tdPrimeSlot").hide();
+
+                                    $(".dvPrime").hide();
+                                    $(".rdnStandard").attr("checked", "checked");
+                                }
+                                else {
+                                    $("#lblDatePrime").text(data.PrimeDateDisplay);
+                                    $("#tdNotAvailabalePrime").hide();
+                                }
+
+                            }
+                            else {
+                                $(".dvPrime").hide();
+                                $("#trPrime").hide();
+                                $(".rdnStandard").attr("checked", "checked");
+                            }
+                            $("#lblDate").text(data.StandardDateDisplay);
+
+                        }
+                        else {
+                            $(".VisaCategorydetails").hide();
+                            $("#dvEarliestDateLnk").show();
+                            $(".tdAvailable").hide();
+                            $(".tdAvailable").hide();
+                            $("#tdNotAvailabale").show();
+                        }
+                    }
+                });
+            }
+            else {
+                $(".VisaCategorydetails").hide();
+                $("#dvEarliestDateLnk").hide();
+            }
+        });
+
+        $("#VisaApplicationForm").submit(function (event) {
+
+            /** Cache Result **/
+            $('#VisaApplicationForm select').each(function () {
+
+                if ($(this).val() == "0") {
+
+                    
+                    event.preventDefault();
+
+                    return false;
+
+                } else {
+                    return true;
+                    /** Submit as normal!! **/
+                    console.log('Validated!');
+                }
+
+            });
+        });
+        $("#btnContinue").on("click", function () {
+            $("#NationalityError").hide();
+            if (!$('#IAgree').is(":checked")) {
+                var message = "Please agree to the Terms and Conditions";
+                alert(message);
+                return false;
+            }
+        });
+
+        ////////////////No of application drop down change////////////////
+        $("#NoOfApplicantId").on("change", function () {
+            $(".VisaCategorydetails").hide();
+            var visaCategoryId = $('#VisaCategoryId option:selected').val();
+            var centerId = $('#LocationId option:selected').val();
+            if ($("#NoOfApplicantId").val() > 0 && visaCategoryId > 0 && centerId > 0) {
+                $.ajax({
+                    type: 'POST',
+                    url: '/IRCC-AppointmentWave1/Account/GetEarliestVisaSlotDate', //  calling json method
+                    headers: headers,
+                    dataType: 'JSON',
+                    data: {
+                        countryId: $("#CountryId option:selected").val(),
+                        missionId: $("#MissionId option:selected").val(),
+                        LocationId: $('#LocationId').val(),
+                        VisaCategoryId: $("#VisaCategoryId").val(),
+                        NoOfApplicantId: $('#NoOfApplicantId option:selected').val(),
+                        NationalityId: $('#NationalityId option:selected').val()
+                    },
+                    cache: false,
+                    success: function (data) {
+                        if (data != "") {
+                            if (data.CanshowAdditionalFields == true) {
+                                // alert(data.CanshowAdditionalFields)
+                                $(".VisaCategorydetails").show();
+                            }
+                            $("#dvEarliestDateLnk").show();
+                            $(".price-break-down-audit-NoData").siblings(".price-break-down-audit-layer-NoData").hide();
+                            $(".tdAvailable").show();
+                            $("#tdNotAvailabale").hide();
+                            if (data.IsPrimeEnabled == true) {
+                                $(".dvPrime").show();
+                                $("#trPrime").show();
+                                if (data.PrimeDateDisplay == "" || data.PrimeDateDisplay == "NA") {
+                                    $("#tdNotAvailabalePrime").show();
+                                    $("#trPrime").show();
+                                    $("#tdPrimeSlot").hide();
+
+                                    $(".dvPrime").hide();
+                                    $(".rdnStandard").attr("checked", "checked");
+                                }
+                                else {
+                                    $("#lblDatePrime").text(data.PrimeDateDisplay);
+                                    $("#tdNotAvailabalePrime").hide();
+                                }
+
+                            }
+                            else {
+                                $(".dvPrime").hide();
+                                $("#trPrime").hide();
+                                $(".rdnStandard").attr("checked", "checked");
+                            }
+                            $("#lblDate").text(data.StandardDateDisplay);
+
+                        }
+                        else {
+                            $(".VisaCategorydetails").hide();
+                            $("#dvEarliestDateLnk").show();
+                            $(".tdAvailable").hide();
+                            $(".tdAvailable").hide();
+                            $("#tdNotAvailabale").show();
+                        }
+                    }
+                });
+            }
+            else {
+                $(".VisaCategorydetails").hide();
+                $("#dvEarliestDateLnk").hide();
+            }
+        });
+        ///////////////END/////////////////////////////////
+    });
+
+    $(function () {
+
+        $("#dvEarliestDateLnk").hide();
+        $(document).on("mouseover", ".price-break-down-audit-NoData", function () {
+            $(this).siblings(".price-break-down-audit-layer-NoData").show();
+        });
+        $(document).on("mouseout", ".price-break-down-audit-NoData", function () {
+            $(this).siblings(".price-break-down-audit-layer-NoData").hide();
+        });
+    });
+    $(window).bind("load", function () {
+        if ($('#NoOfApplicantId option:selected').val() != "0")
+            $("#NoOfApplicantId").change();
+        else if ($('#VisaCategoryId option:selected').val() != "0")
+            $("#VisaCategoryId").change();
+    });
+
+</script>
+
+
+            <div id="loading" style="display: none;"></div>
+            <img src="/IRCC-AppointmentWave1/Content/App-Styles/images/cube.gif" alt="Please wait ..." class="loaderImg" style="display: none;" />
+
+        </div>
+        <div class="timezonediv">
+            
+            <!-- Added Partial view for timezone added by santosh-->
+            <style type="text/css">
+    .timezone {
+        width: 330px;
+        float: right;
+        border: 4px solid #968585;
+        padding: 10px;
+    }
+
+        .timezone p {
+            margin: 0px 0px 0px 0px;
+            font-weight: bold;
+            color: black;
+            text-align: left;
+        }
+
+    .timezonediv {
+        background: #FAF9F9;
+        /* display: table-row; */
+        height: 117px;
+        border-right: 1px solid #9A8F8F;
+        border-left: 1px #9A8F8F solid;
+    }
+</style>
+<div class="timezone">
+    <p></p>
+    <p></p>
+    <p></p>
+    <div id="countdown">
+    </div>
+    <p id="note"></p>
+</div>
+<script type="text/javascript">
+    $(document).ready(function () {
+        var _language = 0;
+       
+        $.ajax({
+            type: 'POST',
+            url: '/IRCC-AppointmentWave1/Home/DownTimeDetails', //  calling json method
+            data: { languageId: _language },
+            dataType: "json",
+            success: function (data) { //ajax call
+                if (data != "") {
+                    SetCountDown(data.DownTimeDetails);
+                }
+                else {
+                    $(".timezone").css("display", "none");
+                }
+            }
+        });
+    });
+
+    function SetCountDown(data) {
+        if (navigator.userAgent.toLowerCase().indexOf('firefox') > -1) {
+
+            var str = data.DownTimeDateTime;
+            data.DownTimeDateTime = str.split(".").join("/");
+        }
+        $(".timezone p:nth-of-type(1)").html('The Next System Maintenance Details.');
+        $(".timezone p:nth-of-type(2)").html(String.format('Start Time: {0} GMT', data.DownDateTime));
+        $(".timezone p:nth-of-type(3)").html(String.format('Est. End Time: {0} GMT', data.UpDateTime));
+        $("#countdown").html('Count Down' + ' | ');
+        var note = $('#note'),
+            ts = new Date(Date.parse(data.DownTimeDateTime)),
+            newYear = true;
+        
+        if ((new Date()) > ts) {
+            // The new year is here! Count towards something else.
+            // Notice the *1000 at the end - time must be in milliseconds
+            ts = (new Date()).getTime() + 10 * 24 * 60 * 60 * 1000;
+
+            newYear = false;
+        }
+
+        $('#countdown').countdown({
+            timestamp: ts,
+            callback: function (days, hours, minutes, seconds) {
+                var message = "";
+                message += days + ' day(s)' + ", ";
+                message += hours + ' hour(s)' + ", ";
+                message += minutes + ' minute(s)' + ' and ';
+                message += seconds + ' second(s)' + " <br />";
+                if (days == 0 & hours == 0 & minutes == 0 & seconds == 0) {
+                    $(".timezone").css("display", "none");
+                }
+                note.html(message);
+            }
+        });
+    }
+
+    String.format = function () {
+        // The string containing the format items (e.g. "{0}")
+        // will and always has to be the first argument.
+        var theString = arguments[0];
+
+        // start with the second argument (i = 1)
+        for (var i = 1; i < arguments.length; i++) {
+            // "gm" = RegEx options for Global search (more than one instance)
+            // and for Multiline search
+            var regEx = new RegExp("\\{" + (i - 1) + "\\}", "gm");
+            theString = theString.replace(regEx, arguments[i]);
+        }
+
+        return theString;
+    }
+
+</script>
+
+
+        </div>
+        <div id="footer">
+
+                <div>
+                    
+                    <span style="float: left; padding-left: 10px; padding-top: 9px;">&#169; VFS Global 2025. All Rights Reserved</span>
+                    
+                        <p style="text-align: right; padding-right: 10px; padding-top: 9px">In Association With <img src="/IRCC-AppointmentWave1/Content/App-Styles/images/vfs-global-footer-logo.png" alt="VFSLogo" style="width:91px"></p>
+                </div>
+
+        </div>
+        <!-- main container ends here -->
+        <!-- footer starts here -->
+        <!-- footer ends here -->
+    </div>
+    <!--wrapper ends here-->
+    <script type="text/javascript">
+        var Accordion1 = new Spry.Widget.Accordion("Accordion1");
+
+
+        $(document).ready(function () {
+
+            var _mission = getParameterByName("mission");
+            var _country = getParameterByName("country");
+
+
+            function getParameterByName(name) {
+                name = name.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
+                var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+                    results = regex.exec(location.search);
+                return results == null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+            }
+
+            $.ajax({
+                type: 'POST',
+                url: '/IRCC-AppointmentWave1/Account/SetMissionAndCountry', //  calling json method
+                data: {},
+                dataType: "json",
+                cache: false,
+                success: function (data) { //ajax call
+                    if (data != "") {
+                        var mission = data.mission;
+                        var country = data.country;
+                        var mastermission = data.mastermission;
+                        var mastercountry = data.mastercountry;
+                        var newsrcFolder = '/IRCC-AppointmentWave1/content/App-Styles/images/flags/';
+                        var img = newsrcFolder + mastermission.toLowerCase().replace(" ", "") + ".jpg";
+                        var imagpath = "<img src='" + img + "'style='margin: 0 7px; vertical-align: -5px;border:2px solid #fff' />";
+                        $("#header-title").show();
+                        $("#header-title").html("<span>" + 'Apply for VISA to' + " " + mission + "" + imagpath + " " + 'In' + " " + country + "</span>");
+                    } else {
+                        $("#header-title").empty();
+                    }
+                }
+            });
+        });
+
+    </script>
+
+
+    
+    <script src="/IRCC-AppointmentWave1/bundles/jqueryval?v=W9RsZUh16Sd9xeQVwcOxPwh11CDl9t_9O_gzu4KKOPk1"></script>
+
+    <script src="/IRCC-AppointmentWave1/Scripts/App/common.js"></script>
+
+    
+
+
+
+
+
+
+
+            <script type="text/javascript">
+
+
+                $(function () {
+
+                    $(document).ajaxStart(function () {
+                        $("#loading").attr("style", "position:absolute; z-index: 1000; top: 0px; " +
+                            "left:0px; text-align: center; display:none; background-color: #ddd; " +
+                            "height: 100%; width: 100%; /* These three lines are for transparency " +
+                            "in all browsers. */-ms-filter:\"progid:DXImageTransform.Microsoft.Alpha(Opacity=50)\";" +
+                            " filter: alpha(opacity=50); opacity:.5; position:fixed;");
+
+                        $("img.loaderImg").attr("style", "position:absolute; top:50%; left:50%; z-index:5000;").show();
+                        $("#loading").show();
+                    })
+                        .ajaxStop(function () {
+                            $("#loading").removeAttr("style");
+                            $("img.loaderImg").removeAttr("style").hide();
+                            $("#loading").hide();
+                        });
+
+
+                    $("form").on("submit", function (e) {
+
+                        if ((typeof event !== 'undefined' && event.defaultPrevented) || e.isDefaultPrevented()) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }
+
+
+                        $("#loading").attr("style", "position:absolute; z-index: 5000; top: 0px; " +
+                            "left:0px; text-align: center; display:none; background-color: #ddd; " +
+                            "height: 100%; width: 100%; /* These three lines are for transparency " +
+                            "in all browsers. */-ms-filter:\"progid:DXImageTransform.Microsoft.Alpha(Opacity=50)\";" +
+                            " filter: alpha(opacity=50); opacity:.5;position : fixed;");
+
+                        $("img.loaderImg").attr("style", "position:absolute; top:50%; left:50%; z-index:5000;").show();
+                        $("#loading").show();
+
+                    });
+
+                });
+            </script>
+        <!-- DATE Formatting converts 12121990 => 12/12/1990 on focus-out  -->
+        <script type="text/javascript">
+            (function ($) {
+                'use strict';
+                var Globalconfig = {
+                    seperator: '/'
+                };
+                var Applicantconfig = {
+                    seperator: '-'
+                };
+
+                $.fn.formatToDate = function (config) {
+                    var $this = this;
+
+                    $.each($this, function () {
+
+                        var $$this = $(this),
+                            cnfg = config || Globalconfig;
+
+                        $$this.on('keydown', function (evt) {
+
+                            var value = $$this.val(),
+                                splitArry = [];
+
+                            splitArry = value.split("");
+
+                            if (!(splitArry.length < 10 && isNumeric(evt) || isDeleteOp(evt)) && !isTabOp(evt)) {
+                                evt.preventDefault();
+                            }
+                        });
+
+                        $$this.on('keyup', function (e) {
+
+                            var textSoFar = $(this).val();
+                            if (e.keyCode != 191) {
+                                if (e.keyCode != 8) {
+                                    if (textSoFar.length == 2 || textSoFar.length == 5) {
+                                        $(this).val(textSoFar + "/");
+                                    }
+                                    //to handle copy & paste of 8 digit
+                                    else if (e.keyCode == 86 && textSoFar.length == 8) {
+                                        $(this).val(textSoFar.substr(0, 2) + "/" + textSoFar.substr(2, 2) + "/" + textSoFar.substr(4, 4));
+                                    }
+                                } else {
+                                    //backspace would skip the slashes and just remove the numbers
+                                    if (textSoFar.length == 5) {
+                                        $(this).val(textSoFar.substring(0, 4));
+                                    } else if (textSoFar.length == 2) {
+                                        $(this).val(textSoFar.substring(0, 1));
+                                    }
+                                }
+                            } else {
+                                //remove slashes to avoid 12//01/2014
+                                $(this).val(textSoFar.substring(0, textSoFar.length - 1));
+                            }
+
+                        });
+
+                        return $this;
+
+
+                        //private functions
+
+                        function isNumeric(e) {
+                            return (e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105);
+                        }
+
+                        function isDeleteOp(e) {
+                            return (e.keyCode === 46 || e.keyCode === 8);
+                        }
+
+                        function isTabOp(e) {
+                            return e.keyCode === 9 || e.keyCode === 191 || e.keyCode === 37 || e.keyCode === 39;
+                        }
+                    });
+
+                };
+                $.fn.formatToyyyymmddDate = function (config) {
+                    var $this = this;
+
+                    $.each($this, function () {
+
+                        var $$this = $(this),
+                            cnfg = config || Applicantconfig;
+
+                        $$this.on('keydown', function (evt) {
+
+                            var value = $$this.val(),
+                                splitArry = [];
+
+                            splitArry = value.split("");
+
+                            if (!(splitArry.length < 10 && isNumeric(evt) || isDeleteOp(evt)) && !isTabOp(evt)) {
+                                evt.preventDefault();
+                            }
+                        });
+
+                        $$this.on('keyup', function (e) {
+
+                            var textSoFar = $(this).val();
+                            if (e.keyCode != 109) {
+                                if (e.keyCode != 8) {
+                                    if (textSoFar.length == 4 || textSoFar.length == 7) {
+                                        $(this).val(textSoFar + "-");
+                                    }
+                                    //to handle copy & paste of 8 digit
+                                    else if (e.keyCode == 86 && textSoFar.length == 8) {
+                                        $(this).val(textSoFar.substr(0, 4) + "-" + textSoFar.substr(4, 2) + "-" + textSoFar.substr(6, 2));
+                                    }
+                                } else {
+                                    //backspace would skip the slashes and just remove the numbers
+                                    if (textSoFar.length == 5) {
+                                        $(this).val(textSoFar.substring(0, 4));
+                                    } else if (textSoFar.length == 2) {
+                                        $(this).val(textSoFar.substring(0, 1));
+                                    }
+                                }
+                            } else {
+                                //remove slashes to avoid 12//01/2014
+                                $(this).val(textSoFar.substring(0, textSoFar.length - 1));
+                            }
+
+                        });
+
+                        return $this;
+
+
+                        //private functions
+
+                        function isNumeric(e) {
+                            return (e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105);
+                        }
+
+                        function isDeleteOp(e) {
+                            return (e.keyCode === 46 || e.keyCode === 8);
+                        }
+
+                        function isTabOp(e) {
+                            return e.keyCode === 9 || e.keyCode === 109 || e.keyCode === 37 || e.keyCode === 39;
+                        }
+                    });
+
+                };
+
+            }(jQuery));
+        </script>
+        <script type="text/javascript">
+            (function () {
+                $(function () {
+                    $('.auto-format-date').formatToDate();
+                    $('.auto-format-yyyymmdddate').formatToyyyymmddDate();
+                }); //jquery wrapper
+            }()); //IIFE
+        </script>
+
+
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-107226811-2"></script>
+    
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'UA-107226811-2');
+    </script>
+
+
+    <!-- GOOGLE ANALYTICS CODE  -->
+    <script type="text/javascript">
+        //(function (i, s, o, g, r, a, m) {
+        //    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+        //        (i[r].q = i[r].q || []).push(arguments)
+        //    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+        //        m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+        //})(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+        //ga('create', 'UA-69459092-1', 'auto');
+        //ga('send', 'pageview');
+
+
+
+
+
+
+        $(document).ready(function () {
+
+            $('.customcapcha').find('br').remove();
+
+            $(".customcapcha a").html('<img src="/IRCC-AppointmentWave1/Images/refresh.png" />');
+
+            $('.customcapcha input').addClass("form-control small-input_field");
+            $('.customcapcha input').css("width", "200px");
+        });
+
+    </script>
+
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"9f6df268eed0300f","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"version":"2025.9.1","token":"b899781cea264fdca8357d6632129ed1"}' crossorigin="anonymous"></script>
+</body>
+</html>

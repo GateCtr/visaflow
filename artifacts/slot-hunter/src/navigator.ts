@@ -4,6 +4,7 @@ import { detectAndSolveCaptcha } from "./captcha.js";
 import { reportSlotFound, sendHeartbeat, uploadScreenshot, reportBotTestResult, type HunterJob, type BotTest } from "./convexClient.js";
 import { runUsaApiSession, getUsaSession, logoutUsaPortal } from "./usaPortal.js";
 import { runCevCheck } from "./cevBooking.js";
+import { runCanadaSession } from "./canadaPortal.js";
 
 function getSessionTimeoutMs(): number {
   return Math.round((3 + Math.random() * 2) * 60 * 1000);
@@ -548,6 +549,56 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
     return;
   }
 
+  // ─── Canada : test Playwright login VFS IRCC ─────────────────────────────
+  if (test.destination === "canada") {
+    console.log(`[navigator] Test Canada → login VFS IRCC (Playwright)`);
+    const fakeJob: HunterJob = {
+      id: `bot-test-${test._id}`,
+      destination: "canada",
+      visaType: "biometric",
+      applicantName: `[TEST] canada`,
+      travelDate: "",
+      urgencyTier: "standard",
+      slotBookingRefs: null,
+      hunterConfig: {
+        embassyUsername: test.testUsername!,
+        embassyPassword: test.testPassword!,
+        isActive: true,
+        twoCaptchaApiKey: test.twoCaptchaApiKey,
+      },
+      portalUrl: test.portalUrl,
+      portalName: test.portalName,
+      portalDashboardUrl: null,
+      portalAppointmentUrl: null,
+      portalScheduleUrl: null,
+      lastCheckAt: null,
+    };
+    try {
+      const result = await runCanadaSession(fakeJob);
+      const latencyMs = Date.now() - startMs;
+      const mapped =
+        result === "slot_found" || result === "not_found" ? "login_success"
+        : result === "login_failed" ? "login_failed"
+        : result === "captcha" ? "captcha"
+        : "error";
+      await reportBotTestResult({
+        testId: test._id,
+        result: mapped,
+        latencyMs,
+        errorMessage: result === "not_found" ? "Login OK — aucun créneau disponible actuellement" : undefined,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await reportBotTestResult({
+        testId: test._id,
+        result: "error",
+        latencyMs: Date.now() - startMs,
+        errorMessage: msg.slice(0, 600),
+      });
+    }
+    return;
+  }
+
   // ─── USA : login API directe (sans navigateur, sans 2captcha) ─────────────
   if (test.destination === "usa") {
     console.log(`[navigator] Test USA → login API directe`);
@@ -671,6 +722,11 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
     // de temps (warm-up + scan multi-OFCs), donc on accorde 8 minutes.
     const usaTimeoutMs = 8 * 60 * 1000;
     return withTimeout(runUsaApiSession(job), usaTimeoutMs);
+  }
+
+  if (job.destination === "canada") {
+    console.log(`[navigator] Destination Canada → VFS IRCC portal (Playwright + API)`);
+    return runCanadaSession(job);
   }
 
   const browserRef: { current: Browser | null } = { current: null };
