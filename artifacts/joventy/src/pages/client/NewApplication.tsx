@@ -32,7 +32,7 @@ const DESTINATIONS = [
   { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine",                         processType: "appointment" as const },
   { id: "canada",      name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique VFS IRCC — centre collecte Kinshasa",           processType: "appointment" as const },
   { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Rendez-vous VFS UKVI — visa standard, étudiant, travail, famille",      processType: "appointment" as const },
-  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous VFS Global — visa Schengen court & long séjour",            processType: "appointment" as const },
+  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous VFS Global — visa Schengen court séjour (Visa C)",          processType: "appointment" as const },
   { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
   { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
