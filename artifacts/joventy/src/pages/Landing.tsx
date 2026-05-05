@@ -881,6 +881,7 @@ export default function Landing() {
                   { code: "gb", label: "Visa Royaume-Uni" },
                   { code: "ch", label: "Visa Suisse" },
                   { code: "eu", label: "Visa Schengen" },
+                  { code: "es", label: "Visa Espagne" },
                   { code: "ae", label: "E-Visa Dubaï" },
                   { code: "tr", label: "Visa Turquie" },
                   { code: "in", label: "E-Visa Inde" },
