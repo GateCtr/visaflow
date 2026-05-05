@@ -308,13 +308,18 @@ async function establishCevSession(
 
 /**
  * Complète le booking via l'UI Playwright une fois que les créneaux sont disponibles.
- * Capture tous les appels réseau pour reverse engineering (Option B).
+ * Capture tous les appels réseau pour reverse engineering.
  *
- * Le flux typique ASP.NET MVC de ce type de système :
- *  1. Calendrier → cliquer une date disponible
- *  2. Sélection de l'heure → cliquer un créneau
- *  3. Formulaire de confirmation → soumettre
- *  4. Page de succès → extraire le code de confirmation
+ * Architecture CEV confirmée (analyse bundle sharedScripts v1.0.249.0) :
+ *  - CEV = ASP.NET MVC + Bootstrap + jQuery — PAS AngularJS
+ *  - Page SelectSlot : server-rendered HTML + inline JS appelant getAvailableTimeSlotsForPublic()
+ *  - Flux calendrier :
+ *    1. Page calendrier Bootstrap → appel AJAX POST /Home/AvailableTimeSlots (JSON) → dates dispo
+ *    2. Cliquer une date → chargement des créneaux horaires (probablement AJAX)
+ *    3. Sélectionner un créneau → formulaire de confirmation
+ *    4. Soumettre → page de succès avec code de référence
+ *  - Le bouton "Annuler" utilise SharedAjaxService.appointmentCancelRequest
+ *    avec {uniqueToken, cultureCode} vers Shared/DoCancelRequestAppointment
  */
 async function completebookingViaUI(
   page: Page,
@@ -328,14 +333,24 @@ async function completebookingViaUI(
 
     botLog({ applicationId: config.clientId, step: 'cev_calendar_loaded', status: 'ok', data: { url: calendarUrl } });
 
+    // Laisser le calendrier Bootstrap se charger (appel AJAX /Home/AvailableTimeSlots)
+    await new Promise(r => setTimeout(r, 3_000));
+
     // === Sélectionner la première date disponible ===
-    // Les dates disponibles ont généralement une classe "available", "enabled", ou similaire
-    // On essaie plusieurs sélecteurs communs pour les calendriers ASP.NET MVC
+    // CEV utilise Bootstrap + jQuery datepicker/calendrier maison.
+    // Les dates disponibles sont des <td> ou <a> avec classes Bootstrap spécifiques.
+    // L'appel AJAX /Home/AvailableTimeSlots retourne les dates dispo — rendu côté client.
     const dateCandidates = [
-      'td.available a',
-      'td:not(.disabled):not(.unavailable) a[data-date]',
-      '.day.available',
-      'a.available-day',
+      // Bootstrap table calendrier — cellule disponible (pas disabled, pas unavailable)
+      'td.available:not(.disabled) a',
+      'td.available:not(.disabled)',
+      'td:not(.disabled):not(.unavailable):not(.past) a[data-date]',
+      'td:not(.disabled):not(.grey):not(.old) a',
+      // Calendrier maison CEV possible
+      'a[data-date]:not([disabled])',
+      '[data-date]:not(.disabled):not(.unavailable)',
+      // Fallback générique Bootstrap
+      '.day:not(.disabled):not(.old):not(.new):not(.unavailable)',
       'td.enabled a',
       '[class*="available"]:not([class*="un"])',
     ];
@@ -346,7 +361,9 @@ async function completebookingViaUI(
     for (const sel of dateCandidates) {
       const dateEl = await page.$(sel);
       if (dateEl) {
-        bookedDate = await dateEl.getAttribute('data-date') ?? await dateEl.innerText().catch(() => '');
+        bookedDate = await dateEl.getAttribute('data-date') ??
+                     await dateEl.getAttribute('data-value') ??
+                     await dateEl.innerText().catch(() => '');
         await dateEl.click();
         dateClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_date_selected', status: 'ok', data: { selector: sel, date: bookedDate } });
@@ -359,20 +376,39 @@ async function completebookingViaUI(
       const screenshotBuf = await page.screenshot().catch(() => null);
       const screenshotB64 = screenshotBuf ? screenshotBuf.toString('base64') : null;
       const storageId = screenshotB64 ? await uploadScreenshot(screenshotB64) : null;
-      botLog({ applicationId: config.clientId, step: 'cev_no_date_found', status: 'fail', data: { screenshotStorageId: storageId ?? '' } });
+      const pageUrl = page.url();
+      const pageText = await page.innerText('body').catch(() => '');
+      botLog({ applicationId: config.clientId, step: 'cev_no_date_found', status: 'fail', data: { screenshotStorageId: storageId ?? '', pageUrl, pageTextPreview: pageText.slice(0, 300) } });
       return { success: false, error: 'NO_DATE_SELECTOR_MATCHED', screenshotStorageId: storageId ?? undefined };
     }
 
-    await page.waitForLoadState('networkidle', { timeout: 15_000 });
+    // Attendre le chargement des créneaux horaires (AJAX probable après sélection date)
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await new Promise(r => setTimeout(r, 1_500));
 
     // === Sélectionner le premier créneau horaire ===
+    // CEV affiche des boutons radio ou des liens pour les créneaux.
+    // Le formulaire utilise Bootstrap + jQuery — noms de champs à découvrir.
     const timeCandidates = [
-      'input[type="radio"][name*="time"]',
-      'button.time-slot',
-      'a.time-slot',
-      '[data-time]',
+      // Radio buttons classiques ASP.NET MVC
+      'input[type="radio"][name*="slot"]:not([disabled])',
+      'input[type="radio"][name*="time"]:not([disabled])',
+      'input[type="radio"][name*="hour"]:not([disabled])',
+      'input[type="radio"]:not([disabled])',
+      // Liens/boutons Bootstrap
+      'a.time-slot:not(.disabled)',
+      'button.time-slot:not([disabled])',
       'li.available-slot a',
+      'li.slot-item:not(.disabled) a',
+      // Attributs data
+      '[data-slot-time]:not(.disabled)',
+      '[data-time]:not(.disabled)',
+      // Tableau de créneaux
+      'td.slot-available a',
       'td.time-available a',
+      // Sélecteur générique Bootstrap
+      '.list-group-item.active ~ .list-group-item:not(.disabled)',
+      '.btn-group .btn:not(.disabled):not(.btn-default)',
     ];
 
     let timeClicked = false;
@@ -381,7 +417,10 @@ async function completebookingViaUI(
     for (const sel of timeCandidates) {
       const timeEl = await page.$(sel);
       if (timeEl) {
-        bookedTime = await timeEl.getAttribute('data-time') ?? await timeEl.innerText().catch(() => '');
+        bookedTime = await timeEl.getAttribute('data-slot-time') ??
+                     await timeEl.getAttribute('data-time') ??
+                     await timeEl.getAttribute('value') ??
+                     await timeEl.innerText().catch(() => '');
         await timeEl.click();
         timeClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_time_selected', status: 'ok', data: { selector: sel, time: bookedTime } });
@@ -390,18 +429,26 @@ async function completebookingViaUI(
     }
 
     if (timeClicked) {
-      await page.waitForLoadState('networkidle', { timeout: 15_000 });
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await new Promise(r => setTimeout(r, 1_000));
     }
 
     // === Cliquer le bouton de confirmation final ===
+    // CEV : bouton submit Bootstrap, probablement btn-primary ou btn-success.
+    // SharedAjaxService.appointmentCancelRequest prouve qu'il y a un bouton #btnConfirm.
     const confirmCandidates = [
-      'button[type="submit"]:has-text("Confirm")',
-      'button[type="submit"]:has-text("Confirmer")',
-      'input[type="submit"]',
-      'button.btn-primary:has-text("Book")',
-      'button.btn-success',
       '#btnConfirm',
       '.btnConfirm',
+      'button[type="submit"].btn-primary',
+      'button[type="submit"].btn-success',
+      'input[type="submit"].btn-primary',
+      'input[type="submit"].btn-success',
+      'button[type="submit"]:has-text("Confirm")',
+      'button[type="submit"]:has-text("Confirmer")',
+      'button[type="submit"]:has-text("Réserver")',
+      'button[type="submit"]:has-text("Book")',
+      'input[type="submit"]',
+      'button[type="submit"]',
     ];
 
     for (const sel of confirmCandidates) {
@@ -413,7 +460,7 @@ async function completebookingViaUI(
       }
     }
 
-    await page.waitForLoadState('networkidle', { timeout: 20_000 });
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
     // === Screenshot de confirmation ===
     const screenshotBuf2 = await page.screenshot({ fullPage: true }).catch(() => null);

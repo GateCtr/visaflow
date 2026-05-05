@@ -106,15 +106,19 @@ function classifyLocation(loc: string | null): "slot" | "no_slot" | "expired" | 
 
 // Marqueurs DOM positifs prouvant qu'on est sur une page calendrier de slots
 // (et pas une page erreur 200). On exige AU MOINS UN match avant de déclarer slot_found.
+//
+// Confirmé par analyse du bundle JS (appointment.cloud.diplomatie.be, v1.0.249.0) :
+//  - CEV est ASP.NET MVC + jQuery + Bootstrap — PAS AngularJS
+//  - La page SelectSlot charge le bundle partagé sharedScripts et appelle inline
+//    getAvailableTimeSlotsForPublic() → POST /Home/AvailableTimeSlots (JSON)
+//  - Les pages d'erreur ne contiennent JAMAIS ces marqueurs
 const POSITIVE_SLOT_MARKERS = [
-  "selectslot",         // form ou bloc de sélection de créneau
-  "available-slot",      // class CSS spécifique
-  "datepicker",          // calendrier interactif
-  "appointment-slot",    // wording slot
-  "ng-controller=\"slotctrl",   // AngularJS controller (CEV utilise AngularJS)
-  "ng-controller='slotctrl",   // variante guillemets simples
-  "data-slot-time",      // attribut data
-  "id=\"slotform\"",     // form id classique
+  "getavailabletimeslotsforpublic",  // appel inline JS depuis la page calendrier (bundle sharedScripts)
+  "home/availabletimeslots",          // URL de l'endpoint slot dans le JS inline de la page
+  "availabletimeslots",               // occurrence partielle de l'endpoint
+  "integration/vow/",                 // chemin URL des pages slot (toujours /Integration/VOW/...)
+  "selectslot",                       // ID de formulaire ou segment d'URL dans le HTML rendu
+  "data-slot-time",                   // attribut data sur les éléments horaires
 ];
 
 function bodyHasSlotMarkers(body: string): boolean {

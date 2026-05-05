@@ -101,12 +101,24 @@ export async function completeCevCaptcha(
  * Poll /Home/AvailableTimeSlots with the session cookie.
  * Used during the window between captcha solves (session stays alive).
  * No additional VOWINT clicks needed during this phase.
+ *
+ * Confirmé par analyse bundle JS (v1.0.249.0) :
+ *  - callPost() → $.ajax({contentType:"application/json", data:JSON.stringify(t)})
+ *  - Envoie du JSON (pas form-urlencoded)
+ *  - Nécessite une session captcha-résolue (403 sinon)
+ *  - Corps typique : {month: N, year: YYYY}
  */
 export async function pollCevSlots(
   session: CevSession,
   clientId: string,
-  requestBody: Record<string, unknown> = {}
+  requestBody?: Record<string, unknown>
 ): Promise<CevPollResult> {
+  const now = new Date();
+  const body = requestBody ?? {
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  };
+
   try {
     const res = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
       method: 'POST',
@@ -117,8 +129,9 @@ export async function pollCevSlots(
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': `${CEV_BASE}${session.redirectUrl}`,
         'Origin': CEV_BASE,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(body),
     });
 
     if (res.redirected) {
@@ -126,10 +139,16 @@ export async function pollCevSlots(
         botLog({ applicationId: clientId, step: 'cev_poll_no_slots', status: 'ok' });
         return { hasSlots: false, slots: [] };
       }
-      if (res.url.includes('SessionExpired')) {
+      if (res.url.includes('SessionExpired') || res.url.includes('Captcha')) {
         botLog({ applicationId: clientId, step: 'cev_session_expired', status: 'warn' });
         return { hasSlots: false, slots: [], error: 'SESSION_EXPIRED' };
       }
+    }
+
+    if (res.status === 403 || res.status === 401) {
+      // Session non résolue captcha — 403 est la réponse attendue sans session valide
+      botLog({ applicationId: clientId, step: 'cev_poll_session_invalid', status: 'warn', data: { httpStatus: res.status } });
+      return { hasSlots: false, slots: [], error: 'SESSION_EXPIRED' };
     }
 
     if (!res.ok) {
@@ -141,12 +160,33 @@ export async function pollCevSlots(
     const slots = parseSlots(raw);
     const hasSlots = slots.some(s => s.available);
 
-    botLog({ applicationId: clientId, step: 'cev_poll_result', status: 'ok', data: { hasSlots, slotCount: slots.length } });
+    botLog({ applicationId: clientId, step: 'cev_poll_result', status: 'ok', data: { hasSlots, slotCount: slots.length, month: body.month, year: body.year } });
     return { hasSlots, slots };
   } catch (err) {
     botLog({ applicationId: clientId, step: 'cev_poll_exception', status: 'fail', data: { error: String(err) } });
     return { hasSlots: false, slots: [], error: String(err) };
   }
+}
+
+/**
+ * Poll /Home/AvailableTimeSlots pour les 2 prochains mois.
+ * Maximise la chance de trouver un créneau si le mois courant est complet.
+ */
+export async function pollCevSlotsMultiMonth(
+  session: CevSession,
+  clientId: string,
+): Promise<CevPollResult> {
+  const now = new Date();
+  for (let i = 0; i < 2; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const result = await pollCevSlots(session, clientId, {
+      month: d.getMonth() + 1,
+      year: d.getFullYear(),
+    });
+    if (result.error) return result; // session expirée ou erreur réseau
+    if (result.hasSlots) return result;
+  }
+  return { hasSlots: false, slots: [] };
 }
 
 /**

@@ -103,17 +103,70 @@ Page : `https://appointment.cloud.diplomatie.be/Captcha`
 BASE = https://appointment.cloud.diplomatie.be/
 
 POST BASE/Captcha                       ← POST depuis blob VOWINT, établit la session (cookie)
-POST BASE/Captcha/SetCaptchaToken       ← {captcha: "hcaptcha_token"} → {validUntil, redirectUrl}
-POST BASE/Home/AvailableTimeSlots       ← JSON body → créneaux disponibles (POLLING ENDPOINT)
-POST BASE/Shared/DoCancelRequestAppointment ← {uniqueToken, cultureCode} → annulation
+POST BASE/Captcha/SetCaptchaToken       ← form-urlencoded: captcha=<token> → {validUntil, redirectUrl}
+POST BASE/Home/AvailableTimeSlots       ← JSON body: {month,year} → créneaux disponibles (POLLING ENDPOINT)
+POST BASE/Shared/DoCancelRequestAppointment ← form-urlencoded: {uniqueToken,cultureCode} → annulation
 ```
 
-### ajaxUrl confirmé :
+### Analyse complète du bundle JS (2026-05-05, v1.0.249.0)
+
+**Bundle unique :** `/bundles/scripts/sharedScripts` (419KB, minifié)
+**13 fonctions nommées** (pas de logique booking inline — tout est server-rendered) :
+```
+FilterOutDuplicates, callPost, convertLocalTimeToUTC, getAvailableTimeSlotsForPublic,
+getModal, getValidUntilMilliseconds, resetValidation, setModalBody, setupSessionTimeout,
+showModal, showModalToSendCancelLink, successfullCaptcha, toggleModalMenu
+```
+
+**SharedAjaxService (objet global) :**
 ```javascript
-// Injecté inline dans chaque page — PAS de token dans l'URL
+SharedAjaxService = {
+  ajaxGet:   function(url, data, success, err)  // GET, traditional:true (form-urlencoded)
+  ajaxPost:  function(url, data, success, err)  // POST, traditional:true (form-urlencoded)
+  setCaptchaToken:          // → POST BASE/Captcha/SetCaptchaToken (form-urlencoded)
+  appointmentCancelRequest: // → POST BASE/Shared/DoCancelRequestAppointment (form-urlencoded)
+}
+```
+
+**callPost (fonction globale) — DIFFÉRENT de ajaxPost :**
+```javascript
+function callPost(url, data, success, err) {
+  $.ajax({
+    url: url, type: "Post", cache: false,
+    contentType: "application/json",  // ← JSON, PAS form-urlencoded
+    dataType: "json",
+    data: JSON.stringify(data),
+    success: success, error: err
+  });
+}
+function getAvailableTimeSlotsForPublic(ajaxUrl, data, success, err) {
+  callPost("/Home/AvailableTimeSlots", data, success, err);  // JSON body
+}
+```
+
+**Flux successfullCaptcha (callback hCaptcha) :**
+```javascript
+function successfullCaptcha(token) {
+  // 1. Cacher le widget, afficher loader
+  SharedAjaxService.setCaptchaToken(ajaxUrl, {captcha: token}, function(response) {
+    // 2. Configurer timeout de session (validUntil)
+    setupSessionTimeout(response.validUntil, response.redirectUrl);
+    // 3. Rediriger vers la page de slots (ou NoAvailability)
+    location.href = response.redirectUrl;
+  });
+}
+```
+
+**ajaxUrl injecté inline dans chaque page :**
+```javascript
 var ajaxUrl = currentLocation.protocol + '//' + 'appointment.cloud.diplomatie.be' + '/';
 ```
 → La session est gérée par **cookie** (établi lors du POST initial au /Captcha)
+
+**Architecture :** ASP.NET MVC + Bootstrap 3 + jQuery — **PAS AngularJS**
+→ La page SelectSlot est **server-rendered HTML** (pas SPA)
+→ Le JS de sélection de slots est injecté **inline** dans la page (pas de bundle séparé)
+→ Le booking complet se fait via **soumission de formulaires HTML** (Playwright requis)
 
 ### Architecture de session — CONFIRMÉE PAR TEST MANUEL :
 1. VOWINT génère un blob HTML → POST vers `appointment.cloud.diplomatie.be/Captcha` → cookie de session posé
