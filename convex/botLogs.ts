@@ -28,6 +28,6 @@ export const listByApplication = query({
         q.eq("applicationId", args.applicationId)
       )
       .order("desc")
-      .take(300);
+      .take(1000);
   },
 });

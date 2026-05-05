@@ -338,6 +338,13 @@ export default function AdminApplicationDetail() {
 
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
 
+  const [logStepFilter, setLogStepFilter] = useState("");
+  const [logStatusFilter, setLogStatusFilter] = useState<"" | "ok" | "warn" | "fail">("");
+  const [logPage, setLogPage] = useState(0);
+  const [logExpanded, setLogExpanded] = useState<Set<string>>(new Set());
+  const [logCopied, setLogCopied] = useState<string | null>(null);
+  const LOG_PAGE_SIZE = 50;
+
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
   const proofUrls = useQuery(api.documents.getPaymentProofUrls, appId ? { applicationId: appId } : "skip");
@@ -1661,98 +1668,219 @@ export default function AdminApplicationDetail() {
         )}
 
         {/* ===== BOT LOG TIMELINE ===== */}
-        {botLogs.length > 0 && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Bot className="w-4 h-4 text-purple-600" />
-              <h2 className="font-bold text-primary text-base">Journal du Bot</h2>
-              <span className="ml-auto text-xs text-muted-foreground">{botLogs.length} événement{botLogs.length > 1 ? "s" : ""}</span>
-            </div>
-            <div className="relative border-l-2 border-slate-100 ml-3 space-y-4 pb-2">
-              {botLogs.map((log: Doc<"botLogs">) => {
-                const stepLabels: Record<string, string> = {
-                  login: "Connexion au portail",
-                  ofc_list: "Liste des bureaux consulaires",
-                  slots_found: "Créneau trouvé",
-                  booking_attempt: "Tentative de réservation",
-                  booking_success: "Réservation confirmée",
-                  booking_fail: "Réservation échouée",
-                  confirmation_letter: "Lettre de confirmation",
-                  not_found: "Aucun créneau disponible",
-                  rate_limit: "Rate limit (429)",
-                  blocked: "Compte potentiellement bloqué",
-                  error: "Erreur",
-                };
-                const stepIcons: Record<string, string> = {
-                  login: "🔑",
-                  ofc_list: "🏛️",
-                  slots_found: "📅",
-                  booking_attempt: "📝",
-                  booking_success: "✅",
-                  booking_fail: "❌",
-                  confirmation_letter: "📄",
-                  not_found: "🔍",
-                  rate_limit: "⛔",
-                  blocked: "🚫",
-                  error: "⚠️",
-                };
-                const dotColors: Record<string, string> = {
-                  ok: "bg-green-500",
-                  warn: "bg-amber-400",
-                  fail: "bg-red-500",
-                };
-                const badgeColors: Record<string, string> = {
-                  ok: "bg-green-50 text-green-700 border-green-200",
-                  warn: "bg-amber-50 text-amber-700 border-amber-200",
-                  fail: "bg-red-50 text-red-700 border-red-200",
-                };
-                const badgeLabels: Record<string, string> = {
-                  ok: "OK",
-                  warn: "Attention",
-                  fail: "Erreur",
-                };
+        {botLogs.length > 0 && (() => {
+          const stepLabels: Record<string, string> = {
+            login: "Connexion au portail",
+            ofc_list: "Liste des bureaux consulaires",
+            slots_found: "Créneau trouvé",
+            booking_attempt: "Tentative de réservation",
+            booking_success: "Réservation confirmée",
+            booking_fail: "Réservation échouée",
+            confirmation_letter: "Lettre de confirmation",
+            not_found: "Aucun créneau disponible",
+            rate_limit: "Rate limit (429)",
+            blocked: "Compte potentiellement bloqué",
+            error: "Erreur",
+          };
+          const stepIcons: Record<string, string> = {
+            login: "🔑", ofc_list: "🏛️", slots_found: "📅",
+            booking_attempt: "📝", booking_success: "✅", booking_fail: "❌",
+            confirmation_letter: "📄", not_found: "🔍", rate_limit: "⛔",
+            blocked: "🚫", error: "⚠️",
+          };
+          const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
+          const badgeColors: Record<string, string> = {
+            ok: "bg-green-50 text-green-700 border-green-200",
+            warn: "bg-amber-50 text-amber-700 border-amber-200",
+            fail: "bg-red-50 text-red-700 border-red-200",
+          };
+          const badgeLabels: Record<string, string> = { ok: "OK", warn: "Attention", fail: "Erreur" };
 
-                let parsedData: Record<string, unknown> | null = null;
-                try {
-                  if (log.data) parsedData = JSON.parse(log.data) as Record<string, unknown>;
-                } catch { /* ignore */ }
+          const allSteps: string[] = Array.from(new Set<string>(botLogs.map((l: Doc<"botLogs">) => l.step))).sort();
 
-                return (
-                  <div key={log._id} className="relative pl-6 group">
-                    <div className={`absolute -left-[7px] top-1.5 w-3 h-3 rounded-full ${dotColors[log.status] ?? "bg-slate-400"} border-2 border-white`} />
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-slate-800">
-                        {stepIcons[log.step] ?? "•"} {stepLabels[log.step] ?? log.step}
-                      </span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${badgeColors[log.status] ?? ""}`}>
-                        {badgeLabels[log.status] ?? log.status}
-                      </span>
-                    </div>
+          const filtered = botLogs.filter((log: Doc<"botLogs">) => {
+            const matchStep = logStepFilter === "" || log.step.toLowerCase().includes(logStepFilter.toLowerCase());
+            const matchStatus = logStatusFilter === "" || log.status === logStatusFilter;
+            return matchStep && matchStatus;
+          });
 
-                    {parsedData && (
-                      <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
-                        {Object.entries(parsedData).map(([k, v]) => (
-                          <div key={k} className="flex gap-1.5 flex-wrap">
-                            <span className="text-slate-400 font-medium shrink-0">{k}:</span>
-                            <span className="text-slate-700 break-all">
-                              {Array.isArray(v)
-                                ? (v as unknown[]).join(", ")
-                                : typeof v === "object" && v !== null
-                                ? JSON.stringify(v)
-                                : String(v)}
-                            </span>
+          const totalPages = Math.ceil(filtered.length / LOG_PAGE_SIZE);
+          const safePage = Math.min(logPage, Math.max(0, totalPages - 1));
+          const pageSlice = filtered.slice(safePage * LOG_PAGE_SIZE, (safePage + 1) * LOG_PAGE_SIZE);
+
+          const toggleExpand = (id: string) => {
+            setLogExpanded(prev => {
+              const next = new Set(prev);
+              next.has(id) ? next.delete(id) : next.add(id);
+              return next;
+            });
+          };
+
+          const copyData = (id: string, text: string) => {
+            void navigator.clipboard.writeText(text);
+            setLogCopied(id);
+            setTimeout(() => setLogCopied(prev => prev === id ? null : prev), 1500);
+          };
+
+          return (
+            <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <Bot className="w-4 h-4 text-purple-600" />
+                <h2 className="font-bold text-primary text-base">Journal du Bot</h2>
+                <span className="text-xs text-muted-foreground">
+                  {filtered.length}/{botLogs.length} événement{botLogs.length > 1 ? "s" : ""}
+                </span>
+                {(logStepFilter || logStatusFilter) && (
+                  <button
+                    onClick={() => { setLogStepFilter(""); setLogStatusFilter(""); setLogPage(0); }}
+                    className="ml-auto text-xs text-purple-600 hover:text-purple-800 underline underline-offset-2"
+                  >
+                    Effacer filtres
+                  </button>
+                )}
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Filtrer par step (ex: cev_calendar, net_response…)"
+                    value={logStepFilter}
+                    onChange={e => { setLogStepFilter(e.target.value); setLogPage(0); }}
+                    list="bot-steps-list"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-purple-300"
+                  />
+                  <datalist id="bot-steps-list">
+                    {allSteps.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+                <div className="flex gap-1">
+                  {(["", "ok", "warn", "fail"] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { setLogStatusFilter(s); setLogPage(0); }}
+                      className={`px-2.5 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                        logStatusFilter === s
+                          ? s === "" ? "bg-slate-700 text-white border-slate-700"
+                            : s === "ok" ? "bg-green-600 text-white border-green-600"
+                            : s === "warn" ? "bg-amber-500 text-white border-amber-500"
+                            : "bg-red-600 text-white border-red-600"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                      }`}
+                    >
+                      {s === "" ? "Tous" : s === "ok" ? "✓ OK" : s === "warn" ? "⚠ Warn" : "✕ Fail"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline */}
+              {pageSlice.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Aucun événement correspondant aux filtres</p>
+              ) : (
+                <div className="relative border-l-2 border-slate-100 ml-3 space-y-4 pb-2">
+                  {pageSlice.map((log: Doc<"botLogs">) => {
+                    let parsedData: Record<string, unknown> | null = null;
+                    try {
+                      if (log.data) parsedData = JSON.parse(log.data) as Record<string, unknown>;
+                    } catch { /* ignore */ }
+
+                    const isExpanded = logExpanded.has(log._id);
+                    const rawStr = log.data ?? "";
+                    const isBig = rawStr.length > 300;
+
+                    return (
+                      <div key={log._id} className="relative pl-6">
+                        <div className={`absolute -left-[7px] top-1.5 w-3 h-3 rounded-full ${dotColors[log.status] ?? "bg-slate-400"} border-2 border-white`} />
+
+                        <div className="flex items-start gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-slate-800">
+                            {stepIcons[log.step] ?? "•"} {stepLabels[log.step] ?? log.step}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${badgeColors[log.status] ?? ""}`}>
+                            {badgeLabels[log.status] ?? log.status}
+                          </span>
+                          {isBig && (
+                            <button
+                              onClick={() => toggleExpand(log._id)}
+                              className="text-[10px] text-purple-600 hover:text-purple-800 underline underline-offset-2 ml-1"
+                            >
+                              {isExpanded ? "Réduire" : `Voir tout (${rawStr.length} cars)`}
+                            </button>
+                          )}
+                          {log.data && (
+                            <button
+                              onClick={() => copyData(log._id, rawStr)}
+                              className="ml-auto text-[10px] text-slate-400 hover:text-slate-700 flex items-center gap-1"
+                              title="Copier les données brutes"
+                            >
+                              {logCopied === log._id ? <><Check className="w-3 h-3 text-green-500" /> Copié</> : <><Copy className="w-3 h-3" /> Copier</>}
+                            </button>
+                          )}
+                        </div>
+
+                        {parsedData && (
+                          <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
+                            {Object.entries(parsedData).map(([k, val]) => {
+                              const strVal = Array.isArray(val)
+                                ? (val as unknown[]).join(", ")
+                                : typeof val === "object" && val !== null
+                                ? JSON.stringify(val)
+                                : String(val);
+                              const isLong = strVal.length > 200;
+                              const display = isLong && !isExpanded ? strVal.slice(0, 200) + "…" : strVal;
+                              return (
+                                <div key={k} className="flex gap-1.5 flex-wrap">
+                                  <span className="text-slate-400 font-medium shrink-0">{k}:</span>
+                                  <span className="text-slate-700 break-all font-mono text-[10px] leading-relaxed">{display}</span>
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )}
 
-                    <p className="text-xs text-muted-foreground mt-1">{formatDate(log.ts)}</p>
-                  </div>
-                );
-              })}
+                        {!parsedData && log.data && (
+                          <div className="mt-1.5 text-[10px] font-mono text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 break-all leading-relaxed">
+                            {isBig && !isExpanded ? log.data.slice(0, 300) + "…" : log.data}
+                          </div>
+                        )}
+
+                        <p className="text-xs text-muted-foreground mt-1">{formatDate(log.ts)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
+                  <button
+                    onClick={() => setLogPage(p => Math.max(0, p - 1))}
+                    disabled={safePage === 0}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ← Précédent
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {safePage + 1} / {totalPages}
+                    <span className="ml-2 text-slate-400">({safePage * LOG_PAGE_SIZE + 1}–{Math.min((safePage + 1) * LOG_PAGE_SIZE, filtered.length)} sur {filtered.length})</span>
+                  </span>
+                  <button
+                    onClick={() => setLogPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={safePage >= totalPages - 1}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Suivant →
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ===== RIGHT PANEL — Chat ===== */}
