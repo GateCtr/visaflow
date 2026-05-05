@@ -43,6 +43,16 @@ const DESTINATIONS = [
     badge: null,
   },
   {
+    code: "ca",
+    name: "Canada",
+    visaTypes: ["Biométrie (Biometric)", "Visa Visiteur", "Permis d'études", "Permis de travail"],
+    engagement: 250,
+    success: 750,
+    model: "appointment",
+    note: "Frais IRCC (85 CAD+) non inclus",
+    badge: "Nouveau",
+  },
+  {
     code: "eu",
     name: "Europe Schengen",
     visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études (gratuit*)", "Visa D Long Séjour"],
@@ -253,11 +263,11 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Joventy — Visa USA, Espagne, Dubaï, Turquie, Inde depuis Kinshasa (RDC)</title>
-        <meta name="description" content="Assistance visa USA, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Joventy remplit vos formulaires, trouve vos créneaux et soumet vos e-Visas. Paiement M-Pesa." />
+        <title>Joventy — Visa USA, Canada, Espagne, Dubaï, Turquie, Inde depuis Kinshasa (RDC)</title>
+        <meta name="description" content="Assistance visa USA, Canada, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Joventy remplit vos formulaires, trouve vos créneaux et soumet vos e-Visas. Paiement M-Pesa." />
         <link rel="canonical" href="https://www.joventy.cd/" />
-        <meta property="og:title" content="Joventy — Visa USA, Espagne, Dubaï, Turquie, Inde depuis Kinshasa (RDC)" />
-        <meta property="og:description" content="Assistance visa USA, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Joventy remplit vos formulaires, trouve vos créneaux et soumet vos e-Visas. Paiement M-Pesa." />
+        <meta property="og:title" content="Joventy — Visa USA, Canada, Espagne, Dubaï, Turquie, Inde depuis Kinshasa (RDC)" />
+        <meta property="og:description" content="Assistance visa USA, Canada, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Joventy remplit vos formulaires, trouve vos créneaux et soumet vos e-Visas. Paiement M-Pesa." />
         <meta property="og:url" content="https://www.joventy.cd/" />
         <meta property="og:type" content="website" />
       </Helmet>
@@ -287,7 +297,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, l'Espagne, Dubaï, la Turquie et l'Inde. Paiement via M-Pesa, Airtel Money ou Orange Money, résultat garanti.
+            Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, le Canada, l'Espagne, Dubaï, la Turquie et l'Inde. Paiement via M-Pesa, Airtel Money ou Orange Money, résultat garanti.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
@@ -847,6 +857,7 @@ export default function Landing() {
               <ul className="space-y-2 text-sm text-white/50">
                 {([
                   { code: "us", label: "Visa États-Unis" },
+                  { code: "ca", label: "Visa Canada" },
                   { code: "eu", label: "Visa Schengen" },
                   { code: "ae", label: "E-Visa Dubaï" },
                   { code: "tr", label: "Visa Turquie" },

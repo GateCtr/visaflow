@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "dubai", "turkey", "india", "schengen", "spain"]),
+  destination: z.enum(["usa", "canada", "dubai", "turkey", "india", "schengen", "spain"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -29,12 +29,13 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa",      name: "États-Unis",        desc: "Rendez-vous consulaire — ambassade américaine",                    processType: "appointment" as const },
-  { id: "schengen", name: "Europe Schengen 🇪🇺", desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",              processType: "appointment" as const },
-  { id: "spain",    name: "Espagne 🇪🇸",         desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)", processType: "appointment" as const },
-  { id: "dubai",    name: "Dubaï (EAU)",        desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                    processType: "evisa" as const },
-  { id: "turkey",   name: "Turquie",            desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                 processType: "hybrid" as const },
-  { id: "india",    name: "Inde",               desc: "E-Visa électronique ou visa régulier (études)",                  processType: "evisa" as const },
+  { id: "usa",      name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine",                         processType: "appointment" as const },
+  { id: "canada",   name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique VFS IRCC — centre collecte Kinshasa",           processType: "appointment" as const },
+  { id: "schengen", name: "Europe Schengen 🇪🇺", desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
+  { id: "spain",    name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
+  { id: "dubai",    name: "Dubaï (EAU)",         desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
+  { id: "turkey",   name: "Turquie",             desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                        processType: "hybrid" as const },
+  { id: "india",    name: "Inde",                desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
 ];
 
 const CEV_COUNTRIES = [
@@ -104,6 +105,8 @@ function getPackageInfo(
     const creneauLabel =
       destination === "usa"
         ? "créneau à l'ambassade américaine de Kinshasa"
+        : destination === "canada"
+        ? "créneau au centre VFS IRCC de Kinshasa (collecte biométrique & dépôt)"
         : destination === "schengen"
         ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
         : destination === "spain"
@@ -123,6 +126,14 @@ function getPackageInfo(
         tagline: "Rendez-vous uniquement",
         description: "Vos formulaires sont remplis et vos frais MRV acquittés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade américaine.",
         slotNote: "Prérequis : DS-160 soumis. Frais MRV (265 $) requis — le reçu peut être fourni ultérieurement.",
+      };
+    }
+    if (destination === "canada") {
+      return {
+        label: "Créneau VFS IRCC",
+        tagline: "Rendez-vous uniquement",
+        description: "Votre dossier IRCC est en cours ou vos documents sont prêts ? Joventy surveille le portail VFS IRCC et capture un créneau dès qu'une place biométrique se libère à Kinshasa.",
+        slotNote: "Prérequis : lettre de collecte biométrique IRCC ou demande de visa en cours. Frais IRCC (85 CAD+) payés séparément.",
       };
     }
     if (destination === "turkey") {
@@ -167,6 +178,8 @@ function getPackageInfo(
     const rdv =
       destination === "usa"
         ? "à l'ambassade américaine"
+        : destination === "canada"
+        ? "au centre VFS IRCC (biométrie & dépôt)"
         : destination === "spain"
         ? "à l'ambassade d'Espagne"
         : destination === "schengen"
