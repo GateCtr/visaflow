@@ -682,6 +682,112 @@ export const sendSpainPreRegistrationClient = internalAction({
   },
 });
 
+/* ─────────────── 10b. OTP ESPAGNE — CONFIG ACTIVÉE → CLIENT ─── */
+export const sendSpainOtpConfiguredClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    channel: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    applicationId: v.id("applications"),
+  },
+  handler: async (_ctx, args) => {
+    const channelLabel =
+      args.channel === "email"
+        ? `Email (interception IMAP automatique)`
+        : args.channel === "sms"
+        ? `SMS (assistance manuelle)`
+        : `Manuel (vous serez notifié pour saisir le code)`;
+
+    const channelDetail =
+      args.channel === "email" && args.email
+        ? info("Adresse configurée", escHtml(args.email))
+        : args.channel === "sms" && args.phone
+        ? info("Numéro configuré", escHtml(args.phone))
+        : "";
+
+    const removalWarning = `<table cellpadding="0" cellspacing="0" style="width:100%;margin:20px 0;">
+      <tr>
+        <td style="background:#fefce8;border:1.5px solid #fbbf24;border-radius:10px;padding:16px 20px;">
+          <p style="margin:0 0 8px;color:#78350f;font-size:14px;font-weight:700;">Important — Suppression après opération</p>
+          <p style="margin:0;color:#78350f;font-size:13px;line-height:1.7;">
+            Une fois votre rendez-vous obtenu, supprimez vos identifiants depuis votre espace client :<br/>
+            <strong>Dossier → section OTP Espagne → bouton "Supprimer mes identifiants"</strong><br/>
+            Vos données seront effacées immédiatement de nos serveurs.
+          </p>
+        </td>
+      </tr>
+    </table>`;
+
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Configuration OTP Espagne activée ✅</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Votre configuration pour l'interception automatique des codes OTP du portail espagnol est bien enregistrée.
+        Notre système utilisera ces informations uniquement lors des sessions de réservation de créneau.
+      </p>
+      ${infoTable(
+        info("Canal configuré", channelLabel) +
+        channelDetail
+      )}
+      ${removalWarning}
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:16px 0 0;">
+        En cas de doute ou si vous souhaitez mettre à jour ces informations, rendez-vous dans votre espace client à tout moment.
+      </p>
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Voir mon dossier")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "Joventy — Configuration OTP Espagne enregistrée",
+      html: htmlWrapper("OTP Espagne configuré", body),
+    });
+  },
+});
+
+/* ─────────────── 10c. OTP ESPAGNE — CONFIG SUPPRIMÉE → CLIENT ─── */
+export const sendSpainOtpRemovedClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    applicationId: v.id("applications"),
+  },
+  handler: async (_ctx, args) => {
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Identifiants OTP supprimés 🗑️</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Vos identifiants OTP pour le dossier Espagne ont été <strong>définitivement supprimés</strong> de nos serveurs.
+        Aucune information d'accès n'est plus stockée par Joventy pour ce dossier.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:16px 20px;">
+            <p style="margin:0;color:#166534;font-size:14px;line-height:1.7;">
+              ✅ &nbsp;Données d'accès effacées<br/>
+              ✅ &nbsp;Interception automatique désactivée<br/>
+              ✅ &nbsp;Aucune donnée résiduelle conservée
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0;">
+        Si vous devez reprendre l'automatisation OTP, vous pouvez reconfigurer vos identifiants depuis votre dossier à tout moment.
+      </p>
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Voir mon dossier")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "Joventy — Identifiants OTP Espagne supprimés",
+      html: htmlWrapper("OTP Espagne supprimé", body),
+    });
+  },
+});
+
 /* ───────────────────────────── 11. BIENVENUE NOUVELLE INSCRIPTION ─── */
 export const sendWelcomeClient = internalAction({
   args: {

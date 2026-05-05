@@ -125,6 +125,15 @@ export default defineSchema({
     )),
     slotBookingRefs: v.optional(slotBookingRefs),
     hunterConfig: v.optional(hunterConfig),
+    // Spain — config OTP automatique (email/SMS pour interception code portail)
+    spainOtpConfig: v.optional(v.object({
+      channel: v.union(v.literal("email"), v.literal("sms"), v.literal("manual")),
+      email: v.optional(v.string()),
+      imapPassword: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      configuredAt: v.number(),
+      lastUsedAt: v.optional(v.number()),
+    })),
     // Schengen / CEV spécifique (drive le calcul des frais consulaires)
     cevVisaClass: v.optional(v.union(v.literal("A"), v.literal("C"), v.literal("D"))),
     cevApplicantAgeCategory: v.optional(v.union(

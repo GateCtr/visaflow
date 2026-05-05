@@ -17,11 +17,338 @@ import {
   Send, Calendar, Plane, CreditCard, ShieldCheck,
   CheckCircle2, Clock, Star, Download, ArrowRight,
   FileText, Search, Lock, XCircle, Upload, Loader2, Eye,
-  Sparkles, ClipboardCheck, Stamp, MessageSquareHeart, ChevronDown
+  Sparkles, ClipboardCheck, Stamp, MessageSquareHeart, ChevronDown,
+  KeyRound, Mail, Phone, Trash2, AlertTriangle, ShieldOff, Info
 } from "lucide-react";
 
 type Application = Doc<"applications">;
 type LogEntry = NonNullable<Application["logs"]>[number];
+
+function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
+  const { toast } = useToast();
+  const otpConfig = useQuery(api.spainOtp.getOtpConfig, { applicationId: appId });
+  const saveConfig = useMutation(api.spainOtp.saveOtpConfig);
+  const removeConfig = useMutation(api.spainOtp.removeOtpConfig);
+
+  const [channel, setChannel] = useState<"email" | "sms" | "manual">("email");
+  const [email, setEmail] = useState("");
+  const [imapPassword, setImapPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [showImapPwd, setShowImapPwd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  const isConfigured = !!otpConfig;
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (channel === "email" && (!email.includes("@") || !imapPassword)) {
+      toast({ variant: "destructive", title: "Champs manquants", description: "Email et mot de passe d'application requis." });
+      return;
+    }
+    if (channel === "sms" && !phone) {
+      toast({ variant: "destructive", title: "Champs manquants", description: "Numéro de téléphone requis." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveConfig({
+        applicationId: appId,
+        channel,
+        email: channel === "email" ? email : undefined,
+        imapPassword: channel === "email" ? imapPassword : undefined,
+        phone: channel === "sms" ? phone : undefined,
+      });
+      toast({ title: "Configuration enregistrée", description: "Vous recevrez un email de confirmation." });
+      setShowForm(false);
+      setImapPassword("");
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder. Réessayez." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    try {
+      await removeConfig({ applicationId: appId });
+      toast({ title: "Identifiants supprimés", description: "Vos données OTP ont été effacées de nos serveurs." });
+      setConfirmRemove(false);
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de supprimer. Réessayez." });
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border-2 border-red-200 bg-white shadow-sm overflow-hidden">
+      <div className="bg-red-50 px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <KeyRound className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-red-900 flex items-center gap-2">
+              OTP automatique — Portail Espagne
+              {isConfigured && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3" /> Configuré
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-red-700 mt-0.5">
+              Permet au bot de saisir automatiquement les codes de vérification du portail citaconsular.es
+            </p>
+          </div>
+        </div>
+        {!showForm && (
+          <Button
+            onClick={() => setShowForm(true)}
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white gap-2 flex-shrink-0"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            {isConfigured ? "Modifier" : "Configurer"}
+          </Button>
+        )}
+      </div>
+
+      <div className="px-6 py-4 space-y-4">
+        {isConfigured && !showForm && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Canal</p>
+                <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                  {otpConfig.channel === "email" ? <><Mail className="w-3.5 h-3.5 text-blue-500" /> Email IMAP</> :
+                   otpConfig.channel === "sms" ? <><Phone className="w-3.5 h-3.5 text-green-500" /> SMS</> :
+                   <><Info className="w-3.5 h-3.5 text-slate-500" /> Manuel</>}
+                </p>
+              </div>
+              {otpConfig.email && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Email configuré</p>
+                  <p className="text-sm font-mono text-slate-700 truncate">{otpConfig.email}</p>
+                </div>
+              )}
+              {otpConfig.phone && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Téléphone</p>
+                  <p className="text-sm font-mono text-slate-700">{otpConfig.phone}</p>
+                </div>
+              )}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Configuré le</p>
+                <p className="text-sm text-slate-700">
+                  {new Date(otpConfig.configuredAt).toLocaleDateString("fr-FR")}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 leading-relaxed">
+                <strong>Supprimez vos identifiants une fois le rendez-vous obtenu.</strong>{" "}
+                Vos données sont uniquement utilisées pendant les sessions de réservation et ne sont jamais partagées.
+                Utilisez le bouton ci-dessous pour les effacer définitivement de nos serveurs.
+              </div>
+            </div>
+
+            {!confirmRemove ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                onClick={() => setConfirmRemove(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Supprimer mes identifiants
+              </Button>
+            ) : (
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-sm text-red-700 font-medium">
+                  Confirmer la suppression définitive ?
+                </p>
+                <Button
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white gap-2"
+                  disabled={removing}
+                  onClick={handleRemove}
+                >
+                  {removing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
+                  Oui, supprimer
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmRemove(false)}
+                >
+                  Annuler
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showForm && (
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
+                Canal d'interception OTP
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(["email", "sms", "manual"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => setChannel(ch)}
+                    className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all text-left ${
+                      channel === ch
+                        ? "border-red-500 bg-red-50 text-red-800"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {ch === "email" && <Mail className="w-4 h-4 flex-shrink-0" />}
+                    {ch === "sms" && <Phone className="w-4 h-4 flex-shrink-0" />}
+                    {ch === "manual" && <Info className="w-4 h-4 flex-shrink-0" />}
+                    <span>
+                      {ch === "email" ? "Email IMAP" : ch === "sms" ? "SMS" : "Manuel"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {channel === "email" && "Le bot lira les codes OTP directement dans votre boîte email via IMAP — entièrement automatique."}
+                {channel === "sms" && "Vous serez notifié par Joventy dès qu'un code SMS est requis pour le saisir manuellement."}
+                {channel === "manual" && "Vous recevrez une alerte dans votre dashboard et par email dès qu'un code OTP est demandé."}
+              </div>
+            </div>
+
+            {channel === "email" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Adresse email (celle enregistrée sur citaconsular.es)
+                  </label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="votre.email@gmail.com"
+                    className="h-10"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                    Mot de passe d'application{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowGuide((v) => !v)}
+                      className="text-primary underline"
+                    >
+                      (c'est quoi ?)
+                    </button>
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type={showImapPwd ? "text" : "password"}
+                      value={imapPassword}
+                      onChange={(e) => setImapPassword(e.target.value)}
+                      placeholder="••••••••••••••••"
+                      className="h-10 pr-10 font-mono"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowImapPwd((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {showGuide && (
+                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 leading-relaxed space-y-1">
+                      <p className="font-semibold">Comment créer un mot de passe d'application :</p>
+                      <p><strong>Gmail :</strong> Mon compte → Sécurité → Validation en 2 étapes → Mots de passe des applications</p>
+                      <p><strong>Outlook :</strong> Compte Microsoft → Sécurité → Options de sécurité avancées → Mots de passe des applications</p>
+                      <p><strong>Yahoo :</strong> Sécurité du compte → Générer le mot de passe d'application</p>
+                      <p className="text-blue-600 mt-1">Ce mot de passe est différent de votre mot de passe habituel et peut être révoqué à tout moment.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {channel === "sms" && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Numéro de téléphone (avec indicatif, ex: +243...)
+                </label>
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+243 8XX XXX XXX"
+                  className="h-10"
+                  required
+                />
+              </div>
+            )}
+
+            {channel === "manual" && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
+                En mode manuel, dès qu'un code OTP est requis par le portail, vous recevrez une notification
+                dans votre dashboard <strong>et</strong> par email. Vous aurez alors quelques minutes pour
+                saisir le code dans votre espace client. Aucun identifiant supplémentaire n'est requis.
+              </div>
+            )}
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+              <span>
+                <strong>Suppression obligatoire après opération :</strong> Une fois votre créneau réservé,
+                supprimez ces identifiants depuis cette carte. Vous recevrez un rappel par email.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button
+                type="submit"
+                disabled={saving}
+                className="bg-red-600 hover:bg-red-700 text-white gap-2"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Enregistrer la configuration
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setShowForm(false); setImapPassword(""); }}
+              >
+                Annuler
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {!isConfigured && !showForm && (
+          <div className="flex items-start gap-3 text-xs text-slate-500 bg-slate-50 rounded-xl p-3 border border-slate-200">
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
+            <span>
+              Non configuré — le bot demandera le code OTP manuellement lors des sessions de réservation.
+              Configurez cette section pour rendre le processus entièrement automatique.
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function getSteps(isEvisaModel: boolean, isDossierOnly: boolean, isSlotOnly: boolean) {
   if (isDossierOnly) {
@@ -740,6 +1067,11 @@ export default function ClientApplicationDetail() {
               : "vos détails de RDV seront débloqués sous 24h."}
           </p>
         </div>
+      )}
+
+      {/* Spain OTP config card — shown when engagement paid, not completed/rejected */}
+      {app.destination === "spain" && isEngagementPaid && !isCompleted && !isRejected && appId && (
+        <SpainOtpConfigCard appId={appId} />
       )}
 
       {/* Dossier only — completed card */}

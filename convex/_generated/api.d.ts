@@ -22,6 +22,7 @@ import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as reviews from "../reviews.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
+import type * as spainOtp from "../spainOtp.js";
 import type * as users from "../users.js";
 import type * as visaDocuments from "../visaDocuments.js";
 import type * as whatsapp from "../whatsapp.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   reviews: typeof reviews;
   slotFoundHelper: typeof slotFoundHelper;
+  spainOtp: typeof spainOtp;
   users: typeof users;
   visaDocuments: typeof visaDocuments;
   whatsapp: typeof whatsapp;
