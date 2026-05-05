@@ -203,6 +203,63 @@ http.route({
   }),
 });
 
+// ─── CEV Loop Session: persister la session active (survie crashs/redémarrages) ─
+http.route({
+  path: "/hunter/cev-loop/persist",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const body = await request.json() as {
+      applicationId: string;
+      sessionCookie: string;
+      validUntil: string;
+      redirectUrl: string;
+    };
+
+    await ctx.runMutation(internal.hunter.internalPersistCevLoopSession, {
+      applicationId: body.applicationId as Id<"applications">,
+      sessionCookie: body.sessionCookie,
+      validUntil: body.validUntil,
+      redirectUrl: body.redirectUrl,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// ─── CEV Loop Session: restaurer la session active au démarrage du bot ───────
+http.route({
+  path: "/hunter/cev-loop/restore",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const applicationId = url.searchParams.get("applicationId");
+    if (!applicationId) {
+      return new Response(JSON.stringify({ session: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const session = await ctx.runQuery(internal.hunter.internalGetCevLoopSession, {
+      applicationId: applicationId as Id<"applications">,
+    });
+
+    return new Response(JSON.stringify({ session: session ?? null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── CEV Sessions: enregistrer le résultat d'un check ───────────────────────
 http.route({
   path: "/hunter/cev-sessions/check",

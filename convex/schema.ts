@@ -61,6 +61,10 @@ const hunterConfig = v.object({
   cevCountry: v.optional(v.string()),         // Pays cible (ex: "BE", "FR", "DE")
   cevClickCount: v.optional(v.number()),      // Nombre de clics VOWINT dans la fenêtre en cours
   cevClickWindowStart: v.optional(v.number()), // Timestamp début de la fenêtre de 5 clics/heure
+  // Session CEV active persistée — survie aux crashs/redémarrages Railway
+  cevActiveSessionCookie: v.optional(v.string()),      // Cookies ASP.NET_SessionId
+  cevActiveSessionValidUntil: v.optional(v.string()),  // ISO string de validUntil (depuis SetCaptchaToken)
+  cevActiveSessionRedirectUrl: v.optional(v.string()), // redirectUrl (Referer pour AvailableTimeSlots)
 });
 
 export default defineSchema({

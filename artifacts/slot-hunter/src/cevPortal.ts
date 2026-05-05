@@ -22,7 +22,7 @@ export interface CevPollResult {
 }
 
 export type CevCaptchaResult =
-  | { status: 'no_availability' }
+  | { status: 'no_availability'; session: CevSession }  // session active — cookie valide, mais aucun créneau actuellement
   | { status: 'session_error'; error: string }
   | { status: 'ready'; session: CevSession };
 
@@ -74,10 +74,18 @@ export async function completeCevCaptcha(
       return { status: 'session_error', error: 'BAD_RESPONSE' };
     }
 
-    // /Integration/Error/NoAvailability → no slots right now
+    // /Integration/Error/NoAvailability → pas de créneaux, mais le cookie reste valide.
+    // On retourne quand même la session pour permettre le polling sans recliquer sur VOWINT.
     if (data.redirectUrl.includes('NoAvailability')) {
       botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { redirectUrl: data.redirectUrl } });
-      return { status: 'no_availability' };
+      return {
+        status: 'no_availability',
+        session: {
+          cookies: sessionCookies,
+          validUntil: data.validUntil,
+          redirectUrl: data.redirectUrl,
+        },
+      };
     }
 
     // Any other redirect = slots are available

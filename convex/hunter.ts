@@ -48,6 +48,12 @@ export const setHunterConfig = mutation({
 
     const existing = (app as { hunterConfig?: { checkCount?: number; lastCheckAt?: number; lastResult?: string; twoCaptchaApiKey?: string; scheduleUrl?: string; portalApplicationId?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string; cevClickCount?: number; cevClickWindowStart?: number } }).hunterConfig;
 
+    const existingFull = existing as (typeof existing & {
+      cevActiveSessionCookie?: string;
+      cevActiveSessionValidUntil?: string;
+      cevActiveSessionRedirectUrl?: string;
+    }) | undefined;
+
     await ctx.db.patch(args.applicationId, {
       hunterConfig: {
         embassyUsername: args.embassyUsername,
@@ -65,11 +71,55 @@ export const setHunterConfig = mutation({
         cevCountry: args.cevCountry || existing?.cevCountry,
         cevClickCount: existing?.cevClickCount,
         cevClickWindowStart: existing?.cevClickWindowStart,
+        // Préserver la session CEV active — ne pas l'écraser lors des mises à jour admin
+        cevActiveSessionCookie: existingFull?.cevActiveSessionCookie,
+        cevActiveSessionValidUntil: existingFull?.cevActiveSessionValidUntil,
+        cevActiveSessionRedirectUrl: existingFull?.cevActiveSessionRedirectUrl,
       },
       updatedAt: Date.now(),
     });
 
     return args.applicationId;
+  },
+});
+
+// ─── INTERNAL: persister la session CEV du cevPollingLoop (survie crashs/redémarrages) ─
+export const internalPersistCevLoopSession = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    sessionCookie: v.string(),
+    validUntil: v.string(),
+    redirectUrl: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const hc = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig ?? {};
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...(hc as Record<string, unknown>),
+        cevActiveSessionCookie: args.sessionCookie,
+        cevActiveSessionValidUntil: args.validUntil,
+        cevActiveSessionRedirectUrl: args.redirectUrl,
+      } as Parameters<(typeof ctx.db)["patch"]>[1]["hunterConfig"],
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// ─── INTERNAL: lire la session CEV persistée du cevPollingLoop ────────────────
+export const internalGetCevLoopSession = internalQuery({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return null;
+    const hc = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig;
+    if (!hc) return null;
+    const cookie = hc.cevActiveSessionCookie as string | undefined;
+    const validUntil = hc.cevActiveSessionValidUntil as string | undefined;
+    const redirectUrl = hc.cevActiveSessionRedirectUrl as string | undefined;
+    if (!cookie || !validUntil || !redirectUrl) return null;
+    return { cookies: cookie, validUntil, redirectUrl };
   },
 });
 

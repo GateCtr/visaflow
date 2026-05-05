@@ -1,6 +1,6 @@
 import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
 import type { HunterJob } from './convexClient';
-import { botLog, uploadScreenshot, recordCevClick, activateCevSession } from './convexClient';
+import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
@@ -847,12 +847,110 @@ async function solveHcaptchaVia2captcha(
 }
 
 /**
- * Boucle de polling CEV — à appeler depuis le bot principal.
- * Gère la limite 5 clics/heure et réutilise la session CEV tant qu'elle est valide.
+ * Phase 1 du cycle CEV : établit une session VOWINT + résout hCaptcha via SetCaptchaToken.
+ * Ne fait PAS le booking — retourne uniquement la CevSession pour le polling ultérieur.
  *
- * Phase "session active" : poll multi-mois (mois courant + suivant) sans recliquer.
- * → Maximise la détection de créneaux quand le mois courant est complet.
- * → 0 clic VOWINT consommé pendant toute la durée de validité de la session (~30-60 min).
+ * Avantage clé : un seul clic VOWINT par fenêtre de session (~30-60 min), puis polling
+ * HTTP pur sans Playwright pendant toute la durée de vie du cookie.
+ *
+ * Retourne :
+ *  - {session, hasSlots: true}  → créneaux immédiatement disponibles (redirectUrl != NoAvailability)
+ *  - {session, hasSlots: false} → aucun créneau mais session active → poller
+ *  - null                       → échec (VOWINT login, hCaptcha, réseau)
+ */
+async function establishCevSessionOnly(
+  config: CevBookingConfig,
+): Promise<{ session: CevSession; hasSlots: boolean } | null> {
+  let browser = null;
+  botLog({ applicationId: config.clientId, step: 'cev_session_only_start', status: 'ok' });
+
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      locale: 'fr-BE',
+      timezoneId: 'Africa/Kinshasa',
+    });
+
+    const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
+    if (accessibilityCookie) {
+      await context.addCookies([{
+        name: 'hc_accessibility',
+        value: accessibilityCookie,
+        domain: '.hcaptcha.com',
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'None',
+      }]);
+    }
+
+    const page = await context.newPage();
+    const cevSession = await establishCevSession(page, context, config, []);
+
+    if (!cevSession) {
+      await browser.close();
+      return null;
+    }
+
+    // Résoudre hCaptcha
+    let hcaptchaToken: string | null = null;
+    if (accessibilityCookie && cevSession.cevPage) {
+      hcaptchaToken = await solveHcaptchaViaAccessibility(cevSession.cevPage, config.clientId);
+    }
+    if (!hcaptchaToken) {
+      hcaptchaToken = await solveHcaptcha(config.twoCaptchaApiKey, config.clientId, config.capsolverApiKey);
+    }
+    if (!hcaptchaToken) {
+      await browser.close();
+      botLog({ applicationId: config.clientId, step: 'cev_session_only_hcaptcha_fail', status: 'fail' });
+      return null;
+    }
+
+    // SetCaptchaToken → obtenir session + disponibilité immédiate
+    const captchaResult = await completeCevCaptcha(cevSession.cookies, hcaptchaToken, config.clientId);
+    await browser.close();
+
+    if (captchaResult.status === 'session_error') {
+      botLog({ applicationId: config.clientId, step: 'cev_session_only_captcha_error', status: 'fail', data: { error: captchaResult.error } });
+      return null;
+    }
+
+    // no_availability → session active mais aucun créneau actuellement
+    // ready           → créneaux disponibles immédiatement
+    return {
+      session: captchaResult.session,
+      hasSlots: captchaResult.status === 'ready',
+    };
+
+  } catch (err) {
+    botLog({ applicationId: config.clientId, step: 'cev_session_only_crash', status: 'fail', data: { error: String(err) } });
+    try { if (browser) await (browser as Awaited<ReturnType<typeof chromium.launch>>).close(); } catch { /* ignore */ }
+    return null;
+  }
+}
+
+/**
+ * Boucle de polling CEV — à appeler depuis le bot principal.
+ *
+ * Architecture deux phases :
+ *
+ * Phase 1 — VOWINT click (consomme 1 clic/4 max par heure) :
+ *   establishCevSessionOnly() → cookie + validUntil + redirectUrl
+ *   → persister en Convex (survie aux crashs/redémarrages Railway)
+ *   → si hasSlots immédiat → runCevBookingSession() (booking UI Playwright)
+ *
+ * Phase 2 — Polling HTTP pur (0 clic VOWINT, 0 captcha) :
+ *   pollCevSlotsMultiMonth() toutes les 30s pendant ~30-60 min
+ *   → si créneaux → runCevBookingSession()
+ *   → si SESSION_EXPIRED → retour en Phase 1
+ *
+ * Au démarrage : restoreCevLoopSession() tente de récupérer la session
+ *   persistée en Convex → skip Phase 1 si le cookie est encore valide.
  */
 export async function cevPollingLoop(
   config: CevBookingConfig,
@@ -863,10 +961,30 @@ export async function cevPollingLoop(
 
   botLog({ applicationId: config.clientId, step: 'cev_poll_loop_start', status: 'ok' });
 
+  // ─── Restauration au démarrage ────────────────────────────────────────────
+  // Si une session valide est déjà persistée en Convex (bot redémarré pendant
+  // une session active), on la réutilise directement sans consommer un clic VOWINT.
+  try {
+    const restored = await restoreCevLoopSession(config.clientId);
+    if (restored && isCevSessionValid(restored)) {
+      activeSession = restored;
+      botLog({
+        applicationId: config.clientId,
+        step: 'cev_poll_session_restored',
+        status: 'ok',
+        data: { validUntil: restored.validUntil },
+      });
+    } else if (restored) {
+      botLog({ applicationId: config.clientId, step: 'cev_poll_session_restored_expired', status: 'warn', data: { validUntil: restored.validUntil } });
+    }
+  } catch (err) {
+    botLog({ applicationId: config.clientId, step: 'cev_poll_restore_error', status: 'warn', data: { error: String(err) } });
+  }
+
   while (true) {
     const now = Date.now();
 
-    // Si session active et valide → poller directement sans recliquer (multi-mois)
+    // ─── Phase 2 : session active → poll multi-mois sans recliquer ───────
     if (activeSession && isCevSessionValid(activeSession)) {
       const pollResult = await pollCevSlotsMultiMonth(activeSession, config.clientId);
 
@@ -887,34 +1005,47 @@ export async function cevPollingLoop(
       continue;
     }
 
-    // Session expirée ou inexistante → vérifier la limite de clics
+    // Session absente ou expirée → passer en Phase 1
+    activeSession = null;
+
+    // ─── Phase 1 : vérifier la limite de clics avant d'ouvrir VOWINT ─────
     const recentClicks = clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
     if (recentClicks.length >= MAX_CLICKS_PER_HOUR) {
       const oldestClick = Math.min(...recentClicks);
       const waitMs = CLICK_WINDOW_MS - (now - oldestClick) + 5_000;
-      botLog({ applicationId: config.clientId, step: 'cev_rate_limit_wait', status: 'warn', data: { waitMs } });
+      botLog({ applicationId: config.clientId, step: 'cev_rate_limit_wait', status: 'warn', data: { waitMs, clicksInWindow: recentClicks.length } });
       await new Promise(r => setTimeout(r, waitMs));
       continue;
     }
 
-    // Lancer un nouveau cycle : Playwright + hCaptcha
+    // ─── Phase 1 : établir une nouvelle session via VOWINT + hCaptcha ─────
     clickTimestamps.push(now);
-    const result = await runCevBookingSession(config);
+    botLog({ applicationId: config.clientId, step: 'cev_vowint_click', status: 'ok', data: { clicksInWindow: recentClicks.length + 1 } });
 
-    if (result.success) {
-      await onSlotsFound(result);
-      return;
-    }
+    const sessionResult = await establishCevSessionOnly(config);
 
-    if (result.error === 'NO_AVAILABILITY') {
-      // Pas de créneaux — attendre avant de réessayer
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    if (!sessionResult) {
+      botLog({ applicationId: config.clientId, step: 'cev_session_establish_failed', status: 'fail' });
+      await new Promise(r => setTimeout(r, 10_000));
       continue;
     }
 
-    // Erreur technique — pause courte puis retry
-    botLog({ applicationId: config.clientId, step: 'cev_poll_loop_error', status: 'warn', data: { error: result.error } });
-    await new Promise(r => setTimeout(r, 10_000));
+    activeSession = sessionResult.session;
+
+    // Persister en Convex (fire-and-forget) → survie aux crashs/redémarrages
+    persistCevLoopSession(config.clientId, activeSession);
+
+    // Créneaux immédiatement disponibles → booking Playwright complet
+    if (sessionResult.hasSlots) {
+      botLog({ applicationId: config.clientId, step: 'cev_session_slots_immediate', status: 'ok' });
+      const bookingResult = await runCevBookingSession(config);
+      await onSlotsFound(bookingResult);
+      return;
+    }
+
+    // Pas de créneaux → conserver la session et démarrer le polling (Phase 2)
+    botLog({ applicationId: config.clientId, step: 'cev_session_ready_polling', status: 'ok', data: { validUntil: activeSession.validUntil } });
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
   }
 }
 

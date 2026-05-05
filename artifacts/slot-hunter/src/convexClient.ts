@@ -413,6 +413,58 @@ export async function activateCevSession(
 }
 
 /**
+ * Persiste la session CEV active du cevPollingLoop dans Convex.
+ * Fire-and-forget — ne bloque pas le chemin critique.
+ * Survie aux crashs et redémarrages Railway.
+ */
+export function persistCevLoopSession(
+  applicationId: string,
+  session: { cookies: string; validUntil: string; redirectUrl: string },
+): void {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-loop/persist`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Hunter-Key": HUNTER_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      applicationId,
+      sessionCookie: session.cookies,
+      validUntil: session.validUntil,
+      redirectUrl: session.redirectUrl,
+    }),
+  }).catch((err) =>
+    console.warn("[convexClient] persistCevLoopSession fire-and-forget error:", err)
+  );
+}
+
+/**
+ * Restaure la session CEV active depuis Convex au démarrage du bot.
+ * Retourne la session si elle est encore en base, null sinon.
+ * Le caller doit vérifier isCevSessionValid() pour confirmer que le cookie n'est pas expiré.
+ */
+export async function restoreCevLoopSession(
+  applicationId: string,
+): Promise<{ cookies: string; validUntil: string; redirectUrl: string } | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-loop/restore?applicationId=${encodeURIComponent(applicationId)}`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      session: { cookies: string; validUntil: string; redirectUrl: string } | null;
+    };
+    return data.session ?? null;
+  } catch (err) {
+    console.warn("[convexClient] restoreCevLoopSession error:", err);
+    return null;
+  }
+}
+
+/**
  * Attache un document généré par le bot (ex: PDF de confirmation) au dossier.
  * Stocké dans la table `documents` avec isAdminUpload:true + verifiedByAdmin:true.
  * Visible côté client uniquement après paiement de la prime de succès.
