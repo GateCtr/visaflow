@@ -217,7 +217,7 @@ export default function Login() {
 
           <div className="space-y-4">
             {[
-              { icon: Globe, text: "USA, Canada, Espagne, Dubaï, Turquie, Inde & plus" },
+              { icon: Globe, text: "USA, Canada, UK, Suisse, Espagne, Dubaï & plus" },
               { icon: Clock, text: "Suivi en temps réel de votre dossier" },
               { icon: Lock, text: "Vos données protégées et confidentielles" },
             ].map(({ icon: Icon, text }) => (

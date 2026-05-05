@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "canada", "dubai", "turkey", "india", "schengen", "spain"]),
+  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -29,13 +29,15 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa",      name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine",                         processType: "appointment" as const },
-  { id: "canada",   name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique VFS IRCC — centre collecte Kinshasa",           processType: "appointment" as const },
-  { id: "schengen", name: "Europe Schengen 🇪🇺", desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
-  { id: "spain",    name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
-  { id: "dubai",    name: "Dubaï (EAU)",         desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
-  { id: "turkey",   name: "Turquie",             desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                        processType: "hybrid" as const },
-  { id: "india",    name: "Inde",                desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
+  { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine",                         processType: "appointment" as const },
+  { id: "canada",      name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique VFS IRCC — centre collecte Kinshasa",           processType: "appointment" as const },
+  { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Rendez-vous VFS UKVI — visa standard, étudiant, travail, famille",      processType: "appointment" as const },
+  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous VFS Global — visa Schengen court & long séjour",            processType: "appointment" as const },
+  { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
+  { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
+  { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
+  { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                        processType: "hybrid" as const },
+  { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
 ];
 
 const CEV_COUNTRIES = [
@@ -107,6 +109,10 @@ function getPackageInfo(
         ? "créneau à l'ambassade américaine de Kinshasa"
         : destination === "canada"
         ? "créneau au centre VFS IRCC de Kinshasa (collecte biométrique & dépôt)"
+        : destination === "uk"
+        ? "créneau au centre VFS UKVI de Kinshasa (UK Visas & Immigration)"
+        : destination === "switzerland"
+        ? "créneau au centre VFS Global Suisse de Kinshasa"
         : destination === "schengen"
         ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
         : destination === "spain"
@@ -134,6 +140,22 @@ function getPackageInfo(
         tagline: "Rendez-vous uniquement",
         description: "Votre dossier IRCC est en cours ou vos documents sont prêts ? Joventy surveille le portail VFS IRCC et capture un créneau dès qu'une place biométrique se libère à Kinshasa.",
         slotNote: "Prérequis : lettre de collecte biométrique IRCC ou demande de visa en cours. Frais IRCC (85 CAD+) payés séparément.",
+      };
+    }
+    if (destination === "uk") {
+      return {
+        label: "Créneau VFS UKVI",
+        tagline: "Rendez-vous uniquement",
+        description: "Votre dossier UK Visas & Immigration est prêt ? Joventy surveille le portail VFS UKVI et réserve votre créneau de dépôt dès qu'une place est disponible à Kinshasa.",
+        slotNote: "Prérequis : dossier UKVI complet (formulaire, photos, justificatifs). Frais UKVI (£115+) payés séparément.",
+      };
+    }
+    if (destination === "switzerland") {
+      return {
+        label: "Créneau VFS Suisse",
+        tagline: "Rendez-vous uniquement",
+        description: "Votre dossier est prêt ? Joventy surveille le portail VFS Global Suisse et capture un créneau dès qu'une disponibilité apparaît pour le centre de Kinshasa.",
+        slotNote: "Prérequis : dossier complet (formulaire, assurance, justificatifs). Frais consulaires suisses (90€+) payés séparément.",
       };
     }
     if (destination === "turkey") {
@@ -180,6 +202,10 @@ function getPackageInfo(
         ? "à l'ambassade américaine"
         : destination === "canada"
         ? "au centre VFS IRCC (biométrie & dépôt)"
+        : destination === "uk"
+        ? "au centre VFS UKVI (UK Visas & Immigration)"
+        : destination === "switzerland"
+        ? "au centre VFS Global Suisse"
         : destination === "spain"
         ? "à l'ambassade d'Espagne"
         : destination === "schengen"

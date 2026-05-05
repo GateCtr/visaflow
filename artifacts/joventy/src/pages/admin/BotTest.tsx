@@ -27,13 +27,15 @@ import {
 type Destination = keyof typeof VISA_PRICING;
 
 const DESTINATIONS: { key: Destination; flag: string; label: string }[] = [
-  { key: "usa",      flag: "🇺🇸", label: "États-Unis" },
-  { key: "canada",   flag: "🇨🇦", label: "Canada (VFS IRCC)" },
-  { key: "dubai",    flag: "🇦🇪", label: "Dubaï (EAU)" },
-  { key: "turkey",   flag: "🇹🇷", label: "Turquie" },
-  { key: "india",    flag: "🇮🇳", label: "Inde" },
-  { key: "schengen", flag: "🇪🇺", label: "Europe Schengen (CEV)" },
-  { key: "spain",    flag: "🇪🇸", label: "Espagne (citaconsular.es)" },
+  { key: "usa",         flag: "🇺🇸", label: "États-Unis" },
+  { key: "canada",      flag: "🇨🇦", label: "Canada (VFS IRCC)" },
+  { key: "uk",          flag: "🇬🇧", label: "Royaume-Uni (VFS UKVI)" },
+  { key: "switzerland", flag: "🇨🇭", label: "Suisse (VFS Global)" },
+  { key: "dubai",       flag: "🇦🇪", label: "Dubaï (EAU)" },
+  { key: "turkey",      flag: "🇹🇷", label: "Turquie" },
+  { key: "india",       flag: "🇮🇳", label: "Inde" },
+  { key: "schengen",    flag: "🇪🇺", label: "Europe Schengen (CEV)" },
+  { key: "spain",       flag: "🇪🇸", label: "Espagne (citaconsular.es)" },
 ];
 
 interface PingResult {
