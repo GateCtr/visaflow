@@ -165,6 +165,26 @@ export async function pollCevSlots(
     }
 
     const raw = await res.json();
+
+    // ── Logging de reverse engineering — corps exact de la réponse ──────────
+    // Ce log permet de découvrir la structure réelle retournée par /Home/AvailableTimeSlots.
+    // À analyser dans botLogs Convex pour valider/corriger parseSlots().
+    const rawType = Array.isArray(raw) ? 'array' : (raw === null ? 'null' : typeof raw);
+    const rawKeys = (rawType === 'object' && raw !== null) ? Object.keys(raw as Record<string, unknown>) : [];
+    const rawPreview = JSON.stringify(raw).slice(0, 1500);
+    botLog({
+      applicationId: clientId,
+      step: 'cev_slots_raw_response',
+      status: 'ok',
+      data: {
+        requestBody: JSON.stringify(body),
+        responseType: rawType,
+        responseKeys: rawKeys,
+        arrayLength: Array.isArray(raw) ? (raw as unknown[]).length : null,
+        responsePreview: rawPreview,
+      },
+    });
+
     const slots = parseSlots(raw);
     const hasSlots = slots.some(s => s.available);
 

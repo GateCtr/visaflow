@@ -329,12 +329,71 @@ async function completebookingViaUI(
 ): Promise<Omit<BookingResult, 'capturedCalls'>> {
   try {
     const calendarUrl = `${CEV_BASE}${session.redirectUrl}`;
+
+    // ── Intercepter /Home/AvailableTimeSlots AVANT la navigation ────────────
+    // waitForResponse doit être enregistré avant goto() pour ne pas rater l'appel.
+    const slotsResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/Home/AvailableTimeSlots'),
+      { timeout: 12_000 },
+    ).catch(() => null);
+
     await page.goto(calendarUrl, { waitUntil: 'networkidle', timeout: 30_000 });
 
     botLog({ applicationId: config.clientId, step: 'cev_calendar_loaded', status: 'ok', data: { url: calendarUrl } });
 
     // Laisser le calendrier Bootstrap se charger (appel AJAX /Home/AvailableTimeSlots)
     await new Promise(r => setTimeout(r, 3_000));
+
+    // ── Dump /Home/AvailableTimeSlots (requête + réponse exactes) ────────────
+    const slotsResp = await slotsResponsePromise;
+    if (slotsResp) {
+      try {
+        const reqBody  = slotsResp.request().postData() ?? null;
+        const resBody  = await slotsResp.text().catch(() => null);
+        const resCT    = slotsResp.headers()['content-type'] ?? '';
+        botLog({
+          applicationId: config.clientId,
+          step: 'cev_available_timeslots_dump',
+          status: 'ok',
+          data: {
+            url:             slotsResp.url().replace(CEV_BASE, ''),
+            httpStatus:      slotsResp.status(),
+            requestBody:     reqBody,
+            responseContentType: resCT,
+            responsePreview: resBody?.slice(0, 2000) ?? null,
+            responseType:    (() => {
+              try { const p = JSON.parse(resBody ?? 'null'); return Array.isArray(p) ? 'array' : typeof p; } catch { return 'non-json'; }
+            })(),
+            responseKeys:    (() => {
+              try { const p = JSON.parse(resBody ?? 'null'); return (p && typeof p === 'object' && !Array.isArray(p)) ? Object.keys(p) : null; } catch { return null; }
+            })(),
+          },
+        });
+      } catch { /* ne pas bloquer le booking */ }
+    } else {
+      // Aucun appel capturé — loguer le HTML de la page pour comprendre la structure
+      const pageHtml = await page.content().catch(() => '');
+      botLog({
+        applicationId: config.clientId,
+        step: 'cev_available_timeslots_not_captured',
+        status: 'warn',
+        data: {
+          hint: 'Aucun appel /Home/AvailableTimeSlots intercepté — page peut être statique ou utiliser un autre endpoint',
+          pageHtmlPreview: pageHtml.slice(0, 3000),
+          pageUrl: page.url(),
+        },
+      });
+    }
+
+    // ── Dump du HTML complet de la page calendrier ────────────────────────
+    // Permet d'identifier les sélecteurs CSS réels des dates/créneaux.
+    const calendarHtml = await page.content().catch(() => '');
+    botLog({
+      applicationId: config.clientId,
+      step: 'cev_calendar_html_dump',
+      status: 'ok',
+      data: { htmlPreview: calendarHtml.slice(0, 4000) },
+    });
 
     // === Sélectionner la première date disponible ===
     // CEV utilise Bootstrap + jQuery datepicker/calendrier maison.
@@ -364,9 +423,53 @@ async function completebookingViaUI(
         bookedDate = await dateEl.getAttribute('data-date') ??
                      await dateEl.getAttribute('data-value') ??
                      await dateEl.innerText().catch(() => '');
+
+        // ── Intercepter les appels POST déclenchés par le clic sur la date ──
+        // C'est ici qu'on découvrira l'endpoint de chargement des créneaux horaires.
+        const afterDateCallsSnapLen = capturedCalls.length;
+        const timeSlotResponsePromise = page.waitForResponse(
+          (r) => r.url().includes('appointment.cloud.diplomatie.be') && r.request().method() === 'POST',
+          { timeout: 8_000 },
+        ).catch(() => null);
+
         await dateEl.click();
         dateClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_date_selected', status: 'ok', data: { selector: sel, date: bookedDate } });
+
+        // ── Dump du premier appel POST déclenché après la sélection de date ──
+        const timeSlotResp = await timeSlotResponsePromise;
+        if (timeSlotResp) {
+          try {
+            const tsReqBody = timeSlotResp.request().postData() ?? null;
+            const tsResBody = await timeSlotResp.text().catch(() => null);
+            botLog({
+              applicationId: config.clientId,
+              step: 'cev_post_date_click_call',
+              status: 'ok',
+              data: {
+                url:             timeSlotResp.url().replace(CEV_BASE, ''),
+                httpStatus:      timeSlotResp.status(),
+                requestBody:     tsReqBody,
+                responsePreview: tsResBody?.slice(0, 2000) ?? null,
+                responseType:    (() => {
+                  try { const p = JSON.parse(tsResBody ?? 'null'); return Array.isArray(p) ? 'array' : typeof p; } catch { return 'non-json'; }
+                })(),
+                responseKeys:    (() => {
+                  try { const p = JSON.parse(tsResBody ?? 'null'); return (p && typeof p === 'object' && !Array.isArray(p)) ? Object.keys(p) : null; } catch { return null; }
+                })(),
+                newCallsSinceDate: capturedCalls.length - afterDateCallsSnapLen,
+              },
+            });
+          } catch { /* ne pas bloquer */ }
+        } else {
+          botLog({
+            applicationId: config.clientId,
+            step: 'cev_post_date_click_no_ajax',
+            status: 'warn',
+            data: { hint: 'Aucun POST intercepté après clic date — chargement peut être synchrone (page reload) ou délai trop court' },
+          });
+        }
+
         break;
       }
     }
@@ -385,6 +488,15 @@ async function completebookingViaUI(
     // Attendre le chargement des créneaux horaires (AJAX probable après sélection date)
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await new Promise(r => setTimeout(r, 1_500));
+
+    // ── Dump HTML de la page après sélection de date (structure créneaux horaires) ──
+    const afterDateHtml = await page.content().catch(() => '');
+    botLog({
+      applicationId: config.clientId,
+      step: 'cev_after_date_html_dump',
+      status: 'ok',
+      data: { htmlPreview: afterDateHtml.slice(0, 4000) },
+    });
 
     // === Sélectionner le premier créneau horaire ===
     // CEV affiche des boutons radio ou des liens pour les créneaux.
@@ -480,6 +592,11 @@ async function completebookingViaUI(
       data: { finalUrl, confirmationCode: confirmationCode ?? '', date: bookedDate, time: bookedTime, capturedCallsCount: capturedCalls.length },
     });
 
+    // ── Dump complet de tous les appels CEV capturés pendant la session ──────
+    // Enregistré en Convex pour analyse offline — permet de reconstruire
+    // le flux HTTP complet sans relancer Playwright.
+    _dumpCapturedCalls(config.clientId, capturedCalls);
+
     return {
       success,
       confirmationCode: confirmationCode ?? undefined,
@@ -492,9 +609,58 @@ async function completebookingViaUI(
     const screenshotBuf3 = await page.screenshot().catch(() => null);
     const screenshotStorageId3 = screenshotBuf3 ? await uploadScreenshot(screenshotBuf3.toString('base64')) : undefined;
     const screenshotStorageId = screenshotStorageId3 ?? undefined;
+    // Dump même en cas d'erreur — les appels déjà capturés sont précieux
+    _dumpCapturedCalls(config.clientId, capturedCalls);
     botLog({ applicationId: config.clientId, step: 'cev_booking_ui_error', status: 'fail', data: { error: String(err) } });
     return { success: false, error: String(err), screenshotStorageId };
   }
+}
+
+/**
+ * Envoie un dump de tous les appels réseau CEV capturés vers Convex (fire-and-forget).
+ * Chaque appel est loggé séparément pour éviter de dépasser la limite de taille des logs.
+ * Focus sur les appels avec un corps JSON (requête ou réponse) pour le reverse engineering.
+ */
+function _dumpCapturedCalls(clientId: string, calls: CapturedNetworkCall[]): void {
+  if (calls.length === 0) return;
+
+  // Log de synthèse : liste de toutes les URLs capturées
+  botLog({
+    applicationId: clientId,
+    step: 'cev_network_calls_summary',
+    status: 'ok',
+    data: {
+      totalCalls: calls.length,
+      urls: calls.map(c => `${c.method} ${c.url.replace('https://appointment.cloud.diplomatie.be', '')} → ${c.responseStatus ?? '?'}`),
+    },
+  });
+
+  // Log détaillé : un entry par appel avec corps req/res (limités à 1500 chars chacun)
+  calls.forEach((c, idx) => {
+    const path = c.url.replace('https://appointment.cloud.diplomatie.be', '');
+    // Ne loguer en détail que les appels avec du contenu exploitable
+    const hasBody = !!c.requestBody || !!c.responseBody;
+    if (!hasBody) return;
+    botLog({
+      applicationId: clientId,
+      step: 'cev_network_call_detail',
+      status: 'ok',
+      data: {
+        idx,
+        method:      c.method,
+        path,
+        reqBody:     c.requestBody?.slice(0, 1500) ?? null,
+        resStatus:   c.responseStatus ?? null,
+        resBody:     c.responseBody?.slice(0, 1500) ?? null,
+        resType:     (() => {
+          try { const p = JSON.parse(c.responseBody ?? 'null'); return Array.isArray(p) ? 'array' : typeof p; } catch { return 'non-json'; }
+        })(),
+        resKeys:     (() => {
+          try { const p = JSON.parse(c.responseBody ?? 'null'); return (p && typeof p === 'object' && !Array.isArray(p)) ? Object.keys(p) : null; } catch { return null; }
+        })(),
+      },
+    });
+  });
 }
 
 /**
