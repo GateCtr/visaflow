@@ -1,8 +1,9 @@
-import { BrowserContext, Page, Request, Response } from 'playwright';
+import { BrowserContext, Page } from 'playwright';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
 import { launchBrowser, randomDelay, humanType, humanClick, humanScroll } from './browser.js';
+import { attachNetCapture } from './netCapture.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
@@ -86,45 +87,11 @@ export async function runCevBookingSession(
       botLog({ applicationId: config.clientId, step: 'cev_hcaptcha_accessibility_cookie_injected', status: 'ok' });
     }
 
-    // === CAPTURE RÉSEAU : intercepte TOUS les appels sur appointment.cloud.diplomatie.be ===
-    context.on('request', (req: Request) => {
-      if (req.url().includes('appointment.cloud.diplomatie.be')) {
-        const entry: CapturedNetworkCall = {
-          timestamp: Date.now(),
-          method: req.method(),
-          url: req.url(),
-          requestBody: req.postData() ?? undefined,
-        };
-        capturedCalls.push(entry);
-        botLog({
-          applicationId: config.clientId,
-          step: 'cev_network_request',
-          status: 'ok',
-          data: { method: req.method(), url: req.url(), body: req.postData() ?? '' },
-        });
-      }
-    });
-
-    context.on('response', async (res: Response) => {
-      if (res.url().includes('appointment.cloud.diplomatie.be')) {
-        const entry = [...capturedCalls].reverse().find((c: CapturedNetworkCall) => c.url === res.url() && !c.responseStatus);
-        if (entry) {
-          entry.responseStatus = res.status();
-          try {
-            const ct = res.headers()['content-type'] ?? '';
-            if (ct.includes('json') || ct.includes('text')) {
-              entry.responseBody = await res.text().catch(() => '[unreadable]');
-            }
-          } catch { /* ignore */ }
-        }
-        botLog({
-          applicationId: config.clientId,
-          step: 'cev_network_response',
-          status: 'ok',
-          data: { status: res.status(), url: res.url() },
-        });
-      }
-    });
+    // === CAPTURE RÉSEAU COMPLÈTE : VOWINT + CEV (style mitmproxy) ===
+    // Capture TOUT le trafic visaonweb.diplomatie.be + appointment.cloud.diplomatie.be
+    // → chaque requête/réponse loguée dans Convex (step: net_request / net_response)
+    // → permet de voir la réponse serveur quand la limite 5 clics/h est atteinte
+    const netCapture = attachNetCapture(context, config.clientId);
 
     // === ÉTAPE 1 : Ouvrir VOWINT et naviguer vers la page de demande ===
     const page = launched.page;
@@ -169,6 +136,7 @@ export async function runCevBookingSession(
 
     const result = await completebookingViaUI(page, session, config, capturedCalls);
 
+    netCapture.dump();
     await browser.close();
     return { ...result, capturedCalls };
 
@@ -1075,9 +1043,13 @@ async function establishCevSessionOnly(
       }]);
     }
 
+    // Capture réseau complète : VOWINT + CEV
+    const netCapture = attachNetCapture(context, config.clientId);
+
     const cevSession = await establishCevSession(page, context, config, []);
 
     if (!cevSession) {
+      netCapture.dump();
       await browser.close();
       return null;
     }
@@ -1091,6 +1063,7 @@ async function establishCevSessionOnly(
       hcaptchaToken = await solveHcaptcha(config.twoCaptchaApiKey, config.clientId, config.capsolverApiKey);
     }
     if (!hcaptchaToken) {
+      netCapture.dump();
       await browser.close();
       botLog({ applicationId: config.clientId, step: 'cev_session_only_hcaptcha_fail', status: 'fail' });
       return null;
@@ -1098,6 +1071,7 @@ async function establishCevSessionOnly(
 
     // SetCaptchaToken → obtenir session + disponibilité immédiate
     const captchaResult = await completeCevCaptcha(cevSession.cookies, hcaptchaToken, config.clientId);
+    netCapture.dump();
     await browser.close();
 
     if (captchaResult.status === 'session_error') {
@@ -1377,6 +1351,9 @@ export async function runCevDirectSessionSetup(
       botLog({ applicationId: clientId, step: 'cev_direct_accessibility_cookie_injected', status: 'ok' });
     }
 
+    // Capture réseau complète : VOWINT + CEV
+    const netCapture = attachNetCapture(context, clientId);
+
     let cookieString: string;
     let captchaPage: Page;
     let discoveredIntegrationUrl: string | undefined;
@@ -1395,6 +1372,7 @@ export async function runCevDirectSessionSetup(
 
       const cevSession = await establishCevSession(page, context, config, []);
       if (!cevSession) {
+        netCapture.dump();
         await browser.close();
         return { success: false, error: 'CEV_VOWINT_SESSION_FAILED' };
       }
@@ -1417,6 +1395,7 @@ export async function runCevDirectSessionSetup(
 
       if (cevCookies.length === 0) {
         botLog({ applicationId: clientId, step: 'cev_direct_no_cookie', status: 'fail', data: { currentUrl } });
+        netCapture.dump();
         await browser.close();
         return { success: false, error: 'NO_SESSION_COOKIE_AFTER_NAVIGATION' };
       }
@@ -1446,6 +1425,7 @@ export async function runCevDirectSessionSetup(
     }
 
     if (!hcaptchaToken) {
+      netCapture.dump();
       await browser.close();
       botLog({ applicationId: clientId, step: 'cev_direct_captcha_failed', status: 'fail' });
       return { success: false, error: 'HCAPTCHA_FAILED' };
@@ -1453,6 +1433,7 @@ export async function runCevDirectSessionSetup(
 
     // === ÉTAPE 3 : POST SetCaptchaToken avec le cookie de session ===
     const captchaResult = await completeCevCaptcha(cookieString, hcaptchaToken, clientId);
+    netCapture.dump();
     await browser.close();
 
     if (captchaResult.status === 'session_error') {
