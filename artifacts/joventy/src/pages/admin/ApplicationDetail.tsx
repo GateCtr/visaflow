@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRoute } from "wouter";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Id } from "@convex/_generated/dataModel";
+import { Doc, Id } from "@convex/_generated/dataModel";
 import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
 import { getUploadDocs } from "@convex/visaDocuments";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -541,7 +541,7 @@ export default function AdminApplicationDetail() {
   const urgencyTier = urgencyTierKey ? SLOT_URGENCY_TIERS[urgencyTierKey] : null;
   const canAdjustFee = isSlotOnly && !isSuccessFeePaid;
 
-  const docsByKey = Object.fromEntries(docs.filter((d) => !d.isAdminUpload).map((d) => [d.docKey, d]));
+  const docsByKey = Object.fromEntries(docs.filter((d: Doc<"documents">) => !d.isAdminUpload).map((d: Doc<"documents">) => [d.docKey, d]));
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
@@ -1570,7 +1570,7 @@ export default function AdminApplicationDetail() {
                 <h2 className="font-bold text-primary text-base">Coffre-fort Documents</h2>
               </div>
               <span className="text-xs text-muted-foreground">
-                {docs.filter((d) => !d.isAdminUpload).length}/{getUploadDocs(app.destination, app.visaType).length} fourni(s)
+                {docs.filter((d: Doc<"documents">) => !d.isAdminUpload).length}/{getUploadDocs(app.destination, app.visaType).length} fourni(s)
               </span>
             </div>
 
@@ -1609,7 +1609,7 @@ export default function AdminApplicationDetail() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Documents admin (versions officielles, attestations, etc.)</p>
                 {/* Existing admin docs */}
                 <div>
-                  {docs.filter((d) => d.isAdminUpload).map((doc) => (
+                  {docs.filter((d: Doc<"documents">) => d.isAdminUpload).map((doc: Doc<"documents">) => (
                     <DocUploadRow
                       key={`admin-${doc._id}`}
                       appId={appId!}
@@ -1620,7 +1620,7 @@ export default function AdminApplicationDetail() {
                       isAdminContext={true}
                     />
                   ))}
-                  {docs.filter((d) => d.isAdminUpload).length === 0 && (
+                  {docs.filter((d: Doc<"documents">) => d.isAdminUpload).length === 0 && (
                     <p className="text-sm text-slate-400 italic py-2">Aucun document admin ajouté.</p>
                   )}
                 </div>
@@ -1669,7 +1669,7 @@ export default function AdminApplicationDetail() {
               <span className="ml-auto text-xs text-muted-foreground">{botLogs.length} événement{botLogs.length > 1 ? "s" : ""}</span>
             </div>
             <div className="relative border-l-2 border-slate-100 ml-3 space-y-4 pb-2">
-              {botLogs.map((log) => {
+              {botLogs.map((log: Doc<"botLogs">) => {
                 const stepLabels: Record<string, string> = {
                   login: "Connexion au portail",
                   ofc_list: "Liste des bureaux consulaires",
@@ -1771,7 +1771,7 @@ export default function AdminApplicationDetail() {
           <div className="text-center text-xs text-muted-foreground mb-6">
             Début de la conversation
           </div>
-          {messages.map((msg) => {
+          {messages.map((msg: Doc<"messages">) => {
             const isAdmin = msg.isFromAdmin;
             return (
               <div key={msg._id} className={`flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>

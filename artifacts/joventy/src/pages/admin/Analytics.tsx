@@ -38,6 +38,10 @@ const PIE_COLORS = [
   "#8B5CF6", "#EF4444", "#F97316", "#6B7280",
 ];
 
+type SuccessEntry = { dest: string; taux: number; success: number; total: number };
+type StatusEntry  = { label: string; value: number };
+type RevenueEntry = { dest: string; revenu: number };
+
 function fmtMoney(n: number) {
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
   return `$${n}`;
@@ -214,7 +218,7 @@ export default function Analytics() {
                     formatter={(v: number, _name, entry) => [`${v}% (${entry.payload.success}/${entry.payload.total})`, "Succès"]}
                   />
                   <Bar dataKey="taux" radius={[0, 6, 6, 0]} barSize={22}>
-                    {successByDest.map((entry) => (
+                    {successByDest.map((entry: SuccessEntry) => (
                       <Cell
                         key={entry.dest}
                         fill={DEST_COLORS[entry.dest] ?? "#6B7280"}
@@ -227,7 +231,7 @@ export default function Analytics() {
           )}
           {/* Légende détaillée */}
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {successByDest.map((d) => (
+            {successByDest.map((d: SuccessEntry) => (
               <div key={d.dest} className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -260,7 +264,7 @@ export default function Analytics() {
                     outerRadius={75}
                     paddingAngle={2}
                   >
-                    {statusDist.map((_entry, i) => (
+                    {statusDist.map((_entry: StatusEntry, i: number) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
@@ -273,7 +277,7 @@ export default function Analytics() {
             </div>
           )}
           <div className="mt-2 space-y-1.5">
-            {statusDist.map((s, i) => (
+            {statusDist.map((s: StatusEntry, i: number) => (
               <div key={s.label} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
@@ -287,7 +291,7 @@ export default function Analytics() {
       </div>
 
       {/* Revenu par destination */}
-      {revenueByDest.some(d => d.revenu > 0) && (
+      {revenueByDest.some((d: RevenueEntry) => d.revenu > 0) && (
         <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
           <h2 className="text-base font-bold text-primary mb-1">Revenu par destination</h2>
           <p className="text-xs text-muted-foreground mb-6">Total encaissé (engagement + succès)</p>
@@ -302,7 +306,7 @@ export default function Analytics() {
                   formatter={(v: number) => [`$${v}`, "Revenu"]}
                 />
                 <Bar dataKey="revenu" radius={[6, 6, 0, 0]} barSize={40}>
-                  {revenueByDest.map((entry) => (
+                  {revenueByDest.map((entry: RevenueEntry) => (
                     <Cell key={entry.dest} fill={DEST_COLORS[entry.dest] ?? "#6B7280"} />
                   ))}
                 </Bar>
@@ -311,7 +315,7 @@ export default function Analytics() {
           </div>
 
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {revenueByDest.map((d) => (
+            {revenueByDest.map((d: RevenueEntry) => (
               <div key={d.dest} className="text-center p-3 bg-slate-50 rounded-xl">
                 <p className="text-xs font-bold" style={{ color: DEST_COLORS[d.dest] ?? "#6B7280" }}>{d.dest}</p>
                 <p className="text-lg font-bold text-primary mt-0.5">{fmtMoney(d.revenu)}</p>

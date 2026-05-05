@@ -42,7 +42,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
   ];
 
   const pendingReviews = useQuery(api.reviews.listAll, isAdmin ? {} : undefined);
-  const pendingReviewCount = pendingReviews?.filter((r) => !r.isApproved).length ?? 0;
+  const pendingReviewCount = pendingReviews?.filter((r: { isApproved: boolean }) => !r.isApproved).length ?? 0;
 
   const adminLinks = [
     { href: "/admin", label: "Tableau de Bord", icon: LayoutDashboard },
