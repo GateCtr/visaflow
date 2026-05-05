@@ -188,12 +188,14 @@ http.route({
       sessionId: string;
       sessionCookie: string;
       validUntilMs?: number;
+      integrationUrl?: string;  // URL d'intégration découverte par le bot (mode credentials)
     };
 
     await ctx.runMutation(internal.cevSessions.internalActivateSession, {
       sessionId: body.sessionId as Id<"cevSessions">,
       sessionCookie: body.sessionCookie,
       validUntilMs: body.validUntilMs,
+      integrationUrl: body.integrationUrl,
     });
 
     return new Response(JSON.stringify({ ok: true }), {

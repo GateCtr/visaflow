@@ -258,6 +258,11 @@ export default defineSchema({
     pollIntervalMs: v.optional(v.number()),
     createdAt: v.number(),
     expiredAt: v.optional(v.number()),
+    // Identifiants VOWINT pour que le bot puisse se connecter et régénérer
+    // l'URL d'intégration de manière autonome quand la session expire.
+    vowintEmail: v.optional(v.string()),
+    vowintPassword: v.optional(v.string()),
+    vowintAppUrl: v.optional(v.string()), // URL dossier spécifique (vide = auto-détection)
     // Note libre admin (ex: "session pour Marie Dupont, dossier urgent")
     notes: v.optional(v.string()),
     // Verrouillage atomique anti-doublon (timestamp jusqu'à quand la session

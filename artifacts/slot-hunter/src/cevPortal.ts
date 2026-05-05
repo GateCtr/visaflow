@@ -1,4 +1,5 @@
 import { botLog } from './convexClient';
+import { randomUserAgent } from './browser.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 
@@ -54,10 +55,12 @@ export async function completeCevCaptcha(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': sessionCookies,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': randomUserAgent(),
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': `${CEV_BASE}/Captcha`,
         'Origin': CEV_BASE,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
       },
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
     });
@@ -133,11 +136,12 @@ export async function pollCevSlots(
       headers: {
         'Content-Type': 'application/json',
         'Cookie': session.cookies,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': randomUserAgent(),
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': `${CEV_BASE}${session.redirectUrl}`,
         'Origin': CEV_BASE,
         'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
       },
       body: JSON.stringify(body),
     });

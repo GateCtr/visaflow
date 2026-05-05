@@ -1,7 +1,8 @@
-import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
+import { BrowserContext, Page, Request, Response } from 'playwright';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
+import { launchBrowser, randomDelay, humanType, humanClick, humanScroll } from './browser.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
@@ -65,16 +66,10 @@ export async function runCevBookingSession(
   botLog({ applicationId: config.clientId, step: 'cev_booking_start', status: 'ok' });
 
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'fr-BE',
-      timezoneId: 'Africa/Kinshasa',
-    });
+    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation, fingerprint masqué ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    browser = launched.browser;
+    const context = launched.context;
 
     // Injecter le cookie d'accessibilité hCaptcha si configuré (bypass gratuit)
     const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
@@ -132,7 +127,7 @@ export async function runCevBookingSession(
     });
 
     // === ÉTAPE 1 : Ouvrir VOWINT et naviguer vers la page de demande ===
-    const page = await context.newPage();
+    const page = launched.page;
     const cevSession = await establishCevSession(page, context, config, capturedCalls);
 
     if (!cevSession) {
@@ -179,7 +174,7 @@ export async function runCevBookingSession(
 
   } catch (err) {
     botLog({ applicationId: config.clientId, step: 'cev_booking_crash', status: 'fail', data: { error: String(err) } });
-    try { if (browser) await (browser as Awaited<ReturnType<typeof chromium.launch>>).close(); } catch { /* ignore */ }
+    try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
     return { success: false, error: String(err), capturedCalls };
   }
 }
@@ -200,7 +195,7 @@ async function establishCevSession(
   context: BrowserContext,
   config: CevBookingConfig,
   _capturedCalls: CapturedNetworkCall[]
-): Promise<{ cookies: string; cevPage: Page } | null> {
+): Promise<{ cookies: string; cevPage: Page; integrationUrl: string | null } | null> {
   try {
     // === ÉTAPE 0 : Login VOWINT ===
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
@@ -213,9 +208,13 @@ async function establishCevSession(
       loginUrl.toLowerCase().includes('account/login');
 
     if (isLoginPage) {
-      await page.fill('input#UserName', config.vowintUsername);
-      await page.fill('input#Password', config.vowintPassword);
-      await page.click('button[type="submit"]');
+      // Comportement humain : délais naturels entre chaque champ
+      await randomDelay(600, 1_200);
+      await humanType(page, 'input#UserName', config.vowintUsername);
+      await randomDelay(400, 900);
+      await humanType(page, 'input#Password', config.vowintPassword);
+      await randomDelay(300, 700);
+      await humanClick(page, 'button[type="submit"]');
       await page.waitForLoadState('networkidle', { timeout: 15_000 });
 
       const afterUrl = page.url();
@@ -241,8 +240,9 @@ async function establishCevSession(
       : 'https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId';
 
     await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30_000 });
-    // Attendre le rendu AngularJS (lazy-loaded)
-    await new Promise(r => setTimeout(r, 2_500));
+    // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
+    await randomDelay(2_000, 4_000);
+    await humanScroll(page); // scroll naturel — évite le pattern "goto → clic immédiat"
 
     botLog({ applicationId: config.clientId, step: 'cev_vowint_apps_page', status: 'ok', data: { url: page.url() } });
 
@@ -262,14 +262,32 @@ async function establishCevSession(
 
     botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_found', status: 'ok' });
 
+    // Micro-pause humaine avant clic — évite le pattern "login → clic immédiat" (détectable)
+    await randomDelay(1_000, 2_500);
+
     // === ÉTAPE 3 : Cliquer et attendre le nouvel onglet CEV ===
+    // Capture l'URL d'intégration dès l'ouverture de l'onglet (avant le redirect /Captcha)
+    let capturedIntegrationUrl: string | null = null;
     const [newPage] = await Promise.all([
-      context.waitForEvent('page', { timeout: 15_000 }),
+      context.waitForEvent('page', { timeout: 15_000 }).then(pg => {
+        pg.on('request', (req) => {
+          if (!capturedIntegrationUrl && req.isNavigationRequest() && req.url().includes('/Integration/VOW/')) {
+            capturedIntegrationUrl = req.url();
+          }
+        });
+        return pg;
+      }),
       rdvBtn.click(),
     ]);
 
     await newPage.waitForLoadState('domcontentloaded', { timeout: 20_000 });
-    await new Promise(r => setTimeout(r, 2_000)); // laisser les cookies s'établir dans le jar
+    await randomDelay(1_500, 3_000); // laisser les cookies s'établir dans le jar
+
+    // Fallback : si le premier event de navigation était déjà /Captcha, essayer l'URL courante
+    if (!capturedIntegrationUrl) {
+      const tabUrl = newPage.url();
+      if (tabUrl.includes('/Integration/VOW/')) capturedIntegrationUrl = tabUrl;
+    }
 
     const newPageUrl = newPage.url();
     botLog({ applicationId: config.clientId, step: 'cev_new_tab_opened', status: 'ok', data: { url: newPageUrl } });
@@ -298,7 +316,14 @@ async function establishCevSession(
       data: { cookieLen: cookieString.length, names: cevCookies.map(c => c.name).join(', ') },
     });
 
-    return { cookies: cookieString, cevPage: newPage };
+    botLog({
+      applicationId: config.clientId,
+      step: 'cev_integration_url_captured',
+      status: capturedIntegrationUrl ? 'ok' : 'warn',
+      data: { integrationUrl: capturedIntegrationUrl ?? 'not_captured' },
+    });
+
+    return { cookies: cookieString, cevPage: newPage, integrationUrl: capturedIntegrationUrl };
 
   } catch (err) {
     botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: String(err) } });
@@ -342,7 +367,7 @@ async function completebookingViaUI(
     botLog({ applicationId: config.clientId, step: 'cev_calendar_loaded', status: 'ok', data: { url: calendarUrl } });
 
     // Laisser le calendrier Bootstrap se charger (appel AJAX /Home/AvailableTimeSlots)
-    await new Promise(r => setTimeout(r, 3_000));
+    await randomDelay(2_500, 4_500);
 
     // ── Dump /Home/AvailableTimeSlots (requête + réponse exactes) ────────────
     const slotsResp = await slotsResponsePromise;
@@ -432,7 +457,7 @@ async function completebookingViaUI(
           { timeout: 8_000 },
         ).catch(() => null);
 
-        await dateEl.click();
+        await humanClick(page, sel);
         dateClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_date_selected', status: 'ok', data: { selector: sel, date: bookedDate } });
 
@@ -487,7 +512,7 @@ async function completebookingViaUI(
 
     // Attendre le chargement des créneaux horaires (AJAX probable après sélection date)
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await new Promise(r => setTimeout(r, 1_500));
+    await randomDelay(1_200, 2_500);
 
     // ── Dump HTML de la page après sélection de date (structure créneaux horaires) ──
     const afterDateHtml = await page.content().catch(() => '');
@@ -533,7 +558,7 @@ async function completebookingViaUI(
                      await timeEl.getAttribute('data-time') ??
                      await timeEl.getAttribute('value') ??
                      await timeEl.innerText().catch(() => '');
-        await timeEl.click();
+        await humanClick(page, sel);
         timeClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_time_selected', status: 'ok', data: { selector: sel, time: bookedTime } });
         break;
@@ -542,7 +567,7 @@ async function completebookingViaUI(
 
     if (timeClicked) {
       await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-      await new Promise(r => setTimeout(r, 1_000));
+      await randomDelay(800, 1_800);
     }
 
     // === Cliquer le bouton de confirmation final ===
@@ -566,7 +591,7 @@ async function completebookingViaUI(
     for (const sel of confirmCandidates) {
       const btn = await page.$(sel);
       if (btn) {
-        await btn.click();
+        await humanClick(page, sel);
         botLog({ applicationId: config.clientId, step: 'cev_confirm_clicked', status: 'ok', data: { selector: sel } });
         break;
       }
@@ -1031,16 +1056,11 @@ async function establishCevSessionOnly(
   botLog({ applicationId: config.clientId, step: 'cev_session_only_start', status: 'ok' });
 
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'fr-BE',
-      timezoneId: 'Africa/Kinshasa',
-    });
+    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    browser = launched.browser;
+    const context = launched.context;
+    const page = launched.page;
 
     const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
     if (accessibilityCookie) {
@@ -1055,7 +1075,6 @@ async function establishCevSessionOnly(
       }]);
     }
 
-    const page = await context.newPage();
     const cevSession = await establishCevSession(page, context, config, []);
 
     if (!cevSession) {
@@ -1095,7 +1114,7 @@ async function establishCevSessionOnly(
 
   } catch (err) {
     botLog({ applicationId: config.clientId, step: 'cev_session_only_crash', status: 'fail', data: { error: String(err) } });
-    try { if (browser) await (browser as Awaited<ReturnType<typeof chromium.launch>>).close(); } catch { /* ignore */ }
+    try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
     return null;
   }
 }
@@ -1314,25 +1333,34 @@ export interface CevDirectSetupResult {
  * Le cookie est valide ~30-60 min. Le bot re-lance ce setup automatiquement
  * quand la session expire (status: "expired" → "needs_setup" via admin UI).
  */
+/**
+ * Mode credentials VOWINT (nouveau, recommandé) :
+ *   Le bot se connecte à VOWINT → clique RDV → capture session CEV → résout hCaptcha → stocke.
+ *   L'URL d'intégration est découverte automatiquement ; les credentials sont réutilisables.
+ *
+ * Mode URL directe (legacy, compatibilité) :
+ *   Navigue vers l'URL fournie → extrait le cookie → résout hCaptcha → stocke.
+ */
 export async function runCevDirectSessionSetup(
-  integrationUrl: string,
+  credentialsOrUrl: { vowintEmail: string; vowintPassword: string; vowintAppUrl?: string } | string,
   sessionId: string,
   clientId: string,
 ): Promise<CevDirectSetupResult> {
-  botLog({ applicationId: clientId, step: 'cev_direct_setup_start', status: 'ok', data: { integrationUrl } });
+  const isCredMode = typeof credentialsOrUrl !== 'string';
+  botLog({
+    applicationId: clientId,
+    step: 'cev_direct_setup_start',
+    status: 'ok',
+    data: { mode: isCredMode ? 'vowint-credentials' : 'url-direct' },
+  });
 
   let browser = null;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'fr-BE',
-      timezoneId: 'Africa/Kinshasa',
-    });
+    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    browser = launched.browser;
+    const context = launched.context;
+    const page = launched.page;
 
     // Injecter le cookie d'accessibilité hCaptcha si configuré (bypass gratuit)
     const accessibilityCookie = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE?.trim();
@@ -1349,49 +1377,72 @@ export async function runCevDirectSessionSetup(
       botLog({ applicationId: clientId, step: 'cev_direct_accessibility_cookie_injected', status: 'ok' });
     }
 
-    const page = await context.newPage();
+    let cookieString: string;
+    let captchaPage: Page;
+    let discoveredIntegrationUrl: string | undefined;
 
-    // === ÉTAPE 1 : Naviguer vers l'URL directe → redirect vers /Captcha ===
-    await page.goto(integrationUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await new Promise(r => setTimeout(r, 2_000)); // laisser les cookies s'établir
+    if (isCredMode) {
+      // ── Mode credentials VOWINT : login → RDV click → session CEV ──────────
+      const creds = credentialsOrUrl as { vowintEmail: string; vowintPassword: string; vowintAppUrl?: string };
+      const config: CevBookingConfig = {
+        clientId,
+        vowintUsername: creds.vowintEmail,
+        vowintPassword: creds.vowintPassword,
+        vowintAppointmentUrl: creds.vowintAppUrl ?? 'https://visaonweb.diplomatie.be',
+        twoCaptchaApiKey: process.env.TWOCAPTCHA_API_KEY ?? '',
+        capsolverApiKey: process.env.CAPSOLVER_API_KEY,
+      };
 
-    const currentUrl = page.url();
-    botLog({ applicationId: clientId, step: 'cev_direct_navigation_done', status: 'ok', data: { currentUrl } });
+      const cevSession = await establishCevSession(page, context, config, []);
+      if (!cevSession) {
+        await browser.close();
+        return { success: false, error: 'CEV_VOWINT_SESSION_FAILED' };
+      }
 
-    // === ÉTAPE 2 : Extraire les cookies CEV depuis le jar navigateur ===
-    const allCookies = await context.cookies();
-    const cevCookies = allCookies.filter(c =>
-      c.domain.includes('appointment.cloud.diplomatie.be')
-    );
+      cookieString = cevSession.cookies;
+      captchaPage = cevSession.cevPage;
+      discoveredIntegrationUrl = cevSession.integrationUrl ?? undefined;
 
-    if (cevCookies.length === 0) {
-      botLog({ applicationId: clientId, step: 'cev_direct_no_cookie', status: 'fail', data: { currentUrl } });
-      await browser.close();
-      return { success: false, error: 'NO_SESSION_COOKIE_AFTER_NAVIGATION' };
+    } else {
+      // ── Mode URL directe (legacy) : naviguer → extraire cookie ──────────────
+      const integrationUrl = credentialsOrUrl as string;
+      await page.goto(integrationUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await randomDelay(1_500, 2_500); // laisser les cookies s'établir
+
+      const currentUrl = page.url();
+      botLog({ applicationId: clientId, step: 'cev_direct_navigation_done', status: 'ok', data: { currentUrl } });
+
+      const allCookies = await context.cookies();
+      const cevCookies = allCookies.filter(c => c.domain.includes('appointment.cloud.diplomatie.be'));
+
+      if (cevCookies.length === 0) {
+        botLog({ applicationId: clientId, step: 'cev_direct_no_cookie', status: 'fail', data: { currentUrl } });
+        await browser.close();
+        return { success: false, error: 'NO_SESSION_COOKIE_AFTER_NAVIGATION' };
+      }
+
+      cookieString = cevCookies.map(c => `${c.name}=${c.value}`).join('; ');
+      captchaPage = page;
+      botLog({
+        applicationId: clientId,
+        step: 'cev_direct_cookie_captured',
+        status: 'ok',
+        data: { names: cevCookies.map(c => c.name).join(', ') },
+      });
     }
 
-    const cookieString = cevCookies.map(c => `${c.name}=${c.value}`).join('; ');
-    const aspNetCookie = cevCookies.find(c => c.name === 'ASP.NET_SessionId');
-
-    botLog({
-      applicationId: clientId,
-      step: 'cev_direct_cookie_captured',
-      status: 'ok',
-      data: { names: cevCookies.map(c => c.name).join(', '), hasAspNet: !!aspNetCookie },
-    });
-
-    // === ÉTAPE 3 : Résoudre hCaptcha ===
+    // === ÉTAPE 2 : Résoudre hCaptcha ===
     let hcaptchaToken: string | null = null;
 
-    // Priorité 0 : Mode accessibilité (cookie hc_accessibility — gratuit)
     if (accessibilityCookie) {
-      hcaptchaToken = await solveHcaptchaViaAccessibility(page, clientId);
+      hcaptchaToken = await solveHcaptchaViaAccessibility(captchaPage, clientId);
     }
-
-    // Fallback : services externes
     if (!hcaptchaToken) {
-      const twoCaptchaApiKey = process.env.TWOCAPTCHA_API_KEY ?? '';
-      hcaptchaToken = await solveHcaptcha(twoCaptchaApiKey, clientId);
+      hcaptchaToken = await solveHcaptcha(
+        process.env.TWOCAPTCHA_API_KEY ?? '',
+        clientId,
+        process.env.CAPSOLVER_API_KEY,
+      );
     }
 
     if (!hcaptchaToken) {
@@ -1400,27 +1451,24 @@ export async function runCevDirectSessionSetup(
       return { success: false, error: 'HCAPTCHA_FAILED' };
     }
 
-    // === ÉTAPE 4 : POST SetCaptchaToken avec le cookie de session ===
-    const captchaResult = await (await import('./cevPortal.js')).completeCevCaptcha(
-      cookieString, hcaptchaToken, clientId
-    );
-
+    // === ÉTAPE 3 : POST SetCaptchaToken avec le cookie de session ===
+    const captchaResult = await completeCevCaptcha(cookieString, hcaptchaToken, clientId);
     await browser.close();
 
     if (captchaResult.status === 'session_error') {
       return { success: false, error: captchaResult.error };
     }
 
-    // === ÉTAPE 5 : Extraire validUntil et persister la session dans Convex ===
+    // === ÉTAPE 4 : Persister la session dans Convex ===
     const validUntilMs = captchaResult.status === 'ready'
       ? new Date(captchaResult.session.validUntil).getTime()
       : undefined;
 
-    // La valeur ASP.NET_SessionId seule suffit pour le polling (cevPolling.ts attend juste la valeur)
-    const cookieForStorage = aspNetCookie?.value ?? cookieString;
+    // Extraire uniquement la valeur ASP.NET_SessionId (suffisant pour le polling)
+    const aspNetMatch = cookieString.match(/ASP\.NET_SessionId=([^;]+)/);
+    const cookieForStorage = aspNetMatch ? aspNetMatch[1] : cookieString;
 
-    // Activer la session dans Convex
-    const activated = await activateCevSession(sessionId, cookieForStorage, validUntilMs);
+    const activated = await activateCevSession(sessionId, cookieForStorage, validUntilMs, discoveredIntegrationUrl);
     if (!activated) {
       botLog({ applicationId: clientId, step: 'cev_direct_activate_failed', status: 'fail' });
       return { success: false, error: 'CONVEX_ACTIVATE_FAILED', sessionCookie: cookieForStorage, validUntilMs };
@@ -1431,9 +1479,11 @@ export async function runCevDirectSessionSetup(
       step: 'cev_direct_setup_complete',
       status: 'ok',
       data: {
+        mode: isCredMode ? 'vowint-credentials' : 'url-direct',
         result: captchaResult.status,
         validUntilMs: validUntilMs ?? 0,
         cookiePreview: cookieForStorage.slice(0, 4) + '…',
+        integrationUrl: discoveredIntegrationUrl ?? 'not_captured',
       },
     });
 
@@ -1441,7 +1491,7 @@ export async function runCevDirectSessionSetup(
 
   } catch (err) {
     botLog({ applicationId: clientId, step: 'cev_direct_setup_crash', status: 'fail', data: { error: String(err) } });
-    try { if (browser) await (browser as Awaited<ReturnType<typeof chromium.launch>>).close(); } catch { /* ignore */ }
+    try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
     return { success: false, error: String(err) };
   }
 }

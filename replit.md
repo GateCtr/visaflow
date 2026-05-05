@@ -21,6 +21,27 @@ Premium visa assistance SaaS for the Democratic Republic of Congo (RDC/DRC).
 - **Charts**: recharts
 - **Routing**: Wouter (SPA)
 
+## CEV Bot — Anti-détection (dernière mise à jour 2026-05-05)
+
+### Problèmes corrigés
+1. **3 sessions Playwright** (`runCevBookingSession`, `establishCevSessionOnly`, `runCevDirectSessionSetup`) passées de `chromium.launch()` brut → `launchBrowser()` (StealthPlugin, proxy résidentiel, UA rotation, fingerprint masqué).
+2. **Login VOWINT humanisé** : `page.fill()` → `humanType()`, `page.click()` → `humanClick()`, délais aléatoires entre chaque champ.
+3. **Clic bouton RDV humanisé** : pause aléatoire 1-2.5s + `humanScroll()` avant le clic.
+4. **Clics date/heure/confirm** : `el.click()` → `humanClick(page, sel)`.
+5. **Délais fixes** : tous les `setTimeout(r, N)` → `randomDelay(min, max)`.
+6. **`cevPolling.ts`** : UA Android+Chrome147 → `randomUserAgent()` (desktop Chrome/Edge/Safari/Firefox).
+7. **`cevPortal.ts`** : UA statique → `randomUserAgent()` dans tous les fetch HTTP.
+8. **Capture URL d'intégration** : `/Integration/VOW/...` capturée automatiquement depuis les requêtes de navigation du nouvel onglet.
+
+### Migration CEV Sessions — VOWINT credentials
+- `convex/schema.ts` : ajout `vowintEmail`, `vowintPassword`, `vowintAppUrl` (optional) à `cevSessions`.
+- `convex/cevSessions.ts` : `upsertSession` supporte credentials VOWINT OU URL legacy ; `internalClaimNeedsSetup` retourne les credentials ; `internalActivateSession` accepte `integrationUrl`.
+- `convex/http.ts` : endpoint activate accepte `integrationUrl`.
+- `convexClient.ts` : `CevSetupTask` + `activateCevSession` étendus.
+- `CevSessions.tsx` : formulaire email VOWINT + mot de passe + URL dossier optionnelle + bouton "relancer config auto".
+- `cevBooking.ts` : `runCevDirectSessionSetup` accepte credentials OU URL (backward compat) ; en mode credentials, réutilise `establishCevSession()`.
+- `index.ts` : boucle setup détecte automatiquement le mode.
+
 ## Architecture
 
 ```text

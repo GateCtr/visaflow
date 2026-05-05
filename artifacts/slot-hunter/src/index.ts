@@ -25,8 +25,17 @@ async function startCevSetupLoop(): Promise<void> {
 
       // Séquentiellement (Playwright est lourd, pas en parallèle)
       for (const s of pending) {
-        console.log(`[CEV-SETUP] Établissement session=${s.sessionId} url=${s.integrationUrl.slice(0, 60)}...`);
-        const r = await runCevDirectSessionSetup(s.integrationUrl, s.sessionId, s.applicationId);
+        const isCredMode = !!(s.vowintEmail && s.vowintPassword);
+        console.log(
+          `[CEV-SETUP] Établissement session=${s.sessionId} mode=${isCredMode ? "vowint-credentials" : "url-direct"}`
+        );
+        const r = await runCevDirectSessionSetup(
+          isCredMode
+            ? { vowintEmail: s.vowintEmail!, vowintPassword: s.vowintPassword!, vowintAppUrl: s.vowintAppUrl }
+            : s.integrationUrl,
+          s.sessionId,
+          s.applicationId,
+        );
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
         } else {

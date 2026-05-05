@@ -15,7 +15,7 @@ import {
   Loader2,
   Info,
   X,
-  ExternalLink,
+  Bot,
 } from "lucide-react";
 
 const POLL_INTERVAL_OPTIONS = [
@@ -45,7 +45,7 @@ function StatusBadge({ status, lastResult }: { status: string; lastResult?: stri
   if (status === "expired") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-        <XCircle className="w-3 h-3" /> Cookie expiré
+        <XCircle className="w-3 h-3" /> Session expirée
       </span>
     );
   }
@@ -86,25 +86,28 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   );
 
   const [applicationId, setApplicationId] = useState<string>("");
-  const [integrationUrl, setIntegrationUrl] = useState("");
-  const [sessionCookie, setSessionCookie] = useState("");
+  const [vowintEmail, setVowintEmail] = useState("");
+  const [vowintPassword, setVowintPassword] = useState("");
+  const [vowintAppUrl, setVowintAppUrl] = useState("");
   const [pollMs, setPollMs] = useState(30_000);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canSubmit = !!applicationId && !!vowintEmail.trim() && !!vowintPassword.trim();
+
   async function submit() {
     setError(null);
-    if (!applicationId) {
-      setError("Sélectionne un dossier client");
-      return;
-    }
+    if (!applicationId) { setError("Sélectionne un dossier client"); return; }
+    if (!vowintEmail.trim()) { setError("Email VOWINT requis"); return; }
+    if (!vowintPassword.trim()) { setError("Mot de passe VOWINT requis"); return; }
     setSubmitting(true);
     try {
       await upsert({
         applicationId: applicationId as Id<"applications">,
-        integrationUrl,
-        sessionCookie,
+        vowintEmail: vowintEmail.trim(),
+        vowintPassword: vowintPassword.trim(),
+        vowintAppUrl: vowintAppUrl.trim() || undefined,
         notes: notes.trim() || undefined,
         pollIntervalMs: pollMs,
       });
@@ -118,10 +121,10 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-[#1A3F96]" />
+            <Bot className="w-5 h-5 text-[#1A3F96]" />
             <h2 className="text-lg font-semibold text-slate-900">Nouvelle session CEV</h2>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
@@ -133,9 +136,13 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
           <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 flex gap-3 text-sm">
             <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
             <div className="text-violet-900 space-y-1.5">
-              <p className="font-medium">2 modes disponibles :</p>
-              <p className="text-xs"><strong>Mode auto (recommandé) :</strong> colle l'URL directe du client → le bot résout le hCaptcha automatiquement et démarre le polling sans intervention. Le cookie se renouvelle tout seul.</p>
-              <p className="text-xs"><strong>Mode manuel :</strong> fournis l'URL + le cookie ASP.NET_SessionId manuellement (cookie obtenu via F12 après résolution captcha dans le navigateur).</p>
+              <p className="font-medium">Mode entièrement autonome</p>
+              <p className="text-xs">
+                Le bot se connecte à VOWINT avec tes identifiants, clique sur
+                «&nbsp;Prendre rendez-vous&nbsp;», résout le hCaptcha automatiquement,
+                puis démarre le polling. Quand la session expire, il se reconnecte
+                seul sans intervention de ta part.
+              </p>
             </div>
           </div>
 
@@ -158,31 +165,50 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">URL d'intégration directe *</label>
-            <textarea
-              value={integrationUrl}
-              onChange={(e) => setIntegrationUrl(e.target.value)}
-              placeholder="https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-.../e978b2fd-.../59eba882-.../95d3b3f2-.../en-US"
-              rows={3}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
-            />
-            <p className="text-xs text-slate-500 mt-1">URL directe avec 4 GUIDs — transmise par le client ou extraite depuis VOWINT</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email VOWINT *
+              </label>
+              <input
+                type="email"
+                value={vowintEmail}
+                onChange={(e) => setVowintEmail(e.target.value)}
+                placeholder="client@example.com"
+                autoComplete="off"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Mot de passe VOWINT *
+              </label>
+              <input
+                type="password"
+                value={vowintPassword}
+                onChange={(e) => setVowintPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Cookie <code className="bg-slate-100 px-1 rounded text-xs">ASP.NET_SessionId</code>{" "}
-              <span className="text-slate-400 font-normal">(optionnel — laisse vide pour le mode auto)</span>
+              URL dossier VOWINT{" "}
+              <span className="text-slate-400 font-normal">(optionnel — auto-détection si vide)</span>
             </label>
             <input
-              type="text"
-              value={sessionCookie}
-              onChange={(e) => setSessionCookie(e.target.value)}
-              placeholder="Laisser vide pour que le bot l'établisse automatiquement"
+              type="url"
+              value={vowintAppUrl}
+              onChange={(e) => setVowintAppUrl(e.target.value)}
+              placeholder="https://visaonweb.diplomatie.be/en/VisaApplication/Detail/..."
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
             />
-            <p className="text-xs text-slate-500 mt-1">Si fourni : polling immédiat. Si absent : le bot résout le hCaptcha (~2 min) puis démarre.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Si fourni, le bot navigue directement vers ce dossier. Sinon, il détecte automatiquement le bouton «&nbsp;Prendre rendez-vous&nbsp;».
+            </p>
           </div>
 
           <div>
@@ -233,11 +259,11 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !applicationId || !integrationUrl}
+            disabled={submitting || !canSubmit}
             className="px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {sessionCookie ? "Activer le polling" : "Lancer la config auto"}
+            Lancer la config auto
           </button>
         </div>
       </div>
@@ -257,7 +283,7 @@ export default function CevSessions() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Sessions CEV — Polling Schengen</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Capture manuelle (cookie + URL) puis polling auto sans captcha.
+            Connexion autonome VOWINT + polling automatique — zéro intervention manuelle.
           </p>
         </div>
         <button
@@ -277,7 +303,7 @@ export default function CevSessions() {
           <KeyRound className="w-10 h-10 mx-auto text-slate-400 mb-3" />
           <h3 className="text-base font-medium text-slate-900">Aucune session CEV active</h3>
           <p className="text-sm text-slate-600 mt-1 mb-4">
-            Crée une session pour qu'un dossier soit poll automatiquement par le bot.
+            Crée une session : le bot se connecte à VOWINT et démarre le polling automatiquement.
           </p>
           <button
             onClick={() => setShowModal(true)}
@@ -293,7 +319,7 @@ export default function CevSessions() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dossier</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Cookie</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Session</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Checks</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dernier check</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fréquence</th>
@@ -356,15 +382,15 @@ export default function CevSessions() {
                           <Play className="w-4 h-4" />
                         </button>
                       )}
-                      <a
-                        href="https://visaonweb.diplomatie.be"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                        title="Ouvrir VOWINT pour rafraîchir le cookie"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
+                      {(s.status === "expired") && (
+                        <button
+                          onClick={() => setStatus({ sessionId: s._id, status: "needs_setup" })}
+                          className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
+                          title="Relancer la configuration auto"
+                        >
+                          <Bot className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (confirm(`Supprimer la session pour ${s.applicantName} ?`)) {

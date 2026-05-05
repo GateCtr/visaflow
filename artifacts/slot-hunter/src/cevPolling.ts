@@ -11,11 +11,10 @@
 //
 // Coût : ~50ms par check, zéro captcha, zéro Playwright.
 
+import { randomUserAgent } from "./browser.js";
+
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
-const USER_AGENT =
-  "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36";
 
 export type CevPollResult =
   | { status: "no_slot" }
@@ -23,15 +22,19 @@ export type CevPollResult =
   | { status: "session_expired" }
   | { status: "error"; error: string };
 
-function fetchManual(url: string, cookie: string): Promise<Response> {
+// UA généré une fois par appel à pollCevSlot — reste stable dans la même session HTTP
+// mais tourne entre sessions pour éviter les fingerprints répétitifs (desktop uniquement).
+function fetchManual(url: string, cookie: string, userAgent: string): Promise<Response> {
   return fetch(url, {
     method: "GET",
     headers: {
       Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
-      "User-Agent": USER_AGENT,
+      "User-Agent": userAgent,
       Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9,fr;q=0.8",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "same-origin",
@@ -46,7 +49,7 @@ function isVowintEAppointmentUrl(url: string): boolean {
   return /^https:\/\/visaonweb\.diplomatie\.be\/Common\/GetEAppointmentUrl\?/i.test(url);
 }
 
-async function resolveEntryUrl(entryUrl: string, cookie: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   // Déjà une URL CEV directe: /Integration/VOW/... => pas besoin de résolution.
   if (entryUrl.startsWith(`${BASE}/Integration/VOW/`)) {
     return { ok: true, url: entryUrl };
@@ -60,9 +63,9 @@ async function resolveEntryUrl(entryUrl: string, cookie: string): Promise<{ ok: 
         method: "GET",
         headers: {
           Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
-          "User-Agent": USER_AGENT,
+          "User-Agent": ua,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9,fr;q=0.8",
+          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
           Referer: `${VOWINT_BASE}/`,
         },
         redirect: "manual",
@@ -143,7 +146,9 @@ export async function pollCevSlot(
   sessionCookie: string,
 ): Promise<CevPollResult> {
   try {
-    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie);
+    // UA stable pour toute la session de polling (cohérence headers) mais tournant entre sessions
+    const ua = randomUserAgent();
+    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua);
     if (!resolved.ok) {
       return { status: "error", error: resolved.error };
     }
@@ -151,7 +156,7 @@ export async function pollCevSlot(
     const entryUrl = resolved.url;
 
     // Étape 1 : URL d'entrée
-    const r1 = await fetchManual(entryUrl, sessionCookie);
+    const r1 = await fetchManual(entryUrl, sessionCookie, ua);
 
     if (r1.status === 302) {
       const loc1 = r1.headers.get("location");
@@ -165,7 +170,7 @@ export async function pollCevSlot(
       // Si redirige vers SelectSlot, on suit
       if (kind1 === "slot" && loc1) {
         const next = loc1.startsWith("http") ? loc1 : `${BASE}${loc1}`;
-        const r2 = await fetchManual(next, sessionCookie);
+        const r2 = await fetchManual(next, sessionCookie, ua);
 
         if (r2.status === 302) {
           const kind2 = classifyLocation(r2.headers.get("location"));

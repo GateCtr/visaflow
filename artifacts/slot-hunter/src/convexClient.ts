@@ -366,6 +366,10 @@ export interface CevSetupTask {
   applicationId: string;
   integrationUrl: string;
   pollIntervalMs: number;
+  // Identifiants VOWINT (mode credentials — bot se connecte et génère l'URL autonomement)
+  vowintEmail?: string;
+  vowintPassword?: string;
+  vowintAppUrl?: string;
 }
 
 export async function getPendingCevSetups(): Promise<CevSetupTask[]> {
@@ -390,6 +394,7 @@ export async function activateCevSession(
   sessionId: string,
   sessionCookie: string,
   validUntilMs?: number,
+  integrationUrl?: string, // URL découverte par le bot lors du login VOWINT (mode credentials)
 ): Promise<boolean> {
   const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/activate`;
   try {
@@ -399,7 +404,7 @@ export async function activateCevSession(
         "X-Hunter-Key": HUNTER_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ sessionId, sessionCookie, validUntilMs }),
+      body: JSON.stringify({ sessionId, sessionCookie, validUntilMs, integrationUrl }),
     });
     if (!res.ok) {
       console.warn(`[convexClient] activateCevSession failed: ${res.status}`);

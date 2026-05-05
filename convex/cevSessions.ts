@@ -51,12 +51,21 @@ function sanitizeCookie(cookie: string): string {
 }
 
 // ─── ADMIN: créer ou rafraîchir une session CEV ─────────────────────────────
-// sessionCookie est optionnel : si absent, la session est créée avec status "needs_setup"
-// → le bot Playwright établit la session automatiquement (résolution hCaptcha incluse).
+// Mode VOWINT credentials (recommandé) : fournir vowintEmail + vowintPassword.
+//   → le bot se connecte à VOWINT, clique RDV, résout hCaptcha, stocke le cookie.
+//   → status "needs_setup" ; integrationUrl sera rempli automatiquement après setup.
+// Mode URL legacy (compatibilité) : fournir integrationUrl + optionnellement sessionCookie.
+//   → si cookie fourni : status "active" immédiat.
+//   → si cookie absent : le bot navigue vers l'URL directe, résout hCaptcha.
 export const upsertSession = mutation({
   args: {
     applicationId: v.id("applications"),
-    integrationUrl: v.string(),
+    // Mode credentials VOWINT (prioritaire)
+    vowintEmail: v.optional(v.string()),
+    vowintPassword: v.optional(v.string()),
+    vowintAppUrl: v.optional(v.string()), // URL dossier (vide = auto-détection)
+    // Mode URL legacy
+    integrationUrl: v.optional(v.string()),
     sessionCookie: v.optional(v.string()),
     notes: v.optional(v.string()),
     pollIntervalMs: v.optional(v.number()),
@@ -68,12 +77,28 @@ export const upsertSession = mutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
 
-    const url = validateIntegrationUrl(args.integrationUrl);
-    const cookie = args.sessionCookie ? sanitizeCookie(args.sessionCookie) : "";
     const now = Date.now();
+    const useCredentials = !!(args.vowintEmail && args.vowintPassword);
 
-    // Si cookie absent → needs_setup (bot établira la session automatiquement)
-    const status = cookie ? "active" : "needs_setup";
+    let url: string;
+    let cookie: string;
+    let status: "active" | "needs_setup";
+
+    if (useCredentials) {
+      // Mode credentials : le bot découvrira l'URL après login VOWINT
+      if (!args.vowintEmail?.trim()) throw new Error("Email VOWINT requis");
+      if (!args.vowintPassword?.trim()) throw new Error("Mot de passe VOWINT requis");
+      url = "pending"; // sera rempli par le bot après setup
+      cookie = "";
+      status = "needs_setup";
+    } else {
+      // Mode URL legacy
+      const rawUrl = args.integrationUrl?.trim() ?? "";
+      if (!rawUrl) throw new Error("URL d'intégration ou identifiants VOWINT requis");
+      url = validateIntegrationUrl(rawUrl);
+      cookie = args.sessionCookie ? sanitizeCookie(args.sessionCookie) : "";
+      status = cookie ? "active" : "needs_setup";
+    }
 
     // Expirer les sessions actives/needs_setup existantes pour ce dossier
     const existing = await ctx.db
@@ -103,6 +128,9 @@ export const upsertSession = mutation({
       pollIntervalMs,
       createdAt: now,
       notes: args.notes,
+      vowintEmail: args.vowintEmail?.trim(),
+      vowintPassword: args.vowintPassword?.trim(),
+      vowintAppUrl: args.vowintAppUrl?.trim() || undefined,
     });
 
     return { sessionId: id, status };
@@ -168,19 +196,27 @@ export const internalActivateSession = internalMutation({
   args: {
     sessionId: v.id("cevSessions"),
     sessionCookie: v.string(),
-    validUntilMs: v.optional(v.number()), // timestamp UTC ms d'expiration estimée
+    validUntilMs: v.optional(v.number()),      // timestamp UTC ms d'expiration estimée
+    integrationUrl: v.optional(v.string()),    // URL découverte par le bot lors du login VOWINT
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return;
 
-    await ctx.db.patch(args.sessionId, {
+    const patch: Record<string, unknown> = {
       sessionCookie: args.sessionCookie,
       status: "active",
       lastCheckAt: Date.now(),
       consecutiveErrors: 0,
       lockedUntil: 0,
-    });
+    };
+
+    // Si le bot a découvert l'URL d'intégration (mode credentials), la stocker
+    if (args.integrationUrl && args.integrationUrl !== "pending") {
+      patch.integrationUrl = args.integrationUrl;
+    }
+
+    await ctx.db.patch(args.sessionId, patch);
   },
 });
 
@@ -201,6 +237,10 @@ export const internalClaimNeedsSetup = internalMutation({
       applicationId: Id<"applications">;
       integrationUrl: string;
       pollIntervalMs: number;
+      // Identifiants VOWINT (mode credentials) — présents si l'admin a choisi ce mode
+      vowintEmail?: string;
+      vowintPassword?: string;
+      vowintAppUrl?: string;
     }> = [];
 
     for (const s of sessions) {
@@ -213,6 +253,9 @@ export const internalClaimNeedsSetup = internalMutation({
         applicationId: s.applicationId,
         integrationUrl: s.integrationUrl,
         pollIntervalMs: s.pollIntervalMs ?? 30_000,
+        vowintEmail: s.vowintEmail,
+        vowintPassword: s.vowintPassword,
+        vowintAppUrl: s.vowintAppUrl,
       });
     }
 
@@ -342,7 +385,9 @@ export const internalRecordCheck = internalMutation({
               : `⏱️ Session CEV expirée — ${app.applicantName}`,
             body: isSlot
               ? `Un créneau est disponible pour ${app.applicantName} (${app.destination}). Connectez-vous immédiatement au portail VOWINT pour réserver.`
-              : `Le cookie de session pour ${app.applicantName} a expiré. Re-fournissez un nouveau cookie depuis l'admin pour relancer le polling.`,
+              : session.vowintEmail
+                ? `La session CEV pour ${app.applicantName} a expiré. Le bot va tenter une reconnexion automatique via VOWINT.`
+                : `Le cookie de session pour ${app.applicantName} a expiré. Re-fournissez un nouveau cookie depuis l'admin pour relancer le polling.`,
             applicationId: session.applicationId,
             read: false,
             createdAt: now,
