@@ -1,0 +1,7 @@
+[build]
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "pnpm --filter @workspace/slot-hunter run start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
