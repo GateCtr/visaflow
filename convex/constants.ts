@@ -128,6 +128,7 @@ export const VISA_PRICING = {
     visaTypes: [
       "Visa C — Tourisme / Affaires (Schengen)",
       "Visa C — Études court séjour",
+      "Visa D — Long Séjour (études / travail / regroupement familial)",
       "Transit aéroportuaire",
     ],
     requiredDocuments: [
@@ -139,6 +140,7 @@ export const VISA_PRICING = {
       { key: "hotel_booking", label: "Réservation hôtel ou attestation d'hébergement", required: true },
       { key: "flight_booking", label: "Billets d'avion (réservation confirmée)", required: true },
       { key: "invitation_letter", label: "Lettre d'invitation / convocation (si applicable)", required: false },
+      { key: "civil_status", label: "Acte de naissance / mariage (Visa D long séjour)", required: false },
     ],
     embassyAddress: "VFS Global Suisse — Centre de collecte, Kinshasa-Gombe",
     portalUrl: "https://visa.vfsglobal.com/cod/en/che/login",
@@ -153,7 +155,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a verrouillé un rendez-vous au centre VFS Global Suisse de Kinshasa. Réglez la prime de succès pour recevoir votre convocation officielle.",
       completedNote: "Votre convocation VFS Suisse est disponible ci-dessous — présentez-la le jour du rendez-vous.",
     },
-    notes: "Visa Schengen court séjour (Visa C ≤ 90 jours) délivré par l'Ambassade de Suisse via VFS Global Kinshasa. Frais consulaires payés séparément : 90 € adulte. Délai légal : 15 jours ouvrables. Le Visa D (long séjour > 90 jours) est traité directement à l'ambassade — non pris en charge par Joventy actuellement.",
+    notes: "Visa C court séjour (≤ 90 jours) et Visa D long séjour pris en charge. Visa C : traitement via VFS Global Kinshasa, frais consulaires 90 € adulte. Visa D : rendez-vous via le même portail VFS Global CHE, dossier transmis à l'Ambassade de Suisse — frais de visa 180 € + redevance variable selon catégorie. Délai légal : 15 jours ouvrables (Visa C), 2 à 3 mois (Visa D).",
   },
   dubai: {
     label: "Dubaï (EAU)",
@@ -255,6 +257,7 @@ export const VISA_PRICING = {
     visaTypes: [
       "Visa C — Tourisme / Affaires",
       "Visa C — Études court séjour",
+      "Visa D — Long Séjour (études / regroupement familial)",
     ],
     requiredDocuments: [
       { key: "passport_scan", label: "Passeport valide (scan HD, 2 pages bio)", required: true },
@@ -267,6 +270,7 @@ export const VISA_PRICING = {
       { key: "employment_letter", label: "Attestation de travail / RCCM / certificat de scolarité", required: true },
       { key: "hotel_booking", label: "Réservation hôtel ou attestation d'hébergement", required: true },
       { key: "invitation_letter", label: "Lettre d'invitation / convocation (si applicable)", required: false },
+      { key: "civil_status", label: "Acte de naissance / acte de mariage (Visa D long séjour)", required: false },
     ],
     embassyAddress: "Ambassade d'Espagne — Avenue des Trois Z, Kinshasa-Gombe",
     embassyEmail: "emb.kinshasa.citasvis@maec.es",
@@ -284,7 +288,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a verrouillé un rendez-vous à l'ambassade d'Espagne. Réglez la prime de succès pour recevoir votre convocation officielle avec la date, l'heure et les instructions de dépôt.",
       completedNote: "Votre convocation consulaire espagnole est disponible ci-dessous — présentez-la le jour du rendez-vous.",
     },
-    notes: "Visa Schengen court séjour (Visa C ≤ 90 jours) uniquement. Le Visa D long séjour est traité directement à l'ambassade — non pris en charge par Joventy actuellement. Procédure en 2 étapes : (1) Inscription par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec photo+passeport, formulaire, réservation vol et assurance santé — l'ambassade envoie un identifiant/mot de passe. (2) Prise de RDV sur citaconsular.es avec ces identifiants. Frais consulaires espagnols (90 € adulte) payés directement à l'ambassade. Délai légal : 15 à 45 jours. Demande entre 6 mois et 15 jours avant le voyage.",
+    notes: "Visa C court séjour et Visa D long séjour pris en charge — même portail citaconsular.es, catégorie de rendez-vous différente selon le type. Procédure en 2 étapes : (1) Inscription par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec photo+passeport, formulaire, réservation vol et assurance santé — l'ambassade envoie un identifiant/mot de passe. (2) Prise de RDV sur citaconsular.es avec ces identifiants. Frais consulaires espagnols (90 € adulte) payés directement à l'ambassade. Délai légal : 15 à 45 jours. Demande entre 6 mois et 15 jours avant le voyage.",
   },
   schengen: {
     label: "Europe Schengen",
@@ -296,6 +300,7 @@ export const VISA_PRICING = {
     visaTypes: [
       "Visa C — Tourisme / Affaires",
       "Visa C — Études court séjour (gratuit*)",
+      "Visa D — Long Séjour (études / regroupement familial)",
     ],
     requiredDocuments: [
       { key: "passport_scan", label: "Passeport valide (scan HD, 2 pages bio)", required: true },
@@ -306,6 +311,8 @@ export const VISA_PRICING = {
       { key: "hotel_booking", label: "Réservation hôtel ou attestation d'hébergement", required: true },
       { key: "flight_booking", label: "Billets d'avion (réservation confirmée)", required: true },
       { key: "invitation_letter", label: "Lettre d'invitation / convocation (si applicable)", required: false },
+      { key: "civil_status", label: "Acte de naissance / acte de mariage (Visa D)", required: false },
+      { key: "redevance_proof", label: "Preuve paiement redevance OE (Visa D Belgique uniquement)", required: false },
     ],
     embassyAddress: "Centre Européen des Visas (CEV) — Avenue des Aviateurs, Kinshasa-Gombe",
     portalUrl: "https://appointment.cloud.diplomatie.be/",
@@ -313,6 +320,9 @@ export const VISA_PRICING = {
     portalDashboardUrl: "https://visaonweb.diplomatie.be/fowint/",
     portalAppointmentUrl: "https://appointment.cloud.diplomatie.be/Captcha",
     portalScheduleUrl: "https://appointment.cloud.diplomatie.be/Home/AvailableTimeSlots",
+    visaDPortalUrl: "https://fr.tlscontact.com/cd/CDG/",
+    visaDPortalName: "TLScontact France — Kinshasa (COD → CDG)",
+    visaDApplicationUrl: "https://france-visas.gouv.fr/",
     processingType: "appointment",
     successCopy: {
       triggerLabel: "Créneau CEV capturé",
@@ -320,7 +330,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a verrouillé un rendez-vous au Centre Européen des Visas. Réglez la prime de succès pour recevoir votre convocation officielle avec date, heure et lieu.",
       completedNote: "Votre convocation CEV est disponible ci-dessous — présentez-la le jour du rendez-vous.",
     },
-    notes: "Visa C court séjour (≤ 90 jours) uniquement — le Visa D long séjour est traité directement à l'ambassade compétente et n'est pas pris en charge par Joventy actuellement. Frais consulaires CEV (handling fee) payés en € par carte bancaire au guichet, NON inclus dans les frais Joventy. Visa C adulte : 90 €. Enfant 6-12 ans : 45 €. Moins de 6 ans : gratuit. Étudiants/chercheurs visa C court séjour : gratuit.",
+    notes: "Visa C court séjour (≤ 90 jours) via CEV Kinshasa. Visa D long séjour via portail TLScontact France (fr.tlscontact.com/cd/CDG/) — dossier déposé en ligne sur france-visas.gouv.fr, RDV biométrique au centre TLScontact Kinshasa. Portails distincts selon le type de visa. Frais Visa C : 90 € adulte, 45 € enfant 6-12 ans, gratuit -6 ans, gratuit étudiants court séjour. Frais Visa D : 99 € (frais de dossier France-Visas) + ~30 € TLScontact. Redevance OE belge requise pour Visa D Belgique.",
   },
 } as const;
 

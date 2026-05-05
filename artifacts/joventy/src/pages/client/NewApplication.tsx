@@ -104,6 +104,7 @@ function getPackageInfo(
         description: `Joventy remplit les formulaires officiels, vérifie les pièces que vous fournissez et soumet votre demande de ${name} en ligne. Aucun rendez-vous nécessaire.`,
       };
     }
+    const isVisaD = visaType.includes("Long Séjour") || visaType.includes("Visa D");
     const creneauLabel =
       destination === "usa"
         ? "créneau à l'ambassade américaine de Kinshasa"
@@ -112,11 +113,13 @@ function getPackageInfo(
         : destination === "uk"
         ? "créneau au centre VFS UKVI de Kinshasa (UK Visas & Immigration)"
         : destination === "switzerland"
-        ? "créneau au centre VFS Global Suisse de Kinshasa"
+        ? `créneau au centre VFS Global Suisse de Kinshasa (Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
+        : destination === "schengen" && isVisaD
+        ? "créneau au centre TLScontact France de Kinshasa (Visa D long séjour — france-visas.gouv.fr)"
         : destination === "schengen"
         ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
         : destination === "spain"
-        ? "créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es)"
+        ? `créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es — Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
         : "créneau de dépôt au centre VFS Global Kinshasa";
     return {
       label: base.label,
@@ -167,6 +170,15 @@ function getPackageInfo(
       };
     }
     if (destination === "schengen") {
+      const isVisaDSlot = visaType.includes("Long Séjour") || visaType.includes("Visa D");
+      if (isVisaDSlot) {
+        return {
+          label: "Créneau TLScontact",
+          tagline: "Rendez-vous uniquement",
+          description: "Votre dossier france-visas.gouv.fr est soumis ? Joventy surveille le portail TLScontact France Kinshasa et capture un créneau biométrique dès qu'une place est disponible.",
+          slotNote: "Prérequis : demande soumise sur france-visas.gouv.fr. Frais de dossier (~99 €) + frais TLScontact (~30 €) payés séparément.",
+        };
+      }
       return {
         label: "Créneau CEV",
         tagline: "Rendez-vous uniquement",
@@ -197,6 +209,7 @@ function getPackageInfo(
         description: `Joventy remplit les formulaires officiels et vérifie les pièces que vous fournissez. Vous soumettez ensuite vous-même sur le ${portal}. Tarif fixe — aucune prime de succès.`,
       };
     }
+    const isVisaDDossier = visaType.includes("Long Séjour") || visaType.includes("Visa D");
     const rdv =
       destination === "usa"
         ? "à l'ambassade américaine"
@@ -207,7 +220,9 @@ function getPackageInfo(
         : destination === "switzerland"
         ? "au centre VFS Global Suisse"
         : destination === "spain"
-        ? "à l'ambassade d'Espagne"
+        ? "à l'ambassade d'Espagne (Visa C ou D — citaconsular.es)"
+        : destination === "schengen" && isVisaDDossier
+        ? "au centre TLScontact France de Kinshasa (Visa D long séjour)"
         : destination === "schengen"
         ? "au Centre Européen des Visas (CEV)"
         : "au centre VFS Global";
@@ -277,7 +292,8 @@ export default function NewApplication() {
   const showSlotRefsSchengen = isSlotOnly && selectedDest === "schengen";
   const isSchengen = selectedDest === "schengen";
   const cevVisaClass = selectedVisaType.includes("Long Séjour") || selectedVisaType.includes("Visa D") ? "D" : "C" as "C" | "D";
-  const cevConsulaireFee = isSchengen ? getCevConsulaireFee(selectedVisaType, cevApplicantAgeCategory) : null;
+  const isSchengenVisaD = isSchengen && cevVisaClass === "D";
+  const cevConsulaireFee = isSchengen && !isSchengenVisaD ? getCevConsulaireFee(selectedVisaType, cevApplicantAgeCategory) : null;
 
   const updateRef = (key: keyof typeof slotRefs, val: string) =>
     setSlotRefs((prev) => ({ ...prev, [key]: val }));
@@ -456,8 +472,8 @@ export default function NewApplication() {
                 />
               )}
 
-              {/* CEV / Schengen — Sélecteurs pays cible + tranche d'âge + info frais consulaires */}
-              {isSchengen && selectedVisaType && (
+              {/* CEV / Schengen — Visa C court séjour */}
+              {isSchengen && selectedVisaType && !isSchengenVisaD && (
                 <div className="animate-in fade-in slide-in-from-top-4 space-y-4 bg-blue-50 border border-blue-200 rounded-xl p-5">
                   <div>
                     <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-1">
@@ -499,12 +515,32 @@ export default function NewApplication() {
                     </div>
                     <span className="text-lg font-bold text-blue-700">{cevConsulaireFee}</span>
                   </div>
-                  {cevVisaClass === "D" && (
-                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
-                      <span className="font-bold">Visa D :</span>
-                      <span>En plus des 180 €, une redevance de l'Office des Étrangers belge doit être payée sur un compte en Belgique <strong>avant</strong> le RDV. Joventy peut vous assister dans cette démarche.</span>
+                </div>
+              )}
+
+              {/* TLScontact — Schengen Visa D long séjour (France) */}
+              {isSchengenVisaD && selectedVisaType && (
+                <div className="animate-in fade-in slide-in-from-top-4 space-y-3 bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-1">
+                      🇫🇷 Visa D — Long Séjour · Portail TLScontact France
+                    </h3>
+                    <p className="text-xs text-amber-700">Le Visa D long séjour est traité via TLScontact France Kinshasa (et non le CEV). La demande se fait en ligne sur <strong>france-visas.gouv.fr</strong>, puis le RDV biométrique est pris au centre TLScontact.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-white rounded-lg px-4 py-3 border border-amber-100">
+                      <p className="text-xs font-semibold text-amber-800">Portail de rendez-vous</p>
+                      <p className="text-xs text-amber-700 font-mono mt-0.5">fr.tlscontact.com/cd/CDG</p>
                     </div>
-                  )}
+                    <div className="bg-white rounded-lg px-4 py-3 border border-amber-100">
+                      <p className="text-xs font-semibold text-amber-800">Frais estimés (hors Joventy)</p>
+                      <p className="text-xs text-amber-700 mt-0.5">~99 € (dossier France-Visas) + ~30 € (TLScontact)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-white border border-amber-100 rounded-lg px-3 py-2.5 text-xs text-amber-800">
+                    <span className="font-bold shrink-0">Note :</span>
+                    <span>Pour un Visa D Belgique, une redevance de l'Office des Étrangers doit être payée sur un compte belge <strong>avant</strong> le rendez-vous. Joventy peut vous accompagner dans cette démarche.</span>
+                  </div>
                 </div>
               )}
             </div>

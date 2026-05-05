@@ -65,7 +65,7 @@ const DESTINATIONS = [
   {
     code: "ch",
     name: "Suisse",
-    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Transit"],
+    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Visa D Long Séjour", "Transit"],
     engagement: 150,
     success: 450,
     model: "appointment",
@@ -75,7 +75,7 @@ const DESTINATIONS = [
   {
     code: "eu",
     name: "Europe Schengen",
-    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études (gratuit*)"],
+    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études (gratuit*)", "Visa D Long Séjour"],
     engagement: 150,
     success: 450,
     model: "appointment",
@@ -115,7 +115,7 @@ const DESTINATIONS = [
   {
     code: "es",
     name: "Espagne",
-    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études"],
+    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Visa D Long Séjour"],
     engagement: 150,
     success: 450,
     model: "appointment",
