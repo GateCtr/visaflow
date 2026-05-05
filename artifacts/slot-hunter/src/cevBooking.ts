@@ -1,7 +1,7 @@
 import { chromium, BrowserContext, Page, Request, Response } from 'playwright';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession } from './convexClient';
-import { completeCevCaptcha, pollCevSlots, isCevSessionValid, CevSession } from './cevPortal';
+import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
@@ -849,6 +849,10 @@ async function solveHcaptchaVia2captcha(
 /**
  * Boucle de polling CEV — à appeler depuis le bot principal.
  * Gère la limite 5 clics/heure et réutilise la session CEV tant qu'elle est valide.
+ *
+ * Phase "session active" : poll multi-mois (mois courant + suivant) sans recliquer.
+ * → Maximise la détection de créneaux quand le mois courant est complet.
+ * → 0 clic VOWINT consommé pendant toute la durée de validité de la session (~30-60 min).
  */
 export async function cevPollingLoop(
   config: CevBookingConfig,
@@ -862,11 +866,12 @@ export async function cevPollingLoop(
   while (true) {
     const now = Date.now();
 
-    // Si session active et valide → poller directement sans recliquer
+    // Si session active et valide → poller directement sans recliquer (multi-mois)
     if (activeSession && isCevSessionValid(activeSession)) {
-      const pollResult = await pollCevSlots(activeSession, config.clientId);
+      const pollResult = await pollCevSlotsMultiMonth(activeSession, config.clientId);
 
       if (pollResult.error === 'SESSION_EXPIRED') {
+        botLog({ applicationId: config.clientId, step: 'cev_poll_session_expired_in_loop', status: 'warn' });
         activeSession = null;
         continue;
       }
