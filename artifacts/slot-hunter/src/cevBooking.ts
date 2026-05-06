@@ -175,6 +175,8 @@ async function establishCevSession(
       loginTitle.toLowerCase().includes('connexion') ||
       loginUrl.toLowerCase().includes('account/login');
 
+    console.log(`[CEV] page VOWINT chargée — titre="${loginTitle}" url=${loginUrl} isLoginPage=${isLoginPage}`);
+
     if (isLoginPage) {
       // Comportement humain : délais naturels entre chaque champ
       await randomDelay(600, 1_200);
@@ -183,7 +185,9 @@ async function establishCevSession(
       await humanType(page, 'input#Password', config.vowintPassword);
       await randomDelay(300, 700);
       await humanClick(page, 'button[type="submit"]');
-      await page.waitForLoadState('networkidle', { timeout: 15_000 });
+      // Utiliser domcontentloaded (networkidle peut ne jamais se stabiliser sur VOWINT/AngularJS)
+      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+      await randomDelay(1_000, 2_000); // laisser le redirect s'établir
 
       const afterUrl = page.url();
       const afterTitle = await page.title();
@@ -191,7 +195,12 @@ async function establishCevSession(
         afterTitle.toLowerCase().includes('login') ||
         afterTitle.toLowerCase().includes('connexion');
 
+      console.log(`[CEV] après login — url=${afterUrl} stillLogin=${stillLogin}`);
+
       if (stillLogin) {
+        // Capturer le HTML de la page d'erreur pour diagnostic Railway
+        const errHtml = await page.content().catch(() => '').then(h => h.slice(0, 500));
+        console.error(`[CEV] ❌ Login VOWINT échoué — url=${afterUrl} html_preview="${errHtml}"`);
         botLog({ applicationId: config.clientId, step: 'cev_vowint_login_failed', status: 'fail', data: { afterUrl, afterTitle } });
         return null;
       }
@@ -207,11 +216,15 @@ async function establishCevSession(
       ? config.vowintAppointmentUrl
       : 'https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId';
 
-    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+    // domcontentloaded d'abord, puis on attend networkidle en best-effort
+    // AngularJS fait du XHR polling — networkidle peut ne jamais se stabiliser
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
     // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
     await randomDelay(2_000, 4_000);
     await humanScroll(page); // scroll naturel — évite le pattern "goto → clic immédiat"
 
+    console.log(`[CEV] page dossiers chargée — url=${page.url()}`);
     botLog({ applicationId: config.clientId, step: 'cev_vowint_apps_page', status: 'ok', data: { url: page.url() } });
 
     // === ÉTAPE 2 : Trouver le bouton calendrier "Prendre rendez-vous" ===
@@ -224,10 +237,12 @@ async function establishCevSession(
       const allNgClicks = await page.$$eval('[ng-click]', (els: any[]) =>
         els.map(e => e.getAttribute('ng-click'))
       ).catch(() => []);
+      console.error(`[CEV] ❌ Bouton RDV introuvable — ng-clicks disponibles: ${JSON.stringify(allNgClicks)}`);
       botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_not_found', status: 'fail', data: { allNgClicks } });
       return null;
     }
 
+    console.log(`[CEV] ✅ Bouton RDV trouvé — clic dans 1-2.5s...`);
     botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_found', status: 'ok' });
 
     // Micro-pause humaine avant clic — évite le pattern "login → clic immédiat" (détectable)
@@ -260,7 +275,10 @@ async function establishCevSession(
     const newPageUrl = newPage.url();
     botLog({ applicationId: config.clientId, step: 'cev_new_tab_opened', status: 'ok', data: { url: newPageUrl } });
 
+    console.log(`[CEV] nouvel onglet — url=${newPageUrl} integrationUrl=${capturedIntegrationUrl ?? 'non_capturee'}`);
+
     if (!newPageUrl.includes('appointment.cloud.diplomatie.be')) {
+      console.error(`[CEV] ❌ Mauvais onglet — attendu appointment.cloud.diplomatie.be, obtenu: ${newPageUrl}`);
       botLog({ applicationId: config.clientId, step: 'cev_wrong_tab', status: 'fail', data: { url: newPageUrl } });
       return null;
     }
@@ -294,6 +312,7 @@ async function establishCevSession(
     return { cookies: cookieString, cevPage: newPage, integrationUrl: capturedIntegrationUrl };
 
   } catch (err) {
+    console.error(`[CEV] ❌ establishCevSession crash: ${String(err)}`);
     botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: String(err) } });
     return null;
   }
