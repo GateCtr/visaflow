@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
@@ -13,33 +13,57 @@ import { runSpainSession } from "./spainPortal.js";
 // Tourne en background ; pour chaque session needs_setup claimée :
 // lance un Playwright qui navigue vers l'URL directe, résout hCaptcha, persiste le cookie.
 // Coût : ~60-120s par setup (captcha externe), zéro VOWINT requis.
+
+// Timeout global par setup : 4 min (le lock Convex dure 5 min)
+const CEV_SETUP_TIMEOUT_MS = 4 * 60_000;
+
 async function startCevSetupLoop(): Promise<void> {
   console.log("[CEV-SETUP] Boucle de setup sessions CEV démarrée");
+  let heartbeatCounter = 0;
   while (true) {
     try {
       const pending = await getPendingCevSetups();
+      heartbeatCounter++;
 
-      if (pending.length > 0) {
-        console.log(`[CEV-SETUP] ${pending.length} session(s) à établir`);
-      }
+      // Log à chaque itération pour diagnostic (setup peut prendre plusieurs minutes)
+      console.log(`[CEV-SETUP] ♥ check — ${pending.length} session(s) à établir (iter=${heartbeatCounter})`);
+
 
       // Séquentiellement (Playwright est lourd, pas en parallèle)
       for (const s of pending) {
         const isCredMode = !!(s.vowintEmail && s.vowintPassword);
         console.log(
-          `[CEV-SETUP] Établissement session=${s.sessionId} mode=${isCredMode ? "vowint-credentials" : "url-direct"}`
+          `[CEV-SETUP] ▶ Établissement session=${s.sessionId} mode=${isCredMode ? "vowint-credentials" : "url-direct"}`
         );
-        const r = await runCevDirectSessionSetup(
-          isCredMode
-            ? { vowintEmail: s.vowintEmail!, vowintPassword: s.vowintPassword!, vowintAppUrl: s.vowintAppUrl }
-            : s.integrationUrl,
-          s.sessionId,
-          s.applicationId,
-        );
+
+        // Timeout global de 4 min — si Playwright bloque (goto networkidle, proxy, etc.)
+        // on abandonne proprement et on déverrouille la session pour la prochaine tentative.
+        let timedOut = false;
+        const timeoutHandle = setTimeout(() => { timedOut = true; }, CEV_SETUP_TIMEOUT_MS);
+
+        const r = await Promise.race([
+          runCevDirectSessionSetup(
+            isCredMode
+              ? { vowintEmail: s.vowintEmail!, vowintPassword: s.vowintPassword!, vowintAppUrl: s.vowintAppUrl }
+              : s.integrationUrl,
+            s.sessionId,
+            s.applicationId,
+          ),
+          new Promise<{ success: false; error: string }>(resolve =>
+            setTimeout(() => resolve({ success: false, error: "TIMEOUT_4MIN" }), CEV_SETUP_TIMEOUT_MS)
+          ),
+        ]);
+        clearTimeout(timeoutHandle);
+
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
         } else {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
+          // Déverrouiller la session pour permettre une nouvelle tentative immédiate
+          if (timedOut || r.error === "TIMEOUT_4MIN") {
+            console.log(`[CEV-SETUP] 🔓 Déverrouillage session=${s.sessionId} (timeout)`);
+            await resetCevSetupLock(s.sessionId).catch(() => {});
+          }
         }
       }
     } catch (err) {

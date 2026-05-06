@@ -267,6 +267,17 @@ export const internalClaimNeedsSetup = internalMutation({
   },
 });
 
+// ─── INTERNAL: déverrouiller une session needs_setup après timeout bot ────────
+// Permet au bot de re-tenter immédiatement après un crash/timeout Playwright.
+export const internalResetSetupLock = internalMutation({
+  args: { sessionId: v.id("cevSessions") },
+  handler: async (ctx, { sessionId }) => {
+    const s = await ctx.db.get(sessionId);
+    if (!s || s.status !== "needs_setup") return;
+    await ctx.db.patch(sessionId, { lockedUntil: 0 });
+  },
+});
+
 // ─── INTERNAL: claim atomique des sessions dues (anti-doublon multi-instance) ─
 // On retourne uniquement les sessions :
 // - status === "active"

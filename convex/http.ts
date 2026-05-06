@@ -176,6 +176,24 @@ http.route({
   }),
 });
 
+// ─── CEV Sessions: déverrouiller une session needs_setup (après timeout bot) ──
+http.route({
+  path: "/hunter/cev-sessions/reset-lock",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+    const body = await request.json() as { sessionId: string };
+    await ctx.runMutation(internal.cevSessions.internalResetSetupLock, {
+      sessionId: body.sessionId as Id<"cevSessions">,
+    });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── CEV Sessions: activer une session après setup bot (nouveau cookie) ──────
 http.route({
   path: "/hunter/cev-sessions/activate",

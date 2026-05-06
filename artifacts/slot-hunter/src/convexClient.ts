@@ -380,6 +380,20 @@ export interface CevSetupTask {
   vowintAppUrl?: string;
 }
 
+export async function resetCevSetupLock(sessionId: string): Promise<boolean> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/reset-lock`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function getPendingCevSetups(): Promise<CevSetupTask[]> {
   const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/needs-setup`;
   try {
