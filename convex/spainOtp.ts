@@ -92,6 +92,27 @@ export const saveOtpConfig = mutation({
   },
 });
 
+export const sendOtpGuide = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Non authentifié");
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+    if (!isAdmin && app.userId !== identity.subject) throw new Error("Accès refusé");
+
+    const clientEmail = app.userEmail;
+    if (!clientEmail) throw new Error("Aucune adresse email pour ce dossier");
+
+    await ctx.scheduler.runAfter(0, internal.emails.sendSpainOtpGuideClient, {
+      to: clientEmail,
+      applicantName: app.applicantName,
+      applicationId: args.applicationId,
+    });
+  },
+});
+
 export const removeOtpConfig = mutation({
   args: { applicationId: v.id("applications") },
   handler: async (ctx, args) => {

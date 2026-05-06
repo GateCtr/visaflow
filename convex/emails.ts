@@ -788,6 +788,117 @@ export const sendSpainOtpRemovedClient = internalAction({
   },
 });
 
+/* ──────────────── 10d. OTP ESPAGNE — GUIDE DE FORWARDING → CLIENT ─── */
+export const sendSpainOtpGuideClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    applicationId: v.id("applications"),
+  },
+  handler: async (_ctx, args) => {
+    const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+    const secret = process.env.OTP_INGEST_SECRET ?? process.env.HUNTER_API_KEY ?? "VOTRE_CLE";
+    const appId = args.applicationId as string;
+    const otpEmail = `otp+${appId}@joventy.cd`;
+    const webhookUrl = `${siteUrl}/hunter/otp/ingest?applicationId=${appId}&secret=${secret}`;
+
+    const step = (n: number, text: string) =>
+      `<tr><td style="padding:6px 0;vertical-align:top;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;margin-right:10px;">${n}</span>
+      </td><td style="padding:6px 0;color:#1e3a5f;font-size:13.5px;line-height:1.6;">${text}</td></tr>`;
+
+    const mono = (t: string) =>
+      `<code style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;font-family:monospace;font-size:12px;word-break:break-all;">${escHtml(t)}</code>`;
+
+    const methodBlock = (title: string, icon: string, color: string, steps: string) =>
+      `<table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:${color};padding:12px 18px;">
+          <p style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">${icon}&nbsp; ${escHtml(title)}</p>
+        </td></tr>
+        <tr><td style="padding:14px 18px;">
+          <table cellpadding="0" cellspacing="0" style="width:100%;">${steps}</table>
+        </td></tr>
+      </table>`;
+
+    const cleanupBlock = `<table cellpadding="0" cellspacing="0" style="width:100%;margin:24px 0 0;border:1.5px solid #fbbf24;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#fefce8;padding:12px 18px;">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#78350f;">⚠️ Important — Désactiver après le rendez-vous</p>
+      </td></tr>
+      <tr><td style="padding:14px 18px;">
+        <table cellpadding="0" cellspacing="0" style="width:100%;">
+          ${step(1, `<strong>Gmail :</strong> Paramètres → Filtres et adresses bloquées → supprimer le filtre créé pour ${mono("no-reply@citaconsular.es")}`)}
+          ${step(2, `<strong>Outlook :</strong> Paramètres → Règles → supprimer la règle de transfert`)}
+          ${step(3, `<strong>Android :</strong> Ouvrir SMS Forwarder → désactiver ou supprimer la règle`)}
+          ${step(4, `<strong>iPhone :</strong> Raccourcis → Automatisation → supprimer l'automatisation créée`)}
+        </table>
+        <p style="margin:12px 0 0;color:#92400e;font-size:13px;line-height:1.6;">
+          Une fois le transfert supprimé, notre système ne recevra plus vos codes OTP. Vous pouvez relancer ce guide depuis votre dossier si besoin.
+        </p>
+      </td></tr>
+    </table>`;
+
+    const gmailSteps =
+      step(1, `Ouvrir Gmail → Paramètres (⚙) → <strong>Voir tous les paramètres</strong> → onglet <strong>Filtres et adresses bloquées</strong>`) +
+      step(2, `Cliquer <strong>Créer un filtre</strong> → champ <em>De :</em> saisir ${mono("no-reply@citaconsular.es")}`) +
+      step(3, `Cliquer <strong>Créer un filtre avec cette recherche</strong>`) +
+      step(4, `Cocher <strong>Transférer à</strong> → saisir ${mono(otpEmail)} → Enregistrer`) +
+      step(5, `Si demandé, confirmer l'adresse de transfert (email de confirmation envoyé par Google)`);
+
+    const androidSteps =
+      step(1, `Installer l'app <strong>SMS Forwarder</strong> (gratuite, Google Play) sur le téléphone qui reçoit les SMS du consulat`) +
+      step(2, `Créer une règle : <em>Expéditeur contient</em> → numéro ambassade (ou laisser vide pour tous)`) +
+      step(3, `Action : <strong>HTTP Request (POST)</strong>`) +
+      step(4, `URL : ${mono(webhookUrl)}`) +
+      step(5, `Corps (JSON) : ${mono('{"raw_text": "{{message}}"}')}`) +
+      step(6, `En-tête : ${mono("Content-Type: application/json")} → Enregistrer et activer`);
+
+    const iphoneSteps =
+      step(1, `Ouvrir l'app <strong>Raccourcis</strong> → onglet <strong>Automatisation</strong> → <strong>+</strong>`) +
+      step(2, `Choisir déclencheur : <strong>Message reçu</strong> → de : numéro ambassade → cocher <em>Exécuter immédiatement</em>`) +
+      step(3, `Ajouter action : <strong>Obtenir le contenu du message</strong>`) +
+      step(4, `Ajouter action : <strong>Contenu de l'URL</strong> → Méthode POST`) +
+      step(5, `URL : ${mono(webhookUrl)}`) +
+      step(6, `Corps de la requête : JSON → ajouter clé ${mono("raw_text")} = valeur <em>Contenu du message</em> → Enregistrer`);
+
+    const body = `
+      <h2 style="margin:0 0 6px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Guide de configuration — OTP automatique Espagne</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Pour que notre bot puisse saisir automatiquement les codes OTP du portail espagnol,
+        configurez un transfert automatique vers Joventy selon la méthode qui vous convient.
+        <strong>Aucun mot de passe ni identifiant à partager</strong> — seul le code de vérification sera transmis.
+      </p>
+
+      ${infoTable(
+        info("ID de votre dossier", escHtml(appId)) +
+        info("Adresse email de transfert", escHtml(otpEmail))
+      )}
+
+      <p style="color:#475569;font-size:13px;line-height:1.7;margin:0 0 20px;">
+        Choisissez <strong>une seule méthode</strong> parmi les trois ci-dessous selon votre appareil :
+      </p>
+
+      ${methodBlock("Méthode 1 — Gmail ou Outlook (recommandé)", "📧", "#eff6ff", gmailSteps)}
+      ${methodBlock("Méthode 2 — SMS Android (SMS Forwarder)", "📱", "#f0fdf4", androidSteps)}
+      ${methodBlock("Méthode 3 — SMS iPhone (Raccourcis)", "🍎", "#faf5ff", iphoneSteps)}
+
+      ${cleanupBlock}
+
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:20px 0 0;">
+        Des questions ? Écrivez-nous directement via la messagerie de votre dossier.
+      </p>
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Voir mon dossier")}
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "Joventy — Guide de configuration OTP automatique (Espagne)",
+      html: htmlWrapper("Guide OTP Espagne", body),
+    });
+  },
+});
+
 /* ───────────────────────────── 11. BIENVENUE NOUVELLE INSCRIPTION ─── */
 export const sendWelcomeClient = internalAction({
   args: {

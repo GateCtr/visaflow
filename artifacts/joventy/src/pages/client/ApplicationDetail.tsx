@@ -24,66 +24,63 @@ import {
 type Application = Doc<"applications">;
 type LogEntry = NonNullable<Application["logs"]>[number];
 
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-0.5 bg-white hover:bg-slate-50 transition-colors flex-shrink-0"
+    >
+      {copied ? <><CheckCircle2 className="w-3 h-3 text-green-500" /> Copié</> : <><ClipboardCheck className="w-3 h-3" /> {label}</>}
+    </button>
+  );
+}
+
 function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
   const { toast } = useToast();
-  const otpConfig = useQuery(api.spainOtp.getOtpConfig, { applicationId: appId });
-  const saveConfig = useMutation(api.spainOtp.saveOtpConfig);
-  const removeConfig = useMutation(api.spainOtp.removeOtpConfig);
+  const sendGuide = useMutation(api.spainOtp.sendOtpGuide);
 
-  const [channel, setChannel] = useState<"email" | "sms" | "manual">("email");
-  const [email, setEmail] = useState("");
-  const [imapPassword, setImapPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [showImapPwd, setShowImapPwd] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
+  const [activeMethod, setActiveMethod] = useState<"gmail" | "android" | "iphone">("gmail");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const isConfigured = !!otpConfig;
+  const appIdStr = appId as string;
+  const otpEmail = `otp+${appIdStr}@joventy.cd`;
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (channel === "email" && (!email.includes("@") || !imapPassword)) {
-      toast({ variant: "destructive", title: "Champs manquants", description: "Email et mot de passe d'application requis." });
-      return;
-    }
-    if (channel === "sms" && !phone) {
-      toast({ variant: "destructive", title: "Champs manquants", description: "Numéro de téléphone requis." });
-      return;
-    }
-    setSaving(true);
+  const handleSendGuide = async () => {
+    setSending(true);
     try {
-      await saveConfig({
-        applicationId: appId,
-        channel,
-        email: channel === "email" ? email : undefined,
-        imapPassword: channel === "email" ? imapPassword : undefined,
-        phone: channel === "sms" ? phone : undefined,
-      });
-      toast({ title: "Configuration enregistrée", description: "Vous recevrez un email de confirmation." });
-      setShowForm(false);
-      setImapPassword("");
+      await sendGuide({ applicationId: appId });
+      setSent(true);
+      toast({ title: "Guide envoyé !", description: "Vérifiez votre boîte email — le guide contient toutes les URLs complètes." });
     } catch {
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder. Réessayez." });
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible d'envoyer l'email. Réessayez." });
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
-  const handleRemove = async () => {
-    setRemoving(true);
-    try {
-      await removeConfig({ applicationId: appId });
-      toast({ title: "Identifiants supprimés", description: "Vos données OTP ont été effacées de nos serveurs." });
-      setConfirmRemove(false);
-    } catch {
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de supprimer. Réessayez." });
-    } finally {
-      setRemoving(false);
-    }
-  };
+  const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
+    <div className="flex items-start gap-3">
+      <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{n}</span>
+      <p className="text-xs text-slate-700 leading-relaxed">{children}</p>
+    </div>
+  );
+
+  const Mono = ({ children }: { children: string }) => (
+    <code className="bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 font-mono text-[11px] text-slate-800 break-all">{children}</code>
+  );
+
+  const tabs = [
+    { id: "gmail" as const, label: "Gmail / Outlook", icon: <Mail className="w-3.5 h-3.5" /> },
+    { id: "android" as const, label: "SMS Android", icon: <Phone className="w-3.5 h-3.5" /> },
+    { id: "iphone" as const, label: "SMS iPhone", icon: <Phone className="w-3.5 h-3.5" /> },
+  ];
 
   return (
     <div className="rounded-2xl border-2 border-red-200 bg-white shadow-sm overflow-hidden">
@@ -93,258 +90,148 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
             <KeyRound className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <h3 className="font-bold text-red-900 flex items-center gap-2">
-              OTP automatique — Portail Espagne
-              {isConfigured && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 className="w-3 h-3" /> Configuré
-                </span>
-              )}
-            </h3>
+            <h3 className="font-bold text-red-900">OTP automatique — Portail Espagne</h3>
             <p className="text-xs text-red-700 mt-0.5">
-              Permet au bot de saisir automatiquement les codes de vérification du portail citaconsular.es
+              Configurez un transfert automatique pour que le bot reçoive les codes sans intervention humaine
             </p>
           </div>
         </div>
-        {!showForm && (
-          <Button
-            onClick={() => setShowForm(true)}
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white gap-2 flex-shrink-0"
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            {isConfigured ? "Modifier" : "Configurer"}
-          </Button>
-        )}
+        <Button
+          onClick={handleSendGuide}
+          disabled={sending}
+          size="sm"
+          className="bg-red-600 hover:bg-red-700 text-white gap-2 flex-shrink-0"
+        >
+          {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : sent ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+          {sent ? "Guide envoyé" : "Recevoir par email"}
+        </Button>
       </div>
 
       <div className="px-6 py-4 space-y-4">
-        {isConfigured && !showForm && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Canal</p>
-                <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                  {otpConfig.channel === "email" ? <><Mail className="w-3.5 h-3.5 text-blue-500" /> Email IMAP</> :
-                   otpConfig.channel === "sms" ? <><Phone className="w-3.5 h-3.5 text-green-500" /> SMS</> :
-                   <><Info className="w-3.5 h-3.5 text-slate-500" /> Manuel</>}
-                </p>
-              </div>
-              {otpConfig.email && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Email configuré</p>
-                  <p className="text-sm font-mono text-slate-700 truncate">{otpConfig.email}</p>
-                </div>
-              )}
-              {otpConfig.phone && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Téléphone</p>
-                  <p className="text-sm font-mono text-slate-700">{otpConfig.phone}</p>
-                </div>
-              )}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Configuré le</p>
-                <p className="text-sm text-slate-700">
-                  {new Date(otpConfig.configuredAt).toLocaleDateString("fr-FR")}
-                </p>
-              </div>
+        {/* Valeurs à copier */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1.5">ID de votre dossier</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs font-mono text-slate-700 truncate flex-1">{appIdStr}</code>
+              <CopyButton value={appIdStr} label="Copier" />
             </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-800 leading-relaxed">
-                <strong>Supprimez vos identifiants une fois le rendez-vous obtenu.</strong>{" "}
-                Vos données sont uniquement utilisées pendant les sessions de réservation et ne sont jamais partagées.
-                Utilisez le bouton ci-dessous pour les effacer définitivement de nos serveurs.
-              </div>
-            </div>
-
-            {!confirmRemove ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
-                onClick={() => setConfirmRemove(true)}
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Supprimer mes identifiants
-              </Button>
-            ) : (
-              <div className="flex items-center gap-3 flex-wrap">
-                <p className="text-sm text-red-700 font-medium">
-                  Confirmer la suppression définitive ?
-                </p>
-                <Button
-                  size="sm"
-                  className="bg-red-600 hover:bg-red-700 text-white gap-2"
-                  disabled={removing}
-                  onClick={handleRemove}
-                >
-                  {removing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
-                  Oui, supprimer
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setConfirmRemove(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            )}
           </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
-                Canal d'interception OTP
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {(["email", "sms", "manual"] as const).map((ch) => (
-                  <button
-                    key={ch}
-                    type="button"
-                    onClick={() => setChannel(ch)}
-                    className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all text-left ${
-                      channel === ch
-                        ? "border-red-500 bg-red-50 text-red-800"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    {ch === "email" && <Mail className="w-4 h-4 flex-shrink-0" />}
-                    {ch === "sms" && <Phone className="w-4 h-4 flex-shrink-0" />}
-                    {ch === "manual" && <Info className="w-4 h-4 flex-shrink-0" />}
-                    <span>
-                      {ch === "email" ? "Email IMAP" : ch === "sms" ? "SMS" : "Manuel"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 text-xs text-slate-500">
-                {channel === "email" && "Le bot lira automatiquement les codes OTP dans la boîte email du compte citaconsular.es via IMAP — aucune intervention humaine requise."}
-                {channel === "sms" && "Le code OTP sera reçu par SMS sur le numéro enregistré sur le compte citaconsular.es. Vous devrez le saisir manuellement dans votre espace client dès notification."}
-                {channel === "manual" && "Vous recevrez une alerte dans votre dashboard dès qu'un code OTP est demandé par le portail. Vous aurez quelques minutes pour le saisir."}
-              </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <p className="text-[10px] text-blue-600 uppercase font-semibold mb-1.5">Adresse email de transfert</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs font-mono text-blue-800 truncate flex-1">{otpEmail}</code>
+              <CopyButton value={otpEmail} label="Copier" />
             </div>
-
-            {channel === "email" && (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Email du compte citaconsular.es (fourni par Joventy)
-                  </label>
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="compte.citaconsular@gmail.com"
-                    className="h-10"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                    Mot de passe d'application{" "}
-                    <button
-                      type="button"
-                      onClick={() => setShowGuide((v) => !v)}
-                      className="text-primary underline"
-                    >
-                      (c'est quoi ?)
-                    </button>
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type={showImapPwd ? "text" : "password"}
-                      value={imapPassword}
-                      onChange={(e) => setImapPassword(e.target.value)}
-                      placeholder="••••••••••••••••"
-                      className="h-10 pr-10 font-mono"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowImapPwd((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {showGuide && (
-                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 leading-relaxed space-y-1">
-                      <p className="font-semibold">Comment créer un mot de passe d'application :</p>
-                      <p><strong>Gmail :</strong> Mon compte → Sécurité → Validation en 2 étapes → Mots de passe des applications</p>
-                      <p><strong>Outlook :</strong> Compte Microsoft → Sécurité → Options de sécurité avancées → Mots de passe des applications</p>
-                      <p><strong>Yahoo :</strong> Sécurité du compte → Générer le mot de passe d'application</p>
-                      <p className="text-blue-600 mt-1">Ce mot de passe est différent de votre mot de passe habituel et peut être révoqué à tout moment.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {channel === "sms" && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  Numéro enregistré sur le compte citaconsular.es (fourni par Joventy)
-                </label>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+XX XXX XXX XXX"
-                  className="h-10"
-                  required
-                />
-              </div>
-            )}
-
-            {channel === "manual" && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
-                En mode manuel, dès qu'un code OTP est requis par le portail, vous recevrez une notification
-                dans votre dashboard <strong>et</strong> par email. Vous aurez alors quelques minutes pour
-                saisir le code dans votre espace client. Aucun identifiant supplémentaire n'est requis.
-              </div>
-            )}
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
-              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
-              <span>
-                <strong>Suppression obligatoire après opération :</strong> Une fois votre créneau réservé,
-                supprimez ces identifiants depuis cette carte. Vous recevrez un rappel par email.
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <Button
-                type="submit"
-                disabled={saving}
-                className="bg-red-600 hover:bg-red-700 text-white gap-2"
-              >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Enregistrer la configuration
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => { setShowForm(false); setImapPassword(""); }}
-              >
-                Annuler
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {!isConfigured && !showForm && (
-          <div className="flex items-start gap-3 text-xs text-slate-500 bg-slate-50 rounded-xl p-3 border border-slate-200">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
-            <span>
-              Non configuré — le bot demandera le code OTP manuellement lors des sessions de réservation.
-              Configurez cette section pour rendre le processus entièrement automatique.
-            </span>
           </div>
-        )}
+        </div>
+
+        {/* Onglets méthode */}
+        <div>
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-3">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveMethod(t.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
+                  activeMethod === t.id
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+
+          {activeMethod === "gmail" && (
+            <div className="space-y-2.5">
+              <Step n={1}>
+                Ouvrir <strong>Gmail</strong> → Paramètres ⚙ → <strong>Voir tous les paramètres</strong> → onglet <strong>Filtres et adresses bloquées</strong>
+              </Step>
+              <Step n={2}>
+                Cliquer <strong>Créer un filtre</strong> → champ <em>De :</em> saisir{" "}
+                <Mono>no-reply@citaconsular.es</Mono>
+              </Step>
+              <Step n={3}>
+                Cliquer <strong>Créer un filtre avec cette recherche</strong>
+              </Step>
+              <Step n={4}>
+                Cocher <strong>Transférer à</strong> → saisir{" "}
+                <Mono>{otpEmail}</Mono>{" "}
+                <CopyButton value={otpEmail} label="Copier" /> → Enregistrer
+              </Step>
+              <Step n={5}>
+                Si demandé, confirmer l'adresse de transfert (Google envoie un email de confirmation à{" "}
+                <Mono>{otpEmail}</Mono>)
+              </Step>
+              <div className="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
+                <strong>Outlook :</strong> Paramètres → Règles → Nouvelle règle → De : <Mono>no-reply@citaconsular.es</Mono> → Action : Transférer à → <Mono>{otpEmail}</Mono>
+              </div>
+            </div>
+          )}
+
+          {activeMethod === "android" && (
+            <div className="space-y-2.5">
+              <Step n={1}>
+                Installer l'app <strong>SMS Forwarder</strong> (gratuite, Google Play) sur le téléphone qui reçoit les SMS du consulat
+              </Step>
+              <Step n={2}>
+                Créer une règle → <em>Expéditeur contient</em> : numéro ou nom de l'ambassade (laisser vide pour tous les SMS)
+              </Step>
+              <Step n={3}>
+                Action : <strong>HTTP Request (POST)</strong>
+              </Step>
+              <Step n={4}>
+                URL du webhook : <span className="text-slate-500 italic">(URL complète avec clé secrète fournie dans l'email reçu par email)</span>
+              </Step>
+              <Step n={5}>
+                Corps (JSON) : <Mono>{'{"raw_text": "{{message}}"}'}</Mono>
+              </Step>
+              <Step n={6}>
+                En-tête : <Mono>Content-Type: application/json</Mono> → Enregistrer et activer la règle
+              </Step>
+            </div>
+          )}
+
+          {activeMethod === "iphone" && (
+            <div className="space-y-2.5">
+              <Step n={1}>
+                Ouvrir l'app <strong>Raccourcis</strong> → onglet <strong>Automatisation</strong> → <strong>+</strong>
+              </Step>
+              <Step n={2}>
+                Déclencheur : <strong>Message reçu</strong> → de : numéro ambassade → cocher <em>Exécuter immédiatement</em>
+              </Step>
+              <Step n={3}>
+                Ajouter action : <strong>Obtenir le contenu du message</strong>
+              </Step>
+              <Step n={4}>
+                Ajouter action : <strong>Contenu de l'URL</strong> → Méthode <strong>POST</strong>
+              </Step>
+              <Step n={5}>
+                URL : <span className="text-slate-500 italic">(URL complète avec clé secrète fournie dans l'email)</span>
+              </Step>
+              <Step n={6}>
+                Corps de la requête : JSON → ajouter clé <Mono>raw_text</Mono> = valeur <em>Contenu du message</em> → Enregistrer
+              </Step>
+            </div>
+          )}
+        </div>
+
+        {/* Cleanup */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+          <div className="space-y-0.5">
+            <p className="font-semibold">Une fois le rendez-vous obtenu, désactivez le transfert :</p>
+            <p><strong>Gmail :</strong> Paramètres → Filtres → supprimer le filtre <Mono>citaconsular.es</Mono></p>
+            <p><strong>Android :</strong> SMS Forwarder → désactiver ou supprimer la règle</p>
+            <p><strong>iPhone :</strong> Raccourcis → Automatisation → supprimer l'automatisation</p>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400 text-center">
+          Cliquez sur <strong>"Recevoir par email"</strong> pour obtenir le guide complet avec toutes les URLs et clés nécessaires
+        </p>
       </div>
     </div>
   );
