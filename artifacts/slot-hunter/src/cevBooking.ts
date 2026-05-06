@@ -198,10 +198,15 @@ async function establishCevSession(
       console.log(`[CEV] après login — url=${afterUrl} stillLogin=${stillLogin}`);
 
       if (stillLogin) {
-        // Capturer le HTML de la page d'erreur pour diagnostic Railway
-        const errHtml = await page.content().catch(() => '').then(h => h.slice(0, 500));
-        console.error(`[CEV] ❌ Login VOWINT échoué — url=${afterUrl} html_preview="${errHtml}"`);
-        botLog({ applicationId: config.clientId, step: 'cev_vowint_login_failed', status: 'fail', data: { afterUrl, afterTitle } });
+        // Capturer le message d'erreur précis + présence hCaptcha
+        const errMsg = await page.$eval(
+          '.validation-summary-errors, .alert, .field-validation-error, [class*="error"], [class*="Error"]',
+          (el: any) => el.innerText?.trim() ?? ''
+        ).catch(() => '');
+        const hasHcaptcha = await page.$('iframe[src*="hcaptcha"]').then(el => !!el).catch(() => false);
+        const hasHcaptchaScript = await page.$('script[src*="hcaptcha"]').then(el => !!el).catch(() => false);
+        console.error(`[CEV] ❌ Login VOWINT échoué — url=${afterUrl} errMsg="${errMsg}" hcaptcha=${hasHcaptcha || hasHcaptchaScript}`);
+        botLog({ applicationId: config.clientId, step: 'cev_vowint_login_failed', status: 'fail', data: { afterUrl, afterTitle, errMsg, hasHcaptcha } });
         return null;
       }
       botLog({ applicationId: config.clientId, step: 'cev_vowint_login_ok', status: 'ok', data: { afterUrl } });

@@ -1,0 +1,31 @@
+Conteneur de démarrage
+> @workspace/slot-hunter@1.0.0 start /app/artefacts/slot-hunter
+> tsx src/index.ts
+[2026-05-06T06:35:59.719Z] [INFO] === Joventy Hunter (Joventy Shuffle v2) ===
+[2026-05-06T06:35:59.720Z] [INFO] Mode: PRODUCTION
+[2026-05-06T06:35:59.720Z] [INFO] Convexe:
+[2026-05-06T06:35:59.720Z] [INFO] Hunter API Key: mailtière
+[CEV-SETUP] Boucle de setup sessions CEVe
+[CEV-POLL] Boucle de séances de sondage CEVe
+[2026-05-06T06:35:59.793Z] [INFO] Serveur IP (chemin de fer): 54.175.183.176
+[2026-05-06T06:35:59.793Z] [INFO] Proxy 2captcha: TWOCAPTCHA_API_KEY ✅ — IP 54.175.183.1767 det est-ce que whitelistée sur 2captcha.com/proxy
+[2026-05-06T06:35:59.793Z] [INFO] Proxy: 2captcha résidentiel trotor ✅ (IP: 54.175.183.176)
+[2026-05-06T06:35:59.793Z] [INFO] Intervalles niveau — tres_urgent:3-5m (rush:1-2m) urgent:15-20m prioritaire:25-35m standard:45-60m
+[2026-05-06T06:35:59.793Z] [INFO] Silence radio: normal 2m0s–3m0s | rush 0m45s–1m30s
+[2026-05-06T06:35:59.793Z] [INFO] Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — maintenant actif: OUI ⚡
+[2026-05-06T06:35:59.793Z] [INFO] Auto-pause après: 3 login_faileds consécutives
+[CEV-SETUP] ♥ vérification — 1 session(s) à établir (iter=1)
+[CEV-SETUP] ▶ Établissement session=k57efmjenexd8sz4t0n0t0pa7186787g mode = voix vue-accréditations
+[2026-05-06T06:35:59.883Z] [INFO] ���Vération de portail bundle USA (quotidienne)...
+[ProxyPool] ❌ Refresh denrelé: {"status":"ERROR_MISSING_IP","message":"adresse IP est manquante"}
+[2026-05-06T06:36:00.816Z] [INFO] 🔍 Contrôle de paquet ✅ — cle AESe changenaire (groupe: main.1672fe230dcb2db1.js)
+[2026-05-06T06:36:00.816Z] [INFO] Aucun dossier actif — sondage dans 90s
+[CEV] page VOWINT chargé —title="Login" url=https://visaonweb.diplomatie.be/ isLoginPage=true
+    <link rel="shortcut icon" href="/Content/Images/favicon.png">
+    <link href="/Fonts/css? v=J7VZwISNVVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1" rel"
+[CEV-SETUP] ❌ Échec session=k57efmjenexd8sz4t0n0t0pa7186787g: CEV_VOWINT_SESSION_FAILED
+[CEV] après login — url=https://visaonweb.diplomatie.be/en/Account/Login stillLogin=true
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Outsourcing Online">
+    <meta name="author" content="Service public fédéral Affaires étrangères">
