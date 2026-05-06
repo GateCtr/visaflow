@@ -799,7 +799,7 @@ export const sendSpainOtpGuideClient = internalAction({
     const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
     const secret = process.env.OTP_INGEST_SECRET ?? process.env.HUNTER_API_KEY ?? "VOTRE_CLE";
     const appId = args.applicationId as string;
-    const otpEmail = `otp+${appId}@joventy.cd`;
+    const otpEmail = `otp+${appId}@otp.joventy.cd`;
     const webhookUrl = `${siteUrl}/hunter/otp/ingest?applicationId=${appId}&secret=${secret}`;
 
     const step = (n: number, text: string) =>

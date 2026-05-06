@@ -1,0 +1,13 @@
+name            = "joventy-otp-router"
+main            = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Variables non-sensibles — les secrets (CONVEX_SITE_URL, OTP_INGEST_SECRET)
+# doivent être ajoutés via :
+#   wrangler secret put CONVEX_SITE_URL
+#   wrangler secret put OTP_INGEST_SECRET
+# ou directement dans le dashboard Cloudflare :
+#   Workers → joventy-otp-router → Settings → Variables → Encrypt
+
+# Aucune route HTTP — ce Worker est déclenché uniquement par Email Routing
+# (pas besoin de [triggers] routes)

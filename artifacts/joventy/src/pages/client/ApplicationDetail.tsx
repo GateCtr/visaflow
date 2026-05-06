@@ -50,7 +50,7 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
   const [sent, setSent] = useState(false);
 
   const appIdStr = appId as string;
-  const otpEmail = `otp+${appIdStr}@joventy.cd`;
+  const otpEmail = `otp+${appIdStr}@otp.joventy.cd`;
 
   const handleSendGuide = async () => {
     setSending(true);
