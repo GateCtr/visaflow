@@ -222,9 +222,9 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
                 ))}
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                {channel === "email" && "Le bot lira les codes OTP directement dans votre boîte email via IMAP — entièrement automatique."}
-                {channel === "sms" && "Vous serez notifié par Joventy dès qu'un code SMS est requis pour le saisir manuellement."}
-                {channel === "manual" && "Vous recevrez une alerte dans votre dashboard et par email dès qu'un code OTP est demandé."}
+                {channel === "email" && "Le bot lira automatiquement les codes OTP dans la boîte email du compte citaconsular.es via IMAP — aucune intervention humaine requise."}
+                {channel === "sms" && "Le code OTP sera reçu par SMS sur le numéro enregistré sur le compte citaconsular.es. Vous devrez le saisir manuellement dans votre espace client dès notification."}
+                {channel === "manual" && "Vous recevrez une alerte dans votre dashboard dès qu'un code OTP est demandé par le portail. Vous aurez quelques minutes pour le saisir."}
               </div>
             </div>
 
@@ -232,13 +232,13 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Adresse email (celle enregistrée sur citaconsular.es)
+                    Email du compte citaconsular.es (fourni par Joventy)
                   </label>
                   <Input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="votre.email@gmail.com"
+                    placeholder="compte.citaconsular@gmail.com"
                     className="h-10"
                     required
                   />
@@ -287,13 +287,13 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
             {channel === "sms" && (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  Numéro de téléphone (avec indicatif, ex: +243...)
+                  Numéro enregistré sur le compte citaconsular.es (fourni par Joventy)
                 </label>
                 <Input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+243 8XX XXX XXX"
+                  placeholder="+XX XXX XXX XXX"
                   className="h-10"
                   required
                 />

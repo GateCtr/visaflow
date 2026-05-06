@@ -37,7 +37,7 @@ export interface HunterJob {
     embassyPassword: string;
     isActive: boolean;
     twoCaptchaApiKey?: string;
-    capsolverApiKey?: string;   // CapSolver API key (pour hCaptcha CEV)
+    capsolverApiKey?: string;
     scheduleUrl?: string;
     portalApplicationId?: string;
     slotDateFrom?: string;
@@ -51,6 +51,14 @@ export interface HunterJob {
     cevClickCount?: number;
     cevClickWindowStart?: number;
   };
+  spainOtpConfig?: {
+    channel: "email" | "sms" | "manual";
+    email?: string;
+    imapPassword?: string;
+    phone?: string;
+    configuredAt: number;
+    lastUsedAt?: number;
+  } | null;
   portalUrl: string | null;
   portalName: string | null;
   portalDashboardUrl: string | null;

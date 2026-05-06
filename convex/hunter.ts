@@ -170,6 +170,7 @@ export const getActiveJobs = internalQuery({
           portalAppointmentUrl: (pricing as { portalAppointmentUrl?: string } | undefined)?.portalAppointmentUrl ?? null,
           portalScheduleUrl: (pricing as { portalScheduleUrl?: string } | undefined)?.portalScheduleUrl ?? null,
           lastCheckAt: (app as { hunterConfig?: { lastCheckAt?: number } }).hunterConfig?.lastCheckAt ?? null,
+          spainOtpConfig: (app as { spainOtpConfig?: unknown }).spainOtpConfig ?? null,
         };
       });
   },

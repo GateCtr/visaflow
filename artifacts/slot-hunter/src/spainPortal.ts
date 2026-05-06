@@ -390,7 +390,7 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
     const directOtp = process.env.SPAIN_OTP_CODE?.trim();
     let otp = directOtp || "";
     if (!otp) {
-      const channel = (process.env.SPAIN_OTP_CHANNEL ?? "email") as "email" | "sms" | "telegram";
+      const channel = (job.spainOtpConfig?.channel ?? process.env.SPAIN_OTP_CHANNEL ?? "manual") as "email" | "sms" | "manual";
       await requestOtpChallenge({
         applicationId: job.id,
         flow: "spain",
