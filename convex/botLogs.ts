@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc } from "./_generated/dataModel";
 
@@ -66,5 +66,17 @@ export const listRecent = query({
         appDestination: app?.destination,
       };
     });
+  },
+});
+
+export const countRecentFails = query({
+  args: { since: v.number() },
+  handler: async (ctx, args) => {
+    const logs = await ctx.db
+      .query("botLogs")
+      .withIndex("by_ts", (q) => q.gte("ts", args.since))
+      .order("desc")
+      .take(500);
+    return logs.filter((l) => l.status === "fail").length;
   },
 });

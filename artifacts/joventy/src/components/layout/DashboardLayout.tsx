@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "convex/react";
@@ -45,6 +45,24 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
   const pendingReviews = useQuery(api.reviews.listAll, isAdmin ? {} : undefined);
   const pendingReviewCount = pendingReviews?.filter((r: { isApproved: boolean }) => !r.isApproved).length ?? 0;
 
+  const [botLogsLastSeen, setBotLogsLastSeen] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem("botLogsLastSeen") ?? "0", 10); } catch { return 0; }
+  });
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "botLogsLastSeen" && e.newValue) {
+        setBotLogsLastSeen(parseInt(e.newValue, 10));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const botFailCount = useQuery(
+    api.botLogs.countRecentFails,
+    isAdmin ? { since: botLogsLastSeen || Date.now() - 24 * 60 * 60 * 1000 } : "skip"
+  ) ?? 0;
+
   const adminLinks = [
     { href: "/admin", label: "Tableau de Bord", icon: LayoutDashboard },
     { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
@@ -55,7 +73,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/reviews", label: "Avis Clients", icon: MessageSquareHeart, badge: pendingReviewCount },
     { href: "/admin/cev-sessions", label: "Sessions CEV", icon: KeyRound },
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
-    { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal },
+    { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal, badge: botFailCount },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;

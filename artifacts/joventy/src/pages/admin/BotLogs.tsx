@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { Link } from "wouter";
 import { api } from "@convex/_generated/api";
@@ -37,6 +37,12 @@ function formatTs(ts: number) {
 const PAGE_SIZE = 50;
 
 export default function AdminBotLogs() {
+  useEffect(() => {
+    const ts = String(Date.now());
+    localStorage.setItem("botLogsLastSeen", ts);
+    window.dispatchEvent(new StorageEvent("storage", { key: "botLogsLastSeen", newValue: ts }));
+  }, []);
+
   const [stepFilter, setStepFilter]     = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "ok" | "warn" | "fail">("");
   const [page, setPage]                 = useState(0);
