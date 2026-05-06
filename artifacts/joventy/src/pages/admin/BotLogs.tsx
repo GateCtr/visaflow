@@ -3,7 +3,6 @@ import { useQuery } from "convex/react";
 import { Link } from "wouter";
 import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Terminal,
   CheckCircle2,
@@ -81,8 +80,7 @@ export default function AdminBotLogs() {
   };
 
   return (
-    <DashboardLayout isAdmin>
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -276,7 +274,6 @@ export default function AdminBotLogs() {
             </>
           )}
         </div>
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }
