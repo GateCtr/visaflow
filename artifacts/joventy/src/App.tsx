@@ -40,6 +40,7 @@ import AdminClients from "@/pages/admin/Clients";
 import AdminMessages from "@/pages/admin/Messages";
 import AdminReviews from "@/pages/admin/Reviews";
 import AdminBotTest from "@/pages/admin/BotTest";
+import AdminBotLogs from "@/pages/admin/BotLogs";
 import AdminCevSessions from "@/pages/admin/CevSessions";
 import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminCalendar from "@/pages/admin/Calendar";
@@ -147,6 +148,9 @@ function Router() {
       </Route>
       <Route path="/admin/bot-test">
         {() => <ProtectedRoute adminOnly component={AdminBotTest} />}
+      </Route>
+      <Route path="/admin/bot-logs">
+        {() => <ProtectedRoute adminOnly component={AdminBotLogs} />}
       </Route>
 
       <Route component={NotFound} />

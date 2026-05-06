@@ -20,6 +20,7 @@ import {
   KeyRound,
   BarChart2,
   CalendarDays,
+  Terminal,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -54,6 +55,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/reviews", label: "Avis Clients", icon: MessageSquareHeart, badge: pendingReviewCount },
     { href: "/admin/cev-sessions", label: "Sessions CEV", icon: KeyRound },
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
+    { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;
