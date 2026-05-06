@@ -83,25 +83,19 @@ export default function Register() {
     });
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("La connexion Google n'a pas répondu. Vérifiez que Google OAuth est activé dans votre Clerk Dashboard.")), 15000)
-      );
-      const { error } = await Promise.race([
-        signIn.sso({
-          strategy,
-          redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
-          redirectUrl: `${window.location.origin}${base}/dashboard`,
-        }),
-        timeout,
-      ]);
-      if (error) {
-        setError(error.longMessage ?? error.message ?? "Erreur OAuth");
+      const { error: oauthError } = await signIn.sso({
+        strategy,
+        redirectCallbackUrl: `${window.location.origin}${base}/sso-callback`,
+        redirectUrl: `${window.location.origin}${base}/dashboard`,
+      });
+      if (oauthError) {
+        setError(oauthError.longMessage ?? oauthError.message ?? "Erreur OAuth");
         setLoadingOAuth(null);
       }
       // Pas d'erreur = redirect en cours, on laisse le spinner (la page va changer)
     } catch (e: any) {
       const msg = e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? e?.message;
-      setError(msg || "Erreur de connexion Google.");
+      setError(msg || "Erreur de connexion OAuth. Vérifiez la configuration dans votre Clerk Dashboard.");
       setLoadingOAuth(null);
     }
   };
