@@ -181,7 +181,11 @@ export const listSessions = query({
         ...s,
         // Ne JAMAIS renvoyer le cookie complet à l'UI (sécurité)
         sessionCookie: undefined,
-        sessionCookiePreview: s.sessionCookie.slice(0, 4) + "…" + s.sessionCookie.slice(-3),
+        sessionCookiePreview: s.sessionCookie && s.sessionCookie.length >= 4
+          ? s.sessionCookie.slice(0, 4) + "…" + s.sessionCookie.slice(-3)
+          : s.sessionCookie
+            ? s.sessionCookie
+            : "(en attente bot)",
         applicantName: app?.applicantName ?? "(dossier supprimé)",
         destination: app?.destination ?? "",
         visaType: app?.visaType ?? "",
