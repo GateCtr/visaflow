@@ -781,8 +781,9 @@ async function solveHcaptcha(
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_anticaptcha_fail_fallback', status: 'warn' });
   }
 
-  // ─── Tentative 2 : CapSolver ─────────────────────────────────────────────
-  // Note : sitekey CEV blacklistée par CapSolver en 2026-04 — fallback seulement
+  // ─── Tentative 2 : CapSolver (PRIORITAIRE avant 2captcha) ───────────────
+  // Essaie HCaptchaEnterpriseTaskProxyLess puis HCaptchaTaskProxyLess.
+  // 2captcha ne supporte pas hCaptcha sur le compte actuel → CapSolver est le solveur principal.
   const capKey = capsolverApiKey ?? process.env.CAPSOLVER_API_KEY ?? '';
   if (capKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_start', status: 'ok' });
@@ -791,14 +792,16 @@ async function solveHcaptcha(
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn' });
   }
 
-  // ─── Tentative 3 : 2captcha HCaptchaTaskProxyless ────────────────────────
+  // ─── Tentative 3 : 2captcha (dernier recours) ────────────────────────────
+  // Note : le compte 2captcha actuel ne supporte pas HCaptchaTaskProxyless.
+  // Configurer ANTICAPTCHA_API_KEY (anti-captcha.com) comme alternative fiable.
   if (twoCaptchaApiKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_2captcha_start', status: 'ok' });
     const token = await solveHcaptchaVia2captcha(twoCaptchaApiKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
     if (token) return token;
   }
 
-  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'Configurer ANTICAPTCHA_API_KEY (anti-captcha.com) — CapSolver blackliste cette sitekey; 2captcha ne supporte pas hCaptcha sur ce compte' } });
+  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'CapSolver: ERROR_INVALID_TASK_DATA → sitekey potentiellement blacklistée sur ce plan. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.' } });
   return null;
 }
 
@@ -875,8 +878,10 @@ async function solveHcaptchaViaAntiCaptcha(
 
 /**
  * Résolution hCaptcha via CapSolver (https://capsolver.com).
- * Supporte hCaptcha proxyless nativement. ~30-60s pour une résolution.
- * Note : sitekey CEV (5f64399c-...) blacklistée par CapSolver en 2026-04.
+ * Essaie deux types de tâche dans l'ordre :
+ *   1. HCaptchaEnterpriseTaskProxyLess — sites gouvernementaux / domaines protégés
+ *   2. HCaptchaTaskProxyLess           — standard (fallback)
+ * Inclut userAgent dans le payload (requis pour certains challenges "hsw").
  */
 async function solveHcaptchaViaCapsolver(
   apiKey: string,
@@ -884,64 +889,80 @@ async function solveHcaptchaViaCapsolver(
   pageUrl: string,
   clientId: string,
 ): Promise<string | null> {
-  try {
-    const createRes = await fetch('https://api.capsolver.com/createTask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientKey: apiKey,
-        task: {
-          type: 'HCaptchaTaskProxyLess',
-          websiteURL: pageUrl,
-          websiteKey: siteKey,
-        },
-      }),
-    });
+  // UA stable pour le cycle entier — doit correspondre au navigateur Playwright utilisé
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
 
-    const createData = await createRes.json() as { errorId: number; errorCode?: string; taskId?: number };
-    if (createData.errorId !== 0 || !createData.taskId) {
-      botLog({ applicationId: clientId, step: 'cev_capsolver_create_fail', status: 'fail', data: { error: createData.errorCode ?? createData.errorId } });
-      return null;
-    }
+  // Essaie les deux types de tâche CapSolver dans l'ordre
+  const taskTypes = ['HCaptchaEnterpriseTaskProxyLess', 'HCaptchaTaskProxyLess'] as const;
 
-    const taskId = createData.taskId;
-    botLog({ applicationId: clientId, step: 'cev_capsolver_task_created', status: 'ok', data: { taskId } });
+  for (const taskType of taskTypes) {
+    try {
+      botLog({ applicationId: clientId, step: 'cev_capsolver_try_type', status: 'ok', data: { taskType } });
 
-    // Poller jusqu'à résolution (max 120s, intervalle 5s)
-    for (let i = 0; i < 24; i++) {
-      await new Promise(r => setTimeout(r, 5_000));
-
-      const pollRes = await fetch('https://api.capsolver.com/getTaskResult', {
+      const createRes = await fetch('https://api.capsolver.com/createTask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientKey: apiKey, taskId }),
+        body: JSON.stringify({
+          clientKey: apiKey,
+          task: {
+            type: taskType,
+            websiteURL: pageUrl,
+            websiteKey: siteKey,
+            userAgent: ua,
+          },
+        }),
       });
 
-      const pollData = await pollRes.json() as {
-        errorId: number;
-        status: 'idle' | 'processing' | 'ready' | 'failed';
-        solution?: { gRecaptchaResponse?: string; userAgent?: string };
-        errorCode?: string;
-      };
+      const createData = await createRes.json() as { errorId: number; errorCode?: string; taskId?: number };
 
-      if (pollData.errorId !== 0 || pollData.status === 'failed') {
-        botLog({ applicationId: clientId, step: 'cev_capsolver_poll_fail', status: 'fail', data: { error: pollData.errorCode ?? pollData.status } });
-        return null;
+      if (createData.errorId !== 0 || !createData.taskId) {
+        // ERROR_INVALID_TASK_DATA ou sitekey blacklistée → essayer le type suivant
+        botLog({ applicationId: clientId, step: 'cev_capsolver_create_fail', status: 'fail', data: { taskType, error: createData.errorCode ?? createData.errorId } });
+        continue;
       }
 
-      if (pollData.status === 'ready' && pollData.solution?.gRecaptchaResponse) {
-        botLog({ applicationId: clientId, step: 'cev_capsolver_solved', status: 'ok', data: { attempts: i + 1, tokenLen: pollData.solution.gRecaptchaResponse.length } });
-        return pollData.solution.gRecaptchaResponse;
+      const taskId = createData.taskId;
+      botLog({ applicationId: clientId, step: 'cev_capsolver_task_created', status: 'ok', data: { taskType, taskId } });
+
+      // Poller jusqu'à résolution (max 120s, intervalle 5s)
+      for (let i = 0; i < 24; i++) {
+        await new Promise(r => setTimeout(r, 5_000));
+
+        const pollRes = await fetch('https://api.capsolver.com/getTaskResult', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientKey: apiKey, taskId }),
+        });
+
+        const pollData = await pollRes.json() as {
+          errorId: number;
+          status: 'idle' | 'processing' | 'ready' | 'failed';
+          solution?: { gRecaptchaResponse?: string; userAgent?: string };
+          errorCode?: string;
+        };
+
+        if (pollData.errorId !== 0 || pollData.status === 'failed') {
+          botLog({ applicationId: clientId, step: 'cev_capsolver_poll_fail', status: 'fail', data: { taskType, error: pollData.errorCode ?? pollData.status } });
+          break; // essaie le type suivant
+        }
+
+        if (pollData.status === 'ready' && pollData.solution?.gRecaptchaResponse) {
+          botLog({ applicationId: clientId, step: 'cev_capsolver_solved', status: 'ok', data: { taskType, attempts: i + 1, tokenLen: pollData.solution.gRecaptchaResponse.length } });
+          return pollData.solution.gRecaptchaResponse;
+        }
       }
+
+      botLog({ applicationId: clientId, step: 'cev_capsolver_timeout', status: 'fail', data: { taskType } });
+      // timeout sur ce type → essaie le suivant
+
+    } catch (err) {
+      botLog({ applicationId: clientId, step: 'cev_capsolver_exception', status: 'fail', data: { taskType, error: String(err) } });
     }
-
-    botLog({ applicationId: clientId, step: 'cev_capsolver_timeout', status: 'fail' });
-    return null;
-
-  } catch (err) {
-    botLog({ applicationId: clientId, step: 'cev_capsolver_exception', status: 'fail', data: { error: String(err) } });
-    return null;
   }
+
+  // Tous les types ont échoué
+  botLog({ applicationId: clientId, step: 'cev_capsolver_all_types_failed', status: 'fail' });
+  return null;
 }
 
 /**
