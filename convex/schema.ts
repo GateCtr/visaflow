@@ -263,6 +263,9 @@ export default defineSchema({
     vowintEmail: v.optional(v.string()),
     vowintPassword: v.optional(v.string()),
     vowintAppUrl: v.optional(v.string()), // URL dossier spécifique (vide = auto-détection)
+    // Nombre cumulé d'échecs de login VOWINT (survie aux redémarrages Railway)
+    // Quand loginFailCount >= 3, la session est automatiquement passée en "paused"
+    loginFailCount: v.optional(v.number()),
     // Note libre admin (ex: "session pour Marie Dupont, dossier urgent")
     notes: v.optional(v.string()),
     // Verrouillage atomique anti-doublon (timestamp jusqu'à quand la session

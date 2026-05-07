@@ -324,6 +324,65 @@ export const internalClaimDue = internalMutation({
   },
 });
 
+// ─── INTERNAL: enregistrer un échec de login VOWINT lors du setup ────────────
+// Incrémente loginFailCount (persisté → survie aux redémarrages Railway).
+// Après MAX_LOGIN_FAILS (3) → status = "paused" + notification admin.
+const MAX_LOGIN_FAILS = 3;
+export const internalRecordSetupLoginFail = internalMutation({
+  args: {
+    sessionId: v.id("cevSessions"),
+    errorDetail: v.optional(v.string()),
+  },
+  handler: async (ctx, { sessionId, errorDetail }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return { loginFailCount: 0, paused: false };
+
+    const now = Date.now();
+    const loginFailCount = (session.loginFailCount ?? 0) + 1;
+    const shouldPause = loginFailCount >= MAX_LOGIN_FAILS;
+
+    const patch: Record<string, unknown> = {
+      loginFailCount,
+      lockedUntil: 0, // libérer le lock immédiatement
+      lastError: errorDetail ?? `VOWINT login failed (attempt ${loginFailCount})`,
+    };
+
+    if (shouldPause) {
+      patch.status = "paused";
+      patch.notes = [
+        session.notes,
+        `[Auto-pause] ${loginFailCount} échecs de login VOWINT consécutifs depuis le dernier reset — vérifier les identifiants VOWINT dans Convex.`,
+      ].filter(Boolean).join('\n');
+    }
+
+    await ctx.db.patch(sessionId, patch);
+
+    // Notifier les admins si session auto-pausée
+    if (shouldPause) {
+      const app = await ctx.db.get(session.applicationId);
+      if (app) {
+        const admins = await ctx.db
+          .query("users")
+          .filter(q => q.eq(q.field("role"), "admin"))
+          .collect();
+        for (const admin of admins) {
+          await ctx.db.insert("notifications", {
+            userId: admin.clerkId,
+            type: "cev_setup_login_failed",
+            title: `🔐 Session CEV pausée — ${app.applicantName}`,
+            body: `${loginFailCount} tentatives de login VOWINT ont échoué pour ${app.applicantName}. Vérifiez les identifiants VOWINT dans la section CEV Sessions.${errorDetail ? ` Erreur: ${errorDetail}` : ''}`,
+            applicationId: session.applicationId,
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+    }
+
+    return { loginFailCount, paused: shouldPause };
+  },
+});
+
 // ─── INTERNAL: enregistrer le résultat d'un check ───────────────────────────
 export const internalRecordCheck = internalMutation({
   args: {

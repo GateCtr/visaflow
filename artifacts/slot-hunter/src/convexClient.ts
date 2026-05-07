@@ -412,6 +412,33 @@ export async function getPendingCevSetups(): Promise<CevSetupTask[]> {
   }
 }
 
+/**
+ * Enregistre un échec de login VOWINT lors du setup d'une session CEV.
+ * Incrémente loginFailCount dans Convex (persisté — survie aux redémarrages Railway).
+ * Retourne { loginFailCount, paused: true } quand la session est auto-pausée (≥ 3 échecs).
+ */
+export async function recordCevSetupLoginFail(
+  sessionId: string,
+  errorDetail?: string,
+): Promise<{ loginFailCount: number; paused: boolean }> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/login-fail`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, errorDetail }),
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] recordCevSetupLoginFail failed: ${res.status}`);
+      return { loginFailCount: 0, paused: false };
+    }
+    return (await res.json()) as { loginFailCount: number; paused: boolean };
+  } catch (err) {
+    console.warn("[convexClient] recordCevSetupLoginFail error:", err);
+    return { loginFailCount: 0, paused: false };
+  }
+}
+
 export async function activateCevSession(
   sessionId: string,
   sessionCookie: string,

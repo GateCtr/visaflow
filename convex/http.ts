@@ -223,6 +223,38 @@ http.route({
   }),
 });
 
+// ─── CEV Sessions: enregistrer un échec de login VOWINT lors du setup ────────
+// Incrémente loginFailCount dans Convex (persisté → survie aux redémarrages Railway).
+// Après 3 échecs → status = "paused" + notification admin.
+http.route({
+  path: "/hunter/cev-sessions/login-fail",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { sessionId: string; errorDetail?: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+    if (!body.sessionId) {
+      return new Response("Missing required field: sessionId", { status: 400 });
+    }
+
+    const result = await ctx.runMutation(internal.cevSessions.internalRecordSetupLoginFail, {
+      sessionId: body.sessionId as Id<"cevSessions">,
+      errorDetail: body.errorDetail,
+    });
+
+    return new Response(JSON.stringify({ ok: true, ...result }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── CEV Loop Session: persister la session active (survie crashs/redémarrages) ─
 http.route({
   path: "/hunter/cev-loop/persist",

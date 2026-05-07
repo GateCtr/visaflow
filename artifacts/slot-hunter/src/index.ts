@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
@@ -59,11 +59,30 @@ async function startCevSetupLoop(): Promise<void> {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
         } else {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
-          // Déverrouiller la session pour permettre une nouvelle tentative immédiate
-          if (timedOut || r.error === "TIMEOUT_4MIN") {
+
+          const isLoginFailure = r.error === "CEV_VOWINT_SESSION_FAILED";
+          const isTimeout = timedOut || r.error === "TIMEOUT_4MIN";
+
+          if (isLoginFailure) {
+            // Échec de login VOWINT : incrémenter le compteur persisté dans Convex.
+            // Après 3 échecs cumulés (même après redémarrages Railway) → session auto-pausée.
+            try {
+              const loginResult = await recordCevSetupLoginFail(s.sessionId, r.error);
+              if (loginResult.paused) {
+                console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE après ${loginResult.loginFailCount} échecs de login — vérifier identifiants VOWINT`);
+              } else {
+                console.log(`[CEV-SETUP] ⚠️  Login fail #${loginResult.loginFailCount}/3 session=${s.sessionId} — lock libéré, prochaine tentative dans 60s`);
+              }
+            } catch (err) {
+              console.warn(`[CEV-SETUP] recordCevSetupLoginFail échoué: ${err} — reset lock pour retry`);
+              await resetCevSetupLock(s.sessionId).catch(() => {});
+            }
+          } else if (isTimeout) {
+            // Timeout Playwright : déverrouiller pour permettre une nouvelle tentative immédiate
             console.log(`[CEV-SETUP] 🔓 Déverrouillage session=${s.sessionId} (timeout)`);
             await resetCevSetupLock(s.sessionId).catch(() => {});
           }
+          // Autres erreurs (HCAPTCHA_FAILED, NO_SESSION_COOKIE…) : le lock expire naturellement (5 min)
         }
       }
     } catch (err) {
