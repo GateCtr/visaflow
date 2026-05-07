@@ -165,6 +165,40 @@ export const setSessionStatus = mutation({
   },
 });
 
+// ─── ADMIN: corriger les identifiants VOWINT et relancer le setup ────────────
+// Met à jour email/mot de passe, remet loginFailCount à 0 et repasse en needs_setup.
+// L'admin utilise ce bouton après avoir corrigé des identifiants incorrects.
+export const updateVowintCredentials = mutation({
+  args: {
+    sessionId: v.id("cevSessions"),
+    vowintEmail: v.string(),
+    vowintPassword: v.string(),
+    vowintAppUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session introuvable");
+
+    if (!args.vowintEmail.trim()) throw new Error("Email VOWINT requis");
+    if (!args.vowintPassword.trim()) throw new Error("Mot de passe VOWINT requis");
+
+    await ctx.db.patch(args.sessionId, {
+      vowintEmail: args.vowintEmail.trim(),
+      vowintPassword: args.vowintPassword.trim(),
+      vowintAppUrl: args.vowintAppUrl?.trim() || undefined,
+      // Remettre les compteurs à zéro + relancer le setup
+      loginFailCount: 0,
+      consecutiveErrors: 0,
+      lastError: undefined,
+      lockedUntil: 0,
+      status: "needs_setup",
+    });
+  },
+});
+
 export const deleteSession = mutation({
   args: { sessionId: v.id("cevSessions") },
   handler: async (ctx, args) => {

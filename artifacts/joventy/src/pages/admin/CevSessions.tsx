@@ -17,6 +17,7 @@ import {
   X,
   Bot,
   RotateCcw,
+  ShieldAlert,
 } from "lucide-react";
 
 const POLL_INTERVAL_OPTIONS = [
@@ -78,6 +79,182 @@ function StatusBadge({ status, lastResult }: { status: string; lastResult?: stri
   );
 }
 
+// ─── Modal : correction des identifiants VOWINT + relance setup ───────────────
+interface ResetSession {
+  _id: string;
+  applicantName: string;
+  loginFailCount: number;
+  vowintEmail?: string;
+  vowintAppUrl?: string;
+  lastError?: string;
+}
+
+function ResetCredentialsModal({
+  session,
+  onClose,
+}: {
+  session: ResetSession;
+  onClose: () => void;
+}) {
+  const updateCredentials = useMutation(api.cevSessions.updateVowintCredentials);
+
+  const [email, setEmail] = useState(session.vowintEmail ?? "");
+  const [password, setPassword] = useState("");
+  const [appUrl, setAppUrl] = useState(session.vowintAppUrl ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = email.trim() !== "" && password.trim() !== "";
+
+  async function submit() {
+    setError(null);
+    if (!email.trim()) { setError("Email VOWINT requis"); return; }
+    if (!password.trim()) { setError("Mot de passe requis"); return; }
+    setSubmitting(true);
+    try {
+      await updateCredentials({
+        sessionId: session._id as Id<"cevSessions">,
+        vowintEmail: email.trim(),
+        vowintPassword: password.trim(),
+        vowintAppUrl: appUrl.trim() || undefined,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-slate-900">
+              Corriger les identifiants VOWINT
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Contexte erreur */}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-1.5">
+            <p className="text-sm font-medium text-red-800 flex items-center gap-1.5">
+              <XCircle className="w-4 h-4 shrink-0" />
+              {session.loginFailCount} échec{session.loginFailCount > 1 ? "s" : ""} de login pour{" "}
+              <span className="font-semibold">{session.applicantName}</span>
+            </p>
+            {session.lastError && (
+              <p className="text-xs text-red-700 font-mono break-all">
+                {session.lastError}
+              </p>
+            )}
+            <p className="text-xs text-red-700 mt-1">
+              Corrige l'email et/ou le mot de passe VOWINT ci-dessous, puis clique
+              sur <strong>Relancer</strong>. Le compteur d'échecs sera remis à zéro
+              et le bot retente immédiatement.
+            </p>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Email VOWINT *
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@example.com"
+              autoComplete="off"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
+            />
+          </div>
+
+          {/* Mot de passe */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Nouveau mot de passe VOWINT *
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="new-password"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Laisse vide pour conserver l'ancien mot de passe… non — un nouveau
+              mot de passe est <span className="font-medium">obligatoire</span> pour
+              relancer.
+            </p>
+          </div>
+
+          {/* URL optionnelle */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              URL dossier VOWINT{" "}
+              <span className="text-slate-400 font-normal">(optionnel)</span>
+            </label>
+            <input
+              type="url"
+              value={appUrl}
+              onChange={(e) => setAppUrl(e.target.value)}
+              placeholder="https://visaonweb.diplomatie.be/en/VisaApplication/Detail/..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
+            />
+          </div>
+
+          {/* Bannière info */}
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 flex gap-2 text-xs text-violet-800">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Après validation, la session repasse en <strong>Configuration auto</strong> et le
+              bot tente une nouvelle connexion dans la prochaine minute.
+            </span>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-800">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 p-5 border-t border-slate-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !canSubmit}
+            className="px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+          >
+            {submitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RotateCcw className="w-4 h-4" />
+            )}
+            Corriger et relancer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal : nouvelle session ─────────────────────────────────────────────────
 function NewSessionModal({ onClose }: { onClose: () => void }) {
   const apps = useQuery(api.applications.list, {});
   const upsert = useMutation(api.cevSessions.upsertSession);
@@ -272,11 +449,14 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Page principale ──────────────────────────────────────────────────────────
 export default function CevSessions() {
   const sessions = useQuery(api.cevSessions.listSessions);
   const setStatus = useMutation(api.cevSessions.setSessionStatus);
   const deleteSession = useMutation(api.cevSessions.deleteSession);
-  const [showModal, setShowModal] = useState(false);
+
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [resetSession, setResetSession] = useState<ResetSession | null>(null);
 
   return (
     <div className="space-y-6">
@@ -288,7 +468,7 @@ export default function CevSessions() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => setShowNewModal(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] text-sm font-medium"
         >
           <Plus className="w-4 h-4" /> Nouvelle session
@@ -307,7 +487,7 @@ export default function CevSessions() {
             Crée une session : le bot se connecte à VOWINT et démarre le polling automatiquement.
           </p>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => setShowNewModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] text-sm font-medium"
           >
             <Plus className="w-4 h-4" /> Créer la première session
@@ -328,106 +508,142 @@ export default function CevSessions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {sessions.map((s) => (
-                <tr key={s._id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-slate-900">{s.applicantName}</div>
-                    <div className="text-xs text-slate-500">{s.visaType}</div>
-                    {s.notes && <div className="text-xs text-slate-400 italic mt-0.5">{s.notes}</div>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={s.status} lastResult={s.lastResult} />
-                    {(s as any).loginFailCount > 0 ? (
-                      <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        {(s as any).loginFailCount} échec{(s as any).loginFailCount > 1 ? "s" : ""} login VOWINT
-                      </div>
-                    ) : s.consecutiveErrors && s.consecutiveErrors > 0 ? (
-                      <div className="text-xs text-amber-600 mt-1">
-                        {s.consecutiveErrors} erreur{s.consecutiveErrors > 1 ? "s" : ""} consécutive{s.consecutiveErrors > 1 ? "s" : ""}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">
-                    <code className="text-xs font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                      {s.sessionCookiePreview}
-                    </code>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-700">{s.checkCount ?? 0}</td>
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-slate-700 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      il y a {formatRelative(s.lastCheckAt)}
-                    </div>
-                    {s.lastError && (
-                      <div className="text-xs text-red-600 mt-0.5 max-w-xs truncate" title={s.lastError}>
-                        {s.lastError}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    toutes les {Math.round((s.pollIntervalMs ?? 30_000) / 1000)}s
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      {s.status === "active" && (
-                        <button
-                          onClick={() => setStatus({ sessionId: s._id, status: "paused" })}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                          title="Mettre en pause"
-                        >
-                          <Pause className="w-4 h-4" />
-                        </button>
+              {sessions.map((s: any) => {
+                const loginFailCount: number = s.loginFailCount ?? 0;
+                const isLoginPaused = s.status === "paused" && loginFailCount > 0;
+
+                return (
+                  <tr key={s._id} className={`hover:bg-slate-50 ${isLoginPaused ? "bg-red-50/30" : ""}`}>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-slate-900">{s.applicantName}</div>
+                      <div className="text-xs text-slate-500">{s.visaType}</div>
+                      {s.notes && (
+                        <div className="text-xs text-slate-400 italic mt-0.5 max-w-xs truncate" title={s.notes}>
+                          {s.notes}
+                        </div>
                       )}
-                      {s.status === "paused" && !(s as any).loginFailCount && (
-                        <button
-                          onClick={() => setStatus({ sessionId: s._id, status: "active" })}
-                          className="p-1.5 rounded hover:bg-slate-100 text-emerald-600"
-                          title="Reprendre le polling"
-                        >
-                          <Play className="w-4 h-4" />
-                        </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={s.status} lastResult={s.lastResult} />
+                      {loginFailCount > 0 ? (
+                        <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                          <XCircle className="w-3 h-3" />
+                          {loginFailCount} échec{loginFailCount > 1 ? "s" : ""} login VOWINT
+                        </div>
+                      ) : s.consecutiveErrors && s.consecutiveErrors > 0 ? (
+                        <div className="text-xs text-amber-600 mt-1">
+                          {s.consecutiveErrors} erreur{s.consecutiveErrors > 1 ? "s" : ""} consécutive{s.consecutiveErrors > 1 ? "s" : ""}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      <code className="text-xs font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {s.sessionCookiePreview}
+                      </code>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{s.checkCount ?? 0}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs text-slate-700 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        il y a {formatRelative(s.lastCheckAt)}
+                      </div>
+                      {s.lastError && (
+                        <div className="text-xs text-red-600 mt-0.5 max-w-xs truncate" title={s.lastError}>
+                          {s.lastError}
+                        </div>
                       )}
-                      {(s.status === "expired" || (s.status === "paused" && (s as any).loginFailCount > 0)) && (
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      toutes les {Math.round((s.pollIntervalMs ?? 30_000) / 1000)}s
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center gap-1">
+                        {/* Pause : session active sans login failure */}
+                        {s.status === "active" && (
+                          <button
+                            onClick={() => setStatus({ sessionId: s._id, status: "paused" })}
+                            className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
+                            title="Mettre en pause"
+                          >
+                            <Pause className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Reprendre : session pausée manuellement (sans login failure) */}
+                        {s.status === "paused" && loginFailCount === 0 && (
+                          <button
+                            onClick={() => setStatus({ sessionId: s._id, status: "active" })}
+                            className="p-1.5 rounded hover:bg-slate-100 text-emerald-600"
+                            title="Reprendre le polling"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Corriger les identifiants VOWINT : session auto-pausée après login failures */}
+                        {isLoginPaused && (
+                          <button
+                            onClick={() =>
+                              setResetSession({
+                                _id: s._id,
+                                applicantName: s.applicantName,
+                                loginFailCount,
+                                vowintEmail: s.vowintEmail,
+                                vowintAppUrl: s.vowintAppUrl,
+                                lastError: s.lastError,
+                              })
+                            }
+                            className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                            title="Corriger les identifiants VOWINT et relancer"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Relancer config auto : session expirée */}
+                        {s.status === "expired" && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Relancer la configuration auto pour ${s.applicantName} ?`)) {
+                                setStatus({ sessionId: s._id, status: "needs_setup" });
+                              }
+                            }}
+                            className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
+                            title="Relancer la configuration auto"
+                          >
+                            <Bot className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Supprimer */}
                         <button
                           onClick={() => {
-                            const msg = (s as any).loginFailCount > 0
-                              ? `Réinitialiser les ${(s as any).loginFailCount} échec(s) de login et relancer la configuration auto pour ${s.applicantName} ?\n\nAssure-toi d'avoir corrigé le mot de passe VOWINT dans Convex avant de continuer.`
-                              : `Relancer la configuration auto pour ${s.applicantName} ?`;
-                            if (confirm(msg)) {
-                              setStatus({ sessionId: s._id, status: "needs_setup" });
+                            if (confirm(`Supprimer la session pour ${s.applicantName} ?`)) {
+                              deleteSession({ sessionId: s._id });
                             }
                           }}
-                          className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
-                          title={(s as any).loginFailCount > 0 ? "Réinitialiser et relancer la config auto" : "Relancer la configuration auto"}
+                          className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                          title="Supprimer"
                         >
-                          {(s as any).loginFailCount > 0
-                            ? <RotateCcw className="w-4 h-4" />
-                            : <Bot className="w-4 h-4" />
-                          }
+                          <Trash2 className="w-4 h-4" />
                         </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          if (confirm(`Supprimer la session pour ${s.applicantName} ?`)) {
-                            deleteSession({ sessionId: s._id });
-                          }
-                        }}
-                        className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {showModal && <NewSessionModal onClose={() => setShowModal(false)} />}
+      {showNewModal && <NewSessionModal onClose={() => setShowNewModal(false)} />}
+      {resetSession && (
+        <ResetCredentialsModal
+          session={resetSession}
+          onClose={() => setResetSession(null)}
+        />
+      )}
     </div>
   );
 }
