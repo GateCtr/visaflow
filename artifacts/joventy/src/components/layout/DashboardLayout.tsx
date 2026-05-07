@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "convex/react";
@@ -58,9 +58,10 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  const defaultSinceRef = useRef<number>(Date.now() - 24 * 60 * 60 * 1000);
   const botFailCount = useQuery(
     api.botLogs.countRecentFails,
-    isAdmin ? { since: botLogsLastSeen || Date.now() - 24 * 60 * 60 * 1000 } : "skip"
+    isAdmin ? { since: botLogsLastSeen || defaultSinceRef.current } : "skip"
   ) ?? 0;
 
   const adminLinks = [
