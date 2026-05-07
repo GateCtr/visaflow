@@ -1473,7 +1473,16 @@ export async function runCevDirectSessionSetup(
     const aspNetMatch = cookieString.match(/ASP\.NET_SessionId=([^;]+)/);
     const cookieForStorage = aspNetMatch ? aspNetMatch[1] : cookieString;
 
-    const activated = await activateCevSession(sessionId, cookieForStorage, validUntilMs, discoveredIntegrationUrl);
+    // L'URL d'intégration peut venir de deux sources :
+    //  1. La capture réseau Playwright (attachNetCapture) — priorité
+    //  2. Le redirectUrl retourné par SetCaptchaToken — fallback fiable
+    // Sans cette URL, pollCevSlot reçoit "pending" et échoue immédiatement.
+    const captchaRedirectUrl = captchaResult.status !== 'session_error'
+      ? captchaResult.session.redirectUrl
+      : undefined;
+    const integrationUrlToStore = discoveredIntegrationUrl ?? captchaRedirectUrl;
+
+    const activated = await activateCevSession(sessionId, cookieForStorage, validUntilMs, integrationUrlToStore);
     if (!activated) {
       botLog({ applicationId: clientId, step: 'cev_direct_activate_failed', status: 'fail' });
       return { success: false, error: 'CONVEX_ACTIVATE_FAILED', sessionCookie: cookieForStorage, validUntilMs };
@@ -1488,7 +1497,8 @@ export async function runCevDirectSessionSetup(
         result: captchaResult.status,
         validUntilMs: validUntilMs ?? 0,
         cookiePreview: cookieForStorage.slice(0, 4) + '…',
-        integrationUrl: discoveredIntegrationUrl ?? 'not_captured',
+        integrationUrlSource: discoveredIntegrationUrl ? 'net_capture' : captchaRedirectUrl ? 'captcha_redirect' : 'none',
+        integrationUrl: integrationUrlToStore ?? 'not_stored',
       },
     });
 
