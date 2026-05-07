@@ -16,6 +16,7 @@ import {
   Info,
   X,
   Bot,
+  RotateCcw,
 } from "lucide-react";
 
 const POLL_INTERVAL_OPTIONS = [
@@ -336,7 +337,12 @@ export default function CevSessions() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={s.status} lastResult={s.lastResult} />
-                    {s.consecutiveErrors && s.consecutiveErrors > 0 ? (
+                    {(s as any).loginFailCount > 0 ? (
+                      <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <XCircle className="w-3 h-3" />
+                        {(s as any).loginFailCount} échec{(s as any).loginFailCount > 1 ? "s" : ""} login VOWINT
+                      </div>
+                    ) : s.consecutiveErrors && s.consecutiveErrors > 0 ? (
                       <div className="text-xs text-amber-600 mt-1">
                         {s.consecutiveErrors} erreur{s.consecutiveErrors > 1 ? "s" : ""} consécutive{s.consecutiveErrors > 1 ? "s" : ""}
                       </div>
@@ -373,22 +379,32 @@ export default function CevSessions() {
                           <Pause className="w-4 h-4" />
                         </button>
                       )}
-                      {s.status === "paused" && (
+                      {s.status === "paused" && !(s as any).loginFailCount && (
                         <button
                           onClick={() => setStatus({ sessionId: s._id, status: "active" })}
                           className="p-1.5 rounded hover:bg-slate-100 text-emerald-600"
-                          title="Reprendre"
+                          title="Reprendre le polling"
                         >
                           <Play className="w-4 h-4" />
                         </button>
                       )}
-                      {(s.status === "expired") && (
+                      {(s.status === "expired" || (s.status === "paused" && (s as any).loginFailCount > 0)) && (
                         <button
-                          onClick={() => setStatus({ sessionId: s._id, status: "needs_setup" })}
+                          onClick={() => {
+                            const msg = (s as any).loginFailCount > 0
+                              ? `Réinitialiser les ${(s as any).loginFailCount} échec(s) de login et relancer la configuration auto pour ${s.applicantName} ?\n\nAssure-toi d'avoir corrigé le mot de passe VOWINT dans Convex avant de continuer.`
+                              : `Relancer la configuration auto pour ${s.applicantName} ?`;
+                            if (confirm(msg)) {
+                              setStatus({ sessionId: s._id, status: "needs_setup" });
+                            }
+                          }}
                           className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
-                          title="Relancer la configuration auto"
+                          title={(s as any).loginFailCount > 0 ? "Réinitialiser et relancer la config auto" : "Relancer la configuration auto"}
                         >
-                          <Bot className="w-4 h-4" />
+                          {(s as any).loginFailCount > 0
+                            ? <RotateCcw className="w-4 h-4" />
+                            : <Bot className="w-4 h-4" />
+                          }
                         </button>
                       )}
                       <button

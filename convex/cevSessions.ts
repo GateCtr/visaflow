@@ -154,6 +154,13 @@ export const setSessionStatus = mutation({
     if (args.status === "expired" && !session.expiredAt) {
       patch.expiredAt = Date.now();
     }
+    // Quand on relance le setup, on remet les compteurs à zéro
+    if (args.status === "needs_setup") {
+      patch.loginFailCount = 0;
+      patch.lastError = undefined;
+      patch.lockedUntil = 0;
+      patch.consecutiveErrors = 0;
+    }
     await ctx.db.patch(args.sessionId, patch);
   },
 });

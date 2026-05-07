@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc --noEmit",
+    "postinstall": "playwright install chromium --with-deps",
     "security:check": "tsx src/securityCheck.ts",
     "security:check:full": "FULL_CHECK=true tsx src/securityCheck.ts",
     "es:citaconsular:discover": "tsx src/citaconsularDiscovery.ts"
