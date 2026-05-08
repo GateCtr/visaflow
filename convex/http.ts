@@ -150,13 +150,18 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const err = requireHunterKey(request);
     if (err) return err;
-
-    // Claim atomique : retourne uniquement les sessions dues + pose un lock 30s
-    const sessions = await ctx.runMutation(internal.cevSessions.internalClaimDue);
-    return new Response(JSON.stringify(sessions), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const sessions = await ctx.runMutation(internal.cevSessions.internalClaimDue);
+      return new Response(JSON.stringify(sessions), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 
@@ -167,12 +172,18 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const err = requireHunterKey(request);
     if (err) return err;
-
-    const sessions = await ctx.runMutation(internal.cevSessions.internalClaimNeedsSetup);
-    return new Response(JSON.stringify(sessions), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const sessions = await ctx.runMutation(internal.cevSessions.internalClaimNeedsSetup);
+      return new Response(JSON.stringify(sessions), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 
@@ -183,14 +194,21 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const err = requireHunterKey(request);
     if (err) return err;
-    const body = await request.json() as { sessionId: string };
-    await ctx.runMutation(internal.cevSessions.internalResetSetupLock, {
-      sessionId: body.sessionId as Id<"cevSessions">,
-    });
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const body = await request.json() as { sessionId: string };
+      await ctx.runMutation(internal.cevSessions.internalResetSetupLock, {
+        sessionId: body.sessionId as Id<"cevSessions">,
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 
@@ -201,25 +219,29 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const err = requireHunterKey(request);
     if (err) return err;
-
-    const body = await request.json() as {
-      sessionId: string;
-      sessionCookie: string;
-      validUntilMs?: number;
-      integrationUrl?: string;  // URL d'intégration découverte par le bot (mode credentials)
-    };
-
-    await ctx.runMutation(internal.cevSessions.internalActivateSession, {
-      sessionId: body.sessionId as Id<"cevSessions">,
-      sessionCookie: body.sessionCookie,
-      validUntilMs: body.validUntilMs,
-      integrationUrl: body.integrationUrl,
-    });
-
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const body = await request.json() as {
+        sessionId: string;
+        sessionCookie: string;
+        validUntilMs?: number;
+        integrationUrl?: string;
+      };
+      await ctx.runMutation(internal.cevSessions.internalActivateSession, {
+        sessionId: body.sessionId as Id<"cevSessions">,
+        sessionCookie: body.sessionCookie,
+        validUntilMs: body.validUntilMs,
+        integrationUrl: body.integrationUrl,
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 
@@ -319,23 +341,27 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const err = requireHunterKey(request);
     if (err) return err;
-
-    const body = await request.json() as {
-      sessionId: string;
-      result: "no_slot" | "slot_found" | "session_expired" | "error";
-      error?: string;
-    };
-
-    await ctx.runMutation(internal.cevSessions.internalRecordCheck, {
-      sessionId: body.sessionId as Id<"cevSessions">,
-      result: body.result,
-      error: body.error,
-    });
-
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const body = await request.json() as {
+        sessionId: string;
+        result: "no_slot" | "slot_found" | "session_expired" | "error";
+        error?: string;
+      };
+      await ctx.runMutation(internal.cevSessions.internalRecordCheck, {
+        sessionId: body.sessionId as Id<"cevSessions">,
+        result: body.result,
+        error: body.error,
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }),
 });
 

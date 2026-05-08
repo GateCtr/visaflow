@@ -111,8 +111,8 @@ async function startCevPollingLoop(): Promise<void> {
         console.log(`[CEV-POLL] ${due.length} session(s) claimée(s) à checker`);
       }
 
-      // Check en parallèle (sessions indépendantes — chacune a son propre cookie)
-      await Promise.all(due.map(async (s) => {
+      // Check séquentiel — évite les bursts parallèles qui génèrent des 500 Convex
+      for (const s of due) {
         const t0 = Date.now();
         const r = await pollCevSlot(s.integrationUrl, s.sessionCookie);
         const ms = Date.now() - t0;
@@ -130,7 +130,7 @@ async function startCevPollingLoop(): Promise<void> {
           // no_slot — log discret
           await recordCevSessionCheck(s.sessionId, "no_slot");
         }
-      }));
+      }
     } catch (err) {
       console.warn("[CEV-POLL] Erreur boucle:", err);
     }
