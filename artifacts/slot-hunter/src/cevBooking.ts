@@ -167,7 +167,7 @@ async function establishCevSession(
   try {
     // === ÉTAPE 0 : Login VOWINT ===
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
-    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
     const loginTitle = await page.title();
     const loginUrl = page.url();
@@ -223,7 +223,7 @@ async function establishCevSession(
 
     // domcontentloaded d'abord, puis on attend networkidle en best-effort
     // AngularJS fait du XHR polling — networkidle peut ne jamais se stabiliser
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
     // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
     await randomDelay(2_000, 4_000);

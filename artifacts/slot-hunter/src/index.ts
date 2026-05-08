@@ -640,6 +640,19 @@ async function main(): Promise<void> {
   log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
+  // ─── Statut solveurs hCaptcha CEV ────────────────────────────────────────
+  const antiCaptchaKey = process.env.ANTICAPTCHA_API_KEY;
+  const capsolverKey   = process.env.CAPSOLVER_API_KEY;
+  const twoCaptchaKey  = process.env.TWOCAPTCHA_API_KEY;
+  const accessCookie   = process.env.HCAPTCHA_ACCESSIBILITY_COOKIE;
+  log("INFO", [
+    "CEV hCaptcha solveurs:",
+    accessCookie ? "Accessibility ✅ (prioritaire)" : "Accessibility ❌ (HCAPTCHA_ACCESSIBILITY_COOKIE absent)",
+    antiCaptchaKey ? "AntiCaptcha ✅" : "AntiCaptcha ❌ (ANTICAPTCHA_API_KEY absent — REQUIS pour domaines gov)",
+    capsolverKey   ? "CapSolver ✅ (sitekey gov blacklistée en 2026-04 — peut échouer)" : "CapSolver ❌",
+    twoCaptchaKey  ? "2captcha ✅ (hCaptcha non supporté sur ce compte)" : "2captcha ❌",
+  ].join(" | "));
+
   if (!convexUrl || !hunterKey) {
     log("ERROR", "CONVEX_SITE_URL et HUNTER_API_KEY sont requis — arrêt");
     process.exit(1);
