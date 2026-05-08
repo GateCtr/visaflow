@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc --noEmit",
-    "postinstall": "node -e \"if (!process.env.VERCEL) { require('child_process').execSync('playwright install chromium --with-deps', {stdio: 'inherit'}) }\"",
+    "postinstall": "node -e \"if (process.env.VERCEL) process.exit(0); const cmd = process.env.REPL_ID ? 'playwright install chromium' : 'playwright install chromium --with-deps'; require('child_process').execSync(cmd, {stdio: 'inherit'})\"",
     "security:check": "tsx src/securityCheck.ts",
     "security:check:full": "FULL_CHECK=true tsx src/securityCheck.ts",
     "es:citaconsular:discover": "tsx src/citaconsularDiscovery.ts"
