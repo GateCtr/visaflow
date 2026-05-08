@@ -24,6 +24,11 @@ const WATCHED_DOMAINS = [
   'appointment.cloud.diplomatie.be',
 ];
 
+// Types de ressources à capturer — on ignore les assets statiques (CSS, fonts, images, scripts).
+// On garde uniquement les appels XHR/fetch (AJAX) et les navigations HTML (document).
+// Cela réduit typiquement le bruit de ~100 entrées à ~10 appels exploitables pour le reversing.
+const CAPTURED_RESOURCE_TYPES = new Set(['xhr', 'fetch', 'document']);
+
 const MAX_BODY_LEN = 2_000;
 
 export interface NetEntry {
@@ -44,8 +49,11 @@ export interface NetCapture {
   dump: () => void;
 }
 
-function isWatched(url: string): boolean {
-  return WATCHED_DOMAINS.some(d => url.includes(d));
+function isWatched(url: string, resourceType: string): boolean {
+  return (
+    WATCHED_DOMAINS.some(d => url.includes(d)) &&
+    CAPTURED_RESOURCE_TYPES.has(resourceType)
+  );
 }
 
 function sanitizeHeaders(raw: Record<string, string>): Record<string, string> {
@@ -68,7 +76,7 @@ export function attachNetCapture(
   const list: NetEntry[] = [];
 
   context.on('request', (req: Request) => {
-    if (!isWatched(req.url())) return;
+    if (!isWatched(req.url(), req.resourceType())) return;
 
     const id = ++seq;
     const entry: NetEntry = {
@@ -105,7 +113,7 @@ export function attachNetCapture(
   });
 
   context.on('response', async (res: Response) => {
-    if (!isWatched(res.url())) return;
+    if (!isWatched(res.url(), res.request().resourceType())) return;
 
     const now = Date.now();
     const key = `${res.request().method()}|${res.url()}|${Math.floor((now - 5_000) / 1000)}`;

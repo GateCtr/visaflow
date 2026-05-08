@@ -1,9 +1,9 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
-import { runCevCheck, runCevDirectSessionSetup } from "./cevBooking.js";
+import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
@@ -118,8 +118,37 @@ async function startCevPollingLoop(): Promise<void> {
         const ms = Date.now() - t0;
 
         if (r.status === "slot_found") {
-          console.log(`[CEV-POLL] 🚨 SLOT TROUVÉ session=${s.sessionId} (${ms}ms)`);
+          console.log(`[CEV-POLL] 🚨 SLOT TROUVÉ session=${s.sessionId} (${ms}ms) — lancement booking Playwright`);
+          // Notifier Convex immédiatement (état "slot_found" visible côté admin)
           await recordCevSessionCheck(s.sessionId, "slot_found");
+
+          // Tenter la réservation avec le cookie de session existant (pas de re-login / captcha)
+          try {
+            const bookResult = await bookWithExistingSession(
+              s.integrationUrl,
+              s.sessionCookie,
+              s.applicationId,
+            );
+
+            if (bookResult.success) {
+              console.log(`[CEV-POLL] ✅ BOOKING RÉUSSI session=${s.sessionId} code=${bookResult.confirmationCode ?? 'N/A'} date=${bookResult.bookedDate ?? '?'}`);
+              // Notifier Convex que le créneau est réservé (déclenche markSlotFound côté admin)
+              await reportSlotFound({
+                applicationId: s.applicationId,
+                date:             bookResult.bookedDate    ?? '',
+                time:             bookResult.bookedTime    ?? '',
+                location:         'CEV - Ambassade de Belgique',
+                confirmationCode: bookResult.confirmationCode,
+                screenshotStorageId: bookResult.screenshotStorageId,
+              });
+            } else {
+              console.log(`[CEV-POLL] ❌ Booking échoué session=${s.sessionId}: ${bookResult.error} — session marquée slot_found dans Convex, admin notifié pour intervention manuelle`);
+              // Le créneau a été détecté mais le booking auto a échoué.
+              // L'admin peut intervenir manuellement (le log cev_book_existing_session_* est visible).
+            }
+          } catch (bookErr) {
+            console.warn(`[CEV-POLL] Crash booking session=${s.sessionId}:`, bookErr);
+          }
         } else if (r.status === "session_expired") {
           console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms)`);
           await recordCevSessionCheck(s.sessionId, "session_expired");

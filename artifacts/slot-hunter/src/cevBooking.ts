@@ -789,7 +789,7 @@ async function solveHcaptcha(
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_start', status: 'ok' });
     const token = await solveHcaptchaViaCapsolver(capKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
     if (token) return token;
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn' });
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn', data: { hint: 'CapSolver a échoué — sitekey CEV potentiellement blacklistée sur ce plan (avril 2026). Vérifier ANTICAPTCHA_API_KEY comme alternative.' } });
   }
 
   // ─── Tentative 3 : 2captcha (dernier recours) ────────────────────────────
@@ -1521,7 +1521,7 @@ export async function runCevDirectSessionSetup(
     //  1. La capture réseau Playwright (attachNetCapture) — priorité
     //  2. Le redirectUrl retourné par SetCaptchaToken — fallback fiable
     // Sans cette URL, pollCevSlot reçoit "pending" et échoue immédiatement.
-    const captchaRedirectUrl = captchaResult.status !== 'session_error'
+    const captchaRedirectUrl = captchaResult.status === 'ready'
       ? captchaResult.session.redirectUrl
       : undefined;
     const integrationUrlToStore = discoveredIntegrationUrl ?? captchaRedirectUrl;
@@ -1552,5 +1552,150 @@ export async function runCevDirectSessionSetup(
     botLog({ applicationId: clientId, step: 'cev_direct_setup_crash', status: 'fail', data: { error: String(err) } });
     try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
     return { success: false, error: String(err) };
+  }
+}
+
+/**
+ * Réservation CEV avec une session déjà établie (ASP.NET_SessionId existant).
+ *
+ * Utilisé par le polling loop quand `pollCevSlot` retourne `slot_found` :
+ *  → réutilise le cookie valide existant (pas de re-login VOWINT, pas de captcha)
+ *  → navigue directement vers l'URL d'intégration CEV
+ *  → dump le HTML de la page SelectSlot pour reverse-engineering des sélecteurs
+ *  → tente de compléter la réservation via UI
+ *
+ * @param integrationUrl  URL complète ou path CEV (ex: https://appointment.cloud.diplomatie.be/Integration/VOW/...)
+ * @param sessionCookie   Valeur brute de ASP.NET_SessionId (sans le nom)
+ * @param clientId        applicationId Convex (pour les logs botLog)
+ */
+export async function bookWithExistingSession(
+  integrationUrl: string,
+  sessionCookie: string,
+  clientId: string,
+): Promise<BookingResult> {
+  const capturedCalls: CapturedNetworkCall[] = [];
+  let browser = null;
+
+  botLog({
+    applicationId: clientId,
+    step: 'cev_book_existing_session_start',
+    status: 'ok',
+    data: { integrationUrlPreview: integrationUrl.slice(0, 80) },
+  });
+
+  try {
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    browser = launched.browser;
+    const context = launched.context;
+    const page = launched.page;
+
+    // Injecter directement le cookie de session (captcha déjà résolu lors du setup)
+    await context.addCookies([
+      {
+        name: 'ASP.NET_SessionId',
+        value: sessionCookie,
+        domain: 'appointment.cloud.diplomatie.be',
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+      {
+        name: 'PreferredCulture',
+        value: 'en-US',
+        domain: 'appointment.cloud.diplomatie.be',
+        path: '/',
+        secure: false,
+        httpOnly: false,
+        sameSite: 'Lax',
+      },
+    ]);
+
+    botLog({ applicationId: clientId, step: 'cev_book_existing_session_cookie_injected', status: 'ok' });
+
+    // Attacher la capture réseau pour reverse engineering (filtrée XHR/fetch/document)
+    const netCapture = attachNetCapture(context, clientId);
+
+    // Normaliser l'URL : construire l'URL complète pour la navigation
+    const fullUrl = integrationUrl.startsWith('http')
+      ? integrationUrl
+      : `${CEV_BASE}${integrationUrl}`;
+
+    // Naviguer vers l'URL d'intégration avec le cookie injecté
+    // Le serveur va vérifier la session et rediriger vers SelectSlot (ou NoAvailability)
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const currentUrl = page.url();
+    botLog({
+      applicationId: clientId,
+      step: 'cev_book_existing_session_navigated',
+      status: 'ok',
+      data: { currentUrl, expectedBase: fullUrl.slice(0, 80) },
+    });
+
+    // Dump HTML immédiat — même avant la vérification d'erreur
+    // Permet de voir la structure de la page (SelectSlot, NoAvailability, SessionExpired…)
+    const pageHtml = await page.content().catch(() => '');
+    botLog({
+      applicationId: clientId,
+      step: 'cev_book_existing_session_page_html',
+      status: 'ok',
+      data: { currentUrl, htmlPreview: pageHtml.slice(0, 4000) },
+    });
+
+    // Vérifier les états d'erreur connus
+    if (currentUrl.includes('NoAvailability') || pageHtml.includes('NoAvailability')) {
+      netCapture.dump();
+      await browser.close();
+      botLog({ applicationId: clientId, step: 'cev_book_existing_session_no_slot', status: 'warn', data: { currentUrl } });
+      return { success: false, error: 'NO_AVAILABILITY_ON_NAVIGATE', capturedCalls };
+    }
+
+    if (
+      currentUrl.includes('SessionExpired') ||
+      currentUrl.includes('/Captcha') ||
+      currentUrl.toLowerCase().includes('login') ||
+      pageHtml.includes('Session has expired') ||
+      pageHtml.includes('session expired')
+    ) {
+      netCapture.dump();
+      await browser.close();
+      botLog({ applicationId: clientId, step: 'cev_book_existing_session_expired', status: 'warn', data: { currentUrl } });
+      return { success: false, error: 'SESSION_EXPIRED_ON_NAVIGATE', capturedCalls };
+    }
+
+    // Construire une CevSession depuis le cookie injecté + URL courante
+    const session: CevSession = {
+      cookies: `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`,
+      validUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      redirectUrl: new URL(currentUrl).pathname + new URL(currentUrl).search,
+    };
+
+    // Construire un config minimal (VOWINT non requis — session déjà établie)
+    const config: CevBookingConfig = {
+      clientId,
+      vowintUsername: '',
+      vowintPassword: '',
+      vowintAppointmentUrl: '',
+      twoCaptchaApiKey: '',
+    };
+
+    // Compléter la réservation via UI (sélection date → heure → confirmation)
+    const result = await completebookingViaUI(page, session, config, capturedCalls);
+
+    netCapture.dump();
+    await browser.close();
+    return { ...result, capturedCalls };
+
+  } catch (err) {
+    botLog({
+      applicationId: clientId,
+      step: 'cev_book_existing_session_crash',
+      status: 'fail',
+      data: { error: String(err) },
+    });
+    try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
+    return { success: false, error: String(err), capturedCalls };
   }
 }
