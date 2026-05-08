@@ -278,6 +278,15 @@ export default defineSchema({
     .index("by_application", ["applicationId"])
     .index("by_status", ["status"]),
 
+  // Configuration auto-découverte par le bot lors du premier booking réussi.
+  // Clé-valeur JSON persisté — survit aux redémarrages Railway sans redéploiement.
+  // Clé typique : "cev_booking_config_v1"
+  botConfig: defineTable({
+    key: v.string(),
+    value: v.string(),    // JSON.stringify'd
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)
   otpChallenges: defineTable({
     applicationId: v.id("applications"),

@@ -1,10 +1,10 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
-import { bookCevViaHttp } from "./cevHttpBooking.js";
+import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
@@ -674,6 +674,22 @@ async function main(): Promise<void> {
   startCevPollingLoop().catch((err) => {
     console.error("[CEV-POLL] Boucle crashée:", err);
   });
+
+  // ─── Auto-config CEV : charger les endpoints confirmés depuis Convex ─────
+  // Après le premier booking HTTP réussi, la config est persistée dans Convex.
+  // Au prochain démarrage, on la charge en mémoire → skip de la discovery phase.
+  // Non bloquant : si Convex est inaccessible, la discovery normale s'enclenche.
+  try {
+    const savedConfig = await loadCevBookingConfig();
+    if (savedConfig) {
+      setCevDiscoveredConfig(savedConfig);
+      log("INFO", `CEV auto-config chargée ✅ — endpoint=${savedConfig.submitEndpoint} successCount=${savedConfig.successCount}`);
+    } else {
+      log("INFO", "CEV auto-config: aucune config sauvegardée — discovery complète au premier booking");
+    }
+  } catch (err) {
+    log("WARN", `CEV auto-config: chargement échoué (non bloquant) — ${err}`);
+  }
 
   // Détection IP serveur — utilisée automatiquement par le ProxyPool 2captcha
   const serverIp = await detectServerIp();

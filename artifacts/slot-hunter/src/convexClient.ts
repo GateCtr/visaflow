@@ -548,6 +548,53 @@ export async function attachConfirmationDoc(payload: {
   }
 }
 
+// ─── Bot Config (auto-découverte endpoints CEV) ──────────────────────────────
+
+const CEV_CONFIG_KEY = "cev_booking_config_v1";
+
+/**
+ * Configuration auto-découverte lors du premier booking HTTP réussi.
+ * Persistée dans Convex — survit aux redémarrages Railway sans redéploiement.
+ */
+export interface CevDiscoveredConfig {
+  submitEndpoint: string;        // Endpoint POST confirmé (ex: /Home/SelectSlot)
+  availabilityDateKey: string;   // Clé JSON de la date dans /Home/AvailableTimeSlots (ex: "date")
+  availabilityTimeKey: string;   // Clé JSON de l'heure (ex: "time")
+  availabilityIdKey?: string;    // Clé JSON de l'ID slot si présent (ex: "id")
+  confirmedAt: number;           // Timestamp du dernier booking réussi
+  successCount: number;          // Nombre total de bookings réussis avec cette config
+}
+
+export async function loadCevBookingConfig(): Promise<CevDiscoveredConfig | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/bot-config?key=${encodeURIComponent(CEV_CONFIG_KEY)}`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { value: string | null };
+    if (!data.value) return null;
+    return JSON.parse(data.value) as CevDiscoveredConfig;
+  } catch (err) {
+    console.warn("[convexClient] loadCevBookingConfig error:", err);
+    return null;
+  }
+}
+
+export async function saveCevBookingConfig(config: CevDiscoveredConfig): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/bot-config`;
+  try {
+    await fetchWithRetry(url, {
+      method: "POST",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ key: CEV_CONFIG_KEY, value: JSON.stringify(config) }),
+    });
+  } catch (err) {
+    console.warn("[convexClient] saveCevBookingConfig error:", err);
+  }
+}
+
 /**
  * Uploade n'importe quel fichier (image, PDF, etc.) vers Convex Storage.
  * @param base64 — contenu encodé en base64

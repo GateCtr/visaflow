@@ -941,4 +941,55 @@ http.route({
   }),
 });
 
+// ─── Bot Config : GET + POST /hunter/bot-config ─────────────────────────────
+
+http.route({
+  path: "/hunter/bot-config",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const key = url.searchParams.get("key");
+    if (!key) return new Response("Missing key", { status: 400 });
+
+    const value = await ctx.runQuery(internal.hunter.internalGetBotConfig, { key });
+    return new Response(JSON.stringify({ value: value ?? null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/bot-config",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { key: string; value: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.key || !body.value) {
+      return new Response("Missing key or value", { status: 400 });
+    }
+
+    await ctx.runMutation(internal.hunter.internalSaveBotConfig, {
+      key: body.key,
+      value: body.value,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 export default http;

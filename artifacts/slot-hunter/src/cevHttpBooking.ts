@@ -17,10 +17,29 @@
  * Tous les états intermédiaires sont loggés via botLog pour analyse offline.
  */
 
-import { botLog } from './convexClient.js';
+import { botLog, saveCevBookingConfig, type CevDiscoveredConfig } from './convexClient.js';
 import { randomUserAgent } from './browser.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
+
+// ─── Singleton de configuration auto-découverte ──────────────────────────────
+// Chargé depuis Convex au démarrage du bot (via loadCevBookingConfig + setCevDiscoveredConfig).
+// Mis à jour après chaque booking HTTP réussi, persisté dans Convex.
+// Survit aux redémarrages Railway sans redéploiement du bot.
+let _discoveredConfig: CevDiscoveredConfig | null = null;
+
+/**
+ * Injecter la configuration chargée depuis Convex au démarrage.
+ * Appelé depuis index.ts après `loadCevBookingConfig()`.
+ */
+export function setCevDiscoveredConfig(config: CevDiscoveredConfig): void {
+  _discoveredConfig = config;
+  console.log(`[cevHttpBooking] ✅ Config auto-découverte chargée — endpoint=${config.submitEndpoint} successCount=${config.successCount} confirmedAt=${new Date(config.confirmedAt).toISOString()}`);
+}
+
+export function getCevDiscoveredConfig(): CevDiscoveredConfig | null {
+  return _discoveredConfig;
+}
 
 export interface HttpBookingResult {
   success: boolean;
@@ -275,8 +294,11 @@ async function submitSlotSelection(
   hiddenInputs: Record<string, string>,
   slot: ParsedSlot,
   clientId: string,
-): Promise<{ success: boolean; html: string; finalUrl: string; error?: string }> {
+  preferredEndpoint?: string, // endpoint confirmé depuis la config auto-découverte (essayé en premier)
+): Promise<{ success: boolean; html: string; finalUrl: string; confirmedEndpoint?: string; error?: string }> {
+  // Si on a un endpoint confirmé → le tester en premier, avant les guesses
   const candidates = [
+    preferredEndpoint ?? null,
     formAction,
     `${CEV_BASE}/Home/SelectSlot`,
     `${CEV_BASE}/Integration/VOW/SelectSlot`,
@@ -368,7 +390,7 @@ async function submitSlotSelection(
         !finalUrl.toLowerCase().includes('error') &&
         (/confirm|référence|reference|booking.*id/i.test(html) || res.status === 200)
       ) {
-        return { success: true, html, finalUrl };
+        return { success: true, html, finalUrl, confirmedEndpoint: endpoint };
       }
 
       // Si on reçoit un 404 sur cet endpoint, essayer le suivant
@@ -473,18 +495,23 @@ export async function bookCevViaHttp(
       return { success: false, error: 'SESSION_EXPIRED_OR_CAPTCHA', needsPlaywright: false };
     }
 
-    // ═══ ÉTAPE 2 : Extraire structure HTML pour reversing ═══
+    // ═══ ÉTAPE 2 : Extraire structure HTML (discovery complète ou fast-path) ═══
+    // Si config auto-découverte connue → on extrait seulement le token antiforgery (request-specific).
+    // La discovery complète (formAction, ajaxEndpoints, slotDataAttrs) est skippée.
+    const knownConfig = _discoveredConfig;
     const antiForgeryToken = extractAntiForgeryToken(html);
-    const formAction       = extractFormAction(html);
-    const hiddenInputs     = extractHiddenInputs(html);
-    const ajaxEndpoints    = extractInlineAjaxEndpoints(html);
-    const slotDataAttrs    = extractSlotDataAttributes(html);
+    const formAction       = knownConfig ? null : extractFormAction(html);
+    const hiddenInputs     = extractHiddenInputs(html);          // toujours nécessaire (token inclus)
+    const ajaxEndpoints    = knownConfig ? {} : extractInlineAjaxEndpoints(html);
+    const slotDataAttrs    = knownConfig ? {} : extractSlotDataAttributes(html);
 
     botLog({
       applicationId: clientId,
       step: 'cev_http_html_discovery',
       status: 'ok',
       data: {
+        fastPath: !!knownConfig,
+        knownEndpoint: knownConfig?.submitEndpoint ?? null,
         antiForgeryTokenFound: !!antiForgeryToken,
         antiForgeryTokenPreview: antiForgeryToken?.slice(0, 8) + '...',
         formAction,
@@ -494,7 +521,7 @@ export async function bookCevViaHttp(
         hiddenInputCount: Object.keys(hiddenInputs).length,
         ajaxEndpoints,
         slotDataAttrs,
-        htmlPreview: html.slice(0, 3000),
+        htmlPreview: knownConfig ? html.slice(0, 500) : html.slice(0, 3000),
       },
     });
 
@@ -572,6 +599,7 @@ export async function bookCevViaHttp(
     }
 
     // ═══ ÉTAPE 5 : Soumettre la sélection de slot ═══
+    // Si on a un endpoint confirmé en mémoire → le passer en priorité (évite le multi-endpoint guess)
     const submitResult = await submitSlotSelection(
       sessionCookie,
       selectSlotUrl,
@@ -580,6 +608,7 @@ export async function bookCevViaHttp(
       hiddenInputs,
       slot,
       clientId,
+      knownConfig?.submitEndpoint,    // preferredEndpoint — essayé en premier si connu
     );
 
     if (!submitResult.success) {
@@ -590,6 +619,7 @@ export async function bookCevViaHttp(
         data: {
           error: submitResult.error,
           finalUrl: submitResult.finalUrl,
+          usedKnownEndpoint: !!knownConfig,
           hint: 'Endpoints de booking HTTP non confirmés — fallback Playwright recommandé',
         },
       });
@@ -600,16 +630,43 @@ export async function bookCevViaHttp(
     // ═══ ÉTAPE 6 : Extraire le code de confirmation ═══
     const confirmationCode = extractConfirmationCode(submitResult.html);
 
+    // ═══ AUTO-CONFIG : Persister la config découverte après le premier booking réussi ═══
+    // Inférer les clés JSON depuis le slot.raw (pour AvailableTimeSlots future)
+    const rawSlot = (slot.raw ?? {}) as Record<string, unknown>;
+    const inferredDateKey = Object.keys(rawSlot).find((k) => rawSlot[k] === slot.date) ?? 'date';
+    const inferredTimeKey = Object.keys(rawSlot).find((k) => rawSlot[k] === slot.time) ?? 'time';
+    const inferredIdKey   = slot.id != null
+      ? Object.keys(rawSlot).find((k) => String(rawSlot[k]) === String(slot.id))
+      : undefined;
+
+    const newConfig: CevDiscoveredConfig = {
+      submitEndpoint:      submitResult.confirmedEndpoint!,
+      availabilityDateKey: inferredDateKey,
+      availabilityTimeKey: inferredTimeKey,
+      availabilityIdKey:   inferredIdKey,
+      confirmedAt:         Date.now(),
+      successCount:        (knownConfig?.successCount ?? 0) + 1,
+    };
+
+    // Mettre à jour en mémoire immédiatement, puis persister dans Convex (fire-and-forget)
+    _discoveredConfig = newConfig;
+    saveCevBookingConfig(newConfig).catch((err) =>
+      console.warn('[cevHttpBooking] saveCevBookingConfig error (non bloquant):', err)
+    );
+
     botLog({
       applicationId: clientId,
       step: 'cev_http_booking_confirmed',
       status: 'ok',
       data: {
-        finalUrl:         submitResult.finalUrl,
-        confirmationCode: confirmationCode ?? 'non extrait',
-        date:             slot.date,
-        time:             slot.time,
-        htmlPreview:      submitResult.html.slice(0, 2000),
+        finalUrl:            submitResult.finalUrl,
+        confirmationCode:    confirmationCode ?? 'non extrait',
+        date:                slot.date,
+        time:                slot.time,
+        confirmedEndpoint:   submitResult.confirmedEndpoint,
+        autoConfigSaved:     true,
+        successCount:        newConfig.successCount,
+        htmlPreview:         submitResult.html.slice(0, 2000),
       },
     });
 

@@ -776,3 +776,31 @@ export const completeBotTest = internalMutation({
     });
   },
 });
+
+// ─── Bot Config (key-value store auto-découvert) ────────────────────────────
+
+export const internalGetBotConfig = internalQuery({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const row = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    return row ? row.value : null;
+  },
+});
+
+export const internalSaveBotConfig = internalMutation({
+  args: { key: v.string(), value: v.string() },
+  handler: async (ctx, { key, value }) => {
+    const existing = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { value, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("botConfig", { key, value, updatedAt: Date.now() });
+    }
+  },
+});
