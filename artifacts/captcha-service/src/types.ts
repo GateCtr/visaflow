@@ -23,9 +23,14 @@ export interface BalanceResult {
   error?: string;
 }
 
+export interface ProviderSolveResult {
+  token: string;
+  taskId: string;
+}
+
 export interface CaptchaProvider {
   name: ProviderName;
   isConfigured(): boolean;
-  solve(req: SolveRequest): Promise<string | null>;
+  solve(req: SolveRequest): Promise<ProviderSolveResult | null>;
   getBalance(): Promise<number | null>;
 }

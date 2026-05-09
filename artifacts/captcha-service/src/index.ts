@@ -6,7 +6,7 @@ import { makeCapSolver } from './providers/capsolver.js';
 import { CaptchaResolver } from './resolver.js';
 import type { CaptchaType, ProviderName, SolveRequest } from './types.js';
 
-const PORT = parseInt(process.env.CAPTCHA_SERVICE_PORT ?? '3001', 10);
+const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const SERVICE_API_KEY = process.env.CAPTCHA_SERVICE_API_KEY ?? '';
 
 const CAPTCHA_TYPES: CaptchaType[] = ['recaptcha_v2', 'recaptcha_v3', 'hcaptcha', 'turnstile'];
@@ -25,17 +25,21 @@ function buildResolver(): CaptchaResolver {
   console.log('='.repeat(60));
   console.log(' Captcha Service starting');
   console.log('='.repeat(60));
+
   if (configured.length === 0) {
-    console.warn(' ⚠️  No captcha providers configured!');
-    console.warn('    Set TWOCAPTCHA_API_KEY, ANTICAPTCHA_API_KEY, or CAPSOLVER_API_KEY');
-  } else {
-    console.log(` ✅ Providers active: ${configured.join(', ')}`);
+    console.error(' ❌ FATAL: No captcha providers configured!');
+    console.error('    Set at least one of: TWOCAPTCHA_API_KEY, ANTICAPTCHA_API_KEY, CAPSOLVER_API_KEY');
+    process.exit(1);
   }
+  console.log(` ✅ Providers active: ${configured.join(', ')}`);
+
   if (!SERVICE_API_KEY) {
-    console.warn(' ⚠️  CAPTCHA_SERVICE_API_KEY not set — auth disabled (open access)');
-  } else {
-    console.log(' 🔒 Auth enabled (X-Api-Key required)');
+    console.error(' ❌ FATAL: CAPTCHA_SERVICE_API_KEY is not set');
+    console.error('    All requests to /captcha/* will be rejected until this is configured.');
+    console.error('    Set CAPTCHA_SERVICE_API_KEY to a secure random string.');
+    process.exit(1);
   }
+  console.log(' 🔒 Auth enabled (X-Api-Key required)');
   console.log(` Port: ${PORT}`);
   console.log('='.repeat(60));
 
@@ -48,13 +52,9 @@ const app = express();
 app.use(express.json());
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (!SERVICE_API_KEY) {
-    next();
-    return;
-  }
   const key = req.headers['x-api-key'];
   if (key !== SERVICE_API_KEY) {
-    res.status(401).json({ error: 'Unauthorized — invalid or missing X-Api-Key' });
+    res.status(401).json({ error: 'Unauthorized — invalid or missing X-Api-Key header' });
     return;
   }
   next();
@@ -97,12 +97,17 @@ app.post('/captcha/solve', authMiddleware, async (req: Request, res: Response) =
 
   try {
     const result = await resolver.solve(solveReq);
-    console.log(`[solve] ✅ ${tag} → ${result.provider} in ${result.durationMs}ms`);
-    res.json({ ok: true, ...result });
+    console.log(`[solve] ✅ ${tag} → ${result.provider} (${result.taskId}) in ${result.durationMs}ms`);
+    res.json({
+      token: result.token,
+      provider: result.provider,
+      durationMs: result.durationMs,
+      taskId: result.taskId,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[solve] ❌ ${tag} — ${message}`);
-    res.status(500).json({ ok: false, error: message });
+    res.status(500).json({ error: message });
   }
 });
 

@@ -1,6 +1,5 @@
-import type { CaptchaProvider, CaptchaType, SolveRequest } from '../types.js';
+import type { CaptchaProvider, SolveRequest, ProviderSolveResult } from '../types.js';
 
-const BASE = 'https://2captcha.com';
 const API_BASE = 'https://api.2captcha.com';
 const POLL_INTERVAL = 5_000;
 const MAX_POLLS = 36;
@@ -33,10 +32,12 @@ export class TwoCaptchaProvider implements CaptchaProvider {
     }
   }
 
-  async solve(req: SolveRequest): Promise<string | null> {
+  async solve(req: SolveRequest): Promise<ProviderSolveResult | null> {
     const taskId = await this.createTask(req);
     if (!taskId) return null;
-    return this.pollResult(taskId);
+    const token = await this.pollResult(taskId);
+    if (!token) return null;
+    return { token, taskId };
   }
 
   private async createTask(req: SolveRequest): Promise<string | null> {
@@ -118,15 +119,4 @@ export function makeTwoCaptcha(): TwoCaptchaProvider | null {
   const key = process.env.TWOCAPTCHA_API_KEY ?? '';
   if (!key) return null;
   return new TwoCaptchaProvider(key);
-}
-
-export async function twoCaptchaBalance(apiKey: string): Promise<number | null> {
-  try {
-    const res = await fetch(`${BASE}/res.php?key=${apiKey}&action=getbalance&json=1`);
-    const data = await res.json() as { status: number; request: string };
-    if (data.status !== 1) return null;
-    return parseFloat(data.request);
-  } catch {
-    return null;
-  }
 }

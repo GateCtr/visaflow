@@ -1,4 +1,4 @@
-import type { CaptchaProvider, CaptchaType, SolveRequest } from '../types.js';
+import type { CaptchaProvider, SolveRequest, ProviderSolveResult } from '../types.js';
 
 const BASE = 'https://api.anti-captcha.com';
 const POLL_INTERVAL = 5_000;
@@ -32,7 +32,7 @@ export class AntiCaptchaProvider implements CaptchaProvider {
     }
   }
 
-  async solve(req: SolveRequest): Promise<string | null> {
+  async solve(req: SolveRequest): Promise<ProviderSolveResult | null> {
     const task = this.buildTask(req);
     if (!task) return null;
 
@@ -56,7 +56,9 @@ export class AntiCaptchaProvider implements CaptchaProvider {
       return null;
     }
 
-    return this.pollResult(taskId);
+    const token = await this.pollResult(taskId);
+    if (!token) return null;
+    return { token, taskId: String(taskId) };
   }
 
   private buildTask(req: SolveRequest): Record<string, unknown> | null {

@@ -3,10 +3,10 @@ import type { CaptchaProvider, CaptchaType, ProviderName, SolveRequest, SolveRes
 type RoutingTable = Record<CaptchaType, ProviderName[]>;
 
 const DEFAULT_ROUTING: RoutingTable = {
-  hcaptcha:    ['anticaptcha', 'capsolver', '2captcha'],
+  hcaptcha:     ['anticaptcha', 'capsolver', '2captcha'],
   recaptcha_v2: ['2captcha', 'anticaptcha', 'capsolver'],
-  recaptcha_v3: ['2captcha', 'anticaptcha', 'capsolver'],
-  turnstile:   ['2captcha', 'anticaptcha', 'capsolver'],
+  recaptcha_v3: ['2captcha', 'anticaptcha'],
+  turnstile:    ['2captcha', 'anticaptcha'],
 };
 
 export class CaptchaResolver {
@@ -42,13 +42,13 @@ export class CaptchaResolver {
       const start = Date.now();
 
       try {
-        const token = await provider.solve(req);
-        if (token) {
+        const result = await provider.solve(req);
+        if (result) {
           return {
-            token,
+            token: result.token,
+            taskId: result.taskId,
             provider: providerName,
             durationMs: Date.now() - start,
-            taskId: `${providerName}-${Date.now()}`,
           };
         }
         const msg = `${providerName} returned null`;
