@@ -166,6 +166,8 @@ export interface BrowserOverrides {
   locale?: string;
   timezoneId?: string;
   acceptLanguage?: string;
+  /** Forcer la connexion directe même si PROXY_URL est configuré (ex: retry après ERR_PROXY_CONNECTION_FAILED) */
+  forceNoProxy?: boolean;
 }
 
 export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
@@ -173,9 +175,11 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   const viewport = randomViewport();
 
   // Priorité : 2captcha pool résidentiel > PROXY_URL statique > connexion directe
-  const proxyAddress = proxyPool.isConfigured
-    ? await proxyPool.getProxy()
-    : PROXY_URL;
+  // forceNoProxy: true → bypass proxy même si configuré (retry après ERR_PROXY_CONNECTION_FAILED)
+  const forceNoProxy = overrides?.forceNoProxy ?? false;
+  const proxyAddress = forceNoProxy
+    ? undefined
+    : (proxyPool.isConfigured ? await proxyPool.getProxy() : PROXY_URL);
   const proxyConfig = proxyAddress ? { server: proxyAddress } : undefined;
 
   const locale         = overrides?.locale         ?? "fr-FR";

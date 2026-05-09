@@ -789,7 +789,7 @@ async function solveHcaptcha(
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_start', status: 'ok' });
     const token = await solveHcaptchaViaCapsolver(capKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
     if (token) return token;
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn', data: { hint: 'CapSolver a échoué — sitekey CEV potentiellement blacklistée sur ce plan (avril 2026). Vérifier ANTICAPTCHA_API_KEY comme alternative.' } });
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn', data: { hint: 'CapSolver : "We don\'t support this service" → restriction de PLAN sur ce sitekey gouvernemental (diplomatie.be). CapSolver ne supporte pas les sitekeys gouvernementaux sur le plan de base. Ajoutez ANTICAPTCHA_API_KEY sur Railway (anti-captcha.com supporte les domaines gov sans restriction de plan).' } });
   }
 
   // ─── Tentative 3 : 2captcha (dernier recours) ────────────────────────────
@@ -939,10 +939,21 @@ async function solveHcaptchaViaCapsolver(
         body: JSON.stringify({ clientKey: apiKey, task: variant.task }),
       });
 
-      const createData = await createRes.json() as { errorId: number; errorCode?: string; taskId?: number };
+      const createData = await createRes.json() as { errorId: number; errorCode?: string; errorDescription?: string; taskId?: number };
 
       if (createData.errorId !== 0 || !createData.taskId) {
-        botLog({ applicationId: clientId, step: 'cev_capsolver_create_fail', status: 'fail', data: { taskType: variant.label, error: createData.errorCode ?? createData.errorId } });
+        botLog({
+          applicationId: clientId,
+          step: 'cev_capsolver_create_fail',
+          status: 'fail',
+          data: {
+            taskType: variant.label,
+            error: createData.errorCode ?? createData.errorId,
+            description: createData.errorDescription ?? null,
+            // "We don't support this service" = restriction de PLAN CapSolver (pas de format erroné)
+            // Solution : ajouter ANTICAPTCHA_API_KEY (anti-captcha.com supporte les domaines gov)
+          },
+        });
         continue;
       }
 
@@ -1396,10 +1407,13 @@ export async function runCevDirectSessionSetup(
     data: { mode: isCredMode ? 'vowint-credentials' : 'url-direct' },
   });
 
+  // Retry loop : tentative 1 avec proxy (si PROXY_URL configuré), tentative 2 sans proxy
+  // si ERR_PROXY_CONNECTION_FAILED (proxy Railway mort ou inaccessible depuis la session en cours).
+  for (const forceNoProxy of [false, true]) {
   let browser = null;
   try {
     // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation ──
-    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', forceNoProxy });
     browser = launched.browser;
     const context = launched.context;
     const page = launched.page;
@@ -1549,10 +1563,26 @@ export async function runCevDirectSessionSetup(
     return { success: true, sessionCookie: cookieForStorage, validUntilMs };
 
   } catch (err) {
-    botLog({ applicationId: clientId, step: 'cev_direct_setup_crash', status: 'fail', data: { error: String(err) } });
+    const errStr = String(err);
     try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
-    return { success: false, error: String(err) };
+
+    // Si le proxy a causé l'erreur et qu'on ne l'a pas encore bypassé → retry sans proxy
+    const isProxyErr = errStr.includes('ERR_PROXY_CONNECTION_FAILED') || errStr.includes('PROXY_CONNECTION_FAILED');
+    if (!forceNoProxy && isProxyErr) {
+      botLog({
+        applicationId: clientId,
+        step: 'cev_vowint_proxy_fail_retry_direct',
+        status: 'warn',
+        data: { error: errStr.slice(0, 200), hint: 'ERR_PROXY_CONNECTION_FAILED — relance sans proxy' },
+      });
+      continue; // retry avec forceNoProxy = true
+    }
+
+    botLog({ applicationId: clientId, step: 'cev_direct_setup_crash', status: 'fail', data: { error: errStr } });
+    return { success: false, error: errStr };
   }
+  } // end for (forceNoProxy loop)
+  return { success: false, error: 'PROXY_RETRY_EXHAUSTED' };
 }
 
 /**
