@@ -410,7 +410,7 @@ function getBrowserHeaders(): Record<string, string> {
 // setUsaSessionProxy() est appelé au début de runUsaApiSession() et réinitialisé à la fin.
 let _usaProxyAgent: ProxyAgent | undefined;
 
-function setUsaSessionProxy(proxyUrl: string | undefined): void {
+export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyAgent = new ProxyAgent(proxyUrl);
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
