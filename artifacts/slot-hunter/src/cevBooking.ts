@@ -1515,12 +1515,66 @@ export async function runCevDirectSessionSetup(
 
     // === ÉTAPE 3 : POST SetCaptchaToken avec le cookie de session ===
     const captchaResult = await completeCevCaptcha(cookieString, hcaptchaToken, clientId);
-    netCapture.dump();
-    await browser.close();
 
     if (captchaResult.status === 'session_error') {
+      netCapture.dump();
+      await browser.close();
       return { success: false, error: captchaResult.error };
     }
+
+    // === ÉTAPE 3b : Créneaux disponibles → tenter la réservation immédiate ===
+    // Le captchaResult contient un redirectUrl vers la page de sélection de créneaux.
+    // Si ce redirectUrl n'est PAS une page "NoAvailability", des créneaux existent MAINTENANT.
+    // On utilise le même browser context (session déjà valide) pour naviguer et tenter la réservation.
+    const immediateRedirectUrl = captchaResult.status === 'ready' ? captchaResult.session.redirectUrl : undefined;
+    const slotsAvailableNow = immediateRedirectUrl && !immediateRedirectUrl.includes('NoAvailability');
+
+    if (slotsAvailableNow && immediateRedirectUrl) {
+      botLog({
+        applicationId: clientId,
+        step: 'cev_direct_slots_now_booking',
+        status: 'ok',
+        data: { redirectUrl: immediateRedirectUrl.slice(0, 120) },
+      });
+      try {
+        // completebookingViaUI attend un path relatif (elle préfixe CEV_BASE elle-même)
+        const redirectPath = immediateRedirectUrl.startsWith('http')
+          ? new URL(immediateRedirectUrl).pathname + new URL(immediateRedirectUrl).search
+          : immediateRedirectUrl;
+
+        const sessionForBooking: CevSession = {
+          cookies: cookieString,
+          validUntil: captchaResult.session.validUntil,
+          redirectUrl: redirectPath,
+        };
+        const bookConfig: CevBookingConfig = {
+          clientId,
+          vowintUsername: '',
+          vowintPassword: '',
+          vowintAppointmentUrl: '',
+          twoCaptchaApiKey: '',
+        };
+        // completebookingViaUI navigue vers l'URL, dump le HTML de la page de créneaux,
+        // et tente la sélection date → heure → confirmation via UI Playwright.
+        const bookingResult = await completebookingViaUI(captchaPage, sessionForBooking, bookConfig, []);
+        botLog({
+          applicationId: clientId,
+          step: 'cev_direct_immediate_booking_result',
+          status: bookingResult.success ? 'ok' : 'fail',
+          data: { success: bookingResult.success, error: bookingResult.error ?? null },
+        });
+      } catch (navErr) {
+        botLog({
+          applicationId: clientId,
+          step: 'cev_direct_immediate_booking_error',
+          status: 'fail',
+          data: { error: String(navErr).slice(0, 300) },
+        });
+      }
+    }
+
+    netCapture.dump();
+    await browser.close();
 
     // === ÉTAPE 4 : Persister la session dans Convex ===
     const validUntilMs = captchaResult.status === 'ready'
