@@ -1,0 +1,408 @@
+cev_session_establish_errorErreur
+🇪🇺 ESTHER BODIA NGOBI
+error:Error: page.goto: net::ERR_PROXY_CONNECTION_FAILED at https://visaonweb.diplomatie.be/ Call log: - navigating to "https://visaonweb.diplomatie.be/", waiting until "domcontentloaded"
+
+09/05/2026 07:44:27
+net_capture_summaryOK
+🇪🇺 ESTHER BODIA NGOBI
+totalRequests:1
+requests:[object Object]
+
+09/05/2026 07:44:27
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:1
+method:GET
+url:https://visaonweb.diplomatie.be/
+body:null
+headers:{"accept-language":"en-US,en;q=0.9","upgrade-insecure-requests":"1","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36","s…
+
+09/05/2026 07:44:27
+cev_vowint_login_startOK
+🇪🇺 ESTHER BODIA NGOBI
+user:screentapinc@gmail.com
+
+09/05/2026 07:44:27
+cev_direct_setup_startOK
+🇪🇺 ESTHER BODIA NGOBI
+mode:vowint-credentials
+
+09/05/2026 07:44:27
+net_capture_summaryOK
+🇪🇺 ESTHER BODIA NGOBI
+totalRequests:111
+requests:[object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Object], [object Objec…
+
+09/05/2026 07:39:37
+cev_direct_captcha_failedErreur
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 07:39:37
+cev_capsolver_all_types_failedErreur
+🇪🇺 ESTHER BODIA NGOBI
+hint:Toutes variantes CapSolver échouées. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.
+
+09/05/2026 07:39:37
+cev_hcaptcha_capsolver_fail_fallbackWarn
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 07:39:37
+cev_hcaptcha_all_failedErreur
+🇪🇺 ESTHER BODIA NGOBI
+hint:CapSolver: ERROR_INVALID_TASK_DATA → sitekey potentiellement blacklistée sur ce plan. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.
+
+09/05/2026 07:39:37
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess
+error:ERROR_INVALID_TASK_DATA
+
+09/05/2026 07:39:37
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess
+
+09/05/2026 07:39:37
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaEnterpriseTaskProxyLess
+error:ERROR_INVALID_TASK_DATA
+
+09/05/2026 07:39:37
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess+isEnterprise
+error:ERROR_INVALID_TASK_DATA
+
+09/05/2026 07:39:37
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaEnterpriseTaskProxyLess
+
+09/05/2026 07:39:37
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess+isEnterprise
+
+09/05/2026 07:39:37
+cev_hcaptcha_capsolver_startOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 07:39:37
+cev_hcaptcha_solve_startOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 07:39:37
+cev_session_cookie_capturedOK
+🇪🇺 ESTHER BODIA NGOBI
+cookieLen:66
+names:ASP.NET_SessionId, PreferredCulture
+
+09/05/2026 07:39:37
+cev_new_tab_openedOK
+🇪🇺 ESTHER BODIA NGOBI
+url:https://appointment.cloud.diplomatie.be/Captcha
+
+09/05/2026 07:39:37
+cev_integration_url_capturedWarn
+🇪🇺 ESTHER BODIA NGOBI
+integrationUrl:not_captured
+
+09/05/2026 07:39:37
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:111
+method:POST
+url:https://api.hcaptcha.com/checksiteconfig?v=c6e277da86802178b920b24f7bd79dd5d0c81e0d&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1
+status:200
+durationMs:68
+responseHeaders:{"strict-transport-security":"max-age=31536000; includeSubDomains; preload","content-encoding":"br","access-control-allow-credentials":"true","access-control-allow-methods":"GET, HEAD, POST, OPTIONS",…
+body:{"features":{"enc_get_req":true},"c":{"type":"hsw","req":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJmIjowLCJzIjoyLCJ0IjoidyIsImQiOiJpcUFwVDJNWGNSTGhvanJlSHVYN3RqSGFpVkx3cmdFN1cwUDNxOVZNT01xdEphN0loK2ZHW…
+parsedKeys:features, c, pass
+
+09/05/2026 07:39:36
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:111
+method:POST
+url:https://api.hcaptcha.com/checksiteconfig?v=c6e277da86802178b920b24f7bd79dd5d0c81e0d&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1
+body:null
+headers:{"sec-ch-ua-platform":"\"Windows\"","referer":"https://newassets.hcaptcha.com/","accept-language":"fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7","sec-ch-ua":"\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"14…
+
+09/05/2026 07:39:36
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:109
+method:GET
+url:https://appointment.cloud.diplomatie.be/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1
+status:200
+durationMs:666
+responseHeaders:{"access-control-expose-headers":"Request-Context","content-encoding":"gzip","x-content-type-options":"nosniff","expires":"Sun, 09 May 2027 06:39:35 GMT","date":"Sat, 09 May 2026 06:39:35 GMT","conten…
+body:function callPost(n,t,i,r){$.ajax({url:n,type:"Post",cache:!1,contentType:"application/json",dataType:"json",data:JSON.stringify(t),success:i,error:r})}function getAvailableTimeSlotsForPublic(n,t,i){c…
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:108
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/logos/logo.png
+status:200
+durationMs:401
+responseHeaders:{"strict-transport-security":"max-age=31536000; includeSubDomains","etag":"\"06fbed0208adc1:0\"","connection":"keep-alive","x-content-type-options":"nosniff","x-download-options":"noopen","referrer-po…
+body:[binary content-type: image/png]
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:110
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/background/bg-lang-site.jpg
+status:200
+durationMs:102
+responseHeaders:{"strict-transport-security":"max-age=31536000; includeSubDomains","etag":"\"06fbed0208adc1:0\"","connection":"keep-alive","x-content-type-options":"nosniff","x-download-options":"noopen","referrer-po…
+body:[binary content-type: image/jpeg]
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:107
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/logos/federalheader_logo.png
+status:200
+durationMs:303
+responseHeaders:{"strict-transport-security":"max-age=31536000; includeSubDomains","etag":"\"06fbed0208adc1:0\"","connection":"keep-alive","x-content-type-options":"nosniff","x-download-options":"noopen","referrer-po…
+body:[binary content-type: image/png]
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:106
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1
+status:200
+durationMs:207
+responseHeaders:{"access-control-expose-headers":"Request-Context","content-encoding":"gzip","x-content-type-options":"nosniff","expires":"Sun, 09 May 2027 06:39:35 GMT","date":"Sat, 09 May 2026 06:39:35 GMT","conten…
+body:html{font-family:sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}body{margin:0}article,aside,details,figcaption,figure,footer,header,hgroup,main,menu,nav,section,summary{display:blo…
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:110
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/background/bg-lang-site.jpg
+body:null
+headers:{"sec-ch-ua-platform":"\"Windows\"","referer":"","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36","sec-ch-ua":"\" Not;A…
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:105
+method:GET
+url:https://appointment.cloud.diplomatie.be/Captcha
+status:200
+durationMs:108
+responseHeaders:{"access-control-expose-headers":"Request-Context","cache-control":"no-cache, no-store, must-revalidate","connection":"keep-alive","content-encoding":"gzip","content-length":"2197","content-security-p…
+body: <!DOCTYPE html> <html lang="en-US"> <head> <title>e-Appointment</title> <link href="/favicon.ico?v1" rel="shortcut icon" type="image/x-icon"/> <meta http-equiv="X-UA-Compatible" con…
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:108
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/logos/logo.png
+body:null
+headers:{"sec-ch-ua-platform":"\"macOS\"","referer":"","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36","sec-ch-ua":"\"Not:A…
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:109
+method:GET
+url:https://appointment.cloud.diplomatie.be/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1
+body:null
+headers:{"sec-ch-ua-platform":"\"macOS\"","referer":"","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36","sec-ch-ua":"\"Not:A…
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:107
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/Images/logos/federalheader_logo.png
+body:null
+headers:{"sec-ch-ua-platform":"\"macOS\"","referer":"","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36","sec-ch-ua":"\"Not:A…
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:106
+method:GET
+url:https://appointment.cloud.diplomatie.be/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1
+body:null
+headers:{"sec-ch-ua-platform":"\"macOS\"","referer":"","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36","sec-ch-ua":"\"Not:A…
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:104
+method:GET
+url:https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/9aefbdbe-c468-4f65-8ec0-ebc16999d…
+status:302
+durationMs:316
+responseHeaders:{"access-control-expose-headers":"Request-Context","cache-control":"no-cache, no-store, must-revalidate","connection":"keep-alive","content-length":"125","content-security-policy":"default-src 'self';…
+body:null
+parsedKeys:null
+
+09/05/2026 07:39:35
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:105
+method:GET
+url:https://appointment.cloud.diplomatie.be/Captcha
+body:null
+headers:{"accept-language":"fr-BE","upgrade-insecure-requests":"1","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36","sec-ch-…
+
+09/05/2026 07:39:35
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:103
+method:GET
+url:https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06
+status:200
+durationMs:117
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"private, s-maxage=0","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"nosniff","content-l…
+body:{"url":"https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/9aefbdbe-c468-4f65-8ec0-e…
+parsedKeys:url
+
+09/05/2026 07:39:34
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:104
+method:GET
+url:https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/9aefbdbe-c468-4f65-8ec0-ebc16999d…
+body:null
+headers:{"accept-language":"fr-BE","referer":"https://visaonweb.diplomatie.be/","upgrade-insecure-requests":"1","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Ge…
+
+09/05/2026 07:39:34
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:103
+method:GET
+url:https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06
+body:null
+headers:{"sec-ch-ua-platform":"\"Windows\"","referer":"https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId","accept-language":"fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7","sec-ch-ua":"\" Not;A Brand\";v…
+
+09/05/2026 07:39:34
+cev_rdv_btn_foundOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 07:39:33
+cev_vowint_apps_pageOK
+🇪🇺 ESTHER BODIA NGOBI
+url:https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId
+
+09/05/2026 07:39:33
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:102
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap/dist/fonts/glyphicons-halflings-regular.woff
+status:200
+durationMs:194
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"no-cache","etag":"\"040b67ce6bd51:0\"","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"n…
+body:[binary content-type: application/font-woff]
+parsedKeys:null
+
+09/05/2026 07:39:27
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:101
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_desc.png
+status:200
+durationMs:99
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"no-cache","etag":"\"0f47a81e6bd51:0\"","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"n…
+body:[binary content-type: image/png]
+parsedKeys:null
+
+09/05/2026 07:39:27
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:102
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap/dist/fonts/glyphicons-halflings-regular.woff
+body:null
+headers:{"origin":"https://visaonweb.diplomatie.be","sec-ch-ua-platform":"\"Windows\"","referer":"https://visaonweb.diplomatie.be/Content/css?v=oL0KqSHZC9-FRMl_bhR8FJ8roMwZ_TV4H0VK5rdBTQA1","user-agent":"Mozi…
+
+09/05/2026 07:39:27
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:101
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_desc.png
+body:null
+headers:{"sec-ch-ua-platform":"\"Windows\"","referer":"https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/bootstrap/dataTables.bootstrap.css","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64…
+
+09/05/2026 07:39:27
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:99
+method:GET
+url:https://visaonweb.diplomatie.be/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true…
+status:200
+durationMs:134
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"private, s-maxage=0","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"nosniff","content-l…
+body:{"draw":1,"data":[{"Id":"e978b2fd-472f-f111-a3ae-00505691de06","AppNum":null,"VOWId":"VOWINT5903406","OSId":"MSHKIN005903406","FName":"ESTHER","LName":"NGOBI","St":"Submitted","StId":2,"Hb":false,"Vac…
+parsedKeys:draw, data, recordsTotal, recordsFiltered
+
+09/05/2026 07:39:27
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:100
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_both.png
+status:200
+durationMs:100
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"no-cache","etag":"\"0f47a81e6bd51:0\"","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"n…
+body:[binary content-type: image/png]
+parsedKeys:null
+
+09/05/2026 07:39:27
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:98
+method:GET
+url:https://visaonweb.diplomatie.be/Common/GetAllVisaStatusTypes
+status:200
+durationMs:97
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"private, s-maxage=0","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"nosniff","content-l…
+body:[{"Value":"5","Text":"Imported"},{"Value":"6","Text":"To be verified"},{"Value":"10","Text":"Decision ready"}]
+parsedKeys:null
+
+09/05/2026 07:39:27
+net_responseOK
+🇪🇺 ESTHER BODIA NGOBI
+id:96
+method:GET
+url:https://visaonweb.diplomatie.be/VisaApplication/DataTables
+status:200
+durationMs:85
+responseHeaders:{"strict-transport-security":"max-age=16070400; includeSubDomains","cache-control":"private, s-maxage=0","x-permitted-cross-domain-policies":"master-only","x-content-type-options":"nosniff","content-l…
+body:{ "sEmptyTable": "No data available in table", "sInfo": "Showing _START_ to _END_ of _TOTAL_ entries", "sInfoEmpty": "Showing 0 to 0 of 0 entries", "sInfoFiltered": "(filt…
+parsedKeys:sEmptyTable, sInfo, sInfoEmpty, sInfoFiltered, sInfoPostFix, sInfoThousands, sLengthMenu, sLoadingRecords, sProcessing, sSearch, sZeroRecords, oPaginate, oAria
+
+09/05/2026 07:39:27
+net_requestOK
+🇪🇺 ESTHER BODIA NGOBI
+id:100
+method:GET
+url:https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_both.png
+body:null
+headers:{"sec-ch-ua-platform":"\"Windows\"","referer":"https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/bootstrap/dataTables.bootstrap.css","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64…
+
+09/05/2026 07:39:27

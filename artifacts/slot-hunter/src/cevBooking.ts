@@ -801,7 +801,7 @@ async function solveHcaptcha(
     if (token) return token;
   }
 
-  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'CapSolver: ERROR_INVALID_TASK_DATA → sitekey potentiellement blacklistée sur ce plan. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.' } });
+  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'Tous les solveurs hCaptcha ont échoué. CapSolver instable sur ce cycle (ERROR_INVALID_TASK_DATA est transitoire — le bot retentera). Pour fiabilité maximale : ajouter ANTICAPTCHA_API_KEY sur Railway (anti-captcha.com supporte les sitekeys gouvernementaux sans restriction).' } });
   return null;
 }
 
@@ -878,11 +878,15 @@ async function solveHcaptchaViaAntiCaptcha(
 
 /**
  * Résolution hCaptcha via CapSolver (https://capsolver.com).
- * Essaie trois variantes de payload dans l'ordre :
- *   1. HCaptchaTaskProxyLess + isEnterprise:true + userAgent  (API CapSolver 2025+)
- *   2. HCaptchaEnterpriseTaskProxyLess sans userAgent          (ancienne API — userAgent causait ERROR_INVALID_TASK_DATA)
- *   3. HCaptchaTaskProxyLess standard + userAgent              (fallback)
- * Si toutes échouent → ajouter ANTICAPTCHA_API_KEY comme solveur de secours.
+ *
+ * Variantes testées dans l'ordre (leçons apprises 2025-2026) :
+ *   1. HCaptchaTaskProxyLess + isEnterprise:true  SANS userAgent  ← le plus fiable CapSolver 2025+
+ *   2. HCaptchaTaskProxyLess SANS isEnterprise, SANS userAgent    ← fallback minimaliste
+ *   3. HCaptchaTaskProxyLess + isEnterprise:true  AVEC userAgent  ← certains workers l'acceptent
+ *
+ * Chaque variant est retenté MAX_RETRIES fois avant de passer au suivant.
+ * ERROR_INVALID_TASK_DATA = CapSolver rejette le format (souvent transitoire) → retry aide.
+ * HCaptchaEnterpriseTaskProxyLess SUPPRIMÉ : déprécié, toujours ERROR_INVALID_TASK_DATA.
  */
 async function solveHcaptchaViaCapsolver(
   apiKey: string,
@@ -890,17 +894,32 @@ async function solveHcaptchaViaCapsolver(
   pageUrl: string,
   clientId: string,
 ): Promise<string | null> {
-  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
+  const MAX_RETRIES = 3; // tentatives par variant avant de passer au suivant
 
-  // Variantes testées dans l'ordre.
-  // Leçons apprises :
-  //  - HCaptchaEnterpriseTaskProxyLess + userAgent  → ERROR_INVALID_TASK_DATA (userAgent rejeté)
-  //  - HCaptchaTaskProxyLess + isEnterprise: true   → API CapSolver 2025+ (méthode actuelle)
-  //  - HCaptchaEnterpriseTaskProxyLess sans userAgent → ancienne API, toujours acceptée parfois
-  //  - HCaptchaTaskProxyLess sans isEnterprise      → fallback standard
   const taskVariants: Array<{ label: string; task: Record<string, unknown> }> = [
     {
-      label: 'HCaptchaTaskProxyLess+isEnterprise',
+      // Variant 1 : méthode principale 2025+ — SANS userAgent (cause principale ERROR_INVALID_TASK_DATA)
+      label: 'HCaptchaTaskProxyLess+isEnterprise+noUA',
+      task: {
+        type: 'HCaptchaTaskProxyLess',
+        websiteURL: pageUrl,
+        websiteKey: siteKey,
+        isEnterprise: true,
+      },
+    },
+    {
+      // Variant 2 : payload minimal — aucun champ optionnel
+      label: 'HCaptchaTaskProxyLess+minimal',
+      task: {
+        type: 'HCaptchaTaskProxyLess',
+        websiteURL: pageUrl,
+        websiteKey: siteKey,
+      },
+    },
+    {
+      // Variant 3 : avec userAgent — certains workers CapSolver l'acceptent encore
+      label: 'HCaptchaTaskProxyLess+isEnterprise+UA',
       task: {
         type: 'HCaptchaTaskProxyLess',
         websiteURL: pageUrl,
@@ -909,93 +928,85 @@ async function solveHcaptchaViaCapsolver(
         userAgent: ua,
       },
     },
-    {
-      label: 'HCaptchaEnterpriseTaskProxyLess',
-      task: {
-        type: 'HCaptchaEnterpriseTaskProxyLess',
-        websiteURL: pageUrl,
-        websiteKey: siteKey,
-        // pas de userAgent → était la cause du ERROR_INVALID_TASK_DATA
-      },
-    },
-    {
-      label: 'HCaptchaTaskProxyLess',
-      task: {
-        type: 'HCaptchaTaskProxyLess',
-        websiteURL: pageUrl,
-        websiteKey: siteKey,
-        userAgent: ua,
-      },
-    },
   ];
 
   for (const variant of taskVariants) {
-    try {
-      botLog({ applicationId: clientId, step: 'cev_capsolver_try_type', status: 'ok', data: { taskType: variant.label } });
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        botLog({ applicationId: clientId, step: 'cev_capsolver_try_type', status: 'ok', data: { taskType: variant.label, attempt, maxRetries: MAX_RETRIES } });
 
-      const createRes = await fetch('https://api.capsolver.com/createTask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientKey: apiKey, task: variant.task }),
-      });
-
-      const createData = await createRes.json() as { errorId: number; errorCode?: string; errorDescription?: string; taskId?: number };
-
-      if (createData.errorId !== 0 || !createData.taskId) {
-        botLog({
-          applicationId: clientId,
-          step: 'cev_capsolver_create_fail',
-          status: 'fail',
-          data: {
-            taskType: variant.label,
-            error: createData.errorCode ?? createData.errorId,
-            description: createData.errorDescription ?? null,
-            // "We don't support this service" = restriction de PLAN CapSolver (pas de format erroné)
-            // Solution : ajouter ANTICAPTCHA_API_KEY (anti-captcha.com supporte les domaines gov)
-          },
-        });
-        continue;
-      }
-
-      const taskId = createData.taskId;
-      botLog({ applicationId: clientId, step: 'cev_capsolver_task_created', status: 'ok', data: { taskType: variant.label, taskId } });
-
-      // Poller jusqu'à résolution (max 120s, intervalle 5s)
-      for (let i = 0; i < 24; i++) {
-        await new Promise(r => setTimeout(r, 5_000));
-
-        const pollRes = await fetch('https://api.capsolver.com/getTaskResult', {
+        const createRes = await fetch('https://api.capsolver.com/createTask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientKey: apiKey, taskId }),
+          body: JSON.stringify({ clientKey: apiKey, task: variant.task }),
         });
 
-        const pollData = await pollRes.json() as {
-          errorId: number;
-          status: 'idle' | 'processing' | 'ready' | 'failed';
-          solution?: { gRecaptchaResponse?: string };
-          errorCode?: string;
-        };
+        const createData = await createRes.json() as { errorId: number; errorCode?: string; errorDescription?: string; taskId?: number };
 
-        if (pollData.errorId !== 0 || pollData.status === 'failed') {
-          botLog({ applicationId: clientId, step: 'cev_capsolver_poll_fail', status: 'fail', data: { taskType: variant.label, error: pollData.errorCode ?? pollData.status } });
-          break;
+        if (createData.errorId !== 0 || !createData.taskId) {
+          const isTransient = createData.errorCode === 'ERROR_INVALID_TASK_DATA';
+          botLog({
+            applicationId: clientId,
+            step: 'cev_capsolver_create_fail',
+            status: 'fail',
+            data: {
+              taskType: variant.label,
+              attempt,
+              error: createData.errorCode ?? createData.errorId,
+              description: createData.errorDescription ?? null,
+              willRetry: isTransient && attempt < MAX_RETRIES,
+            },
+          });
+          if (isTransient && attempt < MAX_RETRIES) {
+            // Délai progressif avant retry : 3s, 5s
+            await new Promise(r => setTimeout(r, attempt === 1 ? 3_000 : 5_000));
+            continue;
+          }
+          break; // erreur non-transiente ou retries épuisés → variant suivant
         }
 
-        if (pollData.status === 'ready' && pollData.solution?.gRecaptchaResponse) {
-          botLog({ applicationId: clientId, step: 'cev_capsolver_solved', status: 'ok', data: { taskType: variant.label, attempts: i + 1, tokenLen: pollData.solution.gRecaptchaResponse.length } });
-          return pollData.solution.gRecaptchaResponse;
+        const taskId = createData.taskId;
+        botLog({ applicationId: clientId, step: 'cev_capsolver_task_created', status: 'ok', data: { taskType: variant.label, attempt, taskId } });
+
+        // Poller jusqu'à résolution (max 120s, intervalle 5s)
+        for (let i = 0; i < 24; i++) {
+          await new Promise(r => setTimeout(r, 5_000));
+
+          const pollRes = await fetch('https://api.capsolver.com/getTaskResult', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientKey: apiKey, taskId }),
+          });
+
+          const pollData = await pollRes.json() as {
+            errorId: number;
+            status: 'idle' | 'processing' | 'ready' | 'failed';
+            solution?: { gRecaptchaResponse?: string };
+            errorCode?: string;
+          };
+
+          if (pollData.errorId !== 0 || pollData.status === 'failed') {
+            botLog({ applicationId: clientId, step: 'cev_capsolver_poll_fail', status: 'fail', data: { taskType: variant.label, attempt, error: pollData.errorCode ?? pollData.status } });
+            break;
+          }
+
+          if (pollData.status === 'ready' && pollData.solution?.gRecaptchaResponse) {
+            botLog({ applicationId: clientId, step: 'cev_capsolver_solved', status: 'ok', data: { taskType: variant.label, attempt, totalPolls: i + 1, tokenLen: pollData.solution.gRecaptchaResponse.length } });
+            return pollData.solution.gRecaptchaResponse;
+          }
         }
+
+        botLog({ applicationId: clientId, step: 'cev_capsolver_timeout', status: 'fail', data: { taskType: variant.label, attempt } });
+        break; // timeout → pas la peine de retenter ce variant, passer au suivant
+
+      } catch (err) {
+        botLog({ applicationId: clientId, step: 'cev_capsolver_exception', status: 'fail', data: { taskType: variant.label, attempt, error: String(err) } });
+        if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3_000));
       }
-
-      botLog({ applicationId: clientId, step: 'cev_capsolver_timeout', status: 'fail', data: { taskType: variant.label } });
-
-    } catch (err) {
-      botLog({ applicationId: clientId, step: 'cev_capsolver_exception', status: 'fail', data: { taskType: variant.label, error: String(err) } });
     }
   }
 
-  botLog({ applicationId: clientId, step: 'cev_capsolver_all_types_failed', status: 'fail', data: { hint: 'Toutes variantes CapSolver échouées. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.' } });
+  botLog({ applicationId: clientId, step: 'cev_capsolver_all_types_failed', status: 'fail', data: { hint: 'Toutes variantes CapSolver épuisées (3× chacune). Vérifier solde CapSolver ou ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.' } });
   return null;
 }
 
