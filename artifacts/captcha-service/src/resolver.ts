@@ -9,6 +9,17 @@ const DEFAULT_ROUTING: RoutingTable = {
   turnstile:    ['2captcha', 'anticaptcha'],
 };
 
+const PROVIDER_TIMEOUT_MS = 180_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export class CaptchaResolver {
   private providers: Map<ProviderName, CaptchaProvider>;
 
@@ -38,11 +49,15 @@ export class CaptchaResolver {
         continue;
       }
 
-      console.log(`[resolver] trying ${providerName} for ${req.type}`);
+      console.log(`[resolver] trying ${providerName} for ${req.type} (timeout ${PROVIDER_TIMEOUT_MS}ms)`);
       const start = Date.now();
 
       try {
-        const result = await provider.solve(req);
+        const result = await withTimeout(
+          provider.solve(req),
+          PROVIDER_TIMEOUT_MS,
+          `${providerName}/${req.type}`,
+        );
         if (result) {
           return {
             token: result.token,

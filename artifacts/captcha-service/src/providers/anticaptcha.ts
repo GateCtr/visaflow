@@ -71,7 +71,7 @@ export class AntiCaptchaProvider implements CaptchaProvider {
       case 'hcaptcha':
         return { type: 'HCaptchaTaskProxyless', ...base };
       case 'turnstile':
-        return { type: 'TurnstileProxyless', ...base };
+        return { type: 'TurnstileTaskProxyless', ...base };
       default:
         console.error(`[anticaptcha] unsupported type: ${req.type as string}`);
         return null;
