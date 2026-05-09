@@ -941,16 +941,30 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   }
 
   if (requestStatus.status === "scheduled") {
-    console.log(`[usa] ✅ Créneau déjà attribué : ${requestStatus.message}`);
-    try {
-      await reportSlotFound({
+    const rescheduleMode = job.hunterConfig.rescheduleMode;
+    const rescheduleExistingDate = job.hunterConfig.rescheduleExistingDate;
+
+    if (rescheduleMode && rescheduleExistingDate) {
+      console.log(`[usa] ♻️ Mode reporter actif — RDV existant le ${rescheduleExistingDate}. Recherche d'un créneau antérieur...`);
+      botLog({
         applicationId: job.id,
-        date: "Créneau déjà attribué",
-        time: "",
-        location: `Ambassade USA Kinshasa (Mission ${session.missionId})`,
+        step: "scan",
+        status: "ok",
+        data: { flow: "usa", phase: "reschedule_start", existingDate: rescheduleExistingDate },
       });
-    } catch { /* ignore */ }
-    return "slot_found";
+      // Ne pas retourner — continuer vers scanUsaSlotsViaAPI avec la deadline calculée
+    } else {
+      console.log(`[usa] ✅ Créneau déjà attribué : ${requestStatus.message}`);
+      try {
+        await reportSlotFound({
+          applicationId: job.id,
+          date: "Créneau déjà attribué",
+          time: "",
+          location: `Ambassade USA Kinshasa (Mission ${session.missionId})`,
+        });
+      } catch { /* ignore */ }
+      return "slot_found";
+    }
   }
 
   console.log(`[usa] ${requestStatus.message} — lancement scan créneaux via API directe...`);
@@ -1348,7 +1362,8 @@ async function findFirstSlotForOfc(
   ofc: UsaOfc,
   appDetails: UsaAppDetails,
   dateFrom?: string,
-  dateDeadline?: string
+  dateDeadline?: string,
+  rescheduleYN?: boolean
 ): Promise<SlotFound | null> {
   const basePayload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
@@ -1360,6 +1375,8 @@ async function findFirstSlotForOfc(
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
   if (appDetails.applicantUUID) basePayload.applicantUUID = appDetails.applicantUUID;
+  // Mode reporter : rescheduleYN=true signale au serveur qu'on modifie un RDV existant
+  if (rescheduleYN) basePayload.rescheduleYN = true;
 
   // Toutes les requêtes de slot incluent les cookies APP_ID_TOBE + missionId (POST avec body)
   const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, REFERER_CREATE_APT, true);
@@ -1992,7 +2009,27 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
   // Fenêtre de réservation définie par l'admin (optionnel)
   const slotDateFrom = job.hunterConfig.slotDateFrom;
-  const slotDateDeadline = job.hunterConfig.slotDateDeadline;
+  let slotDateDeadline = job.hunterConfig.slotDateDeadline;
+  const rescheduleMode = job.hunterConfig.rescheduleMode;
+  const rescheduleExistingDate = job.hunterConfig.rescheduleExistingDate;
+
+  // Mode reporter : forcer dateDeadline à la veille du RDV existant
+  if (rescheduleMode && rescheduleExistingDate) {
+    const existingDateObj = new Date(rescheduleExistingDate + "T12:00:00");
+    existingDateObj.setDate(existingDateObj.getDate() - 1);
+    const computedDeadline = toYMD(existingDateObj);
+    // Prendre la plus restrictive des deux deadlines
+    if (!slotDateDeadline || computedDeadline < slotDateDeadline) {
+      slotDateDeadline = computedDeadline;
+    }
+    console.log(`[usa] ♻️ Mode reporter : deadline forcée à ${slotDateDeadline} (veille du RDV existant ${rescheduleExistingDate})`);
+    // Bundle : rescheduleYN && appointmentPriority==="group" → "regular"
+    if (session.appointmentPriority === "group") {
+      console.log(`[usa] ♻️ Mode reporter : appointmentPriority "group" → "regular"`);
+      session.appointmentPriority = "regular";
+    }
+  }
+
   if (slotDateFrom || slotDateDeadline) {
     console.log(`[usa] 📅 Fenêtre admin : ${slotDateFrom ?? "illimitée"} → ${slotDateDeadline ?? "illimitée"}`);
   }
@@ -2005,7 +2042,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
     let found: SlotFound | null;
     try {
-      found = await findFirstSlotForOfc(session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline);
+      found = await findFirstSlotForOfc(session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline, rescheduleMode);
     } catch (err) {
       if (err instanceof RateLimitError) {
         const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);

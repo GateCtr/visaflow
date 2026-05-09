@@ -65,6 +65,9 @@ const hunterConfig = v.object({
   cevActiveSessionCookie: v.optional(v.string()),      // Cookies ASP.NET_SessionId
   cevActiveSessionValidUntil: v.optional(v.string()),  // ISO string de validUntil (depuis SetCaptchaToken)
   cevActiveSessionRedirectUrl: v.optional(v.string()), // redirectUrl (Referer pour AvailableTimeSlots)
+  // Mode reporter USA — cherche un créneau antérieur au RDV existant
+  rescheduleMode: v.optional(v.boolean()),
+  rescheduleExistingDate: v.optional(v.string()),      // "YYYY-MM-DD" — date du RDV actuel (deadline = veille)
 });
 
 export default defineSchema({

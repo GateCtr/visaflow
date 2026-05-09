@@ -50,6 +50,9 @@ export interface HunterJob {
     cevCountry?: string;
     cevClickCount?: number;
     cevClickWindowStart?: number;
+    // Mode reporter USA
+    rescheduleMode?: boolean;
+    rescheduleExistingDate?: string;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";

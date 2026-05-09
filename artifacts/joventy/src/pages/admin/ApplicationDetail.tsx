@@ -376,6 +376,8 @@ export default function AdminApplicationDetail() {
   const [hunterVowintAppId, setHunterVowintAppId] = useState("");
   const [hunterCevCountry, setHunterCevCountry] = useState("");
   const [hunterScheduleUrl, setHunterScheduleUrl] = useState("");
+  const [hunterRescheduleMode, setHunterRescheduleMode] = useState(false);
+  const [hunterRescheduleExistingDate, setHunterRescheduleExistingDate] = useState("");
   const [hunterSaving, setHunterSaving] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaBalanceChecking, setCaptchaBalanceChecking] = useState(false);
@@ -409,7 +411,7 @@ export default function AdminApplicationDetail() {
       setAdminNoteInput(app.adminNotes ?? "");
       const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
       if (pricing) setSlotLocation(pricing.embassyAddress ?? "");
-      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string; scheduleUrl?: string } }).hunterConfig;
+      const hc = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; twoCaptchaApiKey?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string; scheduleUrl?: string; rescheduleMode?: boolean; rescheduleExistingDate?: string } }).hunterConfig;
       if (hc) {
         setHunterUsername(hc.embassyUsername);
         setHunterPassword(hc.embassyPassword);
@@ -420,6 +422,8 @@ export default function AdminApplicationDetail() {
         setHunterVowintAppId(hc.vowintAppId ?? "");
         setHunterCevCountry(hc.cevCountry ?? "");
         setHunterScheduleUrl(hc.scheduleUrl ?? "");
+        setHunterRescheduleMode(hc.rescheduleMode ?? false);
+        setHunterRescheduleExistingDate(hc.rescheduleExistingDate ?? "");
       } else {
         setHunterUsername("");
         setHunterPassword("");
@@ -430,6 +434,8 @@ export default function AdminApplicationDetail() {
         setHunterVowintAppId("");
         setHunterCevCountry("");
         setHunterScheduleUrl("");
+        setHunterRescheduleMode(false);
+        setHunterRescheduleExistingDate("");
       }
     }
   }, [app?._id]);
@@ -1171,7 +1177,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined, rescheduleMode: hunterRescheduleMode || undefined, rescheduleExistingDate: hunterRescheduleExistingDate || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1185,7 +1191,7 @@ export default function AdminApplicationDetail() {
             setHunterSaving(true);
             try {
               await resetHunterConfig({ applicationId: appId });
-              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false); setHunterScheduleUrl("");
+              setHunterUsername(""); setHunterPassword(""); setHunterTwoCaptchaKey(""); setHunterActive(false); setHunterScheduleUrl(""); setHunterRescheduleMode(false); setHunterRescheduleExistingDate("");
               toast({ title: "Config Hunter supprimée", description: "Les identifiants ont été effacés." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1443,6 +1449,44 @@ export default function AdminApplicationDetail() {
                     </p>
                   )}
                 </div>
+
+                {/* Mode reporter — USA uniquement */}
+                {app.destination === "usa" && (
+                  <div className="space-y-3 border border-orange-200 bg-orange-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-orange-800 uppercase tracking-wide flex items-center gap-1.5">
+                        🔄 Mode Reporter (Reschedule)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setHunterRescheduleMode((v) => !v)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hunterRescheduleMode ? "bg-orange-500" : "bg-slate-300"}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${hunterRescheduleMode ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-orange-700">
+                      Le client a déjà un RDV mais souhaite en obtenir un <strong>plus tôt</strong>. Activez ce mode et indiquez la date du RDV existant — le robot ne prendra que des créneaux antérieurs à cette date.
+                    </p>
+                    {hunterRescheduleMode && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-orange-700 uppercase">Date du RDV existant</label>
+                        <Input
+                          type="date"
+                          value={hunterRescheduleExistingDate}
+                          onChange={(e) => setHunterRescheduleExistingDate(e.target.value)}
+                          className="h-9 bg-white text-sm"
+                        />
+                        <p className="text-[10px] text-orange-500">Le robot cherchera uniquement des créneaux avant cette date (deadline = veille).</p>
+                        {hunterRescheduleExistingDate && (
+                          <p className="text-[11px] text-orange-800 font-medium pt-1">
+                            ✓ Deadline automatique : <strong>{new Date(new Date(hunterRescheduleExistingDate + "T12:00:00").getTime() - 86400000).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</strong>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-3">
                   <button

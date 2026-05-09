@@ -38,6 +38,9 @@ export const setHunterConfig = mutation({
     // CEV / Schengen
     vowintAppId: v.optional(v.string()),
     cevCountry: v.optional(v.string()),
+    // Mode reporter USA
+    rescheduleMode: v.optional(v.boolean()),
+    rescheduleExistingDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -75,6 +78,9 @@ export const setHunterConfig = mutation({
         cevActiveSessionCookie: existingFull?.cevActiveSessionCookie,
         cevActiveSessionValidUntil: existingFull?.cevActiveSessionValidUntil,
         cevActiveSessionRedirectUrl: existingFull?.cevActiveSessionRedirectUrl,
+        // Mode reporter USA — défini explicitement par l'admin (pas préservé, toujours écrasé)
+        rescheduleMode: args.rescheduleMode ?? undefined,
+        rescheduleExistingDate: args.rescheduleExistingDate || undefined,
       },
       updatedAt: Date.now(),
     });
