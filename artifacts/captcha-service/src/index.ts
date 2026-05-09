@@ -6,7 +6,7 @@ import { makeCapSolver } from './providers/capsolver.js';
 import { CaptchaResolver } from './resolver.js';
 import type { CaptchaType, ProviderName, SolveRequest } from './types.js';
 
-const PORT = parseInt(process.env.PORT ?? '3001', 10);
+const PORT = parseInt(process.env.PORT ?? '3100', 10);
 const SERVICE_API_KEY = process.env.CAPTCHA_SERVICE_API_KEY ?? '';
 
 const CAPTCHA_TYPES: CaptchaType[] = ['recaptcha_v2', 'recaptcha_v3', 'hcaptcha', 'turnstile'];
