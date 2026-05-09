@@ -30,6 +30,10 @@ args = "artifacts/slot-hunter: Slot Hunter"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/captcha-service: Captcha Service"
+
 [[workflows.workflow]]
 name = "artifacts/slot-hunter: Slot Hunter"
 author = "agent"
@@ -52,6 +56,18 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "artifacts/captcha-service: Captcha Service"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/captcha-service run dev"
+waitForPort = 3001
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -79,3 +95,7 @@ externalPort = 80
 [[ports]]
 localPort = 8082
 externalPort = 3000
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
