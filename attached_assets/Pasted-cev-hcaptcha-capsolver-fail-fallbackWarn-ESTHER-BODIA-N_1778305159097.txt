@@ -1,0 +1,75 @@
+cev_hcaptcha_capsolver_fail_fallbackWarn
+🇪🇺 ESTHER BODIA NGOBI
+hint:CapSolver : "We don't support this service" → restriction de PLAN sur ce sitekey gouvernemental (diplomatie.be). CapSolver ne supporte pas les sitekeys gouvernementaux sur le plan de base. Ajoutez ANT…
+
+09/05/2026 06:37:44
+cev_capsolver_all_types_failedErreur
+🇪🇺 ESTHER BODIA NGOBI
+hint:Toutes variantes CapSolver échouées. Ajouter ANTICAPTCHA_API_KEY (anti-captcha.com) pour résolution gouvernementale fiable.
+
+09/05/2026 06:37:44
+cev_hcaptcha_2captcha_startOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 06:37:44
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess
+error:ERROR_INVALID_TASK_DATA
+description:We don't support this service. Please contact support if you have any questions.
+
+09/05/2026 06:37:44
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaEnterpriseTaskProxyLess
+
+09/05/2026 06:37:44
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess
+
+09/05/2026 06:37:44
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess+isEnterprise
+error:ERROR_INVALID_TASK_DATA
+description:We don't support this service. Please contact support if you have any questions.
+
+09/05/2026 06:37:44
+cev_capsolver_create_failErreur
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaEnterpriseTaskProxyLess
+error:ERROR_INVALID_TASK_DATA
+description:This service is not supported: HCaptchaEnterpriseTaskProxyLess
+
+09/05/2026 06:37:44
+cev_capsolver_try_typeOK
+🇪🇺 ESTHER BODIA NGOBI
+taskType:HCaptchaTaskProxyLess+isEnterprise
+
+09/05/2026 06:37:44
+cev_hcaptcha_capsolver_startOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 06:37:44
+cev_session_cookie_capturedOK
+🇪🇺 ESTHER BODIA NGOBI
+cookieLen:66
+names:ASP.NET_SessionId, PreferredCulture
+
+09/05/2026 06:37:44
+cev_hcaptcha_solve_startOK
+🇪🇺 ESTHER BODIA NGOBI
+
+09/05/2026 06:37:44
+cev_integration_url_capturedWarn
+🇪🇺 ESTHER BODIA NGOBI
+integrationUrl:not_captured
+
+09/05/2026 06:37:44
+cev_new_tab_openedOK
+🇪🇺 ESTHER BODIA NGOBI
+url:https://appointment.cloud.diplomatie.be/Captcha
+
+09/05/2026 06:37:44
+net_responseOK
