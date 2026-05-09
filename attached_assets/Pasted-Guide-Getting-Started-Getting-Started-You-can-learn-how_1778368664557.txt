@@ -1,0 +1,83 @@
+Guide
+Getting Started
+Getting Started
+
+You can learn how to use CapSolver services by following these steps
+Step. 1: Create Account
+
+Before you are ready to use CapSolver’s services, you need to go to the user panel and register your account. There are many ways to register. If you don’t see the way you want to register, please contact us.
+Step. 2: Get your API Key
+
+Once you have registered, you can obtain your api key from the home page panel. img.png
+Step. 3: Create Task
+
+When you have the key ready, you can create the task using our API method createTask. Here is an example of the parameters of a http request.
+
+POST https://api.capsolver.com/createTask
+Host: api.capsolver.com
+Content-Type: application/json
+
+{
+  "clientKey": "YOUR_API_KEY",
+  "task": {
+    "type": "ReCaptchaV2TaskProxyLess",
+    "websiteURL": "https://www.google.com/recaptcha/api2/demo",
+    "websiteKey": "6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-",
+    "cookies": "cookiename=1;cookiename=2;cookieName=3"
+  }
+}
+
+When your account has sent a request with sufficient balance and correct parameters, you will receive the following api response.
+
+{
+  "errorId": 0,
+  "errorCode": "",
+  "errorDescription": "",
+  // Make a note of this ID, which will be used in subsequent query results
+  "taskId": "61138bb6-19fb-11ec-a9c8-0242ac110006"
+}
+
+We currently support various types of tasks. You can use the parameter task > type to distinguish task types
+
+    Task (Recognition)
+        ImageToTextTask
+        reCAPTCHA v2
+        AWS WAF
+        VisionEngine
+    Task (Token)
+        GeeTest
+        reCAPTCHA v2
+        reCAPTCHA v3
+        MTCaptcha
+        DataDome
+        AWS WAF
+        Cloudflare Turnstile
+        Cloudflare Challenge
+
+Step. 4: Get Task Result
+
+Usually Identify task returns the result directly via createTask But task token takes more time, so you need to go through getTaskResult separately. Obtain the task result.
+
+headers
+
+POST https://api.capsolver.com/getTaskResult
+Host: api.capsolver.com
+Content-Type: application/json
+
+{
+  "clientKey": "YOUR_API_KEY",
+  //The result returned by the first step createTask
+  "taskId": "37223a89-06ed-442c-a0b8-22067b79c5b4"
+}
+
+Generally just wait for ‘1-10s’ and you will get the result of the task execution via getTaskResult. The following is a successful response When a request is sent with sufficient balance and correct parameters in your account, you will get the following api response
+
+{
+  "errorId": 0,
+  "solution": {
+    "userAgent": "xxx",
+    "gRecaptchaResponse": "03AGdBq25SxXT-pmSeBXjzScW-EiocHwwpwqtk1QXlJnGnUJCZrgjwLLdt7cb0..."
+  },
+  "status": "ready"
+}
+
