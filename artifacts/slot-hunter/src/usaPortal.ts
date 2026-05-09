@@ -680,7 +680,10 @@ export async function loginUsaPortal(
   };
 }
 
-export async function checkUsaAppointmentRequestStatus(session: UsaSession): Promise<{
+export async function checkUsaAppointmentRequestStatus(
+  session: UsaSession,
+  portalApplicationId?: string,
+): Promise<{
   status: "payment_required" | "scheduled" | "no_request" | "pending" | "error";
   applicationId: string | null;
   pendingAppoStatus: number | null;
@@ -722,10 +725,48 @@ export async function checkUsaAppointmentRequestStatus(session: UsaSession): Pro
     if (!raw || typeof raw !== "object") {
       return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Aucune demande de RDV trouvée", missionId: USA_MISSION_ID };
     }
-    // Le portail peut renvoyer un objet unique ou un tableau à un seul élément.
-    data = (Array.isArray(raw) ? raw[0] : raw) as UsaAppointmentRequest;
+
+    // ── Sélection de l'application active parmi un tableau potentiel ──────────
+    // Le serveur peut retourner un tableau quand le compte a plusieurs dossiers.
+    // Priorité de sélection :
+    //   1. portalApplicationId renseigné par l'admin → chercher cet ID exactement
+    //   2. Premier dossier avec pendingAppoStatus > 0 (paiement confirmé, actif)
+    //   3. Fallback : raw[0] (comportement original)
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) {
+        return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Tableau vide — aucune demande de RDV", missionId: USA_MISSION_ID };
+      }
+      const list = raw as UsaAppointmentRequest[];
+
+      if (portalApplicationId) {
+        // Priorité 1 : l'admin a ciblé un dossier spécifique
+        const targeted = list.find((r) => r.applicationId === portalApplicationId);
+        if (targeted) {
+          console.log(`[usa] 🎯 portalApplicationId trouvé dans le tableau (${list.length} dossier(s)) : ${portalApplicationId}`);
+          data = targeted;
+        } else {
+          console.warn(`[usa] ⚠️ portalApplicationId "${portalApplicationId}" introuvable dans le tableau de ${list.length} dossier(s). IDs disponibles : ${list.map((r) => r.applicationId).join(", ")}`);
+          data = list[0];
+        }
+      } else {
+        // Priorité 2 : premier dossier actif (paiement confirmé)
+        const active = list.find((r) => typeof r.pendingAppoStatus === "number" && r.pendingAppoStatus > 0);
+        if (active) {
+          if (list.length > 1) {
+            console.log(`[usa] 📋 Compte multi-dossiers (${list.length}) — dossier actif sélectionné : ${active.applicationId} (pendingAppoStatus=${active.pendingAppoStatus})`);
+          }
+          data = active;
+        } else {
+          // Fallback : aucun dossier avec paiement confirmé — prendre le premier
+          data = list[0];
+        }
+      }
+    } else {
+      data = raw as UsaAppointmentRequest;
+    }
+
     if (!data) {
-      return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Tableau vide — aucune demande de RDV", missionId: USA_MISSION_ID };
+      return { status: "no_request", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: "Aucune application sélectionnable", missionId: USA_MISSION_ID };
     }
   } catch (err) {
     console.error("[usa] Erreur appel appointment status:", err);
@@ -899,9 +940,9 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Résolution du dossier actif ────────────────────────────────────────────
-  // Le portail retourne toujours l'applicationId du dossier actif de la session.
-  // Une session = un compte = un dossier principal → pas d'ambiguïté.
-  const requestStatus = await checkUsaAppointmentRequestStatus(session);
+  // Le portail peut retourner plusieurs dossiers si le compte en gère plusieurs.
+  // portalApplicationId (admin) → sélection exacte ; sinon → premier avec paiement confirmé.
+  const requestStatus = await checkUsaAppointmentRequestStatus(session, job.hunterConfig.portalApplicationId);
   session.applicationId = requestStatus.applicationId;
   session.pendingAppoStatus = requestStatus.pendingAppoStatus;
   // Priorité au missionId serveur (équivalent au cookie "missionId" que le portail Angular lit).
@@ -2158,58 +2199,64 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         continue;
       }
 
-      // ── 2. Télécharger le PDF de confirmation ───────────────
-      // Uniquement si le booking a réussi : le portail ne génère la lettre que sur un RDV confirmé.
-      let pdfStorageId: string | undefined;
-      if (booking.success) {
-        botLog({
-          applicationId: job.id,
-          step: "slots_found",
-          status: "ok",
-          data: {
-            flow: "usa",
-            phase: "booking_success",
-            ofc: found.ofcName,
-            date: found.date,
-            time: found.time,
-            appointmentId: booking.appointmentId,
-            responseMsg: booking.responseMsg,
-          },
-        });
-        const pdf = await downloadUsaConfirmationPdf(session, session.applicationId, booking.appointmentId);
-        if (pdf) {
-          console.log(`[usa] 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
-          const b64 = pdf.toString("base64");
-          pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
-          if (pdfStorageId) {
-            console.log(`[usa] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
-            botLog({
-              applicationId: job.id,
-              step: "slots_found",
-              status: "ok",
-              data: { flow: "usa", phase: "confirmation_letter", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
-            });
-          }
-        }
-      } else {
+      // Tout autre échec de booking (502, erreur réseau, réponse inattendue) :
+      // NE PAS reporter slot_found — ce serait un faux positif. Reporter une erreur et arrêter.
+      if (!booking.success) {
+        const errMsg = `Booking échoué (HTTP ${booking.statusCode ?? "err"}) sur ${found.ofcName} — ${booking.error}. Créneau NON confirmé.`;
+        console.error(`[usa] ❌ ${errMsg}`);
         botLog({
           applicationId: job.id,
           step: "error",
           status: "fail",
-          data: { flow: "usa", phase: "booking_fail", ofc: found.ofcName, date: found.date, statusCode: booking.statusCode, error: booking.error },
+          data: { flow: "usa", phase: "booking_fail_final", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, statusCode: booking.statusCode, error: booking.error },
         });
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: errMsg,
+        });
+        return "error";
       }
 
-      // ── 3. Rapport vers Convex ──────────────────────────────
-      const bookingNote = booking.success
-        ? `booking confirmé — appointmentId=${booking.appointmentId}`
-        : `booking échoué (${booking.statusCode ?? "err"}: ${booking.error})`;
+      // ── 2. Télécharger le PDF de confirmation ───────────────
+      // Uniquement si le booking a réussi : le portail ne génère la lettre que sur un RDV confirmé.
+      let pdfStorageId: string | undefined;
+      botLog({
+        applicationId: job.id,
+        step: "slots_found",
+        status: "ok",
+        data: {
+          flow: "usa",
+          phase: "booking_success",
+          ofc: found.ofcName,
+          date: found.date,
+          time: found.time,
+          appointmentId: booking.appointmentId,
+          responseMsg: booking.responseMsg,
+        },
+      });
+      const pdf = await downloadUsaConfirmationPdf(session, session.applicationId, booking.appointmentId);
+      if (pdf) {
+        console.log(`[usa] 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
+        const b64 = pdf.toString("base64");
+        pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+        if (pdfStorageId) {
+          console.log(`[usa] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
+          botLog({
+            applicationId: job.id,
+            step: "slots_found",
+            status: "ok",
+            data: { flow: "usa", phase: "confirmation_letter", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
+          });
+        }
+      }
 
+      // ── 3. Rapport vers Convex — booking réellement confirmé ──
       await reportSlotFound({
         applicationId: job.id,
         date: found.date,
         time: found.time,
-        location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, ${bookingNote})`,
+        location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, appointmentId=${booking.appointmentId})`,
         confirmationCode: booking.appointmentId?.toString(),
         screenshotStorageId: pdfStorageId,
       });
