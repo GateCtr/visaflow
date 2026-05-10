@@ -21,6 +21,22 @@ Premium visa assistance SaaS for the Democratic Republic of Congo (RDC/DRC).
 - **Charts**: recharts
 - **Routing**: Wouter (SPA)
 
+## USA Portal — Reschedule API-first (2026-05-10)
+
+### Rebooking Christian BUKELA (pendingAppoStatus=0, cancellable=true)
+- **Cas "cancellable"** : `fetchCancellableSessionIds()` remplace Playwright — appels API directs Bearer :
+  1. `GET /appointments/scheduledappointmentInfo` → applicationId + appointmentId existant
+  2. `GET /appointments/getLandingPageDeatils` (fallback avec `LanguageId: 1`)
+  3. `POST /appointments/search` → détails complets (applicantId, applicantUUID)
+- **Reschedule endpoint** : `PUT /appointments/reschedule` (vs `/schedule` pour nouveaux RDV)
+  - Payload = TABLEAU `[{...10 champs + rescheduleType:"POST"}]`
+  - `rescheduleType` = type de localisation du RDV EXISTANT (`"POST"` = ambassade)
+  - `appointmentId` dans le payload = ID du RDV existant à annuler/reporter
+- **Sélection automatique** : `session.isReschedule=true` (cas cancellable) **ou** `hunterConfig.rescheduleMode=true` (cas scheduled) → `rescheduleUsaSlot()` utilisé à la place de `bookUsaSlot()`
+- **URL corrigée** : `USA_LANDING_PAGE_URL` = `/appointments/getLandingPageDeatils` (pas `/appointment/...`)
+- Nouvelles constantes : `USA_RESCHEDULE_URL`, `USA_SEARCH_URL`, `USA_SCHEDULED_INFO_URL`
+- Nouvelle fonction `corrId()` (15-char alphanumeric, partagée entre `fetchCancellableSessionIds` et `test-new-endpoints.ts`)
+
 ## Architecture Captcha & Proxy (décision 2026-05-10)
 
 `captcha-service` et `proxy-service` sont des **librairies locales**, pas des services HTTP séparés sur Railway. Le bot `slot-hunter` importe directement leurs modules TypeScript via les dépendances workspace pnpm :

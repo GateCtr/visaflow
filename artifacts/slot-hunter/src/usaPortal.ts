@@ -56,8 +56,14 @@ const USA_APP_DETAILS_URL = (applicationId: string, applicantId: number) =>
   `${USA_APPOINTMENT_URL}/appointments/getApplicationDetails?applicationId=${applicationId}&applicantId=${applicantId}`;
 const USA_CONFIRMATION_LETTER_URL = `${USA_NOTIFICATION_URL}/template/appointmentLetter`;
 const USA_SCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/schedule`;
+// Reschedule : PUT au lieu de schedule — payload identique + rescheduleType (bundle Angular)
+const USA_RESCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/reschedule`;
+// Recherche de détails RDV par applicationId (POST, retourne tableau avec appointmentId/UUID)
+const USA_SEARCH_URL = `${USA_APPOINTMENT_URL}/appointments/search`;
+// Dashboard : retourne les RDV planifiés (Bearer seulement, pas d'applicationId requis)
+const USA_SCHEDULED_INFO_URL = `${USA_APPOINTMENT_URL}/appointments/scheduledappointmentInfo`;
 // Anti-détection : endpoints que le vrai portail appelle dans son flux normal
-const USA_LANDING_PAGE_URL = `${USA_APPOINTMENT_URL}/appointment/getLandingPageDeatils`;
+const USA_LANDING_PAGE_URL = `${USA_APPOINTMENT_URL}/appointments/getLandingPageDeatils`;
 // Retourne l'URL de base du sanity check — le stepType est ajouté en query param par l'appelant.
 // Bundle Angular : this.sanityCheckUrl+`/visa/sanitycheck/${f}`,null,E?{params:{stepType:E}}:{}
 const USA_SANITY_CHECK_URL = (applicationId: string, stepType: "slotBooking" | "appointmentLetter") =>
@@ -325,6 +331,10 @@ export interface UsaSession {
    * Valeurs possibles : "regular", "group", ou vide (absent = non transmis).
    * Si "group" + reschedule → converti en "regular" (bundle : rescheduleYN&&"group"==ap→"regular"). */
   appointmentPriority?: string;
+  /** Drapeau positionné à true par le branch "cancellable" avant d'appeler scanUsaSlotsViaAPI.
+   * Indique que le booking doit utiliser PUT /appointments/reschedule au lieu de /schedule,
+   * même si hunterConfig.rescheduleMode n'est pas activé (cas: pendingAppoStatus=0 + cancellable). */
+  isReschedule?: boolean;
 }
 
 // Referers spécifiques à chaque étape de navigation du portail Angular.
@@ -889,177 +899,220 @@ export async function getUsaAppointmentRequests(session: UsaSession): Promise<Us
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// SESSION PLAYWRIGHT — Résolution du cas "cancellable" (pendingAppoStatus=0 + cancellable=true)
+// RÉSOLUTION "CANCELLABLE" — API-first (remplace Playwright)
 //
-// Quand le workflow de l'utilisateur est terminé (slot trouvé, paiement complet) mais
-// qu'il veut reporter son RDV, le portail Angular affiche un bouton "Reschedule".
-// Les appels API avec Bearer token ne fonctionnent pas pour les endpoints qui retournent
-// l'applicationId (401 systématique pour visauserapi/visaworkflowprocessor dans cet état).
+// Quand le workflow est terminé (pendingAppoStatus=0, cancellable=true), le portail
+// Angular affiche un bouton "Reschedule". L'applicationId ne vient pas de
+// getUserHistoryApplicantPaymentStatus dans cet état.
 //
-// Cette fonction :
-//  1. Lance un navigateur Playwright avec les cookies HTTP-only de la session navigateur
-//  2. Se connecte via le formulaire Angular (pour obtenir les cookies serveur)
-//  3. Intercepte les appels API faits par Angular sur le dashboard/manage-appointment
-//  4. Extrait applicationId + appointmentId depuis les réponses interceptées
-//  5. Met à jour session.applicationId et session.appointmentId
-//  6. Retourne "proceed" (→ scan), "not_found" (→ skip), ou "error"
+// Stratégie API-first (3 endpoints du bundle Angular, Bearer seulement) :
+//  1. GET /appointments/scheduledappointmentInfo  → liste des RDV planifiés
+//  2. GET /appointments/getLandingPageDeatils      → fallback données dashboard
+//  3. POST /appointments/search                    → détails complets si appId trouvé
+//
+// Met à jour session.applicationId, session.appointmentId, session.applicantId,
+// session.applicantUUID si trouvés.
+// Retourne "proceed" (→ scan), "not_found" (→ skip), "error".
 // ────────────────────────────────────────────────────────────────────────────
-async function runUsaPortalPlaywrightReschedule(
+
+/**
+ * Génère un X-Correlation-key de 15 chars alphanumériques (même algo que generateCorrelationId()
+ * dans l'intercepteur Angular du bundle).
+ */
+function corrId(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < 15; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+async function fetchCancellableSessionIds(
   session: UsaSession,
   job: HunterJob,
 ): Promise<"proceed" | "not_found" | "error"> {
-  const { embassyUsername: username, embassyPassword: password } = job.hunterConfig;
-  const USA_PW_BASE = "https://www.usvisaappt.com";
-  const LOGIN_PW    = `${USA_PW_BASE}/visaapplicantui/home/auth/login`;
-  const DASH_PW     = `${USA_PW_BASE}/visaapplicantui/home/dashboard`;
+  const token = session.accessToken;
+  console.log("[cancellable] Tentative API-first pour récupérer applicationId/appointmentId...");
 
-  let browser: Awaited<ReturnType<typeof launchBrowser>>["browser"] | undefined;
+  // Headers standards Angular (l'intercepteur injecte X-Correlation-key + Authorization)
+  const stdH: Record<string, string> = {
+    ...getBrowserHeaders(),
+    "Authorization":     `Bearer ${token}`,
+    "Content-Type":      "application/json",
+    "Accept":            "application/json",
+    "X-Correlation-key": corrId(),
+    "Referer":           REFERER_DASHBOARD,
+  };
 
+  // ── Étape 1 : GET scheduledappointmentInfo ─────────────────────────────────
+  // Retourne la liste des RDV "scheduled" de l'utilisateur connecté.
+  // Ce tableau contient applicationId + appointmentId + appointmentUUID.
+  let foundViaInfo = false;
   try {
-    const { browser: br, context, page } = await launchBrowser({
-      proxySource: "iproyal",
-      locale: "en-US",
-      timezoneId: "America/New_York",
-      acceptLanguage: "en-US,en;q=0.9",
-    });
-    browser = br;
+    console.log("[cancellable] GET scheduledappointmentInfo...");
+    const res = await usaFetch(USA_SCHEDULED_INFO_URL, { method: "GET", headers: stdH });
+    console.log(`[cancellable] scheduledappointmentInfo → HTTP ${res.status}`);
+    if (res.ok) {
+      const raw = await res.text();
+      console.log(`[cancellable] scheduledappointmentInfo réponse: ${raw.slice(0, 500)}`);
+      let data: unknown;
+      try { data = JSON.parse(raw); } catch { /* non-JSON */ }
 
-    // Captures réseau — on cherche applicationId / appointmentId dans les réponses
-    interface PwCapture { url: string; status: number; body: string }
-    const captures: PwCapture[] = [];
-    const pendingMap = new Map<string, string>(); // clé → url
+      const items: Record<string, unknown>[] = Array.isArray(data) ? data as Record<string, unknown>[] :
+        (data && typeof data === "object" ? [data as Record<string, unknown>] : []);
 
-    page.on("request", (req) => {
-      const url = req.url();
-      if (!url.includes(USA_PW_BASE)) return;
-      const isApi = !url.match(/\.(js|css|png|jpg|ico|woff|svg|gif)(\?|$)/);
-      if (isApi) pendingMap.set(url + "|" + req.method(), url);
-    });
+      for (const item of items) {
+        const appId = typeof item.applicationId === "string" ? item.applicationId : null;
+        const apptId = typeof item.appointmentId === "number" ? item.appointmentId :
+          (typeof item.appointmentId === "string" ? parseInt(item.appointmentId, 10) : undefined);
+        const applicantId = typeof item.applicantId === "number" ? item.applicantId :
+          (typeof item.applicantId === "string" ? parseInt(item.applicantId, 10) : undefined);
+        const applicantUUID = typeof item.applicantUUID === "number" ? item.applicantUUID :
+          (typeof item.applicantUUID === "string" ? parseInt(item.applicantUUID, 10) : undefined);
+        const appointmentUUID = typeof item.appointmentUUID === "string" ? item.appointmentUUID : undefined;
 
-    page.on("response", async (res) => {
-      const url = res.url();
-      if (!url.includes(USA_PW_BASE)) return;
-      const isApi = !url.match(/\.(js|css|png|jpg|ico|woff|svg|gif)(\?|$)/);
-      if (!isApi) return;
-      try {
-        const ct = res.headers()["content-type"] ?? "";
-        if (!ct.includes("json") && !ct.includes("text")) return;
-        const body = await res.text();
-        captures.push({ url, status: res.status(), body: body.slice(0, 2000) });
-      } catch { /* ignore */ }
-    });
-
-    // ── Navigation login ────────────────────────────────────────────────────
-    console.log("[pw-reschedule] Navigation → login...");
-    await page.goto(LOGIN_PW, { waitUntil: "domcontentloaded", timeout: 30_000 });
-
-    // Attendre le rendu Angular (max 30s)
-    const deadline = Date.now() + 30_000;
-    let inputsReady = false;
-    while (Date.now() < deadline) {
-      const els = await page.$$("input");
-      for (const el of els) {
-        if (await el.isVisible()) { inputsReady = true; break; }
+        if (appId) {
+          session.applicationId = appId;
+          foundViaInfo = true;
+          console.log(`[cancellable] ✅ applicationId depuis scheduledappointmentInfo: ${appId}`);
+        }
+        if (apptId !== undefined && !isNaN(apptId)) {
+          session.appointmentId = apptId;
+          console.log(`[cancellable] ✅ appointmentId depuis scheduledappointmentInfo: ${apptId}`);
+        }
+        if (applicantId !== undefined && !isNaN(applicantId)) {
+          session.applicantId = applicantId;
+        }
+        if (applicantUUID !== undefined && !isNaN(applicantUUID)) {
+          session.applicantUUID = applicantUUID;
+        }
+        if (appointmentUUID) {
+          console.log(`[cancellable] appointmentUUID: ${appointmentUUID}`);
+        }
+        if (foundViaInfo) break;
       }
-      if (inputsReady) break;
-      await randomDelay(600, 900);
+    } else {
+      const errBody = await res.text().catch(() => "");
+      console.warn(`[cancellable] scheduledappointmentInfo HTTP ${res.status}: ${errBody.slice(0, 200)}`);
     }
-    if (!inputsReady) {
-      console.error("[pw-reschedule] ❌ Formulaire Angular non rendu dans les délais");
-      return "error";
-    }
-    await randomDelay(600, 1000);
+  } catch (err) {
+    console.warn(`[cancellable] scheduledappointmentInfo erreur réseau: ${err}`);
+  }
 
-    // ── Remplissage email ────────────────────────────────────────────────────
-    for (const sel of ['input[type="email"]', 'input[type="text"]', 'input:not([type="password"])']) {
-      const el = await page.$(sel);
-      if (el && await el.isVisible()) {
-        await el.click(); await randomDelay(150, 300);
-        await el.fill(username);
-        console.log(`[pw-reschedule] Email rempli (${sel})`);
-        break;
-      }
-    }
-    await randomDelay(300, 600);
-
-    // ── Remplissage mot de passe ─────────────────────────────────────────────
-    const passEl = await page.$('input[type="password"]');
-    if (passEl) { await passEl.click(); await randomDelay(150, 300); await passEl.fill(password); }
-    await randomDelay(400, 700);
-
-    // ── Soumission ───────────────────────────────────────────────────────────
-    const btnEl = await page.$('button[type="submit"]') ?? await page.$("button");
-    if (btnEl) { await btnEl.click(); }
-    else { await page.keyboard.press("Enter"); }
-
-    // ── Attente dashboard ────────────────────────────────────────────────────
-    console.log("[pw-reschedule] Attente dashboard...");
+  // ── Étape 2 : GET getLandingPageDeatils (fallback) ──────────────────────────
+  // Dashboard data — retourne les infos de la demande en cours incluant applicationId.
+  // Nécessite le header LanguageId (cf. intercepteur Angular dans le bundle).
+  if (!session.applicationId) {
     try {
-      await page.waitForURL("**/dashboard**", { timeout: 30_000 });
-    } catch {
-      const cur = page.url();
-      console.error(`[pw-reschedule] ❌ Pas de redirection dashboard — URL: ${cur}`);
-      const txt = await page.evaluate(() => document.body.innerText).catch(() => "");
-      if (txt.includes("restricted") || txt.includes("temporarily")) {
-        console.error("[pw-reschedule] ❌ Compte rate-limited par le portail");
-      }
-      return "error";
-    }
-    await randomDelay(2000, 3000);
-    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-    console.log(`[pw-reschedule] Dashboard chargé — ${captures.length} appel(s) intercepté(s)`);
-
-    // ── Cookies post-login (debug) ───────────────────────────────────────────
-    const cookies = await context.cookies(USA_PW_BASE);
-    const authCookies = cookies.filter(c => c.httpOnly || c.name.toLowerCase().includes("token") || c.name.toLowerCase().includes("session"));
-    if (authCookies.length > 0) {
-      console.log(`[pw-reschedule] Cookies auth: ${authCookies.map(c => `${c.name}(httpOnly=${c.httpOnly})`).join(", ")}`);
-    }
-
-    // ── Analyse des captures ─────────────────────────────────────────────────
-    const extractIds = (body: string): { applicationId?: string; appointmentId?: number; applicantId?: number; applicantUUID?: number } => {
-      const appIdM   = body.match(/"applicationId"\s*:\s*"?([a-zA-Z0-9_-]{5,})"?/);
-      const apptIdM  = body.match(/"appointmentId"\s*:\s*(\d+)/);
-      const applIdM  = body.match(/"applicantId"\s*:\s*(\d+)/);
-      const apptUUID = body.match(/"applicantUUID"\s*:\s*(\d+)/);
-      return {
-        ...(appIdM  ? { applicationId: appIdM[1] }    : {}),
-        ...(apptIdM ? { appointmentId: parseInt(apptIdM[1]) } : {}),
-        ...(applIdM ? { applicantId:   parseInt(applIdM[1]) } : {}),
-        ...(apptUUID ? { applicantUUID: parseInt(apptUUID[1]) } : {}),
+      console.log("[cancellable] Fallback GET getLandingPageDeatils...");
+      const landingH = {
+        ...stdH,
+        "X-Correlation-key": corrId(),
+        "LanguageId": "1",
       };
-    };
-
-    for (const cap of captures) {
-      if (cap.status < 400 && cap.body) {
-        const ids = extractIds(cap.body);
-        if (ids.applicationId || ids.appointmentId) {
-          console.log(`[pw-reschedule] ✅ IDs trouvés dans ${cap.url.replace(USA_PW_BASE, "")}:`);
-          if (ids.applicationId)  { console.log(`   applicationId  : ${ids.applicationId}`);  session.applicationId = ids.applicationId; }
-          if (ids.appointmentId)  { console.log(`   appointmentId  : ${ids.appointmentId}`);  session.appointmentId = ids.appointmentId; }
-          if (ids.applicantId)    { console.log(`   applicantId    : ${ids.applicantId}`);    session.applicantId   = ids.applicantId; }
-          if (ids.applicantUUID)  { console.log(`   applicantUUID  : ${ids.applicantUUID}`);  session.applicantUUID = ids.applicantUUID; }
-          botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "pw_ids_found", ...ids } });
-          return "proceed";
+      const res = await usaFetch(USA_LANDING_PAGE_URL, { method: "GET", headers: landingH });
+      console.log(`[cancellable] getLandingPageDeatils → HTTP ${res.status}`);
+      if (res.ok) {
+        const raw = await res.text();
+        console.log(`[cancellable] getLandingPageDeatils réponse: ${raw.slice(0, 500)}`);
+        // Chercher applicationId dans la réponse JSON (quel que soit le format)
+        const appIdMatch = raw.match(/"applicationId"\s*:\s*"([^"]+)"/);
+        if (appIdMatch) {
+          session.applicationId = appIdMatch[1];
+          console.log(`[cancellable] ✅ applicationId depuis getLandingPageDeatils: ${session.applicationId}`);
+        }
+        const apptIdMatch = raw.match(/"appointmentId"\s*:\s*(\d+)/);
+        if (apptIdMatch && session.appointmentId === undefined) {
+          session.appointmentId = parseInt(apptIdMatch[1], 10);
+          console.log(`[cancellable] ✅ appointmentId depuis getLandingPageDeatils: ${session.appointmentId}`);
         }
       }
+    } catch (err) {
+      console.warn(`[cancellable] getLandingPageDeatils erreur: ${err}`);
     }
-
-    console.warn(`[pw-reschedule] ⚠️ applicationId/appointmentId non trouvés dans ${captures.length} appel(s) — log des appels:`);
-    for (const cap of captures) {
-      console.log(`   [${cap.status}] ${cap.url.replace(USA_PW_BASE, "")} → ${cap.body.slice(0, 200)}`);
-    }
-    botLog({ applicationId: job.id, step: "scan", status: "warn", data: { flow: "usa", phase: "pw_ids_not_found", captureCount: captures.length } });
-    return "not_found";
-
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[pw-reschedule] ❌ Erreur: ${msg}`);
-    botLog({ applicationId: job.id, step: "scan", status: "fail", data: { flow: "usa", phase: "pw_error", error: msg } });
-    return "error";
-  } finally {
-    try { await browser?.close(); } catch { /* ignore */ }
   }
+
+  if (!session.applicationId) {
+    console.warn("[cancellable] ❌ applicationId introuvable via les 2 endpoints dashboard");
+    botLog({ applicationId: job.id, step: "scan", status: "warn", data: { flow: "usa", phase: "cancellable_api_no_appid" } });
+    return "not_found";
+  }
+
+  // ── Étape 3 : POST /appointments/search — détails complets du RDV ────────────
+  // Si on a l'applicationId, on appelle /search pour récupérer appointmentId exact +
+  // applicantId + applicantUUID (correspondant à l'entrée "SCHEDULED"/"RESCHEDULED").
+  if (session.appointmentId === undefined || session.applicantId === undefined) {
+    try {
+      console.log(`[cancellable] POST /appointments/search (applicationId=${session.applicationId})...`);
+      const searchPayload = {
+        operation: "AND",
+        searchObjects: [
+          { key: "applicationId", value: session.applicationId, feildType: "STRING", operation: "EQUAL" },
+        ],
+      };
+      const searchH = {
+        ...stdH,
+        "X-Correlation-key": corrId(),
+        "Cookie": `APP_ID_TOBE=${session.applicationId}; missionId=${session.missionId}`,
+      };
+      const res = await usaFetch(USA_SEARCH_URL, {
+        method: "POST",
+        headers: searchH,
+        body: JSON.stringify(searchPayload),
+      });
+      console.log(`[cancellable] /appointments/search → HTTP ${res.status}`);
+      if (res.ok) {
+        const raw = await res.text();
+        console.log(`[cancellable] /appointments/search réponse: ${raw.slice(0, 600)}`);
+        let rows: Record<string, unknown>[] = [];
+        try { rows = JSON.parse(raw) as Record<string, unknown>[]; } catch { /* non-JSON */ }
+
+        // Filtrer SCHEDULED ou RESCHEDULED + type POST (RDV ambassade) ou OFC
+        const scheduled = rows.filter(r =>
+          (r.appointmentStatus === "SCHEDULED" || r.appointmentStatus === "RESCHEDULED") &&
+          (r.appointmentLocationType === "POST" || r.appointmentLocationType === "OFC")
+        );
+        const target = scheduled[0] ?? rows[0];
+
+        if (target) {
+          if (typeof target.appointmentId === "number" && session.appointmentId === undefined) {
+            session.appointmentId = target.appointmentId;
+            console.log(`[cancellable] ✅ appointmentId depuis /search: ${session.appointmentId}`);
+          }
+          if (typeof target.applicantId === "number" && session.applicantId === undefined) {
+            session.applicantId = target.applicantId;
+            console.log(`[cancellable] ✅ applicantId depuis /search: ${session.applicantId}`);
+          }
+          const uuid = target.applicantUUID ?? target.appointmentUUID;
+          if (typeof uuid === "number" && session.applicantUUID === undefined) {
+            session.applicantUUID = uuid;
+            console.log(`[cancellable] ✅ applicantUUID depuis /search: ${uuid}`);
+          }
+        }
+      } else {
+        console.warn(`[cancellable] /appointments/search HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`[cancellable] /appointments/search erreur: ${err}`);
+    }
+  }
+
+  console.log(
+    `[cancellable] ✅ Résolution API terminée — applicationId=${session.applicationId} ` +
+    `appointmentId=${session.appointmentId ?? "N/A"} applicantId=${session.applicantId ?? "N/A"}`
+  );
+  botLog({
+    applicationId: job.id,
+    step: "scan",
+    status: "ok",
+    data: {
+      flow: "usa",
+      phase: "cancellable_api_ok",
+      applicationId: session.applicationId,
+      appointmentId: session.appointmentId,
+      applicantId: session.applicantId,
+    },
+  });
+  return "proceed";
 }
 
 export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
@@ -1210,24 +1263,25 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return "not_found";
     }
 
-    console.log(`[usa] ♻️ Compte cancellable — lancement session Playwright pour récupérer applicationId/appointmentId...`);
-    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_playwright_start" } });
+    console.log(`[usa] ♻️ Compte cancellable — résolution applicationId/appointmentId via API...`);
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_api_start" } });
 
-    const pwResult = await runUsaPortalPlaywrightReschedule(session, job);
-    if (pwResult === "error") {
-      console.error("[usa] ❌ Session Playwright cancellable échouée");
-      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Session Playwright cancellable échouée" });
+    const apiResult = await fetchCancellableSessionIds(session, job);
+    if (apiResult === "error") {
+      console.error("[usa] ❌ Résolution cancellable API échouée");
+      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Résolution cancellable API échouée" });
       return "error";
     }
-    if (pwResult === "not_found") {
-      console.warn("[usa] ⚠️ Session Playwright cancellable : aucun ID trouvé — skip");
-      await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: "applicationId/appointmentId non trouvés via Playwright" });
+    if (apiResult === "not_found") {
+      console.warn("[usa] ⚠️ Résolution cancellable : aucun ID trouvé — skip");
+      await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: "applicationId/appointmentId non trouvés via API dashboard" });
       return "not_found";
     }
-    // pwResult = "proceed" : session a mis à jour session.applicationId, session.appointmentId
-    // Continuer vers le scan de créneaux
-    console.log(`[usa] ✅ Session Playwright terminée — applicationId=${session.applicationId} appointmentId=${session.appointmentId}`);
-    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_playwright_ok", applicationId: session.applicationId, appointmentId: session.appointmentId } });
+    // apiResult = "proceed" : session.applicationId et session.appointmentId sont à jour
+    console.log(`[usa] ✅ Résolution cancellable terminée — applicationId=${session.applicationId} appointmentId=${session.appointmentId}`);
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_api_proceed", applicationId: session.applicationId, appointmentId: session.appointmentId } });
+    // Marquer la session pour utiliser PUT /appointments/reschedule lors du booking
+    session.isReschedule = true;
     // Laisser tomber vers le scan de créneaux (ne pas return ici)
   }
 
@@ -2120,6 +2174,108 @@ async function bookUsaSlot(
 }
 
 /**
+ * Reporter un RDV existant vers un nouveau créneau.
+ * PUT /visaappointmentapi/appointments/reschedule
+ *
+ * Source bundle Angular : initRescheduleSlot(se) → initRescheduleAPI([se])
+ *   se est identique au payload de schedule + rescheduleType = reschedProps.appointmentLocationType
+ *   Le payload est envoyé en TABLEAU même pour un seul applicant.
+ *
+ * La valeur de appointmentId dans le payload = l'ID du RDV EXISTANT à reporter
+ * (session.appointmentId, récupéré depuis /scheduledappointmentInfo ou /search).
+ * rescheduleType = "POST" = type de l'appointment existant (ambassade = POST location).
+ *
+ * Codes d'erreur identiques à bookUsaSlot (409 = conflit, 429 = rate limit, etc.)
+ */
+async function rescheduleUsaSlot(
+  session: UsaSession,
+  found: { slot: UsaTimeSlot; bookingBase: Record<string, unknown>; date: string; time: string }
+): Promise<UsaBookingResult> {
+  const slotRaw = found.slot as Record<string, unknown>;
+  const slotDate = slotRaw.slotDate as string | undefined ?? found.date;
+  const appointmentTime = formatUItime(found.slot.startTime ?? found.time);
+
+  // rescheduleType = type de localisation de l'appointment EXISTANT (POST = ambassade)
+  // Bundle : se.rescheduleType = reschedProps.appointmentLocationType
+  const rescheduleType: "POST" | "OFC" = "POST";
+
+  // Payload identique au booking schedule + rescheduleType (array wrapper)
+  const payload: UsaBookingPayload & { rescheduleType: "POST" | "OFC" } = {
+    appointmentId:          session.appointmentId,
+    applicantUUID:          session.applicantUUID,
+    appointmentLocationType: "OFC",
+    appointmentStatus:       "SCHEDULED",
+    slotId:                  found.slot.slotId,
+    appointmentDt:           slotDate,
+    appointmentTime,
+
+    postUserId:    found.bookingBase.postUserId   as number,
+    applicantId:   found.bookingBase.applicantId  as number,
+    applicationId: found.bookingBase.applicationId as string,
+
+    rescheduleType,
+  };
+
+  console.log(
+    `[usa] ♻️ Tentative RESCHEDULE — slotId=${payload.slotId}, appointmentDt=${slotDate}, ` +
+    `appointmentTime=${appointmentTime}, existingApptId=${session.appointmentId ?? "N/A"}, ` +
+    `OFC postUserId=${payload.postUserId}, rescheduleType=${rescheduleType}`
+  );
+
+  try {
+    const bookingHeaders = {
+      ...sessionHeaders(session.accessToken, payload.applicationId, session.missionId, REFERER_MANAGE_APT),
+      "CookieName":    `XSRF-TOKEN=${session.csrfToken}`,
+      "X-XSRF-TOKEN":  session.csrfToken,
+    };
+    // Le portail envoie le payload en TABLEAU (initRescheduleAPI reçoit appointmentPayload qui est [])
+    const res = await usaFetch(USA_RESCHEDULE_URL, {
+      method: "PUT",
+      headers: bookingHeaders,
+      body: JSON.stringify([payload]),
+    });
+
+    if (res.ok) {
+      let arr: UsaBookingResponse = [];
+      try { arr = await res.json() as UsaBookingResponse; } catch { /* body vide */ }
+      const msg = arr[0]?.responseMsg ?? "Reschedule confirmé";
+      const appointmentId = arr[0]?.appointmentId;
+      console.log(`[usa] ✅ RESCHEDULE RÉUSSI — "${msg}" (appointmentId=${appointmentId})`);
+      return { success: true, appointmentId, responseMsg: msg };
+    }
+
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("Retry-After");
+      const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+      throw new RateLimitError(USA_RESCHEDULE_URL, waitMs);
+    }
+    if (res.status === 403) throw new AccountBlockedError(USA_RESCHEDULE_URL);
+    if (res.status === 401) throw new TokenExpiredError();
+    if (res.status === 409) {
+      const body = await res.json().catch(() => ({})) as { responseMsg?: string };
+      const msg = body.responseMsg ?? "Créneau déjà pris (conflit 409)";
+      console.warn(`[usa] ⚠️ Reschedule conflit 409 — ${msg}`);
+      return { success: false, error: msg, statusCode: 409 };
+    }
+    if (res.status === 502) {
+      const body = await res.json().catch(() => ({})) as { responseMsg?: string };
+      const msg = body.responseMsg ?? "Erreur serveur 502";
+      console.warn(`[usa] ⚠️ Reschedule serveur 502 — ${msg}`);
+      return { success: false, error: msg, statusCode: 502 };
+    }
+    const text = await res.text();
+    console.warn(`[usa] ⚠️ Reschedule échoué HTTP ${res.status}: ${text.slice(0, 300)}`);
+    return { success: false, error: `HTTP ${res.status}`, statusCode: res.status };
+
+  } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[usa] Reschedule erreur réseau: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Télécharge la lettre de confirmation de RDV au format PDF.
  * POST /visanotificationapi/template/appointmentLetter
  *
@@ -2457,8 +2613,15 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         data: { flow: "usa", phase: "booking_attempt", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
       });
       try {
-        // ── 1. Booking automatique ────────────────────────────
-        booking = await bookUsaSlot(session, found);
+        // ── 1. Booking ou Reschedule automatique ─────────────
+        // En mode reschedule (cancellable ou scheduled+rescheduleMode), le portail Angular
+        // utilise PUT /appointments/reschedule au lieu de PUT /appointments/schedule.
+        // Les deux cas (cancellable et scheduled+rescheduleMode) aboutissent au même
+        // endpoint avec le même payload + rescheduleType:"POST".
+        const useReschedule = rescheduleMode || session.isReschedule === true;
+        booking = useReschedule
+          ? await rescheduleUsaSlot(session, found)
+          : await bookUsaSlot(session, found);
       } catch (bookErr) {
         if (bookErr instanceof RateLimitError) {
           const waitSec = Math.round((bookErr.retryAfterMs ?? 60000) / 1000);
