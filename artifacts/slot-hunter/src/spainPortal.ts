@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page, Response } from "playwright";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
-import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, reportSpainWatcherScan, type HunterJob } from "./convexClient.js";
+import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
 
 const CF_TITLE_RE =
   /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;

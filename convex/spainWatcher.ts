@@ -69,6 +69,11 @@ export const setWatcher = mutation({
     const identity = await ctx.auth.getUserIdentity();
     requireAdmin(identity as Record<string, unknown> | null);
 
+    // Clamp intervalMin between 5 and 120 minutes
+    const intervalMin = args.intervalMin !== undefined
+      ? Math.max(5, Math.min(120, Math.round(args.intervalMin)))
+      : undefined;
+
     const existing = await ctx.db
       .query("spainWatcher")
       .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
@@ -79,7 +84,7 @@ export const setWatcher = mutation({
         isActive: args.isActive,
         portalUrl: args.portalUrl,
         adminEmail: args.adminEmail,
-        intervalMin: args.intervalMin,
+        intervalMin,
         updatedAt: Date.now(),
       });
     } else {
@@ -88,7 +93,7 @@ export const setWatcher = mutation({
         isActive: args.isActive,
         portalUrl: args.portalUrl,
         adminEmail: args.adminEmail,
-        intervalMin: args.intervalMin,
+        intervalMin,
         updatedAt: Date.now(),
       });
     }
