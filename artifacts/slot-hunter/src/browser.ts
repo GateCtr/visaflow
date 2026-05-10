@@ -152,6 +152,10 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   };
   const browser = await playwrightChromium.launch(launchOptions) as unknown as Browser;
 
+  // BrightData intercepte TLS côté proxy — ignoreHTTPSErrors requis pour que
+  // Playwright puisse établir des tunnels HTTPS à travers leur infrastructure.
+  const ignoreHTTPSErrors = proxySource === "brightdata";
+
   const context = await browser.newContext({
     userAgent: ua,
     viewport,
@@ -159,7 +163,7 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
     timezoneId,
     extraHTTPHeaders: { "Accept-Language": acceptLanguage },
     javaScriptEnabled: true,
-    ignoreHTTPSErrors: false,
+    ignoreHTTPSErrors,
   });
 
   await context.addInitScript((langs: string[]) => {

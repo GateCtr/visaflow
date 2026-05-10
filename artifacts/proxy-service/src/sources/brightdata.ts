@@ -1,6 +1,8 @@
 import { ProxyAgent } from 'undici';
 
-const VERIFY_URL = 'https://ipv4.icanhazip.com';
+// HTTP (pas HTTPS) — BrightData inspecte TLS côté proxy, ce qui fait échouer
+// la vérification de certificat avec undici/curl en mode HTTPS strict.
+const VERIFY_URL = 'http://ipv4.icanhazip.com';
 const VERIFY_TIMEOUT_MS = 12_000;
 
 export interface BrightDataSource {
