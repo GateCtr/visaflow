@@ -2610,11 +2610,10 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     );
     botLog({
       applicationId: job.id,
-      step: "scan",
+      step: "ofc_list",
       status: "ok",
       data: {
         flow: "usa",
-        phase: "ofc_list",
         count: ofcList.length,
         offices: ofcList.map((o) => ({ name: o.postName, postUserId: o.postUserId })),
         visaClass: effectiveDetails.visaClass,
@@ -2645,7 +2644,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
   if (ofcList.length === 0) {
     console.warn("[usa] Aucun OFC trouvé — vérifier missionId ou droits d'accès");
-    botLog({ applicationId: job.id, step: "scan", status: "warn", data: { flow: "usa", phase: "ofc_list", count: 0, missionId: session.missionId } });
+    botLog({ applicationId: job.id, step: "ofc_list", status: "warn", data: { flow: "usa", count: 0, missionId: session.missionId } });
     await sendHeartbeat({
       applicationId: job.id,
       result: "not_found",
@@ -2697,6 +2696,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
   for (const ofc of ofcToScan) {
     console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "ofc_scanning", ofc: ofc.postName } });
     // Délai humain entre OFCs — un vrai utilisateur prend 1.5-4s pour passer d'un bureau à l'autre
     await randomDelay(1500, 4000);
 
@@ -2782,9 +2782,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       let booking: UsaBookingResult;
       botLog({
         applicationId: job.id,
-        step: "scan",
+        step: "booking_attempt",
         status: "ok",
-        data: { flow: "usa", phase: "booking_attempt", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
+        data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
       });
       try {
         // ── 1. Booking ou Reschedule automatique ─────────────
@@ -2835,7 +2835,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         // Erreur réseau inattendue — traiter comme booking échoué et continuer
         const msg = bookErr instanceof Error ? bookErr.message : String(bookErr);
         console.error(`[usa] Erreur inattendue lors du booking: ${msg}`);
-        botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "booking_fail", error: msg.slice(0, 300), ofc: found.ofcName, date: found.date } });
+        botLog({ applicationId: job.id, step: "booking_fail", status: "fail", data: { flow: "usa", error: msg.slice(0, 300), ofc: found.ofcName, date: found.date } });
         booking = { success: false, error: msg };
       }
 
@@ -2845,7 +2845,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       // Ne pas signaler le slot comme trouvé (on ne l'a pas obtenu) — scanner le prochain OFC.
       if (!booking.success && booking.statusCode === 409) {
         console.log("[usa] Conflit 409 — le créneau a été pris avant nous. Poursuite du scan...");
-        botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "booking_fail", reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
+        botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { flow: "usa", reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
         continue;
       }
 
@@ -2856,9 +2856,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         console.error(`[usa] ❌ ${errMsg}`);
         botLog({
           applicationId: job.id,
-          step: "error",
+          step: "booking_fail",
           status: "fail",
-          data: { flow: "usa", phase: "booking_fail_final", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, statusCode: booking.statusCode, error: booking.error },
+          data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, statusCode: booking.statusCode, error: booking.error },
         });
         await sendHeartbeat({
           applicationId: job.id,
@@ -2873,11 +2873,10 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       let pdfStorageId: string | undefined;
       botLog({
         applicationId: job.id,
-        step: "slots_found",
+        step: "booking_success",
         status: "ok",
         data: {
           flow: "usa",
-          phase: "booking_success",
           ofc: found.ofcName,
           date: found.date,
           time: found.time,
@@ -2894,9 +2893,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           console.log(`[usa] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
           botLog({
             applicationId: job.id,
-            step: "slots_found",
+            step: "confirmation_letter",
             status: "ok",
-            data: { flow: "usa", phase: "confirmation_letter", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
+            data: { flow: "usa", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
           });
         }
       }
@@ -2913,6 +2912,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
       return "slot_found";
     }
+    // Aucun créneau pour cette OFC lors de ce cycle
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "ofc_no_slot", ofc: ofc.postName } });
   }
 
   console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);

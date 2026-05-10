@@ -1715,8 +1715,9 @@ export default function AdminApplicationDetail() {
         {botLogs.length > 0 && (() => {
           const stepLabels: Record<string, string> = {
             login: "Connexion au portail",
-            ofc_list: "Liste des bureaux consulaires",
-            slots_found: "Créneau trouvé",
+            ofc_list: "Bureaux consulaires",
+            scan: "Scan en cours",
+            slots_found: "Créneau détecté",
             booking_attempt: "Tentative de réservation",
             booking_success: "Réservation confirmée",
             booking_fail: "Réservation échouée",
@@ -1724,13 +1725,14 @@ export default function AdminApplicationDetail() {
             not_found: "Aucun créneau disponible",
             rate_limit: "Rate limit (429)",
             blocked: "Compte potentiellement bloqué",
+            restricted: "Compte restreint",
             error: "Erreur",
           };
           const stepIcons: Record<string, string> = {
-            login: "🔑", ofc_list: "🏛️", slots_found: "📅",
-            booking_attempt: "📝", booking_success: "✅", booking_fail: "❌",
-            confirmation_letter: "📄", not_found: "🔍", rate_limit: "⛔",
-            blocked: "🚫", error: "⚠️",
+            login: "🔑", ofc_list: "🏛️", scan: "🔄",
+            slots_found: "📅", booking_attempt: "📝", booking_success: "✅",
+            booking_fail: "❌", confirmation_letter: "📄", not_found: "🔍",
+            rate_limit: "⛔", blocked: "🚫", restricted: "🔒", error: "⚠️",
           };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {
