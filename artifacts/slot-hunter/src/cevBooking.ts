@@ -167,11 +167,26 @@ async function establishCevSession(
   try {
     // === ÉTAPE 0 : Login VOWINT ===
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
+
+    // Listener réseau : détecte BrightData 402 sur N'IMPORTE quelle requête diplomatie.be.
+    // Couvre à la fois le GET initial ET le POST /en/Account/Login.
+    // x-luminati-error header = signature BrightData "Residential Failed (bad_endpoint)".
+    let brightData402Detected = false;
+    const onResponse = (response: import('playwright').Response) => {
+      if (!response.url().includes('diplomatie.be')) return;
+      if (response.status() !== 402) return;
+      const hdrs = response.headers();
+      if (hdrs['x-luminati-error'] || hdrs['x-lpm-error'] || hdrs['x-brd-error']) {
+        brightData402Detected = true;
+        console.warn(`[CEV] ⚡ BrightData 402 détecté sur ${response.request().method()} ${response.url()}`);
+      }
+    };
+    page.on('response', onResponse);
+
     await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
     // BrightData peut retourner HTTP 402 "bad_endpoint" pour visaonweb.diplomatie.be.
-    // Dans ce cas la page chargée est la page d'erreur BrightData (pas VOWINT).
-    // Détecter immédiatement et lever ERR_PROXY_BAD_ENDPOINT pour déclencher le retry.
+    // Le listener ci-dessus couvre le GET initial ; on vérifie aussi le contenu de la page.
     const isVowintPage = await page.evaluate(() => {
       const body = (document.body?.textContent ?? '').toLowerCase();
       const hasLoginForm = !!document.querySelector('input#UserName');
@@ -180,9 +195,9 @@ async function establishCevSession(
       const isBrightDataError = body.includes('luminati') || body.includes('bad_endpoint')
         || body.includes('residential failed') || body.includes('not available');
       return hasLoginForm || (hasVowintContent && !isBrightDataError);
-    }).catch(() => true); // en cas d'erreur evaluate → on laisse continuer
-    if (!isVowintPage) {
-      throw new Error('ERR_PROXY_BAD_ENDPOINT: BrightData a bloqué visaonweb.diplomatie.be (402) — retry sans proxy');
+    }).catch(() => true);
+    if (!isVowintPage || brightData402Detected) {
+      throw new Error('ERR_PROXY_BAD_ENDPOINT: BrightData a bloqué visaonweb.diplomatie.be (402 GET) — retry sans proxy');
     }
 
     const loginTitle = await page.title().catch(() => "");
@@ -204,6 +219,12 @@ async function establishCevSession(
       // Utiliser domcontentloaded (networkidle peut ne jamais se stabiliser sur VOWINT/AngularJS)
       await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
       await randomDelay(1_000, 2_000); // laisser le redirect s'établir
+
+      // Vérifier BrightData 402 sur le POST login AVANT d'analyser l'URL
+      if (brightData402Detected) {
+        console.warn('[CEV] BrightData 402 sur POST login — lancement retry forceNoProxy');
+        throw new Error('ERR_PROXY_BAD_ENDPOINT: BrightData a bloqué POST /Account/Login (402) — retry sans proxy');
+      }
 
       const afterUrl = page.url();
       // page.title() peut lever "Execution context was destroyed" si BrightData renvoie
