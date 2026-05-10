@@ -669,9 +669,9 @@ async function startSpainWatcherLoop(): Promise<void> {
         `[SPAIN-WATCHER] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
-      // Upload screenshot si créneau trouvé
+      // Upload screenshot si créneau trouvé OU si not_found (diagnostic visuel de la page)
       let screenshotStorageId: string | undefined;
-      if (result.status === "found" && result.screenshotBase64) {
+      if ((result.status === "found" || result.status === "not_found") && result.screenshotBase64) {
         screenshotStorageId = await uploadFile(result.screenshotBase64, "image/png") ?? undefined;
       }
 

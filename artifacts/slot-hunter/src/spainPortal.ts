@@ -1620,7 +1620,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       // Retry avec 45s si le premier essai expire en 25s.
       try {
         await page.goto(portalUrl, { waitUntil: "commit", timeout: 25_000 });
-      } catch {
+      } catch (gotoErr) {
+        // Si le browser/page est déjà fermé, re-throw immédiatement — inutile de réessayer.
+        const gotoErrStr = String(gotoErr);
+        if (
+          gotoErrStr.includes("closed") ||
+          gotoErrStr.includes("destroyed") ||
+          gotoErrStr.includes("detached")
+        ) {
+          throw gotoErr;
+        }
         console.warn("[spain-watcher] goto timeout 25s — retry 45s");
         await page.goto(portalUrl, { waitUntil: "commit", timeout: 45_000 });
       }
@@ -1648,9 +1657,19 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
                 capsolverKey,
                 process.env.IPROYAL_PROXY_URL,
               ).catch(() => "failed" as const);
+
               if (capRes !== "solved") {
-                console.log("[spain-watcher] Cloudflare non résolu — probe abandonnée");
-                return { status: "error", errorMessage: "cloudflare_blocked" };
+                // CF peut avoir été résolu naturellement PENDANT les tentatives CapSolver
+                // (ex: dialog "Welcome / Bienvenido" accepté entre-temps par page.on("dialog")).
+                // Re-vérifier le titre avant d'abandonner.
+                let recheckTitle = "";
+                try { recheckTitle = await page.title(); } catch { /* ignore */ }
+                if (CF_TITLE_RE.test(recheckTitle)) {
+                  console.log("[spain-watcher] Cloudflare non résolu (CapSolver échec + re-check KO) — probe abandonnée");
+                  return { status: "error", errorMessage: "cloudflare_blocked" };
+                }
+                console.log("[spain-watcher] ✅ Cloudflare résolu naturellement (pendant CapSolver) — poursuite probe");
+                // fall through — CF est passé, on continue normalement
               }
             } else {
               console.log("[spain-watcher] Cloudflare non résolu (CAPSOLVER_API_KEY absent) — probe abandonnée");
@@ -1923,7 +1942,26 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       }
 
       console.log("[spain-watcher] Aucun créneau disponible");
-      return { status: "not_found" };
+      // Capturer screenshot + diagnostic DOM pour vérifier que le bot est sur la bonne page.
+      let notFoundScreenshot: string | undefined;
+      let notFoundDiag: string | undefined;
+      try {
+        const [diagTitle, diagUrl, diagText] = await Promise.all([
+          page.title().catch(() => "?"),
+          Promise.resolve(page.url()),
+          page.evaluate(() => {
+            const bktBody = document.getElementById("idBktWidgetDefaultBodyContainer");
+            const el = bktBody ?? document.body;
+            return (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+          }).catch(() => ""),
+        ]);
+        const buf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
+        if (buf) notFoundScreenshot = buf.toString("base64");
+        const hash = await page.evaluate(() => window.location.hash).catch(() => "");
+        notFoundDiag = `hash="${hash}" | title="${diagTitle}" | ${diagUrl} | DOM: ${diagText}`;
+        console.log(`[spain-watcher] Diagnostic not_found — hash="${hash}" titre="${diagTitle}"`);
+      } catch { /* capture best-effort */ }
+      return { status: "not_found", screenshotBase64: notFoundScreenshot, slotInfo: notFoundDiag };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn("[spain-watcher] Erreur probe:", msg.slice(0, 200));
