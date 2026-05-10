@@ -593,9 +593,6 @@ importers:
 
   artifacts/slot-hunter:
     dependencies:
-      '@workspace/proxy-service':
-        specifier: workspace:*
-        version: link:../proxy-service
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
