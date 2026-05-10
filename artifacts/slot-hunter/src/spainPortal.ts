@@ -364,7 +364,7 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
   const target = `${base}#selecttime/${encodeURIComponent(slot.date)}/${encodeURIComponent(slot.time)}${agendaPart}`;
 
   try {
-    await page.goto(target, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(target, { waitUntil: "commit", timeout: 30_000 });
     await randomDelay(1200, 2200);
   } catch {
     return { status: "failed", note: "selecttime_navigation_failed" };
@@ -721,7 +721,14 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       });
 
       console.log(`[spain] Navigation: ${url}`);
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      // "commit" : robuste face aux challenges Cloudflare et portails lents.
+      // On attend ensuite les sélecteurs spécifiques plutôt que le parsing HTML global.
+      try {
+        await page.goto(url, { waitUntil: "commit", timeout: 30_000 });
+      } catch {
+        console.warn("[spain] goto timeout 30s — retry 45s");
+        await page.goto(url, { waitUntil: "commit", timeout: 45_000 });
+      }
       await randomDelay(1500, 3000);
 
       // ── Détection & résolution Cloudflare Turnstile ──────────────────────
@@ -999,7 +1006,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       });
 
       console.log(`[spain-watcher] Probe → ${portalUrl}`);
-      await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      // "commit" = déclenche dès les premiers octets reçus (headers HTTP).
+      // Plus robuste que "domcontentloaded" si le portail est lent ou si
+      // Cloudflare injecte un challenge qui retarde le parsing HTML.
+      // Retry avec 45s si le premier essai expire en 25s.
+      try {
+        await page.goto(portalUrl, { waitUntil: "commit", timeout: 25_000 });
+      } catch {
+        console.warn("[spain-watcher] goto timeout 25s — retry 45s");
+        await page.goto(portalUrl, { waitUntil: "commit", timeout: 45_000 });
+      }
       await randomDelay(1500, 2500);
 
       // Cloudflare check — attente passive 20s
