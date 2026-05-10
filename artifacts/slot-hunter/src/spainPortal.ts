@@ -95,9 +95,50 @@ function parseJsonpPayload(text: string): unknown | null {
   }
 }
 
+/** Suffixes d'API Bookitit connus — utilisés pour extraire la base depuis une URL complète */
+const BOOKITIT_KNOWN_SUFFIXES = [
+  "getwidgetconfigurations/",
+  "getservices/",
+  "getagendas/",
+  "datetime/",
+  "signup/",
+  "signupfirstappointment/",
+  "signin/",
+  "signedin/",
+  "confirmclient/",
+  "summary/",
+  "freetempevent/",
+];
+
 function getBookititBaseFromUrl(u: string): string | null {
+  // Priorité 1 : pattern classique avec "onlinebookings"
   const m = u.match(/^(https?:\/\/[^/]+\/.*?onlinebookings\/)/i);
-  return m ? m[1] : null;
+  if (m) return m[1];
+
+  // Priorité 2 : extraire la base en strippant tout suffix d'API connu
+  for (const suffix of BOOKITIT_KNOWN_SUFFIXES) {
+    const idx = u.indexOf(suffix);
+    if (idx > 0) return u.slice(0, idx);
+  }
+
+  // Priorité 3 : host Bookitit connu (app.bookitit.com, widget.bookitit.com, etc.)
+  if (/bookitit\.com/i.test(u)) {
+    try {
+      const parsed = new URL(u);
+      // Garder le path jusqu'au dernier segment avant le ?
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      // Retirer le dernier segment si c'est un endpoint connu
+      const last = parts[parts.length - 1] ?? "";
+      if (BOOKITIT_KNOWN_SUFFIXES.some((s) => s.replace("/", "") === last)) {
+        parts.pop();
+      }
+      return `${parsed.origin}/${parts.join("/")}/`;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function firstMonthDayYmd(d: Date): string {
@@ -255,26 +296,49 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlot | null {
       if (!day || typeof day !== "object") continue;
       const dayObj = day as Record<string, unknown>;
       const date = typeof dayObj.date === "string" ? dayObj.date : "";
-      const agenda = typeof dayObj.agenda === "string" ? dayObj.agenda : "citaconsular";
-      const agendaId =
-        typeof dayObj.agenda === "string"
-          ? dayObj.agenda
-          : typeof dayObj.agenda_id === "string" || typeof dayObj.agenda_id === "number"
-            ? String(dayObj.agenda_id)
-            : undefined;
-      const times = dayObj.times;
-      if (!times || typeof times !== "object") continue;
+      if (!date) continue;
 
-      for (const v of Object.values(times as Record<string, unknown>)) {
+      // agenda est l'ID dans la réponse API (ex: "bkt12345" ou un entier)
+      const agendaId =
+        typeof dayObj.agenda === "string" ? dayObj.agenda
+        : typeof dayObj.agenda === "number" ? String(dayObj.agenda)
+        : typeof dayObj.agenda_id === "string" ? dayObj.agenda_id
+        : typeof dayObj.agenda_id === "number" ? String(dayObj.agenda_id)
+        : undefined;
+
+      const location = agendaId ?? "citaconsular";
+
+      const times = dayObj.times;
+      // times doit être un objet non-vide non-tableau (conforme à dayAvailable() du bundle)
+      if (!times || typeof times !== "object" || Array.isArray(times)) continue;
+      const timesObj = times as Record<string, unknown>;
+      if (Object.keys(timesObj).length === 0) continue;
+
+      // Chercher le premier créneau disponible dans times
+      // L'API retourne freeSlots/totalSlots (camelCase) — le bundle les renomme en lowercase pour display
+      // On supporte les deux formes pour robustesse
+      for (const v of Object.values(timesObj)) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
-        const free = typeof t.freeslots === "number" ? t.freeslots : undefined;
-        const totals = typeof t.totalslots === "number" ? t.totalslots : undefined;
-        const hasAvailability = (free !== undefined && free > 0) || (totals !== undefined && totals > 0);
+
+        // Extraire le nombre de créneaux libres (camelCase prioritaire, lowercase fallback)
+        const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
+        const totalRaw = t.totalSlots ?? t.totalslots ?? t.total_slots;
+        const free = typeof freeRaw === "number" ? freeRaw : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
+        const total = typeof totalRaw === "number" ? totalRaw : typeof totalRaw === "string" ? parseInt(totalRaw, 10) : -1;
+
+        // Un créneau est disponible si free > 0, OU si total > 0, OU si freeSlots/totalSlots absents
+        // (présence dans times = disponible selon dayAvailable() du bundle)
+        const hasAvailability = (free > 0) || (total > 0) || (free === -1 && total === -1);
         if (!hasAvailability) continue;
 
-        const time = typeof t.time === "string" ? t.time : "09:00";
-        if (date) return { date, time, location: agenda, agendaId };
+        // Extraire l'heure — peut être la clé (ex: "09:30") ou la propriété .time
+        const time =
+          typeof t.time === "string" ? t.time
+          : typeof t.hour === "string" ? t.hour
+          : "09:00";
+
+        return { date, time, location, agendaId };
       }
     }
   }
@@ -432,6 +496,44 @@ type BookingAttempt =
   | { status: "payment_required"; note: string }
   | { status: "failed"; note: string };
 
+/**
+ * Attend que le hash de la page corresponde à un des patterns attendus.
+ * Retourne le hash final ou "" si timeout.
+ */
+async function pollForHash(
+  page: Page,
+  matchFn: (hash: string) => boolean,
+  timeoutMs: number,
+  intervalMs = 800,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const h = await page.evaluate(() => window.location.hash || "").catch(() => "");
+    if (matchFn(h)) return h;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return await page.evaluate(() => window.location.hash || "").catch(() => "");
+}
+
+/**
+ * Attend que le bouton de confirmation signin/signup soit visible (CF Turnstile peut le cacher).
+ * Retourne true si le bouton est cliquable dans le délai imparti.
+ */
+async function waitForSubmitButtonVisible(page: Page, selector: string, timeoutMs = 12_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const el = await page.$(selector);
+      if (el) {
+        const visible = await el.isVisible().catch(() => false);
+        if (visible) return true;
+      }
+    } catch { /* continue */ }
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  return false;
+}
+
 async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot): Promise<BookingAttempt> {
   const login = job.hunterConfig.embassyUsername?.trim();
   const password = job.hunterConfig.embassyPassword?.trim();
@@ -446,71 +548,174 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
 
   try {
     await page.goto(target, { waitUntil: "commit", timeout: 30_000 });
-    await randomDelay(1200, 2200);
+    await randomDelay(1000, 1800);
   } catch {
     return { status: "failed", note: "selecttime_navigation_failed" };
   }
 
-  // Écran signin typique du bundle Bookitit.
-  const signInInput = page.locator("#idIptBktSignInlogin");
-  const signInPass = page.locator("#idIptBktSignInpassword");
-  const signInBtn = page.locator("#idBktDefaultSignInConfirmButton");
-  if ((await signInInput.count()) > 0 && (await signInPass.count()) > 0) {
-    await signInInput.first().fill(login);
-    await signInPass.first().fill(password);
-    if ((await signInBtn.count()) > 0) {
-      await signInBtn.first().click().catch(() => undefined);
+  // Le router Bookitit redirige immédiatement depuis #selecttime vers #signin, #signup,
+  // ou #signupfirstappointment selon registration_type. On attend la stabilisation du hash.
+  const postSelectHash = await pollForHash(
+    page,
+    (h) => h.includes("signin") || h.includes("signup") || h.includes("signedin") || h.includes("summary"),
+    5_000,
+  );
+
+  // ── Cas 1 : signin (compte existant) ──────────────────────────────────────
+  // Si le hash contient "signin" (mais pas "signup"), c'est le flow compte existant.
+  // Si hash non-résolu → on tente signin par défaut (les champs seront absents → section skip).
+  if (postSelectHash.includes("signin") && !postSelectHash.includes("signup")) {
+    // Formulaire signin : #idIptBktSignInlogin + #idIptBktSignInpassword
+    const signInInput = page.locator("#idIptBktSignInlogin");
+    const signInPass = page.locator("#idIptBktSignInpassword");
+    const signInBtn = "#idBktDefaultSignInConfirmButton";
+
+    if ((await signInInput.count()) > 0 && (await signInPass.count()) > 0) {
+      await signInInput.first().fill(login);
+      await signInPass.first().fill(password);
+      await randomDelay(400, 800);
+
+      // Attendre que le bouton devienne visible (CF Turnstile peut le masquer jusqu'à 10-12s)
+      const btnVisible = await waitForSubmitButtonVisible(page, signInBtn, 14_000);
+      if (btnVisible) {
+        await page.click(signInBtn).catch(() => undefined);
+      } else {
+        // CF Turnstile non résolu — clic force quand même (peut échouer côté serveur)
+        await page.click(signInBtn).catch(() => undefined);
+        botLog({
+          applicationId: job.id,
+          step: "booking_signin",
+          status: "warn",
+          data: { reason: "submit_btn_not_visible_after_14s", flow: "spain" },
+        });
+      }
+      await randomDelay(1500, 2500);
     }
-    await randomDelay(1800, 3200);
   }
 
-  const hash = await page.evaluate(() => window.location.hash || "");
-  if (hash.includes("confirmclient")) {
-    // OTP auto-ingéré : email forward ou SMS forwarder → webhook /hunter/otp/ingest → Convex
-    // Fallback dev : variable d'environnement SPAIN_OTP_CODE
-    const directOtp = process.env.SPAIN_OTP_CODE?.trim();
-    let otp = directOtp || "";
-    if (!otp) {
-      const channel = (job.spainOtpConfig?.channel ?? process.env.SPAIN_OTP_CHANNEL ?? "manual") as "email" | "sms" | "manual";
-      await requestOtpChallenge({
-        applicationId: job.id,
-        flow: "spain",
-        channel,
-        ttlMs: 90_000,
-      });
+  // ── Cas 2 : signup / signupfirstappointment (nouveau compte) ─────────────
+  // Le formulaire signup demande name, email, éventuellement passport number.
+  // On remplit avec les données du job (applicantName, userEmail, passportNumber).
+  if (postSelectHash.includes("signup") || postSelectHash.includes("signupfirstappointment")) {
+    const nameInput = page.locator("#idIptBktname");
+    const emailInput = page.locator("#idIptBktemail");
+    const acceptCheck = page.locator("#idIptBktAcceptCondtions");
+    const signUpBtn = "#idBktDefaultSignUpConfirmButton";
+
+    // applicantName sur job ; email = embassyUsername (typiquement une adresse email Bookitit)
+    const applicantName = (job.applicantName ?? login).trim();
+    const applicantEmail = login; // embassyUsername = email de connexion Bookitit
+
+    if ((await nameInput.count()) > 0) await nameInput.first().fill(applicantName).catch(() => undefined);
+    if ((await emailInput.count()) > 0) await emailInput.first().fill(applicantEmail).catch(() => undefined);
+
+    // Champs passport / document si présents (non disponible dans HunterJob — laisser vide)
+    // Le formulaire citaconsular peut demander des champs event (numéro de dossier, etc.)
+    // ils sont pré-remplis depuis bkt_init_widget.fields si configuré côté Bookitit
+    const docInputs = [
+      page.locator("#idIptBktpassport"),
+      page.locator("#idIptBktdocument"),
+      page.locator("#idIptBktdni"),
+    ];
+    for (const inp of docInputs) {
+      if ((await inp.count()) > 0) {
+        // Laisser vide — Bookitit peut avoir des custom fields pré-remplis via bkt_init_widget.fields
+        break;
+      }
+    }
+
+    // Phone si présent (non disponible dans HunterJob — skip)
+    // const phoneInput = page.locator("#idIptBktcellphone, #idIptBktphone");
+
+    // Accept conditions checkbox
+    if ((await acceptCheck.count()) > 0) {
+      const isChecked = await acceptCheck.first().isChecked().catch(() => false);
+      if (!isChecked) await acceptCheck.first().check().catch(() => undefined);
+    }
+
+    await randomDelay(400, 800);
+
+    // Attendre CF Turnstile si présent
+    const btnVisible = await waitForSubmitButtonVisible(page, signUpBtn, 14_000);
+    if (btnVisible) {
+      await page.click(signUpBtn).catch(() => undefined);
+    } else {
+      await page.click(signUpBtn).catch(() => undefined);
       botLog({
         applicationId: job.id,
-        step: "otp_waiting",
-        status: "ok",
-        data: {
-          channel,
-          ingestUrl: `${process.env.CONVEX_SITE_URL ?? ""}/hunter/otp/ingest`,
-          note: "OTP attendu via forward automatique — aucune action humaine requise",
-          flow: "spain",
-        },
+        step: "booking_signup",
+        status: "warn",
+        data: { reason: "submit_btn_not_visible_after_14s", flow: "spain" },
       });
-      otp = (await waitForOtpFromConvex(job.id, 90_000)) ?? "";
     }
-    if (!otp) {
-      return { status: "otp_required", note: "otp_code_missing" };
-    }
-    const otpInput = page.locator("#idIptBktValidateCode");
-    const otpBtn = page.locator("#idDivBktConfirmClientValidateButton .clsDivContinueButton");
-    if ((await otpInput.count()) > 0) {
-      await otpInput.first().fill(otp);
-      if ((await otpBtn.count()) > 0) {
-        await otpBtn.first().click().catch(() => undefined);
-      }
-      await randomDelay(1200, 2500);
-    }
+    await randomDelay(1500, 2500);
   }
 
-  const finalHash = await page.evaluate(() => window.location.hash || "");
+  // ── Après signin/signup : attendre confirmclient, creditcardcapture, ou summary ──
+  // Flow complet pour RDV gratuits : signin/signup → confirmclient → selectpaymentgateway
+  // → creditcardcapture → arePaymentServices()==false → navigate("summary")
+  // Timeout 20s pour traverser toute la chaîne automatique.
+  const postLoginHash = await pollForHash(
+    page,
+    (h) => h.includes("confirmclient") || h.includes("creditcardcapture") || h.includes("summary") || h.includes("selectpaymentgateway"),
+    20_000,
+  );
+
+  // ── Cas OTP (confirmclient avec validate défini) ───────────────────────────
+  if (postLoginHash.includes("confirmclient")) {
+    // Vérifier si le formulaire OTP est visible (si validate absent → auto-redirect)
+    const otpInput = page.locator("#idIptBktValidateCode");
+    await randomDelay(800, 1200);
+    if ((await otpInput.count()) > 0 && (await otpInput.first().isVisible().catch(() => false))) {
+      // OTP requis
+      const directOtp = process.env.SPAIN_OTP_CODE?.trim();
+      let otp = directOtp || "";
+      if (!otp) {
+        const channel = (job.spainOtpConfig?.channel ?? process.env.SPAIN_OTP_CHANNEL ?? "manual") as "email" | "sms" | "manual";
+        await requestOtpChallenge({ applicationId: job.id, flow: "spain", channel, ttlMs: 90_000 });
+        botLog({
+          applicationId: job.id,
+          step: "otp_waiting",
+          status: "ok",
+          data: {
+            channel,
+            ingestUrl: `${process.env.CONVEX_SITE_URL ?? ""}/hunter/otp/ingest`,
+            note: "OTP attendu via forward automatique",
+            flow: "spain",
+          },
+        });
+        otp = (await waitForOtpFromConvex(job.id, 90_000)) ?? "";
+      }
+      if (!otp) {
+        return { status: "otp_required", note: "otp_code_missing" };
+      }
+      const otpBtn = page.locator("#idDivBktConfirmClientValidateButton .clsDivContinueButton");
+      await otpInput.first().fill(otp);
+      await randomDelay(400, 700);
+      if ((await otpBtn.count()) > 0) await otpBtn.first().click().catch(() => undefined);
+      await randomDelay(1000, 1800);
+    }
+    // Après OTP (ou skip), attendre la chaîne creditcardcapture → summary
+    await pollForHash(
+      page,
+      (h) => h.includes("creditcardcapture") || h.includes("summary") || h.includes("selectpaymentgateway"),
+      12_000,
+    );
+  }
+
+  // ── creditcardcapture : pour RDV gratuits, auto-redirige vers summary ────
+  // Pour les RDV payants, on reste bloqué ici → payment_required
+  if ((await page.evaluate(() => window.location.hash || "").catch(() => "")).includes("creditcardcapture")) {
+    // Attendre l'auto-redirect vers summary (arePaymentServices() == false → navigate("summary"))
+    await pollForHash(page, (h) => h.includes("summary"), 6_000);
+  }
+
+  const finalHash = await page.evaluate(() => window.location.hash || "").catch(() => "");
   if (finalHash.includes("summary")) {
     return { status: "booked", note: "summary_reached" };
   }
   if (finalHash.includes("creditcardcapture") || finalHash.includes("selectpaymentgateway")) {
-    return { status: "payment_required", note: "payment_step_reached" };
+    return { status: "payment_required", note: "payment_gateway_required" };
   }
   if (finalHash.includes("confirmclient")) {
     return { status: "otp_required", note: "otp_confirmation_pending" };
