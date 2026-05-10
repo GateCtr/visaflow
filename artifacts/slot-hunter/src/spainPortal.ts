@@ -771,9 +771,13 @@ async function waitAndResolveCloudflareTurnstile(
     }
   }
 
-  // Phase 2 : résolution active via 2captcha Turnstile
-  console.log("[spain] 30s écoulées — tentative résolution Turnstile via 2captcha…");
-  const turnstileResult = await detectAndSolveTurnstile(page, job.hunterConfig.twoCaptchaApiKey);
+  // Phase 2 : résolution active via CapSolver (priorité) → 2captcha (fallback)
+  console.log("[spain] 30s écoulées — tentative résolution Turnstile (CapSolver → 2captcha)…");
+  const turnstileResult = await detectAndSolveTurnstile(
+    page,
+    job.hunterConfig.twoCaptchaApiKey,
+    job.hunterConfig.capsolverApiKey,
+  );
 
   if (turnstileResult === "solved") {
     await new Promise((r) => setTimeout(r, 2500));
