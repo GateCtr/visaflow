@@ -8,7 +8,7 @@ import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
-import { detectPublicIp } from "@workspace/proxy-service/src/pool.js";
+import { detectPublicIp } from "./proxyPool.js";
 import { runSpainSession } from "./spainPortal.js";
 
 // ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────

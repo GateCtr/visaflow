@@ -2,7 +2,7 @@ import { chromium as baseChromium } from "playwright";
 import { addExtra } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, BrowserContext, Page, LaunchOptions } from "playwright";
-import { ProxyPool } from "@workspace/proxy-service/src/pool.js";
+import { ProxyPool } from "./proxyPool.js";
 
 const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
@@ -10,7 +10,8 @@ playwrightChromium.use(StealthPlugin());
 const PROXY_URL = process.env.PROXY_URL;
 const DRY_RUN = process.env.DRY_RUN === "true";
 
-// ProxyPool centralisé — importé depuis @workspace/proxy-service.
+// ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
+// les problèmes de résolution workspace sur Railway).
 // initialize(ip) est appelé au démarrage dans index.ts :
 //   → refresh immédiat de la whitelist 2captcha
 //   → boucle auto-refresh toutes les 25 min (pas de whitelist manuelle requise)

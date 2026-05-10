@@ -13,7 +13,6 @@
     "es:citaconsular:discover": "tsx src/citaconsularDiscovery.ts"
   },
   "dependencies": {
-    "@workspace/proxy-service": "workspace:*",
     "dotenv": "^16.4.5",
     "playwright": "^1.49.0",
     "playwright-extra": "^4.3.6",
