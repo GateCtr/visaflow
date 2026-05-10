@@ -1,6 +1,6 @@
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { ProxyAgent } from "undici";
-import { randomDelay, proxyPool } from "./browser.js";
+import { randomDelay, proxyPool, launchBrowser } from "./browser.js";
 import { reportSlotFound, sendHeartbeat, uploadFile, botLog, type HunterJob } from "./convexClient.js";
 
 type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed" | "payment_required";
@@ -123,7 +123,7 @@ export function updateAesKey(newKey: string): void {
  * identique à cryptoService.encrypt() du portail Angular.
  * Format de sortie : salt_hex(32) + iv_hex(32) + base64(ciphertext)
  */
-function encryptPortalCredentials(username: string, password: string): string {
+export function encryptPortalCredentials(username: string, password: string): string {
   const plaintext = `${username}:${password}`;
   const salt = randomBytes(16);
   const key = pbkdf2Sync(USA_ENC_SEC_KEY, salt, 1000, 32, "sha1");
@@ -685,7 +685,12 @@ export async function checkUsaAppointmentRequestStatus(
   session: UsaSession,
   portalApplicationId?: string,
 ): Promise<{
-  status: "payment_required" | "scheduled" | "no_request" | "pending" | "error";
+  /**
+   * cancellable : pendingAppoStatus=0 MAIS cancellable=true → RDV existant (terminé côté workflow)
+   *   que l'utilisateur peut annuler/reporter. Différent de "no_request" (aucun RDV du tout).
+   *   Le portail Angular affiche un bouton "Reschedule/Cancel" dans ce cas.
+   */
+  status: "payment_required" | "scheduled" | "no_request" | "pending" | "error" | "cancellable";
   applicationId: string | null;
   pendingAppoStatus: number | null;
   primaryApplicant: string | null;
@@ -801,6 +806,23 @@ export async function checkUsaAppointmentRequestStatus(
     : USA_MISSION_ID;
 
   if (appoStatus === 0 || appoStatus === null) {
+    // cancellable:true + pendingAppoStatus=0 → compte avec RDV existant (workflow terminé)
+    // distinct de "pas de RDV" — le portail Angular affiche un bouton Reschedule dans ce cas.
+    const isCancellable = data.cancellable === true;
+    if (isCancellable) {
+      console.log(`[usa] ♻️ pendingAppoStatus=0 + cancellable=true → RDV existant en état "complété", reportable via Playwright`);
+      return {
+        status: "cancellable",
+        applicationId: appId,
+        pendingAppoStatus: 0,
+        primaryApplicant: applicant,
+        message: `RDV existant reportable (pendingAppoStatus=0, cancellable=true) — applicationId: ${appId ?? "non résolu"}`,
+        missionId: serverMissionId,
+        applicantId: serverApplicantId,
+        appointmentId: serverAppointmentId,
+        applicantUUID: serverApplicantUUID,
+      };
+    }
     return {
       status: "no_request",
       applicationId: appId,
@@ -843,14 +865,18 @@ export async function checkUsaAppointmentRequestStatus(
 }
 
 export async function getUsaAppointmentRequests(session: UsaSession): Promise<UsaAppointmentRequest[]> {
-  // Referer = page "Mes rendez-vous" (Dashboard > Requests) — c'est depuis là que le portail
-  // Angular appelle getallbyuser avant de présenter le bouton "Rebook".
-  const headers = authHeaders(session.accessToken, REFERER_MANAGE_APT, false);
+  // visauserapi requiert le cookie missionId (comme tous les endpoints de slot).
+  // On utilise sessionHeaders avec applicationId vide si non résolu — seul missionId compte ici.
+  // Referer = page "Requests" du dashboard (REFERER_MANAGE_APT → 401 sur visauserapi).
+  const appIdForCookie = session.applicationId ?? "";
+  const headers = sessionHeaders(session.accessToken, appIdForCookie, session.missionId, REFERER_REQUESTS, false);
 
   try {
     const res = await usaFetch(USA_APPT_REQUESTS_URL, { method: "GET", headers });
     if (!res.ok) {
-      console.error(`[usa] Appointment requests HTTP ${res.status}`);
+      let body = "";
+      try { body = await res.text(); } catch { /* ignore */ }
+      console.error(`[usa] Appointment requests HTTP ${res.status}${body ? ` — ${body.slice(0, 200)}` : ""}`);
       return [];
     }
     const raw = await res.json();
@@ -859,6 +885,180 @@ export async function getUsaAppointmentRequests(session: UsaSession): Promise<Us
   } catch (err) {
     console.error("[usa] Erreur appel appointment requests:", err);
     return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// SESSION PLAYWRIGHT — Résolution du cas "cancellable" (pendingAppoStatus=0 + cancellable=true)
+//
+// Quand le workflow de l'utilisateur est terminé (slot trouvé, paiement complet) mais
+// qu'il veut reporter son RDV, le portail Angular affiche un bouton "Reschedule".
+// Les appels API avec Bearer token ne fonctionnent pas pour les endpoints qui retournent
+// l'applicationId (401 systématique pour visauserapi/visaworkflowprocessor dans cet état).
+//
+// Cette fonction :
+//  1. Lance un navigateur Playwright avec les cookies HTTP-only de la session navigateur
+//  2. Se connecte via le formulaire Angular (pour obtenir les cookies serveur)
+//  3. Intercepte les appels API faits par Angular sur le dashboard/manage-appointment
+//  4. Extrait applicationId + appointmentId depuis les réponses interceptées
+//  5. Met à jour session.applicationId et session.appointmentId
+//  6. Retourne "proceed" (→ scan), "not_found" (→ skip), ou "error"
+// ────────────────────────────────────────────────────────────────────────────
+async function runUsaPortalPlaywrightReschedule(
+  session: UsaSession,
+  job: HunterJob,
+): Promise<"proceed" | "not_found" | "error"> {
+  const { embassyUsername: username, embassyPassword: password } = job.hunterConfig;
+  const USA_PW_BASE = "https://www.usvisaappt.com";
+  const LOGIN_PW    = `${USA_PW_BASE}/visaapplicantui/home/auth/login`;
+  const DASH_PW     = `${USA_PW_BASE}/visaapplicantui/home/dashboard`;
+
+  let browser: Awaited<ReturnType<typeof launchBrowser>>["browser"] | undefined;
+
+  try {
+    const { browser: br, context, page } = await launchBrowser({
+      proxySource: "iproyal",
+      locale: "en-US",
+      timezoneId: "America/New_York",
+      acceptLanguage: "en-US,en;q=0.9",
+    });
+    browser = br;
+
+    // Captures réseau — on cherche applicationId / appointmentId dans les réponses
+    interface PwCapture { url: string; status: number; body: string }
+    const captures: PwCapture[] = [];
+    const pendingMap = new Map<string, string>(); // clé → url
+
+    page.on("request", (req) => {
+      const url = req.url();
+      if (!url.includes(USA_PW_BASE)) return;
+      const isApi = !url.match(/\.(js|css|png|jpg|ico|woff|svg|gif)(\?|$)/);
+      if (isApi) pendingMap.set(url + "|" + req.method(), url);
+    });
+
+    page.on("response", async (res) => {
+      const url = res.url();
+      if (!url.includes(USA_PW_BASE)) return;
+      const isApi = !url.match(/\.(js|css|png|jpg|ico|woff|svg|gif)(\?|$)/);
+      if (!isApi) return;
+      try {
+        const ct = res.headers()["content-type"] ?? "";
+        if (!ct.includes("json") && !ct.includes("text")) return;
+        const body = await res.text();
+        captures.push({ url, status: res.status(), body: body.slice(0, 2000) });
+      } catch { /* ignore */ }
+    });
+
+    // ── Navigation login ────────────────────────────────────────────────────
+    console.log("[pw-reschedule] Navigation → login...");
+    await page.goto(LOGIN_PW, { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    // Attendre le rendu Angular (max 30s)
+    const deadline = Date.now() + 30_000;
+    let inputsReady = false;
+    while (Date.now() < deadline) {
+      const els = await page.$$("input");
+      for (const el of els) {
+        if (await el.isVisible()) { inputsReady = true; break; }
+      }
+      if (inputsReady) break;
+      await randomDelay(600, 900);
+    }
+    if (!inputsReady) {
+      console.error("[pw-reschedule] ❌ Formulaire Angular non rendu dans les délais");
+      return "error";
+    }
+    await randomDelay(600, 1000);
+
+    // ── Remplissage email ────────────────────────────────────────────────────
+    for (const sel of ['input[type="email"]', 'input[type="text"]', 'input:not([type="password"])']) {
+      const el = await page.$(sel);
+      if (el && await el.isVisible()) {
+        await el.click(); await randomDelay(150, 300);
+        await el.fill(username);
+        console.log(`[pw-reschedule] Email rempli (${sel})`);
+        break;
+      }
+    }
+    await randomDelay(300, 600);
+
+    // ── Remplissage mot de passe ─────────────────────────────────────────────
+    const passEl = await page.$('input[type="password"]');
+    if (passEl) { await passEl.click(); await randomDelay(150, 300); await passEl.fill(password); }
+    await randomDelay(400, 700);
+
+    // ── Soumission ───────────────────────────────────────────────────────────
+    const btnEl = await page.$('button[type="submit"]') ?? await page.$("button");
+    if (btnEl) { await btnEl.click(); }
+    else { await page.keyboard.press("Enter"); }
+
+    // ── Attente dashboard ────────────────────────────────────────────────────
+    console.log("[pw-reschedule] Attente dashboard...");
+    try {
+      await page.waitForURL("**/dashboard**", { timeout: 30_000 });
+    } catch {
+      const cur = page.url();
+      console.error(`[pw-reschedule] ❌ Pas de redirection dashboard — URL: ${cur}`);
+      const txt = await page.evaluate(() => document.body.innerText).catch(() => "");
+      if (txt.includes("restricted") || txt.includes("temporarily")) {
+        console.error("[pw-reschedule] ❌ Compte rate-limited par le portail");
+      }
+      return "error";
+    }
+    await randomDelay(2000, 3000);
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+    console.log(`[pw-reschedule] Dashboard chargé — ${captures.length} appel(s) intercepté(s)`);
+
+    // ── Cookies post-login (debug) ───────────────────────────────────────────
+    const cookies = await context.cookies(USA_PW_BASE);
+    const authCookies = cookies.filter(c => c.httpOnly || c.name.toLowerCase().includes("token") || c.name.toLowerCase().includes("session"));
+    if (authCookies.length > 0) {
+      console.log(`[pw-reschedule] Cookies auth: ${authCookies.map(c => `${c.name}(httpOnly=${c.httpOnly})`).join(", ")}`);
+    }
+
+    // ── Analyse des captures ─────────────────────────────────────────────────
+    const extractIds = (body: string): { applicationId?: string; appointmentId?: number; applicantId?: number; applicantUUID?: number } => {
+      const appIdM   = body.match(/"applicationId"\s*:\s*"?([a-zA-Z0-9_-]{5,})"?/);
+      const apptIdM  = body.match(/"appointmentId"\s*:\s*(\d+)/);
+      const applIdM  = body.match(/"applicantId"\s*:\s*(\d+)/);
+      const apptUUID = body.match(/"applicantUUID"\s*:\s*(\d+)/);
+      return {
+        ...(appIdM  ? { applicationId: appIdM[1] }    : {}),
+        ...(apptIdM ? { appointmentId: parseInt(apptIdM[1]) } : {}),
+        ...(applIdM ? { applicantId:   parseInt(applIdM[1]) } : {}),
+        ...(apptUUID ? { applicantUUID: parseInt(apptUUID[1]) } : {}),
+      };
+    };
+
+    for (const cap of captures) {
+      if (cap.status < 400 && cap.body) {
+        const ids = extractIds(cap.body);
+        if (ids.applicationId || ids.appointmentId) {
+          console.log(`[pw-reschedule] ✅ IDs trouvés dans ${cap.url.replace(USA_PW_BASE, "")}:`);
+          if (ids.applicationId)  { console.log(`   applicationId  : ${ids.applicationId}`);  session.applicationId = ids.applicationId; }
+          if (ids.appointmentId)  { console.log(`   appointmentId  : ${ids.appointmentId}`);  session.appointmentId = ids.appointmentId; }
+          if (ids.applicantId)    { console.log(`   applicantId    : ${ids.applicantId}`);    session.applicantId   = ids.applicantId; }
+          if (ids.applicantUUID)  { console.log(`   applicantUUID  : ${ids.applicantUUID}`);  session.applicantUUID = ids.applicantUUID; }
+          botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "pw_ids_found", ...ids } });
+          return "proceed";
+        }
+      }
+    }
+
+    console.warn(`[pw-reschedule] ⚠️ applicationId/appointmentId non trouvés dans ${captures.length} appel(s) — log des appels:`);
+    for (const cap of captures) {
+      console.log(`   [${cap.status}] ${cap.url.replace(USA_PW_BASE, "")} → ${cap.body.slice(0, 200)}`);
+    }
+    botLog({ applicationId: job.id, step: "scan", status: "warn", data: { flow: "usa", phase: "pw_ids_not_found", captureCount: captures.length } });
+    return "not_found";
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[pw-reschedule] ❌ Erreur: ${msg}`);
+    botLog({ applicationId: job.id, step: "scan", status: "fail", data: { flow: "usa", phase: "pw_error", error: msg } });
+    return "error";
+  } finally {
+    try { await browser?.close(); } catch { /* ignore */ }
   }
 }
 
@@ -991,6 +1191,44 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       errorMessage: requestStatus.message,
     });
     return "not_found";
+  }
+
+  // ── Cas "cancellable" : RDV existant en état "complété" (pendingAppoStatus=0, cancellable=true) ──
+  // Exemple : Christian a un RDV nov 2026, son workflow est terminé (payé, créneau attribué),
+  // mais il veut reporter. Le portail Angular affiche un bouton "Reschedule" dans ce cas.
+  // L'applicationId n'est pas retourné par getUserHistoryApplicantPaymentStatus dans ce state →
+  // on utilise une session Playwright pour intercepter les appels réseau et récupérer les IDs.
+  if (requestStatus.status === "cancellable") {
+    const rescheduleMode = job.hunterConfig.rescheduleMode;
+    if (!rescheduleMode) {
+      console.log(`[usa] ♻️ Compte avec RDV existant reportable (cancellable=true) — rescheduleMode non activé dans l'admin. Passage ignoré.`);
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: "cancellable: rescheduleMode non activé",
+      });
+      return "not_found";
+    }
+
+    console.log(`[usa] ♻️ Compte cancellable — lancement session Playwright pour récupérer applicationId/appointmentId...`);
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_playwright_start" } });
+
+    const pwResult = await runUsaPortalPlaywrightReschedule(session, job);
+    if (pwResult === "error") {
+      console.error("[usa] ❌ Session Playwright cancellable échouée");
+      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Session Playwright cancellable échouée" });
+      return "error";
+    }
+    if (pwResult === "not_found") {
+      console.warn("[usa] ⚠️ Session Playwright cancellable : aucun ID trouvé — skip");
+      await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: "applicationId/appointmentId non trouvés via Playwright" });
+      return "not_found";
+    }
+    // pwResult = "proceed" : session a mis à jour session.applicationId, session.appointmentId
+    // Continuer vers le scan de créneaux
+    console.log(`[usa] ✅ Session Playwright terminée — applicationId=${session.applicationId} appointmentId=${session.appointmentId}`);
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_playwright_ok", applicationId: session.applicationId, appointmentId: session.appointmentId } });
+    // Laisser tomber vers le scan de créneaux (ne pas return ici)
   }
 
   if (requestStatus.status === "scheduled") {
