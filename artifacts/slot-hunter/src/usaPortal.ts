@@ -110,6 +110,67 @@ class TokenExpiredError extends Error {
   }
 }
 
+/**
+ * Levée quand le portail renvoie 401 avec "temporarily restricted" — compte temporairement bloqué.
+ * DIFFÉRENT de TokenExpiredError : le token est encore valide mais le compte est en cooldown.
+ * Action : NE PAS supprimer le cache, NE PAS se reconnecter — attendre la fin de la restriction.
+ * La restriction dure typiquement 15-30 min côté portail.
+ */
+class AccountRestrictedError extends Error {
+  constructor(public readonly retryAfterMs: number = 25 * 60 * 1000) {
+    super(`Compte temporairement restreint par le portail — attendre ${Math.round(retryAfterMs / 60000)} min`);
+    this.name = "AccountRestrictedError";
+  }
+}
+
+// ─── Restriction account-level : map username → timestamp fin de restriction ──
+// Quand "Access temporarily restricted" est détecté, on enregistre la fin de la
+// fenêtre (maintenant + 25 min). Tous les appels au compte sont bloqués jusqu'à
+// ce timestamp, SANS toucher au cache de token (le JWT reste valide).
+const accountRestrictedUntil = new Map<string, number>();
+
+/** Vrai si le compte est actuellement en cooldown côté portail. */
+export function isAccountRestricted(username: string): boolean {
+  const until = accountRestrictedUntil.get(username.toLowerCase());
+  return until !== undefined && Date.now() < until;
+}
+
+/** Marque un compte comme restreint pendant `durationMs` ms (défaut 25 min). */
+function markAccountRestricted(username: string, durationMs = 25 * 60 * 1000): void {
+  const until = Date.now() + durationMs;
+  accountRestrictedUntil.set(username.toLowerCase(), until);
+  const endTime = new Date(until).toISOString().slice(11, 16);
+  console.warn(`[usa] 🔒 Compte ${username} marqué "restreint" jusqu'à ${endTime} UTC (~${Math.round(durationMs / 60000)} min)`);
+}
+
+/** Teste si un corps de réponse 401 indique une restriction temporaire vs un token expiré. */
+function isRestrictedBody(body: string): boolean {
+  const lower = body.toLowerCase();
+  return lower.includes("temporarily") || lower.includes("restricted") ||
+    lower.includes("access denied") || lower.includes("account locked") ||
+    lower.includes("too many") || lower.includes("rate limit");
+}
+
+// ─── Warm-up throttle : éviter d'appeler landingPage+sanityCheck+checkFcs à chaque cycle ──
+// Ces 3 appels "anti-détection" font +3 requêtes par cycle. En tier tres_urgent (3-5 min),
+// c'est 36-60 appels supplémentaires par heure juste pour le warm-up.
+// Solution : warm-up max 1 fois toutes les WARMUP_INTERVAL_MS (8 min).
+const WARMUP_INTERVAL_MS = 8 * 60 * 1000;
+const warmupLastCalledAt = new Map<string, number>(); // key = applicationId
+
+/** Vrai si le warm-up doit être effectué (première fois ou > WARMUP_INTERVAL_MS depuis le dernier). */
+function shouldDoWarmup(applicationId: string): boolean {
+  const last = warmupLastCalledAt.get(applicationId);
+  return last === undefined || Date.now() - last > WARMUP_INTERVAL_MS;
+}
+
+// ─── OFC round-robin : scanner 1 seule OFC par cycle (rotation) ─────────────
+// Avec N OFCs et tier tres_urgent (3-5 min), scanner toutes les OFCs à chaque cycle =
+// N×3 appels supplémentaires par cycle. Avec 3 OFCs → 9 appels → 108-180/heure.
+// Solution : scanner 1 OFC par cycle en rotation. Chaque OFC est vérifiée toutes les N×(3-5) min.
+// Acceptable car les créneaux n'apparaissent pas à la seconde — 10-15 min de latence est OK.
+const ofcCursor = new Map<string, number>(); // key = applicationId, value = index OFC courant
+
 // Clé AES du portail USA — extraite du bundle Angular public (visaapplicantui/main.js)
 // nosemgrep: generic-api-key — clé publique, visible dans le JS client du portail
 // Déclarée en `let` pour permettre la mise à jour automatique si le bundle Angular change.
@@ -446,6 +507,18 @@ export async function getUsaSession(
   _captchaApiKey?: string  // Conservé pour compatibilité — le portail USA ne requiert pas de CAPTCHA via API
 ): Promise<UsaSession | null> {
   const cacheKey = username.toLowerCase();
+
+  // ── Guard restriction compte ────────────────────────────────────────────────
+  // Si le portail a renvoyé "temporarily restricted" lors d'un appel précédent,
+  // NE PAS tenter de login — cela prolongerait la restriction.
+  // Retourner null signale à runUsaApiSession de skipper ce cycle.
+  if (isAccountRestricted(username)) {
+    const until = accountRestrictedUntil.get(cacheKey)!;
+    const remainMin = Math.round((until - Date.now()) / 60000);
+    console.warn(`[usa] 🔒 ${username} en restriction compte — ${remainMin} min restantes. Cycle ignoré.`);
+    return null;
+  }
+
   const cached = tokenCache.get(cacheKey);
 
   if (cached) {
@@ -501,6 +574,13 @@ export async function getUsaSession(
       console.log("[usa] Login API avec credentials AES chiffrés...");
       session = await loginUsaPortal(username, password, null);
     } catch (err) {
+      // AccountRestrictedError : le portail a refusé le login avec "temporarily restricted".
+      // Enregistrer la restriction et retourner null — PAS d'exception qui casserait l'auto-pause.
+      if (err instanceof AccountRestrictedError) {
+        markAccountRestricted(username, err.retryAfterMs);
+        pendingLogin.delete(cacheKey);
+        return null;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Login USA échoué: ${msg}`);
     } finally {
@@ -618,6 +698,12 @@ export async function loginUsaPortal(
   if (!response.ok) {
     const detail = data?.msg ?? rawBody.slice(0, 200);
     console.error(`[usa] Login HTTP ${response.status} — détail: ${detail}`);
+    // 401 avec corps "temporarily restricted" = compte en cooldown côté portail.
+    // NE PAS traiter comme une erreur de credentials — lever AccountRestrictedError
+    // pour que getUsaSession puisse enregistrer la fenêtre de restriction sans loop.
+    if (response.status === 401 && isRestrictedBody(rawBody + detail)) {
+      throw new AccountRestrictedError(25 * 60 * 1000);
+    }
     throw new Error(`HTTP ${response.status}: ${detail}`);
   }
 
@@ -724,9 +810,18 @@ export async function checkUsaAppointmentRequestStatus(
     const res = await usaFetch(USA_PAYMENT_STATUS_URL, { method: "GET", headers });
     if (!res.ok) {
       console.error(`[usa] Appointment status HTTP ${res.status}`);
-      // 403/401 : le compte peut être bloqué ou le token invalide juste après le login —
-      // vider le cache pour forcer une reconnexion propre au prochain cycle.
-      if (res.status === 403 || res.status === 401) {
+      if (res.status === 401 || res.status === 403) {
+        const errBody = await res.text().catch(() => "");
+        // Distinction cruciale : "temporarily restricted" ≠ token expiré.
+        // Si restreint → NE PAS vider le cache (le JWT reste valide) → juste retourner "error".
+        // Le guard isAccountRestricted() dans getUsaSession bloquera les prochains cycles.
+        if (res.status === 401 && isRestrictedBody(errBody)) {
+          const username = [...tokenCache.entries()].find(([, v]) => v.accessToken === session.accessToken)?.[0] ?? "";
+          if (username) markAccountRestricted(username);
+          console.warn(`[usa] Compte temporairement restreint (401 sur appointment status) — cycles ignorés 25 min`);
+          return { status: "error", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: `Compte restreint (401)`, missionId: USA_MISSION_ID };
+        }
+        // Vraie expiration de token ou 403 : vider le cache pour forcer reconnexion
         const cacheKey = session.accessToken
           ? [...tokenCache.entries()].find(([, v]) => v.accessToken === session.accessToken)?.[0]
           : undefined;
@@ -1182,6 +1277,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "login_failed";
   }
   if (!session) {
+    // null peut vouloir dire : compte temporairement restreint (isAccountRestricted() = true)
+    // ou identifiants incorrects. On distingue les deux pour éviter l'auto-pause inutile.
+    if (isAccountRestricted(username)) {
+      const until = accountRestrictedUntil.get(username.toLowerCase())!;
+      const remainMin = Math.round((until - Date.now()) / 60000);
+      botLog({ applicationId: job.id, step: "login", status: "warn", data: { username, error: `Compte restreint — ${remainMin} min restantes` } });
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: `Compte restreint — cycle ignoré (${remainMin} min restantes)`,
+      });
+      return "not_found";  // "not_found" = pas de panique, on réessaie plus tard
+    }
     botLog({ applicationId: job.id, step: "login", status: "fail", data: { username, error: "Identifiants incorrects ou portail indisponible" } });
     await sendHeartbeat({
       applicationId: job.id,
@@ -1639,7 +1747,11 @@ async function getUsaTransformData(
     const res = await usaFetch(url, { headers: hdrs });
     if (res.status === 429) throw new RateLimitError("getTransformData", parseInt(res.headers.get("retry-after") ?? "60", 10) * 1000);
     if (res.status === 403) throw new AccountBlockedError("getTransformData");
-    if (res.status === 401) throw new TokenExpiredError();
+    if (res.status === 401) {
+      const b = await res.text().catch(() => "");
+      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      throw new TokenExpiredError();
+    }
     if (!res.ok) {
       console.warn(`[usa] getTransformData HTTP ${res.status} — ignoré (params OFC non enrichis)`);
       return null;
@@ -1693,6 +1805,8 @@ async function getUsaOfcList(
       throw new AccountBlockedError("getOfcList");
     }
     if (res.status === 401) {
+      const b = await res.text().catch(() => "");
+      if (isRestrictedBody(b)) throw new AccountRestrictedError();
       throw new TokenExpiredError();
     }
     if (!res.ok) {
@@ -1779,10 +1893,11 @@ async function findFirstSlotForOfc(
 
   /**
    * Vérifie le status HTTP et lève une erreur circuit-breaker si critique.
-   * 429 → RateLimitError (ban imminent), 403 → AccountBlockedError, 401 → TokenExpiredError.
+   * 429 → RateLimitError, 403 → AccountBlockedError,
+   * 401 restricted → AccountRestrictedError, 401 autre → TokenExpiredError.
    * Retourne false si le statut est une erreur non-critique (scan de cet OFC abandonne).
    */
-  function checkSlotResponse(res: Response, endpoint: string): boolean {
+  async function checkSlotResponse(res: Response, endpoint: string): Promise<boolean> {
     if (res.status === 429) {
       const retryAfter = parseInt(res.headers.get("retry-after") ?? "60", 10);
       console.error(`[usa] ⛔ RATE LIMIT (429) sur ${endpoint} — abandon scan complet`);
@@ -1793,6 +1908,11 @@ async function findFirstSlotForOfc(
       throw new AccountBlockedError(endpoint);
     }
     if (res.status === 401) {
+      const body401 = await res.text().catch(() => "");
+      if (isRestrictedBody(body401)) {
+        console.error(`[usa] ⛔ COMPTE RESTREINT (401) sur ${endpoint} — 25 min de pause`);
+        throw new AccountRestrictedError();
+      }
       console.error(`[usa] ⛔ TOKEN EXPIRÉ (401) sur ${endpoint} — arrêt scan`);
       throw new TokenExpiredError();
     }
@@ -1811,10 +1931,10 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify(basePayload),
     });
-    if (!checkSlotResponse(res, "getFirstAvailableMonth")) return null;
+    if (!await checkSlotResponse(res, "getFirstAvailableMonth")) return null;
     firstMonth = await res.json() as UsaFirstAvailableMonthResponse;
   } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
     console.warn(`[usa] getFirstAvailableMonth erreur: ${err}`);
     return null;
   }
@@ -1866,11 +1986,11 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify({ ...basePayload, fromDate, toDate }),
     });
-    if (!checkSlotResponse(res, "getSlotDates")) return null;
+    if (!await checkSlotResponse(res, "getSlotDates")) return null;
     const raw = await res.json();
     slotDates = Array.isArray(raw) ? raw as UsaSlotDate[] : [];
   } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
     console.warn(`[usa] getSlotDates erreur: ${err}`);
     return null;
   }
@@ -1925,11 +2045,11 @@ async function findFirstSlotForOfc(
       headers: hdrs,
       body: JSON.stringify(slotTimePayload),
     });
-    if (!checkSlotResponse(res, "getSlotTime")) return null;
+    if (!await checkSlotResponse(res, "getSlotTime")) return null;
     const raw = await res.json();
     timeSlots = Array.isArray(raw) ? raw as UsaTimeSlot[] : [];
   } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
     console.warn(`[usa] getSlotTime erreur: ${err}`);
     return null;
   }
@@ -2139,6 +2259,8 @@ async function bookUsaSlot(
       throw new AccountBlockedError(USA_SCHEDULE_URL);
     }
     if (res.status === 401) {
+      const b = await res.text().catch(() => "");
+      if (isRestrictedBody(b)) throw new AccountRestrictedError();
       throw new TokenExpiredError();
     }
 
@@ -2250,7 +2372,11 @@ async function rescheduleUsaSlot(
       throw new RateLimitError(USA_RESCHEDULE_URL, waitMs);
     }
     if (res.status === 403) throw new AccountBlockedError(USA_RESCHEDULE_URL);
-    if (res.status === 401) throw new TokenExpiredError();
+    if (res.status === 401) {
+      const b = await res.text().catch(() => "");
+      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      throw new TokenExpiredError();
+    }
     if (res.status === 409) {
       const body = await res.json().catch(() => ({})) as { responseMsg?: string };
       const msg = body.responseMsg ?? "Créneau déjà pris (conflit 409)";
@@ -2360,30 +2486,40 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     return "error";
   }
 
-  // ── Anti-détection : reproduire le flux exact du portail Angular ────────────
+  // ── Anti-détection : warm-up throttlé (max 1×/8 min) ────────────────────────
   // Le portail appelle ces 3 endpoints à chaque ouverture de la page de booking.
-  // Les omettre rend les requêtes de slot anormalement isolées → risque de ban.
+  // Throttle à WARMUP_INTERVAL_MS pour éviter le flood : en tres_urgent (3-5 min),
+  // sans throttle = 36-60 appels warm-up/heure supplémentaires → restriction account.
+  const doWarmup = shouldDoWarmup(session.applicationId);
+  if (doWarmup) {
+    warmupLastCalledAt.set(session.applicationId, Date.now());
+    console.log("[usa] Warm-up: landingPage + sanityCheck + checkFcs...");
 
-  // a) Warm-up dashboard (getLandingPageDeatils) — navigation normale
-  await callLandingPage(session);
-  await randomDelay(400, 800);
+    // a) Warm-up dashboard
+    await callLandingPage(session);
+    await randomDelay(400, 800);
 
-  // b) Sanity check — vérifie l'état du workflow côté portail
-  await callSanityCheck(session);
-  await randomDelay(300, 600);
+    // b) Sanity check
+    await callSanityCheck(session);
+    await randomDelay(300, 600);
 
-  // c) Vérification paiement FCS — confirmation avant booking
-  const fcsOk = await checkFcsPayment(session);
-  if (!fcsOk) {
-    console.warn("[usa] checkFcs indique paiement non confirmé — scan interrompu");
-    await sendHeartbeat({
-      applicationId: job.id,
-      result: "payment_required",
-      errorMessage: "FCS payment check failed — paiement non confirmé côté serveur",
-    });
-    return "payment_required";
+    // c) Vérification paiement FCS — bloquante si non confirmé
+    const fcsOk = await checkFcsPayment(session);
+    if (!fcsOk) {
+      console.warn("[usa] checkFcs indique paiement non confirmé — scan interrompu");
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "payment_required",
+        errorMessage: "FCS payment check failed — paiement non confirmé côté serveur",
+      });
+      return "payment_required";
+    }
+    await randomDelay(300, 700);
+  } else {
+    const lastWarmup = warmupLastCalledAt.get(session.applicationId) ?? 0;
+    const nextIn = Math.round((WARMUP_INTERVAL_MS - (Date.now() - lastWarmup)) / 60000);
+    console.log(`[usa] Warm-up ignoré (prochain dans ~${nextIn} min) — économie 3 appels API`);
   }
-  await randomDelay(300, 700);
   // ────────────────────────────────────────────────────────────────────────────
 
   // 1. Récupérer les détails de la demande (applicantId, visaType, visaClass, appointmentId, applicantUUID)
@@ -2441,6 +2577,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getTransformData` });
         return "error";
       }
+      if (err instanceof AccountRestrictedError) {
+        const username = job.hunterConfig.embassyUsername ?? "";
+        if (username) markAccountRestricted(username, err.retryAfterMs);
+        await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint — pause 25 min` });
+        return "not_found";
+      }
       if (err instanceof AccountBlockedError || err instanceof TokenExpiredError) {
         const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
         if (cacheKey) tokenCache.delete(cacheKey);
@@ -2484,6 +2626,13 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "rate_limit", endpoint: "getOfcList", retryAfterMs: err.retryAfterMs } });
       await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Rate limit (429) sur getOfcList` });
       return "error";
+    }
+    if (err instanceof AccountRestrictedError) {
+      const username = job.hunterConfig.embassyUsername ?? "";
+      if (username) markAccountRestricted(username, err.retryAfterMs);
+      botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: err.message } });
+      await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint (getOfcList) — pause 25 min` });
+      return "not_found";
     }
     if (err instanceof AccountBlockedError || err instanceof TokenExpiredError) {
       botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: err instanceof AccountBlockedError ? "blocked" : "token_expired", error: (err as Error).message } });
@@ -2532,8 +2681,21 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     console.log(`[usa] 📅 Fenêtre admin : ${slotDateFrom ?? "illimitée"} → ${slotDateDeadline ?? "illimitée"}`);
   }
 
-  // 3. Scanner chaque OFC à la recherche d'un créneau
-  for (const ofc of ofcList) {
+  // 3. Scanner les OFCs en round-robin (1 OFC par cycle) pour réduire le nombre
+  //    d'appels API par cycle. Avec N OFCs, chaque OFC est vérifiée toutes les N×(3-5) min
+  //    au lieu de scanner toutes les N à chaque cycle (économie : (N-1)×3 appels/cycle).
+  //    Accepté car les créneaux n'apparaissent pas à la seconde — 10-15 min de latence OK.
+  const cursorKey = session.applicationId;
+  const cursor = ofcCursor.get(cursorKey) ?? 0;
+  const ofcToScan = ofcList.length > 1
+    ? [ofcList[cursor % ofcList.length]]
+    : ofcList;
+  ofcCursor.set(cursorKey, (cursor + 1) % ofcList.length);
+  if (ofcList.length > 1) {
+    console.log(`[usa] 🔄 Round-robin OFC : scanning ${ofcToScan[0].postName} (${cursor % ofcList.length + 1}/${ofcList.length})`);
+  }
+
+  for (const ofc of ofcToScan) {
     console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
     // Délai humain entre OFCs — un vrai utilisateur prend 1.5-4s pour passer d'un bureau à l'autre
     await randomDelay(1500, 4000);
@@ -2568,6 +2730,18 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           errorMessage: `Compte bloqué (403) — ${err.message}`,
         });
         return "error";
+      }
+      if (err instanceof AccountRestrictedError) {
+        const username = job.hunterConfig.embassyUsername ?? "";
+        if (username) markAccountRestricted(username, err.retryAfterMs);
+        console.warn(`[usa] 🔒 Compte restreint pendant le scan OFC ${ofc.postName} — pause 25 min (cache préservé)`);
+        botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", ofc: ofc.postName, error: err.message } });
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "not_found",
+          errorMessage: `Compte restreint — cycles ignorés ~25 min`,
+        });
+        return "not_found";
       }
       if (err instanceof TokenExpiredError) {
         console.error(`[usa] ⛔ TOKEN EXPIRÉ en cours de scan — arrêt, reconnexion au prochain cycle`);
@@ -2641,6 +2815,14 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           if (cacheKey) tokenCache.delete(cacheKey);
           await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Compte bloqué (403) lors du booking` });
           return "error";
+        }
+        if (bookErr instanceof AccountRestrictedError) {
+          const username = job.hunterConfig.embassyUsername ?? "";
+          if (username) markAccountRestricted(username, bookErr.retryAfterMs);
+          console.warn(`[usa] 🔒 Compte restreint lors du booking — pause 25 min (cache préservé)`);
+          botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: "Compte restreint lors du booking" } });
+          await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint lors du booking — pause 25 min` });
+          return "not_found";
         }
         if (bookErr instanceof TokenExpiredError) {
           console.error(`[usa] ⛔ TOKEN EXPIRÉ lors du booking — reconnexion au prochain cycle`);

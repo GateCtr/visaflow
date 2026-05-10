@@ -21,6 +21,39 @@ Premium visa assistance SaaS for the Democratic Republic of Congo (RDC/DRC).
 - **Charts**: recharts
 - **Routing**: Wouter (SPA)
 
+## USA Portal — Anti-restriction (2026-05-10)
+
+### 4 correctifs anti-ban account-level (restriction 15-30 min)
+
+**Problème racine** : restriction account-level sur le portail USA — une restriction sur un compte persiste même en changeant d'IP (iProyal). La boucle mortelle : 401 "restricted" → `TokenExpiredError` → cache supprimé → re-login → login aussi 401 → loop toutes les 3-5 min → restriction prolongée.
+
+**Fix 1 — `AccountRestrictedError` + `accountRestrictedUntil` map**
+- Nouvelle classe `AccountRestrictedError` (≠ `TokenExpiredError`) : lève quand 401 body contient "temporarily", "restricted", "too many", "rate limit"
+- Map `accountRestrictedUntil: Map<username, timestamp>` : quand restriction détectée, NE PAS vider le cache — enregistrer fin de restriction (now + 25 min)
+- `isAccountRestricted(username)` : guard vérifié **avant tout appel API** dans `getUsaSession`
+- `markAccountRestricted(username)` : fonction partagée entre tous les sites de détection
+
+**Fix 2 — Distinction "restricted" vs "token expiré"**
+- `isRestrictedBody(body)` : détecte le corpus 401 dans login, appointment status, et **toutes** les fonctions de scan (getTransformData, getOfcList, getFirstAvailableMonth, getSlotDates, getSlotTime, bookUsaSlot, rescheduleUsaSlot)
+- `checkSlotResponse` rendue `async` pour lire le body 401
+- En cas de restriction → `markAccountRestricted()` + `return "not_found"` (pas d'effacement cache)
+- En cas de vrai token expiré → `tokenCache.delete()` + reconnexion (comportement original)
+- `runUsaApiSession` : quand `getUsaSession` retourne `null` → distinction "restreint" (not_found, pas de panique) vs "credentials incorrects" (login_failed, pause)
+
+**Fix 3 — Warm-up throttle (max 1×/8 min)**
+- `WARMUP_INTERVAL_MS = 8 min`, map `warmupLastCalledAt: Map<applicationId, timestamp>`
+- Sans throttle en tier tres_urgent (3-5 min) = 36-60 appels warm-up/heure (landingPage + sanityCheck + checkFcs)
+- Avec throttle : 7-8 appels warm-up/heure — économie 85%
+- Le warm-up reste effectif : effectué au 1er cycle puis toutes les ~8 min pour maintenir le pattern de navigation
+
+**Fix 4 — OFC round-robin (1 OFC par cycle)**
+- `ofcCursor: Map<applicationId, index>` : scan 1 seule OFC par cycle, rotation circulaire
+- Avec 3 OFCs en tres_urgent (3-5 min) : sans round-robin = 9 appels slot/cycle, avec = 3 appels — économie 66%
+- Chaque OFC vérifiée toutes les N×(3-5) min — acceptable (créneaux n'apparaissent pas à la seconde)
+- Avec 1 OFC unique : comportement identique à l'ancien (ofcToScan = ofcList entier)
+
+**Résultat** : en tier tres_urgent, de ~85-200 appels/heure → ~30-50 appels/heure. Probabilité de restriction divisée par ~3-4.
+
 ## USA Portal — Reschedule API-first (2026-05-10)
 
 ### Rebooking Christian BUKELA (pendingAppoStatus=0, cancellable=true)
