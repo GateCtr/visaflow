@@ -887,8 +887,17 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
   } else {
-    // Nouveau token → nouvelle identité réseau + navigateur
-    sessionProxy = (await proxyPool.getProxy())?.proxy;
+    // Nouveau token → nouvelle identité réseau + navigateur.
+    // Priorité : iProyal résidentiel > 2captcha pool > direct.
+    // BrightData est réservé au portail CEV belge (coût plus élevé par GB).
+    const iproyalUrl = process.env.IPROYAL_PROXY_URL;
+    if (iproyalUrl) {
+      sessionProxy = iproyalUrl;
+      console.log(`[usa] Nouveau token → iProyal résidentiel`);
+    } else {
+      sessionProxy = (await proxyPool.getProxy())?.proxy;
+      console.log(`[usa] Nouveau token → 2captcha pool`);
+    }
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
     console.log(`[usa] Nouveau token → nouvelle identité (UA idx ${sessionUaIdx})`);
   }

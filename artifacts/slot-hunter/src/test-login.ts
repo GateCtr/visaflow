@@ -23,36 +23,47 @@ async function getPublicIp(): Promise<string> {
   }
 }
 
+async function resolveProxyUrl(): Promise<string | undefined> {
+  // Priorité : iProyal > 2captcha pool > aucun
+  const iproyal = process.env.IPROYAL_PROXY_URL;
+  if (iproyal) {
+    const masked = iproyal.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[proxy] ✅ iProyal résidentiel actif: ${masked}`);
+    return iproyal;
+  }
+  if (proxyPool.isConfigured) {
+    console.log("[proxy] Chargement des IPs résidentielles 2captcha...");
+    const poolResult = await proxyPool.getProxy();
+    if (poolResult?.proxy) {
+      const masked = poolResult.proxy.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[proxy] ✅ 2captcha proxy actif: ${masked}`);
+      return poolResult.proxy;
+    }
+    console.warn("[proxy] ⚠️  2captcha: aucun proxy disponible (IP non whitelistée ?)");
+  }
+  console.warn("[proxy] ⚠️  Aucun proxy résidentiel — connexion directe (risque 401)");
+  return undefined;
+}
+
 async function main() {
   console.log("=".repeat(60));
   console.log(" TEST LOGIN USA PORTAL");
   console.log("=".repeat(60));
-  console.log(`Email    : ${EMAIL}`);
-  console.log(`AppId    : ${PORTAL_APP_ID ?? "(auto-sélection)"}`);
-  console.log(`2captcha : ${process.env.TWOCAPTCHA_API_KEY ? "✅ clé présente" : "❌ absente"}`);
+  console.log(`Email     : ${EMAIL}`);
+  console.log(`AppId     : ${PORTAL_APP_ID ?? "(auto-sélection)"}`);
+  console.log(`iProyal   : ${process.env.IPROYAL_PROXY_URL   ? "✅ configuré" : "❌ absent"}`);
+  console.log(`BrightData: ${process.env.BRIGHTDATA_PROXY_URL ? "✅ configuré (réservé CEV)" : "❌ absent"}`);
+  console.log(`2captcha  : ${process.env.TWOCAPTCHA_API_KEY   ? "✅ clé présente" : "❌ absente"}`);
 
-  // ── 0. Initialisation proxy résidentiel ────────────────────
   const serverIp = await getPublicIp();
   console.log(`IP serveur: ${serverIp}`);
-  if (process.env.TWOCAPTCHA_API_KEY) {
+
+  if (process.env.TWOCAPTCHA_API_KEY && !process.env.IPROYAL_PROXY_URL) {
     await proxyPool.initialize(serverIp);
   }
 
-  let proxyUrl: string | undefined;
-  if (proxyPool.isConfigured) {
-    console.log("[proxy] Chargement des IPs résidentielles 2captcha...");
-    const poolResult = await proxyPool.getProxy();
-    proxyUrl = poolResult?.proxy;
-    if (proxyUrl) {
-      const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
-      console.log(`[proxy] ✅ Proxy actif: ${masked}`);
-      setUsaSessionProxy(proxyUrl);
-    } else {
-      console.warn("[proxy] ⚠️  Aucun proxy disponible (IP non whitelistée ?) — connexion directe");
-    }
-  } else {
-    console.warn("[proxy] ⚠️  Proxy non configuré — connexion directe (risque 401)");
-  }
+  const proxyUrl = await resolveProxyUrl();
+  setUsaSessionProxy(proxyUrl);
 
   console.log("-".repeat(60));
 
@@ -65,7 +76,7 @@ async function main() {
     console.error("❌ Login exception:", err);
     process.exit(1);
   } finally {
-    setUsaSessionProxy(undefined); // reset proxy
+    setUsaSessionProxy(undefined);
   }
 
   if (!session) {
@@ -73,7 +84,7 @@ async function main() {
     process.exit(1);
   }
 
-  setUsaSessionProxy(proxyUrl); // réactiver pour les appels suivants
+  setUsaSessionProxy(proxyUrl);
 
   console.log("✅ Login réussi !");
   console.log(`   fullName     : ${session.fullName}`);
