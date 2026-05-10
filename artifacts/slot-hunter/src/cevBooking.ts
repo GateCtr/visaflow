@@ -67,8 +67,8 @@ export async function runCevBookingSession(
   botLog({ applicationId: config.clientId, step: 'cev_booking_start', status: 'ok' });
 
   try {
-    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation, fingerprint masqué ──
-    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    // ── Lancement stealth : BrightData (priorité CEV belge), StealthPlugin, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', proxySource: 'brightdata' });
     browser = launched.browser;
     const context = launched.context;
 
@@ -1114,8 +1114,8 @@ async function establishCevSessionOnly(
   botLog({ applicationId: config.clientId, step: 'cev_session_only_start', status: 'ok' });
 
   try {
-    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation ──
-    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    // ── Lancement stealth : BrightData (priorité CEV belge), StealthPlugin, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', proxySource: 'brightdata' });
     browser = launched.browser;
     const context = launched.context;
     const page = launched.page;
@@ -1423,8 +1423,8 @@ export async function runCevDirectSessionSetup(
   for (const forceNoProxy of [false, true]) {
   let browser = null;
   try {
-    // ── Lancement stealth : StealthPlugin, proxy résidentiel, UA rotation ──
-    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', forceNoProxy });
+    // ── Lancement stealth : BrightData (priorité CEV belge), StealthPlugin, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', proxySource: 'brightdata', forceNoProxy });
     browser = launched.browser;
     const context = launched.context;
     const page = launched.page;
@@ -1679,7 +1679,8 @@ export async function bookWithExistingSession(
   });
 
   try {
-    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa' });
+    // ── Lancement stealth : BrightData (priorité CEV belge), StealthPlugin, UA rotation ──
+    const launched = await launchBrowser({ locale: 'fr-BE', timezoneId: 'Africa/Kinshasa', proxySource: 'brightdata' });
     browser = launched.browser;
     const context = launched.context;
     const page = launched.page;

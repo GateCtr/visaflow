@@ -7,16 +7,14 @@ import { ProxyPool } from "./proxyPool.js";
 const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
 
-const PROXY_URL = process.env.PROXY_URL;
-const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
+const PROXY_URL          = process.env.PROXY_URL;
+const IPROYAL_PROXY_URL  = process.env.IPROYAL_PROXY_URL;
+const BRIGHTDATA_PROXY_URL = process.env.BRIGHTDATA_PROXY_URL;
 const DRY_RUN = process.env.DRY_RUN === "true";
 
 // ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
 // les problèmes de résolution workspace sur Railway).
-// initialize(ip) est appelé au démarrage dans index.ts :
-//   → refresh immédiat de la whitelist 2captcha
-//   → boucle auto-refresh toutes les 25 min (pas de whitelist manuelle requise)
-// Fallback automatique : IPROYAL_PROXY_URL → 2captcha pool → PROXY_URL statique → connexion directe.
+// Fallback automatique : BrightData (CEV) | iProyal (Espagne) → 2captcha pool → PROXY_URL statique → direct.
 export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 
 // ─── User-Agents desktop uniquement ─────────────────────────────────────────
@@ -55,18 +53,14 @@ const VIEWPORTS = [
 ];
 
 // ─── Rotation UA sans répétition consécutive ─────────────────────────────────
-// Utilise un "deck mélangé" : chaque UA est utilisé une fois par cycle avant
-// de recommencer. Garantit qu'on ne tombe jamais deux fois de suite sur le même UA.
 class UaRotator {
   private queue: string[] = [];
   private lastUsed: string | null = null;
 
   next(): string {
     if (this.queue.length === 0) {
-      // Recharger et mélanger le deck
       this.queue = [...USER_AGENTS].sort(() => Math.random() - 0.5);
     }
-    // Si la tête du deck est le même UA que le précédent, on le déplace en fin
     if (this.lastUsed && this.queue[0] === this.lastUsed && this.queue.length > 1) {
       this.queue.push(this.queue.shift()!);
     }
@@ -90,35 +84,52 @@ export interface BrowserOverrides {
   locale?: string;
   timezoneId?: string;
   acceptLanguage?: string;
-  /** Forcer la connexion directe même si PROXY_URL est configuré (ex: retry après ERR_PROXY_CONNECTION_FAILED) */
+  /** Forcer la connexion directe même si un proxy est configuré (ex: retry après ERR_PROXY_CONNECTION_FAILED) */
   forceNoProxy?: boolean;
+  /**
+   * Forcer un proxy spécifique par nom :
+   *   "brightdata" → BRIGHTDATA_PROXY_URL  (portail belge CEV — priorité 1)
+   *   "iproyal"    → IPROYAL_PROXY_URL     (portail Espagne — priorité 2)
+   *   "auto"       → sélection automatique (défaut)
+   */
+  proxySource?: "brightdata" | "iproyal" | "auto";
 }
 
 export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
   const ua = randomUserAgent();
   const viewport = randomViewport();
 
-  // Priorité : iProyal résidentiel > 2captcha pool > PROXY_URL statique > connexion directe
-  // forceNoProxy: true → bypass proxy même si configuré (retry après ERR_PROXY_CONNECTION_FAILED)
-  const forceNoProxy = overrides?.forceNoProxy ?? false;
+  // ── Résolution du proxy ───────────────────────────────────────────────────
+  // Priorité globale : BrightData (CEV) | iProyal (Espagne) | 2captcha pool | PROXY_URL statique | direct
+  // forceNoProxy: true → bypass total (retry après ERR_PROXY_CONNECTION_FAILED)
+  const forceNoProxy  = overrides?.forceNoProxy ?? false;
+  const proxySource   = overrides?.proxySource ?? "auto";
   let proxyAddress: string | undefined;
+
   if (!forceNoProxy) {
-    if (IPROYAL_PROXY_URL) {
+    if (proxySource === "brightdata" && BRIGHTDATA_PROXY_URL) {
+      proxyAddress = BRIGHTDATA_PROXY_URL;
+    } else if (proxySource === "iproyal" && IPROYAL_PROXY_URL) {
       proxyAddress = IPROYAL_PROXY_URL;
-    } else if (proxyPool.isConfigured) {
-      const poolResult = await proxyPool.getProxy();
-      proxyAddress = poolResult?.proxy ?? PROXY_URL;
     } else {
-      proxyAddress = PROXY_URL;
+      // auto : iProyal → 2captcha → PROXY_URL statique
+      if (IPROYAL_PROXY_URL) {
+        proxyAddress = IPROYAL_PROXY_URL;
+      } else if (proxyPool.isConfigured) {
+        const poolResult = await proxyPool.getProxy();
+        proxyAddress = poolResult?.proxy ?? PROXY_URL;
+      } else {
+        proxyAddress = PROXY_URL;
+      }
     }
   }
+
   const proxyConfig = proxyAddress ? { server: proxyAddress } : undefined;
 
   const locale         = overrides?.locale         ?? "fr-FR";
   const timezoneId     = overrides?.timezoneId     ?? "Africa/Kinshasa";
   const acceptLanguage = overrides?.acceptLanguage ?? "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
 
-  // Dériver le tableau navigator.languages depuis la locale fournie
   const langParts = locale.split("-");
   const navLanguages = overrides?.locale
     ? [locale, langParts[0], "en-US", "en"].filter((v, i, a) => a.indexOf(v) === i)
