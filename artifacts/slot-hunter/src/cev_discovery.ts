@@ -91,8 +91,8 @@ async function solveHcaptchaViaService(
   const taskId = createData.taskId;
   note(`hCaptcha soumis via ${serviceLabel}`, `TaskID: ${taskId}\nSitekey: ${sitekey}\nPage: ${pageUrl}`);
 
-  // Poll jusqu'à 120s (24 × 5s)
-  for (let i = 0; i < 24; i++) {
+  // Poll jusqu'à 300s (60 × 5s)
+  for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 5000));
 
     const pollRes = await fetch(`${apiBase}/getTaskResult`, {
