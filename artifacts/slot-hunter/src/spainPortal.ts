@@ -1,7 +1,43 @@
 import type { APIRequestContext, Page, Response } from "playwright";
+import { ProxyAgent } from "undici";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
 import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
+
+// ─── Session Cache ────────────────────────────────────────────────────────────
+// Après un passage Playwright réussi, on met en cache la session Bookitit
+// (bookititBase + cookies + initParams + services + agendas).
+// Les probes suivantes utilisent undici directement (0 browser) jusqu'à expiry.
+// TTL : 25 min (PHPSESSID PHP standard = 30 min).
+
+interface SpainSessionCache {
+  bookititBase: string;
+  initParams: Record<string, string>;
+  services: string[];
+  agendas: string[];
+  cookieHeader: string;  // "name=value; name2=value2"
+  referer: string;       // URL de la page pour le header Referer
+  cachedAt: number;      // Date.now() au moment de la mise en cache
+}
+
+const SESSION_TTL_MS = 25 * 60 * 1_000; // 25 minutes
+
+// Clé = portalUrl, valeur = dernière session valide
+const spainSessionCache = new Map<string, SpainSessionCache>();
+
+function getCachedSession(portalUrl: string): SpainSessionCache | null {
+  const entry = spainSessionCache.get(portalUrl);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > SESSION_TTL_MS) {
+    spainSessionCache.delete(portalUrl);
+    return null;
+  }
+  return entry;
+}
+
+function invalidateSession(portalUrl: string): void {
+  spainSessionCache.delete(portalUrl);
+}
 
 const CF_TITLE_RE =
   /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
@@ -120,6 +156,51 @@ async function callJsonp(
   const res = await req.get(url, { timeout: 20_000 });
   if (!res.ok()) return null;
   const body = await res.text();
+  return parseJsonpPayload(body);
+}
+
+/**
+ * Variante undici de callJsonp — n'a pas besoin d'un browser Playwright.
+ * Utilise les cookies de session mis en cache + iProyal si disponible.
+ * Retourne null si la réponse n'est pas du JSONP (HTML → session expirée).
+ */
+async function callJsonpUndici(
+  endpointBase: string,
+  endpoint: string,
+  params: Record<string, string>,
+  cookieHeader: string,
+  referer: string,
+): Promise<unknown | null> {
+  const proxyUrl = process.env.IPROYAL_PROXY_URL;
+  const agent = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+
+  const q = new URLSearchParams(params);
+  q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10_000)}`);
+  q.set("_", String(Date.now()));
+  const url = `${endpointBase}${endpoint}?${q.toString()}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+      "Referer": referer,
+      "Origin": new URL(referer).origin,
+      "Cookie": cookieHeader,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    signal: AbortSignal.timeout(15_000),
+    dispatcher: agent,
+  } as RequestInit & { dispatcher?: ProxyAgent });
+
+  if (!res.ok) return null;
+  const body = await res.text();
+
+  // Détecter session expirée : Bookitit renvoie son HTML de bienvenue
+  const trimmed = body.trim();
+  const looksLikeJsonp = trimmed.startsWith("{") || trimmed.startsWith("[") || /^[\w$.]+\(/.test(trimmed);
+  if (!looksLikeJsonp) return null;
+
   return parseJsonpPayload(body);
 }
 
@@ -496,6 +577,157 @@ async function tryApiFirstSlot(
 }
 
 /**
+ * Scan créneaux via undici pur, en réutilisant la session Bookitit mise en cache.
+ * Retourne null si la session est expirée (réponse HTML au lieu de JSONP).
+ * Retourne false si la session est valide mais aucun créneau disponible.
+ * Retourne SpainSlot si un créneau est trouvé.
+ */
+async function tryApiFirstWithCachedSession(
+  cache: SpainSessionCache,
+  portalUrl: string,
+): Promise<SpainSlot | false | null> {
+  const { bookititBase, initParams, services: cachedServices, agendas: cachedAgendas, cookieHeader, referer } = cache;
+
+  // Bootstrap config — vérifie que la session est toujours valide
+  const cfgPayload = await callJsonpUndici(bookititBase, "getwidgetconfigurations/", initParams, cookieHeader, referer)
+    .catch(() => null);
+  if (cfgPayload === null) {
+    // null = HTML response = session expirée
+    console.log("[spain-cache] Session expirée (getwidgetconfigurations réponse HTML) → invalidation");
+    invalidateSession(portalUrl);
+    return null;
+  }
+
+  // Tenter de récupérer services/agendas frais, sinon réutiliser le cache
+  let services = cachedServices;
+  let agendas = cachedAgendas;
+
+  if (services.length === 0) {
+    const svcPayload = await callJsonpUndici(bookititBase, "getservices/", {
+      ...initParams,
+      selectedPeople: "1",
+    }, cookieHeader, referer).catch(() => null);
+    if (svcPayload !== null) {
+      services = collectIds(svcPayload, /(service.*id|services.*id|^id$)/i).slice(0, 3);
+    }
+  }
+
+  if (agendas.length === 0) {
+    const agPayload = await callJsonpUndici(bookititBase, "getagendas/", {
+      ...initParams,
+      services: services.join(","),
+      selectedPeople: "1",
+    }, cookieHeader, referer).catch(() => null);
+    if (agPayload !== null) {
+      agendas = collectIds(agPayload, /(agenda.*id|agendas.*id|^id$)/i).slice(0, 5);
+    }
+  }
+
+  if (services.length === 0 || agendas.length === 0) {
+    return false; // pas de services/agendas → impossible de scanner, mais session valide
+  }
+
+  // Scan datetime (9 mois)
+  const baseDate = new Date();
+  for (let i = 0; i < 9; i++) {
+    const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+    const payload = await callJsonpUndici(bookititBase, "datetime/", {
+      ...initParams,
+      services: services.join(","),
+      agendas: agendas.join(","),
+      start: firstMonthDayYmd(d),
+      end: lastMonthDayYmd(d),
+      selectedPeople: "1",
+    }, cookieHeader, referer).catch(() => null);
+
+    if (payload === null) {
+      // Session a expiré en cours de scan
+      console.log("[spain-cache] Session expirée (datetime réponse HTML) → invalidation");
+      invalidateSession(portalUrl);
+      return null;
+    }
+
+    const slot = extractSlotFromBookititPayload(payload);
+    if (slot) return slot;
+  }
+
+  return false; // session valide, 0 créneau
+}
+
+/**
+ * Après un passage Playwright réussi, extrait les cookies Bookitit + init params
+ * et les sauvegarde dans spainSessionCache pour les prochaines probes undici.
+ */
+async function extractAndSaveSession(
+  page: Page,
+  bookititBases: Set<string>,
+  runtime: SpainRuntimeContext,
+  portalUrl: string,
+): Promise<SpainSessionCache | null> {
+  const base = [...bookititBases][0];
+  if (!base) return null;
+
+  try {
+    const allCookies = await page.context().cookies();
+    // Garder les cookies Bookitit + session PHP
+    const relevantCookies = allCookies.filter(c =>
+      c.domain.includes("bookitit") ||
+      c.domain.includes("citaconsular") ||
+      /phpsess|ci_sess|bkt|sess/i.test(c.name)
+    );
+
+    // Fallback : si aucun cookie spécifique, garder tous les cookies
+    const cookiesToUse = relevantCookies.length > 0 ? relevantCookies : allCookies;
+    const cookieHeader = cookiesToUse.map(c => `${c.name}=${c.value}`).join("; ");
+
+    if (!cookieHeader) return null;
+
+    // Récupérer services + agendas frais depuis le contexte Playwright
+    // pour les avoir disponibles dans le cache
+    const req = page.context().request;
+    const initParams = toStringMap(runtime.init);
+
+    let services = runtime.selectedServices;
+    let agendas = runtime.selectedAgendas;
+
+    if (services.length === 0) {
+      const svcPayload = await callJsonp(req, base, "getservices/", {
+        ...initParams,
+        selectedPeople: "1",
+      }).catch(() => null);
+      if (svcPayload) services = collectIds(svcPayload, /(service.*id|services.*id|^id$)/i).slice(0, 3);
+    }
+
+    if (agendas.length === 0) {
+      const agPayload = await callJsonp(req, base, "getagendas/", {
+        ...initParams,
+        services: services.join(","),
+        selectedPeople: "1",
+      }).catch(() => null);
+      if (agPayload) agendas = collectIds(agPayload, /(agenda.*id|agendas.*id|^id$)/i).slice(0, 5);
+    }
+
+    const cache: SpainSessionCache = {
+      bookititBase: base,
+      initParams,
+      services,
+      agendas,
+      cookieHeader,
+      referer: page.url() || portalUrl,
+      cachedAt: Date.now(),
+    };
+
+    spainSessionCache.set(portalUrl, cache);
+    const ageMin = 0;
+    console.log(`[spain-cache] Session sauvegardée — base: ${base} | services: ${services.join(",") || "auto"} | agendas: ${agendas.join(",") || "auto"} | cookies: ${cookiesToUse.length} | TTL: ${Math.round((SESSION_TTL_MS - ageMin) / 60_000)}min`);
+    return cache;
+  } catch (e) {
+    console.warn("[spain-cache] Impossible de sauvegarder la session:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
  * Attend que Cloudflare se résout automatiquement (stealth + proxy résidentiel passent souvent).
  * Phase 1 : attente passive 30s (vérification toutes les 3s).
  * Phase 2 : tentative résolution active via 2captcha Turnstile.
@@ -670,6 +902,99 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       return "error";
     }
 
+    // ── Cache check : session Bookitit encore valide ? ─────────────────────
+    // Si oui, on fait le scan via undici (0 Playwright overhead).
+    // Si le scan cache retourne un créneau → on lance Playwright uniquement pour booker.
+    // Si aucun créneau (false) → heartbeat not_found immédiat, pas de browser.
+    // Si null → session expirée, on continue avec le flow Playwright complet.
+    const cachedSession = getCachedSession(url);
+    if (cachedSession) {
+      const ageMin = Math.round((Date.now() - cachedSession.cachedAt) / 60_000);
+      botLog({
+        applicationId: job.id,
+        step: "scan",
+        status: "ok",
+        data: { strategy: "cached_session", ageMin, base: cachedSession.bookititBase, flow: "spain" },
+      });
+      console.log(`[spain] Cache hit (${ageMin}min) — scan undici sans Playwright`);
+
+      try {
+        const cacheResult = await tryApiFirstWithCachedSession(cachedSession, url);
+
+        if (cacheResult === null) {
+          // Session expirée — passe au flow Playwright complet
+          console.log("[spain] Cache expiré → flow Playwright complet");
+        } else if (cacheResult === false) {
+          // Session valide, pas de créneau
+          botLog({
+            applicationId: job.id,
+            step: "not_found",
+            status: "warn",
+            data: { strategy: "cached_session", flow: "spain" },
+          });
+          await sendHeartbeat({ applicationId: job.id, result: "not_found" });
+          return "not_found";
+        } else {
+          // Créneau trouvé via cache — lancer Playwright uniquement pour le booking
+          const slot = cacheResult;
+          botLog({
+            applicationId: job.id,
+            step: "slots_found",
+            status: "ok",
+            data: { date: slot.date, time: slot.time, location: slot.location, strategy: "cached_session", flow: "spain" },
+          });
+          console.log(`[spain] ✅ Créneau trouvé via cache (${slot.date} ${slot.time}) — lancement Playwright pour booking`);
+
+          const { browser: bkBrowser, page: bkPage } = await launchBrowser({
+            locale: "es-ES",
+            timezoneId: "Europe/Madrid",
+            acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+          });
+          try {
+            await bkPage.goto(url, { waitUntil: "commit", timeout: 45_000 });
+            await randomDelay(1500, 2500);
+            const booking = await tryAutoBookSpainSlot(bkPage, job, slot);
+            if (booking.status === "otp_required") {
+              await sendHeartbeat({
+                applicationId: job.id,
+                result: "payment_required",
+                errorMessage: "OTP requis (email/SMS) pour finaliser le booking Espagne",
+              });
+              return "payment_required";
+            }
+            if (booking.status === "payment_required") {
+              await sendHeartbeat({
+                applicationId: job.id,
+                result: "payment_required",
+                errorMessage: "Étape paiement requise pour finaliser le booking Espagne",
+              });
+              return "payment_required";
+            }
+            if (booking.status === "failed") {
+              botLog({
+                applicationId: job.id,
+                step: "booking",
+                status: "fail",
+                data: { note: booking.note, date: slot.date, strategy: "cached_session", flow: "spain" },
+              });
+              const errMsg = booking.note === "credentials_missing"
+                ? "⚠️ Créneau DISPONIBLE mais identifiants Bookitit manquants"
+                : `Réservation impossible (cache) : ${booking.note}`;
+              await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: errMsg });
+              return "error";
+            }
+            await postBookingCapture(bkPage, job, slot, booking);
+            return "slot_found";
+          } finally {
+            await bkBrowser.close().catch(() => undefined);
+          }
+        }
+      } catch (e) {
+        console.warn("[spain] Erreur scan cache:", e instanceof Error ? e.message : e);
+        // Continuer avec le flow Playwright complet
+      }
+    }
+
     const { browser, page } = await launchBrowser({
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
@@ -780,6 +1105,10 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
         });
         const runtime = await getRuntimeContext(page);
         sessionInitParams = toStringMap(runtime.init);
+
+        // ── Sauvegarder la session pour les prochaines probes (undici sans Playwright) ──
+        await extractAndSaveSession(page, bookititBases, runtime, url).catch(() => undefined);
+
         for (const base of bookititBases) {
           const apiSlot = await tryApiFirstSlot(page, base, runtime).catch(() => null);
           if (!apiSlot) continue;
@@ -975,6 +1304,32 @@ export interface SpainWatcherProbeResult {
 
 export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatcherProbeResult> {
   const probe = (async (): Promise<SpainWatcherProbeResult> => {
+
+    // ── Cache check : session Bookitit valide → scan undici sans Playwright ──
+    const cachedSession = getCachedSession(portalUrl);
+    if (cachedSession) {
+      const ageMin = Math.round((Date.now() - cachedSession.cachedAt) / 60_000);
+      console.log(`[spain-watcher] Cache hit (${ageMin}min) — probe undici sans browser`);
+      try {
+        const cacheResult = await tryApiFirstWithCachedSession(cachedSession, portalUrl);
+        if (cacheResult === null) {
+          console.log("[spain-watcher] Cache expiré → probe Playwright complète");
+          // Continuer avec le flow Playwright ci-dessous
+        } else if (cacheResult === false) {
+          console.log("[spain-watcher] Aucun créneau (cache)");
+          return { status: "not_found" };
+        } else {
+          const slot = cacheResult;
+          const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
+          console.log(`[spain-watcher] ✅ Créneau trouvé via cache: ${slotInfo}`);
+          return { status: "found", slotInfo };
+        }
+      } catch (e) {
+        console.warn("[spain-watcher] Erreur probe cache:", e instanceof Error ? e.message : e);
+      }
+    }
+
+    // ── Flow Playwright complet (premier passage ou session expirée) ──────
     const { browser, page } = await launchBrowser({
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
@@ -1080,6 +1435,10 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       // API-first via bases Bookitit détectées
       if (bookititBases.size > 0) {
         const runtime = await getRuntimeContext(page);
+
+        // ── Sauvegarder la session pour les prochaines probes (undici sans Playwright) ──
+        await extractAndSaveSession(page, bookititBases, runtime, portalUrl).catch(() => undefined);
+
         for (const base of bookititBases) {
           const slot = await tryApiFirstSlot(page, base, runtime).catch(() => null);
           if (slot) {

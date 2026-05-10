@@ -116,7 +116,7 @@ async function main(): Promise<void> {
 
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-    (window as Record<string, unknown>).chrome = { runtime: {} };
+    ((window as unknown) as Record<string, unknown>).chrome = { runtime: {} };
   });
 
   const page: Page = await context.newPage();
@@ -203,7 +203,7 @@ async function main(): Promise<void> {
 
   // Variables JS globales
   const jsGlobals = await page.evaluate(() => {
-    const w = window as Record<string, unknown>;
+    const w = (window as unknown) as Record<string, unknown>;
     const result: Record<string, unknown> = {};
 
     // bkt_init_widget
