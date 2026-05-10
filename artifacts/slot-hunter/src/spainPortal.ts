@@ -579,6 +579,79 @@ async function waitAndResolveCloudflareTurnstile(
   return false;
 }
 
+/**
+ * Clique sur le bouton "Continue / Continuar" affiché par citaconsular.es
+ * avant le calendrier Bookitit. Sans ce clic le widget ne se charge pas
+ * et aucun appel JSONP datetime/ n'est déclenché.
+ *
+ * Stratégie multi-sélecteur : IDs Bookitit connus → classe CSS → texte DOM.
+ */
+async function clickContinuarIfPresent(page: Page, job: HunterJob): Promise<void> {
+  // IDs et classes connus du widget Bookitit citaconsular
+  const SELECTORS = [
+    "#idBktDefaultContinueButton",
+    "#idDivBktContinueButton",
+    ".clsDivContinueButton",
+    ".clsBktContinueButton",
+    "[id*='Continue'][id*='Button']",
+    "[class*='ContinueButton']",
+  ];
+
+  for (const sel of SELECTORS) {
+    try {
+      const el = await page.$(sel);
+      if (!el) continue;
+      const visible = await el.isVisible().catch(() => false);
+      if (!visible) continue;
+      console.log(`[spain] Bouton "Continuar" trouvé (${sel}) → clic`);
+      await el.click();
+      await randomDelay(2000, 3500);
+      botLog({
+        applicationId: job.id,
+        step: "continuar",
+        status: "ok",
+        data: { selector: sel, flow: "spain" },
+      });
+      return;
+    } catch {
+      // essayer le sélecteur suivant
+    }
+  }
+
+  // Fallback : scan texte DOM ("Continuar" ou "Continue")
+  const clicked = await page.evaluate(() => {
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>("button, a, div[onclick], [role='button'], input[type='button'], input[type='submit']")
+    );
+    for (const el of candidates) {
+      if (/continuar|continue/i.test(el.textContent?.trim() ?? "") && el.offsetParent !== null) {
+        el.click();
+        return (el.textContent?.trim() ?? "").slice(0, 40);
+      }
+    }
+    return null;
+  });
+
+  if (clicked) {
+    console.log(`[spain] Bouton "Continuar" cliqué via fallback texte: "${clicked}"`);
+    await randomDelay(2000, 3500);
+    botLog({
+      applicationId: job.id,
+      step: "continuar",
+      status: "ok",
+      data: { selector: "text_fallback", text: clicked, flow: "spain" },
+    });
+  } else {
+    console.log("[spain] Aucun bouton 'Continuar' détecté — widget peut-être déjà chargé");
+    botLog({
+      applicationId: job.id,
+      step: "continuar",
+      status: "warn",
+      data: { reason: "not_found", flow: "spain" },
+    });
+  }
+}
+
 export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
   const sessionPromise = (async (): Promise<SessionResult> => {
     const url = job.portalUrl ?? job.hunterConfig.scheduleUrl ?? "";
@@ -640,6 +713,13 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
     page.on("response", responseHandler);
 
     try {
+      // ── Dialog natif (alert/confirm) — apparaît sur certaines URLs citaconsular.es
+      // Doit être enregistré AVANT goto() pour capturer le dialog au chargement.
+      page.on("dialog", async (dialog) => {
+        console.log(`[spain] Dialog natif détecté (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
+        await dialog.accept().catch(() => undefined);
+      });
+
       console.log(`[spain] Navigation: ${url}`);
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
       await randomDelay(1500, 3000);
@@ -647,6 +727,13 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       // ── Détection & résolution Cloudflare Turnstile ──────────────────────
       const cfCleared = await waitAndResolveCloudflareTurnstile(page, job);
       if (!cfCleared) return "captcha"; // heartbeat déjà envoyé dans la fonction
+
+      // ── Bouton "Continue / Continuar" ─────────────────────────────────────
+      // citaconsular.es/widgetdefault/... affiche un écran intermédiaire
+      // "Para solicitar cita pulse en el botón continuar" avant le calendrier.
+      // Ce clic déclenche le chargement du widget Bookitit et les appels JSONP
+      // datetime/ — sans lui le bot n'intercepte aucun créneau.
+      await clickContinuarIfPresent(page, job);
 
       botLog({
         applicationId: job.id,
