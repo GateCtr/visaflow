@@ -27,8 +27,8 @@ async function init(): Promise<void> {
     pool = new ProxyPool(TWOCAPTCHA_KEY);
     const ip = await detectPublicIp();
     if (ip) {
-      pool.setServerIp(ip);
-      console.log(' ✅ Mode: 2captcha residential proxy pool');
+      await pool.initialize(ip);
+      console.log(' ✅ Mode: 2captcha residential proxy pool — initial load complete');
     } else {
       console.warn(' ⚠️  Mode: 2captcha key set but IP detection failed — pool disabled until next restart');
     }

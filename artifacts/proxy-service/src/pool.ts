@@ -28,10 +28,29 @@ export class ProxyPool {
     return this.apiKey.length > 0 && this.serverIp !== null;
   }
 
-  /** Called at startup after public IP detection */
-  setServerIp(ip: string): void {
+  /** Called at startup after public IP detection. Triggers immediate refresh + background loop. */
+  async initialize(ip: string): Promise<void> {
     this.serverIp = ip;
     console.log(`[ProxyPool] Server IP set: ${ip}`);
+    await this.refresh();
+    this.startAutoRefresh();
+  }
+
+  /** @deprecated Use initialize() instead */
+  setServerIp(ip: string): void {
+    this.serverIp = ip;
+  }
+
+  /** Starts a background setInterval to refresh the pool every 25 minutes. */
+  private startAutoRefresh(): void {
+    const timer = setInterval(() => {
+      console.log('[ProxyPool] ⏱ Auto-refresh triggered (25 min interval)');
+      this.refresh().catch(err => {
+        console.error('[ProxyPool] Auto-refresh error:', err);
+      });
+    }, REFRESH_MS);
+    timer.unref();
+    console.log('[ProxyPool] 🔄 Auto-refresh loop started (every 25 min)');
   }
 
   getState(): PoolState {
