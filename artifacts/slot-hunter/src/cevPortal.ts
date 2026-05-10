@@ -77,31 +77,63 @@ export async function completeCevCaptcha(
       return { status: 'session_error', error: 'BAD_RESPONSE' };
     }
 
-    // /Integration/Error/NoAvailability → pas de créneaux, mais le cookie reste valide.
-    // On retourne quand même la session pour permettre le polling sans recliquer sur VOWINT.
-    if (data.redirectUrl.includes('NoAvailability')) {
-      botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { redirectUrl: data.redirectUrl } });
-      return {
-        status: 'no_availability',
-        session: {
-          cookies: sessionCookies,
-          validUntil: data.validUntil,
-          redirectUrl: data.redirectUrl,
+    // ── Vérification disponibilité par navigation ───────────────────────────
+    // SetCaptchaToken retourne TOUJOURS une redirectUrl du type
+    //   /Integration/VOW/{orgId}/{appId}/{sessionGuid}/{tokenGuid}/{lang}
+    // La page finale est déterminée APRÈS navigation :
+    //   → GET redirectUrl → 302 → GET /Integration/VOW/SelectSlot
+    //     → 302 → GET /Integration/Error/NoAvailability   (pas de créneaux)
+    //     → 200  sur la page calendrier                   (créneaux dispo)
+    // On suit la redirectUrl via fetch (follow redirects) pour lire l'URL finale.
+    let finalUrl = data.redirectUrl;
+    try {
+      const probe = await fetch(data.redirectUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: {
+          'Cookie': sessionCookies,
+          'User-Agent': randomUserAgent(),
+          'Accept': 'text/html,application/xhtml+xml,*/*',
+          'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8',
         },
-      };
+      });
+      finalUrl = probe.url; // URL après tous les 302
+      botLog({
+        applicationId: clientId,
+        step: 'cev_redirect_probe',
+        status: 'ok',
+        data: { httpStatus: probe.status, finalUrl },
+      });
+    } catch (probeErr) {
+      // En cas d'échec de la sonde, on continue avec la redirectUrl brute
+      // et on laisse pollCevSlots détecter l'état réel.
+      botLog({
+        applicationId: clientId,
+        step: 'cev_redirect_probe_error',
+        status: 'warn',
+        data: { error: String(probeErr) },
+      });
     }
 
-    // Any other redirect = slots are available
-    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, redirectUrl: data.redirectUrl } });
-
-    return {
-      status: 'ready',
-      session: {
-        cookies: sessionCookies,
-        validUntil: data.validUntil,
-        redirectUrl: data.redirectUrl,
-      },
+    const session: CevSession = {
+      cookies: sessionCookies,
+      validUntil: data.validUntil,
+      redirectUrl: data.redirectUrl,
     };
+
+    if (finalUrl.includes('NoAvailability')) {
+      botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { finalUrl } });
+      return { status: 'no_availability', session };
+    }
+
+    if (finalUrl.includes('SessionExpired') || finalUrl.includes('/Captcha')) {
+      botLog({ applicationId: clientId, step: 'cev_session_expired_probe', status: 'warn', data: { finalUrl } });
+      return { status: 'session_error', error: 'SESSION_EXPIRED_PROBE' };
+    }
+
+    // SelectSlot page (ou autre page calendrier) → créneaux disponibles
+    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, finalUrl } });
+    return { status: 'ready', session };
   } catch (err) {
     botLog({ applicationId: clientId, step: 'cev_captcha_exception', status: 'fail', data: { error: String(err) } });
     return { status: 'session_error', error: String(err) };

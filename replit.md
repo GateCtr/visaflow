@@ -228,25 +228,32 @@ visaonweb.diplomatie.be  →  appointment.cloud.diplomatie.be
 7. POST `appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken` avec token 2captcha
 8. Réponse : `{ validUntil, redirectUrl }` → redirectUrl = page des créneaux
 
-**CEV API endpoints (reverse-engineered depuis le JS bundle 394KB) :**
+**CEV API endpoints (confirmés par discovery live 2026-05-10) :**
 - `POST /Captcha/SetCaptchaToken` — body: `captcha=<token>` (form-encoded, pas de CSRF requis)
   - Réponse: `{ captchaSolved: bool, validUntil: string|null, redirectUrl: string|null, defaultTimeout: 15 }`
   - `captchaSolved: false` si token invalide ; `true` + redirectUrl si OK
-  - `redirectUrl` contient "NoAvailability" si aucun créneau, sinon page de réservation
-- `POST /Home/AvailableTimeSlots` — body: JSON `{}` — endpoint de polling des créneaux
+  - `redirectUrl` = `Integration/VOW/{orgId}/{appId}/{sessionGuid}/{tokenGuid}/{lang}` — le dernier GUID change à chaque session
+  - ⚠️ `redirectUrl` NE contient PAS "NoAvailability" directement — il faut naviguer vers cette URL pour savoir
+- `GET {redirectUrl}` → 302 → `GET /Integration/VOW/SelectSlot`
+  - → 302 → `GET /Integration/Error/NoAvailability` si pas de créneaux
+  - → 200 sur page calendrier si créneaux disponibles
+  - `completeCevCaptcha()` suit les redirects via fetch pour lire l'URL finale (corrigé 2026-05-10)
+- `POST /Home/AvailableTimeSlots` — body: `{ month: N, year: YYYY }` — polling créneaux depuis page calendrier
 - `POST /Shared/DoCancelRequestAppointment` — body: `{ uniqueToken, cultureCode }` — annuler RDV
 - `ajaxUrl` = `https://appointment.cloud.diplomatie.be/` (base de tous les appels AJAX)
 
-**hCaptcha — statut résolution :**
+**hCaptcha — statut résolution (confirmé 2026-05-10) :**
 - Sitekey : `5f64399c-14a8-415e-ad1a-7ebccdc4943a`
+- **Anti-Captcha** ✅ : `HCaptchaTaskProxyless` — résolu en 10s (workers libres) à 200s+ (workers occupés)
+- **CapSolver** : blackliste cette sitekey gov depuis 2026-04 — inutilisable
 - **2captcha** : `HCaptchaTaskProxyless` NON disponible sur ce compte (plan actuel = reCAPTCHA v2 seulement)
-- **CapSolver** (`capsolver.com`) : supporté nativement, `HCaptchaTaskProxyLess`, ~30-60s
-- Code : `solveHcaptchaViaCapsolver()` dans `cevBooking.ts` — activer avec `CAPSOLVER_API_KEY`
 
 **Données test :**
 - Compte VOWINT : `screentapinc@gmail.com` (VOWINT secret Replit)
 - Application : VOWINT5903406 — NGOBI ESTHER (ID Convex : `e978b2fd-472f-f111-a3ae-00505691de06`)
-- Integration URL CEV : `https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/{appGuid}/59eba882-4cc3-4ede-ba31-935d81f9393c/adbc8e5f-ecaf-435b-849e-f533a09c7dcb/en-US`
+- Org ID CEV (fixe) : `df171b6f-871b-48d2-b6ac-7352d37cd13b`
+- Session GUID (fixe par app) : `59eba882-4cc3-4ede-ba31-935d81f9393c`
+- Token GUID (change chaque session) : ex. `b2f37202-726d-4e0f-910a-e02a108c61b1`
 
 **Fichiers clés :**
 - `artifacts/slot-hunter/src/cevBooking.ts` — `establishCevSession()` + `runCevCheck()` + `runCevBookingSession()` + `solveHcaptchaViaCapsolver()`
