@@ -33,7 +33,7 @@ async function init(): Promise<void> {
       console.warn(' ⚠️  Mode: 2captcha key set but IP detection failed — pool disabled until next restart');
     }
   } else if (staticSrc.isConfigured) {
-    console.log(` ✅ Mode: static proxy (${staticSrc.proxyUrl})`);
+    console.log(' ✅ Mode: static proxy (PROXY_URL configured)');
   } else {
     console.warn(' ⚠️  Mode: no proxy configured — /proxy/get will return source="none"');
   }
@@ -67,7 +67,13 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/proxy/get', authMiddleware, async (_req: Request, res: Response) => {
+app.get('/proxy/get', authMiddleware, async (req: Request, res: Response) => {
+  const type = req.query['type'];
+  if (type !== undefined && type !== 'residential') {
+    res.status(400).json({ error: `Unsupported proxy type: "${type}". Only "residential" is supported.` });
+    return;
+  }
+
   if (pool?.isConfigured) {
     const result = await pool.getProxy();
     if (result) {
@@ -108,6 +114,13 @@ app.post('/proxy/whitelist', authMiddleware, async (_req: Request, res: Response
   if (!pool) {
     res.status(400).json({ ok: false, error: 'TWOCAPTCHA_API_KEY not configured — pool unavailable' });
     return;
+  }
+  const freshIp = await detectPublicIp();
+  if (freshIp) {
+    pool.setServerIp(freshIp);
+    console.log(`[whitelist] Re-detected public IP: ${freshIp}`);
+  } else {
+    console.warn('[whitelist] Could not re-detect public IP — using cached IP');
   }
   const result = await pool.forceWhitelistRefresh();
   res.status(result.ok ? 200 : 500).json(result);
