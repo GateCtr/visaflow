@@ -169,7 +169,23 @@ async function establishCevSession(
     botLog({ applicationId: config.clientId, step: 'cev_vowint_login_start', status: 'ok', data: { user: config.vowintUsername } });
     await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-    const loginTitle = await page.title();
+    // BrightData peut retourner HTTP 402 "bad_endpoint" pour visaonweb.diplomatie.be.
+    // Dans ce cas la page chargée est la page d'erreur BrightData (pas VOWINT).
+    // Détecter immédiatement et lever ERR_PROXY_BAD_ENDPOINT pour déclencher le retry.
+    const isVowintPage = await page.evaluate(() => {
+      const body = (document.body?.textContent ?? '').toLowerCase();
+      const hasLoginForm = !!document.querySelector('input#UserName');
+      const hasVowintContent = document.location.hostname.includes('diplomatie.be')
+        || body.includes('visa') || body.includes(' visa application');
+      const isBrightDataError = body.includes('luminati') || body.includes('bad_endpoint')
+        || body.includes('residential failed') || body.includes('not available');
+      return hasLoginForm || (hasVowintContent && !isBrightDataError);
+    }).catch(() => true); // en cas d'erreur evaluate → on laisse continuer
+    if (!isVowintPage) {
+      throw new Error('ERR_PROXY_BAD_ENDPOINT: BrightData a bloqué visaonweb.diplomatie.be (402) — retry sans proxy');
+    }
+
+    const loginTitle = await page.title().catch(() => "");
     const loginUrl = page.url();
     const isLoginPage = loginTitle.toLowerCase().includes('login') ||
       loginTitle.toLowerCase().includes('connexion') ||
@@ -190,7 +206,12 @@ async function establishCevSession(
       await randomDelay(1_000, 2_000); // laisser le redirect s'établir
 
       const afterUrl = page.url();
-      const afterTitle = await page.title();
+      // page.title() peut lever "Execution context was destroyed" si BrightData renvoie
+      // une réponse 402 au POST login qui déclenche une navigation d'erreur.
+      const afterTitle = await page.title().catch(async () => {
+        await new Promise(r => setTimeout(r, 600));
+        return page.title().catch(() => "");
+      });
       const stillLogin = afterUrl.toLowerCase().includes('account/login') ||
         afterTitle.toLowerCase().includes('login') ||
         afterTitle.toLowerCase().includes('connexion');
@@ -323,7 +344,8 @@ async function establishCevSession(
     const isProxyOrTunnel = errStr.includes('ERR_TUNNEL_CONNECTION_FAILED')
       || errStr.includes('ERR_PROXY_CONNECTION_FAILED')
       || errStr.includes('PROXY_CONNECTION_FAILED')
-      || errStr.includes('TUNNEL_CONNECTION_FAILED');
+      || errStr.includes('TUNNEL_CONNECTION_FAILED')
+      || errStr.includes('ERR_PROXY_BAD_ENDPOINT'); // BrightData 402 bad_endpoint
     if (isProxyOrTunnel) throw err;
     console.error(`[CEV] ❌ establishCevSession crash: ${errStr}`);
     botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: errStr.slice(0, 400) } });
@@ -1646,7 +1668,8 @@ export async function runCevDirectSessionSetup(
     const isProxyErr = errStr.includes('ERR_PROXY_CONNECTION_FAILED')
       || errStr.includes('PROXY_CONNECTION_FAILED')
       || errStr.includes('ERR_TUNNEL_CONNECTION_FAILED')
-      || errStr.includes('TUNNEL_CONNECTION_FAILED');
+      || errStr.includes('TUNNEL_CONNECTION_FAILED')
+      || errStr.includes('ERR_PROXY_BAD_ENDPOINT'); // BrightData 402 bad_endpoint
     if (!forceNoProxy && isProxyErr) {
       botLog({
         applicationId: clientId,
