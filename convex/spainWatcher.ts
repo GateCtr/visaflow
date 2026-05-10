@@ -3,23 +3,54 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 const WATCHER_KEY = "default";
-const MAX_SCANS = 50;
+const MAX_SCANS = 20;
+
+// ─── Auth helpers (même pattern que admin.ts) ─────────────────────────────────
+
+function getRole(identity: { [key: string]: unknown } | null): string {
+  if (!identity) return "client";
+  if (identity.role) return identity.role as string;
+  const pub = identity.publicMetadata as { role?: string } | undefined;
+  if (pub?.role) return pub.role;
+  const pubSnake = identity["public_metadata"] as { role?: string } | undefined;
+  if (pubSnake?.role) return pubSnake.role;
+  return "client";
+}
+
+function requireAdmin(identity: { [key: string]: unknown } | null) {
+  if (!identity || getRole(identity) !== "admin") {
+    throw new Error("Accès refusé — réservé aux administrateurs Joventy");
+  }
+}
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 export const getWatcher = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
     const watcher = await ctx.db
       .query("spainWatcher")
       .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
       .first();
 
-    const scans = await ctx.db
+    const rawScans = await ctx.db
       .query("spainWatcherScans")
       .withIndex("by_ts")
       .order("desc")
       .take(MAX_SCANS);
+
+    // Resolve screenshot URLs for scans that have a screenshotStorageId
+    const scans = await Promise.all(
+      rawScans.map(async (scan) => {
+        const screenshotUrl = scan.screenshotStorageId
+          ? await ctx.storage.getUrl(scan.screenshotStorageId)
+          : null;
+        return { ...scan, screenshotUrl };
+      }),
+    );
 
     return { watcher: watcher ?? null, scans };
   },
@@ -35,6 +66,9 @@ export const setWatcher = mutation({
     intervalMin: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
     const existing = await ctx.db
       .query("spainWatcher")
       .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))

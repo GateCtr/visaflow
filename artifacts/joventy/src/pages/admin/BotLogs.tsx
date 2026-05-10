@@ -478,7 +478,7 @@ function SpainWatcherTab() {
           </p>
         ) : (
           <div className="relative border-l-2 border-slate-100 ml-3 space-y-4 pb-2">
-            {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; errorMessage?: string }) => {
+            {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string }) => {
               const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
               return (
                 <div key={scan._id} className="relative pl-6">
@@ -492,6 +492,17 @@ function SpainWatcherTab() {
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${meta.badge}`}>
                       {meta.label}
                     </span>
+                    {scan.screenshotUrl && (
+                      <a
+                        href={scan.screenshotUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto flex items-center gap-1 text-[10px] text-red-600 hover:text-red-800 font-medium"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Voir screenshot
+                      </a>
+                    )}
                   </div>
 
                   {scan.slotInfo && (
