@@ -1657,31 +1657,91 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         }
       }
 
-      // ── Attente initialisation widget Bookitit ─────────────────────────────────
-      // Après le rechargement CF, le widget SPA prend quelques secondes à s'initialiser.
-      // On attend que le conteneur principal `#idBktWidgetDefaultBodyContainer` apparaisse
-      // ET que le hash change de "" vers "#services"/"#agendas"/"#datetime"/etc.
-      // Sans cette attente, on clique sur des boutons CF (ex: "Continue / Continuar") avant
-      // que le widget Bookitit soit rendu.
+      // ── Dismiss modal natif citaconsular.es ────────────────────────────────────
+      // Citaconsular.es affiche un modal HTML (overlay) avec un bouton "Continue / Continuar"
+      // (texte bilingue ES/EN) avant de montrer le widget Bookitit.
+      // Ce modal BLOQUE le chargement du widget — il faut le dismisser en premier.
+      //
+      // Stratégie : pendant l'attente d'initialisation (max 25s), à chaque tick on cherche
+      // un bouton visible qui :
+      //   1. A un texte dismiss-type (OK, Aceptar, Acepto, Entendido, Continuar, Continue, Accept…)
+      //   2. N'est PAS à l'intérieur du widget Bookitit (#idBkt…)
+      //   → On clique si trouvé.
+      //
+      // IMPORTANT: pas de const/function nommée dans les callbacks page.evaluate
+      // (tsx/esbuild injecte __name qui crashe dans le contexte browser de Playwright).
       {
-        console.log("[spain-watcher] Attente initialisation widget Bookitit (max 15s)…");
+        console.log("[spain-watcher] Attente init widget + dismiss modal natif (max 25s)…");
         const t0 = Date.now();
-        while (Date.now() - t0 < 15_000) {
+        let modalDismissed = false;
+
+        while (Date.now() - t0 < 25_000) {
           await new Promise((r) => setTimeout(r, 1500));
-          // Vérifier que le widget est chargé (container visible) ET hash non-vide
+
+          // 1) Tenter de dismisser le modal si pas encore fait
+          if (!modalDismissed) {
+            const dismissed: string | null = await page.evaluate(() => {
+              // Textes qui indiquent un bouton de fermeture de modal
+              const DISMISS_TEXTS = ["OK", "ACEPTAR", "ACEPTO", "ENTENDIDO", "ACCEPT",
+                                     "CONTINUAR", "CONTINUE", "CONTINUE / CONTINUAR",
+                                     "ACCEPTER", "FERMER", "CLOSE", "CERRAR", "CONTINUER"];
+              // Sélecteurs larges : boutons, liens, divs cliquables
+              const candidates = document.querySelectorAll(
+                "button, a[role='button'], div[onclick], input[type='button'], input[type='submit'], [role='button']"
+              );
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                if (!el.offsetParent) continue; // invisible
+                // Vérifier que ce n'est PAS à l'intérieur du widget Bookitit
+                let insideBkt = false;
+                let p: HTMLElement | null = el.parentElement;
+                while (p) {
+                  if ((p.id && (p.id.indexOf("Bkt") >= 0 || p.id.indexOf("bkt") >= 0)) ||
+                      (p.className && typeof p.className === "string" &&
+                       (p.className.indexOf("Bkt") >= 0 || p.className.indexOf("bkt") >= 0))) {
+                    insideBkt = true;
+                    break;
+                  }
+                  p = p.parentElement;
+                }
+                if (insideBkt) continue;
+                // Vérifier le texte
+                const txt = (el.textContent || "").trim().toUpperCase();
+                for (let di = 0; di < DISMISS_TEXTS.length; di++) {
+                  if (txt === DISMISS_TEXTS[di] || txt.indexOf(DISMISS_TEXTS[di]) >= 0) {
+                    el.click();
+                    return txt.slice(0, 50);
+                  }
+                }
+              }
+              return null;
+            }).catch(() => null);
+
+            if (dismissed) {
+              console.log(`[spain-watcher] Modal dismissé: "${dismissed}" — attente widget…`);
+              modalDismissed = true;
+              await new Promise((r) => setTimeout(r, 2000)); // laisser le widget s'initialiser
+              continue;
+            }
+          }
+
+          // 2) Vérifier que le widget Bookitit est chargé (container visible ET hash non-vide)
           const ready: boolean = await page.evaluate(() => {
             const container = document.getElementById("idBktWidgetDefaultBodyContainer");
-            const hash = window.location.hash;
-            // Widget prêt si le container est visible (display != none) ET hash non-vide
             if (!container) return false;
             const style = window.getComputedStyle(container);
-            return style.display !== "none" && hash.length > 1;
+            return style.display !== "none" && window.location.hash.length > 1;
           }).catch(() => false);
+
           if (ready) {
             const h = await page.evaluate(() => window.location.hash).catch(() => "");
             console.log(`[spain-watcher] Widget initialisé, hash="${h}"`);
             break;
           }
+        }
+
+        if (!modalDismissed) {
+          console.log("[spain-watcher] Aucun modal détecté (ou déjà dismissé auto)");
         }
       }
 
