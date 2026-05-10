@@ -317,8 +317,16 @@ async function establishCevSession(
     return { cookies: cookieString, cevPage: newPage, integrationUrl: capturedIntegrationUrl };
 
   } catch (err) {
-    console.error(`[CEV] ❌ establishCevSession crash: ${String(err)}`);
-    botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: String(err) } });
+    const errStr = String(err);
+    // Les erreurs proxy/tunnel doivent remonter au caller pour que sa boucle retry
+    // (forceNoProxy=true) puisse se déclencher — ne pas absorber ici.
+    const isProxyOrTunnel = errStr.includes('ERR_TUNNEL_CONNECTION_FAILED')
+      || errStr.includes('ERR_PROXY_CONNECTION_FAILED')
+      || errStr.includes('PROXY_CONNECTION_FAILED')
+      || errStr.includes('TUNNEL_CONNECTION_FAILED');
+    if (isProxyOrTunnel) throw err;
+    console.error(`[CEV] ❌ establishCevSession crash: ${errStr}`);
+    botLog({ applicationId: config.clientId, step: 'cev_session_establish_error', status: 'fail', data: { error: errStr.slice(0, 400) } });
     return null;
   }
 }
@@ -1631,14 +1639,20 @@ export async function runCevDirectSessionSetup(
     const errStr = String(err);
     try { if (browser) await (browser as { close(): Promise<void> }).close(); } catch { /* ignore */ }
 
-    // Si le proxy a causé l'erreur et qu'on ne l'a pas encore bypassé → retry sans proxy
-    const isProxyErr = errStr.includes('ERR_PROXY_CONNECTION_FAILED') || errStr.includes('PROXY_CONNECTION_FAILED');
+    // Si le proxy a causé l'erreur et qu'on ne l'a pas encore bypassé → retry sans proxy.
+    // ERR_PROXY_CONNECTION_FAILED = proxy injoignable.
+    // ERR_TUNNEL_CONNECTION_FAILED = proxy joignable mais tunnel vers la destination échoue
+    //   (BrightData bloqué sur ce domaine ou BrightData down).
+    const isProxyErr = errStr.includes('ERR_PROXY_CONNECTION_FAILED')
+      || errStr.includes('PROXY_CONNECTION_FAILED')
+      || errStr.includes('ERR_TUNNEL_CONNECTION_FAILED')
+      || errStr.includes('TUNNEL_CONNECTION_FAILED');
     if (!forceNoProxy && isProxyErr) {
       botLog({
         applicationId: clientId,
         step: 'cev_vowint_proxy_fail_retry_direct',
         status: 'warn',
-        data: { error: errStr.slice(0, 200), hint: 'ERR_PROXY_CONNECTION_FAILED — relance sans proxy' },
+        data: { error: errStr.slice(0, 200), hint: 'Proxy/tunnel error — relance sans proxy (direct)' },
       });
       continue; // retry avec forceNoProxy = true
     }
