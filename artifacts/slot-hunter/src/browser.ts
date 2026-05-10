@@ -124,7 +124,21 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
     }
   }
 
-  const proxyConfig = proxyAddress ? { server: proxyAddress } : undefined;
+  // Playwright ne parse pas les credentials depuis l'URL (→ HTTP 407).
+  // On extrait username/password explicitement si présents dans l'URL.
+  let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+  if (proxyAddress) {
+    try {
+      const u = new URL(proxyAddress);
+      proxyConfig = {
+        server: `${u.protocol}//${u.host}`,
+        ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
+        ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
+      };
+    } catch {
+      proxyConfig = { server: proxyAddress };
+    }
+  }
 
   const locale         = overrides?.locale         ?? "fr-FR";
   const timezoneId     = overrides?.timezoneId     ?? "Africa/Kinshasa";
@@ -221,4 +235,53 @@ export async function humanScroll(page: Page): Promise<void> {
 
 export function isDryRun(): boolean {
   return DRY_RUN;
+}
+
+// ─── iProyal Sticky Session ───────────────────────────────────────────────────
+
+/**
+ * ID de session iProyal basé sur l'heure courante (rotation toutes les heures).
+ * Partagé entre Playwright et CapSolver pour garantir le même exit IP.
+ */
+export function getIproyalSessionId(): string {
+  // Format YYYYMMDDHH — change chaque heure pour rotation IP quotidienne
+  return `j${new Date().toISOString().slice(0, 13).replace(/[-T:]/g, "")}`;
+}
+
+/**
+ * Ajoute un ID de session sticky à l'URL iProyal.
+ * Format iProyal sticky : http://USER_session-ID:PASS@geo.iproyal.com:12321
+ * Même ID = même exit IP entre CapSolver et Playwright.
+ */
+export function buildStickyIproyalUrl(proxyUrl: string, sessionId?: string): string {
+  try {
+    if (!proxyUrl.includes("iproyal.com")) return proxyUrl;
+    const u = new URL(proxyUrl);
+    const decodedUser = decodeURIComponent(u.username);
+    // Ne pas dupliquer le suffixe session s'il est déjà présent
+    if (decodedUser.includes("_session-")) return proxyUrl;
+    const sid = sessionId ?? getIproyalSessionId();
+    // Format iProyal sticky : USER_session-ID (underscore avant "session", tiret avant l'ID)
+    const stickyUser = encodeURIComponent(`${decodedUser}_session-${sid}`);
+    // Reconstruire l'URL sans trailing slash
+    return `http://${stickyUser}:${u.password}@${u.host}`;
+  } catch {
+    return proxyUrl;
+  }
+}
+
+/**
+ * Parse une URL proxy en objet { server, username, password } pour Playwright.
+ */
+export function parseProxyUrl(proxyUrl: string): { server: string; username?: string; password?: string } | undefined {
+  try {
+    const u = new URL(proxyUrl);
+    return {
+      server: `${u.protocol}//${u.host}`,
+      ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
+      ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
+    };
+  } catch {
+    return undefined;
+  }
 }

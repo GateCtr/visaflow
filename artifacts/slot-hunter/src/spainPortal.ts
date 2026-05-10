@@ -729,8 +729,8 @@ async function extractAndSaveSession(
 
 /**
  * Attend que Cloudflare se résout automatiquement (stealth + proxy résidentiel passent souvent).
- * Phase 1 : attente passive 30s (vérification toutes les 3s).
- * Phase 2 : tentative résolution active via 2captcha Turnstile.
+ * Phase 1 : attente passive 120s (vérification toutes les 3s) — IP DRC via iProyal nécessite ~90-120s.
+ * Phase 2 : tentative résolution active via CapSolver AntiCloudflareTask → 2captcha Turnstile.
  * Retourne true si la page est accessible, false si toujours bloquée.
  */
 async function waitAndResolveCloudflareTurnstile(
@@ -750,8 +750,8 @@ async function waitAndResolveCloudflareTurnstile(
   });
   console.log(`[spain] ⚠️  Cloudflare challenge détecté (titre: "${title}") — attente auto-résolution…`);
 
-  // Phase 1 : attente passive jusqu'à 30s
-  const AUTO_WAIT_MS = 30_000;
+  // Phase 1 : attente passive jusqu'à 120s (IP DRC via iProyal nécessite ~90-120s pour CF)
+  const AUTO_WAIT_MS = 120_000;
   const CHECK_INTERVAL_MS = 3_000;
   const t0 = Date.now();
 
@@ -772,11 +772,12 @@ async function waitAndResolveCloudflareTurnstile(
   }
 
   // Phase 2 : résolution active via CapSolver (priorité) → 2captcha (fallback)
-  console.log("[spain] 30s écoulées — tentative résolution Turnstile (CapSolver → 2captcha)…");
+  console.log("[spain] 30s écoulées — tentative résolution CF (CapSolver → 2captcha)…");
   const turnstileResult = await detectAndSolveTurnstile(
     page,
     job.hunterConfig.twoCaptchaApiKey,
     job.hunterConfig.capsolverApiKey,
+    process.env.IPROYAL_PROXY_URL,
   );
 
   if (turnstileResult === "solved") {
@@ -1048,6 +1049,28 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
         console.log(`[spain] Dialog natif détecté (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
       });
+
+      // ── Warm-up : visite la racine du domaine avant le widget URL ────────────
+      // CF donne plus confiance aux sessions qui naviguent naturellement sur le site
+      // avant d'atteindre le widget (vs. arrivée directe sur le widget URL depuis rien).
+      try {
+        const widgetBaseUrl = new URL(url);
+        const domainRoot = `${widgetBaseUrl.protocol}//${widgetBaseUrl.hostname}/`;
+        if (url !== domainRoot) {
+          console.log(`[spain] Warm-up: ${domainRoot}`);
+          await page.goto(domainRoot, { waitUntil: "commit", timeout: 20_000 }).catch(() => { /* timeout ok */ });
+          await randomDelay(1500, 3000);
+
+          // Si CF bloque déjà la racine, attente courte
+          const warmTitle = await page.title().catch(() => "");
+          if (CF_TITLE_RE.test(warmTitle)) {
+            console.log("[spain] CF sur racine domaine — pause 8s...");
+            await new Promise(r => setTimeout(r, 8_000));
+          }
+        }
+      } catch {
+        /* warm-up non critique — on continue */
+      }
 
       console.log(`[spain] Navigation: ${url}`);
       // "commit" : robuste face aux challenges Cloudflare et portails lents.
@@ -1377,19 +1400,37 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       }
       await randomDelay(1500, 2500);
 
-      // Cloudflare check — attente passive 20s
-      let title = "";
-      try { title = await page.title(); } catch { /* ignore */ }
-      if (CF_TITLE_RE.test(title)) {
-        const t0 = Date.now();
-        while (Date.now() - t0 < 20_000) {
-          await new Promise((r) => setTimeout(r, 3_000));
-          try { title = await page.title(); } catch { title = ""; }
-          if (!CF_TITLE_RE.test(title)) break;
-        }
-        if (CF_TITLE_RE.test(title)) {
-          console.log("[spain-watcher] Cloudflare non résolu — probe abandonnée");
-          return { status: "error", errorMessage: "cloudflare_blocked" };
+      // Cloudflare check — attente 120s + CapSolver AntiCloudflareTask si nécessaire
+      {
+        let cfTitle = "";
+        try { cfTitle = await page.title(); } catch { /* ignore */ }
+        if (CF_TITLE_RE.test(cfTitle)) {
+          console.log(`[spain-watcher] Cloudflare détecté (titre: "${cfTitle}") — attente 120s…`);
+          const t0 = Date.now();
+          while (Date.now() - t0 < 120_000) {
+            await new Promise((r) => setTimeout(r, 3_000));
+            try { cfTitle = await page.title(); } catch { cfTitle = ""; }
+            if (!CF_TITLE_RE.test(cfTitle)) break;
+          }
+          if (CF_TITLE_RE.test(cfTitle)) {
+            // Tentative CapSolver AntiCloudflareTask
+            const capsolverKey = process.env.CAPSOLVER_API_KEY;
+            if (capsolverKey) {
+              const capRes = await detectAndSolveTurnstile(
+                page,
+                process.env.TWOCAPTCHA_API_KEY,
+                capsolverKey,
+                process.env.IPROYAL_PROXY_URL,
+              ).catch(() => "failed" as const);
+              if (capRes !== "solved") {
+                console.log("[spain-watcher] Cloudflare non résolu — probe abandonnée");
+                return { status: "error", errorMessage: "cloudflare_blocked" };
+              }
+            } else {
+              console.log("[spain-watcher] Cloudflare non résolu (CAPSOLVER_API_KEY absent) — probe abandonnée");
+              return { status: "error", errorMessage: "cloudflare_blocked" };
+            }
+          }
         }
       }
 

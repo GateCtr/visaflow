@@ -1,4 +1,5 @@
 import type { Page } from "playwright";
+import { buildStickyIproyalUrl } from "./browser.js";
 
 const TWO_CAPTCHA_BASE = "https://2captcha.com";
 const POLL_INTERVAL_MS = 5000;
@@ -299,46 +300,211 @@ async function injectTurnstileSolution(page: Page, token: string): Promise<void>
   }, token);
 }
 
+interface SitekeyResult {
+  sitekey: string;
+  /** true = CF Managed Challenge interstitiel (AntiCloudflareTask requis) */
+  isCfChallenge: boolean;
+}
+
 /**
- * Extrait le sitekey Turnstile CF depuis la page de challenge.
- * Cherche dans : iframe src param, attribut data-sitekey, HTML inline.
+ * Extrait le sitekey + type de challenge depuis la page CF.
+ *
+ * Stratégie multi-couches :
+ *  1. URLs de toutes les frames — pattern `/0x4.../` dans challenge-platform → CF Managed
+ *  2. Iframes DOM (src chemin ou ?k=)
+ *  3. Widget .cf-turnstile[data-sitekey]
+ *  4. Scan HTML brut (fallback)
  */
-async function extractTurnstileSitekey(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    // Depuis l'iframe challenges.cloudflare.com
+async function extractTurnstileSitekey(page: Page): Promise<SitekeyResult | null> {
+  // 1. Scan des URLs de toutes les frames actives
+  //    CF Managed Challenge embarque le sitekey dans l'URL de son iframe interne :
+  //    challenges.cloudflare.com/cdn-cgi/challenge-platform/.../0x4XXXX/...
+  const frames = page.frames();
+  for (const frame of frames) {
+    try {
+      const frameUrl = frame.url();
+      if (!frameUrl || frameUrl === "about:blank" || frameUrl.startsWith("blob:")) continue;
+      const mFrame = frameUrl.match(/\/(0x4[A-Za-z0-9_-]{10,})\//);
+      if (mFrame) {
+        const isCfChallenge = frameUrl.includes("challenge-platform");
+        console.log(`[captcha] Sitekey dans frame URL (type: ${isCfChallenge ? "CF_CHALLENGE" : "turnstile"}): ${mFrame[1]}`);
+        return { sitekey: mFrame[1], isCfChallenge };
+      }
+    } catch { /* frame déchargée */ }
+  }
+
+  // 2-4. Fallback DOM → probablement Turnstile standard
+  const sitekey = await page.evaluate(() => {
     const iframes = document.querySelectorAll<HTMLIFrameElement>(
       'iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]'
     );
     for (const f of iframes) {
       const src = f.getAttribute("src") ?? "";
-      // ?k=XXXX ou /k=XXXX
-      const m = src.match(/[?&/]k=([0-9a-zA-Z_-]{10,})/);
-      if (m) return m[1];
+      const mPath = src.match(/\/(0x4[A-Za-z0-9_-]{10,})\//);
+      if (mPath) return mPath[1];
+      const mParam = src.match(/[?&]k=([0-9a-zA-Z_-]{10,})/);
+      if (mParam) return mParam[1];
     }
-    // Depuis un widget .cf-turnstile
     const widget = document.querySelector<HTMLElement>(
       ".cf-turnstile[data-sitekey], [data-cf-turnstile][data-sitekey]"
     );
-    if (widget?.getAttribute("data-sitekey")) {
-      return widget.getAttribute("data-sitekey")!;
-    }
-    // Scan HTML brut (fallback)
+    if (widget?.getAttribute("data-sitekey")) return widget.getAttribute("data-sitekey")!;
+    const m0x4 = document.documentElement.innerHTML.match(/0x4[A-Za-z0-9_-]{10,}/);
+    if (m0x4) return m0x4[0];
     const match = document.documentElement.innerHTML.match(
       /"sitekey"\s*:\s*"([0-9a-zA-Z_-]{10,})"|data-sitekey="([0-9a-zA-Z_-]{10,})"/
     );
     return match ? (match[1] ?? match[2] ?? "") : "";
   }).catch(() => "");
+
+  if (!sitekey) return null;
+  return { sitekey, isCfChallenge: false };
+}
+
+// ─── CapSolver — CF Managed Challenge (AntiCloudflareTask) ───────────────────
+
+interface CfClearanceSolution {
+  cfClearance: string;
+  userAgent: string;
+}
+
+interface CapSolverCfResultResponse {
+  errorId: number;
+  errorCode?: string;
+  status: string;
+  solution?: { token?: string; userAgent?: string; cookies?: Array<{ name: string; value: string }> };
 }
 
 /**
- * Détecte et tente de résoudre un challenge Cloudflare Turnstile.
- * Priorité : CapSolver (AntiTurnstileTaskProxyLess) → 2captcha (fallback).
+ * Résout un Cloudflare Managed Challenge via CapSolver AntiCloudflareTask.
+ * Retourne la valeur du cookie cf_clearance + le userAgent utilisé par CapSolver.
+ * @param proxyUrl  URL proxy iProyal au format http://user:pass@host:port (recommandé)
+ */
+async function solveCfManagedChallengeViaCapsolver(
+  apiKey: string,
+  siteKey: string,
+  pageUrl: string,
+  proxyUrl?: string,
+): Promise<CfClearanceSolution | null> {
+  // AntiCloudflareTask peut échouer avec 1002 (intermittent) — on retente 3 fois
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const result = await _tryAntiCloudflareTask(apiKey, siteKey, pageUrl, proxyUrl, attempt);
+    if (result) return result;
+    if (attempt < MAX_ATTEMPTS) {
+      const jitter = 5_000 + Math.random() * 5_000;
+      console.log(`[captcha] AntiCloudflareTask tentative ${attempt} échouée — retry dans ${Math.round(jitter / 1000)}s…`);
+      await new Promise(r => setTimeout(r, jitter));
+    }
+  }
+  console.error("[captcha] AntiCloudflareTask : toutes les tentatives ont échoué");
+  return null;
+}
+
+async function _tryAntiCloudflareTask(
+  apiKey: string,
+  siteKey: string,
+  pageUrl: string,
+  proxyUrl: string | undefined,
+  attempt: number,
+): Promise<CfClearanceSolution | null> {
+  const safeProxy = proxyUrl?.replace(/:[^:@]+@/, ":<redacted>@") ?? "aucun";
+  console.log(`[captcha] CF Managed → CapSolver AntiCloudflareTask (tentative ${attempt}/3) | proxy: ${safeProxy.slice(0, 50)}`);
+
+  // AntiCloudflareTask ne prend PAS de websiteKey — le challenge est détecté auto.
+  const task: Record<string, unknown> = {
+    type: "AntiCloudflareTask",
+    websiteURL: pageUrl,
+  };
+  if (proxyUrl) task.proxy = proxyUrl;
+
+  // 1. Créer la tâche
+  let taskId: string;
+  try {
+    const createRes = await fetch(`${CAPSOLVER_BASE}/createTask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientKey: apiKey, task }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = (await createRes.json()) as CapSolverCreateResponse;
+    if (data.errorId !== 0 || !data.taskId) {
+      console.error(`[captcha] CapSolver AntiCloudflareTask erreur: ${data.errorCode} — ${data.errorDescription}`);
+      return null;
+    }
+    taskId = data.taskId;
+    console.log(`[captcha] CapSolver AntiCloudflareTask créée: ${taskId}`);
+  } catch (err) {
+    console.error("[captcha] CapSolver AntiCloudflareTask réseau:", err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  // 2. Poller le résultat (timeout 120s — CF challenge peut prendre du temps)
+  for (let i = 1; i <= 60; i++) {
+    await new Promise(r => setTimeout(r, CAPSOLVER_POLL_MS));
+    try {
+      const resultRes = await fetch(`${CAPSOLVER_BASE}/getTaskResult`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey, taskId }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = (await resultRes.json()) as CapSolverCfResultResponse;
+      if (data.errorId !== 0) {
+        console.error(`[captcha] CapSolver CF poll erreur: ${data.errorCode}`);
+        return null;
+      }
+      if (data.status === "ready") {
+        // cf_clearance peut être dans solution.token ou solution.cookies
+        let cfClearance = data.solution?.token ?? "";
+        if (!cfClearance && data.solution?.cookies) {
+          const cfCookie = data.solution.cookies.find(c => c.name === "cf_clearance");
+          cfClearance = cfCookie?.value ?? "";
+        }
+        if (!cfClearance) {
+          console.error("[captcha] CapSolver AntiCloudflareTask: ready mais cf_clearance absent");
+          console.error("[captcha] Solution reçue:", JSON.stringify(data.solution).slice(0, 300));
+          return null;
+        }
+        const userAgent = data.solution?.userAgent ?? "";
+        console.log(`[captcha] ✅ cf_clearance reçu en ${i * CAPSOLVER_POLL_MS / 1000}s (longueur: ${cfClearance.length})`);
+        return { cfClearance, userAgent };
+      }
+      if (data.status !== "processing" && data.status !== "idle") {
+        console.error(`[captcha] CapSolver CF statut inattendu: ${data.status}`);
+        return null;
+      }
+      process.stdout.write(`[captcha] CapSolver CF #${i}/60 — en attente…\r`);
+    } catch (err) {
+      console.warn(`[captcha] CapSolver CF poll erreur (tentative ${i}):`, err instanceof Error ? err.message : err);
+    }
+  }
+  console.error("\n[captcha] CapSolver AntiCloudflareTask timeout");
+  return null;
+}
+
+/**
+ * Détecte et tente de résoudre un challenge Cloudflare.
+ *
+ * Deux branches selon le type de challenge détecté :
+ *
+ * ── CF Managed Challenge (interstitiel "Un momento…") ─────────────────────────
+ *   → CapSolver AntiCloudflareTask (nécessite proxy iProyal) → cf_clearance cookie
+ *
+ * ── Turnstile widget standard (data-sitekey dans le DOM) ─────────────────────
+ *   → CapSolver AntiTurnstileTaskProxyLess → token injecté
+ *   → Fallback : 2captcha
+ *
  * Utilisé APRÈS l'attente d'auto-résolution (voir waitAndResolveCloudflareTurnstile dans spainPortal).
+ *
+ * @param proxyUrl  URL proxy au format http://user:pass@host:port
+ *                  Requis pour AntiCloudflareTask (CF Managed Challenge).
  */
 export async function detectAndSolveTurnstile(
   page: Page,
   twoCaptchaApiKey: string | undefined,
   capsolverApiKey?: string,
+  proxyUrl?: string,
 ): Promise<CaptchaResult> {
   let title = "";
   try { title = await page.title(); } catch { /* ignore */ }
@@ -354,29 +520,80 @@ export async function detectAndSolveTurnstile(
 
   if (!hasCfBlock) return "solved";
 
-  console.log(`[captcha] Turnstile CF détecté (titre: "${title}")`);
+  console.log(`[captcha] Challenge CF détecté (titre: "${title}")`);
 
-  const siteKey = await extractTurnstileSitekey(page);
-  if (!siteKey) {
-    console.error("[captcha] Turnstile : sitekey introuvable dans la page");
+  const sitekeyResult = await extractTurnstileSitekey(page);
+  if (!sitekeyResult) {
+    console.error("[captcha] Sitekey CF introuvable dans la page");
     return "failed";
   }
 
+  const { sitekey, isCfChallenge } = sitekeyResult;
   const pageUrl = page.url();
+
+  // ── Branche A : CF Managed Challenge — CapSolver AntiCloudflareTask ────
+  if (isCfChallenge) {
+    console.log(`[captcha] Type: CF Managed Challenge | sitekey: ${sitekey}`);
+    if (!capsolverApiKey) {
+      console.warn("[captcha] CF Managed Challenge : CAPSOLVER_API_KEY absent — impossible à résoudre");
+      return "no_key";
+    }
+    const solution = await solveCfManagedChallengeViaCapsolver(capsolverApiKey, sitekey, pageUrl, proxyUrl).catch(() => null);
+    if (!solution) return "failed";
+
+    // Injecter le cookie cf_clearance dans le contexte Playwright
+    const domain = new URL(pageUrl).hostname;
+    try {
+      await page.context().addCookies([{
+        name: "cf_clearance",
+        value: solution.cfClearance,
+        domain: `.${domain}`,
+        path: "/",
+        secure: true,
+        httpOnly: false,
+        sameSite: "None",
+      }]);
+      console.log("[captcha] ✅ Cookie cf_clearance injecté");
+    } catch (err) {
+      console.error("[captcha] Erreur injection cf_clearance:", err instanceof Error ? err.message : err);
+      return "failed";
+    }
+
+    // Synchroniser le User-Agent avec celui utilisé par CapSolver pour résoudre le challenge.
+    // cf_clearance est lié à l'UA — sans correspondance, CF rejette le cookie.
+    if (solution.userAgent) {
+      try {
+        await page.setExtraHTTPHeaders({ "User-Agent": solution.userAgent });
+        console.log(`[captcha] UA synchronisé: ${solution.userAgent.slice(0, 60)}…`);
+      } catch { /* non critique */ }
+    }
+
+    // Recharger via reload() (pas goto) — réutilise la connexion iProyal existante
+    // pour rester sur le même exit IP que CapSolver a utilisé → cf_clearance valide.
+    console.log("[captcha] Rechargement post-injection (reload)...");
+    try {
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+    } catch { /* timeout acceptable */ }
+
+    return "solved";
+  }
+
+  // ── Branche B : Turnstile widget standard ────────────────────────────────
+  console.log(`[captcha] Type: Turnstile standard | sitekey: ${sitekey.slice(0, 14)}…`);
   let token: string | null = null;
 
-  // ── Priorité 1 : CapSolver (plus fiable sur les sitekeys gov) ──────────
+  // Priorité 1 : CapSolver AntiTurnstileTaskProxyLess
   if (capsolverApiKey) {
-    console.log("[captcha] Turnstile → essai CapSolver en priorité");
-    token = await solveTurnstileViaCapsolver(capsolverApiKey, siteKey, pageUrl).catch(() => null);
+    console.log("[captcha] Turnstile → CapSolver AntiTurnstileTaskProxyLess");
+    token = await solveTurnstileViaCapsolver(capsolverApiKey, sitekey, pageUrl).catch(() => null);
     if (token) {
-      console.log("[captcha] ✅ CapSolver a fourni le token Turnstile");
+      console.log("[captcha] ✅ CapSolver Turnstile token reçu");
     } else {
-      console.warn("[captcha] CapSolver échec — fallback 2captcha");
+      console.warn("[captcha] CapSolver Turnstile échec — fallback 2captcha");
     }
   }
 
-  // ── Priorité 2 : 2captcha (fallback si CapSolver absent ou échoué) ─────
+  // Priorité 2 : 2captcha (fallback)
   if (!token) {
     if (!twoCaptchaApiKey) {
       console.warn("[captcha] Turnstile : aucune clé captcha disponible (CapSolver ni 2captcha)");
@@ -385,9 +602,9 @@ export async function detectAndSolveTurnstile(
     console.log("[captcha] Turnstile → 2captcha");
     let taskId: string | null = null;
     try {
-      taskId = await submitTurnstileTask(twoCaptchaApiKey, siteKey, pageUrl);
+      taskId = await submitTurnstileTask(twoCaptchaApiKey, sitekey, pageUrl);
     } catch (err) {
-      console.error("[captcha] Soumission Turnstile 2captcha échouée:", err instanceof Error ? err.message : String(err));
+      console.error("[captcha] 2captcha Turnstile soumission échouée:", err instanceof Error ? err.message : String(err));
       return "failed";
     }
     if (!taskId) return "failed";
@@ -397,14 +614,11 @@ export async function detectAndSolveTurnstile(
   if (!token) return "failed";
 
   await injectTurnstileSolution(page, token);
-  console.log("[captcha] Turnstile token injecté — attente rechargement page...");
+  console.log("[captcha] Turnstile token injecté — attente rechargement...");
 
-  // Attendre que CF redirige vers la page réelle après injection du token
   try {
     await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 });
-  } catch {
-    // Pas de navigation = form.submit() non déclenché — peut être normal
-  }
+  } catch { /* pas de navigation = form.submit() non déclenché */ }
 
   return "solved";
 }

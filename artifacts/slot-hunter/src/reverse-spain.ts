@@ -16,17 +16,14 @@
  *
  * Usage : npx tsx src/reverse-spain.ts
  */
-import { chromium as baseChromium } from "playwright";
-import { addExtra } from "playwright-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { ProxyAgent } from "undici";
-
-const playwrightChromium = addExtra(baseChromium);
-playwrightChromium.use(StealthPlugin());
+import { detectAndSolveTurnstile } from "./captcha.js";
+import { launchBrowser } from "./browser.js";
 
 const WIDGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 const proxy = process.env.IPROYAL_PROXY_URL;
+const capsolverKey = process.env.CAPSOLVER_API_KEY;
 
 function sep(title: string): void {
   console.log("\n" + "─".repeat(60));
@@ -98,28 +95,13 @@ async function main(): Promise<void> {
   // ── Phase A : Playwright — passer CF, charger widget, capturer session ──
   sep("A. Playwright — bypass CF + capture session");
 
-  const browser = await playwrightChromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--disable-gpu"],
-    proxy: proxy ? { server: proxy } : undefined,
-  }) as unknown as Browser;
-
-  const context: BrowserContext = await (browser as unknown as {
-    newContext(opts: Record<string, unknown>): Promise<BrowserContext>
-  }).newContext({
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    viewport: { width: 1366, height: 768 },
+  // Utilise launchBrowser() — identique à la prod (stealth, UA aléatoire, iProyal)
+  const { browser, context, page } = await launchBrowser({
+    proxySource: "iproyal",
     locale: "es-ES",
     timezoneId: "Europe/Madrid",
-    extraHTTPHeaders: { "Accept-Language": "es-ES,es;q=0.9,en;q=0.8" },
+    acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
   });
-
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-    ((window as unknown) as Record<string, unknown>).chrome = { runtime: {} };
-  });
-
-  const page: Page = await context.newPage();
 
   // Capturer toutes les URLs de requêtes réseau (pour trouver bookititBase)
   const capturedRequests: string[] = [];
@@ -147,21 +129,47 @@ async function main(): Promise<void> {
   console.log("  Navigation vers:", WIDGET_URL);
   try {
     await page.goto(WIDGET_URL, { waitUntil: "commit", timeout: 30_000 });
-  } catch {
-    console.warn("  goto 30s timeout — retry 45s");
-    await page.goto(WIDGET_URL, { waitUntil: "commit", timeout: 45_000 });
+  } catch (e) {
+    console.warn("  goto timeout/err:", e instanceof Error ? e.message : e);
   }
 
-  // Attente CF
+  // Attente 20s pour que CF JS s'exécute (challenge ou auto-bypass)
+  console.log("  Attente 20s pour exécution CF JS...");
+  for (let i = 1; i <= 4; i++) {
+    await new Promise(r => setTimeout(r, 5_000));
+    const t = await page.title().catch(() => "");
+    console.log(`  [${i * 5}s] titre: "${t}" | url: ${page.url()}`);
+    if (t && !/just a moment|un instant|un momento|verifying you are human/i.test(t)) {
+      console.log("  ✅ Page réelle chargée sans CF");
+      break;
+    }
+  }
+
+  // Dump HTML pour diagnostic
+  const htmlSnippet = await page.content().catch(() => "").then(h => h.slice(0, 1200));
+  console.log("  HTML reçu (1200 chars):\n" + htmlSnippet);
+
+  // Attente CF — auto-résolution 25s supplémentaires puis CapSolver si toujours bloqué
   let title = await page.title().catch(() => "");
   console.log("  Titre initial:", title);
+  console.log("  CapSolver:", capsolverKey ? `✅ clé présente (${capsolverKey.slice(0, 8)}…)` : "❌ absent");
   const CF_RE = /just a moment|un instant|un momento|verifying you are human/i;
   if (CF_RE.test(title)) {
-    console.log("  Cloudflare détecté — attente 25s...");
+    console.log("  Cloudflare détecté — attente auto 25s...");
     for (let i = 0; i < 8; i++) {
       await new Promise(r => setTimeout(r, 3000));
       title = await page.title().catch(() => "");
-      if (!CF_RE.test(title)) { console.log(`  CF résolu après ${(i+1)*3}s`); break; }
+      if (!CF_RE.test(title)) { console.log(`  CF auto-résolu après ${(i+1)*3}s`); break; }
+    }
+    if (CF_RE.test(title)) {
+      console.log("  CF persistant après 25s — résolution CapSolver AntiTurnstileTaskProxyLess…");
+      const result = await detectAndSolveTurnstile(page, undefined, capsolverKey);
+      console.log("  Résultat CapSolver:", result);
+      if (result === "solved") {
+        await new Promise(r => setTimeout(r, 3000));
+        title = await page.title().catch(() => "");
+        console.log(`  Titre après CapSolver: "${title}" | CF encore présent: ${CF_RE.test(title) ? "OUI ❌" : "NON ✅"}`);
+      }
     }
   }
 
