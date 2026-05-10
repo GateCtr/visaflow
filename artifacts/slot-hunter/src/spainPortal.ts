@@ -251,9 +251,13 @@ async function getRuntimeContext(page: Page): Promise<SpainRuntimeContext> {
     const init = (w.bkt_init_widget && typeof w.bkt_init_widget === "object")
       ? (w.bkt_init_widget as Record<string, unknown>)
       : {};
-    const ocv = (w.oClientValues_248295 && typeof w.oClientValues_248295 === "object")
-      ? (w.oClientValues_248295 as Record<string, unknown>)
-      : {};
+
+    // Trouver oClientValues_XXXXX dynamiquement (le suffixe numérique dépend du widget)
+    let ocv: Record<string, unknown> = {};
+    const ocvKey = Object.keys(w).find(
+      (k) => k.startsWith("oClientValues_") && typeof w[k] === "object" && w[k] !== null
+    );
+    if (ocvKey) ocv = w[ocvKey] as Record<string, unknown>;
 
     const extract = (arr: unknown): string[] => {
       if (!Array.isArray(arr)) return [];
@@ -1639,48 +1643,144 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         }
       }
 
-      // Bouton Continuar (version watcher : version légère sans botLog)
-      const SELECTORS = [
+      // ── Navigation multi-étapes Bookitit ──────────────────────────────────────
+      // Flux : #services → (sélection service) → #agendas → (sélection agenda) → #datetime → datetime/ API
+      //
+      // Logique d'auto-navigation du bundle :
+      //   • 1 seul service  → checkOneService() auto-sélectionne → navigate('agendas')
+      //   • 1 seul agenda   → checkOneAgenda()  auto-sélectionne → navigate('datetime')
+      // → Dans ce cas le widget navigue tout seul ; on attend juste que le hash change.
+      //
+      // Sélecteurs réels extraits du bundle :
+      //   Services  : #idListServices .clsBktServiceDataContainer  (checkbox: input[name='services[]'])
+      //   Agendas   : #idListAgendas  .clsBktAgendaDataContainer
+      //   Continue  : #idDivBktButtonContinueContainer (affiché seulement si multiselect > 0)
+
+      // Sélecteurs de cartes cliquables par hash
+      const SERVICE_CARD_SELS = [
+        "#idListServices .clsBktServiceDataContainer",
+        "#idListServices input[name='services[]']",
+        "#idListServices a",
+        ".clsBktServiceDataContainer",
+      ];
+      const AGENDA_CARD_SELS = [
+        "#idListAgendas .clsBktAgendaDataContainer",
+        "#idListAgendas a",
+        ".clsBktAgendaDataContainer",
+        ".clsDivBktAgendaFirstAvailable",
+      ];
+      // Continue button (multiselect services uniquement)
+      const CONTINUE_SELS = [
+        "#idDivBktButtonContinueContainer button",
+        "#idDivBktButtonContinueContainer a",
         "#idBktDefaultContinueButton",
         "#idDivBktContinueButton",
         ".clsDivContinueButton",
-        ".clsBktContinueButton",
+        "[id*='ContinueContainer'] button",
         "[id*='Continue'][id*='Button']",
-        "[class*='ContinueButton']",
       ];
-      for (const sel of SELECTORS) {
-        try {
-          const el = await page.$(sel);
-          if (!el) continue;
-          const visible = await el.isVisible().catch(() => false);
-          if (!visible) continue;
-          console.log(`[spain-watcher] Continuar (${sel})`);
-          await el.click();
-          await randomDelay(2000, 3500);
-          break;
-        } catch { /* try next */ }
-      }
 
-      // Fallback texte DOM
-      const clicked = await page.evaluate(() => {
-        const candidates = Array.from(
-          document.querySelectorAll<HTMLElement>("button, a, div[onclick], [role='button'], input[type='button'], input[type='submit']")
-        );
-        for (const el of candidates) {
-          if (/continuar|continue/i.test(el.textContent?.trim() ?? "") && el.offsetParent !== null) {
-            el.click();
-            return (el.textContent?.trim() ?? "").slice(0, 40);
+      for (let step = 0; step < 8; step++) {
+        const currentHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
+        console.log(`[spain-watcher] step=${step} hash="${currentHash}"`);
+
+        // Étape datetime → les appels API datetime/ vont se déclencher → sortir
+        if (/datetime|selecttime|calendar|noavailability|slot/i.test(currentHash)) {
+          console.log(`[spain-watcher] Étape datetime atteinte → attente API`);
+          break;
+        }
+
+        // Attendre d'abord l'auto-navigation Bookitit (jusqu'à 4s)
+        // Le bundle auto-navigue si 1 seul service ou 1 seul agenda
+        let autoNavigated = false;
+        for (let w = 0; w < 4; w++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const newHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
+          if (newHash !== currentHash) {
+            console.log(`[spain-watcher] Auto-navigation: "${currentHash}" → "${newHash}"`);
+            autoNavigated = true;
+            break;
           }
         }
-        return null;
-      });
-      if (clicked) {
-        console.log(`[spain-watcher] Continuar text fallback: "${clicked}"`);
-        await randomDelay(2000, 3500);
+        if (autoNavigated) continue; // Re-boucler avec le nouveau hash
+
+        // Pas d'auto-navigation → sélectionner manuellement la première carte visible
+        const isAtAgendas = /agendas/i.test(currentHash);
+        const cardSels = isAtAgendas ? AGENDA_CARD_SELS : SERVICE_CARD_SELS;
+
+        const cardClicked = await page.evaluate((sels: string[]) => {
+          for (const sel of sels) {
+            const cards = Array.from(document.querySelectorAll<HTMLElement>(sel));
+            for (const card of cards) {
+              if (card.offsetParent === null) continue; // invisible
+              const disabled = card.hasAttribute("disabled") || card.classList.contains("clsBktServiceDisabled");
+              if (disabled) continue;
+              card.click();
+              return `${sel} [text="${(card.textContent?.trim() ?? "").slice(0, 30)}"]`;
+            }
+          }
+          return null;
+        }, cardSels);
+
+        if (cardClicked) {
+          console.log(`[spain-watcher] Carte cliquée: ${cardClicked}`);
+          await randomDelay(600, 1200);
+        }
+
+        // Cliquer "Continuar" (affiché uniquement pour multiselect > 0)
+        let continuarClicked = false;
+        for (const sel of CONTINUE_SELS) {
+          try {
+            const el = await page.$(sel);
+            if (!el) continue;
+            const visible = await el.isVisible().catch(() => false);
+            if (!visible) continue;
+            const disabled = await el.isDisabled().catch(() => false);
+            if (disabled) continue;
+            console.log(`[spain-watcher] Continuar (${sel}) step=${step}`);
+            await el.click();
+            await randomDelay(1500, 2500);
+            continuarClicked = true;
+            break;
+          } catch { /* try next */ }
+        }
+
+        // Fallback texte
+        if (!continuarClicked) {
+          const textClicked = await page.evaluate(() => {
+            const candidates = Array.from(
+              document.querySelectorAll<HTMLElement>("button, a, [role='button']")
+            );
+            for (const el of candidates) {
+              if (el.offsetParent === null) continue;
+              if (/continuar|continue/i.test(el.textContent?.trim() ?? "")) {
+                el.click();
+                return (el.textContent?.trim() ?? "").slice(0, 40);
+              }
+            }
+            return null;
+          });
+          if (textClicked) {
+            console.log(`[spain-watcher] Continuar text: "${textClicked}" step=${step}`);
+            await randomDelay(1500, 2500);
+            continuarClicked = true;
+          }
+        }
+
+        // Si ni carte ni Continuar trouvés → attendre auto-navigation ou abandonner
+        if (!cardClicked && !continuarClicked) {
+          console.log(`[spain-watcher] Rien à cliquer step=${step}, hash="${currentHash}" — attente 3s`);
+          await randomDelay(2500, 4000);
+          const newHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
+          if (newHash === currentHash) {
+            console.log(`[spain-watcher] Hash inchangé — navigation bloquée à step=${step}`);
+            break;
+          }
+        }
       }
 
-      // Attendre les JSONP datetime
-      await randomDelay(3000, 5000);
+      // Attendre les JSONP datetime (délai après dernière navigation)
+      await randomDelay(3500, 6000);
 
       // API-first via bases Bookitit détectées
       if (bookititBases.size > 0) {
