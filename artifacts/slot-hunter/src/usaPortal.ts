@@ -333,6 +333,7 @@ const REFERER_LOGIN      = "https://www.usvisaappt.com/visaapplicantui/login";
 const REFERER_DASHBOARD  = "https://www.usvisaappt.com/visaapplicantui/home/dashboard";
 const REFERER_REQUESTS   = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests";
 const REFERER_CREATE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment";
+const REFERER_MANAGE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/manage-appointment";
 
 // ─── Pool UA Chrome/Edge pour les appels API USA ─────────────────────────────
 // Le portail Angular envoie des requêtes depuis Chrome uniquement → pas de Firefox/Safari ici.
@@ -842,7 +843,9 @@ export async function checkUsaAppointmentRequestStatus(
 }
 
 export async function getUsaAppointmentRequests(session: UsaSession): Promise<UsaAppointmentRequest[]> {
-  const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
+  // Referer = page "Mes rendez-vous" (Dashboard > Requests) — c'est depuis là que le portail
+  // Angular appelle getallbyuser avant de présenter le bouton "Rebook".
+  const headers = authHeaders(session.accessToken, REFERER_MANAGE_APT, false);
 
   try {
     const res = await usaFetch(USA_APPT_REQUESTS_URL, { method: "GET", headers });
@@ -995,7 +998,53 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const rescheduleExistingDate = job.hunterConfig.rescheduleExistingDate;
 
     if (rescheduleMode && rescheduleExistingDate) {
-      console.log(`[usa] ♻️ Mode reporter actif — RDV existant le ${rescheduleExistingDate}. Recherche d'un créneau antérieur...`);
+      console.log(`[usa] ♻️ Mode reporter actif — RDV existant le ${rescheduleExistingDate}. Simulation page "Mes rendez-vous"...`);
+
+      // ── Simulation de la page "Mes rendez-vous" + bouton "Rebook" ─────────────
+      // Le portail Angular appelle getallbyuser avant d'ouvrir le flow de modification.
+      // Sans cet appel, le pattern de requêtes est anormal (slot scan sans visite préalable).
+      // On l'utilise aussi pour vérifier/récupérer l'appointmentId exact du RDV existant.
+      await randomDelay(800, 1800);
+      try {
+        const apptRequests = await getUsaAppointmentRequests(session);
+        if (apptRequests.length > 0) {
+          // Chercher le RDV correspondant à la date existante (ou prendre le premier actif)
+          // Le portail retourne un `appointmentId` par dossier — crucial pour le PUT reschedule
+          const matchingAppt = apptRequests.find((r) =>
+            r.pendingAppoStatus === 1 && (
+              // Si le portalApplicationId est configuré → matcher par applicationId
+              (session.applicationId && r.applicationId === session.applicationId) ||
+              // Sinon prendre le premier avec statut "scheduled" (pendingAppoStatus=1)
+              true
+            )
+          ) ?? apptRequests[0];
+
+          if (matchingAppt) {
+            console.log(
+              `[usa] 📋 "Mes rendez-vous" → dossier ${matchingAppt.applicationId}` +
+              `${matchingAppt.appointmentId !== undefined ? ` | appointmentId=${matchingAppt.appointmentId}` : ""}` +
+              `${matchingAppt.applicantUUID !== undefined ? ` | applicantUUID=${matchingAppt.applicantUUID}` : ""}` +
+              ` | pendingAppoStatus=${matchingAppt.pendingAppoStatus}`
+            );
+            // Mettre à jour l'appointmentId depuis la liste "Mes rendez-vous" si disponible
+            // (priorité sur checkUsaAppointmentRequestStatus car source plus précise pour le reschedule)
+            if (matchingAppt.appointmentId !== undefined && session.appointmentId === undefined) {
+              console.log(`[usa] ♻️ appointmentId du RDV existant (reschedule) : ${matchingAppt.appointmentId}`);
+              session.appointmentId = matchingAppt.appointmentId;
+            }
+            if (matchingAppt.applicantUUID !== undefined && session.applicantUUID === undefined) {
+              session.applicantUUID = matchingAppt.applicantUUID;
+            }
+          }
+          console.log(`[usa] ♻️ "Rebook" initié — ${apptRequests.length} dossier(s) trouvé(s)`);
+        } else {
+          console.warn(`[usa] ⚠️ Aucun rendez-vous trouvé via getallbyuser — reschedule avec les données disponibles`);
+        }
+      } catch (err) {
+        console.warn(`[usa] ⚠️ getUsaAppointmentRequests ignoré (${err}) — reschedule maintenu`);
+      }
+      await randomDelay(600, 1200);
+
       botLog({
         applicationId: job.id,
         step: "scan",
@@ -1413,7 +1462,8 @@ async function findFirstSlotForOfc(
   appDetails: UsaAppDetails,
   dateFrom?: string,
   dateDeadline?: string,
-  rescheduleYN?: boolean
+  rescheduleYN?: boolean,
+  referer?: string
 ): Promise<SlotFound | null> {
   const basePayload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
@@ -1428,8 +1478,12 @@ async function findFirstSlotForOfc(
   // Mode reporter : rescheduleYN=true signale au serveur qu'on modifie un RDV existant
   if (rescheduleYN) basePayload.rescheduleYN = true;
 
+  // Referer : en mode reschedule, les requêtes viennent de la page "Mes rendez-vous" / "Rebook"
+  // En mode normal (nouveau créneau), elles viennent de la page "create-appointment"
+  const slotReferer = referer ?? REFERER_CREATE_APT;
+
   // Toutes les requêtes de slot incluent les cookies APP_ID_TOBE + missionId (POST avec body)
-  const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, REFERER_CREATE_APT, true);
+  const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, slotReferer, true);
 
   /**
    * Vérifie le status HTTP et lève une erreur circuit-breaker si critique.
@@ -2092,7 +2146,11 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
 
     let found: SlotFound | null;
     try {
-      found = await findFirstSlotForOfc(session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline, rescheduleMode);
+      found = await findFirstSlotForOfc(
+        session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline,
+        rescheduleMode,
+        rescheduleMode ? REFERER_MANAGE_APT : undefined
+      );
     } catch (err) {
       if (err instanceof RateLimitError) {
         const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);
