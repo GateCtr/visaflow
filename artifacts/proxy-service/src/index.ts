@@ -2,6 +2,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { ProxyPool, detectPublicIp } from './pool.js';
 import { getStaticProxy } from './sources/static.js';
+import { getIProyalProxy, verifyIProyalProxy } from './sources/iproyal.js';
 
 const PORT             = parseInt(process.env.PORT ?? '3200', 10);
 const SERVICE_API_KEY  = process.env.PROXY_SERVICE_API_KEY ?? '';
@@ -21,9 +22,18 @@ async function init(): Promise<void> {
   }
   console.log(' 🔒 Auth enabled (X-Api-Key required)');
 
+  const iproyal   = getIProyalProxy();
   const staticSrc = getStaticProxy();
 
-  if (TWOCAPTCHA_KEY) {
+  if (iproyal.isConfigured) {
+    console.log(' ✅ Mode: iProyal residential proxy (IPROYAL_PROXY_URL)');
+    const check = await verifyIProyalProxy();
+    if (check.ok) {
+      console.log(` ✅ iProyal verified — exit IP: ${check.ip}`);
+    } else {
+      console.warn(` ⚠️  iProyal verify failed at startup: ${check.error}`);
+    }
+  } else if (TWOCAPTCHA_KEY) {
     pool = new ProxyPool(TWOCAPTCHA_KEY);
     const ip = await detectPublicIp();
     if (ip) {
@@ -55,14 +65,17 @@ const app = express();
 app.use(express.json());
 
 app.get('/health', (_req: Request, res: Response) => {
+  const iproyal   = getIProyalProxy();
   const staticSrc = getStaticProxy();
   res.json({
     status: 'ok',
-    mode: pool?.isConfigured
-      ? '2captcha'
-      : staticSrc.isConfigured
-        ? 'static'
-        : 'none',
+    mode: iproyal.isConfigured
+      ? 'iproyal'
+      : pool?.isConfigured
+        ? '2captcha'
+        : staticSrc.isConfigured
+          ? 'static'
+          : 'none',
     timestamp: new Date().toISOString(),
   });
 });
@@ -74,6 +87,15 @@ app.get('/proxy/get', authMiddleware, async (req: Request, res: Response) => {
     return;
   }
 
+  // Priority 1: iProyal
+  const iproyal = getIProyalProxy();
+  if (iproyal.isConfigured && iproyal.proxyUrl) {
+    const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
+    res.json({ proxy: iproyal.proxyUrl, source: 'iproyal', expiresAt });
+    return;
+  }
+
+  // Priority 2: 2captcha pool
   if (pool?.isConfigured) {
     const result = await pool.getProxy();
     if (result) {
@@ -83,6 +105,7 @@ app.get('/proxy/get', authMiddleware, async (req: Request, res: Response) => {
     console.warn('[proxy/get] 2captcha pool returned null — trying static fallback');
   }
 
+  // Priority 3: static PROXY_URL
   const staticSrc = getStaticProxy();
   if (staticSrc.isConfigured && staticSrc.proxyUrl) {
     const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
@@ -94,10 +117,12 @@ app.get('/proxy/get', authMiddleware, async (req: Request, res: Response) => {
 });
 
 app.get('/proxy/pool', authMiddleware, (_req: Request, res: Response) => {
+  const iproyal   = getIProyalProxy();
   const staticSrc = getStaticProxy();
   if (!pool) {
     res.json({
-      mode: staticSrc.isConfigured ? 'static' : 'none',
+      mode: iproyal.isConfigured ? 'iproyal' : staticSrc.isConfigured ? 'static' : 'none',
+      iproyalProxy: iproyal.proxyUrl ? '[configured]' : null,
       staticProxy: staticSrc.proxyUrl,
       pool: null,
     });
@@ -105,9 +130,15 @@ app.get('/proxy/pool', authMiddleware, (_req: Request, res: Response) => {
   }
   res.json({
     mode: pool.isConfigured ? '2captcha' : 'unconfigured',
+    iproyalProxy: iproyal.proxyUrl ? '[configured]' : null,
     staticProxy: staticSrc.proxyUrl,
     pool: pool.getState(),
   });
+});
+
+app.post('/proxy/verify', authMiddleware, async (_req: Request, res: Response) => {
+  const result = await verifyIProyalProxy();
+  res.status(result.ok ? 200 : 502).json(result);
 });
 
 app.post('/proxy/whitelist', authMiddleware, async (_req: Request, res: Response) => {
