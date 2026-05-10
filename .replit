@@ -34,6 +34,10 @@ args = "Start application"
 task = "workflow.run"
 args = "artifacts/captcha-service: Captcha Service"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/proxy-service: Proxy Service"
+
 [[workflows.workflow]]
 name = "artifacts/slot-hunter: Slot Hunter"
 author = "agent"
@@ -69,6 +73,17 @@ task = "shell.exec"
 args = "PORT=3001 pnpm --filter @workspace/captcha-service run dev"
 waitForPort = 3001
 
+[[workflows.workflow]]
+name = "artifacts/proxy-service: Proxy Service"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=3002 pnpm --filter @workspace/proxy-service run dev"
+
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
@@ -99,3 +114,7 @@ externalPort = 3000
 [[ports]]
 localPort = 3001
 externalPort = 3001
+
+[[ports]]
+localPort = 3002
+externalPort = 3002

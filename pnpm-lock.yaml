@@ -572,6 +572,25 @@ importers:
         specifier: 'catalog:'
         version: 3.25.76
 
+  artifacts/proxy-service:
+    dependencies:
+      express:
+        specifier: ^4.21.0
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   artifacts/slot-hunter:
     dependencies:
       dotenv:
