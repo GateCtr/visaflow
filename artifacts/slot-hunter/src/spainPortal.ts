@@ -1661,12 +1661,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       }
 
       // ── Attente initialisation widget Bookitit (max 25s) ─────────────────────
-      // Le dialog natif "Welcome / Bienvenido" (window.alert) est déjà géré par
-      // page.on("dialog") ci-dessus — auto-accepté avant le chargement du widget.
-      // Ici on attend simplement que le SPA Bookitit soit prêt :
-      //   • #idBktWidgetDefaultBodyContainer visible (display != "none")
-      //   • hash non-vide (ex: "#services", "#agendas", "#datetime")
-      // Avec 1 seul service et 1 seul agenda, le SPA auto-navigue jusqu'à #datetime.
+      // Le dialog natif "Welcome / Bienvenido" (window.alert) est géré par
+      // page.on("dialog") ci-dessus — auto-accepté dès le chargement.
+      //
+      // Après le dismiss de l'alert, citaconsular.es affiche la vue "custom" Bookitit
+      // (texte "Para solicitar cita pulse en el botón continuar" + bouton vert).
+      // Cette vue correspond à la route '' → 'custom' du router Backbone.
+      // IMPORTANT : Backbone ne push pas "#custom" dans l'URL pour la route par défaut
+      // → hash reste "" même si le widget est chargé en vue custom.
+      //
+      // Condition "prêt" : container Bookitit visible ET (hash non-vide OU vue custom visible)
       {
         console.log("[spain-watcher] Attente init widget Bookitit (max 25s)…");
         const t0 = Date.now();
@@ -1675,12 +1679,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           const ready: boolean = await page.evaluate(() => {
             const container = document.getElementById("idBktWidgetDefaultBodyContainer");
             if (!container) return false;
-            const style = window.getComputedStyle(container);
-            return style.display !== "none" && window.location.hash.length > 1;
+            if (window.getComputedStyle(container).display === "none") return false;
+            // Hash non-vide : widget passé au-delà de la vue custom
+            if (window.location.hash.length > 1) return true;
+            // Hash vide : vérifier si la vue custom est visible (route '' = custom)
+            const customView = document.getElementById("idBktDefaultCustomContainer");
+            return !!(customView && customView.offsetParent !== null);
           }).catch(() => false);
           if (ready) {
             const h = await page.evaluate(() => window.location.hash).catch(() => "");
-            console.log(`[spain-watcher] Widget initialisé, hash="${h}"`);
+            console.log(`[spain-watcher] Widget initialisé, hash="${h || "(custom view)"}"`);
             break;
           }
         }
@@ -1727,7 +1735,45 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
 
       for (let step = 0; step < 8; step++) {
         const currentHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
-        console.log(`[spain-watcher] step=${step} hash="${currentHash}"`);
+        console.log(`[spain-watcher] step=${step} hash="${currentHash || "(custom view)"}"`);
+
+        // ── Vue custom Bookitit (hash="" = route par défaut → custom) ───────────
+        // Le router Backbone charge la vue custom en premier (route '' → 'custom').
+        // Le bouton #idDivBktCustomContinueButton (texte "Continue / Continuar")
+        // navigue vers #services. On attend jusqu'à 12s que le hash change.
+        if (currentHash === "" || currentHash === "#custom") {
+          const customClicked: boolean = await page.evaluate(() => {
+            // Sélecteur exact du bundle custom.js : #idDivBktCustomContinueButton
+            const btn = document.getElementById("idDivBktCustomContinueButton");
+            if (btn && btn.offsetParent !== null) { btn.click(); return true; }
+            // Fallback : n'importe quel bouton visible dans le container custom
+            const container = document.getElementById("idBktDefaultCustomContainer");
+            if (!container) return false;
+            const candidates = container.querySelectorAll("button, a, input[type='button'], input[type='submit']");
+            for (let i = 0; i < candidates.length; i++) {
+              const el = candidates[i] as HTMLElement;
+              if (el.offsetParent !== null) { el.click(); return true; }
+            }
+            return false;
+          }).catch(() => false);
+
+          if (customClicked) {
+            console.log("[spain-watcher] Vue custom → Continue cliqué — attente hash (max 12s)");
+            for (let w = 0; w < 12; w++) {
+              await new Promise((r) => setTimeout(r, 1000));
+              const newHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
+              if (newHash && newHash !== "" && newHash !== "#custom") {
+                console.log(`[spain-watcher] Vue custom → navigué vers "${newHash}"`);
+                break;
+              }
+            }
+            continue;
+          } else {
+            console.log("[spain-watcher] Vue custom : bouton Continue introuvable — attente 4s");
+            await new Promise((r) => setTimeout(r, 4000));
+            continue;
+          }
+        }
 
         // ── Détection "aucun créneau" via DOM Bookitit ──────────────────────────
         // Bookitit affiche #idBktDefaultDatetimeErrorNoAvailability quand aucun créneau.
