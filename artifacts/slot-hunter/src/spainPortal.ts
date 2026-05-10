@@ -254,36 +254,50 @@ async function getRuntimeContext(page: Page): Promise<SpainRuntimeContext> {
 
     // Trouver oClientValues_XXXXX dynamiquement (le suffixe numérique dépend du widget)
     let ocv: Record<string, unknown> = {};
-    const ocvKey = Object.keys(w).find(
-      (k) => k.startsWith("oClientValues_") && typeof w[k] === "object" && w[k] !== null
-    );
-    if (ocvKey) ocv = w[ocvKey] as Record<string, unknown>;
+    const keys = Object.keys(w);
+    for (let ki = 0; ki < keys.length; ki++) {
+      const k = keys[ki];
+      if (k.indexOf("oClientValues_") === 0 && typeof w[k] === "object" && w[k] !== null) {
+        ocv = w[k] as Record<string, unknown>;
+        break;
+      }
+    }
 
-    const extract = (arr: unknown): string[] => {
-      if (!Array.isArray(arr)) return [];
-      const out: string[] = [];
-      for (const item of arr) {
+    // IMPORTANT: pas de fonction nommée (const f = () => {}) ici car tsx/esbuild injecte
+    // __name(f, "f") qui n'est pas disponible dans le contexte browser de page.evaluate.
+    // On inline l'extraction directement pour selectedServices et selectedAgendas.
+    const selectedServices: string[] = [];
+    const rawSvc = ocv.selectedServices;
+    if (Array.isArray(rawSvc)) {
+      for (let i = 0; i < rawSvc.length; i++) {
+        const item = rawSvc[i];
         if (!item || typeof item !== "object") continue;
         const obj = item as Record<string, unknown>;
-        const attrs = (obj.attributes && typeof obj.attributes === "object")
-          ? (obj.attributes as Record<string, unknown>)
-          : {};
-        const candidates = [
-          obj.id, obj.service_id, obj.services_id, obj.agenda_id, obj.agendas_id, obj.value,
-          attrs.id, attrs.service_id, attrs.services_id, attrs.agenda_id, attrs.agendas_id, attrs.value,
-        ];
-        for (const c of candidates) {
-          if (typeof c === "string" || typeof c === "number") {
-            out.push(String(c));
-            break;
-          }
+        const attrs = (obj.attributes && typeof obj.attributes === "object") ? obj.attributes as Record<string, unknown> : {};
+        const cands = [obj.id, obj.service_id, obj.services_id, obj.value, attrs.id, attrs.service_id, attrs.services_id, attrs.value];
+        for (let ci = 0; ci < cands.length; ci++) {
+          const c = cands[ci];
+          if (typeof c === "string" || typeof c === "number") { selectedServices.push(String(c)); break; }
         }
       }
-      return [...new Set(out)];
-    };
+    }
 
-    const selectedServices = extract(ocv.selectedServices);
-    const selectedAgendas = extract(ocv.selectedAgendas);
+    const selectedAgendas: string[] = [];
+    const rawAgd = ocv.selectedAgendas;
+    if (Array.isArray(rawAgd)) {
+      for (let i = 0; i < rawAgd.length; i++) {
+        const item = rawAgd[i];
+        if (!item || typeof item !== "object") continue;
+        const obj = item as Record<string, unknown>;
+        const attrs = (obj.attributes && typeof obj.attributes === "object") ? obj.attributes as Record<string, unknown> : {};
+        const cands = [obj.id, obj.agenda_id, obj.agendas_id, obj.value, attrs.id, attrs.agenda_id, attrs.agendas_id, attrs.value];
+        for (let ci = 0; ci < cands.length; ci++) {
+          const c = cands[ci];
+          if (typeof c === "string" || typeof c === "number") { selectedAgendas.push(String(c)); break; }
+        }
+      }
+    }
+
     const selectedPeopleRaw = ocv.selectedPeople;
     const selectedPeople = typeof selectedPeopleRaw === "number" && selectedPeopleRaw > 0 ? selectedPeopleRaw : 1;
 
@@ -1643,24 +1657,54 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         }
       }
 
+      // ── Attente initialisation widget Bookitit ─────────────────────────────────
+      // Après le rechargement CF, le widget SPA prend quelques secondes à s'initialiser.
+      // On attend que le conteneur principal `#idBktWidgetDefaultBodyContainer` apparaisse
+      // ET que le hash change de "" vers "#services"/"#agendas"/"#datetime"/etc.
+      // Sans cette attente, on clique sur des boutons CF (ex: "Continue / Continuar") avant
+      // que le widget Bookitit soit rendu.
+      {
+        console.log("[spain-watcher] Attente initialisation widget Bookitit (max 15s)…");
+        const t0 = Date.now();
+        while (Date.now() - t0 < 15_000) {
+          await new Promise((r) => setTimeout(r, 1500));
+          // Vérifier que le widget est chargé (container visible) ET hash non-vide
+          const ready: boolean = await page.evaluate(() => {
+            const container = document.getElementById("idBktWidgetDefaultBodyContainer");
+            const hash = window.location.hash;
+            // Widget prêt si le container est visible (display != none) ET hash non-vide
+            if (!container) return false;
+            const style = window.getComputedStyle(container);
+            return style.display !== "none" && hash.length > 1;
+          }).catch(() => false);
+          if (ready) {
+            const h = await page.evaluate(() => window.location.hash).catch(() => "");
+            console.log(`[spain-watcher] Widget initialisé, hash="${h}"`);
+            break;
+          }
+        }
+      }
+
       // ── Navigation multi-étapes Bookitit ──────────────────────────────────────
       // Flux : #services → (sélection service) → #agendas → (sélection agenda) → #datetime → datetime/ API
       //
       // Logique d'auto-navigation du bundle :
       //   • 1 seul service  → checkOneService() auto-sélectionne → navigate('agendas')
       //   • 1 seul agenda   → checkOneAgenda()  auto-sélectionne → navigate('datetime')
-      // → Dans ce cas le widget navigue tout seul ; on attend juste que le hash change.
+      // → Dans ce cas le widget navigue tout seul sans aucun clic.
       //
-      // Sélecteurs réels extraits du bundle :
+      // Sélecteurs réels extraits du bundle Bookitit :
       //   Services  : #idListServices .clsBktServiceDataContainer  (checkbox: input[name='services[]'])
       //   Agendas   : #idListAgendas  .clsBktAgendaDataContainer
       //   Continue  : #idDivBktButtonContinueContainer (affiché seulement si multiselect > 0)
+      //
+      // IMPORTANT: les page.evaluate() callbacks NE DOIVENT PAS contenir de fonctions nommées
+      // (const f = () => {}) car tsx/esbuild injecte __name(f, "f") qui crash dans le browser.
 
-      // Sélecteurs de cartes cliquables par hash
       const SERVICE_CARD_SELS = [
         "#idListServices .clsBktServiceDataContainer",
         "#idListServices input[name='services[]']",
-        "#idListServices a",
+        "#idListServices a:not(.clsBktServiceDisabled)",
         ".clsBktServiceDataContainer",
       ];
       const AGENDA_CARD_SELS = [
@@ -1669,8 +1713,8 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         ".clsBktAgendaDataContainer",
         ".clsDivBktAgendaFirstAvailable",
       ];
-      // Continue button (multiselect services uniquement)
-      const CONTINUE_SELS = [
+      // Continue button : seulement pour services multiselect > 0 ; absent pour widget simple
+      const BKT_CONTINUE_SELS = [
         "#idDivBktButtonContinueContainer button",
         "#idDivBktButtonContinueContainer a",
         "#idBktDefaultContinueButton",
@@ -1684,39 +1728,57 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         const currentHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
         console.log(`[spain-watcher] step=${step} hash="${currentHash}"`);
 
-        // Étape datetime → les appels API datetime/ vont se déclencher → sortir
-        if (/datetime|selecttime|calendar|noavailability|slot/i.test(currentHash)) {
-          console.log(`[spain-watcher] Étape datetime atteinte → attente API`);
+        // ── Détection "aucun créneau" via DOM Bookitit ──────────────────────────
+        // Bookitit affiche #idBktDefaultDatetimeErrorNoAvailability quand aucun créneau.
+        // On le vérifie à chaque étape pour court-circuiter la boucle.
+        const noSlotsInDom: boolean = await page.evaluate(() => {
+          const noAvail = document.getElementById("idBktDefaultDatetimeErrorNoAvailability");
+          if (noAvail && noAvail.offsetParent !== null) return true;
+          // Texte "No hay horas disponibles" visible dans le corps
+          const body = document.body.textContent ?? "";
+          return body.indexOf("No hay horas disponibles") >= 0 ||
+                 body.indexOf("No available hours") >= 0;
+        }).catch(() => false);
+        if (noSlotsInDom) {
+          console.log("[spain-watcher] 'No hay horas disponibles' détecté dans le DOM → not_found");
           break;
         }
 
-        // Attendre d'abord l'auto-navigation Bookitit (jusqu'à 4s)
-        // Le bundle auto-navigue si 1 seul service ou 1 seul agenda
+        // ── Étape datetime atteinte → les appels API datetime/ vont se déclencher ──
+        if (/datetime|selecttime|calendar|noavailability|slot/i.test(currentHash)) {
+          console.log(`[spain-watcher] Étape datetime atteinte (hash="${currentHash}") → attente API`);
+          break;
+        }
+
+        // ── Attendre l'auto-navigation Bookitit (jusqu'à 6s) ────────────────────
+        // Le bundle auto-navigue si 1 seul service ou 1 seul agenda disponible.
         let autoNavigated = false;
-        for (let w = 0; w < 4; w++) {
+        for (let w = 0; w < 6; w++) {
           await new Promise((r) => setTimeout(r, 1000));
           const newHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
           if (newHash !== currentHash) {
-            console.log(`[spain-watcher] Auto-navigation: "${currentHash}" → "${newHash}"`);
+            console.log(`[spain-watcher] Auto-nav: "${currentHash}" → "${newHash}"`);
             autoNavigated = true;
             break;
           }
         }
-        if (autoNavigated) continue; // Re-boucler avec le nouveau hash
+        if (autoNavigated) continue;
 
-        // Pas d'auto-navigation → sélectionner manuellement la première carte visible
-        const isAtAgendas = /agendas/i.test(currentHash);
+        // ── Pas d'auto-nav → sélectionner la première carte visible ─────────────
+        const isAtAgendas = currentHash.indexOf("agendas") >= 0;
         const cardSels = isAtAgendas ? AGENDA_CARD_SELS : SERVICE_CARD_SELS;
 
-        const cardClicked = await page.evaluate((sels: string[]) => {
-          for (const sel of sels) {
-            const cards = Array.from(document.querySelectorAll<HTMLElement>(sel));
-            for (const card of cards) {
-              if (card.offsetParent === null) continue; // invisible
-              const disabled = card.hasAttribute("disabled") || card.classList.contains("clsBktServiceDisabled");
-              if (disabled) continue;
+        // NOTE: pas de const/function nommée à l'intérieur du callback evaluate
+        const cardClicked: string | null = await page.evaluate((sels: string[]) => {
+          for (let si = 0; si < sels.length; si++) {
+            const cards = document.querySelectorAll(sels[si]);
+            for (let ci = 0; ci < cards.length; ci++) {
+              const card = cards[ci] as HTMLElement;
+              if (!card.offsetParent) continue;
+              if (card.hasAttribute("disabled")) continue;
+              if (card.className && card.className.indexOf("clsBktServiceDisabled") >= 0) continue;
               card.click();
-              return `${sel} [text="${(card.textContent?.trim() ?? "").slice(0, 30)}"]`;
+              return sels[si] + " => " + (card.textContent || "").trim().slice(0, 30);
             }
           }
           return null;
@@ -1727,9 +1789,9 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           await randomDelay(600, 1200);
         }
 
-        // Cliquer "Continuar" (affiché uniquement pour multiselect > 0)
+        // ── Cliquer "Continuar" Bookitit (multiselect > 0 uniquement) ───────────
         let continuarClicked = false;
-        for (const sel of CONTINUE_SELS) {
+        for (const sel of BKT_CONTINUE_SELS) {
           try {
             const el = await page.$(sel);
             if (!el) continue;
@@ -1737,7 +1799,19 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
             if (!visible) continue;
             const disabled = await el.isDisabled().catch(() => false);
             if (disabled) continue;
-            console.log(`[spain-watcher] Continuar (${sel}) step=${step}`);
+            // Vérifier que c'est bien un bouton Bookitit (pas un bouton CF)
+            const insideBkt: boolean = await el.evaluate((node: Element) => {
+              let p = node.parentElement;
+              while (p) {
+                if (p.id && p.id.indexOf("Bkt") >= 0) return true;
+                if (p.className && p.className.indexOf("Bkt") >= 0) return true;
+                if (p.id && p.id.indexOf("bkt") >= 0) return true;
+                p = p.parentElement;
+              }
+              return false;
+            }).catch(() => true); // par défaut on clique
+            if (!insideBkt) continue;
+            console.log(`[spain-watcher] Continuar Bookitit (${sel}) step=${step}`);
             await el.click();
             await randomDelay(1500, 2500);
             continuarClicked = true;
@@ -1745,35 +1819,13 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           } catch { /* try next */ }
         }
 
-        // Fallback texte
-        if (!continuarClicked) {
-          const textClicked = await page.evaluate(() => {
-            const candidates = Array.from(
-              document.querySelectorAll<HTMLElement>("button, a, [role='button']")
-            );
-            for (const el of candidates) {
-              if (el.offsetParent === null) continue;
-              if (/continuar|continue/i.test(el.textContent?.trim() ?? "")) {
-                el.click();
-                return (el.textContent?.trim() ?? "").slice(0, 40);
-              }
-            }
-            return null;
-          });
-          if (textClicked) {
-            console.log(`[spain-watcher] Continuar text: "${textClicked}" step=${step}`);
-            await randomDelay(1500, 2500);
-            continuarClicked = true;
-          }
-        }
-
-        // Si ni carte ni Continuar trouvés → attendre auto-navigation ou abandonner
+        // ── Si ni carte ni Continuar → widget bloqué ────────────────────────────
         if (!cardClicked && !continuarClicked) {
-          console.log(`[spain-watcher] Rien à cliquer step=${step}, hash="${currentHash}" — attente 3s`);
-          await randomDelay(2500, 4000);
+          console.log(`[spain-watcher] Rien à cliquer step=${step}, hash="${currentHash}" — attente 4s`);
+          await randomDelay(3500, 5000);
           const newHash: string = await page.evaluate(() => window.location.hash).catch(() => "");
           if (newHash === currentHash) {
-            console.log(`[spain-watcher] Hash inchangé — navigation bloquée à step=${step}`);
+            console.log(`[spain-watcher] Hash inchangé — sortie boucle step=${step}`);
             break;
           }
         }
