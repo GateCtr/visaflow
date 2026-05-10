@@ -2394,7 +2394,7 @@ async function rescheduleUsaSlot(
     return { success: false, error: `HTTP ${res.status}`, statusCode: res.status };
 
   } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[usa] Reschedule erreur réseau: ${msg}`);
     return { success: false, error: msg };
