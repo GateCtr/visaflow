@@ -280,7 +280,7 @@ function SpainWatcherTab() {
   const watcher = data?.watcher ?? null;
   const scans   = data?.scans  ?? [];
 
-  const [portalUrl,    setPortalUrl]    = useState("");
+  const [portalUrl,    setPortalUrl]    = useState("https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5");
   const [adminEmail,   setAdminEmail]   = useState("");
   const [intervalMin,  setIntervalMin]  = useState(15);
   const [isActive,     setIsActive]     = useState(false);
