@@ -743,11 +743,13 @@ async function main(): Promise<void> {
     log("WARN", "IP serveur: indéterminée (ipify.org inaccessible)");
   }
 
-  const proxyStatus = proxyPool.isConfigured
-    ? `2captcha résidentiel rotatif ✅ (IP: ${serverIp ?? "?"})`
-    : process.env.PROXY_URL
-      ? "statique (PROXY_URL)"
-      : "aucun ⚠️ — IP fixe Railway exposée";
+  const proxyStatus = process.env.IPROYAL_PROXY_URL
+    ? "iProyal résidentiel Kinshasa ✅ (IPROYAL_PROXY_URL)"
+    : proxyPool.isConfigured
+      ? `2captcha résidentiel rotatif ✅ (IP: ${serverIp ?? "?"})`
+      : process.env.PROXY_URL
+        ? "statique (PROXY_URL)"
+        : "aucun ⚠️ — IP fixe Railway exposée";
   log("INFO", `Proxy: ${proxyStatus}`);
   log("INFO", "Intervalles tier — tres_urgent:3-5m (rush:1-2m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
   log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);

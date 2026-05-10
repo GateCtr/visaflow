@@ -8,6 +8,7 @@ const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
 
 const PROXY_URL = process.env.PROXY_URL;
+const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
 const DRY_RUN = process.env.DRY_RUN === "true";
 
 // ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
@@ -15,7 +16,7 @@ const DRY_RUN = process.env.DRY_RUN === "true";
 // initialize(ip) est appelé au démarrage dans index.ts :
 //   → refresh immédiat de la whitelist 2captcha
 //   → boucle auto-refresh toutes les 25 min (pas de whitelist manuelle requise)
-// Fallback automatique : PROXY_URL statique → connexion directe.
+// Fallback automatique : IPROYAL_PROXY_URL → 2captcha pool → PROXY_URL statique → connexion directe.
 export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 
 // ─── User-Agents desktop uniquement ─────────────────────────────────────────
@@ -97,13 +98,20 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   const ua = randomUserAgent();
   const viewport = randomViewport();
 
-  // Priorité : 2captcha pool résidentiel > PROXY_URL statique > connexion directe
+  // Priorité : iProyal résidentiel > 2captcha pool > PROXY_URL statique > connexion directe
   // forceNoProxy: true → bypass proxy même si configuré (retry après ERR_PROXY_CONNECTION_FAILED)
   const forceNoProxy = overrides?.forceNoProxy ?? false;
-  const poolResult = !forceNoProxy && proxyPool.isConfigured
-    ? await proxyPool.getProxy()
-    : null;
-  const proxyAddress = poolResult?.proxy ?? (!forceNoProxy ? PROXY_URL : undefined);
+  let proxyAddress: string | undefined;
+  if (!forceNoProxy) {
+    if (IPROYAL_PROXY_URL) {
+      proxyAddress = IPROYAL_PROXY_URL;
+    } else if (proxyPool.isConfigured) {
+      const poolResult = await proxyPool.getProxy();
+      proxyAddress = poolResult?.proxy ?? PROXY_URL;
+    } else {
+      proxyAddress = PROXY_URL;
+    }
+  }
   const proxyConfig = proxyAddress ? { server: proxyAddress } : undefined;
 
   const locale         = overrides?.locale         ?? "fr-FR";
