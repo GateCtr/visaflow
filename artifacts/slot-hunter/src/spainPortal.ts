@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page, Response } from "playwright";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
-import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
+import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, reportSpainWatcherScan, type HunterJob } from "./convexClient.js";
 
 const CF_TITLE_RE =
   /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
@@ -951,4 +951,170 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
   })();
 
   return withTimeout(sessionPromise, 5 * 60_000);
+}
+
+// ─── Spain Watcher Probe ─────────────────────────────────────────────────────
+// Scan indépendant : pas de HunterJob, pas d'applicationId.
+// Lance un navigateur stealth, navigue vers portalUrl, détecte les créneaux
+// via JSONP Bookitit, prend un screenshot et retourne le résultat.
+// Appelé par startSpainWatcherLoop() dans index.ts.
+
+export interface SpainWatcherProbeResult {
+  status: "found" | "not_found" | "error";
+  slotInfo?: string;
+  screenshotBase64?: string;
+  errorMessage?: string;
+}
+
+export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatcherProbeResult> {
+  const probe = (async (): Promise<SpainWatcherProbeResult> => {
+    const { browser, page } = await launchBrowser({
+      locale: "es-ES",
+      timezoneId: "Europe/Madrid",
+      acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+    });
+
+    const payloadHits: unknown[] = [];
+    const bookititBases = new Set<string>();
+
+    const responseHandler = async (res: Response): Promise<void> => {
+      const u = res.url();
+      const base = getBookititBaseFromUrl(u);
+      if (base) bookititBases.add(base);
+      if (!u.includes("datetime/")) return;
+      try {
+        const body = await res.text();
+        const parsed = parseJsonpPayload(body);
+        if (parsed) payloadHits.push(parsed);
+      } catch {
+        // ignore
+      }
+    };
+    page.on("response", responseHandler);
+
+    try {
+      // Dismiss dialogs natifs
+      page.on("dialog", async (dialog) => {
+        await dialog.accept().catch(() => undefined);
+      });
+
+      console.log(`[spain-watcher] Probe → ${portalUrl}`);
+      await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await randomDelay(1500, 2500);
+
+      // Cloudflare check — attente passive 20s
+      let title = "";
+      try { title = await page.title(); } catch { /* ignore */ }
+      if (CF_TITLE_RE.test(title)) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 20_000) {
+          await new Promise((r) => setTimeout(r, 3_000));
+          try { title = await page.title(); } catch { title = ""; }
+          if (!CF_TITLE_RE.test(title)) break;
+        }
+        if (CF_TITLE_RE.test(title)) {
+          console.log("[spain-watcher] Cloudflare non résolu — probe abandonnée");
+          return { status: "error", errorMessage: "cloudflare_blocked" };
+        }
+      }
+
+      // Bouton Continuar (version watcher : version légère sans botLog)
+      const SELECTORS = [
+        "#idBktDefaultContinueButton",
+        "#idDivBktContinueButton",
+        ".clsDivContinueButton",
+        ".clsBktContinueButton",
+        "[id*='Continue'][id*='Button']",
+        "[class*='ContinueButton']",
+      ];
+      for (const sel of SELECTORS) {
+        try {
+          const el = await page.$(sel);
+          if (!el) continue;
+          const visible = await el.isVisible().catch(() => false);
+          if (!visible) continue;
+          console.log(`[spain-watcher] Continuar (${sel})`);
+          await el.click();
+          await randomDelay(2000, 3500);
+          break;
+        } catch { /* try next */ }
+      }
+
+      // Fallback texte DOM
+      const clicked = await page.evaluate(() => {
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>("button, a, div[onclick], [role='button'], input[type='button'], input[type='submit']")
+        );
+        for (const el of candidates) {
+          if (/continuar|continue/i.test(el.textContent?.trim() ?? "") && el.offsetParent !== null) {
+            el.click();
+            return (el.textContent?.trim() ?? "").slice(0, 40);
+          }
+        }
+        return null;
+      });
+      if (clicked) {
+        console.log(`[spain-watcher] Continuar text fallback: "${clicked}"`);
+        await randomDelay(2000, 3500);
+      }
+
+      // Attendre les JSONP datetime
+      await randomDelay(3000, 5000);
+
+      // API-first via bases Bookitit détectées
+      if (bookititBases.size > 0) {
+        const runtime = await getRuntimeContext(page);
+        for (const base of bookititBases) {
+          const slot = await tryApiFirstSlot(page, base, runtime).catch(() => null);
+          if (slot) {
+            const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
+            const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+            const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
+            console.log(`[spain-watcher] ✅ Créneau trouvé (api_first): ${slotInfo}`);
+            return { status: "found", slotInfo, screenshotBase64 };
+          }
+        }
+      }
+
+      // Fallback : payloads interceptés en navigation
+      for (const p of payloadHits) {
+        const slot = extractSlotFromBookititPayload(p);
+        if (slot) {
+          const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
+          const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+          const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
+          console.log(`[spain-watcher] ✅ Créneau trouvé (network_fallback): ${slotInfo}`);
+          return { status: "found", slotInfo, screenshotBase64 };
+        }
+      }
+
+      // Fallback DOM
+      const domSlot = await detectSlotInDom(page);
+      if (domSlot) {
+        const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
+        const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+        const slotInfo = `${domSlot.date} à ${domSlot.time} — ${domSlot.location}`;
+        console.log(`[spain-watcher] ✅ Créneau trouvé (dom): ${slotInfo}`);
+        return { status: "found", slotInfo, screenshotBase64 };
+      }
+
+      console.log("[spain-watcher] Aucun créneau disponible");
+      return { status: "not_found" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[spain-watcher] Erreur probe:", msg.slice(0, 200));
+      return { status: "error", errorMessage: msg.slice(0, 200) };
+    } finally {
+      try { await browser.close(); } catch { /* ignore */ }
+    }
+  })();
+
+  // Timeout 4 min pour la probe
+  return new Promise<SpainWatcherProbeResult>((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ status: "error", errorMessage: "probe_timeout_4min" }), 4 * 60_000);
+    probe.then(
+      (r) => { clearTimeout(timer); resolve(r); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
 }

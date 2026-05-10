@@ -290,6 +290,32 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 
+  // Spain Watcher — singleton config + scan history (no applicationId needed)
+  spainWatcher: defineTable({
+    key: v.string(),            // toujours "default" (singleton)
+    isActive: v.boolean(),
+    portalUrl: v.string(),      // URL Bookitit citaconsular.es à surveiller
+    adminEmail: v.string(),     // email de l'admin à alerter lors d'un créneau trouvé
+    intervalMin: v.optional(v.number()), // intervalle de scan en minutes (défaut 15)
+    lastScanAt: v.optional(v.number()),
+    lastResult: v.optional(v.union(
+      v.literal("found"),
+      v.literal("not_found"),
+      v.literal("error"),
+    )),
+    lastSlotInfo: v.optional(v.string()),
+    consecutiveErrors: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
+  spainWatcherScans: defineTable({
+    ts: v.number(),
+    status: v.union(v.literal("found"), v.literal("not_found"), v.literal("error")),
+    slotInfo: v.optional(v.string()),
+    screenshotStorageId: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+  }).index("by_ts", ["ts"]),
+
   // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)
   otpChallenges: defineTable({
     applicationId: v.id("applications"),

@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
@@ -9,7 +9,7 @@ import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
-import { runSpainSession } from "./spainPortal.js";
+import { runSpainSession, runSpainWatcherProbe } from "./spainPortal.js";
 
 // ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────
 // Tourne en background ; pour chaque session needs_setup claimée :
@@ -643,6 +643,54 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
   }
 }
 
+// ─── Spain Watcher Loop — veille créneaux Espagne ────────────────────────────
+// Boucle indépendante, tourne en background.
+// Intervalle configurable depuis Convex (défaut 15 min).
+// Si un créneau est trouvé : upload screenshot → Convex → email admin.
+
+async function startSpainWatcherLoop(): Promise<void> {
+  log("INFO", "[SPAIN-WATCHER] Boucle démarrée");
+  while (true) {
+    try {
+      const config = await getSpainWatcherConfig();
+
+      if (!config || !config.isActive) {
+        // Veilleur inactif ou non configuré — check toutes les 2 min
+        await new Promise((r) => setTimeout(r, 2 * 60_000));
+        continue;
+      }
+
+      const intervalMs = (config.intervalMin ?? 15) * 60_000;
+      log("INFO", `[SPAIN-WATCHER] Probe → ${config.portalUrl} (intervalle: ${config.intervalMin ?? 15} min)`);
+
+      const result = await runSpainWatcherProbe(config.portalUrl);
+      log(
+        "INFO",
+        `[SPAIN-WATCHER] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
+      );
+
+      // Upload screenshot si créneau trouvé
+      let screenshotStorageId: string | undefined;
+      if (result.status === "found" && result.screenshotBase64) {
+        screenshotStorageId = await uploadFile(result.screenshotBase64, "image/png") ?? undefined;
+      }
+
+      // Reporter le résultat à Convex (qui enverra l'email si found)
+      await reportSpainWatcherScan({
+        status: result.status,
+        slotInfo: result.slotInfo,
+        screenshotStorageId,
+        errorMessage: result.errorMessage,
+      });
+
+      await new Promise((r) => setTimeout(r, intervalMs));
+    } catch (err) {
+      log("WARN", `[SPAIN-WATCHER] Erreur boucle: ${err} — retry dans 5 min`);
+      await new Promise((r) => setTimeout(r, 5 * 60_000));
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const dryRun = process.env.DRY_RUN === "true";
   const convexUrl = process.env.CONVEX_SITE_URL;
@@ -661,6 +709,11 @@ async function main(): Promise<void> {
   // Lancer la boucle de polling CEV en background (indépendante de Playwright)
   startCevPollingLoop().catch((err) => {
     console.error("[CEV-POLL] Boucle crashée:", err);
+  });
+
+  // Lancer le veilleur Espagne en background (scan créneaux Bookitit citaconsular.es)
+  startSpainWatcherLoop().catch((err) => {
+    console.error("[SPAIN-WATCHER] Boucle crashée:", err);
   });
 
   // ─── Auto-config CEV : charger les endpoints confirmés depuis Convex ─────

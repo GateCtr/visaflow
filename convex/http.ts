@@ -992,4 +992,68 @@ http.route({
   }),
 });
 
+// ─── Spain Watcher : config pour le bot ──────────────────────────────────────
+http.route({
+  path: "/hunter/spain-watcher/config",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const config = await ctx.runMutation(internal.spainWatcher.internalGetConfig);
+    return new Response(JSON.stringify({ config: config ?? null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// ─── Spain Watcher : résultat d'un scan envoyé par le bot ────────────────────
+http.route({
+  path: "/hunter/spain-watcher/scan-result",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      status: "found" | "not_found" | "error";
+      slotInfo?: string;
+      screenshotStorageId?: string;
+      errorMessage?: string;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.status || !["found", "not_found", "error"].includes(body.status)) {
+      return new Response("Missing or invalid field: status", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.spainWatcher.internalRecordScan, {
+        status: body.status,
+        slotInfo: body.slotInfo,
+        screenshotStorageId: body.screenshotStorageId,
+        errorMessage: body.errorMessage,
+      });
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("spain-watcher/scan-result error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

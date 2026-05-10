@@ -603,6 +603,65 @@ export async function saveCevBookingConfig(config: CevDiscoveredConfig): Promise
  * @param base64 — contenu encodé en base64
  * @param contentType — ex: "image/png", "application/pdf"
  */
+// ─── Spain Watcher ────────────────────────────────────────────────────────────
+
+export interface SpainWatcherConfig {
+  isActive: boolean;
+  portalUrl: string;
+  adminEmail: string;
+  intervalMin?: number;
+}
+
+/**
+ * Récupère la configuration du veilleur Espagne depuis Convex.
+ * Retourne null si pas encore configuré ou si le watcher est inactif.
+ */
+export async function getSpainWatcherConfig(): Promise<SpainWatcherConfig | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/config`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { config: SpainWatcherConfig | null };
+    if (!data.config || !data.config.isActive) return null;
+    return data.config;
+  } catch (err) {
+    console.warn("[convexClient] getSpainWatcherConfig error:", err);
+    return null;
+  }
+}
+
+/**
+ * Envoie le résultat d'un scan du veilleur Espagne à Convex.
+ * Convex se charge d'envoyer l'email si status === "found".
+ */
+export async function reportSpainWatcherScan(payload: {
+  status: "found" | "not_found" | "error";
+  slotInfo?: string;
+  screenshotStorageId?: string;
+  errorMessage?: string;
+}): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/scan-result`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[convexClient] reportSpainWatcherScan failed: ${res.status} ${text}`);
+    }
+  } catch (err) {
+    console.warn("[convexClient] reportSpainWatcherScan error:", err);
+  }
+}
+
 export async function uploadFile(base64: string, contentType: string): Promise<string | null> {
   const url = `${CONVEX_SITE_URL}/hunter/upload-screenshot`;
   try {
