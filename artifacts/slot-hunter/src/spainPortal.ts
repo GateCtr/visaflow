@@ -1635,46 +1635,64 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       }
       await randomDelay(1500, 2500);
 
-      // Cloudflare check — attente 120s + CapSolver AntiCloudflareTask si nécessaire
+      // Cloudflare check — résolution parallèle : attente naturelle RACE CapSolver (max 90s)
+      // Ancien comportement : 120s attente + 3×CapSolver séquentiel = ~404s → timeout 4min.
+      // Nouveau : les deux stratégies démarrent simultanément, la première qui passe gagne.
       {
         let cfTitle = "";
         try { cfTitle = await page.title(); } catch { /* ignore */ }
         if (CF_TITLE_RE.test(cfTitle)) {
-          console.log(`[spain-watcher] Cloudflare détecté (titre: "${cfTitle}") — attente 120s…`);
-          const t0 = Date.now();
-          while (Date.now() - t0 < 120_000) {
-            await new Promise((r) => setTimeout(r, 3_000));
-            try { cfTitle = await page.title(); } catch { cfTitle = ""; }
-            if (!CF_TITLE_RE.test(cfTitle)) break;
-          }
-          if (CF_TITLE_RE.test(cfTitle)) {
-            // Tentative CapSolver AntiCloudflareTask
-            const capsolverKey = process.env.CAPSOLVER_API_KEY;
-            if (capsolverKey) {
-              const capRes = await detectAndSolveTurnstile(
+          const capsolverKey = process.env.CAPSOLVER_API_KEY;
+          console.log(`[spain-watcher] Cloudflare détecté (titre: "${cfTitle}") — résolution parallèle (natural 45s + CapSolver, max 90s total)`);
+
+          // Branche A : attente naturelle — CF JS challenge résolu par le navigateur
+          // (dialog "Welcome / Bienvenido" auto-accepté → page charge normalement)
+          const naturalWait = (async (): Promise<boolean> => {
+            const t0 = Date.now();
+            while (Date.now() - t0 < 45_000) {
+              await new Promise((r) => setTimeout(r, 3_000));
+              let t = "";
+              try { t = await page.title(); } catch { t = ""; }
+              if (!CF_TITLE_RE.test(t)) {
+                console.log("[spain-watcher] ✅ Cloudflare résolu naturellement");
+                return true;
+              }
+            }
+            return false;
+          })();
+
+          // Branche B : CapSolver AntiCloudflareTask (en parallèle, 1 shot)
+          const capsolverWait: Promise<boolean> = capsolverKey
+            ? detectAndSolveTurnstile(
                 page,
                 process.env.TWOCAPTCHA_API_KEY,
                 capsolverKey,
                 process.env.IPROYAL_PROXY_URL,
-              ).catch(() => "failed" as const);
+              )
+                .then((r) => {
+                  if (r === "solved") {
+                    console.log("[spain-watcher] ✅ Cloudflare résolu via CapSolver");
+                    return true;
+                  }
+                  return false;
+                })
+                .catch(() => false)
+            : Promise.resolve(false);
 
-              if (capRes !== "solved") {
-                // CF peut avoir été résolu naturellement PENDANT les tentatives CapSolver
-                // (ex: dialog "Welcome / Bienvenido" accepté entre-temps par page.on("dialog")).
-                // Re-vérifier le titre avant d'abandonner.
-                let recheckTitle = "";
-                try { recheckTitle = await page.title(); } catch { /* ignore */ }
-                if (CF_TITLE_RE.test(recheckTitle)) {
-                  console.log("[spain-watcher] Cloudflare non résolu (CapSolver échec + re-check KO) — probe abandonnée");
-                  return { status: "error", errorMessage: "cloudflare_blocked" };
-                }
-                console.log("[spain-watcher] ✅ Cloudflare résolu naturellement (pendant CapSolver) — poursuite probe");
-                // fall through — CF est passé, on continue normalement
-              }
-            } else {
-              console.log("[spain-watcher] Cloudflare non résolu (CAPSOLVER_API_KEY absent) — probe abandonnée");
+          // Timeout global 90s — empêche de dépasser le budget temps de la probe
+          const cfTimeout = new Promise<boolean>((r) => setTimeout(() => r(false), 90_000));
+
+          const cfPassed = await Promise.race([naturalWait, capsolverWait, cfTimeout]);
+
+          if (!cfPassed) {
+            // Dernière chance : re-vérifier le titre (CF peut passer pendant le timeout race)
+            let finalTitle = "";
+            try { finalTitle = await page.title(); } catch { /* ignore */ }
+            if (CF_TITLE_RE.test(finalTitle)) {
+              console.log("[spain-watcher] Cloudflare non résolu après 90s — probe abandonnée");
               return { status: "error", errorMessage: "cloudflare_blocked" };
             }
+            console.log("[spain-watcher] ✅ Cloudflare passé (titre normal après race)");
           }
         }
       }
@@ -1971,9 +1989,9 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
     }
   })();
 
-  // Timeout 4 min pour la probe
+  // Timeout 7 min pour la probe (CF bypass parallèle max 90s + navigation widget + API calls)
   return new Promise<SpainWatcherProbeResult>((resolve, reject) => {
-    const timer = setTimeout(() => resolve({ status: "error", errorMessage: "probe_timeout_4min" }), 4 * 60_000);
+    const timer = setTimeout(() => resolve({ status: "error", errorMessage: "probe_timeout_7min" }), 7 * 60_000);
     probe.then(
       (r) => { clearTimeout(timer); resolve(r); },
       (e) => { clearTimeout(timer); reject(e); },
