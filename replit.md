@@ -21,6 +21,17 @@ Premium visa assistance SaaS for the Democratic Republic of Congo (RDC/DRC).
 - **Charts**: recharts
 - **Routing**: Wouter (SPA)
 
+## Architecture Captcha & Proxy (décision 2026-05-10)
+
+`captcha-service` et `proxy-service` sont des **librairies locales**, pas des services HTTP séparés sur Railway. Le bot `slot-hunter` importe directement leurs modules TypeScript via les dépendances workspace pnpm :
+
+- `captcha.ts` dans slot-hunter → remplacé par import de `@workspace/captcha-service/src/resolver` (appel direct, pas HTTP)
+- `ProxyPool` dans `browser.ts` → remplacé par import de `@workspace/proxy-service/src/pool`
+
+**Pas de déploiement séparé Railway** pour ces deux packages — un seul service bot, zéro latence réseau inter-service.
+
+Les workflows Replit `captcha-service` et `proxy-service` restent présents pour développement/test local uniquement.
+
 ## CEV Bot — Anti-détection (dernière mise à jour 2026-05-05)
 
 ### Problèmes corrigés
