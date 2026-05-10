@@ -596,6 +596,69 @@ if (captchaJson.redirectUrl) {
     els.map(e => ({ text: e.textContent?.trim(), href: e.href }))
   ).catch(() => []);
   note('Navigation calendrier', JSON.stringify(monthLinks, null, 2));
+
+  // ── Si on est sur SelectSlot (créneaux dispo) : appeler /Home/AvailableTimeSlots ──
+  const finalUrl = cevPage.url();
+  const isOnSelectSlot = !finalUrl.includes('NoAvailability') && !finalUrl.includes('SessionExpired') && !finalUrl.includes('/Captcha');
+  if (isOnSelectSlot) {
+    log('[CEV] Slots disponibles — appel /Home/AvailableTimeSlots pour les 2 prochains mois...');
+    const now = new Date();
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+      const slotBody = { month: d.getMonth() + 1, year: d.getFullYear() };
+      const slotResult = await cevPage.evaluate(async (body: object) => {
+        const res = await fetch('/Home/AvailableTimeSlots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify(body),
+          credentials: 'include',
+        });
+        const text = await res.text();
+        return { status: res.status, finalUrl: res.url, body: text.slice(0, 3000) };
+      }, slotBody).catch((e: unknown) => ({ status: 0, finalUrl: '', body: String(e) }));
+      note(
+        `POST /Home/AvailableTimeSlots (mois ${d.getMonth() + 1}/${d.getFullYear()})`,
+        `Status: ${slotResult.status}\nFinalUrl: ${slotResult.finalUrl}\nBody:\n\`\`\`json\n${slotResult.body}\n\`\`\``
+      );
+    }
+
+    // Dump du HTML complet de la page SelectSlot (formulaires, inputs, data-* attrs)
+    const selectSlotHtml = await cevPage.content();
+    note('SelectSlot HTML COMPLET', `\`\`\`html\n${selectSlotHtml.slice(0, 10000)}\n\`\`\``);
+
+    // Formulaires et leurs champs (action, méthode, inputs)
+    const forms = await cevPage.evaluate(() => {
+      return Array.from(document.querySelectorAll('form')).map((f: any) => ({
+        action: f.action,
+        method: f.method,
+        id: f.id,
+        inputs: Array.from(f.querySelectorAll('input,select,textarea')).map((i: any) => ({
+          type: i.type || i.tagName,
+          name: i.name,
+          id: i.id,
+          value: i.value?.slice(0, 100),
+          dataAttrs: Object.fromEntries(Array.from(i.attributes as NamedNodeMap)
+            .filter((a: Attr) => a.name.startsWith('data-'))
+            .map((a: Attr) => [a.name, a.value])),
+        })),
+      }));
+    }).catch(() => []);
+    note('Formulaires SelectSlot (action + inputs)', JSON.stringify(forms, null, 2));
+
+    // Boutons + liens cliquables (dates, heures)
+    const clickables = await cevPage.evaluate(() => {
+      return Array.from(document.querySelectorAll('a[data-date],button[data-date],[data-slot],[data-time],[data-id],td.available,td[onclick],a.slot,a.available')).map((e: any) => ({
+        tag: e.tagName,
+        text: e.textContent?.trim().slice(0, 40),
+        href: e.href || null,
+        onclick: e.getAttribute('onclick'),
+        dataAttrs: Object.fromEntries(Array.from(e.attributes as NamedNodeMap)
+          .filter((a: Attr) => a.name.startsWith('data-'))
+          .map((a: Attr) => [a.name, a.value])),
+      }));
+    }).catch(() => []);
+    note('Éléments cliquables (slots/dates)', JSON.stringify(clickables, null, 2));
+  }
 }
 
 // ==================== ANALYSE RÉSEAU COMPLÈTE ====================
