@@ -34,12 +34,15 @@ async function main() {
   // ── 0. Initialisation proxy résidentiel ────────────────────
   const serverIp = await getPublicIp();
   console.log(`IP serveur: ${serverIp}`);
-  proxyPool.setServerIp(serverIp);
+  if (process.env.TWOCAPTCHA_API_KEY) {
+    await proxyPool.initialize(serverIp);
+  }
 
   let proxyUrl: string | undefined;
   if (proxyPool.isConfigured) {
     console.log("[proxy] Chargement des IPs résidentielles 2captcha...");
-    proxyUrl = await proxyPool.getProxy();
+    const poolResult = await proxyPool.getProxy();
+    proxyUrl = poolResult?.proxy;
     if (proxyUrl) {
       const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
       console.log(`[proxy] ✅ Proxy actif: ${masked}`);

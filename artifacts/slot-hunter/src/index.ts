@@ -8,6 +8,7 @@ import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
+import { detectPublicIp } from "@workspace/proxy-service/src/pool.js";
 import { runSpainSession } from "./spainPortal.js";
 
 // ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────
@@ -197,19 +198,6 @@ async function startCevPollingLoop(): Promise<void> {
 
     // Polling fréquent (5s) — la condition "due" filtre selon pollIntervalMs de chaque session
     await new Promise((r) => setTimeout(r, 5_000));
-  }
-}
-
-// ─── Auto-détection IP publique du serveur ───────────────────────────────────
-async function detectServerIp(): Promise<string | null> {
-  try {
-    const res = await fetch("https://api.ipify.org?format=json", {
-      signal: AbortSignal.timeout(8_000),
-    });
-    const data = await res.json() as { ip: string };
-    return data.ip ?? null;
-  } catch {
-    return null;
   }
 }
 
@@ -691,22 +679,19 @@ async function main(): Promise<void> {
     log("WARN", `CEV auto-config: chargement échoué (non bloquant) — ${err}`);
   }
 
-  // Détection IP serveur — utilisée automatiquement par le ProxyPool 2captcha
-  const serverIp = await detectServerIp();
+  // Détection IP + initialisation ProxyPool (refresh whitelist 2captcha immédiat + boucle auto 25 min)
+  const serverIp = await detectPublicIp();
   if (serverIp) {
-    proxyPool.setServerIp(serverIp);
     log("INFO", `IP serveur (Railway): ${serverIp}`);
     if (process.env.TWOCAPTCHA_API_KEY) {
-      log("INFO", `Proxy 2captcha: TWOCAPTCHA_API_KEY ✅ — IP ${serverIp} doit être whitelistée sur 2captcha.com/proxy`);
-    } else {
-      log("WARN", `⚠️ TWOCAPTCHA_API_KEY absente de Railway — ajoutez-la dans les variables Railway pour activer le proxy résidentiel`);
+      await proxyPool.initialize(serverIp);
     }
   } else {
     log("WARN", "IP serveur: indéterminée (ipify.org inaccessible)");
   }
 
   const proxyStatus = proxyPool.isConfigured
-    ? `2captcha résidentiel rotatif ✅ (IP: ${serverIp})`
+    ? `2captcha résidentiel rotatif ✅ (IP: ${serverIp ?? "?"})`
     : process.env.PROXY_URL
       ? "statique (PROXY_URL)"
       : "aucun ⚠️ — IP fixe Railway exposée";

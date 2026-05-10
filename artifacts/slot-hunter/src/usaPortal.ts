@@ -888,7 +888,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
   } else {
     // Nouveau token → nouvelle identité réseau + navigateur
-    sessionProxy = await proxyPool.getProxy();
+    sessionProxy = (await proxyPool.getProxy())?.proxy;
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
     console.log(`[usa] Nouveau token → nouvelle identité (UA idx ${sessionUaIdx})`);
   }
