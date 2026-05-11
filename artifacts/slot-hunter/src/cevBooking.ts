@@ -1656,7 +1656,9 @@ export async function runCevDirectSessionSetup(
 
     // === ÉTAPE 4 : Persister la session dans Convex ===
     const validUntilMs = captchaResult.status === 'ready'
-      ? new Date(captchaResult.session.validUntil).getTime()
+      ? new Date(captchaResult.session.validUntil.endsWith('Z') 
+          ? captchaResult.session.validUntil 
+          : captchaResult.session.validUntil + 'Z').getTime()
       : undefined;
 
     // Extraire uniquement la valeur ASP.NET_SessionId (suffisant pour le polling)

@@ -278,7 +278,12 @@ export async function pollCevSlotsMultiMonth(
  * Check if the CEV session is still valid (hasn't expired).
  */
 export function isCevSessionValid(session: CevSession): boolean {
-  const validUntil = new Date(session.validUntil).getTime();
+  // Le serveur renvoie validUntil sans suffixe 'Z', donc on doit l'ajouter
+  // pour que JavaScript l'interprète correctement comme UTC
+  const validUntilStr = session.validUntil.endsWith('Z') 
+    ? session.validUntil 
+    : session.validUntil + 'Z';
+  const validUntil = new Date(validUntilStr).getTime();
   const now = Date.now();
   const bufferMs = 60_000;
   return validUntil - now > bufferMs;

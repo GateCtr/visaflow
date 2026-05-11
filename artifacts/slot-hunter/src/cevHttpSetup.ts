@@ -361,7 +361,12 @@ export async function setupCevSessionHttp(
       return { success: false, error: "CAPTCHA_NO_VALID_UNTIL" };
     }
 
-    const validUntilMs = new Date(captchaData.validUntil).getTime();
+    // Le serveur renvoie validUntil sans suffixe 'Z', donc on doit l'ajouter
+    // pour que JavaScript l'interprète correctement comme UTC
+    const validUntilStr = captchaData.validUntil.endsWith('Z') 
+      ? captchaData.validUntil 
+      : captchaData.validUntil + 'Z';
+    const validUntilMs = new Date(validUntilStr).getTime();
 
     // Analyser le redirectUrl pour déterminer si des créneaux sont disponibles.
     // La capture réseau montre :
