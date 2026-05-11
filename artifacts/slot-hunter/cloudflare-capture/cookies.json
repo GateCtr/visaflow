@@ -1,0 +1,56 @@
+[
+  {
+    "name": "PHPSESSID",
+    "value": "KQR48rzIIamQPlMMmQ2fhpwp",
+    "domain": "www.citaconsular.es",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "cf_chl_rc_ni",
+    "value": "1",
+    "domain": "www.citaconsular.es",
+    "path": "/",
+    "expires": 1778445806,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://citaconsular.es",
+    "_crHasCrossSiteAncestor": false
+  },
+  {
+    "name": "cf_clearance",
+    "value": "CRztWqQ1DeNrL7a_0kABfUO0gksuHNRTv21DrsXdois-1778442210-1.2.1.1-ItXFEn5hpTcybW4DXSoCJAGGxbXXVG3ZAwf05MEYIjzuCqGPUOXNGoynErMZf.F6qjMjOhxVjLS.sPtR3bgHRig5UmFC7qEN9d2nfRApNTAg02WgPVPgZMUzp0TLrNkUi6MPwhOVmFsHfpGINCaURi5rLnHnbsCGzsRb88ioeIoteAYmRgjPgqVq8DnJyX4whpfCRQEtvDjoOw5XTv_04.S_6QjxOlW2wntyybwrfcD4KReE5TqhGNvM85gxgex2j18feqcPrQXOM91BY1q8IMZ93YqX8Ho0ahqfWz8gj.2R1dUzP26Y0f8mDzQW4pt.W98054V0GERHDsLJxHJ1Ng",
+    "domain": ".citaconsular.es",
+    "path": "/",
+    "expires": 1809978210.256128,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://citaconsular.es",
+    "_crHasCrossSiteAncestor": false
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.68948925.1778442215",
+    "domain": ".citaconsular.es",
+    "path": "/",
+    "expires": 1813002215.443603,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga_F3TYSDL945",
+    "value": "GS2.1.s1778442215$o1$g0$t1778442215$j60$l0$h0",
+    "domain": ".citaconsular.es",
+    "path": "/",
+    "expires": 1813002215.454235,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

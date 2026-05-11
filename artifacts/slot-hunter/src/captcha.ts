@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import { buildStickyIproyalUrl } from "./browser.js";
 
 const TWO_CAPTCHA_BASE = "https://2captcha.com";
+const ANTICAPTCHA_BASE = "https://api.anti-captcha.com";
 const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 24;
 
@@ -125,6 +126,24 @@ async function injectCaptchaSolution(page: Page, token: string): Promise<void> {
   }, token);
 }
 
+// ─── Anti-Captcha ───────────────────────────────────────────────────────────
+
+const ANTICAPTCHA_POLL_MS = 5_000;
+const ANTICAPTCHA_MAX_POLLS = 36; // 3 minutes max
+
+interface AntiCaptchaCreateResponse {
+  errorId: number;
+  taskId?: number;
+  errorCode?: string;
+}
+
+interface AntiCaptchaResultResponse {
+  errorId: number;
+  status: 'processing' | 'ready';
+  solution?: { gRecaptchaResponse?: string; token?: string };
+  errorCode?: string;
+}
+
 // ─── CapSolver — Turnstile (AntiTurnstileTaskProxyLess) ──────────────────────
 
 const CAPSOLVER_BASE = "https://api.capsolver.com";
@@ -144,6 +163,80 @@ interface CapSolverResultResponse {
   errorCode?: string;
   status: string;
   solution?: { token?: string; userAgent?: string };
+}
+
+async function solveTurnstileViaAntiCaptcha(
+  apiKey: string,
+  siteKey: string,
+  pageUrl: string,
+): Promise<string | null> {
+  console.log(`[captcha] Turnstile → Anti-Captcha TurnstileTaskProxyless | siteKey: ${siteKey.slice(0, 14)}… | page: ${pageUrl}`);
+
+  // 1. Créer la tâche
+  let taskId: number;
+  try {
+    const createRes = await fetch(`${ANTICAPTCHA_BASE}/createTask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientKey: apiKey,
+        task: {
+          type: "TurnstileTaskProxyless",
+          websiteURL: pageUrl,
+          websiteKey: siteKey,
+        },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = (await createRes.json()) as AntiCaptchaCreateResponse;
+
+    if (data.errorId !== 0 || !data.taskId) {
+      console.error(`[captcha] Anti-Captcha createTask erreur: ${data.errorCode ?? data.errorId}`);
+      return null;
+    }
+    taskId = data.taskId;
+    console.log(`[captcha] Anti-Captcha tâche créée: ${taskId}`);
+  } catch (err) {
+    console.error("[captcha] Anti-Captcha createTask réseau:", err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  // 2. Poller le résultat
+  for (let i = 0; i < ANTICAPTCHA_MAX_POLLS; i++) {
+    await new Promise(r => setTimeout(r, ANTICAPTCHA_POLL_MS));
+
+    try {
+      const resultRes = await fetch(`${ANTICAPTCHA_BASE}/getTaskResult`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey, taskId }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = (await resultRes.json()) as AntiCaptchaResultResponse;
+
+      if (data.errorId !== 0) {
+        console.error(`[captcha] Anti-Captcha poll erreur: ${data.errorCode ?? data.errorId}`);
+        return null;
+      }
+
+      if (data.status === "ready") {
+        const token = data.solution?.token ?? null;
+        if (token) {
+          console.log(`[captcha] Anti-Captcha token reçu en ${(i + 1) * ANTICAPTCHA_POLL_MS / 1000}s (longueur: ${token.length})`);
+          return token;
+        }
+        console.error("[captcha] Anti-Captcha: status ready mais token absent");
+        return null;
+      }
+
+      console.log(`[captcha] Anti-Captcha poll #${i + 1} — processing`);
+    } catch (err) {
+      console.warn(`[captcha] Anti-Captcha poll #${i + 1} réseau erreur:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  console.error("[captcha] Anti-Captcha timeout");
+  return null;
 }
 
 async function solveTurnstileViaCapsolver(
@@ -300,7 +393,7 @@ async function injectTurnstileSolution(page: Page, token: string): Promise<void>
   }, token);
 }
 
-interface SitekeyResult {
+export interface SitekeyResult {
   sitekey: string;
   /** true = CF Managed Challenge interstitiel (AntiCloudflareTask requis) */
   isCfChallenge: boolean;
@@ -315,7 +408,7 @@ interface SitekeyResult {
  *  3. Widget .cf-turnstile[data-sitekey]
  *  4. Scan HTML brut (fallback)
  */
-async function extractTurnstileSitekey(page: Page): Promise<SitekeyResult | null> {
+export async function extractTurnstileSitekey(page: Page): Promise<SitekeyResult | null> {
   // 1. Scan des URLs de toutes les frames actives
   //    CF Managed Challenge embarque le sitekey dans l'URL de son iframe interne :
   //    challenges.cloudflare.com/cdn-cgi/challenge-platform/.../0x4XXXX/...
@@ -492,7 +585,8 @@ async function _tryAntiCloudflareTask(
  *   → CapSolver AntiCloudflareTask (nécessite proxy iProyal) → cf_clearance cookie
  *
  * ── Turnstile widget standard (data-sitekey dans le DOM) ─────────────────────
- *   → CapSolver AntiTurnstileTaskProxyLess → token injecté
+ *   → Anti-Captcha TurnstileTaskProxyless (priorité)
+ *   → CapSolver AntiTurnstileTaskProxyLess
  *   → Fallback : 2captcha
  *
  * Utilisé APRÈS l'attente d'auto-résolution (voir waitAndResolveCloudflareTurnstile dans spainPortal).
@@ -505,6 +599,7 @@ export async function detectAndSolveTurnstile(
   twoCaptchaApiKey: string | undefined,
   capsolverApiKey?: string,
   proxyUrl?: string,
+  anticaptchaApiKey?: string,
 ): Promise<CaptchaResult> {
   let title = "";
   try { title = await page.title(); } catch { /* ignore */ }
@@ -582,8 +677,19 @@ export async function detectAndSolveTurnstile(
   console.log(`[captcha] Type: Turnstile standard | sitekey: ${sitekey.slice(0, 14)}…`);
   let token: string | null = null;
 
-  // Priorité 1 : CapSolver AntiTurnstileTaskProxyLess
-  if (capsolverApiKey) {
+  // Priorité 1 : Anti-Captcha TurnstileTaskProxyless
+  if (anticaptchaApiKey) {
+    console.log("[captcha] Turnstile → Anti-Captcha TurnstileTaskProxyless");
+    token = await solveTurnstileViaAntiCaptcha(anticaptchaApiKey, sitekey, pageUrl).catch(() => null);
+    if (token) {
+      console.log("[captcha] ✅ Anti-Captcha Turnstile token reçu");
+    } else {
+      console.warn("[captcha] Anti-Captcha Turnstile échec — fallback CapSolver");
+    }
+  }
+
+  // Priorité 2 : CapSolver AntiTurnstileTaskProxyLess
+  if (!token && capsolverApiKey) {
     console.log("[captcha] Turnstile → CapSolver AntiTurnstileTaskProxyLess");
     token = await solveTurnstileViaCapsolver(capsolverApiKey, sitekey, pageUrl).catch(() => null);
     if (token) {
@@ -593,10 +699,10 @@ export async function detectAndSolveTurnstile(
     }
   }
 
-  // Priorité 2 : 2captcha (fallback)
+  // Priorité 3 : 2captcha (fallback)
   if (!token) {
     if (!twoCaptchaApiKey) {
-      console.warn("[captcha] Turnstile : aucune clé captcha disponible (CapSolver ni 2captcha)");
+      console.warn("[captcha] Turnstile : aucune clé captcha disponible (Anti-Captcha, CapSolver ni 2captcha)");
       return "no_key";
     }
     console.log("[captcha] Turnstile → 2captcha");
@@ -672,4 +778,224 @@ export async function detectAndSolveCaptcha(
   await injectCaptchaSolution(page, token);
   console.log("[captcha] Solution injected successfully");
   return "solved";
+}
+
+
+// ─── Méthode avec proxy injection (comme @antiadmin/anticaptchaofficial) ─────────────────
+
+interface TurnstileParams {
+  websiteURL: string;
+  websiteKey: string;
+  action?: string;
+  cData?: string;
+  chlPageData?: string;
+  userAgent: string;
+}
+
+/**
+ * Résout Turnstile avec la méthode de proxy injection (comme @antiadmin/anticaptchaofficial).
+ * Cette méthode intercepte window.turnstile.render pour capturer les paramètres exacts.
+ */
+export async function solveTurnstileWithProxyInjection(
+  page: Page,
+  anticaptchaApiKey: string,
+): Promise<CaptchaResult> {
+  console.log("[captcha] Tentative de résolution Turnstile avec proxy injection...");
+  
+  let params: TurnstileParams | null = null;
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (!params && attempts < maxAttempts) {
+    attempts++;
+    console.log(`[captcha] Tentative ${attempts}/${maxAttempts} d'interception des paramètres...`);
+    
+    try {
+      // Injecter le proxy pour intercepter window.turnstile.render
+      await page.evaluate(() => {
+        // Déclarer turnstile sur window
+        const w = window as any;
+        if (w.turnstile) {
+          w.turnstile = new Proxy(w.turnstile, {
+            get(target, prop) {
+              if (prop === "render") {
+                return function (a: any, b: any) {
+                  const p = {
+                    websiteURL: window.location.href,
+                    websiteKey: b.sitekey,
+                    action: b.action,
+                    cData: b.cData,
+                    chlPageData: b.chlPageData,
+                    userAgent: navigator.userAgent,
+                  };
+                  
+                  // Sauvegarder les paramètres dans window.params
+                  w.params = p;
+                  
+                  // Sauvegarder le callback dans window.cfCallback
+                  w.cfCallback = b.callback;
+                  
+                  // Appeler la fonction render originale
+                  return target.render.apply(target, arguments);
+                };
+              }
+              return (target as any)[prop];
+            },
+          });
+        }
+      });
+      
+      // Attendre que les paramètres soient capturés
+      params = await page.evaluate(() => {
+        return new Promise<TurnstileParams | null>((resolve) => {
+          setTimeout(() => resolve((window as any).params || null), 5000);
+        });
+      });
+      
+      if (!params) {
+        console.log(`[captcha] Aucun paramètre capturé, attente avant nouvelle tentative...`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    } catch (error) {
+      console.warn(`[captcha] Erreur lors de l'interception:`, error instanceof Error ? error.message : error);
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+  
+  if (!params) {
+    console.error("[captcha] Impossible de capturer les paramètres Turnstile après", maxAttempts, "tentatives");
+    return "failed";
+  }
+  
+  console.log(`[captcha] Paramètres Turnstile capturés:`, {
+    websiteKey: params.websiteKey.slice(0, 14) + "...",
+    action: params.action,
+    cData: params.cData ? params.cData.slice(0, 20) + "..." : "non défini",
+    chlPageData: params.chlPageData ? params.chlPageData.slice(0, 20) + "..." : "non défini",
+  });
+  
+  // Résoudre avec Anti-Captcha API
+  try {
+    // 1. Créer la tâche
+    const createRes = await fetch(`${ANTICAPTCHA_BASE}/createTask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientKey: anticaptchaApiKey,
+        task: {
+          type: "TurnstileTaskProxyless",
+          websiteURL: params.websiteURL,
+          websiteKey: params.websiteKey,
+          action: params.action,
+          data: params.cData,
+          pageData: params.chlPageData,
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    
+    const createData = await createRes.json() as { errorId: number; errorCode?: string; taskId?: number };
+    
+    if (createData.errorId !== 0 || !createData.taskId) {
+      console.error(`[captcha] Anti-Captcha createTask erreur: ${createData.errorCode ?? createData.errorId}`);
+      return "failed";
+    }
+    
+    const taskId = createData.taskId;
+    console.log(`[captcha] Tâche Anti-Captcha créée: ${taskId}`);
+    
+    // 2. Poller le résultat
+    for (let i = 0; i < ANTICAPTCHA_MAX_POLLS; i++) {
+      await new Promise(r => setTimeout(r, ANTICAPTCHA_POLL_MS));
+      
+      try {
+        const resultRes = await fetch(`${ANTICAPTCHA_BASE}/getTaskResult`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientKey: anticaptchaApiKey, taskId }),
+          signal: AbortSignal.timeout(10000),
+        });
+        
+        const resultData = await resultRes.json() as { errorId: number; status: string; solution?: { token?: string } };
+        
+        if (resultData.errorId !== 0) {
+          console.error(`[captcha] Anti-Captcha poll erreur: ${resultData.errorId}`);
+          return "failed";
+        }
+        
+        if (resultData.status === "ready") {
+          const token = resultData.solution?.token;
+          if (!token) {
+            console.error("[captcha] Anti-Captcha: status ready mais token absent");
+            return "failed";
+          }
+          
+          console.log(`[captcha] Token Turnstile reçu (longueur: ${token.length})`);
+          
+          // 3. Exécuter le callback avec le token
+          await page.evaluate((tok: string) => {
+            if ((window as any).cfCallback && typeof (window as any).cfCallback === "function") {
+              (window as any).cfCallback(tok);
+            }
+          }, token);
+          
+          console.log("[captcha] Callback exécuté avec le token");
+          
+          // 4. Attendre la redirection/navigation
+          await new Promise(r => setTimeout(r, 5000));
+          
+          // Vérifier si le cookie cf_clearance est présent
+          const cookies = await page.context().cookies();
+          const cfClearance = cookies.find(c => c.name === "cf_clearance");
+          
+          if (cfClearance) {
+            console.log(`[captcha] Cookie cf_clearance obtenu: ${cfClearance.value.slice(0, 20)}...`);
+            return "solved";
+          } else {
+            console.warn("[captcha] Aucun cookie cf_clearance trouvé après résolution");
+            // Continuer quand même, peut-être que la page a été débloquée
+            return "solved";
+          }
+        }
+        
+        console.log(`[captcha] Anti-Captcha poll #${i + 1} — processing`);
+      } catch (error) {
+        console.warn(`[captcha] Erreur réseau lors du poll #${i + 1}:`, error instanceof Error ? error.message : error);
+      }
+    }
+    
+    console.error("[captcha] Timeout lors de la résolution Turnstile");
+    return "failed";
+    
+  } catch (error) {
+    console.error("[captcha] Erreur lors de la résolution Turnstile:", error instanceof Error ? error.message : error);
+    return "failed";
+  }
+}
+
+/**
+ * Version alternative de detectAndSolveTurnstile qui utilise la méthode de proxy injection.
+ * À utiliser quand la méthode standard échoue.
+ */
+export async function detectAndSolveTurnstileWithInjection(
+  page: Page,
+  twoCaptchaApiKey: string | undefined,
+  capsolverApiKey?: string,
+  proxyUrl?: string,
+  anticaptchaApiKey?: string,
+): Promise<CaptchaResult> {
+  // D'abord essayer la méthode standard
+  const standardResult = await detectAndSolveTurnstile(page, twoCaptchaApiKey, capsolverApiKey, proxyUrl, anticaptchaApiKey);
+  
+  if (standardResult === "solved") {
+    return "solved";
+  }
+  
+  // Si la méthode standard échoue et qu'on a une clé Anti-Captcha, essayer la méthode d'injection
+  if (anticaptchaApiKey && standardResult !== "no_key") {
+    console.log("[captcha] Méthode standard échouée, tentative avec proxy injection...");
+    return await solveTurnstileWithProxyInjection(page, anticaptchaApiKey);
+  }
+  
+  return standardResult;
 }

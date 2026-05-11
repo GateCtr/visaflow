@@ -1,0 +1,21 @@
+{
+  "proxy": {
+    "url": "http://brd-customer-hl_f0e9b823-zone-residential_proxy1-cd-session-session_20260510_221717:7umnfa8s8ana@brd.superproxy.io:33335",
+    "capsolverFormat": "brd.superproxy.io:33335:brd-customer-hl_f0e9b823-zone-residential_proxy1-cd-session-session_20260510_221717:7umnfa8s8ana",
+    "sessionId": "session_20260510_221717",
+    "type": "residential_proxy1",
+    "generatedAt": "2026-05-10T21:17:17.415Z"
+  },
+  "capsolver": {
+    "apiKey": "NON_CONFIGURÉ",
+    "taskType": "AntiCloudflareTask",
+    "websiteURL": "https://www.citaconsular.es",
+    "notes": "Configuration pour Cloudflare Managed Challenge"
+  },
+  "instructions": [
+    "1. Utiliser BRIGHTDATA_CAPSOLVER_FORMAT dans les appels CapSolver",
+    "2. La session reste valide 10-30 minutes",
+    "3. Régénérer une nouvelle session après expiration",
+    "4. Pour une IP vraiment fixe, utiliser datacenter_proxy1"
+  ]
+}

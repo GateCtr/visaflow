@@ -1,0 +1,37 @@
+{
+  "cookies": [
+    {
+      "name": "cf_chl_rc_ni",
+      "value": "1",
+      "domain": "www.citaconsular.es",
+      "path": "/",
+      "expires": 1778474517,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "source": "manual",
+      "validFor": [
+        "www.citaconsular.es"
+      ],
+      "capturedAt": 1778470925450
+    },
+    {
+      "name": "cf_clearance",
+      "value": "CRztWqQ1DeNrL7a_0kABfUO0gksuHNRTv21DrsXdois-1778442210-1.2.1.1-ItXFEn5hpTcybW4DXSoCJAGGxbXXVG3ZAwf05MEYIjzuCqGPUOXNGoynErMZf.F6qjMjOhxVjLS.sPtR3bgHRig5UmFC7qEN9d2nfRApNTAg02WgPVPgZMUzp0TLrNkUi6MPwhOVmFsHfpGINCaURi5rLnHnbsCGzsRb88ioeIoteAYmRgjPgqVq8DnJyX4whpfCRQEtvDjoOw5XTv_04.S_6QjxOlW2wntyybwrfcD4KReE5TqhGNvM85gxgex2j18feqcPrQXOM91BY1q8IMZ93YqX8Ho0ahqfWz8gj.2R1dUzP26Y0f8mDzQW4pt.W98054V0GERHDsLJxHJ1Ng",
+      "domain": ".citaconsular.es",
+      "path": "/",
+      "expires": 1809978210.256128,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "source": "manual",
+      "validFor": [
+        "citaconsular.es",
+        "www.citaconsular.es"
+      ],
+      "capturedAt": 1778473229659
+    }
+  ],
+  "lastUpdated": 1778473229659,
+  "version": 1
+}

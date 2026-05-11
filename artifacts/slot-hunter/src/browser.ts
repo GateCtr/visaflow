@@ -93,6 +93,8 @@ export interface BrowserOverrides {
    *   "auto"       → sélection automatique (défaut)
    */
   proxySource?: "brightdata" | "iproyal" | "auto";
+  /** Mode headless (true par défaut) */
+  headless?: boolean;
 }
 
 export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
@@ -160,7 +162,7 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   ];
 
   const launchOptions: LaunchOptions = {
-    headless: true,
+    headless: overrides?.headless ?? true,
     args: launchArgs,
     proxy: proxyConfig,
   };

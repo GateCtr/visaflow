@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page, Response } from "playwright";
 import { ProxyAgent } from "undici";
-import { detectAndSolveCaptcha, detectAndSolveTurnstile } from "./captcha.js";
+import { detectAndSolveCaptcha, detectAndSolveTurnstile, detectAndSolveTurnstileWithInjection } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
 import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
 
@@ -994,13 +994,14 @@ async function waitAndResolveCloudflareTurnstile(
     }
   }
 
-  // Phase 2 : résolution active via CapSolver (priorité) → 2captcha (fallback)
-  console.log("[spain] 30s écoulées — tentative résolution CF (CapSolver → 2captcha)…");
-  const turnstileResult = await detectAndSolveTurnstile(
+  // Phase 2 : résolution active via Anti-Captcha (priorité) → CapSolver → 2captcha (fallback)
+  console.log("[spain] 30s écoulées — tentative résolution CF avec méthode améliorée (proxy injection)…");
+  const turnstileResult = await detectAndSolveTurnstileWithInjection(
     page,
     job.hunterConfig.twoCaptchaApiKey,
     job.hunterConfig.capsolverApiKey,
     process.env.IPROYAL_PROXY_URL,
+    process.env.ANTICAPTCHA_API_KEY, // Utiliser la clé depuis les variables d'environnement
   );
 
   if (turnstileResult === "solved") {
@@ -1663,11 +1664,12 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
 
           // Branche B : CapSolver AntiCloudflareTask (en parallèle, 1 shot)
           const capsolverWait: Promise<boolean> = capsolverKey
-            ? detectAndSolveTurnstile(
+            ? detectAndSolveTurnstileWithInjection(
                 page,
                 process.env.TWOCAPTCHA_API_KEY,
                 capsolverKey,
                 process.env.IPROYAL_PROXY_URL,
+                undefined, // pas de clé anti-captcha pour cette branche
               )
                 .then((r) => {
                   if (r === "solved") {

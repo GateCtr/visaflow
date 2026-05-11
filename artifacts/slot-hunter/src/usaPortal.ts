@@ -62,6 +62,10 @@ const USA_RESCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/reschedule`;
 const USA_SEARCH_URL = `${USA_APPOINTMENT_URL}/appointments/search`;
 // Dashboard : retourne les RDV planifiés (Bearer seulement, pas d'applicationId requis)
 const USA_SCHEDULED_INFO_URL = `${USA_APPOINTMENT_URL}/appointments/scheduledappointmentInfo`;
+// showRescheduleButton : retourne applicationId + appointmentId du RDV reschedule-able
+// Découvert via capture Playwright — c'est l'endpoint CORRECT pour identifier le dossier à reschedule.
+// Retourne : [{applicationId, appointmentId, showRescheduleButton: true, rescheduleLimit, showCancelButton}]
+const USA_SHOW_RESCHEDULE_BUTTON_URL = `${USA_APPOINTMENT_URL}/appointments/showRescheduleButton`;
 // Anti-détection : endpoints que le vrai portail appelle dans son flux normal
 const USA_LANDING_PAGE_URL = `${USA_APPOINTMENT_URL}/appointments/getLandingPageDeatils`;
 // Retourne l'URL de base du sanity check — le stepType est ajouté en query param par l'appelant.
@@ -1038,7 +1042,74 @@ async function fetchCancellableSessionIds(
     "Referer":           REFERER_DASHBOARD,
   };
 
-  // ── Étape 1 : GET scheduledappointmentInfo ─────────────────────────────────
+  // ── Étape 0 (PRIORITÉ) : GET showRescheduleButton ──────────────────────────
+  // Découvert via capture Playwright du flux réel Angular.
+  // C'est l'endpoint que le portail appelle sur la page "Mes rendez-vous" pour
+  // déterminer quel dossier peut être reschedule. Il retourne le BON applicationId
+  // (celui avec le RDV actif), contrairement à scheduledappointmentInfo qui peut
+  // retourner un ancien dossier.
+  // Retourne : [{applicationId, appointmentId, showRescheduleButton, rescheduleLimit, showCancelButton}]
+  let foundViaRescheduleBtn = false;
+  try {
+    console.log("[cancellable] GET showRescheduleButton...");
+    const res = await usaFetch(USA_SHOW_RESCHEDULE_BUTTON_URL, { method: "GET", headers: stdH });
+    console.log(`[cancellable] showRescheduleButton → HTTP ${res.status}`);
+    if (res.ok) {
+      const raw = await res.text();
+      console.log(`[cancellable] showRescheduleButton réponse: ${raw.slice(0, 500)}`);
+      let data: unknown;
+      try { data = JSON.parse(raw); } catch { /* non-JSON */ }
+
+      const items: Record<string, unknown>[] = Array.isArray(data) ? data as Record<string, unknown>[] :
+        (data && typeof data === "object" ? [data as Record<string, unknown>] : []);
+
+      // Chercher l'entrée avec showRescheduleButton=true
+      for (const item of items) {
+        if (item.showRescheduleButton !== true) continue;
+
+        const appId = typeof item.applicationId === "string" ? item.applicationId : null;
+        const apptId = typeof item.appointmentId === "number" ? item.appointmentId :
+          (typeof item.appointmentId === "string" ? parseInt(item.appointmentId as string, 10) : undefined);
+
+        if (appId) {
+          session.applicationId = appId;
+          foundViaRescheduleBtn = true;
+          console.log(`[cancellable] ✅ applicationId depuis showRescheduleButton: ${appId}`);
+        }
+        if (apptId !== undefined && !isNaN(apptId)) {
+          session.appointmentId = apptId;
+          console.log(`[cancellable] ✅ appointmentId depuis showRescheduleButton: ${apptId}`);
+        }
+        if (foundViaRescheduleBtn) break;
+      }
+    } else {
+      const errBody = await res.text().catch(() => "");
+      console.warn(`[cancellable] showRescheduleButton HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+    }
+  } catch (err) {
+    console.warn(`[cancellable] showRescheduleButton erreur réseau: ${err}`);
+  }
+
+  // Si showRescheduleButton a donné les IDs, on peut skip les étapes suivantes
+  if (foundViaRescheduleBtn && session.applicationId && session.appointmentId !== undefined) {
+    console.log(`[cancellable] ✅ Résolution via showRescheduleButton — applicationId=${session.applicationId} appointmentId=${session.appointmentId}`);
+    botLog({
+      applicationId: job.id,
+      step: "scan",
+      status: "ok",
+      data: {
+        flow: "usa",
+        phase: "cancellable_api_ok",
+        source: "showRescheduleButton",
+        applicationId: session.applicationId,
+        appointmentId: session.appointmentId,
+        applicantId: session.applicantId,
+      },
+    });
+    return "proceed";
+  }
+
+  // ── Étape 1 (fallback) : GET scheduledappointmentInfo ──────────────────────
   // Retourne la liste des RDV "scheduled" de l'utilisateur connecté.
   // Ce tableau contient applicationId + appointmentId + appointmentUUID.
   let foundViaInfo = false;
