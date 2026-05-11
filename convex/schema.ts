@@ -277,6 +277,29 @@ export default defineSchema({
     // Marqueur "déjà notifié pour ce slot" — évite le spam admin tant que la
     // session n'a pas été expirée/recréée par l'admin
     slotNotifiedAt: v.optional(v.number()),
+    // ══════════════════════════════════════════════════════════════════════════
+    // NOUVEAUX CHAMPS - Statistiques détaillées et monitoring
+    // ══════════════════════════════════════════════════════════════════════════
+    // Timestamp d'expiration de la session (retourné par SetCaptchaToken)
+    validUntilMs: v.optional(v.number()),
+    // Moment où la session a été activée (passage de needs_setup → active)
+    activatedAt: v.optional(v.number()),
+    // Nombre total de slots trouvés depuis le début
+    slotsFoundCount: v.optional(v.number()),
+    // Timestamp du dernier slot trouvé
+    lastSlotFoundAt: v.optional(v.number()),
+    // Nombre de renouvellements automatiques via VOWINT (sessions recréées)
+    autoRenewalCount: v.optional(v.number()),
+    // Timestamp du dernier renouvellement automatique
+    lastAutoRenewalAt: v.optional(v.number()),
+    // Temps total de polling en ms (cumulé sur tous les cycles de vie)
+    totalPollingDurationMs: v.optional(v.number()),
+    // Nombre de tentatives de setup (login VOWINT + hCaptcha)
+    setupAttempts: v.optional(v.number()),
+    // Dernière erreur de setup détaillée
+    lastSetupError: v.optional(v.string()),
+    // Timestamp du dernier setup réussi
+    lastSuccessfulSetupAt: v.optional(v.number()),
   })
     .index("by_application", ["applicationId"])
     .index("by_status", ["status"]),

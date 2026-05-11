@@ -248,12 +248,31 @@ export const internalActivateSession = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) return;
 
+    const now = Date.now();
+    
+    // Calculer la durée de polling cumulée si la session avait déjà été active
+    const previousDuration = session.totalPollingDurationMs ?? 0;
+    const lastActiveDuration = session.lastCheckAt && session.activatedAt 
+      ? session.lastCheckAt - session.activatedAt 
+      : 0;
+    
+    // Incrémenter le compteur de renouvellements si ce n'est pas la première activation
+    const renewalCount = session.activatedAt 
+      ? (session.autoRenewalCount ?? 0) + 1 
+      : (session.autoRenewalCount ?? 0);
+
     const patch: Record<string, unknown> = {
       sessionCookie: args.sessionCookie,
       status: "active",
-      lastCheckAt: Date.now(),
+      lastCheckAt: now,
       consecutiveErrors: 0,
       lockedUntil: 0,
+      activatedAt: now,
+      validUntilMs: args.validUntilMs,
+      lastSuccessfulSetupAt: now,
+      autoRenewalCount: renewalCount,
+      lastAutoRenewalAt: renewalCount > 0 ? now : undefined,
+      totalPollingDurationMs: previousDuration + lastActiveDuration,
     };
 
     // Si le bot a découvert l'URL d'intégration (mode credentials), la stocker
@@ -380,12 +399,15 @@ export const internalRecordSetupLoginFail = internalMutation({
 
     const now = Date.now();
     const loginFailCount = (session.loginFailCount ?? 0) + 1;
+    const setupAttempts = (session.setupAttempts ?? 0) + 1;
     const shouldPause = loginFailCount >= MAX_LOGIN_FAILS;
 
     const patch: Record<string, unknown> = {
       loginFailCount,
+      setupAttempts,
       lockedUntil: 0, // libérer le lock immédiatement
       lastError: errorDetail ?? `VOWINT login failed (attempt ${loginFailCount})`,
+      lastSetupError: errorDetail ?? `VOWINT login failed (attempt ${loginFailCount})`,
     };
 
     if (shouldPause) {
@@ -458,6 +480,12 @@ export const internalRecordCheck = internalMutation({
 
     // Auto-expire la session si cookie mort ou trop d'erreurs
     if (args.result === "session_expired") {
+      // Calculer la durée de polling avant expiration
+      const pollingDuration = session.activatedAt 
+        ? now - session.activatedAt 
+        : 0;
+      patch.totalPollingDurationMs = (session.totalPollingDurationMs ?? 0) + pollingDuration;
+      
       // Si le bot demande un auto-renewal (credentials VOWINT disponibles),
       // remettre en needs_setup au lieu d'expirer définitivement.
       if (args.error === "auto_renewal_requested" && session.vowintEmail) {
@@ -477,6 +505,11 @@ export const internalRecordCheck = internalMutation({
     // et on marque slotNotifiedAt. Admin doit la réactiver après réservation.
     let shouldNotifySlot = false;
     if (args.result === "slot_found") {
+      // Incrémenter le compteur de slots trouvés
+      const slotsFoundCount = (session.slotsFoundCount ?? 0) + 1;
+      patch.slotsFoundCount = slotsFoundCount;
+      patch.lastSlotFoundAt = now;
+      
       if (!session.slotNotifiedAt) {
         shouldNotifySlot = true;
         patch.slotNotifiedAt = now;

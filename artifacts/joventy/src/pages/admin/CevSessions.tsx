@@ -36,46 +36,170 @@ function formatRelative(ts?: number): string {
   return `${Math.floor(diff / 86_400_000)}j`;
 }
 
-function StatusBadge({ status, lastResult }: { status: string; lastResult?: string }) {
+function formatDuration(ms?: number): string {
+  if (!ms) return "—";
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
+
+function formatTimeRemaining(validUntilMs?: number): { text: string; color: string; isExpired: boolean } {
+  if (!validUntilMs) return { text: "—", color: "text-slate-500", isExpired: false };
+  
+  const now = Date.now();
+  const remaining = validUntilMs - now;
+  
+  if (remaining <= 0) {
+    return { text: "Expirée", color: "text-red-600", isExpired: true };
+  }
+  
+  const minutes = Math.floor(remaining / 60_000);
+  const seconds = Math.floor((remaining % 60_000) / 1000);
+  
+  if (remaining < 5 * 60_000) {
+    return { text: `${minutes}m ${seconds}s`, color: "text-red-600", isExpired: false };
+  }
+  if (remaining < 10 * 60_000) {
+    return { text: `${minutes}m`, color: "text-amber-600", isExpired: false };
+  }
+  
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) {
+    return { text: `${hours}h ${minutes % 60}m`, color: "text-emerald-600", isExpired: false };
+  }
+  return { text: `${minutes}m`, color: "text-emerald-600", isExpired: false };
+}
+
+function StatusBadge({ status, lastResult, validUntilMs, loginFailCount }: { 
+  status: string; 
+  lastResult?: string;
+  validUntilMs?: number;
+  loginFailCount?: number;
+}) {
+  const timeInfo = formatTimeRemaining(validUntilMs);
+  
   if (status === "needs_setup") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-        <Loader2 className="w-3 h-3 animate-spin" /> Configuration auto…
-      </span>
+      <div className="space-y-1">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+          <Loader2 className="w-3 h-3 animate-spin" /> Configuration auto…
+        </span>
+      </div>
     );
   }
   if (status === "expired") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-        <XCircle className="w-3 h-3" /> Session expirée
-      </span>
+      <div className="space-y-1">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+          <XCircle className="w-3 h-3" /> Session expirée
+        </span>
+      </div>
     );
   }
   if (status === "paused") {
+    // Pause manuelle ou auto-pause après login failures
+    if (loginFailCount && loginFailCount >= 3) {
+      return (
+        <div className="space-y-1">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+            <ShieldAlert className="w-3 h-3" /> Identifiants invalides
+          </span>
+          <div className="text-xs text-red-600">
+            {loginFailCount} échecs de login
+          </div>
+        </div>
+      );
+    }
+    // Pause après slot trouvé
+    if (lastResult === "slot_found") {
+      return (
+        <div className="space-y-1">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
+            🚨 Créneau trouvé
+          </span>
+          <div className="text-xs text-emerald-600">En attente de réservation</div>
+        </div>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
         <Pause className="w-3 h-3" /> En pause
       </span>
     );
   }
-  if (lastResult === "slot_found") {
+  if (status === "active") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
-        🚨 Créneau trouvé
-      </span>
-    );
-  }
-  if (lastResult === "no_slot") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-        <CheckCircle2 className="w-3 h-3" /> Polling actif
-      </span>
+      <div className="space-y-1">
+        {lastResult === "slot_found" ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
+            🚨 Créneau trouvé
+          </span>
+        ) : lastResult === "no_slot" ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+            <CheckCircle2 className="w-3 h-3" /> Polling actif
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+            <Loader2 className="w-3 h-3 animate-spin" /> 1er check…
+          </span>
+        )}
+        {validUntilMs && (
+          <div className={`text-xs font-medium ${timeInfo.color} flex items-center gap-1`}>
+            <Clock className="w-3 h-3" />
+            Expire dans {timeInfo.text}
+          </div>
+        )}
+      </div>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-      <Loader2 className="w-3 h-3 animate-spin" /> En attente 1er check
+      <Loader2 className="w-3 h-3 animate-spin" /> En attente
     </span>
+  );
+}
+
+// ─── Composant : Statistiques détaillées de session ───────────────────────────
+function SessionStats({ session }: { session: any }) {
+  const stats = [];
+  
+  if (session.checkCount) {
+    stats.push(`${session.checkCount} checks`);
+  }
+  
+  if (session.slotsFoundCount) {
+    stats.push(`${session.slotsFoundCount} slot${session.slotsFoundCount > 1 ? 's' : ''} trouvé${session.slotsFoundCount > 1 ? 's' : ''}`);
+  }
+  
+  if (session.autoRenewalCount) {
+    stats.push(`${session.autoRenewalCount} renouvellement${session.autoRenewalCount > 1 ? 's' : ''}`);
+  }
+  
+  if (session.totalPollingDurationMs) {
+    stats.push(`Durée: ${formatDuration(session.totalPollingDurationMs)}`);
+  }
+  
+  if (session.setupAttempts && session.setupAttempts > 1) {
+    stats.push(`${session.setupAttempts} tentatives setup`);
+  }
+  
+  return (
+    <div className="text-xs text-slate-500 space-y-0.5">
+      {stats.map((stat, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-slate-300" />
+          {stat}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -501,19 +625,19 @@ export default function CevSessions() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dossier</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Session</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Checks</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dernier check</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fréquence</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statistiques</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Activité</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sessions.map((s: any) => {
                 const loginFailCount: number = s.loginFailCount ?? 0;
-                const isLoginPaused = s.status === "paused" && loginFailCount > 0;
+                const isLoginPaused = s.status === "paused" && loginFailCount >= 3;
+                const isSlotPaused = s.status === "paused" && s.lastResult === "slot_found";
 
                 return (
-                  <tr key={s._id} className={`hover:bg-slate-50 ${isLoginPaused ? "bg-red-50/30" : ""}`}>
+                  <tr key={s._id} className={`hover:bg-slate-50 ${isLoginPaused ? "bg-red-50/30" : isSlotPaused ? "bg-emerald-50/30" : ""}`}>
                     <td className="px-4 py-3">
                       <div className="text-sm font-medium text-slate-900">{s.applicantName}</div>
                       <div className="text-xs text-slate-500">{s.visaType}</div>
@@ -524,37 +648,42 @@ export default function CevSessions() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={s.status} lastResult={s.lastResult} />
-                      {loginFailCount > 0 ? (
-                        <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                          <XCircle className="w-3 h-3" />
-                          {loginFailCount} échec{loginFailCount > 1 ? "s" : ""} login VOWINT
-                        </div>
-                      ) : s.consecutiveErrors && s.consecutiveErrors > 0 ? (
-                        <div className="text-xs text-amber-600 mt-1">
-                          {s.consecutiveErrors} erreur{s.consecutiveErrors > 1 ? "s" : ""} consécutive{s.consecutiveErrors > 1 ? "s" : ""}
-                        </div>
-                      ) : null}
+                      <StatusBadge 
+                        status={s.status} 
+                        lastResult={s.lastResult} 
+                        validUntilMs={s.validUntilMs}
+                        loginFailCount={s.loginFailCount}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <code className="text-xs font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                         {s.sessionCookiePreview}
                       </code>
+                      {s.autoRenewalCount && s.autoRenewalCount > 0 && (
+                        <div className="text-xs text-violet-600 mt-1 flex items-center gap-1">
+                          <RotateCcw className="w-3 h-3" />
+                          {s.autoRenewalCount} renouvellement{s.autoRenewalCount > 1 ? "s" : ""}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">{s.checkCount ?? 0}</td>
+                    <td className="px-4 py-3">
+                      <SessionStats session={s} />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="text-xs text-slate-700 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        il y a {formatRelative(s.lastCheckAt)}
+                        {s.lastCheckAt ? `il y a ${formatRelative(s.lastCheckAt)}` : "—"}
                       </div>
+                      {s.status === "active" && (
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          toutes les {Math.round((s.pollIntervalMs ?? 30_000) / 1000)}s
+                        </div>
+                      )}
                       {s.lastError && (
                         <div className="text-xs text-red-600 mt-0.5 max-w-xs truncate" title={s.lastError}>
                           {s.lastError}
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
-                      toutes les {Math.round((s.pollIntervalMs ?? 30_000) / 1000)}s
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
@@ -570,7 +699,7 @@ export default function CevSessions() {
                         )}
 
                         {/* Reprendre : session pausée manuellement (sans login failure) */}
-                        {s.status === "paused" && loginFailCount === 0 && (
+                        {s.status === "paused" && loginFailCount < 3 && s.lastResult !== "slot_found" && (
                           <button
                             onClick={() => setStatus({ sessionId: s._id, status: "active" })}
                             className="p-1.5 rounded hover:bg-slate-100 text-emerald-600"
