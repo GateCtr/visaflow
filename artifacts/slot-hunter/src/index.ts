@@ -6,6 +6,7 @@ import { runHunterSession, runBotTestSession, type SessionResult } from "./navig
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
+import { setupCevSessionHttp } from "./cevHttpSetup.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
@@ -38,24 +39,65 @@ async function startCevSetupLoop(): Promise<void> {
           `[CEV-SETUP] ▶ Établissement session=${s.sessionId} mode=${isCredMode ? "vowint-credentials" : "url-direct"}`
         );
 
-        // Timeout global de 4 min — si Playwright bloque (goto networkidle, proxy, etc.)
-        // on abandonne proprement et on déverrouille la session pour la prochaine tentative.
-        let timedOut = false;
-        const timeoutHandle = setTimeout(() => { timedOut = true; }, CEV_SETUP_TIMEOUT_MS);
+        // ── Stratégie 1 : HTTP pur (rapide, ~5s, pas de Playwright) ──────────
+        // Essayer d'abord en HTTP si on a les credentials VOWINT
+        let r: { success: boolean; error?: string; sessionCookie?: string; validUntilMs?: number; integrationUrl?: string };
 
-        const r = await Promise.race([
-          runCevDirectSessionSetup(
-            isCredMode
-              ? { vowintEmail: s.vowintEmail!, vowintPassword: s.vowintPassword!, vowintAppUrl: s.vowintAppUrl }
-              : s.integrationUrl,
-            s.sessionId,
+        if (isCredMode) {
+          console.log(`[CEV-SETUP] 🌐 Tentative HTTP pur session=${s.sessionId}...`);
+          const httpResult = await setupCevSessionHttp(
+            s.vowintEmail!,
+            s.vowintPassword!,
             s.applicationId,
-          ),
-          new Promise<{ success: false; error: string }>(resolve =>
-            setTimeout(() => resolve({ success: false, error: "TIMEOUT_4MIN" }), CEV_SETUP_TIMEOUT_MS)
-          ),
-        ]);
-        clearTimeout(timeoutHandle);
+            s.applicationId,
+            s.vowintAppUrl,
+          );
+
+          if (httpResult.success) {
+            // Activer la session dans Convex
+            const { activateCevSession } = await import("./convexClient.js");
+            const activated = await activateCevSession(
+              s.sessionId,
+              httpResult.sessionCookie!,
+              httpResult.validUntilMs,
+              httpResult.integrationUrl,
+            );
+            r = activated
+              ? { success: true }
+              : { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+          } else {
+            console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);
+            r = { success: false, error: httpResult.error };
+          }
+        } else {
+          r = { success: false, error: "NO_CREDENTIALS_FOR_HTTP" };
+        }
+
+        // ── Stratégie 2 : Playwright (fallback si HTTP échoue) ───────────────
+        if (!r.success && r.error !== "CEV_VOWINT_SESSION_FAILED") {
+          // Timeout global de 4 min — si Playwright bloque
+          let timedOut = false;
+          const timeoutHandle = setTimeout(() => { timedOut = true; }, CEV_SETUP_TIMEOUT_MS);
+
+          const playwrightResult = await Promise.race([
+            runCevDirectSessionSetup(
+              isCredMode
+                ? { vowintEmail: s.vowintEmail!, vowintPassword: s.vowintPassword!, vowintAppUrl: s.vowintAppUrl }
+                : s.integrationUrl,
+              s.sessionId,
+              s.applicationId,
+            ),
+            new Promise<{ success: false; error: string }>(resolve =>
+              setTimeout(() => resolve({ success: false, error: "TIMEOUT_4MIN" }), CEV_SETUP_TIMEOUT_MS)
+            ),
+          ]);
+          clearTimeout(timeoutHandle);
+
+          r = playwrightResult;
+          if (!r.success && (timedOut || r.error === "TIMEOUT_4MIN")) {
+            r = { success: false, error: "TIMEOUT_4MIN" };
+          }
+        }
 
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
@@ -66,9 +108,12 @@ async function startCevSetupLoop(): Promise<void> {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
 
           const isLoginFailure = r.error === "CEV_VOWINT_SESSION_FAILED";
-          const isTimeout = timedOut || r.error === "TIMEOUT_4MIN";
+          const isTimeout = r.error === "TIMEOUT_4MIN";
+          // Ne pas compter comme login failure si c'est un rate limit (bouton désactivé)
+          // ou si le setup a été déclenché par un auto_renewal (session expirée normalement)
+          const isRateLimit = (r.error ?? "").includes("RATE_LIMIT") || (r.error ?? "").includes("rate_limit");
 
-          if (isLoginFailure) {
+          if (isLoginFailure && !isRateLimit) {
             // Échec de login VOWINT : incrémenter le compteur persisté dans Convex.
             // Après 3 échecs cumulés (même après redémarrages Railway) → session auto-pausée.
             try {
@@ -187,6 +232,9 @@ async function startCevPollingLoop(): Promise<void> {
         } else if (r.status === "session_expired") {
           console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms) — demande re-setup...`);
           await recordCevSessionCheck(s.sessionId, "session_expired", "auto_renewal_requested");
+          // Reset le lock/compteur d'échecs pour que la boucle de setup puisse reprendre
+          // (sinon l'auto-pause bloque indéfiniment après 3 anciens échecs)
+          await resetCevSetupLock(s.sessionId).catch(() => {});
         } else if (r.status === "error") {
           console.log(`[CEV-POLL] ❌ Erreur session=${s.sessionId}: ${r.error} (${ms}ms)`);
           await recordCevSessionCheck(s.sessionId, "error", r.error);

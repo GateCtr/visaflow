@@ -284,9 +284,22 @@ async function establishCevSession(
                    await page.$('[ng-click*="appointment"]');
 
     if (!rdvBtn) {
+      // Vérifier si c'est la limite de 5 clics/heure (message VOWINT visible sur la page)
+      const pageText = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+      const isRateLimited = pageText.includes('5 fois') || pageText.includes('5 times') ||
+        pageText.includes('bloqué pendant') || pageText.includes('blocked for');
+
       const allNgClicks = await page.$$eval('[ng-click]', (els: any[]) =>
         els.map(e => e.getAttribute('ng-click'))
       ).catch(() => []);
+
+      if (isRateLimited) {
+        console.warn(`[CEV] ⏳ Limite 5 clics/heure atteinte — pas un échec de login`);
+        botLog({ applicationId: config.clientId, step: 'cev_rdv_rate_limited', status: 'warn', data: { pageText: pageText.slice(0, 300) } });
+        // Retourner null avec un marqueur spécial pour que le caller ne compte pas ça comme login_fail
+        return null;
+      }
+
       console.error(`[CEV] ❌ Bouton RDV introuvable — ng-clicks disponibles: ${JSON.stringify(allNgClicks)}`);
       botLog({ applicationId: config.clientId, step: 'cev_rdv_btn_not_found', status: 'fail', data: { allNgClicks } });
       return null;

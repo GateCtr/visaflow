@@ -1,20 +1,37 @@
-// CEV Polling — vérifie un endpoint /Integration/VOW/.../en-US avec un cookie
-// session déjà validé (captcha résolu manuellement par l'admin).
+// CEV Polling — deux stratégies :
 //
-// Stratégie :
-//   1. GET URL d'entrée → 302 vers /Integration/VOW/SelectSlot (si session valide)
-//                       → 302 vers /Captcha (si pas validée)
-//                       → 302 vers login (si cookie mort)
-//   2. GET /Integration/VOW/SelectSlot → 302 NoAvailability   = no_slot
-//                                       → 200 OK              = slot_found
-//                                       → 302 SessionExpired  = session_expired
+// Stratégie 1 (PRIORITAIRE) : POST /Home/AvailableTimeSlots (API JSON)
+//   - Vérifie directement les créneaux disponibles
+//   - Fonctionne tant que le cookie ASP.NET_SessionId est valide (validUntil)
+//   - Coût : ~50ms, zéro clic VOWINT, illimité pendant la durée de la session
+//   - Retourne les slots en JSON ou 403 si session expirée
 //
-// Coût : ~50ms par check, zéro captcha, zéro Playwright.
+// Stratégie 2 (FALLBACK) : GET integrationUrl → suivre les redirections
+//   - Utilisée si l'API retourne une erreur inattendue
+//   - Détecte NoAvailability, SessionExpired, ou page calendrier
+//
+// Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
 import { randomUserAgent } from "./browser.js";
+import { ProxyAgent } from "undici";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
+
+// Proxy pour le polling API — évite que l'IP Railway soit flaggée
+const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
+let _pollProxyAgent: ProxyAgent | undefined;
+if (IPROYAL_PROXY_URL) {
+  _pollProxyAgent = new ProxyAgent(IPROYAL_PROXY_URL);
+}
+
+function cevFetch(url: string, options: RequestInit): Promise<Response> {
+  if (_pollProxyAgent) {
+    // @ts-expect-error — dispatcher est une option undici
+    return fetch(url, { ...options, dispatcher: _pollProxyAgent });
+  }
+  return fetch(url, options);
+}
 
 export type CevPollResult =
   | { status: "no_slot" }
@@ -25,7 +42,7 @@ export type CevPollResult =
 // UA généré une fois par appel à pollCevSlot — reste stable dans la même session HTTP
 // mais tourne entre sessions pour éviter les fingerprints répétitifs (desktop uniquement).
 function fetchManual(url: string, cookie: string, userAgent: string): Promise<Response> {
-  return fetch(url, {
+  return cevFetch(url, {
     method: "GET",
     headers: {
       Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
@@ -141,13 +158,105 @@ function bodyIsErrorPage(body: string): boolean {
   );
 }
 
+/**
+ * Poll via POST /Home/AvailableTimeSlots — API JSON directe.
+ * Retourne null si l'API n'est pas accessible (fallback vers GET redirect).
+ * Retourne CevPollResult si on a une réponse claire.
+ *
+ * Bundle JS confirmé : callPost("/Home/AvailableTimeSlots", {month, year}, success, error)
+ * Content-Type: application/json (pas form-urlencoded)
+ */
+async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollResult | null> {
+  const now = new Date();
+  // Vérifier mois courant + mois suivant (comme pollCevSlotsMultiMonth)
+  for (let i = 0; i < 2; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const body = { month: d.getMonth() + 1, year: d.getFullYear() };
+
+    try {
+      const res = await cevFetch(`${BASE}/Home/AvailableTimeSlots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cookie": sessionCookie,
+          "User-Agent": ua,
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json, text/javascript, */*; q=0.01",
+          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Referer": `${BASE}/Integration/VOW/SelectSlot`,
+          "Origin": BASE,
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+        },
+        body: JSON.stringify(body),
+        redirect: "manual",
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      // 403/401 = session expirée (captcha non résolu ou cookie mort)
+      if (res.status === 403 || res.status === 401) {
+        return { status: "session_expired" };
+      }
+
+      // 302 redirect = session expirée ou NoAvailability
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get("location") ?? "";
+        if (loc.includes("SessionExpired") || loc.includes("Captcha")) {
+          return { status: "session_expired" };
+        }
+        // Autre redirect — fallback vers stratégie 2
+        return null;
+      }
+
+      if (!res.ok) {
+        // Erreur serveur inattendue — fallback
+        return null;
+      }
+
+      // Réponse JSON — parser les slots
+      const raw = await res.json() as unknown;
+
+      // Réponse vide ou tableau vide = pas de créneaux ce mois
+      if (raw === null || (Array.isArray(raw) && raw.length === 0)) {
+        continue; // essayer le mois suivant
+      }
+
+      // Si c'est un tableau non-vide ou un objet avec des données → slots trouvés !
+      if (Array.isArray(raw) && raw.length > 0) {
+        const preview = JSON.stringify(raw).slice(0, 2000);
+        return { status: "slot_found", bodyPreview: preview };
+      }
+
+      // Objet avec des clés → probablement des slots
+      if (typeof raw === "object" && raw !== null && Object.keys(raw as object).length > 0) {
+        const preview = JSON.stringify(raw).slice(0, 2000);
+        return { status: "slot_found", bodyPreview: preview };
+      }
+
+    } catch (err) {
+      // Erreur réseau/timeout — fallback vers stratégie 2
+      return null;
+    }
+  }
+
+  // Les deux mois sont vides → pas de créneaux
+  return { status: "no_slot" };
+}
+
 export async function pollCevSlot(
   integrationUrl: string,
   sessionCookie: string,
 ): Promise<CevPollResult> {
   try {
-    // UA stable pour toute la session de polling (cohérence headers) mais tournant entre sessions
     const ua = randomUserAgent();
+
+    // ── Stratégie 1 : POST /Home/AvailableTimeSlots (API JSON directe) ──────
+    // Plus fiable que le GET redirect — retourne les slots en JSON
+    // Fonctionne tant que le cookie est valide (pas besoin de l'integrationUrl)
+    const apiResult = await pollViaApi(sessionCookie, ua);
+    if (apiResult !== null) return apiResult;
+
+    // ── Stratégie 2 (fallback) : GET integrationUrl → suivre redirections ───
     const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua);
     if (!resolved.ok) {
       return { status: "error", error: resolved.error };
