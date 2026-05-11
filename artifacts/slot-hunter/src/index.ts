@@ -59,6 +59,9 @@ async function startCevSetupLoop(): Promise<void> {
 
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
+          // Reset le compteur d'échecs de login après un succès
+          // (les anciens échecs étaient peut-être dus à un proxy mort, pas aux identifiants)
+          await resetCevSetupLock(s.sessionId).catch(() => {});
         } else {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
 

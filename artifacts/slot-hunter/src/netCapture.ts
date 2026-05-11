@@ -182,7 +182,7 @@ export function attachNetCapture(
         applicationId,
         step: 'net_capture_summary',
         status: 'ok',
-        data: { totalRequests: list.length, requests: summary },
+        data: { totalRequests: list.length, requests: JSON.stringify(summary) },
       });
     },
   };
