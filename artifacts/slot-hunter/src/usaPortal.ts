@@ -1811,7 +1811,7 @@ async function getUsaApplicationDetails(
 async function getUsaTransformData(
   session: UsaSession,
   applicationId: string,
-): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string } | null> {
+): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string } | null> {
   const url = USA_TRANSFORM_DATA_URL(applicationId);
   const hdrs = sessionHeaders(session.accessToken, applicationId, session.missionId, REFERER_REQUESTS, false);
   try {
@@ -1843,9 +1843,14 @@ async function getUsaTransformData(
     const stateCode        = typeof td.stateCode        === "string" ? td.stateCode        : undefined;
     const appointmentPriority = typeof td.appointmentPriority === "string" ? td.appointmentPriority : undefined;
     const paymentStatus    = typeof td.paymentStatus    === "string" ? td.paymentStatus    : undefined;
+    // visaClass et visaCategory — nécessaires pour l'URL OFC list quand getApplicationDetails échoue
+    // (cas "cancellable" : le dossier est terminé, getApplicationDetails filtre par appointmentStatus=NEW → vide)
+    const visaClass        = typeof td.visaClass        === "string" ? td.visaClass        : undefined;
+    const visaCategory     = typeof td.visaCategory     === "string" ? td.visaCategory     :
+                             (typeof td.visaCategoryCode === "string" ? td.visaCategoryCode : undefined);
 
-    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
-    return { stateCode, appointmentPriority, paymentStatus };
+    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} visaClass=${visaClass ?? "(vide)"} visaCategory=${visaCategory ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
+    return { stateCode, appointmentPriority, paymentStatus, visaClass, visaCategory };
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getTransformData erreur: ${err} — ignoré`);
@@ -2638,6 +2643,16 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       if (td) {
         if (td.stateCode) session.stateCode = td.stateCode;
         if (td.appointmentPriority) session.appointmentPriority = td.appointmentPriority;
+        // Enrichir effectiveDetails avec visaClass/visaCategory de transformData
+        // quand getApplicationDetails a échoué (cas cancellable: filtre NEW → vide)
+        if (td.visaClass && effectiveDetails.visaClass === "200") {
+          console.log(`[usa] visaClass enrichi depuis getTransformData: ${td.visaClass} (remplace défaut "200")`);
+          effectiveDetails.visaClass = td.visaClass;
+        }
+        if (td.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "B")) {
+          console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${td.visaCategory} (remplace défaut "B")`);
+          effectiveDetails.visaType = td.visaCategory;
+        }
         // Vérification paymentStatus — avertissement si non VERIFIED
         if (td.paymentStatus && td.paymentStatus !== "VERIFIED") {
           console.warn(`[usa] ⚠️  paymentStatus=${td.paymentStatus} — le paiement n'est peut-être pas confirmé`);
