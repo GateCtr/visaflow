@@ -40,7 +40,7 @@ export interface CevHttpSetupResult {
 export async function setupCevSessionHttp(
   vowintEmail: string,
   vowintPassword: string,
-  applicationId: string,
+  _applicationId: string,
   clientId: string,
   vowintAppUrl?: string,
 ): Promise<CevHttpSetupResult> {
@@ -148,30 +148,111 @@ export async function setupCevSessionHttp(
     }
 
     if (!vowintAppId) {
-      // Récupérer la liste des dossiers pour trouver l'appId
+      // Récupérer l'appId depuis la page des dossiers
+      // Le portail VOWINT est AngularJS — le HTML statique ne contient PAS les UUIDs.
+      // Le flux navigateur est :
+      //   1. GET /en/VisaApplication/IndexByUserId → page HTML (shell AngularJS)
+      //   2. GET /VisaApplication/DataTables → config DataTables (initialise état serveur)
+      //   3. GET /VisaApplication/MyList?draw=1&columns... → JSON avec les IDs
+      // On doit reproduire ce flux exactement.
       try {
-        const listUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&start=0&length=10`;
-        const listRes = await fetch(listUrl, {
+        // Étape 1 : Charger la page HTML (initialise la session côté serveur pour cette vue)
+        const pageRes = await fetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
           method: "GET",
           headers: {
             "User-Agent": ua,
             "Cookie": postLoginCookies,
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": `${VOWINT_BASE}/en`,
+            "Upgrade-Insecure-Requests": "1",
           },
+          redirect: "follow",
           signal: AbortSignal.timeout(15_000),
         });
-        if (listRes.ok) {
-          const listData = await listRes.json() as { data?: Array<{ Id?: string; St?: string }> };
-          // Prendre le premier dossier "Submitted" (StId=2) ou le premier disponible
-          const submitted = listData.data?.find(d => d.Id);
-          if (submitted?.Id) {
-            vowintAppId = submitted.Id;
-            botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId } });
+        if (pageRes.ok) {
+          const pageHtml = await pageRes.text();
+          // Merger les cookies de cette réponse (le serveur peut en émettre de nouveaux)
+          postLoginCookies = mergeCookies(postLoginCookies, pageRes);
+
+          // Chercher GetEAppointmentUrl?id=UUID dans le HTML (rare mais possible)
+          const appIdMatch = pageHtml.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
+          if (appIdMatch) {
+            vowintAppId = appIdMatch[1];
+            botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "page_html" } });
           }
-        } else {
-          botLog({ applicationId: clientId, step: "cev_http_mylist_failed", status: "fail", data: { status: listRes.status } });
+        }
+
+        // Étape 2 : GET /VisaApplication/DataTables (initialise l'état serveur DataTables)
+        // Sans cet appel, MyList retourne 500 car le serveur n'a pas initialisé la vue.
+        if (!vowintAppId) {
+          await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+            method: "GET",
+            headers: {
+              "User-Agent": ua,
+              "Cookie": postLoginCookies,
+              "Accept": "application/json, text/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest",
+              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            },
+            signal: AbortSignal.timeout(10_000),
+          }).then(r => {
+            postLoginCookies = mergeCookies(postLoginCookies, r);
+            return r.text(); // consommer le body
+          }).catch(() => {});
+
+          // Étape 2b : GET /Common/GetAllVisaStatusTypes (le navigateur l'appelle aussi)
+          await fetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
+            method: "GET",
+            headers: {
+              "User-Agent": ua,
+              "Cookie": postLoginCookies,
+              "Accept": "application/json, text/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest",
+              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            },
+            signal: AbortSignal.timeout(10_000),
+          }).then(r => r.text()).catch(() => {});
+        }
+
+        // Étape 3 : GET /VisaApplication/MyList (DataTables AJAX — retourne les dossiers en JSON)
+        if (!vowintAppId) {
+          const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
+          const listRes = await fetch(dtUrl, {
+            method: "GET",
+            headers: {
+              "User-Agent": ua,
+              "Cookie": postLoginCookies,
+              "Accept": "application/json, text/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest",
+              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            },
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (listRes.ok) {
+            const listText = await listRes.text();
+            // Tenter de parser en JSON
+            try {
+              const listData = JSON.parse(listText) as { data?: Array<{ Id?: string; VOWId?: string }> };
+              const first = listData.data?.find(d => d.Id || d.VOWId);
+              if (first) {
+                vowintAppId = first.Id ?? first.VOWId ?? null;
+                if (vowintAppId) {
+                  botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "datatables" } });
+                }
+              }
+            } catch {
+              // Pas du JSON — chercher un UUID dans le texte brut
+              const uuidMatch = listText.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
+              if (uuidMatch) {
+                vowintAppId = uuidMatch[0];
+                botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "datatables_regex" } });
+              }
+            }
+          } else {
+            const errBody = await listRes.text().catch(() => "");
+            botLog({ applicationId: clientId, step: "cev_http_mylist_failed", status: "fail", data: { status: listRes.status, bodyPreview: errBody.slice(0, 500) } });
+          }
         }
       } catch (err) {
         botLog({ applicationId: clientId, step: "cev_http_mylist_error", status: "fail", data: { error: String(err) } });
@@ -203,9 +284,23 @@ export async function setupCevSessionHttp(
       });
 
       if (eRes.ok) {
-        const eData = await eRes.json().catch(() => null) as { url?: string } | null;
-        if (eData?.url) {
-          integrationUrl = eData.url;
+        const eText = await eRes.text();
+        // La réponse peut être :
+        //  - JSON : {"url": "https://appointment.cloud.diplomatie.be/Integration/VOW/..."}
+        //  - Texte brut : "https://appointment.cloud.diplomatie.be/Integration/VOW/..."
+        //  - JSON string : "\"https://appointment.cloud.diplomatie.be/Integration/VOW/...\""
+        try {
+          const eData = JSON.parse(eText) as { url?: string } | string;
+          if (typeof eData === "string" && eData.includes("/Integration/VOW/")) {
+            integrationUrl = eData;
+          } else if (typeof eData === "object" && eData?.url) {
+            integrationUrl = eData.url;
+          }
+        } catch {
+          // Pas du JSON — vérifier si c'est une URL brute
+          if (eText.includes("/Integration/VOW/")) {
+            integrationUrl = eText.trim().replace(/^"|"$/g, "");
+          }
         }
       }
 
@@ -354,7 +449,7 @@ function mergeCookies(existing: string, res: Response): string {
     if (k && v) map.set(k, v);
   });
 
-  return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+  return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 async function solveHcaptcha(clientId: string): Promise<string | null> {
