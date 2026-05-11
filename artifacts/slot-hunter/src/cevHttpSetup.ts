@@ -357,6 +357,20 @@ export async function setupCevSessionHttp(
     }
 
     const captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string };
+    
+    // DEBUG: Loguer la réponse brute pour comprendre le format du validUntil
+    botLog({
+      applicationId: clientId,
+      step: "cev_http_captcha_response",
+      status: "ok",
+      data: {
+        validUntilRaw: captchaData.validUntil,
+        redirectUrlRaw: captchaData.redirectUrl,
+        now: new Date().toISOString(),
+        nowLocal: new Date().toString(),
+      },
+    });
+    
     if (!captchaData.validUntil) {
       return { success: false, error: "CAPTCHA_NO_VALID_UNTIL" };
     }
@@ -367,6 +381,23 @@ export async function setupCevSessionHttp(
       ? captchaData.validUntil 
       : captchaData.validUntil + 'Z';
     const validUntilMs = new Date(validUntilStr).getTime();
+    
+    // DEBUG: Loguer la comparaison des timestamps
+    const nowMs = Date.now();
+    const remainingMs = validUntilMs - nowMs;
+    botLog({
+      applicationId: clientId,
+      step: "cev_http_validuntil_debug",
+      status: "ok",
+      data: {
+        validUntilStr,
+        validUntilMs,
+        nowMs,
+        remainingMs,
+        remainingSeconds: Math.floor(remainingMs / 1000),
+        isExpired: remainingMs <= 0,
+      },
+    });
 
     // Analyser le redirectUrl pour déterminer si des créneaux sont disponibles.
     // La capture réseau montre :
