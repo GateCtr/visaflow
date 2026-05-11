@@ -42,10 +42,14 @@ export type CevPollResult =
 // UA généré une fois par appel à pollCevSlot — reste stable dans la même session HTTP
 // mais tourne entre sessions pour éviter les fingerprints répétitifs (desktop uniquement).
 function fetchManual(url: string, cookie: string, userAgent: string): Promise<Response> {
+  // cookie = valeur brute ASP.NET_SessionId (ex: "abc123") stockée dans Convex
+  const cookieHeader = cookie.includes("ASP.NET_SessionId")
+    ? cookie  // déjà au format complet (legacy)
+    : `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`;
   return cevFetch(url, {
     method: "GET",
     headers: {
-      Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
+      Cookie: cookieHeader,
       "User-Agent": userAgent,
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -76,10 +80,13 @@ async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string): Pr
   // et tenter de récupérer la redirection CEV en lisant l'en-tête Location.
   if (isVowintEAppointmentUrl(entryUrl)) {
     try {
+      const cookieHeader = cookie.includes("ASP.NET_SessionId")
+        ? cookie
+        : `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`;
       const r = await fetch(entryUrl, {
         method: "GET",
         headers: {
-          Cookie: `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`,
+          Cookie: cookieHeader,
           "User-Agent": ua,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
           "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -167,6 +174,10 @@ function bodyIsErrorPage(body: string): boolean {
  * Content-Type: application/json (pas form-urlencoded)
  */
 async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollResult | null> {
+  // sessionCookie = valeur brute ou format complet (legacy)
+  const cookieHeader = sessionCookie.includes("ASP.NET_SessionId")
+    ? sessionCookie
+    : `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`;
   const now = new Date();
   // Vérifier mois courant + mois suivant (comme pollCevSlotsMultiMonth)
   for (let i = 0; i < 2; i++) {
@@ -178,7 +189,7 @@ async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollRes
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Cookie": sessionCookie,
+          "Cookie": cookieHeader,
           "User-Agent": ua,
           "X-Requested-With": "XMLHttpRequest",
           "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -347,4 +358,182 @@ export async function pollCevSlot(
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "error", error: msg };
   }
+}
+
+
+/**
+ * Capture le contenu de SelectSlot sans suivre la redirection automatique.
+ * Utilise redirect: 'manual' pour capturer la réponse 302 et son éventuel body.
+ */
+export async function captureSelectSlotWithoutRedirect(
+  integrationUrl: string,
+  sessionCookie: string,
+): Promise<{
+  status: number;
+  statusText: string;
+  redirectLocation: string | null;
+  body: string | null;
+  headers: Record<string, string>;
+  error?: string;
+}> {
+  try {
+    const ua = randomUserAgent();
+    const cookieHeader = sessionCookie.includes("ASP.NET_SessionId")
+      ? sessionCookie
+      : `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`;
+
+    // Résoudre l'URL d'entrée si nécessaire
+    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua);
+    if (!resolved.ok) {
+      return {
+        status: 0,
+        statusText: 'URL_RESOLUTION_FAILED',
+        redirectLocation: null,
+        body: null,
+        headers: {},
+        error: resolved.error,
+      };
+    }
+
+    const entryUrl = resolved.url;
+    
+    // Faire la requête avec redirect: 'manual' pour capturer la 302
+    const response = await cevFetch(entryUrl, {
+      method: "GET",
+      headers: {
+        Cookie: cookieHeader,
+        "User-Agent": ua,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      redirect: "manual", // IMPORTANT: ne pas suivre automatiquement
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    // Capturer tous les headers
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    // Capturer le body même pour les 302
+    let body: string | null = null;
+    try {
+      body = await response.text();
+    } catch {
+      // Certaines réponses 302 n'ont pas de body lisible
+    }
+
+    const redirectLocation = response.headers.get("location");
+
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      redirectLocation,
+      body,
+      headers,
+    };
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      status: 0,
+      statusText: 'FETCH_ERROR',
+      redirectLocation: null,
+      body: null,
+      headers: {},
+      error: msg,
+    };
+  }
+}
+
+/**
+ * Analyse détaillée d'une réponse SelectSlot pour comprendre pourquoi
+ * la redirection se produit et ce qu'il y a dans le body.
+ */
+export async function analyzeSelectSlotRedirect(
+  integrationUrl: string,
+  sessionCookie: string,
+): Promise<{
+  capture: ReturnType<typeof captureSelectSlotWithoutRedirect> extends Promise<infer T> ? T : never;
+  analysis: {
+    isRedirect: boolean;
+    redirectTarget: string | null;
+    hasBody: boolean;
+    bodyLength: number;
+    bodyContainsSelectSlot: boolean;
+    bodyContainsNoAvailability: boolean;
+    bodyContainsHcaptcha: boolean;
+    bodyContainsSessionExpired: boolean;
+    markersFound: string[];
+    suggestedAction: 'follow_redirect' | 'inspect_body' | 'session_expired' | 'error';
+  };
+}> {
+  const capture = await captureSelectSlotWithoutRedirect(integrationUrl, sessionCookie);
+  
+  const analysis = {
+    isRedirect: capture.status >= 300 && capture.status < 400,
+    redirectTarget: capture.redirectLocation,
+    hasBody: !!capture.body && capture.body.length > 0,
+    bodyLength: capture.body?.length || 0,
+    bodyContainsSelectSlot: false,
+    bodyContainsNoAvailability: false,
+    bodyContainsHcaptcha: false,
+    bodyContainsSessionExpired: false,
+    markersFound: [] as string[],
+    suggestedAction: 'error' as 'follow_redirect' | 'inspect_body' | 'session_expired' | 'error',
+  };
+
+  if (capture.body) {
+    const lowerBody = capture.body.toLowerCase();
+    
+    analysis.bodyContainsSelectSlot = lowerBody.includes('selectslot');
+    analysis.bodyContainsNoAvailability = lowerBody.includes('noavailability');
+    analysis.bodyContainsHcaptcha = lowerBody.includes('hcaptcha');
+    analysis.bodyContainsSessionExpired = lowerBody.includes('sessionexpired') || lowerBody.includes('session expired');
+    
+    // Chercher des marqueurs CEV
+    const markers = [
+      'getavailabletimeslotsforpublic',
+      'home/availabletimeslots',
+      'data-slot-time',
+      'integration/vow/',
+      'bootstrap-datetimepicker',
+      'sharedscripts',
+      'availabletimeslots',
+      'selectslot',
+      'noavailability',
+      'sessionexpired',
+      'hcaptcha',
+    ];
+    
+    markers.forEach(marker => {
+      if (lowerBody.includes(marker)) {
+        analysis.markersFound.push(marker);
+      }
+    });
+  }
+
+  // Déterminer l'action suggérée
+  if (capture.error) {
+    analysis.suggestedAction = 'error';
+  } else if (analysis.bodyContainsSessionExpired) {
+    analysis.suggestedAction = 'session_expired';
+  } else if (analysis.isRedirect && analysis.redirectTarget) {
+    if (analysis.hasBody && analysis.bodyContainsSelectSlot) {
+      analysis.suggestedAction = 'inspect_body'; // Body intéressant à inspecter
+    } else {
+      analysis.suggestedAction = 'follow_redirect'; // Redirection normale
+    }
+  } else if (analysis.hasBody) {
+    analysis.suggestedAction = 'inspect_body';
+  }
+
+  return { capture, analysis };
 }

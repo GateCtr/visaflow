@@ -270,7 +270,7 @@ export const internalClaimNeedsSetup = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const LOCK_DURATION_MS = 5 * 60_000; // 5 min — setup Playwright peut prendre du temps
+    const LOCK_DURATION_MS = 13 * 60_000; // 13 min — respecte la limite VOWINT de 5 clics/heure (60/5=12 min)
 
     const sessions = await ctx.db
       .query("cevSessions")
@@ -458,8 +458,16 @@ export const internalRecordCheck = internalMutation({
 
     // Auto-expire la session si cookie mort ou trop d'erreurs
     if (args.result === "session_expired") {
-      patch.status = "expired";
-      patch.expiredAt = now;
+      // Si le bot demande un auto-renewal (credentials VOWINT disponibles),
+      // remettre en needs_setup au lieu d'expirer définitivement.
+      if (args.error === "auto_renewal_requested" && session.vowintEmail) {
+        patch.status = "needs_setup";
+        patch.lockedUntil = 0;
+        patch.loginFailCount = 0;
+      } else {
+        patch.status = "expired";
+        patch.expiredAt = now;
+      }
     } else if (consecutiveErrors >= 10) {
       patch.status = "expired";
       patch.expiredAt = now;
@@ -480,8 +488,9 @@ export const internalRecordCheck = internalMutation({
 
     await ctx.db.patch(args.sessionId, patch);
 
-    // Notifier l'admin si nouveau slot OU session expirée
-    if (shouldNotifySlot || args.result === "session_expired") {
+    // Notifier l'admin si nouveau slot OU session expirée définitivement (pas auto-renewal)
+    const isDefinitiveExpiry = args.result === "session_expired" && args.error !== "auto_renewal_requested";
+    if (shouldNotifySlot || isDefinitiveExpiry) {
       const app = await ctx.db.get(session.applicationId);
       if (app) {
         // Trouver tous les admins

@@ -2,19 +2,17 @@
  * cevHttpSetup.ts — Setup CEV session en HTTP pur (sans Playwright)
  *
  * Flux complet :
- *   1. GET visaonweb.diplomatie.be → extraire __RequestVerificationToken + cookie
- *   2. POST /en/Account/Login → authentification → cookie session VOWINT
- *   3. GET /Common/GetEAppointmentUrl?id={appId} → URL d'intégration CEV
- *   4. GET {integrationUrl} → cookie ASP.NET_SessionId CEV
- *   5. Résoudre hCaptcha via Anti-Captcha
- *   6. POST /Captcha/SetCaptchaToken → validUntil + redirectUrl
+ *   1. Login VOWINT (ou réutiliser session existante)
+ *   2. GET /Common/GetEAppointmentUrl?id={appId} → URL d'intégration CEV (= 1 clic VOWINT)
+ *   3. GET {integrationUrl} → cookie ASP.NET_SessionId CEV
+ *   4. Résoudre hCaptcha via Anti-Captcha
+ *   5. POST /Captcha/SetCaptchaToken → validUntil + redirectUrl
  *
- * Avantages vs Playwright :
- *   - ~5s au lieu de ~30s
- *   - Pas de Chromium (0 RAM supplémentaire)
- *   - Plus fiable (pas de timeout DOM, pas de proxy Playwright)
+ * Optimisation : les cookies VOWINT sont persistés en mémoire entre les checks.
+ * On ne re-login que si la session VOWINT a expiré (401/302 vers login).
+ * Seul le GetEAppointmentUrl compte comme "clic" (limite 5/heure).
  *
- * Coût : 1 hCaptcha (~$0.003) par setup
+ * Coût : 1 hCaptcha (~$0.003) par check
  */
 
 import { botLog } from "./convexClient.js";
@@ -26,12 +24,179 @@ const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
 
+// ─── Cache session VOWINT (persisté en mémoire entre les checks) ─────────────
+// Clé = vowintEmail, Valeur = { cookies, appId, ua, lastUsedAt }
+// On réutilise la session tant qu'elle n'a pas expiré (détecté par 302 vers login).
+interface VowintSessionCache {
+  cookies: string;
+  appId: string;       // UUID du dossier (pour GetEAppointmentUrl)
+  ua: string;          // User-Agent utilisé lors du login (garder le même)
+  lastUsedAt: number;  // timestamp du dernier usage réussi
+}
+const vowintSessionCache = new Map<string, VowintSessionCache>();
+
+// Durée max avant de forcer un re-login (30 min — session VOWINT expire après ~20-30 min d'inactivité)
+const VOWINT_SESSION_MAX_AGE_MS = 25 * 60_000;
+
 export interface CevHttpSetupResult {
   success: boolean;
   sessionCookie?: string;
   validUntilMs?: number;
   integrationUrl?: string;
+  redirectUrl?: string;       // URL retournée par SetCaptchaToken (indique si slots dispo)
+  slotsAvailable?: boolean;   // true si redirectUrl contient SelectSlot
   error?: string;
+}
+
+/**
+ * Obtient une session VOWINT (login + appId) — utilise le cache si disponible.
+ * Ne re-login que si :
+ *   - Pas de cache pour cet email
+ *   - Cache expiré (> 25 min)
+ *   - Session invalide (détecté par 302 vers login lors d'un appel ultérieur)
+ */
+async function getVowintSession(
+  vowintEmail: string,
+  vowintPassword: string,
+  clientId: string,
+  vowintAppUrl?: string,
+): Promise<{ success: true; cookies: string; appId: string; ua: string } | { success: false; error: string }> {
+  // Vérifier le cache
+  const cached = vowintSessionCache.get(vowintEmail);
+  if (cached && (Date.now() - cached.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
+    botLog({ applicationId: clientId, step: "cev_http_vowint_cache_hit", status: "ok", data: { appId: cached.appId } });
+    cached.lastUsedAt = Date.now();
+    return { success: true, cookies: cached.cookies, appId: cached.appId, ua: cached.ua };
+  }
+
+  // Cache miss ou expiré — faire un login complet
+  const ua = randomUserAgent();
+
+  // 1. GET page login → CSRF token + cookies
+  const loginPageRes = await fetch(`${VOWINT_BASE}/`, {
+    method: "GET",
+    headers: { "User-Agent": ua, "Accept": "text/html" },
+    redirect: "follow",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!loginPageRes.ok) {
+    return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
+  }
+  const loginHtml = await loginPageRes.text();
+  const tokenMatch = loginHtml.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
+  if (!tokenMatch) return { success: false, error: "CSRF_TOKEN_NOT_FOUND" };
+  const csrfToken = tokenMatch[1];
+  const vowintCookies = extractCookies(loginPageRes);
+  if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
+
+  // 2. POST login
+  const loginRes = await fetch(`${VOWINT_BASE}/en/Account/Login`, {
+    method: "POST",
+    headers: {
+      "User-Agent": ua,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cookie": vowintCookies,
+      "Referer": `${VOWINT_BASE}/`,
+      "Origin": VOWINT_BASE,
+      "Accept": "text/html,application/xhtml+xml,*/*",
+    },
+    body: new URLSearchParams({
+      __RequestVerificationToken: csrfToken,
+      UserName: vowintEmail,
+      Password: vowintPassword,
+    }).toString(),
+    redirect: "manual",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (loginRes.status !== 302) {
+    botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
+    return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
+  }
+
+  // Suivre les redirections post-login pour collecter tous les cookies
+  let cookies = mergeCookies(vowintCookies, loginRes);
+  let redirectUrl = loginRes.headers.get("location");
+  for (let i = 0; i < 5 && redirectUrl; i++) {
+    const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
+    const r = await fetch(fullUrl, {
+      method: "GET",
+      headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/` },
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    });
+    cookies = mergeCookies(cookies, r);
+    if (r.status >= 300 && r.status < 400) { redirectUrl = r.headers.get("location"); }
+    else break;
+  }
+  botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
+
+  // 3. Récupérer l'appId
+  let appId: string | null = null;
+
+  if (vowintAppUrl?.includes("GetEAppointmentUrl")) {
+    appId = vowintAppUrl.match(/id=([^&]+)/)?.[1] ?? null;
+  }
+
+  if (!appId) {
+    // GET IndexByUserId (initialise la vue)
+    const pageRes = await fetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
+      method: "GET",
+      headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/en`, "Upgrade-Insecure-Requests": "1" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      cookies = mergeCookies(cookies, pageRes);
+      const m = html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
+      if (m) appId = m[1];
+    }
+
+    // GET DataTables (initialise état serveur)
+    if (!appId) {
+      await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+        method: "GET",
+        headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
+        signal: AbortSignal.timeout(10_000),
+      }).then(r => { cookies = mergeCookies(cookies, r); return r.text(); }).catch(() => {});
+
+      // GET MyList (DataTables AJAX)
+      const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
+      const listRes = await fetch(dtUrl, {
+        method: "GET",
+        headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (listRes.ok) {
+        const text = await listRes.text();
+        try {
+          const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
+          const first = data.data?.find(d => d.Id || d.VOWId);
+          if (first) appId = first.Id ?? first.VOWId ?? null;
+        } catch {
+          const m = text.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
+          if (m) appId = m[0];
+        }
+      }
+    }
+  }
+
+  if (!appId) {
+    botLog({ applicationId: clientId, step: "cev_http_no_app_id", status: "fail" });
+    return { success: false, error: "NO_APP_ID" };
+  }
+
+  botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId, source: "login" } });
+
+  // Stocker dans le cache
+  vowintSessionCache.set(vowintEmail, { cookies, appId, ua, lastUsedAt: Date.now() });
+
+  return { success: true, cookies, appId, ua };
+}
+
+/** Invalide le cache VOWINT (appelé quand on détecte une session expirée) */
+export function invalidateVowintCache(vowintEmail: string): void {
+  vowintSessionCache.delete(vowintEmail);
 }
 
 /**
@@ -44,225 +209,23 @@ export async function setupCevSessionHttp(
   clientId: string,
   vowintAppUrl?: string,
 ): Promise<CevHttpSetupResult> {
-  const ua = randomUserAgent();
-
   try {
-    // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 1 : GET page login VOWINT → extraire CSRF token + cookies
-    // ══════════════════════════════════════════════════════════════════════════
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
 
-    const loginPageRes = await fetch(`${VOWINT_BASE}/`, {
-      method: "GET",
-      headers: { "User-Agent": ua, "Accept": "text/html" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    if (!loginPageRes.ok) {
-      return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
+    // ══════════════════════════════════════════════════════════════════════════
+    // ÉTAPE 1 : Obtenir session VOWINT (login ou cache)
+    // ══════════════════════════════════════════════════════════════════════════
+    const vowintSession = await getVowintSession(vowintEmail, vowintPassword, clientId, vowintAppUrl);
+    if (!vowintSession.success) {
+      return { success: false, error: vowintSession.error };
     }
 
-    const loginHtml = await loginPageRes.text();
-
-    // Extraire __RequestVerificationToken du HTML
-    const tokenMatch = loginHtml.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
-    if (!tokenMatch) {
-      return { success: false, error: "CSRF_TOKEN_NOT_FOUND" };
-    }
-    const csrfToken = tokenMatch[1];
-
-    // Extraire les cookies de la réponse
-    const vowintCookies = extractCookies(loginPageRes);
-    if (!vowintCookies) {
-      return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
-    }
+    const { cookies: postLoginCookies, appId: vowintAppId, ua } = vowintSession;
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 2 : POST login VOWINT
+    // ÉTAPE 2 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
+    //           (= 1 clic VOWINT comptabilisé, limite 5/heure)
     // ══════════════════════════════════════════════════════════════════════════
-    const loginBody = new URLSearchParams({
-      __RequestVerificationToken: csrfToken,
-      UserName: vowintEmail,
-      Password: vowintPassword,
-    }).toString();
-
-    const loginRes = await fetch(`${VOWINT_BASE}/en/Account/Login`, {
-      method: "POST",
-      headers: {
-        "User-Agent": ua,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": vowintCookies,
-        "Referer": `${VOWINT_BASE}/`,
-        "Origin": VOWINT_BASE,
-        "Accept": "text/html,application/xhtml+xml,*/*",
-      },
-      body: loginBody,
-      redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    // 302 = succès (redirect vers /), 200 = échec (page login avec erreur)
-    if (loginRes.status !== 302) {
-      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
-      return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
-    }
-
-    // Merger les cookies de login avec les cookies existants
-    let postLoginCookies = mergeCookies(vowintCookies, loginRes);
-
-    // Suivre les redirections manuellement pour collecter tous les cookies de session
-    let redirectUrl = loginRes.headers.get("location");
-    for (let redir = 0; redir < 5 && redirectUrl; redir++) {
-      const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
-      const redirRes = await fetch(fullUrl, {
-        method: "GET",
-        headers: {
-          "User-Agent": ua,
-          "Cookie": postLoginCookies,
-          "Accept": "text/html,application/xhtml+xml,*/*",
-          "Referer": `${VOWINT_BASE}/`,
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(10_000),
-      });
-      postLoginCookies = mergeCookies(postLoginCookies, redirRes);
-      if (redirRes.status >= 300 && redirRes.status < 400) {
-        redirectUrl = redirRes.headers.get("location");
-      } else {
-        break;
-      }
-    }
-
-    botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 3 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
-    // ══════════════════════════════════════════════════════════════════════════
-    // D'abord récupérer l'appId VOWINT depuis la liste des dossiers
-    let vowintAppId: string | null = null;
-
-    if (vowintAppUrl?.includes("GetEAppointmentUrl")) {
-      // URL directe fournie par l'admin
-      vowintAppId = vowintAppUrl.match(/id=([^&]+)/)?.[1] ?? null;
-    }
-
-    if (!vowintAppId) {
-      // Récupérer l'appId depuis la page des dossiers
-      // Le portail VOWINT est AngularJS — le HTML statique ne contient PAS les UUIDs.
-      // Le flux navigateur est :
-      //   1. GET /en/VisaApplication/IndexByUserId → page HTML (shell AngularJS)
-      //   2. GET /VisaApplication/DataTables → config DataTables (initialise état serveur)
-      //   3. GET /VisaApplication/MyList?draw=1&columns... → JSON avec les IDs
-      // On doit reproduire ce flux exactement.
-      try {
-        // Étape 1 : Charger la page HTML (initialise la session côté serveur pour cette vue)
-        const pageRes = await fetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
-          method: "GET",
-          headers: {
-            "User-Agent": ua,
-            "Cookie": postLoginCookies,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": `${VOWINT_BASE}/en`,
-            "Upgrade-Insecure-Requests": "1",
-          },
-          redirect: "follow",
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (pageRes.ok) {
-          const pageHtml = await pageRes.text();
-          // Merger les cookies de cette réponse (le serveur peut en émettre de nouveaux)
-          postLoginCookies = mergeCookies(postLoginCookies, pageRes);
-
-          // Chercher GetEAppointmentUrl?id=UUID dans le HTML (rare mais possible)
-          const appIdMatch = pageHtml.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
-          if (appIdMatch) {
-            vowintAppId = appIdMatch[1];
-            botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "page_html" } });
-          }
-        }
-
-        // Étape 2 : GET /VisaApplication/DataTables (initialise l'état serveur DataTables)
-        // Sans cet appel, MyList retourne 500 car le serveur n'a pas initialisé la vue.
-        if (!vowintAppId) {
-          await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
-            method: "GET",
-            headers: {
-              "User-Agent": ua,
-              "Cookie": postLoginCookies,
-              "Accept": "application/json, text/javascript, */*; q=0.01",
-              "X-Requested-With": "XMLHttpRequest",
-              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-            },
-            signal: AbortSignal.timeout(10_000),
-          }).then(r => {
-            postLoginCookies = mergeCookies(postLoginCookies, r);
-            return r.text(); // consommer le body
-          }).catch(() => {});
-
-          // Étape 2b : GET /Common/GetAllVisaStatusTypes (le navigateur l'appelle aussi)
-          await fetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
-            method: "GET",
-            headers: {
-              "User-Agent": ua,
-              "Cookie": postLoginCookies,
-              "Accept": "application/json, text/javascript, */*; q=0.01",
-              "X-Requested-With": "XMLHttpRequest",
-              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-            },
-            signal: AbortSignal.timeout(10_000),
-          }).then(r => r.text()).catch(() => {});
-        }
-
-        // Étape 3 : GET /VisaApplication/MyList (DataTables AJAX — retourne les dossiers en JSON)
-        if (!vowintAppId) {
-          const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
-          const listRes = await fetch(dtUrl, {
-            method: "GET",
-            headers: {
-              "User-Agent": ua,
-              "Cookie": postLoginCookies,
-              "Accept": "application/json, text/javascript, */*; q=0.01",
-              "X-Requested-With": "XMLHttpRequest",
-              "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-            },
-            signal: AbortSignal.timeout(15_000),
-          });
-          if (listRes.ok) {
-            const listText = await listRes.text();
-            // Tenter de parser en JSON
-            try {
-              const listData = JSON.parse(listText) as { data?: Array<{ Id?: string; VOWId?: string }> };
-              const first = listData.data?.find(d => d.Id || d.VOWId);
-              if (first) {
-                vowintAppId = first.Id ?? first.VOWId ?? null;
-                if (vowintAppId) {
-                  botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "datatables" } });
-                }
-              }
-            } catch {
-              // Pas du JSON — chercher un UUID dans le texte brut
-              const uuidMatch = listText.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
-              if (uuidMatch) {
-                vowintAppId = uuidMatch[0];
-                botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId, source: "datatables_regex" } });
-              }
-            }
-          } else {
-            const errBody = await listRes.text().catch(() => "");
-            botLog({ applicationId: clientId, step: "cev_http_mylist_failed", status: "fail", data: { status: listRes.status, bodyPreview: errBody.slice(0, 500) } });
-          }
-        }
-      } catch (err) {
-        botLog({ applicationId: clientId, step: "cev_http_mylist_error", status: "fail", data: { error: String(err) } });
-      }
-    }
-
-    if (!vowintAppId) {
-      botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail" });
-      return { success: false, error: "NO_INTEGRATION_URL" };
-    }
 
     // Appeler GetEAppointmentUrl avec l'appId
     const eAppointmentUrl = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${vowintAppId}`;
@@ -317,6 +280,8 @@ export async function setupCevSessionHttp(
     }
 
     if (!integrationUrl) {
+      // Si GetEAppointmentUrl a échoué, la session VOWINT est peut-être expirée → invalider le cache
+      invalidateVowintCache(vowintEmail);
       botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail" });
       return { success: false, error: "NO_INTEGRATION_URL" };
     }
@@ -355,8 +320,10 @@ export async function setupCevSessionHttp(
       return { success: false, error: "NO_CEV_SESSION_COOKIE" };
     }
 
+    // Stocker uniquement la VALEUR du cookie (cohérent avec le Playwright setup)
+    // Le polling reconstruit le header complet "ASP.NET_SessionId=xxx; PreferredCulture=en-US"
     const fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=en-US`;
-    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: fullCevCookie.length } });
+    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie.length } });
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 5 : Résoudre hCaptcha
@@ -396,18 +363,36 @@ export async function setupCevSessionHttp(
 
     const validUntilMs = new Date(captchaData.validUntil).getTime();
 
+    // Analyser le redirectUrl pour déterminer si des créneaux sont disponibles.
+    // La capture réseau montre :
+    //   - redirectUrl = "/Integration/VOW/{guid1}/{guid2}" → le serveur va rediriger vers SelectSlot ou NoAvailability
+    //   - Si on suit : integrationUrl → 302 → SelectSlot → 302 → NoAvailability = session MORTE
+    //   - La session CEV est SINGLE-USE : un seul passage dans le flow de redirections la tue.
+    //
+    // Stratégie : NE PAS suivre les redirections. Utiliser le cookie pour POST /Home/AvailableTimeSlots.
+    // Si l'API retourne des slots → booking. Si 302/403 → session morte, refaire un setup.
+    const captchaRedirectUrl = captchaData.redirectUrl ?? "";
+    const slotsAvailable = captchaRedirectUrl.toLowerCase().includes("selectslot");
+
     botLog({
       applicationId: clientId,
       step: "cev_http_setup_complete",
       status: "ok",
-      data: { validUntil: captchaData.validUntil, integrationUrl: integrationUrl.slice(0, 80) },
+      data: {
+        validUntil: captchaData.validUntil,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable,
+        integrationUrl: integrationUrl.slice(0, 80),
+      },
     });
 
     return {
       success: true,
-      sessionCookie: fullCevCookie,
+      sessionCookie: cevSessionCookie,  // Valeur brute (sans "ASP.NET_SessionId=")
       validUntilMs,
       integrationUrl,
+      redirectUrl: captchaRedirectUrl || undefined,
+      slotsAvailable,
     };
 
   } catch (err) {

@@ -54,17 +54,31 @@ async function startCevSetupLoop(): Promise<void> {
           );
 
           if (httpResult.success) {
-            // Activer la session dans Convex
-            const { activateCevSession } = await import("./convexClient.js");
-            const activated = await activateCevSession(
-              s.sessionId,
-              httpResult.sessionCookie!,
-              httpResult.validUntilMs,
-              httpResult.integrationUrl,
-            );
-            r = activated
-              ? { success: true }
-              : { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+            // Le portail CEV est single-use : après SetCaptchaToken, le serveur
+            // a déjà vérifié la disponibilité. Si redirectUrl ne contient pas "SelectSlot",
+            // il n'y a pas de créneaux et la session est morte.
+            if (httpResult.slotsAvailable) {
+              // 🚨 SLOTS DISPONIBLES — activer la session pour booking immédiat
+              console.log(`[CEV-SETUP] 🚨 SLOTS DISPONIBLES session=${s.sessionId} — activation pour booking`);
+              const { activateCevSession } = await import("./convexClient.js");
+              const activated = await activateCevSession(
+                s.sessionId,
+                httpResult.sessionCookie!,
+                httpResult.validUntilMs,
+                httpResult.integrationUrl,
+              );
+              r = activated
+                ? { success: true }
+                : { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+            } else {
+              // Pas de créneaux — session consommée (single-use), attendre le prochain cycle.
+              // NE PAS resetCevSetupLock : le lock Convex (5 min) empêche de re-checker
+              // cette session trop vite. Avec un lock de 5 min, on fait max ~12 checks/heure
+              // par session, ce qui reste dans la limite de 5 clics/heure VOWINT avec marge.
+              // On ajuste : on ne libère pas le lock, il expirera naturellement.
+              console.log(`[CEV-SETUP] ℹ️  Pas de créneaux (redirectUrl=${httpResult.redirectUrl?.slice(0, 60)}) session=${s.sessionId} — lock expire dans ~13 min`);
+              r = { success: true }; // Pas une erreur — juste pas de créneaux
+            }
           } else {
             console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);
             r = { success: false, error: httpResult.error };
@@ -139,7 +153,11 @@ async function startCevSetupLoop(): Promise<void> {
       console.warn("[CEV-SETUP] Erreur boucle:", err);
     }
 
-    // Check toutes les 60s (setup long, inutile de boucler plus vite)
+    // Intervalle de boucle : 60s. Le rate limiting est géré par le lock Convex (5 min)
+    // qui empêche de re-checker la même session trop vite.
+    // Avec un lock de 5 min → max 12 checks/heure par session.
+    // La limite VOWINT est 5 clics/heure → il faut un lock d'au moins 12 min côté Convex.
+    // TODO: Augmenter le lock Convex à 13 min pour respecter la limite 5/heure.
     await new Promise((r) => setTimeout(r, 60_000));
   }
 }
