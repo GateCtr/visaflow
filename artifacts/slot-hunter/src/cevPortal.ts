@@ -86,6 +86,8 @@ export async function completeCevCaptcha(
     //     → 200  sur la page calendrier                   (créneaux dispo)
     // On suit la redirectUrl via fetch (follow redirects) pour lire l'URL finale.
     let finalUrl = data.redirectUrl;
+    let probeBodyPreview = '';
+    let probeBodyRaw = '';
     try {
       const probe = await fetch(data.redirectUrl, {
         method: 'GET',
@@ -98,11 +100,24 @@ export async function completeCevCaptcha(
         },
       });
       finalUrl = probe.url; // URL après tous les 302
+      // Capturer le body pour diagnostiquer les pages d'erreur
+      let probeBody = '';
+      try { probeBody = await probe.text(); } catch { /* ignore */ }
+      probeBodyRaw = probeBody;
+      // Extraire le message d'erreur visible (texte entre balises, sans HTML)
+      const errorMessage = probeBody
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500);
+      probeBodyPreview = errorMessage;
       botLog({
         applicationId: clientId,
         step: 'cev_redirect_probe',
         status: 'ok',
-        data: { httpStatus: probe.status, finalUrl },
+        data: { httpStatus: probe.status, finalUrl, bodyPreview: probeBodyPreview || '(vide)' },
       });
     } catch (probeErr) {
       // En cas d'échec de la sonde, on continue avec la redirectUrl brute
@@ -122,17 +137,23 @@ export async function completeCevCaptcha(
     };
 
     if (finalUrl.includes('NoAvailability')) {
-      botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { finalUrl } });
+      botLog({ applicationId: clientId, step: 'cev_no_availability', status: 'ok', data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) } });
       return { status: 'no_availability', session };
     }
 
     if (finalUrl.includes('SessionExpired') || finalUrl.includes('/Captcha')) {
-      botLog({ applicationId: clientId, step: 'cev_session_expired_probe', status: 'warn', data: { finalUrl } });
+      botLog({ applicationId: clientId, step: 'cev_session_expired_probe', status: 'warn', data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) } });
       return { status: 'session_error', error: 'SESSION_EXPIRED_PROBE' };
     }
 
+    // /Integration/Error/Default — erreur générique du serveur CEV (pas de créneaux ou problème interne)
+    if (finalUrl.includes('/Error/Default') || finalUrl.includes('/Error/')) {
+      botLog({ applicationId: clientId, step: 'cev_error_page', status: 'warn', data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) } });
+      return { status: 'no_availability', session };
+    }
+
     // SelectSlot page (ou autre page calendrier) → créneaux disponibles
-    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, finalUrl } });
+    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, finalUrl, bodyPreview: probeBodyPreview.slice(0, 500), htmlRaw: probeBodyRaw.slice(0, 5000) } });
     return { status: 'ready', session };
   } catch (err) {
     botLog({ applicationId: clientId, step: 'cev_captcha_exception', status: 'fail', data: { error: String(err) } });
