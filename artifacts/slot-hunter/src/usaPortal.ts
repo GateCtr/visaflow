@@ -60,6 +60,11 @@ const USA_SCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/schedule`;
 const USA_RESCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/reschedule`;
 // Recherche de détails RDV par applicationId (POST, retourne tableau avec appointmentId/UUID)
 const USA_SEARCH_URL = `${USA_APPOINTMENT_URL}/appointments/search`;
+// VAS Configuration — lieux de retrait passeport (DHL Gombe, etc.)
+const USA_VAS_CONFIG_URL = `${USA_PAYMENT_URL}/vasconfiguration/getbymissionid`;
+// DocDelivery — enregistrement du choix de retrait passeport
+const USA_DOC_DELIVERY_URL = `${USA_BASE}/visadataexchangeapi/docdelivery`;
+const USA_DOC_DELIVERY_SEARCH_URL = `${USA_DOC_DELIVERY_URL}/search/applicationid`;
 // Dashboard : retourne les RDV planifiés (Bearer seulement, pas d'applicationId requis)
 const USA_SCHEDULED_INFO_URL = `${USA_APPOINTMENT_URL}/appointments/scheduledappointmentInfo`;
 // showRescheduleButton : retourne applicationId + appointmentId du RDV reschedule-able
@@ -1570,7 +1575,7 @@ interface UsaOfc {
 }
 
 interface UsaAppDetails {
-  applicantId: number;
+  applicantId: number | string;
   applicationId: string;
   visaType: string;
   visaClass: string;
@@ -1811,7 +1816,7 @@ async function getUsaApplicationDetails(
 async function getUsaTransformData(
   session: UsaSession,
   applicationId: string,
-): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string } | null> {
+): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string; applicantId?: string; visaTypeKey?: string } | null> {
   const url = USA_TRANSFORM_DATA_URL(applicationId);
   const hdrs = sessionHeaders(session.accessToken, applicationId, session.missionId, REFERER_REQUESTS, false);
   try {
@@ -1848,9 +1853,14 @@ async function getUsaTransformData(
     const visaClass        = typeof td.visaClass        === "string" ? td.visaClass        : undefined;
     const visaCategory     = typeof td.visaCategory     === "string" ? td.visaCategory     :
                              (typeof td.visaCategoryCode === "string" ? td.visaCategoryCode : undefined);
+    // applicantId GSS (ex: "RQUP3HHVQHOD") — utilisé dans les payloads slot si getApplicationDetails échoue
+    const applicantId      = typeof td.applicantid      === "string" ? td.applicantid      :
+                             (typeof td.applicantId      === "string" ? td.applicantId      : undefined);
+    // visaTypekey (ex: "NIV") — c'est ce que le portail envoie dans les payloads slot, PAS visaType ("Non-immigrant Visa")
+    const visaTypeKey      = typeof td.visaTypekey      === "string" ? td.visaTypekey      : undefined;
 
-    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} visaClass=${visaClass ?? "(vide)"} visaCategory=${visaCategory ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
-    return { stateCode, appointmentPriority, paymentStatus, visaClass, visaCategory };
+    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} visaClass=${visaClass ?? "(vide)"} visaCategory=${visaCategory ?? "(vide)"} applicantId=${applicantId ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
+    return { stateCode, appointmentPriority, paymentStatus, visaClass, visaCategory, applicantId, visaTypeKey };
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getTransformData erreur: ${err} — ignoré`);
@@ -1950,9 +1960,13 @@ async function findFirstSlotForOfc(
   const basePayload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
     applicantId: appDetails.applicantId,
-    visaType: appDetails.visaType,
+    // visaType dans les payloads slot : utiliser visaTypeKey ("NIV") si disponible, sinon visaType
+    // Le portail Angular envoie visaTypekey (ex: "NIV") dans getFirstAvailableMonth/getSlotDates/getSlotTime
+    visaType: (appDetails as unknown as Record<string, unknown>).visaTypeKey ?? appDetails.visaType,
     visaClass: appDetails.visaClass,
-    locationType: "OFC",
+    // locationType : "OFC" pour un nouveau booking, "POST" pour un reschedule d'un RDV POST
+    // Bundle Angular : this.ofcOrPost — déterminé par appointmentLocationType du RDV existant
+    locationType: rescheduleYN ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC") : "OFC",
     applicationId: appDetails.applicationId,
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
@@ -2188,6 +2202,104 @@ function formatUItime(startTime: string): string {
   const suffix  = hour24 < 12 ? " AM" : " PM";
 
   return `${hour12}:${minutes}${suffix}`;  // ex. "9:00 AM", "2:00 PM"
+}
+
+// ─────────────────────────────────────────────────────────────
+// DocDelivery — Enregistrement du lieu de retrait passeport
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Vérifie si un docDelivery existe déjà pour ce dossier.
+ * Si non, en crée un avec DHL Kinshasa Gombe (vasId=64, gratuit) par défaut.
+ *
+ * Le portail Angular fait cette étape AVANT le booking (wizard step "Choose Pickup Point").
+ * Pour un reschedule, le docDelivery existe déjà — cette fonction ne fait rien.
+ * Pour un premier booking, elle crée l'entrée nécessaire.
+ *
+ * Endpoints :
+ *   GET  /visadataexchangeapi/docdelivery/search/applicationid?applicationId=xxx
+ *   POST /visadataexchangeapi/docdelivery
+ *   GET  /visapaymentapi/v1/vasconfiguration/getbymissionid/{missionId} (pour récupérer vasId)
+ */
+async function ensureDocDelivery(
+  session: UsaSession,
+  applicantId: string,
+): Promise<void> {
+  if (!session.applicationId) return;
+
+  const hdrs: Record<string, string> = {
+    ...getBrowserHeaders(),
+    "Authorization": `Bearer ${session.accessToken}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-Correlation-key": corrId(),
+    "Referer": REFERER_CREATE_APT,
+  };
+
+  // 1. Vérifier si un docDelivery existe déjà
+  try {
+    const checkUrl = `${USA_DOC_DELIVERY_SEARCH_URL}?applicationId=${session.applicationId}`;
+    const res = await usaFetch(checkUrl, { headers: hdrs });
+    if (res.ok) {
+      const data = await res.json() as unknown[];
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`[usa] ✅ DocDelivery déjà enregistré pour ${session.applicationId} (id=${(data[0] as Record<string, unknown>).id})`);
+        return; // Déjà fait — rien à faire
+      }
+    }
+  } catch (err) {
+    console.warn(`[usa] DocDelivery check erreur (non-bloquant): ${err}`);
+  }
+
+  // 2. Récupérer le vasId par défaut (DHL Gombe gratuit) depuis la config mission
+  let vasId = 64; // Valeur par défaut connue pour Kinshasa (DHL KINSHASA GOMBE, FreeDelivery)
+  try {
+    const vasUrl = `${USA_VAS_CONFIG_URL}/${session.missionId}`;
+    const vasRes = await usaFetch(vasUrl, { headers: hdrs });
+    if (vasRes.ok) {
+      const vasData = await vasRes.json() as Array<{ id: number; type: string; amount: number; name: string }>;
+      // Prendre le premier gratuit (FreeDelivery) ou le premier disponible
+      const freeOption = vasData.find(v => v.type === "FreeDelivery" || v.amount === 0);
+      if (freeOption) {
+        vasId = freeOption.id;
+        console.log(`[usa] VAS config: ${freeOption.name} (vasId=${vasId}, gratuit)`);
+      } else if (vasData.length > 0) {
+        vasId = vasData[0].id;
+        console.log(`[usa] VAS config: ${vasData[0].name} (vasId=${vasId}, premier disponible)`);
+      }
+    }
+  } catch (err) {
+    console.warn(`[usa] VAS config erreur (utilisation vasId=${vasId} par défaut): ${err}`);
+  }
+
+  // 3. Créer le docDelivery
+  const payload = {
+    applicantId,
+    applicationId: session.applicationId,
+    vasId,
+    docDeliveryServiceType: "documentdelivery",
+    deliveryFlowType: "DELIVERY_TO_APPLICANTS",
+  };
+
+  console.log(`[usa] 📦 Création docDelivery — vasId=${vasId}, applicantId=${applicantId}, applicationId=${session.applicationId}`);
+
+  try {
+    const res = await usaFetch(USA_DOC_DELIVERY_URL, {
+      method: "POST",
+      headers: hdrs,
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const result = await res.json().catch(() => null);
+      console.log(`[usa] ✅ DocDelivery créé avec succès (id=${(result as Record<string, unknown>)?.id ?? "?"})`);
+    } else {
+      const errBody = await res.text().catch(() => "");
+      console.warn(`[usa] ⚠️ DocDelivery création HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      // Non-bloquant : le booking peut quand même fonctionner sans
+    }
+  } catch (err) {
+    console.warn(`[usa] DocDelivery création erreur réseau (non-bloquant): ${err}`);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2653,6 +2765,18 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${td.visaCategory} (remplace défaut "B")`);
           effectiveDetails.visaType = td.visaCategory;
         }
+        // visaTypeKey (ex: "NIV") — le portail envoie cette valeur dans les payloads slot
+        // PAS visaCategory ("StudentsandExchangeVisitors") qui est pour l'URL OFC list
+        if (td.visaTypeKey && effectiveDetails.visaType === td.visaCategory) {
+          // Pour l'URL OFC list on utilise visaCategory, mais pour les payloads slot on utilise visaTypeKey
+          // On stocke visaTypeKey séparément pour l'utiliser dans basePayload.visaType
+          (effectiveDetails as unknown as Record<string, unknown>).visaTypeKey = td.visaTypeKey;
+        }
+        // applicantId GSS — nécessaire dans les payloads slot quand getApplicationDetails échoue
+        if (td.applicantId && (effectiveDetails.applicantId === session.userID)) {
+          console.log(`[usa] applicantId enrichi depuis getTransformData: ${td.applicantId} (remplace userID ${session.userID})`);
+          effectiveDetails.applicantId = td.applicantId;
+        }
         // Vérification paymentStatus — avertissement si non VERIFIED
         if (td.paymentStatus && td.paymentStatus !== "VERIFIED") {
           console.warn(`[usa] ⚠️  paymentStatus=${td.paymentStatus} — le paiement n'est peut-être pas confirmé`);
@@ -2879,6 +3003,18 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         // Les deux cas (cancellable et scheduled+rescheduleMode) aboutissent au même
         // endpoint avec le même payload + rescheduleType:"POST".
         const useReschedule = rescheduleMode || session.isReschedule === true;
+
+        // ── 0. DocDelivery (premier booking uniquement) ──────
+        // Le portail Angular exige que le lieu de retrait passeport soit enregistré
+        // AVANT le PUT /schedule. Pour un reschedule, il existe déjà.
+        if (!useReschedule) {
+          const applicantIdForDelivery = String(found.bookingBase.applicantId ?? session.applicantId ?? "");
+          if (applicantIdForDelivery) {
+            await ensureDocDelivery(session, applicantIdForDelivery);
+            await randomDelay(300, 600);
+          }
+        }
+
         booking = useReschedule
           ? await rescheduleUsaSlot(session, found)
           : await bookUsaSlot(session, found);
