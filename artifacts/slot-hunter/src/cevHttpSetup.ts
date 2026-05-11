@@ -116,10 +116,46 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 3 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
     // ══════════════════════════════════════════════════════════════════════════
-    const appUrl = vowintAppUrl ?? `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${applicationId}`;
-    const eAppointmentUrl = appUrl.startsWith("http") ? appUrl : `${VOWINT_BASE}${appUrl}`;
+    // D'abord récupérer l'appId VOWINT depuis la liste des dossiers
+    let vowintAppId: string | null = null;
 
-    // Si c'est déjà une URL GetEAppointmentUrl, l'appeler directement
+    if (vowintAppUrl?.includes("GetEAppointmentUrl")) {
+      // URL directe fournie par l'admin
+      vowintAppId = vowintAppUrl.match(/id=([^&]+)/)?.[1] ?? null;
+    }
+
+    if (!vowintAppId) {
+      // Récupérer la liste des dossiers pour trouver l'appId
+      try {
+        const listRes = await fetch(`${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&start=0&length=10`, {
+          method: "GET",
+          headers: {
+            "User-Agent": ua,
+            "Cookie": postLoginCookies,
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+          },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (listRes.ok) {
+          const listData = await listRes.json() as { data?: Array<{ Id?: string; St?: string }> };
+          // Prendre le premier dossier "Submitted" (StId=2) ou le premier disponible
+          const submitted = listData.data?.find(d => d.Id);
+          if (submitted?.Id) {
+            vowintAppId = submitted.Id;
+          }
+        }
+      } catch { /* fallback */ }
+    }
+
+    if (!vowintAppId) {
+      botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail" });
+      return { success: false, error: "NO_INTEGRATION_URL" };
+    }
+
+    // Appeler GetEAppointmentUrl avec l'appId
+    const eAppointmentUrl = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${vowintAppId}`;
     let integrationUrl: string | null = null;
 
     if (eAppointmentUrl.includes("GetEAppointmentUrl")) {
@@ -129,6 +165,8 @@ export async function setupCevSessionHttp(
           "User-Agent": ua,
           "Cookie": postLoginCookies,
           "Accept": "application/json, text/html, */*",
+          "X-Requested-With": "XMLHttpRequest",
+          "If-Modified-Since": "0",
           "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
         },
         redirect: "manual",
@@ -150,6 +188,7 @@ export async function setupCevSessionHttp(
         }
       }
     } else {
+      // URL directe fournie — l'utiliser telle quelle
       integrationUrl = eAppointmentUrl;
     }
 
