@@ -1,179 +1,15 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan, activateCevSession } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
-import { completeCevCaptcha } from "./cevPortal.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
 import { runSpainSession, runSpainWatcherProbe } from "./spainPortal.js";
-
-// ─── CEV Session Renewal — renouvellement automatique quand la session expire ──
-const CEV_HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
-const CEV_CAPTCHA_PAGE_URL = "https://appointment.cloud.diplomatie.be/Captcha";
-const CEV_BASE = "https://appointment.cloud.diplomatie.be";
-const ANTICAPTCHA_API_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
-const CAPSOLVER_API_KEY_CEV = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
-
-/**
- * Renouvelle une session CEV expirée :
- *  1. GET integrationUrl → obtient un nouveau cookie ASP.NET_SessionId
- *  2. Résout hCaptcha via Anti-Captcha (priorité) ou CapSolver
- *  3. POST /Captcha/SetCaptchaToken → nouveau validUntil
- *  4. Met à jour la session dans Convex via activateCevSession
- */
-async function renewCevSession(
-  integrationUrl: string,
-  sessionId: string,
-  applicationId: string,
-): Promise<boolean> {
-  console.log(`[CEV-RENEW] Début renouvellement session=${sessionId}...`);
-
-  // 1. Naviguer vers l'integrationUrl pour obtenir un nouveau cookie
-  let newCookie: string | null = null;
-  try {
-    const res = await fetch(integrationUrl, {
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    // Extraire le cookie ASP.NET_SessionId depuis les headers Set-Cookie
-    const setCookies = res.headers.getSetCookie?.() ?? [];
-    for (const c of setCookies) {
-      const m = c.match(/ASP\.NET_SessionId=([^;]+)/);
-      if (m) { newCookie = m[1]; break; }
-    }
-
-    // Fallback: essayer le header raw
-    if (!newCookie) {
-      const rawCookie = res.headers.get("set-cookie") ?? "";
-      const m = rawCookie.match(/ASP\.NET_SessionId=([^;]+)/);
-      if (m) newCookie = m[1];
-    }
-
-    if (!newCookie) {
-      console.warn(`[CEV-RENEW] Pas de cookie ASP.NET_SessionId dans la réponse (HTTP ${res.status})`);
-      return false;
-    }
-    console.log(`[CEV-RENEW] Nouveau cookie obtenu: ${newCookie.slice(0, 10)}...`);
-  } catch (err) {
-    console.warn(`[CEV-RENEW] Erreur navigation integrationUrl: ${err}`);
-    return false;
-  }
-
-  // 2. Résoudre hCaptcha
-  let hcaptchaToken: string | null = null;
-
-  // Priorité 1 : Anti-Captcha (supporte les domaines gouvernementaux)
-  if (ANTICAPTCHA_API_KEY && !hcaptchaToken) {
-    console.log(`[CEV-RENEW] Résolution hCaptcha via Anti-Captcha...`);
-    try {
-      const createRes = await fetch("https://api.anti-captcha.com/createTask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientKey: ANTICAPTCHA_API_KEY,
-          task: { type: "HCaptchaTaskProxyless", websiteURL: CEV_CAPTCHA_PAGE_URL, websiteKey: CEV_HCAPTCHA_SITEKEY },
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const createData = await createRes.json() as { errorId: number; taskId?: number };
-      if (createData.errorId === 0 && createData.taskId) {
-        for (let i = 0; i < 60; i++) {
-          await new Promise(r => setTimeout(r, 5000));
-          const pollRes = await fetch("https://api.anti-captcha.com/getTaskResult", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientKey: ANTICAPTCHA_API_KEY, taskId: createData.taskId }),
-          });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { gRecaptchaResponse?: string; token?: string } };
-          if (pollData.status === "ready") {
-            hcaptchaToken = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;
-            if (hcaptchaToken) {
-              console.log(`[CEV-RENEW] hCaptcha résolu via Anti-Captcha en ${(i + 1) * 5}s`);
-            }
-            break;
-          }
-          if (pollData.errorId !== 0) break;
-        }
-      }
-    } catch (err) {
-      console.warn(`[CEV-RENEW] Anti-Captcha erreur: ${err}`);
-    }
-  }
-
-  // Priorité 2 : CapSolver (fallback)
-  if (!hcaptchaToken && CAPSOLVER_API_KEY_CEV) {
-    console.log(`[CEV-RENEW] Résolution hCaptcha via CapSolver (fallback)...`);
-    try {
-      const createRes = await fetch("https://api.capsolver.com/createTask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientKey: CAPSOLVER_API_KEY_CEV,
-          task: { type: "HCaptchaTaskProxyless", websiteURL: CEV_CAPTCHA_PAGE_URL, websiteKey: CEV_HCAPTCHA_SITEKEY },
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const createData = await createRes.json() as { errorId: number; taskId?: string };
-      if (createData.errorId === 0 && createData.taskId) {
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          const pollRes = await fetch("https://api.capsolver.com/getTaskResult", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientKey: CAPSOLVER_API_KEY_CEV, taskId: createData.taskId }),
-          });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { token?: string } };
-          if (pollData.status === "ready" && pollData.solution?.token) {
-            hcaptchaToken = pollData.solution.token;
-            console.log(`[CEV-RENEW] hCaptcha résolu via CapSolver en ${(i + 1) * 3}s`);
-            break;
-          }
-          if (pollData.errorId !== 0) break;
-        }
-      }
-    } catch (err) {
-      console.warn(`[CEV-RENEW] CapSolver erreur: ${err}`);
-    }
-  }
-
-  if (!hcaptchaToken) {
-    console.error(`[CEV-RENEW] ❌ Impossible de résoudre hCaptcha — session non renouvelée`);
-    return false;
-  }
-
-  // 3. POST /Captcha/SetCaptchaToken avec le nouveau cookie + token
-  const fullCookie = `ASP.NET_SessionId=${newCookie}; PreferredCulture=en-US`;
-  const captchaResult = await completeCevCaptcha(fullCookie, hcaptchaToken, applicationId);
-
-  if (captchaResult.status === "session_error") {
-    console.error(`[CEV-RENEW] ❌ SetCaptchaToken échoué: ${captchaResult.error}`);
-    return false;
-  }
-
-  // 4. Mettre à jour la session dans Convex
-  const session = captchaResult.status === "ready" ? captchaResult.session : captchaResult.session;
-  const validUntilMs = new Date(session.validUntil).getTime();
-
-  const activated = await activateCevSession(sessionId, fullCookie, validUntilMs, integrationUrl);
-  if (!activated) {
-    console.error(`[CEV-RENEW] ❌ activateCevSession échoué dans Convex`);
-    return false;
-  }
-
-  console.log(`[CEV-RENEW] ✅ Session renouvelée — validUntil=${session.validUntil}, cookie=${newCookie.slice(0, 10)}...`);
-  return true;
-}
 
 // ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────
 // Tourne en background ; pour chaque session needs_setup claimée :
@@ -346,24 +182,8 @@ async function startCevPollingLoop(): Promise<void> {
             console.warn(`[CEV-POLL] Crash booking session=${s.sessionId}:`, bookErr);
           }
         } else if (r.status === "session_expired") {
-          console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms) — tentative de renouvellement...`);
-          await recordCevSessionCheck(s.sessionId, "session_expired");
-
-          // ── Renouvellement automatique de la session CEV ────────────────────
-          // 1. Naviguer vers l'integrationUrl pour obtenir un nouveau cookie ASP.NET_SessionId
-          // 2. Résoudre hCaptcha via Anti-Captcha (ou CapSolver)
-          // 3. POST /Captcha/SetCaptchaToken → nouveau validUntil
-          // 4. Mettre à jour la session dans Convex
-          try {
-            const renewed = await renewCevSession(s.integrationUrl, s.sessionId, s.applicationId);
-            if (renewed) {
-              console.log(`[CEV-POLL] ✅ Session renouvelée session=${s.sessionId} — polling reprend`);
-            } else {
-              console.log(`[CEV-POLL] ❌ Renouvellement échoué session=${s.sessionId} — intervention admin requise`);
-            }
-          } catch (renewErr) {
-            console.warn(`[CEV-POLL] Erreur renouvellement session=${s.sessionId}:`, renewErr);
-          }
+          console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms) — demande re-setup...`);
+          await recordCevSessionCheck(s.sessionId, "session_expired", "auto_renewal_requested");
         } else if (r.status === "error") {
           console.log(`[CEV-POLL] ❌ Erreur session=${s.sessionId}: ${r.error} (${ms}ms)`);
           await recordCevSessionCheck(s.sessionId, "error", r.error);
