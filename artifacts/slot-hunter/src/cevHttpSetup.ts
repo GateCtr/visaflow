@@ -109,7 +109,30 @@ export async function setupCevSessionHttp(
     }
 
     // Merger les cookies de login avec les cookies existants
-    const postLoginCookies = mergeCookies(vowintCookies, loginRes);
+    let postLoginCookies = mergeCookies(vowintCookies, loginRes);
+
+    // Suivre les redirections manuellement pour collecter tous les cookies de session
+    let redirectUrl = loginRes.headers.get("location");
+    for (let redir = 0; redir < 5 && redirectUrl; redir++) {
+      const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
+      const redirRes = await fetch(fullUrl, {
+        method: "GET",
+        headers: {
+          "User-Agent": ua,
+          "Cookie": postLoginCookies,
+          "Accept": "text/html,application/xhtml+xml,*/*",
+          "Referer": `${VOWINT_BASE}/`,
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(10_000),
+      });
+      postLoginCookies = mergeCookies(postLoginCookies, redirRes);
+      if (redirRes.status >= 300 && redirRes.status < 400) {
+        redirectUrl = redirRes.headers.get("location");
+      } else {
+        break;
+      }
+    }
 
     botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
 
@@ -127,12 +150,13 @@ export async function setupCevSessionHttp(
     if (!vowintAppId) {
       // Récupérer la liste des dossiers pour trouver l'appId
       try {
-        const listRes = await fetch(`${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&start=0&length=10`, {
+        const listUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&start=0&length=10`;
+        const listRes = await fetch(listUrl, {
           method: "GET",
           headers: {
             "User-Agent": ua,
             "Cookie": postLoginCookies,
-            "Accept": "application/json",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest",
             "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
           },
@@ -144,9 +168,14 @@ export async function setupCevSessionHttp(
           const submitted = listData.data?.find(d => d.Id);
           if (submitted?.Id) {
             vowintAppId = submitted.Id;
+            botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId: vowintAppId } });
           }
+        } else {
+          botLog({ applicationId: clientId, step: "cev_http_mylist_failed", status: "fail", data: { status: listRes.status } });
         }
-      } catch { /* fallback */ }
+      } catch (err) {
+        botLog({ applicationId: clientId, step: "cev_http_mylist_error", status: "fail", data: { error: String(err) } });
+      }
     }
 
     if (!vowintAppId) {
