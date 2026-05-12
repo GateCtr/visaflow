@@ -1,5 +1,6 @@
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { ProxyAgent } from "undici";
+import { Impit } from "impit";
 import { randomDelay, proxyPool, launchBrowser } from "./browser.js";
 import { reportSlotFound, sendHeartbeat, uploadFile, botLog, type HunterJob } from "./convexClient.js";
 import { 
@@ -814,20 +815,45 @@ export function setUsaSessionProxy(proxyUrl: string | undefined): void {
 }
 
 /**
- * Fetch via undici ProxyAgent (proxy résidentiel) ou fetch natif (sans proxy).
+ * Fetch avec fingerprint TLS Chrome via impit (anti-détection JA3/JA4).
  * 
- * NOTE: impit a été retiré car il introduisait une incohérence entre le TLS fingerprint
- * (version Chrome interne d'impit) et les headers HTTP Sec-CH-UA/User-Agent qu'on envoie
- * manuellement (version Chrome différente). Le serveur détecte cette incohérence → 401.
- * Le fetch natif Node.js avec undici ProxyAgent fonctionnait correctement avant l'introduction
- * d'impit — on revient à ce fonctionnement stable.
+ * impit génère un handshake TLS identique à un vrai Chrome, rendant le bot
+ * indistinguable d'un navigateur réel au niveau réseau (ciphers, ALPN, extensions TLS).
+ * 
+ * IMPORTANT : on NE laisse PAS impit gérer les headers HTTP — on les envoie nous-mêmes
+ * via getBrowserHeaders() pour garder le contrôle exact sur Sec-CH-UA, Referer, cookies, etc.
+ * impit est utilisé UNIQUEMENT pour le fingerprint TLS sous-jacent.
+ * 
+ * Mode sans proxy : connexion directe via IP Railway (fixe et stable).
+ * Le serveur USA lie le JWT à l'IP — pas de changement mid-session.
  */
+
+// Instance impit singleton — réutilisée pour toutes les requêtes USA.
+// browser:"chrome" = fingerprint TLS du dernier Chrome supporté par impit.
+// redirect:"follow" = suit les redirections comme un vrai navigateur.
+let _impitInstance: InstanceType<typeof Impit> | undefined;
+
+function getImpitInstance(): InstanceType<typeof Impit> {
+  if (!_impitInstance) {
+    _impitInstance = new Impit({
+      browser: "chrome",
+    });
+    console.log("[usa] ✅ impit initialisé (fingerprint TLS Chrome) — indétectable JA3/JA4");
+  }
+  return _impitInstance;
+}
+
 async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
   if (_usaProxyAgent) {
+    // Si un proxy est configuré (cas futur), utiliser le fetch natif avec ProxyAgent.
+    // impit ne supporte pas directement undici ProxyAgent.
     // @ts-expect-error — dispatcher est une option interne undici non présente dans RequestInit standard
     return fetch(url, { ...options, dispatcher: _usaProxyAgent });
   }
-  return fetch(url, options);
+  // Mode normal (sans proxy) : utiliser impit pour le fingerprint TLS Chrome.
+  // Les headers sont passés tels quels — impit ne les modifie PAS quand on les fournit.
+  const impit = getImpitInstance();
+  return impit.fetch(url, options as Parameters<typeof impit.fetch>[1]) as unknown as Response;
 }
 
 
