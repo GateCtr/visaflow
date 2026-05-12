@@ -1,6 +1,5 @@
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { ProxyAgent } from "undici";
-import { Impit } from "impit";
 import { randomDelay, proxyPool, launchBrowser } from "./browser.js";
 import { reportSlotFound, sendHeartbeat, uploadFile, botLog, type HunterJob } from "./convexClient.js";
 import { 
@@ -762,12 +761,9 @@ function getBrowserHeaders(jobId?: string): Record<string, string> {
 }
 
 // ─── Proxy résidentiel pour les appels API USA ────────────────────────────────
-// Utilise impit (Apify) pour simuler l'empreinte TLS Chrome sur toutes les requêtes.
-// Sans ça, Node.js fetch() natif a une empreinte JA3/JA4 identifiable comme bot,
-// ce qui cause un 401 systématique sur les endpoints authentifiés du portail USA.
+// Utilise undici ProxyAgent pour router les requêtes via un proxy résidentiel.
 // setUsaSessionProxy() est appelé au début de runUsaApiSession() et réinitialisé à la fin.
 let _usaProxyAgent: ProxyAgent | undefined;
-let _usaImpit: InstanceType<typeof Impit> | undefined;
 let _usaProxyUrl: string | undefined;
 
 /**
@@ -802,38 +798,26 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyUrl = proxyUrl;
-    // Créer une instance Impit avec empreinte TLS Chrome + proxy résidentiel.
-    // Impit simule le handshake TLS et les frames HTTP/2 d'un vrai Chrome,
-    // rendant les requêtes indistinguables du trafic navigateur réel.
-    _usaImpit = new Impit({
-      browser: "chrome",
-      proxyUrl: proxyUrl,
-    });
-    // Conserver aussi le ProxyAgent undici comme fallback (pour le refresh sans proxy dans loginUsaPortal)
     _usaProxyAgent = new ProxyAgent(proxyUrl);
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[usa] Proxy résidentiel actif (impit Chrome TLS): ${masked}`);
+    console.log(`[usa] Proxy résidentiel actif (undici): ${masked}`);
   } else {
     _usaProxyUrl = undefined;
-    _usaImpit = undefined;
     _usaProxyAgent = undefined;
   }
 }
 
 /**
- * Fetch avec empreinte TLS Chrome via impit.
- * Remplace le fetch() natif Node.js (qui a une empreinte JA3/JA4 de bot) par
- * une requête dont le handshake TLS est identique à Chrome 124+.
- * Si impit n'est pas configuré, fallback sur fetch() natif (pour les appels sans proxy).
+ * Fetch via undici ProxyAgent (proxy résidentiel) ou fetch natif (sans proxy).
+ * 
+ * NOTE: impit a été retiré car il introduisait une incohérence entre le TLS fingerprint
+ * (version Chrome interne d'impit) et les headers HTTP Sec-CH-UA/User-Agent qu'on envoie
+ * manuellement (version Chrome différente). Le serveur détecte cette incohérence → 401.
+ * Le fetch natif Node.js avec undici ProxyAgent fonctionnait correctement avant l'introduction
+ * d'impit — on revient à ce fonctionnement stable.
  */
 async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  if (_usaImpit) {
-    // impit.fetch() renvoie ImpitResponse — compatible en pratique avec Response
-    // (status, headers.get(), json(), text()) mais TypeScript est strict sur le type.
-    return _usaImpit.fetch(url, options as Parameters<InstanceType<typeof Impit>["fetch"]>[1]) as unknown as Response;
-  }
   if (_usaProxyAgent) {
-    // Fallback undici si impit n'est pas disponible pour une raison quelconque
     // @ts-expect-error — dispatcher est une option interne undici non présente dans RequestInit standard
     return fetch(url, { ...options, dispatcher: _usaProxyAgent });
   }
@@ -1006,16 +990,11 @@ export async function loginUsaPortal(
 
   let response: Response;
   try {
-    // Bundle Angular : loginUser() envoie 4 headers CORS non-standard
+    // Bundle Angular : loginUser() envoie ses headers normaux
     const loginHeaders = {
       ...getBrowserHeaders(),
       "Content-Type": "application/json",
       "Referer": REFERER_LOGIN,
-      // Headers CORS non-standard que le bundle Angular envoie (serveur les ignore mais fingerprint important)
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Max-Age": "1000",
-      "Access-Control-Allow-Headers": "Origin, Content-Type, X-Auth-Token, content-type,-CSRF-Token, Authorization",
     };
     
     response = await usaFetch(USA_LOGIN_URL, {
@@ -1119,9 +1098,8 @@ export async function loginUsaPortal(
     if (_usaProxyAgent) {
       console.log("[usa] Tentative de récupération csrfToken via appel direct (sans proxy, TLS Chrome)...");
       try {
-        // Utiliser impit SANS proxy pour avoir l'empreinte TLS Chrome mais depuis l'IP Railway directe
-        const directImpit = new Impit({ browser: "chrome" });
-        const directRes = await directImpit.fetch(USA_REFRESH_URL, {
+        // Fallback : appel direct sans proxy pour capturer le csrfToken
+        const directRes = await fetch(USA_REFRESH_URL, {
           method: "POST",
           headers: {
             ...getBrowserHeaders(),
@@ -1129,7 +1107,7 @@ export async function loginUsaPortal(
             "Referer": REFERER_DASHBOARD,
           },
           body: JSON.stringify({ refreshToken: refreshToken ?? "", username }),
-        } as Parameters<InstanceType<typeof Impit>["fetch"]>[1]) as unknown as Response;
+        });
         const directCsrf = directRes.headers.get("Csrftoken") ?? directRes.headers.get("csrftoken") ?? "";
         if (directCsrf) {
           csrfToken = directCsrf;
