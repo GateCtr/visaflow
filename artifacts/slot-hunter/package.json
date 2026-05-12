@@ -31,7 +31,10 @@
     "spain:capture": "tsx scripts/spain-manual-capture.ts",
     "spain:capture:manual": "tsx scripts/spain-manual-capture.ts",
     "spain:analyze": "tsx scripts/analyze-spain-capture.ts",
-    "spain:analyze:latest": "tsx scripts/analyze-spain-capture.ts"
+    "spain:analyze:latest": "tsx scripts/analyze-spain-capture.ts",
+    "usa:capture": "tsx scripts/usa-capture-session.ts",
+    "usa:capture:interactive": "tsx scripts/usa-capture-interactive.ts",
+    "usa:capture:cookies": "tsx scripts/usa-capture-with-cookies.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
