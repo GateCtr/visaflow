@@ -1010,11 +1010,82 @@ export async function loginUsaPortal(
 
   const accessToken = response.headers.get("authorization");
   const refreshToken = response.headers.get("refreshtoken");
-  // "Csrftoken" : header de réponse de login capturé par le bundle Angular
-  // (localStorage.setItem("CSRFTOKEN", this.csrfToken) dans le portail).
-  // Réutilisé dans le header "CookieName: XSRF-TOKEN={csrfToken}" sur tous les PUT.
-  // Note: le bundle utilise F.headers.get("Csrftoken") avec 'C' majuscule
-  const csrfToken = response.headers.get("Csrftoken") ?? response.headers.get("csrftoken") ?? "";
+
+  // ── Extraction csrfToken robuste ───────────────────────────────────────────
+  // Le bundle Angular lit : F.headers.get("Csrftoken") (header de réponse custom).
+  // Problème observé : les proxies résidentiels (iProyal) filtrent parfois les headers
+  // non-standard de la réponse HTTP. On cherche dans plusieurs sources :
+  //   1. Header "Csrftoken" (case-insensitive via l'API Headers)
+  //   2. Header "x-csrf-token" (variante normalisée parfois utilisée par des reverse-proxies)
+  //   3. Header "set-cookie" contenant "XSRF-TOKEN=" (le serveur peut poser un cookie CSRF)
+  //   4. Champ "csrfToken" ou "csrf" dans le body JSON (si le serveur a changé le format)
+  let csrfToken = response.headers.get("Csrftoken")
+    ?? response.headers.get("csrftoken")
+    ?? response.headers.get("x-csrf-token")
+    ?? "";
+
+  // Fallback : chercher dans le Set-Cookie un XSRF-TOKEN
+  if (!csrfToken) {
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    const xsrfMatch = setCookie.match(/XSRF-TOKEN=([^;]+)/);
+    if (xsrfMatch) {
+      csrfToken = xsrfMatch[1];
+      console.log(`[usa] csrfToken extrait depuis Set-Cookie: ${csrfToken.slice(0, 8)}...`);
+    }
+  }
+
+  // Fallback : chercher dans le body JSON (si le serveur a migré le CSRF dans le body)
+  if (!csrfToken && data) {
+    const bodyAny = data as unknown as Record<string, unknown>;
+    const fromBody = bodyAny.csrfToken ?? bodyAny.csrf ?? bodyAny.xsrfToken ?? bodyAny.CsrfToken;
+    if (typeof fromBody === "string" && fromBody.length > 0) {
+      csrfToken = fromBody;
+      console.log(`[usa] csrfToken extrait depuis le body JSON: ${csrfToken.slice(0, 8)}...`);
+    }
+  }
+
+  // Diagnostic : loguer les headers de réponse si le csrfToken est toujours absent
+  if (!csrfToken) {
+    const headerEntries = [...response.headers.entries()];
+    const headerNames = headerEntries.map(([k]) => k).join(", ");
+    console.warn(`[usa] ⚠️ csrfToken ABSENT de la réponse login — headers reçus: [${headerNames}]`);
+    console.warn(`[usa] Headers détaillés: ${JSON.stringify(Object.fromEntries(headerEntries)).slice(0, 1000)}`);
+    // Le csrfToken vide n'empêche PAS le login ni le polling (GET).
+    // Il ne bloque QUE les opérations PUT (booking/reschedule).
+    // On continue avec un warning plutôt que de crasher.
+
+    // ── Fallback : retry login sans proxy pour capturer le csrfToken ────────
+    // Si le proxy résidentiel filtre les headers non-standard, un appel direct
+    // (sans dispatcher) devrait recevoir le header Csrftoken du serveur.
+    // On ne refait PAS un vrai login (risque de lockout) — on réutilise le JWT
+    // déjà obtenu. On fait juste un GET /refreshToken sans proxy pour lire les headers.
+    // NOTE: si le serveur a vraiment supprimé le header (migration), ce fallback échouera aussi.
+    if (_usaProxyAgent) {
+      console.log("[usa] Tentative de récupération csrfToken via appel direct (sans proxy)...");
+      try {
+        const directRes = await fetch(USA_REFRESH_URL, {
+          method: "POST",
+          headers: {
+            ...getBrowserHeaders(),
+            "Content-Type": "application/json",
+            "Referer": REFERER_DASHBOARD,
+          },
+          body: JSON.stringify({ refreshToken: refreshToken ?? "", username }),
+        });
+        const directCsrf = directRes.headers.get("Csrftoken") ?? directRes.headers.get("csrftoken") ?? "";
+        if (directCsrf) {
+          csrfToken = directCsrf;
+          console.log(`[usa] ✅ csrfToken récupéré via appel direct (sans proxy): ${csrfToken.slice(0, 8)}...`);
+        } else {
+          const directHeaders = [...directRes.headers.entries()].map(([k]) => k).join(", ");
+          console.warn(`[usa] csrfToken TOUJOURS absent sans proxy — headers directs: [${directHeaders}]`);
+          console.warn(`[usa] ⚠️ Le serveur ne renvoie plus le header Csrftoken — les PUT (booking) échoueront.`);
+        }
+      } catch (directErr) {
+        console.warn(`[usa] Fallback direct échoué: ${directErr instanceof Error ? directErr.message : directErr}`);
+      }
+    }
+  }
 
   if (data.msg && (data.msg.toLowerCase().includes("invalid") || data.msg.toLowerCase().includes("incorrect"))) {
     console.error(`[usa] Login refusé par le portail: ${data.msg}`);
