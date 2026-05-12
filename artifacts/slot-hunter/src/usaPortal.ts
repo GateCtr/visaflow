@@ -1013,7 +1013,8 @@ export async function loginUsaPortal(
   // "Csrftoken" : header de réponse de login capturé par le bundle Angular
   // (localStorage.setItem("CSRFTOKEN", this.csrfToken) dans le portail).
   // Réutilisé dans le header "CookieName: XSRF-TOKEN={csrfToken}" sur tous les PUT.
-  const csrfToken = response.headers.get("csrftoken") ?? "";
+  // Note: le bundle utilise F.headers.get("Csrftoken") avec 'C' majuscule
+  const csrfToken = response.headers.get("Csrftoken") ?? response.headers.get("csrftoken") ?? "";
 
   if (data.msg && (data.msg.toLowerCase().includes("invalid") || data.msg.toLowerCase().includes("incorrect"))) {
     console.error(`[usa] Login refusé par le portail: ${data.msg}`);
