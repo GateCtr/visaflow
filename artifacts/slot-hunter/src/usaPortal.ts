@@ -137,7 +137,7 @@ class TokenExpiredError extends Error {
  * La restriction dure typiquement 15-30 min côté portail.
  */
 class AccountRestrictedError extends Error {
-  constructor(public readonly retryAfterMs: number = 25 * 60 * 1000) {
+  constructor(public readonly retryAfterMs: number = 60 * 60 * 1000) {
     super(`Compte temporairement restreint par le portail — attendre ${Math.round(retryAfterMs / 60000)} min`);
     this.name = "AccountRestrictedError";
   }
@@ -145,7 +145,7 @@ class AccountRestrictedError extends Error {
 
 // ─── Restriction account-level : map username → timestamp fin de restriction ──
 // Quand "Access temporarily restricted" est détecté, on enregistre la fin de la
-// fenêtre (maintenant + 25 min). Tous les appels au compte sont bloqués jusqu'à
+// fenêtre (maintenant + 60 min). Tous les appels au compte sont bloqués jusqu'à
 // ce timestamp, SANS toucher au cache de token (le JWT reste valide).
 const accountRestrictedUntil = new Map<string, number>();
 
@@ -155,8 +155,8 @@ export function isAccountRestricted(username: string): boolean {
   return until !== undefined && Date.now() < until;
 }
 
-/** Marque un compte comme restreint pendant `durationMs` ms (défaut 25 min). */
-function markAccountRestricted(username: string, durationMs = 25 * 60 * 1000): void {
+/** Marque un compte comme restreint pendant `durationMs` ms (défaut 60 min). */
+function markAccountRestricted(username: string, durationMs = 60 * 60 * 1000): void {
   const until = Date.now() + durationMs;
   accountRestrictedUntil.set(username.toLowerCase(), until);
   const endTime = new Date(until).toISOString().slice(11, 16);
@@ -1067,7 +1067,7 @@ export async function loginUsaPortal(
     // NE PAS traiter comme une erreur de credentials — lever AccountRestrictedError
     // pour que getUsaSession puisse enregistrer la fenêtre de restriction sans loop.
     if (response.status === 401 && isRestrictedBody(rawBody + detail)) {
-      throw new AccountRestrictedError(25 * 60 * 1000);
+      throw new AccountRestrictedError(60 * 60 * 1000);
     }
     throw new Error(`HTTP ${response.status}: ${detail}`);
   }
@@ -1261,7 +1261,7 @@ export async function checkUsaAppointmentRequestStatus(
         if (res.status === 401 && isRestrictedBody(errBody)) {
           const username = [...tokenCache.entries()].find(([, v]) => v.accessToken === session.accessToken)?.[0] ?? "";
           if (username) markAccountRestricted(username);
-          console.warn(`[usa] Compte temporairement restreint (401 sur appointment status) — cycles ignorés 25 min`);
+          console.warn(`[usa] Compte temporairement restreint (401 sur appointment status) — cycles ignorés 60 min`);
           return { status: "error", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: `Compte restreint (401)`, missionId: USA_MISSION_ID };
         }
         // Vraie expiration de token ou 403 : vider le cache pour forcer reconnexion
@@ -2441,7 +2441,7 @@ async function findFirstSlotForOfc(
     if (res.status === 401) {
       const body401 = await res.text().catch(() => "");
       if (isRestrictedBody(body401)) {
-        console.error(`[usa] ⛔ COMPTE RESTREINT (401) sur ${endpoint} — 25 min de pause`);
+        console.error(`[usa] ⛔ COMPTE RESTREINT (401) sur ${endpoint} — 60 min de pause`);
         throw new AccountRestrictedError();
       }
       console.error(`[usa] ⛔ TOKEN EXPIRÉ (401) sur ${endpoint} — arrêt scan`);
@@ -3104,10 +3104,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     // sinon fallback sur session.userID (number du login).
     applicantId: session.applicantId ?? session.userID,
     applicationId: session.applicationId,
-    // Valeurs par défaut alignées avec le portail réel (logs réseau confirmés) :
-    // Le portail envoie "NIV" (visaTypekey) et "B1/B2" (visaClass) pour les visas B1/B2.
-    // visaCategory = "VisitorVisas" est le param envoyé à l'URL getpost (OFC list).
-    // Ces valeurs seront enrichies depuis getTransformData si disponible.
+    // FALLBACK UNIQUEMENT si getApplicationDetails échoue.
+    // Ces valeurs seront TOUJOURS écrasées par getTransformData (appelé dans le flow OFC).
+    // Si les deux APIs échouent, ces défauts permettent quand même de tenter un scan.
+    // NOTE: "NIV" = Non-Immigrant Visa. Pour les Immigrant Visas (IV), getTransformData
+    // retournera la bonne valeur (ex: visaTypekey="IV", visaClass="IR1", visaCategory="ImmigrantVisas").
+    // Le bot ne code JAMAIS le type de visa en dur pour le booking — il vient toujours de l'API.
     visaType: "NIV",
     visaClass: "B1/B2",
     visaCategory: "VisitorVisas",
@@ -3184,8 +3186,10 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
                   console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "B1/B2")`);
                   effectiveDetails.visaClass = transformDataResult.visaClass;
                 }
-                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV")) {
-                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "NIV")`);
+                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV" || effectiveDetails.visaType.includes(" "))) {
+                  // Le portail Angular envoie visaTypekey (ex: "NIV") dans les payloads slot, PAS le label
+                  // long comme "Non-immigrant Visa". getTransformData retourne le bon code court.
+                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace "${effectiveDetails.visaType}")`);
                   effectiveDetails.visaType = transformDataResult.visaCategory;
                 }
                 if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID || effectiveDetails.applicantId === (session.applicantId ?? session.userID))) {
@@ -3268,8 +3272,10 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
                   console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "B1/B2")`);
                   effectiveDetails.visaClass = transformDataResult.visaClass;
                 }
-                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV")) {
-                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "NIV")`);
+                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV" || effectiveDetails.visaType.includes(" "))) {
+                  // Le portail Angular envoie visaTypekey (ex: "NIV") dans les payloads slot, PAS le label
+                  // long comme "Non-immigrant Visa". getTransformData retourne le bon code court.
+                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace "${effectiveDetails.visaType}")`);
                   effectiveDetails.visaType = transformDataResult.visaCategory;
                 }
                 if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID || effectiveDetails.applicantId === (session.applicantId ?? session.userID))) {
@@ -3324,12 +3330,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       if (err instanceof AccountRestrictedError) {
         const username = job.hunterConfig.embassyUsername ?? "";
         if (username) markAccountRestricted(username, err.retryAfterMs);
-        console.warn(`[usa] 🔒 Compte restreint — pause 25 min (cache préservé)`);
+        console.warn(`[usa] 🔒 Compte restreint — pause 60 min (cache préservé)`);
         botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: err.message } });
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
-          errorMessage: `Compte restreint — cycles ignorés ~25 min`,
+          errorMessage: `Compte restreint — cycles ignorés ~60 min`,
         });
         return "not_found";
       }
@@ -3460,12 +3466,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         if (err instanceof AccountRestrictedError) {
           const username = job.hunterConfig.embassyUsername ?? "";
           if (username) markAccountRestricted(username, err.retryAfterMs);
-          console.warn(`[usa] 🔒 Compte restreint pendant le scan OFC ${ofc.postName} — pause 25 min (cache préservé)`);
+          console.warn(`[usa] 🔒 Compte restreint pendant le scan OFC ${ofc.postName} — pause 60 min (cache préservé)`);
           botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", ofc: ofc.postName, error: err.message } });
           await sendHeartbeat({
             applicationId: job.id,
             result: "not_found",
-            errorMessage: `Compte restreint — cycles ignorés ~25 min`,
+            errorMessage: `Compte restreint — cycles ignorés ~60 min`,
           });
           return "not_found";
         }
@@ -3547,9 +3553,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           if (bookErr instanceof AccountRestrictedError) {
             const username = job.hunterConfig.embassyUsername ?? "";
             if (username) markAccountRestricted(username, bookErr.retryAfterMs);
-            console.warn(`[usa] 🔒 Compte restreint lors du booking — pause 25 min (cache préservé)`);
+            console.warn(`[usa] 🔒 Compte restreint lors du booking — pause 60 min (cache préservé)`);
             botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: "Compte restreint lors du booking" } });
-            await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint lors du booking — pause 25 min` });
+            await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint lors du booking — pause 60 min` });
             return "not_found";
           }
           if (bookErr instanceof TokenExpiredError) {
