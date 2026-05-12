@@ -584,6 +584,12 @@ interface UsaAppointmentRequest {
   pendingAppoStatus: number;
   primaryApplicant: string;
   messagetext: string | null;
+  /** Champ "cancellable" retourné par getUserHistoryApplicantPaymentStatus.
+   * Quand pendingAppoStatus=0 ET cancellable=true, le portail Angular affiche
+   * le bouton "Reschedule" — signifie qu'un RDV terminé existe et peut être reporté.
+   * La réponse peut ne contenir QUE {pendingAppoStatus:0, cancellable:true} sans applicationId.
+   * Dans ce cas, il faut résoudre l'applicationId via showRescheduleButton / scheduledappointmentInfo. */
+  cancellable?: boolean;
   /** applicantId interne (si retourné par getUserHistoryApplicantPaymentStatus).
    * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
    * À utiliser de préférence à userID comme param applicantId de getApplicationDetails. */
@@ -1186,8 +1192,9 @@ export async function checkUsaAppointmentRequestStatus(
   portalApplicationId?: string,
 ): Promise<{
   /**
-   * pendingAppoStatus=0 + applicationId → "cancellable" (demande annulable, paiement non effectué)
-   * pendingAppoStatus=0 sans applicationId → "no_request" (aucune demande active)
+   * pendingAppoStatus=0 + cancellable=true → "cancellable" (RDV existant, peut être reporté)
+   * pendingAppoStatus=0 + applicationId (sans cancellable) → "cancellable" (demande annulable)
+   * pendingAppoStatus=0 sans applicationId ni cancellable → "no_request" (aucune demande active)
    * pendingAppoStatus=1 → "scheduled" (créneau déjà attribué)
    * pendingAppoStatus>0 → "pending" (paiement fait, en attente de créneau)
    */
@@ -1320,16 +1327,22 @@ export async function checkUsaAppointmentRequestStatus(
     // D'après le bundle: 0 !== pendingAppoStatus → redirection vers création de RDV
     // Donc pendingAppoStatus=0 → pas de redirection
     
-    // Mais il peut y avoir un applicationId avec pendingAppoStatus=0 qui est "cancellable"
-    // (demande annulable car paiement non effectué)
-    if (appId) {
-      console.log(`[usa] ⚠️ pendingAppoStatus=0 mais applicationId=${appId} → demande peut-être annulable (cancellable)`);
+    // CAS 1 : pendingAppoStatus=0 + cancellable=true (avec ou sans applicationId)
+    // La réponse API peut être simplement {"pendingAppoStatus":0,"cancellable":true}
+    // sans applicationId — le portail Angular considère ce cas comme un RDV existant
+    // qui peut être reporté (affiche le bouton "Reschedule").
+    // L'applicationId sera résolu via showRescheduleButton / scheduledappointmentInfo.
+    if (data.cancellable === true || appId) {
+      const reason = data.cancellable === true
+        ? `cancellable=true${appId ? ` + applicationId=${appId}` : " (sans applicationId — sera résolu via API)"}`
+        : `applicationId=${appId} présent`;
+      console.log(`[usa] ⚠️ pendingAppoStatus=0 mais ${reason} → demande annulable/reschedule`);
       return {
         status: "cancellable",
         applicationId: appId,
         pendingAppoStatus: 0,
         primaryApplicant: applicant,
-        message: `Demande annulable (pendingAppoStatus=0, applicationId présent) — applicationId: ${appId}`,
+        message: `Demande annulable (pendingAppoStatus=0, ${reason})`,
         missionId: serverMissionId,
         applicantId: serverApplicantId,
         appointmentId: serverAppointmentId,
