@@ -1760,6 +1760,21 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ── Log login réussi dans Convex (visible dans botLogs du panneau admin) ──
+  botLog({
+    applicationId: job.id,
+    step: "login",
+    status: "ok",
+    data: {
+      flow: "usa",
+      username,
+      fullName: session.fullName,
+      userID: session.userID,
+      csrfToken: session.csrfToken ? "present" : "ABSENT",
+      missionId: session.missionId,
+    },
+  });
+
   // ── Résolution du dossier actif ────────────────────────────────────────────
   // Le portail peut retourner plusieurs dossiers si le compte en gère plusieurs.
   // portalApplicationId (admin) → sélection exacte ; sinon → premier avec paiement confirmé.
@@ -1784,6 +1799,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   if (requestStatus.status === "error") {
     console.error(`[usa] Erreur lecture statut demande : ${requestStatus.message}`);
+    botLog({ applicationId: job.id, step: "appointment_status", status: "fail", data: { flow: "usa", status: "error", message: requestStatus.message } });
     await sendHeartbeat({
       applicationId: job.id,
       result: "error",
@@ -1794,6 +1810,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   if (requestStatus.status === "no_request") {
     console.warn(`[usa] Aucune demande soumise : ${requestStatus.message}`);
+    botLog({ applicationId: job.id, step: "appointment_status", status: "warn", data: { flow: "usa", status: "no_request", pendingAppoStatus: requestStatus.pendingAppoStatus, message: requestStatus.message, action: "L'utilisateur doit effectuer le paiement sur usvisaappt.com" } });
     await sendHeartbeat({
       applicationId: job.id,
       result: "not_found",

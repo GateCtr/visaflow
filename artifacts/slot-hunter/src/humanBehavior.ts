@@ -302,44 +302,48 @@ export function printExecutionTimeReport(
 }
 
 /**
- * Log le début d'une session avec comportement humain
+ * Log le début d'une session avec comportement humain.
+ * Format lisible : durée en "Xs" ou "Xm Ys", heure locale ISO.
  */
 export function logHumanBehaviorStart(jobId: string, context: string = ""): void {
   botLog({
     applicationId: jobId,
-    step: "human_behavior",
+    step: "session_start",
     status: "ok",
     data: {
-      type: "session_start",
-      context: context,
-      timestamp: Date.now(),
-      features: [
-        "variable_headers",
-        "human_pauses", 
-        "network_error_simulation",
-        "menu_click_simulation",
-        "page_refresh_simulation",
-        "execution_variability"
-      ]
+      portal: context,
+      startedAt: new Date().toISOString(),
     }
   });
   console.log(`[human] 🧠 Début session comportement humain pour ${context}`);
 }
 
 /**
- * Log la fin d'une session avec comportement humain
+ * Log la fin d'une session avec comportement humain.
+ * Format lisible : durée en "Xs" ou "Xm Ys", heure locale ISO.
  */
 export function logHumanBehaviorEnd(jobId: string, context: string = "", durationMs?: number): void {
+  // Formater la durée de façon lisible
+  let durationStr = "";
+  if (durationMs !== undefined) {
+    if (durationMs < 60_000) {
+      durationStr = `${(durationMs / 1000).toFixed(1)}s`;
+    } else {
+      const mins = Math.floor(durationMs / 60_000);
+      const secs = Math.round((durationMs % 60_000) / 1000);
+      durationStr = `${mins}m ${secs}s`;
+    }
+  }
+
   botLog({
     applicationId: jobId,
-    step: "human_behavior",
+    step: "session_end",
     status: "ok",
     data: {
-      type: "session_end",
-      context: context,
-      timestamp: Date.now(),
-      durationMs: durationMs
+      portal: context,
+      duration: durationStr || undefined,
+      endedAt: new Date().toISOString(),
     }
   });
-  console.log(`[human] ✅ Fin session comportement humain pour ${context}`);
+  console.log(`[human] ✅ Fin session comportement humain pour ${context}${durationStr ? ` (${durationStr})` : ""}`);
 }
