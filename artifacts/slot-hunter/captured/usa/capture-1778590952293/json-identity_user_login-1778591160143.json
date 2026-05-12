@@ -1,0 +1,22 @@
+{
+  "userName": "sabowaryan@gmail.com",
+  "msg": null,
+  "mfa": false,
+  "userID": 6012807,
+  "fullName": "Ryan Sabowa",
+  "firstTimeLogin": false,
+  "isActive": "ACTIVE",
+  "defaultIdleTimeOut": 15,
+  "uuid": "1a4f7df5-02b6-41b9-88eb-e6e52f5a6e52",
+  "userAssociateTotpDeviceQRCode": null,
+  "softwareTokenMfaEnabled": false,
+  "adminMfaSetupEnabled": false,
+  "session": null,
+  "accessToken": null,
+  "totpVerification": false,
+  "refreshToken": null,
+  "idToken": null,
+  "mission": null,
+  "post": [],
+  "ofc": []
+}

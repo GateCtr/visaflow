@@ -1,0 +1,179 @@
+{
+  "version": "1.0.0",
+  "type": "complete",
+  "id": "27933496-518e-4b1d-a09f-c96c0c3e29d2",
+  "node": "832515ba-ee2e-4250-a673-09801fbf53e8",
+  "time": 1778591166461,
+  "agent": "Vertex CL",
+  "data": {
+    "id": "f085a4b3-af22-4a63-a8b2-df7c044f4292",
+    "companyName": "usvisaappt.com",
+    "companyId": "3814074b-c9ee-4bbd-a093-ac3bd7fb6924",
+    "locales": {},
+    "settings": {
+      "width": 500,
+      "height": 800,
+      "vars": {
+        "name": {
+          "value": ""
+        },
+        "prefix": {
+          "value": ""
+        },
+        "template": {
+          "value": "tpl_blank_widget_usvisa"
+        },
+        "theme": {
+          "value": "blue"
+        },
+        "loginFields": [
+          {
+            "name": "name",
+            "value": false
+          },
+          {
+            "name": "email",
+            "value": false
+          },
+          {
+            "name": "phone",
+            "value": true,
+            "required": true
+          }
+        ],
+        "interactions": [
+          {
+            "name": "call",
+            "start": true,
+            "value": true
+          },
+          {
+            "name": "videoCall",
+            "start": false,
+            "value": false
+          },
+          {
+            "name": "chat",
+            "start": false,
+            "value": false
+          },
+          {
+            "name": "tests",
+            "value": true,
+            "start": true
+          }
+        ],
+        "departments": [
+          {
+            "name": "US Service",
+            "value": "13169003#9991561837"
+          }
+        ],
+        "colors": {
+          "headerBackground": {
+            "value": "#0099ef"
+          },
+          "headerCaption": {
+            "value": "#ffffff"
+          },
+          "backgroundPrimary": {
+            "value": "#f8f8f8"
+          },
+          "backgroundSecondary": {
+            "value": "#f8f8f8"
+          },
+          "buttonBackground": {
+            "value": "#0099ef"
+          },
+          "buttonCaption": {
+            "value": "#000000"
+          },
+          "text": {
+            "value": "#636363"
+          },
+          "error": {
+            "value": "#ff0100"
+          },
+          "action": {
+            "value": "#75d439"
+          }
+        },
+        "buttonType": {
+          "value": "default"
+        },
+        "background": {
+          "value": null,
+          "value2": null
+        },
+        "position": {
+          "value": 1
+        },
+        "locales": [
+          {
+            "name": "english",
+            "value": "en-EN",
+            "type": 0
+          },
+          {
+            "name": "russian",
+            "value": "ru-RU",
+            "type": 0
+          }
+        ],
+        "extAPIURI": {
+          "value": ""
+        },
+        "defaultCLI": {
+          "value": ""
+        },
+        "postUrl": {
+          "value": ""
+        },
+        "advancedPhoneField": {
+          "value": true,
+          "setPreferredCountry": true,
+          "preferredCountry": "ci"
+        },
+        "autostart": {
+          "value": false
+        },
+        "customErrorMessage": {
+          "value": ""
+        },
+        "welcomeMessage": {
+          "value": "",
+          "returning": ""
+        },
+        "bottomLink": {
+          "value": "Powered by Xvisa.io",
+          "show": false,
+          "href": "https://visadox.com"
+        },
+        "optIn": {
+          "value": "I have read and accept the [Privacy policy](https://www.telerion.com/en/privacypolicy-2/).",
+          "enabled": false
+        },
+        "analyticFormId": {
+          "value": ""
+        },
+        "feedbackFormId": {
+          "value": ""
+        },
+        "menuItems": [],
+        "useOmnichannel": {
+          "value": false
+        },
+        "enableCallButtonsForBot": {
+          "value": true
+        },
+        "context": {
+          "value": {}
+        },
+        "onlyTheme": {
+          "value": false
+        }
+      }
+    },
+    "version": 1
+  }
+}

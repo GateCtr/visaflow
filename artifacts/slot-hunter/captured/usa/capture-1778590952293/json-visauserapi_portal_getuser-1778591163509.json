@@ -1,0 +1,35 @@
+{
+  "userID": 6012807,
+  "countryCode": null,
+  "fullName": "Ryan Sabowa",
+  "email": "sabowaryan@gmail.com",
+  "createdDate": "2026-05-09T19:31:53.224+00:00",
+  "modifiedDate": "2026-05-09T19:35:00.545+00:00",
+  "isActive": "ACTIVE",
+  "userType": "Applicant",
+  "failureCount": 0,
+  "phone": null,
+  "designation": null,
+  "entityId": 2,
+  "browserCookies": true,
+  "emailNotification": true,
+  "smsNotification": true,
+  "languageCode": null,
+  "uuid": "1a4f7df5-02b6-41b9-88eb-e6e52f5a6e52",
+  "createdby": "",
+  "modifiedby": "",
+  "passwordHistory": [
+    {
+      "passwordHistoryID": 1766011,
+      "userID": 6012807,
+      "email": "sabowaryan@gmail.com",
+      "changedBy": "",
+      "createdDate": "2026-05-09T19:31:53.000+00:00"
+    }
+  ],
+  "userMission": [],
+  "userOfc": [],
+  "userPost": [],
+  "userCountry": [],
+  "authType": null
+}

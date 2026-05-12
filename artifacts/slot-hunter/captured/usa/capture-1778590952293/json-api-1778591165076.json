@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "type": "complete",
+  "id": "35806027-8246-4737-ad2c-fca62ecbb96e",
+  "node": "832515ba-ee2e-4250-a673-09801fbf53e8",
+  "time": 1778591166003,
+  "agent": "Vertex CL",
+  "data": {
+    "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3Nzg1OTExNjUsImV4cCI6MTc3ODU5NDc2NSwianRpIjoiZGRlNTZkODAtODRjZC00MTI4LWJjOTEtMmY5ZTQ5NTUzNjk0IiwidHlwZSI6ImFjY291bnQiLCJhY2NvdW50IjoiZTc5NDgzMzItYzdlYS00NTdmLWI1NTEtMzU0MDhlYTJiZjY5IiwiY29tcGFueSI6IjM4MTQwNzRiLWM5ZWUtNGJiZC1hMDkzLWFjM2JkN2ZiNjkyNCIsImRvbWFpbiI6InVzdmlzYWFwcHQuY29tIiwibG9naW4iOiJGU1dBRV9CRkFfZW5fY2hhdCIsInJvbGVzIjpbICJ3aWRnZXQiXX0.pLKdfewV3pk0t_9knFjGerpYZx-ppXLQHZDSvEE2LttLda4ig2in357zgA7DdkmDkKylQw6BEzGaI9s8F9yfbSFgXTAajdrnuVAWVQ6AjsBvlR2sTDY-KLbkRM9N79T-b5yRwDfiXyAgdNO6FMwi_IQnJH23GMNS3O90IEwsB7o",
+    "accessExpire": 60,
+    "refreshToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3Nzg1OTExNjUsImV4cCI6MTc3ODYzNDM2NSwianRpIjoiZGRlNTZkODAtODRjZC00MTI4LWJjOTEtMmY5ZTQ5NTUzNjk0In0.AqN2msW0yRAwf7JY7I4IFrDlhOrTsfJBYG8FTXqLu_ud6IYCs8LFwdfJh9ECrYB1vcRrU8Q-sjknq1Tsm6VW4C0oqXtVfd-Fdjg_I-oJgZ2jyxeY5GD350hDhYf4aPJBSEXcJRBWKTziuM-mK0f5IFZCtgliBXkEbpP7IsIdnkI",
+    "refreshExpire": 720,
+    "type": "account",
+    "account": "e7948332-c7ea-457f-b551-35408ea2bf69",
+    "company": "3814074b-c9ee-4bbd-a093-ac3bd7fb6924",
+    "domain": "usvisaappt.com"
+  }
+}

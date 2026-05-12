@@ -1,0 +1,77 @@
+{
+  "id": 1,
+  "roleName": "Applicant User Role",
+  "permission": [
+    {
+      "permissionId": 55,
+      "permissionName": "My Dashboard",
+      "permissionCode": "MyDashboard",
+      "access": [
+        {
+          "accessId": 445,
+          "accessName": "My Dashboard Access",
+          "accessCode": "MyDashboardAccess",
+          "accessType": "Show"
+        },
+        {
+          "accessId": 475,
+          "accessName": "EXPEDITE",
+          "accessCode": "EXPEDITE",
+          "accessType": "Show"
+        }
+      ]
+    },
+    {
+      "permissionId": 59,
+      "permissionName": "Support",
+      "permissionCode": "Support",
+      "access": [
+        {
+          "accessId": 457,
+          "accessName": "Support Access",
+          "accessCode": "SupportAccess",
+          "accessType": "Show"
+        }
+      ]
+    },
+    {
+      "permissionId": 60,
+      "permissionName": "My Account",
+      "permissionCode": "MyAccount",
+      "access": [
+        {
+          "accessId": 460,
+          "accessName": "My Account Access",
+          "accessCode": "MyAccountAccess",
+          "accessType": "Show"
+        }
+      ]
+    },
+    {
+      "permissionId": 56,
+      "permissionName": "My Application",
+      "permissionCode": "MyApplication",
+      "access": [
+        {
+          "accessId": 448,
+          "accessName": "My Application Access",
+          "accessCode": "MyApplicationAccess",
+          "accessType": "Show"
+        }
+      ]
+    },
+    {
+      "permissionId": 58,
+      "permissionName": "Notifications",
+      "permissionCode": "Notifications",
+      "access": [
+        {
+          "accessId": 454,
+          "accessName": "Notifications Access",
+          "accessCode": "NotificationsAccess",
+          "accessType": "Show"
+        }
+      ]
+    }
+  ]
+}

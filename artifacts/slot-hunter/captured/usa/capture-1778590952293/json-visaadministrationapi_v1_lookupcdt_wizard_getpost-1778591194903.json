@@ -1,0 +1,18 @@
+[
+  {
+    "message": null,
+    "statusCode": null,
+    "postUserId": 480,
+    "missionId": 323,
+    "ofcName": "Kinshasa",
+    "ofcAddress": "310 Avenue des Aviateurs ",
+    "countryCode": "COD",
+    "stateCode": "Kinshasa",
+    "city": "Kinshasa",
+    "taskOrderId": null,
+    "officeType": "POST",
+    "missionName": null,
+    "code": "KIN",
+    "status": "A"
+  }
+]

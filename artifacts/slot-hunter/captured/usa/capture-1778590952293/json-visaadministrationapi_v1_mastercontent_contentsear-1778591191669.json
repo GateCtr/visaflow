@@ -1,0 +1,555 @@
+[
+  {
+    "cntId": 8435,
+    "cntText": "Back",
+    "translationId": null,
+    "translationText": "Back",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8436,
+    "cntText": "PROCEED",
+    "translationId": null,
+    "translationText": "PROCEED",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8437,
+    "cntText": "Atleast one applicant should be added.",
+    "translationId": null,
+    "translationText": "Atleast one applicant should be added.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8438,
+    "cntText": "Consulate Appointment",
+    "translationId": null,
+    "translationText": "Consulate Appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8439,
+    "cntText": "OFC Appointment",
+    "translationId": null,
+    "translationText": "OFC Appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8440,
+    "cntText": "Book an appointment",
+    "translationId": null,
+    "translationText": "Book an appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8441,
+    "cntText": "Applicant",
+    "translationId": null,
+    "translationText": "Applicant",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8442,
+    "cntText": "In Progress",
+    "translationId": null,
+    "translationText": "In Progress",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8443,
+    "cntText": "Status",
+    "translationId": null,
+    "translationText": "Status",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8444,
+    "cntText": "Application Date",
+    "translationId": null,
+    "translationText": "Application Date",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8445,
+    "cntText": "PROCEED TO NEXT",
+    "translationId": null,
+    "translationText": "PROCEED TO NEXT",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8446,
+    "cntText": "Pay Visa Fee",
+    "translationId": null,
+    "translationText": "Pay Visa Fee",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8447,
+    "cntText": "Pay Value Added Services",
+    "translationId": null,
+    "translationText": "Pay Value Added Services",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8448,
+    "cntText": "Total",
+    "translationId": null,
+    "translationText": "Total",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8449,
+    "cntText": "Value Added Services",
+    "translationId": null,
+    "translationText": "Value Added Services",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8450,
+    "cntText": "Payment Details",
+    "translationId": null,
+    "translationText": "Payment Details",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8451,
+    "cntText": "Track your passport",
+    "translationId": null,
+    "translationText": "Track your passport",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8452,
+    "cntText": "Choose how you want to receive passport",
+    "translationId": null,
+    "translationText": "Choose how you want to receive passport",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8453,
+    "cntText": "You have",
+    "translationId": null,
+    "translationText": "You have",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8454,
+    "cntText": "applying for",
+    "translationId": null,
+    "translationText": "applying for",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8455,
+    "cntText": "Choose pickup location",
+    "translationId": null,
+    "translationText": "Choose pickup location",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8456,
+    "cntText": "Select",
+    "translationId": null,
+    "translationText": "Select",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8457,
+    "cntText": "Address",
+    "translationId": null,
+    "translationText": "Address",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8458,
+    "cntText": "Pickup available at",
+    "translationId": null,
+    "translationText": "Pickup available at",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8459,
+    "cntText": "locations",
+    "translationId": null,
+    "translationText": "locations",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8460,
+    "cntText": "Reschedule",
+    "translationId": null,
+    "translationText": "Reschedule",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8461,
+    "cntText": "Book",
+    "translationId": null,
+    "translationText": "Book",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8462,
+    "cntText": "an appointment",
+    "translationId": null,
+    "translationText": "an appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8463,
+    "cntText": "Available Slots",
+    "translationId": null,
+    "translationText": "Available Slots",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8464,
+    "cntText": "Appointment Selected",
+    "translationId": null,
+    "translationText": "Appointment Selected",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8465,
+    "cntText": "Available",
+    "translationId": null,
+    "translationText": "Available",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8466,
+    "cntText": "Credit Card",
+    "translationId": null,
+    "translationText": "Credit Card",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8467,
+    "cntText": "Debit Card",
+    "translationId": null,
+    "translationText": "Debit Card",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8468,
+    "cntText": "Bank Deposit",
+    "translationId": null,
+    "translationText": "Bank Deposit",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8469,
+    "cntText": "Select Your Payment Option",
+    "translationId": null,
+    "translationText": "Select Your Payment Option",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8470,
+    "cntText": "Details",
+    "translationId": null,
+    "translationText": "Details",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8471,
+    "cntText": "Generate Deposit Slip",
+    "translationId": null,
+    "translationText": "Generate Deposit Slip",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8472,
+    "cntText": "Select the bank",
+    "translationId": null,
+    "translationText": "Select the bank",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8473,
+    "cntText": "Depositor Name",
+    "translationId": null,
+    "translationText": "Depositor Name",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8474,
+    "cntText": "Receipt No.",
+    "translationId": null,
+    "translationText": "Receipt No.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8475,
+    "cntText": "Bank",
+    "translationId": null,
+    "translationText": "Bank",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8476,
+    "cntText": "Amount",
+    "translationId": null,
+    "translationText": "Amount",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8477,
+    "cntText": "Create Date",
+    "translationId": null,
+    "translationText": "Create Date",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8478,
+    "cntText": "Expiration Date",
+    "translationId": null,
+    "translationText": "Expiration Date",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8479,
+    "cntText": "Valid upto",
+    "translationId": null,
+    "translationText": "Valid upto",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8480,
+    "cntText": "days",
+    "translationId": null,
+    "translationText": "days",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8481,
+    "cntText": "GENERATE",
+    "translationId": null,
+    "translationText": "GENERATE",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8482,
+    "cntText": "Deposit Bank",
+    "translationId": null,
+    "translationText": "Deposit Bank",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8483,
+    "cntText": "Bank Deposit Slip Reference No",
+    "translationId": null,
+    "translationText": "Bank Deposit Slip Reference No",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8484,
+    "cntText": "Date of Deposit",
+    "translationId": null,
+    "translationText": "Date of Deposit",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8485,
+    "cntText": "SUBMIT",
+    "translationId": null,
+    "translationText": "SUBMIT",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8486,
+    "cntText": "Complete Reschedule Booking",
+    "translationId": null,
+    "translationText": "Complete Reschedule Booking",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8487,
+    "cntText": "Select POST and Proceed",
+    "translationId": null,
+    "translationText": "Select POST and Proceed",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8488,
+    "cntText": "Invalid",
+    "translationId": null,
+    "translationText": "Invalid",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8489,
+    "cntText": "This is a required field",
+    "translationId": null,
+    "translationText": "This is a required field",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8490,
+    "cntText": "Book POST Appointment",
+    "translationId": null,
+    "translationText": "Book POST Appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8491,
+    "cntText": "Book OFC Appointment",
+    "translationId": null,
+    "translationText": "Book OFC Appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8492,
+    "cntText": "Through courier",
+    "translationId": null,
+    "translationText": "Through courier",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8493,
+    "cntText": "Self Pickup",
+    "translationId": null,
+    "translationText": "Self Pickup",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8494,
+    "cntText": "Application Page",
+    "translationId": null,
+    "translationText": "Application Page",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8495,
+    "cntText": "Applicant Information",
+    "translationId": null,
+    "translationText": "Applicant Information",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8496,
+    "cntText": "Make Payment",
+    "translationId": null,
+    "translationText": "Make Payment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8497,
+    "cntText": "Choose Pickup Point",
+    "translationId": null,
+    "translationText": "Choose Pickup Point",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8498,
+    "cntText": "Book a Slot",
+    "translationId": null,
+    "translationText": "Book a Slot",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8499,
+    "cntText": "Download",
+    "translationId": null,
+    "translationText": "Download",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8500,
+    "cntText": "You won't be able to change the country and state once application has started. Do you want to continue ?",
+    "translationId": null,
+    "translationText": "You won't be able to change the country and state once application has started. Do you want to continue ?",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8501,
+    "cntText": "Default country should be configured before starting application. Do you want to continue ?",
+    "translationId": null,
+    "translationText": "Default country should be configured before starting application. Do you want to continue ?",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8502,
+    "cntText": "The selected applicant will be deleted. Do you want to continue.?",
+    "translationId": null,
+    "translationText": "The selected applicant will be deleted. Do you want to continue.?",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8503,
+    "cntText": "Atleast one applicant is mandatory to proceed application.",
+    "translationId": null,
+    "translationText": "Atleast one applicant is mandatory to proceed application.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8504,
+    "cntText": "Applicant deleted successfully.",
+    "translationId": null,
+    "translationText": "Applicant deleted successfully.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8505,
+    "cntText": "Unavailable Previous Step.",
+    "translationId": null,
+    "translationText": "Unavailable Previous Step.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8506,
+    "cntText": "The administrator is not allowed to perform this action.",
+    "translationId": null,
+    "translationText": "The administrator is not allowed to perform this action.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8507,
+    "cntText": "The selected slot details will be cleared. Do you want to continue.?",
+    "translationId": null,
+    "translationText": "The selected slot details will be cleared. Do you want to continue.?",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8508,
+    "cntText": "You will be automatically navigated to payment screen. Do you want to confirm this payment option?",
+    "translationId": null,
+    "translationText": "You will be automatically navigated to payment screen. Do you want to confirm this payment option?",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8509,
+    "cntText": "You are eligible for group appointment request",
+    "translationId": null,
+    "translationText": "You are eligible for group appointment request",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8510,
+    "cntText": "Non-family applicants travelling in a group having more than",
+    "translationId": null,
+    "translationText": "Non-family applicants travelling in a group having more than",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8511,
+    "cntText": "applicants are eligible for group application request.",
+    "translationId": null,
+    "translationText": "applicants are eligible for group application request.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8988,
+    "cntText": "",
+    "translationId": null,
+    "translationText": "",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 11815,
+    "cntText": "PROCEED TO NEXT STEP",
+    "translationId": null,
+    "translationText": "PROCEED TO NEXT STEP",
+    "pageContentType": "KEY"
+  }
+]

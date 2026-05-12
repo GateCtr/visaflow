@@ -1,0 +1,182 @@
+{
+  "version": "1.0.0",
+  "type": "complete",
+  "id": "613517f7-bd96-4157-84d0-b526ea7695c8",
+  "node": "832515ba-ee2e-4250-a673-09801fbf53e8",
+  "time": 1778591166280,
+  "agent": "Vertex CL",
+  "data": {
+    "id": "e7948332-c7ea-457f-b551-35408ea2bf69",
+    "companyName": "usvisaappt.com",
+    "companyId": "3814074b-c9ee-4bbd-a093-ac3bd7fb6924",
+    "locales": {},
+    "settings": {
+      "width": 550,
+      "height": 800,
+      "vars": {
+        "name": {
+          "value": "Burkina Faso - English"
+        },
+        "loginFields": [
+          {
+            "name": "name",
+            "value": true
+          },
+          {
+            "name": "email",
+            "value": true
+          },
+          {
+            "name": "phone",
+            "value": false,
+            "required": true
+          }
+        ],
+        "interactions": [
+          {
+            "name": "call",
+            "start": false,
+            "value": false
+          },
+          {
+            "name": "videoCall",
+            "start": false,
+            "value": false
+          },
+          {
+            "name": "chat",
+            "start": false,
+            "value": false
+          },
+          {
+            "name": "tests",
+            "value": false,
+            "start": false
+          }
+        ],
+        "departments": [
+          {
+            "name": "US Services",
+            "value": "fswae_burkina_faso_en"
+          }
+        ],
+        "colors": {
+          "headerBackground": {
+            "value": "#ffffff"
+          },
+          "headerCaption": {
+            "value": "#2c2c2c"
+          },
+          "backgroundPrimary": {
+            "value": "#2c2c2c"
+          },
+          "backgroundSecondary": {
+            "value": "#111111"
+          },
+          "buttonBackground": {
+            "value": "#ffffff"
+          },
+          "buttonCaption": {
+            "value": "#ffffff"
+          },
+          "text": {
+            "value": "#e8e8e8"
+          },
+          "error": {
+            "value": "#ff0100"
+          },
+          "action": {
+            "value": "#75d439"
+          }
+        },
+        "background": {
+          "value": "/e7948332-c7ea-457f-b551-35408ea2bf69/background.png",
+          "value2": "/e7948332-c7ea-457f-b551-35408ea2bf69/background2.png"
+        },
+        "position": {
+          "value": 5
+        },
+        "locales": [
+          {
+            "name": "english",
+            "value": "en-EN",
+            "type": 0
+          },
+          {
+            "name": "russian",
+            "value": "ru-RU",
+            "type": 0
+          }
+        ],
+        "prefix": {
+          "value": ""
+        },
+        "template": {
+          "value": "tpl_blank_widget_usvisa"
+        },
+        "theme": {
+          "value": "dark"
+        },
+        "buttonType": {
+          "value": "default"
+        },
+        "extAPIURI": {
+          "value": ""
+        },
+        "defaultCLI": {
+          "value": ""
+        },
+        "postUrl": {
+          "value": ""
+        },
+        "advancedPhoneField": {
+          "value": true,
+          "setPreferredCountry": true,
+          "preferredCountry": "bf"
+        },
+        "autostart": {
+          "value": false
+        },
+        "customErrorMessage": {
+          "value": ""
+        },
+        "welcomeMessage": {
+          "value": "",
+          "returning": ""
+        },
+        "bottomLink": {
+          "value": "Powered by Xvisa.io",
+          "show": false,
+          "href": "https://visadox.com"
+        },
+        "optIn": {
+          "value": "I have read and accept the [Privacy policy](https://www.telerion.com/en/privacypolicy-2/).",
+          "enabled": false
+        },
+        "analyticFormId": {
+          "value": "553548f1-0c35-4bce-a57f-6d4ade1842d0"
+        },
+        "feedbackFormId": {
+          "value": ""
+        },
+        "menuItems": [],
+        "useOmnichannel": {
+          "value": false
+        },
+        "enableCallButtonsForBot": {
+          "value": true
+        },
+        "context": {
+          "value": {}
+        },
+        "onlyTheme": {
+          "value": false
+        },
+        "enableInputWithChatbot": {
+          "value": false
+        }
+      }
+    },
+    "version": 1
+  }
+}

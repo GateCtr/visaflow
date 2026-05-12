@@ -1,0 +1,10 @@
+[
+  {
+    "id": 6,
+    "type": "Captcha",
+    "globalValue": "true",
+    "status": "ACTIVE",
+    "recaptchaSiteKey": "6LdVVDAqAAAAAK4DS06UwosT8o1SA_3WhzUDAWAp",
+    "recaptchaSecretKey": "6LdVVDAqAAAAALuuEbn3TPamHtWHEJvNPEDlbxt-"
+  }
+]
