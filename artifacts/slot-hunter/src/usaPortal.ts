@@ -1735,22 +1735,16 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
   } else {
-    // Nouveau token → nouvelle identité réseau + navigateur.
-    // Priorité : iProyal résidentiel > 2captcha pool > direct.
-    // BrightData est réservé au portail CEV belge (coût plus élevé par GB).
-    const iproyalUrl = process.env.IPROYAL_PROXY_URL;
-    if (iproyalUrl) {
-      // CRITIQUE : iProyal en mode par défaut est ROTATIF — chaque requête obtient une IP différente.
-      // Le portail USA lie le JWT à l'IP du login (protection anti-session-hijack).
-      // → On active une session sticky de 60 min (durée du JWT) pour garder la même IP.
-      sessionProxy = makeIproyalStickyUrl(iproyalUrl, 60);
-      console.log(`[usa] Nouveau token → iProyal résidentiel (sticky session)`);
-    } else {
-      sessionProxy = (await proxyPool.getProxy())?.proxy;
-      console.log(`[usa] Nouveau token → 2captcha pool`);
-    }
+    // ── Mode SANS PROXY pour le portail USA ────────────────────────────────
+    // Les proxies résidentiels (iProyal, BrightData) causent des 401 systématiques
+    // car leur session sticky ne maintient pas une IP constante entre le login et
+    // les appels suivants. Le serveur USA lie le JWT à l'IP du login.
+    // Solution : connexion directe via IP Railway (fixe et stable).
+    // BrightData bloque les POST vers usvisaappt.com (nécessite KYC).
+    // iProyal sticky sessions → 504 Gateway Timeout ou changement d'IP mid-session.
+    sessionProxy = undefined;
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
-    console.log(`[usa] Nouveau token → nouvelle identité (UA idx ${sessionUaIdx})`);
+    console.log(`[usa] Nouveau token → connexion DIRECTE (sans proxy — IP Railway fixe)`);
   }
 
   // Activer le proxy et l'UA choisis pour TOUTE cette session
