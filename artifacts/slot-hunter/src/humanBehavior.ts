@@ -49,53 +49,52 @@ export async function humanPause(baseMs: number, context: string = "", jobId?: s
 }
 
 /**
- * Génère des headers légèrement variables pour éviter le "trop parfait"
+ * Génère des headers légèrement variables pour éviter le "trop parfait".
+ * 
+ * RÈGLES DE SÉCURITÉ (ne JAMAIS violer) :
+ * - Ne JAMAIS supprimer les headers Sec-Fetch-* (le serveur les vérifie → 401 sinon)
+ * - Ne JAMAIS supprimer Accept-Encoding ou le simplifier (absence de br/zstd = fingerprint bot)
+ * - Ne JAMAIS ajouter de Cookie (conflit avec la session réelle → 401)
+ * - Ne JAMAIS modifier Authorization, Content-Type, Origin, Referer
+ * 
+ * Variabilité SAFE uniquement :
+ * - Accept-Language : variations mineures (ordre des langues, ajout d'une locale)
+ * - Cache-Control / Pragma : suppression de l'un des deux (les navigateurs varient)
+ * - X-Correlation-key : déjà aléatoire par construction
  */
 export function getVariableBrowserHeaders(baseHeaders: Record<string, string>, jobId?: string): Record<string, string> {
   const headers = { ...baseHeaders };
   const r = Math.random();
   let modifications: string[] = [];
-  
-  // 30% du temps : oublier un header optionnel
-  if (r < 0.3) {
-    const optionalHeaders = ['Sec-Fetch-Dest', 'Sec-Fetch-Mode', 'Sec-Fetch-Site', 'Pragma'];
-    const headerToRemove = optionalHeaders[Math.floor(Math.random() * optionalHeaders.length)];
-    delete headers[headerToRemove];
-    modifications.push(`header_removed:${headerToRemove}`);
+
+  // Headers CRITIQUES — ne JAMAIS toucher
+  // Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-CH-UA*, 
+  // Accept-Encoding, Authorization, Content-Type, Origin, Referer, User-Agent, Cookie
+
+  // 15% du temps : supprimer Pragma (certains Chrome ne l'envoient pas systématiquement)
+  if (r < 0.15) {
+    delete headers["Pragma"];
+    modifications.push("pragma_removed");
   }
-  
-  // 10% du temps : version simplifiée d'Accept-Encoding
-  if (r < 0.1) {
-    headers['Accept-Encoding'] = 'gzip, deflate';
-    modifications.push('accept_encoding_simplified');
-  }
-  
-  // 5% du temps : ajouter un header légèrement malformé
-  if (r < 0.05) {
-    const malformedHeaders = [
-      'Accept-Language: fr',
-      'Cache-Control: no-cache, no-store',
-      'Accept: application/json'
+
+  // 10% du temps : variante Accept-Language (ordre légèrement différent)
+  if (r > 0.85 && r < 0.95) {
+    const langVariants = [
+      "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      "fr-CD,fr;q=0.9,en;q=0.8",
+      "fr;q=0.9,en-US;q=0.8,en;q=0.7,fr-CD;q=0.6",
+      "fr-CD,fr;q=0.9,en-US;q=0.8,en;q=0.7,ln;q=0.5",
     ];
-    const malformed = malformedHeaders[Math.floor(Math.random() * malformedHeaders.length)];
-    const [key, value] = malformed.split(': ');
-    headers[key] = value;
-    modifications.push(`malformed_header:${key}`);
+    headers["Accept-Language"] = langVariants[Math.floor(Math.random() * langVariants.length)];
+    modifications.push("accept_language_varied");
   }
-  
-  // 20% du temps : ajouter des cookies de tracking simulés
-  if (r < 0.2) {
-    const fakeCookies = [
-      '_ga=GA1.2.123456789.1234567890',
-      '_gid=GA1.2.987654321.1234567890',
-      '_fbp=fb.1.1234567890.1234567890',
-      'NID=123=abcdefghijklmnopqrstuvwxyz-1234567890'
-    ];
-    const cookie = fakeCookies[Math.floor(Math.random() * fakeCookies.length)];
-    headers['Cookie'] = cookie;
-    modifications.push('fake_cookie_added');
+
+  // 8% du temps : ajouter Cache-Control: no-store en plus de no-cache (variante navigateur)
+  if (r > 0.42 && r < 0.50) {
+    headers["Cache-Control"] = "no-cache, no-store";
+    modifications.push("cache_control_extended");
   }
-  
+
   // Log les modifications si jobId fourni et modifications effectuées
   if (jobId && modifications.length > 0) {
     botLog({
@@ -109,7 +108,7 @@ export function getVariableBrowserHeaders(baseHeaders: Record<string, string>, j
       }
     });
   }
-  
+
   return headers;
 }
 
