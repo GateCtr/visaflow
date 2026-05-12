@@ -1,5 +1,6 @@
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { ProxyAgent } from "undici";
+import { Impit } from "impit";
 import { randomDelay, proxyPool, launchBrowser } from "./browser.js";
 import { reportSlotFound, sendHeartbeat, uploadFile, botLog, type HunterJob } from "./convexClient.js";
 import { 
@@ -761,10 +762,13 @@ function getBrowserHeaders(jobId?: string): Record<string, string> {
 }
 
 // ─── Proxy résidentiel pour les appels API USA ────────────────────────────────
-// Le proxyPool Playwright est 2captcha résidentiel — on l'injecte aussi dans fetch()
-// via undici ProxyAgent pour que le portail USA voie une IP résidentielle, pas Railway.
+// Utilise impit (Apify) pour simuler l'empreinte TLS Chrome sur toutes les requêtes.
+// Sans ça, Node.js fetch() natif a une empreinte JA3/JA4 identifiable comme bot,
+// ce qui cause un 401 systématique sur les endpoints authentifiés du portail USA.
 // setUsaSessionProxy() est appelé au début de runUsaApiSession() et réinitialisé à la fin.
 let _usaProxyAgent: ProxyAgent | undefined;
+let _usaImpit: InstanceType<typeof Impit> | undefined;
+let _usaProxyUrl: string | undefined;
 
 /**
  * Génère une URL iProyal avec session sticky.
@@ -797,16 +801,39 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
 
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
+    _usaProxyUrl = proxyUrl;
+    // Créer une instance Impit avec empreinte TLS Chrome + proxy résidentiel.
+    // Impit simule le handshake TLS et les frames HTTP/2 d'un vrai Chrome,
+    // rendant les requêtes indistinguables du trafic navigateur réel.
+    _usaImpit = new Impit({
+      browser: "chrome",
+      proxyUrl: proxyUrl,
+    });
+    // Conserver aussi le ProxyAgent undici comme fallback (pour le refresh sans proxy dans loginUsaPortal)
     _usaProxyAgent = new ProxyAgent(proxyUrl);
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[usa] Proxy résidentiel actif: ${masked}`);
+    console.log(`[usa] Proxy résidentiel actif (impit Chrome TLS): ${masked}`);
   } else {
+    _usaProxyUrl = undefined;
+    _usaImpit = undefined;
     _usaProxyAgent = undefined;
   }
 }
 
+/**
+ * Fetch avec empreinte TLS Chrome via impit.
+ * Remplace le fetch() natif Node.js (qui a une empreinte JA3/JA4 de bot) par
+ * une requête dont le handshake TLS est identique à Chrome 124+.
+ * Si impit n'est pas configuré, fallback sur fetch() natif (pour les appels sans proxy).
+ */
 async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  if (_usaImpit) {
+    // impit.fetch() renvoie ImpitResponse — compatible en pratique avec Response
+    // (status, headers.get(), json(), text()) mais TypeScript est strict sur le type.
+    return _usaImpit.fetch(url, options as Parameters<InstanceType<typeof Impit>["fetch"]>[1]) as unknown as Response;
+  }
   if (_usaProxyAgent) {
+    // Fallback undici si impit n'est pas disponible pour une raison quelconque
     // @ts-expect-error — dispatcher est une option interne undici non présente dans RequestInit standard
     return fetch(url, { ...options, dispatcher: _usaProxyAgent });
   }
@@ -1090,9 +1117,11 @@ export async function loginUsaPortal(
     // déjà obtenu. On fait juste un GET /refreshToken sans proxy pour lire les headers.
     // NOTE: si le serveur a vraiment supprimé le header (migration), ce fallback échouera aussi.
     if (_usaProxyAgent) {
-      console.log("[usa] Tentative de récupération csrfToken via appel direct (sans proxy)...");
+      console.log("[usa] Tentative de récupération csrfToken via appel direct (sans proxy, TLS Chrome)...");
       try {
-        const directRes = await fetch(USA_REFRESH_URL, {
+        // Utiliser impit SANS proxy pour avoir l'empreinte TLS Chrome mais depuis l'IP Railway directe
+        const directImpit = new Impit({ browser: "chrome" });
+        const directRes = await directImpit.fetch(USA_REFRESH_URL, {
           method: "POST",
           headers: {
             ...getBrowserHeaders(),
@@ -1100,7 +1129,7 @@ export async function loginUsaPortal(
             "Referer": REFERER_DASHBOARD,
           },
           body: JSON.stringify({ refreshToken: refreshToken ?? "", username }),
-        });
+        } as Parameters<InstanceType<typeof Impit>["fetch"]>[1]) as unknown as Response;
         const directCsrf = directRes.headers.get("Csrftoken") ?? directRes.headers.get("csrftoken") ?? "";
         if (directCsrf) {
           csrfToken = directCsrf;
