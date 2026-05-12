@@ -766,6 +766,35 @@ function getBrowserHeaders(jobId?: string): Record<string, string> {
 // setUsaSessionProxy() est appelé au début de runUsaApiSession() et réinitialisé à la fin.
 let _usaProxyAgent: ProxyAgent | undefined;
 
+/**
+ * Génère une URL iProyal avec session sticky.
+ * iProyal : les paramètres _session-{id}_lifetime-{durée} sont ajoutés AU MOT DE PASSE.
+ * Format : user:password_session-{8chars}_lifetime-{60m}@host:port
+ * Cela force le routeur iProyal à maintenir la même IP de sortie pendant toute la durée de la session.
+ * Ref: https://docs.iproyal.com/proxies/residential/proxy/rotation
+ */
+export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60): string {
+  try {
+    const parsed = new URL(baseUrl);
+    // Générer un session ID aléatoire de 8 caractères alphanumériques
+    const sessionId = Array.from({ length: 8 }, () =>
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 62)]
+    ).join("");
+    // Ajouter les paramètres sticky au mot de passe (après le password existant)
+    // Si le password contient déjà _session-, on le remplace pour éviter les doublons
+    let password = decodeURIComponent(parsed.password);
+    password = password.replace(/_session-[^_]+/g, "").replace(/_lifetime-[^_]+/g, "");
+    password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
+    parsed.password = encodeURIComponent(password);
+    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m`);
+    return parsed.toString();
+  } catch {
+    // Si le parsing d'URL échoue, retourner l'URL d'origine (non-sticky)
+    console.warn(`[usa] ⚠️ Impossible de parser l'URL proxy pour sticky session — fallback rotatif`);
+    return baseUrl;
+  }
+}
+
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyAgent = new ProxyAgent(proxyUrl);
@@ -1691,8 +1720,11 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // BrightData est réservé au portail CEV belge (coût plus élevé par GB).
     const iproyalUrl = process.env.IPROYAL_PROXY_URL;
     if (iproyalUrl) {
-      sessionProxy = iproyalUrl;
-      console.log(`[usa] Nouveau token → iProyal résidentiel`);
+      // CRITIQUE : iProyal en mode par défaut est ROTATIF — chaque requête obtient une IP différente.
+      // Le portail USA lie le JWT à l'IP du login (protection anti-session-hijack).
+      // → On active une session sticky de 60 min (durée du JWT) pour garder la même IP.
+      sessionProxy = makeIproyalStickyUrl(iproyalUrl, 60);
+      console.log(`[usa] Nouveau token → iProyal résidentiel (sticky session)`);
     } else {
       sessionProxy = (await proxyPool.getProxy())?.proxy;
       console.log(`[usa] Nouveau token → 2captcha pool`);
