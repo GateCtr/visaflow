@@ -4,13 +4,17 @@ WORKDIR /app
 
 RUN npm install -g pnpm@latest
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json package.json ./
 COPY artifacts/slot-hunter/package.json ./artifacts/slot-hunter/
 
-RUN pnpm install --filter @workspace/slot-hunter --frozen-lockfile --ignore-scripts
+RUN pnpm install --filter @workspace/slot-hunter --frozen-lockfile
 
 RUN npx playwright install chromium
 
 COPY artifacts/slot-hunter/ ./artifacts/slot-hunter/
+
+RUN useradd -m -u 1001 slothunter && chown -R slothunter:slothunter /app
+
+USER slothunter
 
 CMD ["pnpm", "--filter", "@workspace/slot-hunter", "run", "start"]
