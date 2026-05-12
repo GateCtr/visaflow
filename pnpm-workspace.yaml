@@ -38,6 +38,7 @@ minimumReleaseAgeExclude:
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
+  - impit
   - msw
   - unrs-resolver
 
