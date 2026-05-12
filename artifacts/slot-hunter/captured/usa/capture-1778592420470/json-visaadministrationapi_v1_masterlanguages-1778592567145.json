@@ -1,0 +1,26 @@
+[
+  {
+    "message": null,
+    "statusCode": null,
+    "langId": 1,
+    "langCode": "ENG",
+    "langName": "English",
+    "langNameTranslated": "English"
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "langId": 33,
+    "langCode": "Fr",
+    "langName": "French",
+    "langNameTranslated": null
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "langId": 34,
+    "langCode": "NL",
+    "langName": "Dutch",
+    "langNameTranslated": null
+  }
+]

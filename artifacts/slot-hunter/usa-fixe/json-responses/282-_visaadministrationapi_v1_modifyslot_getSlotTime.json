@@ -1,0 +1,25 @@
+[
+  {
+    "message": null,
+    "statusCode": null,
+    "ruleId": 3126,
+    "date": "2026-06-26T00:00:00.000+00:00",
+    "slotCount": 0,
+    "postId": 0,
+    "slotId": "hHPzm1VQyGRMhPR8ihQMlvOx2oN2Gt",
+    "startTime": "2026-06-26T08:00:00.000+00:00",
+    "endTime": "2026-06-26T08:15:00.000+00:00",
+    "slotStatus": "UNBOOKED",
+    "slotDate": "2026-06-26T00:00:00.000+00:00",
+    "visaType": null,
+    "createdDate": "2026-05-12T09:28:02.918+00:00",
+    "updatedDate": "2026-05-12T14:03:00.968+00:00",
+    "createdBy": "",
+    "updatedBy": "",
+    "responseMessage": null,
+    "status": "A",
+    "ruleName": null,
+    "missionId": null,
+    "slotDuration": 0
+  }
+]

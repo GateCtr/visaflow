@@ -1,0 +1,149 @@
+[
+  {
+    "cntId": 8172,
+    "cntText": "My Appointments",
+    "translationId": null,
+    "translationText": "My Appointments",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8173,
+    "cntText": "You have",
+    "translationId": null,
+    "translationText": "You have",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8174,
+    "cntText": "appointments.",
+    "translationId": null,
+    "translationText": "appointments.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8175,
+    "cntText": "Applicant Information",
+    "translationId": null,
+    "translationText": "Applicant Information",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8176,
+    "cntText": "Make Payment",
+    "translationId": null,
+    "translationText": "Make Payment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8177,
+    "cntText": "Book a Slot",
+    "translationId": null,
+    "translationText": "Book a Slot",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8178,
+    "cntText": "Choose Pickup Point",
+    "translationId": null,
+    "translationText": "Choose Pickup Point",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8179,
+    "cntText": "Appointment Status",
+    "translationId": null,
+    "translationText": "Appointment Status",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8180,
+    "cntText": "Appointment",
+    "translationId": null,
+    "translationText": "Appointment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8181,
+    "cntText": "RESCHEDULE",
+    "translationId": null,
+    "translationText": "RESCHEDULE",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8182,
+    "cntText": "CANCEL",
+    "translationId": null,
+    "translationText": "CANCEL",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8183,
+    "cntText": "Group Request -",
+    "translationId": null,
+    "translationText": "Group Request -",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8184,
+    "cntText": "Applicants",
+    "translationId": null,
+    "translationText": "Applicants",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8185,
+    "cntText": "You will get mail/sms once get approved from Consulate team.then you wil proceed next steps",
+    "translationId": null,
+    "translationText": "You will get mail/sms once get approved from Consulate team.then you wil proceed next steps",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8186,
+    "cntText": "Your request is approved.",
+    "translationId": null,
+    "translationText": "Your request is approved.",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8187,
+    "cntText": "Now you can resume or create an appointment with maximum of",
+    "translationId": null,
+    "translationText": "Now you can resume or create an appointment with maximum of",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8188,
+    "cntText": "This request expires on",
+    "translationId": null,
+    "translationText": "This request expires on",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8189,
+    "cntText": "PENDING APPOINTMENT",
+    "translationId": null,
+    "translationText": "PENDING APPOINTMENT",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8190,
+    "cntText": "CREATE NEW",
+    "translationId": null,
+    "translationText": "CREATE NEW",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 9124,
+    "cntText": "Pending appointment request",
+    "translationId": null,
+    "translationText": "Pending appointment request",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 9126,
+    "cntText": "CANCEL APPOINTMENT REQUEST",
+    "translationId": null,
+    "translationText": "CANCEL APPOINTMENT REQUEST",
+    "pageContentType": "KEY"
+  }
+]

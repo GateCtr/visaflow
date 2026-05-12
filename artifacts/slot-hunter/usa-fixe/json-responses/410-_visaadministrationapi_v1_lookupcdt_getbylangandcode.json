@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-05-12T14:46:01.981+00:00",
+  "status": 404,
+  "httpStatus": "NOT_FOUND",
+  "responseMessage": "Data Not found : null",
+  "requestURL": "/visaadministrationapi/v1/lookupcdt/getbylangandcode"
+}

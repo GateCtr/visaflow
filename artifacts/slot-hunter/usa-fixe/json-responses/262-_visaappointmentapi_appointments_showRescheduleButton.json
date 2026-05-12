@@ -1,0 +1,9 @@
+[
+  {
+    "applicationId": "fa68-6780-e96e-c8eb",
+    "appointmentId": 1754564,
+    "showRescheduleButton": true,
+    "rescheduleLimit": 5,
+    "showCancelButton": true
+  }
+]

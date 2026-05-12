@@ -1,0 +1,26 @@
+{
+  "paymentDetails": {
+    "paymentSatus": "VERIFIED"
+  },
+  "applicantDetails": [
+    {
+      "name": "BAZE'S BASEYILA MAYANGI",
+      "gender": null,
+      "lastName": "MAYANGI",
+      "feeAmount": 185,
+      "firstName": "BAZE'S BASEYILA",
+      "requestId": "8a7ea7af-7d25-437c-9efa-0d6bc3067305",
+      "applicantId": "ODXJKHXJQMZH",
+      "dateOfBirth": "1984-04-27",
+      "feeUsdAmount": 185,
+      "countryofBirth": "CONGO-KINSHASA",
+      "passportNumber": "OP1696912",
+      "applicantCategory": null
+    }
+  ],
+  "applicationDetails": [
+    {
+      "requestId": "8a7ea7af-7d25-437c-9efa-0d6bc3067305"
+    }
+  ]
+}

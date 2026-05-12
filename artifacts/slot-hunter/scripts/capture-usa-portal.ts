@@ -10,16 +10,16 @@
  */
 
 import { chromium, type Browser, type Page, type Request, type Response } from 'playwright';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 // Configuration
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const CAPTURE_DIR = join(__dirname, '../captured/usa');
+const __dirname = path.dirname(__filename);
+const CAPTURE_DIR = path.join(__dirname, '../captured/usa');
 const TIMESTAMP = Date.now();
-const SESSION_DIR = join(CAPTURE_DIR, `capture-${TIMESTAMP}`);
+const SESSION_DIR = path.join(CAPTURE_DIR, `capture-${TIMESTAMP}`);
 
 // Données capturées
 interface CapturedRequest {
@@ -67,10 +67,10 @@ class USAPortalCapturer {
     console.log(`[capture] Dossier de session: ${SESSION_DIR}`);
     
     // Créer le dossier de capture
-    if (!existsSync(CAPTURE_DIR)) {
-      mkdirSync(CAPTURE_DIR, { recursive: true });
+    if (!fs.existsSync(CAPTURE_DIR)) {
+      fs.mkdirSync(CAPTURE_DIR, { recursive: true });
     }
-    mkdirSync(SESSION_DIR, { recursive: true });
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
     
     // Lancer le navigateur
     this.browser = await chromium.launch({
@@ -204,8 +204,8 @@ class USAPortalCapturer {
       const safeFilename = filename.length > 50 ? filename.substring(0, 50) : filename;
       const timestamp = Date.now();
       
-      const filePath = join(SESSION_DIR, `json-${safeFilename}-${timestamp}.json`);
-      writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      const filePath = path.join(SESSION_DIR, `json-${safeFilename}-${timestamp}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
       
       console.log(`[json saved] ${filePath}`);
     } catch (error) {
@@ -236,7 +236,7 @@ class USAPortalCapturer {
     if (!this.page) return;
     
     try {
-      const screenshotPath = join(SESSION_DIR, name);
+      const screenshotPath = path.join(SESSION_DIR, name);
       await this.page.screenshot({ path: screenshotPath, fullPage: false });
       this.sessionData.screenshots.push(screenshotPath);
       console.log(`[screenshot] ${screenshotPath}`);
@@ -249,8 +249,8 @@ class USAPortalCapturer {
     this.sessionData.endTime = Date.now();
     
     // Sauvegarder les données de session
-    const sessionFilePath = join(SESSION_DIR, 'session-data.json');
-    writeFileSync(sessionFilePath, JSON.stringify(this.sessionData, null, 2), 'utf8');
+    const sessionFilePath = path.join(SESSION_DIR, 'session-data.json');
+    fs.writeFileSync(sessionFilePath, JSON.stringify(this.sessionData, null, 2), 'utf8');
     
     // Sauvegarder un résumé
     const summary = {
@@ -264,17 +264,17 @@ class USAPortalCapturer {
       sessionDir: SESSION_DIR
     };
     
-    const summaryFilePath = join(SESSION_DIR, 'capture-summary.json');
-    writeFileSync(summaryFilePath, JSON.stringify(summary, null, 2), 'utf8');
+    const summaryFilePath = path.join(SESSION_DIR, 'capture-summary.json');
+    fs.writeFileSync(summaryFilePath, JSON.stringify(summary, null, 2), 'utf8');
     
     // Sauvegarder les requêtes et réponses dans des fichiers séparés
-    const requestsFilePath = join(SESSION_DIR, 'requests.jsonl');
+    const requestsFilePath = path.join(SESSION_DIR, 'requests.jsonl');
     const requestsData = this.sessionData.requests.map(req => JSON.stringify(req)).join('\n');
-    writeFileSync(requestsFilePath, requestsData, 'utf8');
+    fs.writeFileSync(requestsFilePath, requestsData, 'utf8');
     
-    const responsesFilePath = join(SESSION_DIR, 'responses.jsonl');
+    const responsesFilePath = path.join(SESSION_DIR, 'responses.jsonl');
     const responsesData = this.sessionData.responses.map(res => JSON.stringify(res)).join('\n');
-    writeFileSync(responsesFilePath, responsesData, 'utf8');
+    fs.writeFileSync(responsesFilePath, responsesData, 'utf8');
     
     console.log(`[capture] Données de session sauvegardées dans: ${SESSION_DIR}`);
     console.log(`[capture] Résumé:`, summary);

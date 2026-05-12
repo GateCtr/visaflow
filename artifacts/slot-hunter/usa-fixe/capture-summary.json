@@ -1,0 +1,31 @@
+{
+  "captureDate": "2026-05-12T14:01:41.220Z",
+  "startUrl": "https://www.usvisaappt.com/visaapplicantui/",
+  "duration": "126s",
+  "stats": {
+    "totalRequests": 71,
+    "totalResponses": 70,
+    "apiCalls": 13,
+    "errors": 1
+  },
+  "endpoints": [
+    "GET /visaapplicantui/",
+    "GET /visaapplicantui/runtime.1bdf3b1e8b38f04a.js",
+    "GET /visaapplicantui/polyfills.581b35e05969ffae.js",
+    "GET /visaapplicantui/scripts.c966c085962eab87.js",
+    "GET /visaapplicantui/main.bb1642ca60dc0e21.js",
+    "GET /visaapplicantui/styles.f7254957f046a302.css",
+    "POST /g/collect",
+    "GET /visaadministrationapi/v1/globalconfiguration/getby/Captcha",
+    "GET /visaapplicantui/assets/images/logo.svg",
+    "GET /visaapplicantui/icomoon.3b7d21c2e35ea9b8.ttf",
+    "POST /identity/user/login"
+  ],
+  "errors": [
+    {
+      "status": 401,
+      "url": "https://www.usvisaappt.com/identity/user/login",
+      "body": "{\"userName\":null,\"msg\":\"Access temporarily restricted. Please try again later.\",\"mfa\":false,\"userID\":null,\"fullName\":null,\"firstTimeLogin\":false,\"isActive\":null,\"defaultIdleTimeOut\":0,\"uuid\":null,\"use"
+    }
+  ]
+}

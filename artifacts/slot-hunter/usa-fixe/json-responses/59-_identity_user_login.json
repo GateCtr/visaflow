@@ -1,0 +1,22 @@
+{
+  "userName": null,
+  "msg": "Access temporarily restricted. Please try again later.",
+  "mfa": false,
+  "userID": null,
+  "fullName": null,
+  "firstTimeLogin": false,
+  "isActive": null,
+  "defaultIdleTimeOut": 0,
+  "uuid": null,
+  "userAssociateTotpDeviceQRCode": null,
+  "softwareTokenMfaEnabled": false,
+  "adminMfaSetupEnabled": false,
+  "session": null,
+  "accessToken": null,
+  "totpVerification": false,
+  "refreshToken": null,
+  "idToken": null,
+  "mission": null,
+  "post": null,
+  "ofc": null
+}

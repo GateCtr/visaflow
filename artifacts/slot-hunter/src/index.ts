@@ -337,6 +337,9 @@ let lastBundleCheckAt = 0; // 0 = jamais vérifié → s'exécute au démarrage
 const consecutiveLoginFailures = new Map<string, number>();
 const consecutiveErrors = new Map<string, number>();
 const pausedJobs = new Set<string>();
+// Jobs terminés (slot_found) — ne doivent PAS être reset par syncAdminResets.
+// Seul un changement explicite dans Convex (isActive=false puis true) peut les relancer.
+const completedJobs = new Set<string>();
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
   const ts = new Date().toISOString();
@@ -467,9 +470,16 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
     if (!freshJobIds.has(jobId)) {
       // Job supprimé de Convex — nettoyer toutes les structures pour éviter une fuite mémoire.
       pausedJobs.delete(jobId);
+      completedJobs.delete(jobId);
       consecutiveLoginFailures.delete(jobId);
       consecutiveErrors.delete(jobId);
       scheduledNextDue.delete(jobId);
+      continue;
+    }
+    // Ne JAMAIS reset un job terminé (slot_found) automatiquement.
+    // Un job completed ne peut reprendre que si l'admin le désactive puis le réactive
+    // (transition isActive false → true), ce qui est géré côté Convex.
+    if (completedJobs.has(jobId)) {
       continue;
     }
     const freshJob = freshJobs.find((j) => j.id === jobId);
@@ -480,6 +490,11 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
       consecutiveErrors.delete(jobId);
       scheduledNextDue.delete(jobId);  // forcer un check immédiat après reset admin
     }
+  }
+
+  // Nettoyer completedJobs pour les jobs supprimés de Convex
+  for (const jobId of completedJobs) {
+    if (!freshJobIds.has(jobId)) completedJobs.delete(jobId);
   }
 
   for (const jobId of consecutiveLoginFailures.keys()) {
@@ -501,6 +516,7 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
       consecutiveLoginFailures.delete(job.id);
       consecutiveErrors.delete(job.id);
       pausedJobs.add(job.id);
+      completedJobs.add(job.id);
       log("INFO", `[${job.applicantName}] ✅ CRÉNEAU TROUVÉ — dossier retiré de la file`);
       return; // pas de reschedule : le job est terminé
 

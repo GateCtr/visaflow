@@ -1,0 +1,77 @@
+{
+  "userID": 2720819,
+  "countryCode": null,
+  "fullName": "BUKELA KALONJI CHRISTIAN",
+  "email": "ilungadieuvie7@gmail.com",
+  "createdDate": "2025-05-21T12:46:52.203+00:00",
+  "modifiedDate": "2025-05-21T12:52:34.630+00:00",
+  "isActive": "ACTIVE",
+  "userType": "Applicant",
+  "failureCount": 0,
+  "phone": null,
+  "designation": null,
+  "entityId": 2,
+  "browserCookies": true,
+  "emailNotification": true,
+  "smsNotification": true,
+  "languageCode": null,
+  "uuid": "b07b755c-a7e8-4435-bc1e-0c4d7737b75d",
+  "createdby": "",
+  "modifiedby": "",
+  "passwordHistory": [
+    {
+      "passwordHistoryID": 1058506,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2025-05-21T12:46:52.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1224927,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2025-07-17T12:17:51.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1224928,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2025-07-17T12:17:52.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1353866,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2025-09-11T14:58:17.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1497110,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2025-11-21T09:43:08.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1685547,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2026-03-18T13:41:37.000+00:00"
+    },
+    {
+      "passwordHistoryID": 1765799,
+      "userID": 2720819,
+      "email": "ilungadieuvie7@gmail.com",
+      "changedBy": "",
+      "createdDate": "2026-05-09T15:50:42.000+00:00"
+    }
+  ],
+  "userMission": [],
+  "userOfc": [],
+  "userPost": [],
+  "userCountry": [],
+  "authType": null
+}

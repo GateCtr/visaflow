@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-05-12T14:43:32.407+00:00",
+  "status": 404,
+  "httpStatus": "NOT_FOUND",
+  "responseMessage": "Query did not return a unique result: 2 results were returned",
+  "requestURL": "/visaadministrationapi/v1/lookupcdt/getbylangandcode"
+}

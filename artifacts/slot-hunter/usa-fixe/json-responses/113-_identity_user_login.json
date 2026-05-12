@@ -1,0 +1,22 @@
+{
+  "userName": "ilungadieuvie7@gmail.com",
+  "msg": null,
+  "mfa": false,
+  "userID": 2720819,
+  "fullName": "BUKELA KALONJI CHRISTIAN",
+  "firstTimeLogin": false,
+  "isActive": "ACTIVE",
+  "defaultIdleTimeOut": 15,
+  "uuid": "b07b755c-a7e8-4435-bc1e-0c4d7737b75d",
+  "userAssociateTotpDeviceQRCode": null,
+  "softwareTokenMfaEnabled": false,
+  "adminMfaSetupEnabled": false,
+  "session": null,
+  "accessToken": null,
+  "totpVerification": false,
+  "refreshToken": null,
+  "idToken": null,
+  "mission": null,
+  "post": [],
+  "ofc": []
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "cntId": 8255,
+    "cntText": "Application for US",
+    "translationId": null,
+    "translationText": "Application for US",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8256,
+    "cntText": "Visa Type",
+    "translationId": null,
+    "translationText": "Visa Type",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8257,
+    "cntText": "State of Residence",
+    "translationId": null,
+    "translationText": "State of Residence",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8258,
+    "cntText": "Visa Category",
+    "translationId": null,
+    "translationText": "Visa Category",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8259,
+    "cntText": "Visa Class",
+    "translationId": null,
+    "translationText": "Visa Class",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8260,
+    "cntText": "Total Applicants",
+    "translationId": null,
+    "translationText": "Total Applicants",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8261,
+    "cntText": "CREATE EMERGENCY REQUEST",
+    "translationId": null,
+    "translationText": "CREATE EMERGENCY REQUEST",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8262,
+    "cntText": "Total",
+    "translationId": null,
+    "translationText": "Total",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8263,
+    "cntText": "Applicant",
+    "translationId": null,
+    "translationText": "Applicant",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8264,
+    "cntText": "Applicant Information",
+    "translationId": null,
+    "translationText": "Applicant Information",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8265,
+    "cntText": "Make Payment",
+    "translationId": null,
+    "translationText": "Make Payment",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8266,
+    "cntText": "Book a Slot",
+    "translationId": null,
+    "translationText": "Book a Slot",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8267,
+    "cntText": "Choose Pickup Point",
+    "translationId": null,
+    "translationText": "Choose Pickup Point",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8268,
+    "cntText": "Appointment Status",
+    "translationId": null,
+    "translationText": "Appointment Status",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8269,
+    "cntText": "Notifications",
+    "translationId": null,
+    "translationText": "Notifications",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8270,
+    "cntText": "Application Page",
+    "translationId": null,
+    "translationText": "Application Page",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8271,
+    "cntText": "Request Date",
+    "translationId": null,
+    "translationText": "Request Date",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8272,
+    "cntText": "Applying for",
+    "translationId": null,
+    "translationText": "Applying for",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8532,
+    "cntText": "Hello",
+    "translationId": null,
+    "translationText": "Hello",
+    "pageContentType": "KEY"
+  },
+  {
+    "cntId": 8533,
+    "cntText": "Nice Work",
+    "translationId": null,
+    "translationText": "Nice Work",
+    "pageContentType": "KEY"
+  }
+]

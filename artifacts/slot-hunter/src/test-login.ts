@@ -116,17 +116,17 @@ async function main() {
 
   console.log("\n── Interprétation ───────────────────────────────────");
   switch (status.status) {
-    case "scheduled":
-      console.log("📅 Compte avec RDV existant (pendingAppoStatus=1) — mode RESCHEDULE applicable");
-      break;
     case "pending":
-      console.log("⏳ En attente de créneau (pendingAppoStatus≥2) — mode NORMAL applicable");
+      console.log("⏳ Demande active (pendingAppoStatus≠0) — calendrier ouvert, scan créneaux applicable");
       break;
     case "payment_required":
       console.log("💳 Paiement non confirmé (pendingAppoStatus=0) — compte non éligible");
       break;
     case "no_request":
       console.log("🔍 Aucune demande de RDV trouvée sur ce compte");
+      break;
+    case "cancellable":
+      console.log("♻️ Demande annulable (pendingAppoStatus=0 + cancellable) — mode RESCHEDULE applicable");
       break;
     case "error":
       console.error("❌ Erreur lors de la vérification du statut");

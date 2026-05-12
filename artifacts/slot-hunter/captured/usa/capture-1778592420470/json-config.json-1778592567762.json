@@ -1,0 +1,27 @@
+{
+  "wss": [
+    "wss://xvisa.io/api"
+  ],
+  "storage": "https://xvisa.io/rtc-widgets",
+  "cdn": "https://xvisa.io",
+  "mode": "production",
+  "conferenceParticipants": 2,
+  "privateChatInitAuto": true,
+  "logoutTimeout": 120,
+  "transactionTimeout": 15,
+  "pingTimeout": 30,
+  "debugLoggerEnable": false,
+  "debugLoggerUri": "https://xvisa.io/rtc-logs/log",
+  "proxyEnable": true,
+  "widgetPath": "ctt",
+  "apiVersion": "1.0.0",
+  "debugLoggerDomain": "",
+  "debugLoggerChannels": {
+    "firebase": "error",
+    "coreApi": "error",
+    "coreApi.network": "error",
+    "acd": "error",
+    "acd.network": "error",
+    "global": "error"
+  }
+}

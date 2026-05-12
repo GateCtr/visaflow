@@ -1,0 +1,10 @@
+[
+  {
+    "id": 12,
+    "type": "defaultDateFormat",
+    "globalValue": "yyyy-MM-dd",
+    "status": "ACTIVE",
+    "recaptchaSiteKey": null,
+    "recaptchaSecretKey": null
+  }
+]

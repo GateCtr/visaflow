@@ -1,0 +1,47 @@
+[
+  {
+    "message": null,
+    "statusCode": null,
+    "postConfigurationId": 646,
+    "postUserId": 480,
+    "postLabel": "IS_BIOMETRIC CAPTURE SUPPORTED",
+    "postValue": "yes",
+    "postCode": "IS_BIOMETRIC_CAPTURE_SUPPORTED"
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "postConfigurationId": 690,
+    "postUserId": 480,
+    "postLabel": "Closing Days",
+    "postValue": "2",
+    "postCode": "postClosingTime"
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "postConfigurationId": 648,
+    "postUserId": 480,
+    "postLabel": "Post End Time",
+    "postValue": "17:00",
+    "postCode": "postEndTime"
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "postConfigurationId": 647,
+    "postUserId": 480,
+    "postLabel": "Post Start Time",
+    "postValue": "07:00",
+    "postCode": "postStartTime"
+  },
+  {
+    "message": null,
+    "statusCode": null,
+    "postConfigurationId": 684,
+    "postUserId": 480,
+    "postLabel": "ReSchedule Post",
+    "postValue": "5",
+    "postCode": "ReSchedulePost"
+  }
+]

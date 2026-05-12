@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-05-12T14:45:52.271+00:00",
+  "status": 404,
+  "httpStatus": "NOT_FOUND",
+  "responseMessage": " Not Found",
+  "requestURL": "/visaadministrationapi/v1/appointmentrequest/getallbyuser"
+}

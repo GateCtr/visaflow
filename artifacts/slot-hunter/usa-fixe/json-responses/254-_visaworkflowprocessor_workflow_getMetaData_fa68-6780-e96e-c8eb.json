@@ -1,0 +1,26 @@
+{
+  "paymentDetails": {
+    "paymentSatus": "VERIFIED"
+  },
+  "applicantDetails": [
+    {
+      "name": "CHRISTIAN KALONJI",
+      "gender": null,
+      "lastName": "KALONJI",
+      "feeAmount": 185,
+      "firstName": "CHRISTIAN",
+      "requestId": "e8a2a2a7-c478-42bb-b92f-0bfeb54710e4",
+      "applicantId": "RQUP3HHVQHOD",
+      "dateOfBirth": "2005-04-02",
+      "feeUsdAmount": 185,
+      "countryofBirth": null,
+      "passportNumber": "OP1411209",
+      "applicantCategory": null
+    }
+  ],
+  "applicationDetails": [
+    {
+      "requestId": "e8a2a2a7-c478-42bb-b92f-0bfeb54710e4"
+    }
+  ]
+}

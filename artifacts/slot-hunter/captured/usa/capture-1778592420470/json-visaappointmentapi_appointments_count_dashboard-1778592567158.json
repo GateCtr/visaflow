@@ -1,0 +1,10 @@
+{
+  "appointmentRequestTotalCount": 0,
+  "appointmentActiveCount": 0,
+  "appointmentExpiredCount": 0,
+  "appointmentScheduledTotalCount": 0,
+  "supportTicketTotalCount": 0,
+  "supportTicketStatusCount": 0,
+  "documentRequiredTotalCount": 0,
+  "documnetExpiredCount": 0
+}
