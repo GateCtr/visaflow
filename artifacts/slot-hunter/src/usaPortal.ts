@@ -583,7 +583,6 @@ interface UsaAppointmentRequest {
   missionId: number;
   pendingAppoStatus: number;
   primaryApplicant: string;
-  cancellable: boolean;
   messagetext: string | null;
   /** applicantId interne (si retourné par getUserHistoryApplicantPaymentStatus).
    * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
@@ -642,9 +641,8 @@ export interface UsaSession {
    * Valeurs possibles : "regular", "group", ou vide (absent = non transmis).
    * Si "group" + reschedule → converti en "regular" (bundle : rescheduleYN&&"group"==ap→"regular"). */
   appointmentPriority?: string;
-  /** Drapeau positionné à true par le branch "cancellable" avant d'appeler scanUsaSlotsViaAPI.
-   * Indique que le booking doit utiliser PUT /appointments/reschedule au lieu de /schedule,
-   * même si hunterConfig.rescheduleMode n'est pas activé (cas: pendingAppoStatus=0 + cancellable). */
+  /** Drapeau positionné à true quand un RDV existant doit être reporté.
+   * Indique que le booking doit utiliser PUT /appointments/reschedule au lieu de /schedule. */
   isReschedule?: boolean;
 }
 
@@ -1080,9 +1078,10 @@ export async function checkUsaAppointmentRequestStatus(
   portalApplicationId?: string,
 ): Promise<{
   /**
-   * cancellable : pendingAppoStatus=0 MAIS cancellable=true → RDV existant (terminé côté workflow)
-   *   que l'utilisateur peut annuler/reporter. Différent de "no_request" (aucun RDV du tout).
-   *   Le portail Angular affiche un bouton "Reschedule/Cancel" dans ce cas.
+   * pendingAppoStatus=0 + applicationId → "cancellable" (demande annulable, paiement non effectué)
+   * pendingAppoStatus=0 sans applicationId → "no_request" (aucune demande active)
+   * pendingAppoStatus=1 → "scheduled" (créneau déjà attribué)
+   * pendingAppoStatus>0 → "pending" (paiement fait, en attente de créneau)
    */
   status: "payment_required" | "scheduled" | "no_request" | "pending" | "error" | "cancellable";
   applicationId: string | null;
@@ -1209,23 +1208,28 @@ export async function checkUsaAppointmentRequestStatus(
     : USA_MISSION_ID;
 
   if (appoStatus === 0 || appoStatus === null) {
-    // cancellable:true + pendingAppoStatus=0 → compte avec RDV existant (workflow terminé)
-    // distinct de "pas de RDV" — le portail Angular affiche un bouton Reschedule dans ce cas.
-    const isCancellable = data.cancellable === true;
-    if (isCancellable) {
-      console.log(`[usa] ♻️ pendingAppoStatus=0 + cancellable=true → RDV existant en état "complété", reportable via Playwright`);
+    // pendingAppoStatus=0 signifie "aucune demande active ou paiement non confirmé"
+    // D'après le bundle: 0 !== pendingAppoStatus → redirection vers création de RDV
+    // Donc pendingAppoStatus=0 → pas de redirection
+    
+    // Mais il peut y avoir un applicationId avec pendingAppoStatus=0 qui est "cancellable"
+    // (demande annulable car paiement non effectué)
+    if (appId) {
+      console.log(`[usa] ⚠️ pendingAppoStatus=0 mais applicationId=${appId} → demande peut-être annulable (cancellable)`);
       return {
         status: "cancellable",
         applicationId: appId,
         pendingAppoStatus: 0,
         primaryApplicant: applicant,
-        message: `RDV existant reportable (pendingAppoStatus=0, cancellable=true) — applicationId: ${appId ?? "non résolu"}`,
+        message: `Demande annulable (pendingAppoStatus=0, applicationId présent) — applicationId: ${appId}`,
         missionId: serverMissionId,
         applicantId: serverApplicantId,
         appointmentId: serverAppointmentId,
         applicantUUID: serverApplicantUUID,
       };
     }
+    
+    console.log(`[usa] pendingAppoStatus=${appoStatus} → aucune demande active ou paiement non confirmé`);
     return {
       status: "no_request",
       applicationId: appId,
@@ -1726,15 +1730,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return "not_found";
   }
 
-  // ── Cas "cancellable" : RDV existant en état "complété" (pendingAppoStatus=0, cancellable=true) ──
-  // Exemple : Christian a un RDV nov 2026, son workflow est terminé (payé, créneau attribué),
-  // mais il veut reporter. Le portail Angular affiche un bouton "Reschedule" dans ce cas.
-  // L'applicationId n'est pas retourné par getUserHistoryApplicantPaymentStatus dans ce state →
-  // on utilise une session Playwright pour intercepter les appels réseau et récupérer les IDs.
+  // ── Cas "cancellable" : demande avec applicationId mais pendingAppoStatus=0 (annulable) ──
+  // Exemple : demande créée mais paiement non effectué, peut être annulée
   if (requestStatus.status === "cancellable") {
     const rescheduleMode = job.hunterConfig.rescheduleMode;
     if (!rescheduleMode) {
-      console.log(`[usa] ♻️ Compte avec RDV existant reportable (cancellable=true) — rescheduleMode non activé dans l'admin. Passage ignoré.`);
+      console.log(`[usa] ♻️ Demande annulable (cancellable) — rescheduleMode non activé dans l'admin. Passage ignoré.`);
       await sendHeartbeat({
         applicationId: job.id,
         result: "not_found",
@@ -1743,7 +1744,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return "not_found";
     }
 
-    console.log(`[usa] ♻️ Compte cancellable — résolution applicationId/appointmentId via API...`);
+    console.log(`[usa] ♻️ Demande cancellable — résolution applicationId/appointmentId via API...`);
     botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "cancellable_api_start" } });
 
     const apiResult = await fetchCancellableSessionIds(session, job);
