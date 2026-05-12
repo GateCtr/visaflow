@@ -68,7 +68,7 @@ const USA_TRANSFORM_DATA_URL = (applicationId: string) =>
 const USA_FIRST_AVAILABLE_MONTH_URL = `${USA_ADMIN_URL}/modifyslot/getFirstAvailableMonth`;
 const USA_SLOT_DATES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotDates`;
 const USA_SLOT_TIMES_URL = `${USA_ADMIN_URL}/modifyslot/getSlotTime`;
-const USA_APP_DETAILS_URL = (applicationId: string, applicantId: number) =>
+const USA_APP_DETAILS_URL = (applicationId: string, applicantId: number | string) =>
   `${USA_APPOINTMENT_URL}/appointments/getApplicationDetails?applicationId=${applicationId}&applicantId=${applicantId}`;
 const USA_CONFIRMATION_LETTER_URL = `${USA_NOTIFICATION_URL}/template/appointmentLetter`;
 const USA_SCHEDULE_URL = `${USA_APPOINTMENT_URL}/appointments/schedule`;
@@ -593,8 +593,9 @@ interface UsaAppointmentRequest {
   cancellable?: boolean;
   /** applicantId interne (si retourné par getUserHistoryApplicantPaymentStatus).
    * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
+   * Peut être un number OU une string GSS (ex: "ODXJKHXJQMZH").
    * À utiliser de préférence à userID comme param applicantId de getApplicationDetails. */
-  applicantId?: number;
+  applicantId?: number | string;
   /** appointmentId interne du dossier en attente de créneau.
    * Bundle Angular : this.selectedSlotDetails.appointmentId
    * OBLIGATOIRE dans le payload PUT /appointments/schedule — le serveur l'utilise
@@ -623,9 +624,10 @@ export interface UsaSession {
   missionId: number;
   /** applicantId interne retourné par getUserHistoryApplicantPaymentStatus.
    * Correspond à selectedSlotDetails.applicantId dans le bundle Angular.
+   * Peut être un number OU une string GSS (ex: "ODXJKHXJQMZH") selon la mission.
    * Utilisé comme param ?applicantId= dans getApplicationDetails à la place du userID
    * si le serveur le retourne — sinon on retombe sur userID comme fallback. */
-  applicantId?: number;
+  applicantId?: number | string;
   /** appointmentId interne du dossier en attente de créneau.
    * Bundle Angular : this.selectedSlotDetails.appointmentId
    * Inclus obligatoirement dans le payload PUT /appointments/schedule. */
@@ -1234,8 +1236,9 @@ export async function checkUsaAppointmentRequestStatus(
   /** missionId tel que retourné par le serveur — à propager dans session.missionId */
   missionId: number;
   /** applicantId interne retourné par le serveur — à propager dans session.applicantId.
-   * Utilisé à la place de session.userID dans le call ?applicantId= de getApplicationDetails. */
-  applicantId?: number;
+   * Utilisé à la place de session.userID dans le call ?applicantId= de getApplicationDetails.
+   * Peut être number ou string GSS (ex: "ODXJKHXJQMZH"). */
+  applicantId?: number | string;
   /** appointmentId interne — à propager dans session.appointmentId.
    * Obligatoire dans le payload PUT /appointments/schedule (bundle: selectedSlotDetails.appointmentId). */
   appointmentId?: number;
@@ -1328,8 +1331,11 @@ export async function checkUsaAppointmentRequestStatus(
   const appoStatus = data.pendingAppoStatus ?? null;
   const applicant = data.primaryApplicant ?? null;
   // applicantId interne (bundle : selectedSlotDetails.applicantId) — peut être absent de la réponse.
-  const serverApplicantId: number | undefined =
-    typeof data.applicantId === "number" ? data.applicantId : undefined;
+  // IMPORTANT: le portail peut retourner un number (ex: 6012807) OU une string GSS (ex: "ODXJKHXJQMZH")
+  // selon la mission. Les deux formes sont valides et doivent être propagées telles quelles.
+  const serverApplicantId: number | string | undefined =
+    typeof data.applicantId === "number" ? data.applicantId :
+    (typeof data.applicantId === "string" && data.applicantId.length > 0 ? data.applicantId : undefined);
   // appointmentId — CRITIQUE pour le payload de booking (bundle: selectedSlotDetails.appointmentId).
   const serverAppointmentId: number | undefined =
     typeof data.appointmentId === "number" ? data.appointmentId : undefined;
@@ -1973,8 +1979,14 @@ interface UsaOfc {
 interface UsaAppDetails {
   applicantId: number | string;
   applicationId: string;
+  /** visaType envoyé dans les payloads slot (getFirstAvailableMonth, getSlotDates, etc.)
+   * Ex: "NIV" (Non-Immigrant Visa). Différent de visaCategory! */
   visaType: string;
   visaClass: string;
+  /** visaCategory envoyé dans l'URL getpost (OFC list).
+   * Ex: "VisitorVisas". Le portail Angular l'envoie comme param ?visaCategory= dans getFilteredOfcPostList.
+   * Distinct de visaType ("NIV") qui va dans les payloads de slot. */
+  visaCategory?: string;
   locationType?: string;
   /** appointmentStatus — bundle Angular filtre sur "NEW" pour obtenir selectedSlotDetails. */
   appointmentStatus?: string;
@@ -2278,7 +2290,19 @@ async function getUsaOfcList(
     const list = Array.isArray(data) ? data as UsaOfc[] : [];
 
     // Étape 1 : filtre par officeType — bundle: je.filter(B => B.officeType === this.ofcOrPost)
+    // Le portail Angular utilise `this.ofcOrPost` qui vaut "OFC" par défaut (nouveau booking)
+    // ou "POST" (reschedule d'un RDV POST, ex: Kinshasa où il n'y a PAS de bureau OFC séparé).
+    // Pour les missions sans bureau OFC (ex: Kinshasa missionId=323 → un seul bureau officeType="POST"),
+    // il faut inclure les bureaux POST sinon la liste est vide et le scan échoue.
     let filtered = list.filter(o => o.officeType === "OFC");
+
+    // Fallback : si aucun OFC trouvé, utiliser les bureaux POST (cas Kinshasa, etc.)
+    if (filtered.length === 0 && list.length > 0) {
+      filtered = list.filter(o => o.officeType === "POST");
+      if (filtered.length > 0) {
+        console.log(`[usa] ⚠️ Aucun bureau OFC — fallback sur ${filtered.length} bureau(x) POST: ${filtered.map(o => o.postName).join(", ")}`);
+      }
+    }
 
     // Étape 2 : filtre par OFCs autorisés (loggedInApplicantUser.ofc)
     // Bundle : S?.length>0 && (ofcList = ofcList.filter(B => S.some(se => se.postUserId===B.postUserId)))
@@ -2339,9 +2363,13 @@ async function findFirstSlotForOfc(
     // Le portail Angular envoie visaTypekey (ex: "NIV") dans getFirstAvailableMonth/getSlotDates/getSlotTime
     visaType: (appDetails as unknown as Record<string, unknown>).visaTypeKey ?? appDetails.visaType,
     visaClass: appDetails.visaClass,
-    // locationType : "OFC" pour un nouveau booking, "POST" pour un reschedule d'un RDV POST
-    // Bundle Angular : this.ofcOrPost — déterminé par appointmentLocationType du RDV existant
-    locationType: rescheduleYN ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC") : "OFC",
+    // locationType : déterminé par le type du bureau sélectionné (ofc.officeType)
+    // Bundle Angular : this.ofcOrPost — "OFC" si bureau OFC, "POST" si bureau POST
+    // Pour Kinshasa (pas de bureau OFC séparé) → locationType="POST" même pour un nouveau booking
+    // En mode reschedule, utiliser le type de l'appointment existant si disponible
+    locationType: rescheduleYN
+      ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC")
+      : (ofc.officeType ?? "OFC"),
     applicationId: appDetails.applicationId,
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
@@ -2606,7 +2634,7 @@ interface UsaBookingPayload {
   appointmentDt: string;
   appointmentTime: string;
   postUserId: number;
-  applicantId: number;
+  applicantId: number | string;
   applicationId: string;
 }
 
@@ -2671,7 +2699,9 @@ async function bookUsaSlot(
     // ── 7 champs de bookSlot() ──
     appointmentId:          session.appointmentId,
     applicantUUID:          session.applicantUUID,
-    appointmentLocationType: "OFC",
+    // Bundle : appointmentLocationType = this.ofcOrPost (type du bureau sélectionné)
+    // Pour Kinshasa (POST) → "POST", pour les bureaux OFC → "OFC"
+    appointmentLocationType: (found.bookingBase.locationType as "OFC" | "POST") ?? "OFC",
     appointmentStatus:       "SCHEDULED",
     slotId:                  found.slot.slotId,
     appointmentDt:           slotDate,
@@ -2679,7 +2709,7 @@ async function bookUsaSlot(
 
     // ── 3 champs ajoutés par initBookSlot() ──
     postUserId:    found.bookingBase.postUserId   as number,
-    applicantId:   found.bookingBase.applicantId  as number,
+    applicantId:   found.bookingBase.applicantId  as number | string,
     applicationId: found.bookingBase.applicationId as string,
   };
 
@@ -2784,20 +2814,21 @@ async function rescheduleUsaSlot(
 
   // rescheduleType = type de localisation de l'appointment EXISTANT (POST = ambassade)
   // Bundle : se.rescheduleType = reschedProps.appointmentLocationType
-  const rescheduleType: "POST" | "OFC" = "POST";
+  const rescheduleType: "POST" | "OFC" = (found.bookingBase.locationType as "POST" | "OFC") ?? "POST";
 
   // Payload identique au booking schedule + rescheduleType (array wrapper)
   const payload: UsaBookingPayload & { rescheduleType: "POST" | "OFC" } = {
     appointmentId:          session.appointmentId,
     applicantUUID:          session.applicantUUID,
-    appointmentLocationType: "OFC",
+    // Bundle : appointmentLocationType = this.ofcOrPost (type du bureau cible)
+    appointmentLocationType: (found.bookingBase.locationType as "OFC" | "POST") ?? "OFC",
     appointmentStatus:       "SCHEDULED",
     slotId:                  found.slot.slotId,
     appointmentDt:           slotDate,
     appointmentTime,
 
     postUserId:    found.bookingBase.postUserId   as number,
-    applicantId:   found.bookingBase.applicantId  as number,
+    applicantId:   found.bookingBase.applicantId  as number | string,
     applicationId: found.bookingBase.applicationId as string,
 
     rescheduleType,
@@ -3031,10 +3062,17 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
 
   let effectiveDetails: UsaAppDetails = appDetails ?? {
-    applicantId: session.userID,
+    // Préférer session.applicantId (GSS string comme "ODXJKHXJQMZH") si disponible,
+    // sinon fallback sur session.userID (number du login).
+    applicantId: session.applicantId ?? session.userID,
     applicationId: session.applicationId,
-    visaType: "B",      // valeur par défaut pour visa touriste/affaires USA
-    visaClass: "200",   // classe standard
+    // Valeurs par défaut alignées avec le portail réel (logs réseau confirmés) :
+    // Le portail envoie "NIV" (visaTypekey) et "B1/B2" (visaClass) pour les visas B1/B2.
+    // visaCategory = "VisitorVisas" est le param envoyé à l'URL getpost (OFC list).
+    // Ces valeurs seront enrichies depuis getTransformData si disponible.
+    visaType: "NIV",
+    visaClass: "B1/B2",
+    visaCategory: "VisitorVisas",
     locationType: "OFC",
   };
 
@@ -3104,16 +3142,16 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
                 if (transformDataResult.stateCode) session.stateCode = transformDataResult.stateCode;
                 if (transformDataResult.appointmentPriority) session.appointmentPriority = transformDataResult.appointmentPriority;
                 // Enrichir effectiveDetails si getApplicationDetails avait échoué (cas cancellable/reschedule)
-                if (transformDataResult.visaClass && effectiveDetails.visaClass === "200") {
-                  console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "200")`);
+                if (transformDataResult.visaClass && effectiveDetails.visaClass === "B1/B2") {
+                  console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "B1/B2")`);
                   effectiveDetails.visaClass = transformDataResult.visaClass;
                 }
-                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "B")) {
-                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "B")`);
+                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV")) {
+                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "NIV")`);
                   effectiveDetails.visaType = transformDataResult.visaCategory;
                 }
-                if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID)) {
-                  console.log(`[usa] applicantId enrichi depuis getTransformData: ${transformDataResult.applicantId} (remplace userID ${session.userID})`);
+                if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID || effectiveDetails.applicantId === (session.applicantId ?? session.userID))) {
+                  console.log(`[usa] applicantId enrichi depuis getTransformData: ${transformDataResult.applicantId} (remplace ${effectiveDetails.applicantId})`);
                   effectiveDetails.applicantId = transformDataResult.applicantId;
                 }
               }
@@ -3125,7 +3163,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           // Utiliser les données de getTransformData en priorité (plus fiables que getApplicationDetails
           // pour les cas cancellable/reschedule où appointmentStatus n'est plus "NEW")
           const ofcVisaClass = transformDataResult?.visaClass ?? effectiveDetails.visaClass;
-          const ofcVisaCategory = transformDataResult?.visaCategory ?? effectiveDetails.visaType;
+          // visaCategory pour l'URL getpost (ex: "VisitorVisas") — distinct de visaType ("NIV") pour les slot payloads
+          const ofcVisaCategory = transformDataResult?.visaCategory ?? effectiveDetails.visaCategory ?? effectiveDetails.visaType;
 
           // Bundle : appointmentPriority "group" + reschedule → "regular" (bot = pas de reschedule donc on envoie tel quel)
           const ofcPriority = session.appointmentPriority;
@@ -3187,16 +3226,16 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
                 if (transformDataResult.appointmentPriority) session.appointmentPriority = transformDataResult.appointmentPriority;
                 
                 // Enrichir effectiveDetails
-                if (transformDataResult.visaClass && effectiveDetails.visaClass === "200") {
-                  console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "200")`);
+                if (transformDataResult.visaClass && effectiveDetails.visaClass === "B1/B2") {
+                  console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "B1/B2")`);
                   effectiveDetails.visaClass = transformDataResult.visaClass;
                 }
-                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "B")) {
-                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "B")`);
+                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "NIV")) {
+                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "NIV")`);
                   effectiveDetails.visaType = transformDataResult.visaCategory;
                 }
-                if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID)) {
-                  console.log(`[usa] applicantId enrichi depuis getTransformData: ${transformDataResult.applicantId} (remplace userID ${session.userID})`);
+                if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID || effectiveDetails.applicantId === (session.applicantId ?? session.userID))) {
+                  console.log(`[usa] applicantId enrichi depuis getTransformData: ${transformDataResult.applicantId} (remplace ${effectiveDetails.applicantId})`);
                   effectiveDetails.applicantId = transformDataResult.applicantId;
                 }
               }
@@ -3282,7 +3321,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         session,
         session.missionId,
         effectiveDetails.visaClass,
-        effectiveDetails.visaType,
+        effectiveDetails.visaCategory ?? effectiveDetails.visaType,
         session.stateCode,
         ofcPriority,
       );
