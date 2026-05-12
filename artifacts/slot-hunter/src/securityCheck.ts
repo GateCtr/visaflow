@@ -14,7 +14,7 @@ dotenv.config();
 
 // ─── constantes extraites du bundle Angular (à synchroniser si bundle change) ──
 const EXPECTED_AES_KEY    = "OuoCdl8xQh/OX6LbmgLEtZxZrvnOmrubsMhPW1VPRjk=";
-const EXPECTED_CAPTCHA_SITEKEY = "6LcpAXklAAAAAFUYDDE8NlsuSb69b5GbXg3sEmaZ";
+const EXPECTED_CAPTCHA_SITEKEY = "6LdVVDAqAAAAAK4DS06UwosT8o1SA_3WhzUDAWAp";
 const USA_BASE            = "https://www.usvisaappt.com";
 const BUNDLE_HTML_URL     = `${USA_BASE}/visaapplicantui/`;
 

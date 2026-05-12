@@ -2012,7 +2012,7 @@ interface UsaSlotDate {
 }
 
 interface UsaTimeSlot {
-  slotId: number;
+  slotId: number | string;  // Le portail retourne un string alphanumérique (ex: "hHPzm1VQyGRMhPR8ihQMlvOx2oN2Gt")
   date?: string;       // peut être absent si l'API retourne slotDate à la place
   slotDate?: string;   // champ retourné par getSlotTime (utilisé comme appointmentDt au booking)
   startTime: string;   // "HH:mm" ou "YYYY-MM-DDTHH:mm:ss"
@@ -2149,10 +2149,48 @@ async function getUsaApplicationDetails(
     // selectedSlotDetails = relatedAppList[0] (premier item avec appointmentStatus "NEW").
     // appointmentId et applicantUUID viennent de ce même objet.
     const raw = await res.json();
-    const list: UsaAppDetails[] = Array.isArray(raw) ? raw : [raw];
+
+    // La réponse peut avoir deux formats (selon le endpoint/version du portail) :
+    //   A) Tableau plat d'objets UsaAppDetails (historique)
+    //   B) Objet unique avec gssApplicants[0].appointmentDetails[0] (format actuel capturé)
+    // Le format B a les champs visaType/visaClass/appointmentId dans appointmentDetails,
+    // pas au top-level de l'objet.
+    let list: UsaAppDetails[];
+
+    if (Array.isArray(raw)) {
+      // Format A : tableau d'objets
+      list = raw;
+    } else if (raw && typeof raw === "object" && raw.gssApplicants?.length > 0) {
+      // Format B : objet avec gssApplicants (format capturé dans la vraie session)
+      const apptDetails = raw.gssApplicants[0]?.appointmentDetails;
+      if (Array.isArray(apptDetails) && apptDetails.length > 0) {
+        // Extraire les détails depuis appointmentDetails imbriqué
+        list = apptDetails.map((ad: Record<string, unknown>) => ({
+          applicantId: ad.applicantId ?? raw.gssApplicants[0]?.applicantId,
+          applicationId: ad.applicationId ?? raw.applicationId,
+          visaType: ad.visaType ?? "NIV",
+          visaClass: (ad.visaClassCode ?? ad.visaClass) as string,
+          visaCategory: (ad.visaCategoryCode ?? ad.visaCategory) as string,
+          locationType: ad.appointmentLocationType,
+          appointmentStatus: ad.appointmentStatus,
+          appointmentLocationType: ad.appointmentLocationType,
+          appointmentId: ad.appointmentId as number | undefined,
+          applicantUUID: ad.applicantUUID ?? ad.appointmentUUID,
+        })) as UsaAppDetails[];
+        console.log(`[usa] getApplicationDetails: format gssApplicants détecté (${list.length} appointment(s))`);
+      } else {
+        // Pas d'appointmentDetails — traiter l'objet comme un UsaAppDetails direct
+        list = [raw as unknown as UsaAppDetails];
+      }
+    } else {
+      list = [raw as unknown as UsaAppDetails];
+    }
+
     // Filtrer pour obtenir uniquement les demandes en statut "NEW" (en attente de créneau)
     const newItems = list.filter(item => item.appointmentStatus === "NEW");
-    const data = newItems.length > 0 ? newItems[0] : list[0];  // fallback au premier si pas de "NEW"
+    // En mode reschedule, les RDV existants sont en statut "SCHEDULED" — les inclure aussi
+    const scheduledItems = list.filter(item => item.appointmentStatus === "SCHEDULED");
+    const data = newItems.length > 0 ? newItems[0] : (scheduledItems.length > 0 ? scheduledItems[0] : list[0]);  // fallback au premier si pas de "NEW" ni "SCHEDULED"
     if (!data) {
       console.warn(`[usa] getApplicationDetails: réponse vide ou inattendue (longueur=${list.length})`);
       return null;
@@ -2341,7 +2379,7 @@ async function getUsaOfcList(
 interface SlotFound {
   date: string;
   time: string;
-  slotId: number;
+  slotId: number | string;  // string alphanumérique retourné par le portail (ex: "hHPzm1VQyGRMhPR8ihQMlvOx2oN2Gt")
   ofcName: string;
   slot: UsaTimeSlot;
   bookingBase: Record<string, unknown>;
@@ -2630,7 +2668,7 @@ interface UsaBookingPayload {
   applicantUUID: number | undefined;
   appointmentLocationType: "OFC" | "POST";
   appointmentStatus: "SCHEDULED";
-  slotId: number;
+  slotId: number | string;  // string alphanumérique (ex: "hHPzm1VQyGRMhPR8ihQMlvOx2oN2Gt")
   appointmentDt: string;
   appointmentTime: string;
   postUserId: number;
