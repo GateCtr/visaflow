@@ -1,8 +1,8 @@
 # Rapport de Comparaison Bundle ↔ Bot
 
-**Date :** 2026-04-02
+**Date :** 2026-05-11
 **Bundle :** `main.dc91e3f7b5f67caa.js`
-**Bot :** `usaPortal.ts` (2093 lignes)
+**Bot :** `usaPortal.ts` (3032 lignes)
 
 ## Résumé global
 

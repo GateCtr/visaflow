@@ -218,7 +218,7 @@ async function randomInterStepPause(minMs: number = 500, maxMs: number = 3000, j
 /**
  * Définit différents flows possibles pour varier la séquence des requêtes
  */
-type FlowStep = "login" | "status" | "ofc" | "dates" | "times" | "warmup" | "noise" | "transform";
+type FlowStep = "login" | "status" | "ofc" | "dates" | "times" | "warmup" | "noise";
 const POSSIBLE_FLOWS: FlowStep[][] = [
   ["login", "status", "ofc", "dates", "times"],
   ["login", "status", "dates", "ofc", "times"],
@@ -2854,12 +2854,11 @@ export async function downloadUsaConfirmationPdf(
  * Remplace scanUsaSlotsWithBrowser (fragile, lent, consomme Chromium).
  */
 async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<SessionResult> {
-  try {
-    if (!session.applicationId) {
-      console.error("[usa] applicationId manquant dans la session — impossible de scanner");
-      await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "applicationId manquant" });
-      return "error";
-    }
+  if (!session.applicationId) {
+    console.error("[usa] applicationId manquant dans la session — impossible de scanner");
+    await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "applicationId manquant" });
+    return "error";
+  }
 
   // ── Sélection du flow aléatoire pour variabilité anti-détection ───────────
   const selectedFlow = selectRandomFlow();
@@ -3097,12 +3096,6 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           }
           await randomInterStepPause(600, 1500, job.id);
           break;
-          
-        default:
-          // This should never happen, but TypeScript wants us to handle all cases
-          console.warn(`[usa] Étape inattendue dans le flow: ${step}`);
-          await randomInterStepPause(300, 1000, job.id);
-          break;
       }
       
       // Pause entre les étapes
@@ -3247,7 +3240,63 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           rescheduleMode ? REFERER_MANAGE_APT : undefined
         );
       } catch (err) {
-        // Gestion des erreurs pour findFirstSlotForOfc
+
+  // Fenêtre de réservation définie par l'admin (optionnel)
+  const slotDateFrom = job.hunterConfig.slotDateFrom;
+  let slotDateDeadline = job.hunterConfig.slotDateDeadline;
+  const rescheduleMode = job.hunterConfig.rescheduleMode;
+  const rescheduleExistingDate = job.hunterConfig.rescheduleExistingDate;
+
+  // Mode reporter : forcer dateDeadline à la veille du RDV existant
+  if (rescheduleMode && rescheduleExistingDate) {
+    const existingDateObj = new Date(rescheduleExistingDate + "T12:00:00");
+    existingDateObj.setDate(existingDateObj.getDate() - 1);
+    const computedDeadline = toYMD(existingDateObj);
+    // Prendre la plus restrictive des deux deadlines
+    if (!slotDateDeadline || computedDeadline < slotDateDeadline) {
+      slotDateDeadline = computedDeadline;
+    }
+    console.log(`[usa] ♻️ Mode reporter : deadline forcée à ${slotDateDeadline} (veille du RDV existant ${rescheduleExistingDate})`);
+    // Bundle : rescheduleYN && appointmentPriority==="group" → "regular"
+    if (session.appointmentPriority === "group") {
+      console.log(`[usa] ♻️ Mode reporter : appointmentPriority "group" → "regular"`);
+      session.appointmentPriority = "regular";
+    }
+  }
+
+  if (slotDateFrom || slotDateDeadline) {
+    console.log(`[usa] 📅 Fenêtre admin : ${slotDateFrom ?? "illimitée"} → ${slotDateDeadline ?? "illimitée"}`);
+  }
+
+  // 3. Scanner les OFCs en round-robin (1 OFC par cycle) pour réduire le nombre
+  //    d'appels API par cycle. Avec N OFCs, chaque OFC est vérifiée toutes les N×(3-5) min
+  //    au lieu de scanner toutes les N à chaque cycle (économie : (N-1)×3 appels/cycle).
+  //    Accepté car les créneaux n'apparaissent pas à la seconde — 10-15 min de latence OK.
+  const cursorKey = session.applicationId;
+  const cursor = ofcCursor.get(cursorKey) ?? 0;
+  const ofcToScan = ofcList.length > 1
+    ? [ofcList[cursor % ofcList.length]]
+    : ofcList;
+  ofcCursor.set(cursorKey, (cursor + 1) % ofcList.length);
+  if (ofcList.length > 1) {
+    console.log(`[usa] 🔄 Round-robin OFC : scanning ${ofcToScan[0].postName} (${cursor % ofcList.length + 1}/${ofcList.length})`);
+  }
+
+  try {
+    for (const ofc of ofcToScan) {
+      console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
+      botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "ofc_scanning", ofc: ofc.postName } });
+      // Délai humain entre OFCs — un vrai utilisateur prend 1.5-4s pour passer d'un bureau à l'autre
+      await randomDelay(1500, 4000);
+
+      let found: SlotFound | null;
+      try {
+        found = await findFirstSlotForOfc(
+          session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline,
+          rescheduleMode,
+          rescheduleMode ? REFERER_MANAGE_APT : undefined
+        );
+      } catch (err) {
         if (err instanceof RateLimitError) {
           const waitSec = Math.round((err.retryAfterMs ?? 60000) / 1000);
           console.error(`[usa] ⛔ RATE LIMIT détecté — scan interrompu (retry-after: ${waitSec}s)`);
@@ -3458,7 +3507,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "ofc_no_slot", ofc: ofc.postName } });
     }
   } catch (error) {
-    // Catch any unexpected errors in the OFC scanning try block
+    // Catch any unexpected errors in the outer try block
     console.error(`[usa] Erreur inattendue dans le scan OFC:`, error);
     await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Erreur inattendue: ${error instanceof Error ? error.message : String(error)}` });
     return "error";
@@ -3468,19 +3517,170 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName) } });
   await sendHeartbeat({ applicationId: job.id, result: "not_found" });
   return "not_found";
-  } catch (error) {
-    // Check if this is the FCS payment check failed error
-    if (error instanceof Error && error.message === "FCS payment check failed") {
-      console.warn("[usa] FCS payment check failed — paiement non confirmé");
-      return "payment_required";
+    if (found) {
+      botLog({
+        applicationId: job.id,
+        step: "slots_found",
+        status: "ok",
+        data: {
+          flow: "usa",
+          phase: "scan",
+          ofc: found.ofcName,
+          date: found.date,
+          time: found.time,
+          slotId: found.slotId,
+        },
+      });
+
+      // Le booking et le téléchargement du PDF sont dans un try/catch séparé :
+      // les erreurs circuit-breaker (RateLimit, Blocked, TokenExpired) doivent
+      // stopper le scan et déclencher un heartbeat d'alerte, pas crasher silencieusement.
+      let booking: UsaBookingResult;
+      botLog({
+        applicationId: job.id,
+        step: "booking_attempt",
+        status: "ok",
+        data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId },
+      });
+      try {
+        // ── 1. Booking ou Reschedule automatique ─────────────
+        // En mode reschedule (cancellable ou scheduled+rescheduleMode), le portail Angular
+        // utilise PUT /appointments/reschedule au lieu de PUT /appointments/schedule.
+        // Les deux cas (cancellable et scheduled+rescheduleMode) aboutissent au même
+        // endpoint avec le même payload + rescheduleType:"POST".
+        const useReschedule = rescheduleMode || session.isReschedule === true;
+
+        booking = useReschedule
+          ? await rescheduleUsaSlot(session, found)
+          : await bookUsaSlot(session, found);
+      } catch (bookErr) {
+        if (bookErr instanceof RateLimitError) {
+          const waitSec = Math.round((bookErr.retryAfterMs ?? 60000) / 1000);
+          console.error(`[usa] ⛔ RATE LIMIT lors du booking — scan interrompu (retry: ${waitSec}s)`);
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "rate_limit", endpoint: "booking", retryAfterMs: bookErr.retryAfterMs, waitSec } });
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "error",
+            errorMessage: `Rate limit (429) lors du booking — ${bookErr.message}. Reprendre dans ~${waitSec}s.`,
+          });
+          return "error";
+        }
+        if (bookErr instanceof AccountBlockedError) {
+          console.error(`[usa] ⛔ COMPTE BLOQUÉ lors du booking — ${bookErr.message}`);
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "blocked", endpoint: "booking", error: (bookErr as Error).message } });
+          const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+          if (cacheKey) tokenCache.delete(cacheKey);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Compte bloqué (403) lors du booking` });
+          return "error";
+        }
+        if (bookErr instanceof AccountRestrictedError) {
+          const username = job.hunterConfig.embassyUsername ?? "";
+          if (username) markAccountRestricted(username, bookErr.retryAfterMs);
+          console.warn(`[usa] 🔒 Compte restreint lors du booking — pause 25 min (cache préservé)`);
+          botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: "Compte restreint lors du booking" } });
+          await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint lors du booking — pause 25 min` });
+          return "not_found";
+        }
+        if (bookErr instanceof TokenExpiredError) {
+          console.error(`[usa] ⛔ TOKEN EXPIRÉ lors du booking — reconnexion au prochain cycle`);
+          botLog({ applicationId: job.id, step: "error", status: "fail", data: { flow: "usa", phase: "token_expired", error: "Token JWT expiré lors du booking" } });
+          const cacheKey = job.hunterConfig.embassyUsername?.toLowerCase() ?? "";
+          if (cacheKey) tokenCache.delete(cacheKey);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Token JWT expiré lors du booking` });
+          return "error";
+        }
+        // Erreur réseau inattendue — traiter comme booking échoué et continuer
+        const msg = bookErr instanceof Error ? bookErr.message : String(bookErr);
+        console.error(`[usa] Erreur inattendue lors du booking: ${msg}`);
+        botLog({ applicationId: job.id, step: "booking_fail", status: "fail", data: { flow: "usa", error: msg.slice(0, 300), ofc: found.ofcName, date: found.date } });
+        booking = { success: false, error: msg };
+      }
+
+      await randomDelay(1000, 2000);
+
+      // 409 = créneau pris en concurrence AVANT notre booking.
+      // Ne pas signaler le slot comme trouvé (on ne l'a pas obtenu) — scanner le prochain OFC.
+      if (!booking.success && booking.statusCode === 409) {
+        console.log("[usa] Conflit 409 — le créneau a été pris avant nous. Poursuite du scan...");
+        botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { flow: "usa", reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
+        continue;
+      }
+
+      // Tout autre échec de booking (502, erreur réseau, réponse inattendue) :
+      // NE PAS reporter slot_found — ce serait un faux positif. Reporter une erreur et arrêter.
+      if (!booking.success) {
+        const errMsg = `Booking échoué (HTTP ${booking.statusCode ?? "err"}) sur ${found.ofcName} — ${booking.error}. Créneau NON confirmé.`;
+        console.error(`[usa] ❌ ${errMsg}`);
+        botLog({
+          applicationId: job.id,
+          step: "booking_fail",
+          status: "fail",
+          data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, statusCode: booking.statusCode, error: booking.error },
+        });
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: errMsg,
+        });
+        return "error";
+      }
+
+      // ── 2. Télécharger le PDF de confirmation ───────────────
+      // Uniquement si le booking a réussi : le portail ne génère la lettre que sur un RDV confirmé.
+      let pdfStorageId: string | undefined;
+      botLog({
+        applicationId: job.id,
+        step: "booking_success",
+        status: "ok",
+        data: {
+          flow: "usa",
+          ofc: found.ofcName,
+          date: found.date,
+          time: found.time,
+          appointmentId: booking.appointmentId,
+          responseMsg: booking.responseMsg,
+        },
+      });
+      const pdf = await downloadUsaConfirmationPdf(session, session.applicationId, booking.appointmentId);
+      if (pdf) {
+        console.log(`[usa] 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
+        const b64 = pdf.toString("base64");
+        pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+        if (pdfStorageId) {
+          console.log(`[usa] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
+          botLog({
+            applicationId: job.id,
+            step: "confirmation_letter",
+            status: "ok",
+            data: { flow: "usa", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId: booking.appointmentId },
+          });
+        }
+      }
+
+      // ── 3. Rapport vers Convex — booking réellement confirmé ──
+      await reportSlotFound({
+        applicationId: job.id,
+        date: found.date,
+        time: found.time,
+        location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, appointmentId=${booking.appointmentId})`,
+        confirmationCode: booking.appointmentId?.toString(),
+        screenshotStorageId: pdfStorageId,
+      });
+
+      return "slot_found";
     }
-    
-    console.error(`[usa] Erreur inattendue dans scanUsaSlotsViaAPI:`, error);
-    await sendHeartbeat({ 
-      applicationId: job.id, 
-      result: "error", 
-      errorMessage: `Erreur inattendue: ${error instanceof Error ? error.message : String(error)}` 
-    });
-    return "error";
+    // Aucun créneau pour cette OFC lors de ce cycle
+    botLog({ applicationId: job.id, step: "scan", status: "ok", data: { flow: "usa", phase: "ofc_no_slot", ofc: ofc.postName } });
   }
+} catch (error) {
+  // Catch any unexpected errors in the outer try block
+  console.error(`[usa] Erreur inattendue dans le scan OFC:`, error);
+  await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Erreur inattendue: ${error instanceof Error ? error.message : String(error)}` });
+  return "error";
+}
+
+  console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
+  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName) } });
+  await sendHeartbeat({ applicationId: job.id, result: "not_found" });
+  return "not_found";
 }

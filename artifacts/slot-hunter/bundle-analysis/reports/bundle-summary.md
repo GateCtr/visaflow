@@ -1,7 +1,7 @@
 # Bundle Analysis — Extraction Automatique
 
 **Bundle :** `main.dc91e3f7b5f67caa.js` (2015 KB)
-**Date extraction :** 2026-04-02
+**Date extraction :** 2026-05-11
 **Total sections :** 20
 
 ---
@@ -130,7 +130,7 @@ penDialogues(){try{$(".modal").modal("hide"),$(".modal-backdrop").remove()}catch
 
 **Mot-clé :** `refreshToken`
 ```js
-ar yi=c(4466),lr=c(529),fs=c(4373);let ca=(()=>{class ae{constructor(v,j,Ce,Ue){this.tokenStorage=v,this.spinner=j,this._router=Ce,this.sheredSer=Ue}intercept(v,j){const Ce=this.tokenStorage.getToken();if(!(null==Ce||v.url.endsWith("/forgotPassword")||v.url.endsWith("/user/login")||v.url.endsWith("/refreshToken")||v.url.includes("/api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json"}});else if(!v.url.includes("/changePassword"))if(v.url.includes("/getLandingPageDeatils")||v.url.includes("
+FGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";let j="";for(let Ce=0;Ce<15;Ce++)j+=v.charAt(Math.floor(Math.random()*v.length));return j}intercept(v,j){const Ce=this.tokenStorage.getToken();if(!(null==Ce||v.url.endsWith("/forgotPassword")||v.url.endsWith("/user/login")||v.url.endsWith("/refreshToken")||v.url.includes("/api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json","X-Correlation-key":this.generateCorrelationId()}});else if(!v.url.includes("/changePassword"))if(v.url.inc
 ```
 
 ---
@@ -266,7 +266,7 @@ dashboardRefresh.asObservable()}setLandingPageDetails(p){this.resetApplicantDeta
 
 **Mot-clé :** `getLandingPageDeatils`
 ```js
-quirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json"}});else if(!v.url.includes("/changePassword"))if(v.url.includes("/getLandingPageDeatils")||v.url.includes("/generatewizardtemplate")){let Ue=localStorage.getItem("LanguageId");v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json",LanguageId:`${Ue}`}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json"}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}if("PUT"==v.method||v.url.endsWit
+t/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json","X-Correlation-key":this.generateCorrelationId()}});else if(!v.url.includes("/changePassword"))if(v.url.includes("/getLandingPageDeatils")||v.url.includes("/generatewizardtemplate")){let Ue=localStorage.getItem("LanguageId");v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json",LanguageId:`${Ue}`,"X-Correlation-key":this.generateCorrelationId()}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json","X-Correlation-key":this.generateCorrelationId()}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem
 ```
 
 ---
@@ -512,12 +512,12 @@ ate=null,this.conuser=!0,this.notifierService.notify(je.error.responseMessage,"m
 
 **Mot-clé :** `tokenStorage.getToken()`
 ```js
-ac=function(v){return new(v||ae)},ae.\u0275mod=e.oAB({type:ae}),ae.\u0275inj=e.cJS({providers:_t,imports:[i.b2]}),ae})();var yi=c(4466),lr=c(529),fs=c(4373);let ca=(()=>{class ae{constructor(v,j,Ce,Ue){this.tokenStorage=v,this.spinner=j,this._router=Ce,this.sheredSer=Ue}intercept(v,j){const Ce=this.tokenStorage.getToken();if(!(null==Ce||v.url.endsWith("/forgotPassword")||v.url.endsWith("/user/login")||v.url.endsWith("/refreshToken")||v.url.includes("/api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,app
+tor(v,j,Ce,Ue){this.tokenStorage=v,this.spinner=j,this._router=Ce,this.sheredSer=Ue}generateCorrelationId(){const v="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";let j="";for(let Ce=0;Ce<15;Ce++)j+=v.charAt(Math.floor(Math.random()*v.length));return j}intercept(v,j){const Ce=this.tokenStorage.getToken();if(!(null==Ce||v.url.endsWith("/forgotPassword")||v.url.endsWith("/user/login")||v.url.endsWith("/refreshToken")||v.url.includes("/api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,app
 ```
 
 **Mot-clé :** `Bearer ${Ce}`
 ```js
-api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json"}});else if(!v.url.includes("/changePassword"))if(v.url.includes("/getLandingPageDeatils")||v.url.includes("/generatewizardtemplate")){let Ue=localStorage.getItem("LanguageId");v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json",LanguageId:`${Ue}`}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json"}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TO
+api/supports?filters")))if(v.url.includes("/document/docSave")||v.url.includes("/history/upload")||v.url.includes("/incidentinquirydocuments/docSave")||v.url.includes("incident/saveTicketDetails")||v.url.endsWith("/incidentNote")||v.url.endsWith("/requestSave"))v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,Accept:"multipart/form-data,application/json","X-Correlation-key":this.generateCorrelationId()}});else if(!v.url.includes("/changePassword"))if(v.url.includes("/getLandingPageDeatils")||v.url.includes("/generatewizardtemplate")){let Ue=localStorage.getItem("LanguageId");v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json",LanguageId:`${Ue}`,"X-Correlation-key":this.generateCorrelationId()}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"
 ```
 
 ---
@@ -607,12 +607,12 @@ getAppointmentDashboardDetails(){return this.http.get(e.N.visaAppointment+"/appo
 
 **Mot-clé :** `XSRF-TOKEN`
 ```js
-{let Ue=localStorage.getItem("LanguageId");v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json",LanguageId:`${Ue}`}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json"}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}if("PUT"==v.method||v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}return j.handle(v)}}return ae.\u0275fac=function(v){return new(v||ae)(e.LFG(ht.i),e.LFG(ir.t2),e.LFG(a.F0),e.LFG(d.F))},ae.\u0275prov=e.Yz7({token:ae,factory:ae.\u0275fac}),ae})();var ms=c(4004),Xa=c(262),Ls=c(9646),rl=c(2843);l
+ntent-Type":"application/json",LanguageId:`${Ue}`,"X-Correlation-key":this.generateCorrelationId()}})}else v=v.clone({setHeaders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json","X-Correlation-key":this.generateCorrelationId()}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}if("PUT"==v.method||v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}return j.handle(v)}}return ae.\u0275fac=function(v){return new(v||ae)(e.LFG(ht.i),e.LFG(ir.t2),e.LFG(a.F0),e.LFG(d.F))},ae.\u0275prov=e.Yz7({token:ae,factory:ae.\u0275fac}),ae})();var ms=c(4004),Xa=c(262),Ls=c(9646),rl=c(2843);l
 ```
 
 **Mot-clé :** `XSRF-TOKEN`
 ```js
-aders:{Authorization:`Bearer ${Ce}`,"Content-Type":"application/json"}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}if("PUT"==v.method||v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}return j.handle(v)}}return ae.\u0275fac=function(v){return new(v||ae)(e.LFG(ht.i),e.LFG(ir.t2),e.LFG(a.F0),e.LFG(d.F))},ae.\u0275prov=e.Yz7({token:ae,factory:ae.\u0275fac}),ae})();var ms=c(4004),Xa=c(262),Ls=c(9646),rl=c(2843);let _s=(()=>{class ae{constructor(v,j,Ce,Ue,bt,Mt,Ut){this.notifierService=v,this.spinner=j,this._router=Ce,this.token=Ue,this.authService=bt,this.route=Mt,this.sheredSer=Ut
+":"application/json","X-Correlation-key":this.generateCorrelationId()}});if(v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}if("PUT"==v.method||v.url.endsWith("/portal/changePassword")){const Ue="XSRF-TOKEN",bt=localStorage.getItem("CSRFTOKEN");v=v.clone({setHeaders:{CookieName:`${Ue}=${bt}`}})}return j.handle(v)}}return ae.\u0275fac=function(v){return new(v||ae)(e.LFG(ht.i),e.LFG(ir.t2),e.LFG(a.F0),e.LFG(d.F))},ae.\u0275prov=e.Yz7({token:ae,factory:ae.\u0275fac}),ae})();var ms=c(4004),Xa=c(262),Ls=c(9646),rl=c(2843);let _s=(()=>{class ae{constructor(v,j,Ce,Ue,bt,Mt,Ut){this.notifierService=v,this.spinner=j,this._router=Ce,this.token=Ue,this.authService=bt,this.route=Mt,this.sheredSer=Ut
 ```
 
 **Mot-clé :** `XSRF-TOKEN`
