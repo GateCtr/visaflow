@@ -1221,10 +1221,12 @@ export async function checkUsaAppointmentRequestStatus(
    * pendingAppoStatus=0 + cancellable=true → "cancellable" (RDV existant, peut être reporté)
    * pendingAppoStatus=0 + applicationId (sans cancellable) → "cancellable" (demande annulable)
    * pendingAppoStatus=0 sans applicationId ni cancellable → "no_request" (aucune demande active)
-   * pendingAppoStatus=1 → "scheduled" (créneau déjà attribué)
-   * pendingAppoStatus>0 → "pending" (paiement fait, en attente de créneau)
+   * pendingAppoStatus !== 0 (1, 2, 3...) → "pending" (demande active, calendrier ouvert, scan créneaux)
+   *
+   * NOTE: Le bundle Angular ne distingue PAS les valeurs 1/2/3. Il fait uniquement
+   *       `0 !== pendingAppoStatus` → redirect vers appointment/create.
    */
-  status: "payment_required" | "scheduled" | "no_request" | "pending" | "error" | "cancellable";
+  status: "payment_required" | "no_request" | "pending" | "error" | "cancellable";
   applicationId: string | null;
   pendingAppoStatus: number | null;
   primaryApplicant: string | null;
@@ -1338,10 +1340,19 @@ export async function checkUsaAppointmentRequestStatus(
   console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}${serverApplicantId !== undefined ? ` applicantId=${serverApplicantId}` : ""}${serverAppointmentId !== undefined ? ` appointmentId=${serverAppointmentId}` : ""}${serverApplicantUUID !== undefined ? ` applicantUUID=${serverApplicantUUID}` : ""}`);
 
   // Interprétation de pendingAppoStatus — tirée du bundle Angular (getAppIdByUserId) :
-  //   0           → aucune demande / paiement non confirmé (portal: synchronizeAccount)
-  //   1           → créneau déjà attribué (portal: redirect dashboard)
-  //   2, 3, etc.  → paiement fait, en attente de créneau (portal: aller à l'appointment create)
-  // Le bundle confirme : "0 !== pendingAppoStatus" → toujours redirigé vers la création de RDV.
+  //
+  // Le bundle ne fait qu'un seul test : `0 !== pendingAppoStatus`
+  //   - Si pendingAppoStatus !== 0 (1, 2, 3, etc.) → navigate to appointment/create
+  //     = l'utilisateur a une demande active, le calendrier est ouvert, prêt à sélectionner un créneau
+  //   - Si pendingAppoStatus === 0 → "The Application has been completed successfully"
+  //     = pas de demande active OU demande terminée, appel synchronizeAccount()
+  //
+  // IL N'Y A PAS de distinction entre 1, 2, 3 dans le bundle.
+  // pendingAppoStatus=1 NE signifie PAS "créneau déjà bookté" — c'est simplement
+  // une valeur non-nulle qui indique que la demande est active et le scan est possible.
+  //
+  // Pour détecter un créneau réellement bookté, il faut interroger showRescheduleButton
+  // ou scheduledappointmentInfo qui retournent les RDV actifs avec appointmentId.
 
   // missionId retourné par le serveur (dans la réponse JSON) — fait office de cookie "missionId" du portail.
   const serverMissionId = typeof data.missionId === "number" && data.missionId > 0
@@ -1390,27 +1401,14 @@ export async function checkUsaAppointmentRequestStatus(
     };
   }
 
-  if (appoStatus === 1) {
-    return {
-      status: "scheduled",
-      applicationId: appId,
-      pendingAppoStatus: 1,
-      primaryApplicant: applicant,
-      message: `Créneau déjà attribué pour ${applicant} (applicationId: ${appId})`,
-      missionId: serverMissionId,
-      applicantId: serverApplicantId,
-      appointmentId: serverAppointmentId,
-      applicantUUID: serverApplicantUUID,
-    };
-  }
-
-  // Status 2, 3 ou tout autre valeur non nulle = paiement effectué, scan pour créneau
+  // Toute valeur non-nulle (1, 2, 3, etc.) = demande active, calendrier ouvert → scanner les créneaux
+  // Le bundle Angular ne distingue pas les valeurs : `0 !== pendingAppoStatus` → appointment/create
   return {
     status: "pending",
     applicationId: appId,
     pendingAppoStatus: appoStatus,
     primaryApplicant: applicant,
-    message: `Paiement confirmé (status=${appoStatus}) — scan créneaux pour ${applicant}`,
+    message: `Demande active (status=${appoStatus}) — scan créneaux pour ${applicant}`,
     missionId: serverMissionId,
     applicantId: serverApplicantId,
     appointmentId: serverAppointmentId,
@@ -1927,78 +1925,9 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // Laisser tomber vers le scan de créneaux (ne pas return ici)
   }
 
-  if (requestStatus.status === "scheduled") {
-    const rescheduleMode = job.hunterConfig.rescheduleMode;
-    const rescheduleExistingDate = job.hunterConfig.rescheduleExistingDate;
-
-    if (rescheduleMode && rescheduleExistingDate) {
-      console.log(`[usa] ♻️ Mode reporter actif — RDV existant le ${rescheduleExistingDate}. Simulation page "Mes rendez-vous"...`);
-
-      // ── Simulation de la page "Mes rendez-vous" + bouton "Rebook" ─────────────
-      // Le portail Angular appelle getallbyuser avant d'ouvrir le flow de modification.
-      // Sans cet appel, le pattern de requêtes est anormal (slot scan sans visite préalable).
-      // On l'utilise aussi pour vérifier/récupérer l'appointmentId exact du RDV existant.
-      await randomDelay(800, 1800);
-      try {
-        const apptRequests = await getUsaAppointmentRequests(session);
-        if (apptRequests.length > 0) {
-          // Chercher le RDV correspondant à la date existante (ou prendre le premier actif)
-          // Le portail retourne un `appointmentId` par dossier — crucial pour le PUT reschedule
-          const matchingAppt = apptRequests.find((r) =>
-            r.pendingAppoStatus === 1 && (
-              // Si le portalApplicationId est configuré → matcher par applicationId
-              (session.applicationId && r.applicationId === session.applicationId) ||
-              // Sinon prendre le premier avec statut "scheduled" (pendingAppoStatus=1)
-              true
-            )
-          ) ?? apptRequests[0];
-
-          if (matchingAppt) {
-            console.log(
-              `[usa] 📋 "Mes rendez-vous" → dossier ${matchingAppt.applicationId}` +
-              `${matchingAppt.appointmentId !== undefined ? ` | appointmentId=${matchingAppt.appointmentId}` : ""}` +
-              `${matchingAppt.applicantUUID !== undefined ? ` | applicantUUID=${matchingAppt.applicantUUID}` : ""}` +
-              ` | pendingAppoStatus=${matchingAppt.pendingAppoStatus}`
-            );
-            // Mettre à jour l'appointmentId depuis la liste "Mes rendez-vous" si disponible
-            // (priorité sur checkUsaAppointmentRequestStatus car source plus précise pour le reschedule)
-            if (matchingAppt.appointmentId !== undefined && session.appointmentId === undefined) {
-              console.log(`[usa] ♻️ appointmentId du RDV existant (reschedule) : ${matchingAppt.appointmentId}`);
-              session.appointmentId = matchingAppt.appointmentId;
-            }
-            if (matchingAppt.applicantUUID !== undefined && session.applicantUUID === undefined) {
-              session.applicantUUID = matchingAppt.applicantUUID;
-            }
-          }
-          console.log(`[usa] ♻️ "Rebook" initié — ${apptRequests.length} dossier(s) trouvé(s)`);
-        } else {
-          console.warn(`[usa] ⚠️ Aucun rendez-vous trouvé via getallbyuser — reschedule avec les données disponibles`);
-        }
-      } catch (err) {
-        console.warn(`[usa] ⚠️ getUsaAppointmentRequests ignoré (${err}) — reschedule maintenu`);
-      }
-      await randomDelay(600, 1200);
-
-      botLog({
-        applicationId: job.id,
-        step: "scan",
-        status: "ok",
-        data: { flow: "usa", phase: "reschedule_start", existingDate: rescheduleExistingDate },
-      });
-      // Ne pas retourner — continuer vers scanUsaSlotsViaAPI avec la deadline calculée
-    } else {
-      console.log(`[usa] ✅ Créneau déjà attribué : ${requestStatus.message}`);
-      try {
-        await reportSlotFound({
-          applicationId: job.id,
-          date: "Créneau déjà attribué",
-          time: "",
-          location: `Ambassade USA Kinshasa (Mission ${session.missionId})`,
-        });
-      } catch { /* ignore */ }
-      return "slot_found";
-    }
-  }
+  // Note: Le statut "scheduled" n'existe plus. Si un RDV est déjà bookté,
+  // il sera détecté via showRescheduleButton dans le flow cancellable (pendingAppoStatus=0 + cancellable=true).
+  // Si pendingAppoStatus !== 0 → demande active, on scanne directement.
 
   console.log(`[usa] ${requestStatus.message} — lancement scan créneaux via API directe...`);
   botLog({
@@ -3101,7 +3030,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     console.warn("[usa] getApplicationDetails échoué — tentative avec userID comme applicantId");
   }
 
-  const effectiveDetails: UsaAppDetails = appDetails ?? {
+  let effectiveDetails: UsaAppDetails = appDetails ?? {
     applicantId: session.userID,
     applicationId: session.applicationId,
     visaType: "B",      // valeur par défaut pour visa touriste/affaires USA
@@ -3174,19 +3103,37 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
               if (transformDataResult) {
                 if (transformDataResult.stateCode) session.stateCode = transformDataResult.stateCode;
                 if (transformDataResult.appointmentPriority) session.appointmentPriority = transformDataResult.appointmentPriority;
+                // Enrichir effectiveDetails si getApplicationDetails avait échoué (cas cancellable/reschedule)
+                if (transformDataResult.visaClass && effectiveDetails.visaClass === "200") {
+                  console.log(`[usa] visaClass enrichi depuis getTransformData: ${transformDataResult.visaClass} (remplace défaut "200")`);
+                  effectiveDetails.visaClass = transformDataResult.visaClass;
+                }
+                if (transformDataResult.visaCategory && (!effectiveDetails.visaType || effectiveDetails.visaType === "B")) {
+                  console.log(`[usa] visaType/Category enrichi depuis getTransformData: ${transformDataResult.visaCategory} (remplace défaut "B")`);
+                  effectiveDetails.visaType = transformDataResult.visaCategory;
+                }
+                if (transformDataResult.applicantId && (effectiveDetails.applicantId === session.userID)) {
+                  console.log(`[usa] applicantId enrichi depuis getTransformData: ${transformDataResult.applicantId} (remplace userID ${session.userID})`);
+                  effectiveDetails.applicantId = transformDataResult.applicantId;
+                }
               }
             } catch (err) {
               console.warn(`[usa] getTransformData ignoré avant OFC list: ${err}`);
             }
           }
           
+          // Utiliser les données de getTransformData en priorité (plus fiables que getApplicationDetails
+          // pour les cas cancellable/reschedule où appointmentStatus n'est plus "NEW")
+          const ofcVisaClass = transformDataResult?.visaClass ?? effectiveDetails.visaClass;
+          const ofcVisaCategory = transformDataResult?.visaCategory ?? effectiveDetails.visaType;
+
           // Bundle : appointmentPriority "group" + reschedule → "regular" (bot = pas de reschedule donc on envoie tel quel)
           const ofcPriority = session.appointmentPriority;
           ofcListResult = await getUsaOfcList(
             session,
             session.missionId,
-            effectiveDetails.visaClass,
-            effectiveDetails.visaType,
+            ofcVisaClass,
+            ofcVisaCategory,
             session.stateCode,
             ofcPriority,
           );
