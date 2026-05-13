@@ -98,18 +98,31 @@ export const clearByApplication = mutation({
   },
 });
 
-/** Supprime tous les logs bot (global). */
+/**
+ * Supprime les logs bot par batch (max 500 par appel pour éviter les timeouts Convex).
+ * Retourne { deleted, remaining } — si remaining > 0, le frontend doit rappeler.
+ */
 export const clearAll = mutation({
   args: {},
   handler: async (ctx) => {
+    // Prendre un batch de 500 max pour rester dans les limites de temps Convex
+    const BATCH_SIZE = 500;
     const logs = await ctx.db
       .query("botLogs")
       .withIndex("by_ts")
       .order("desc")
-      .collect();
+      .take(BATCH_SIZE);
+
     for (const log of logs) {
       await ctx.db.delete(log._id);
     }
-    return { deleted: logs.length };
+
+    // Vérifier s'il reste des logs (peek 1)
+    const remaining = await ctx.db
+      .query("botLogs")
+      .withIndex("by_ts")
+      .take(1);
+
+    return { deleted: logs.length, remaining: remaining.length > 0 };
   },
 });
