@@ -1825,7 +1825,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result: "error",
       errorMessage: msg.slice(0, 300),
     });
-    return "login_failed";
+    result = "login_failed";
+    return result;
   }
   if (!session) {
     // null peut vouloir dire : compte temporairement restreint (isAccountRestricted() = true)
@@ -1839,7 +1840,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         result: "not_found",
         errorMessage: `Compte restreint — cycle ignoré (${remainMin} min restantes)`,
       });
-      return "not_found";  // "not_found" = pas de panique, on réessaie plus tard
+      result = "not_found";
+      return result;  // "not_found" = pas de panique, on réessaie plus tard
     }
     botLog({ applicationId: job.id, step: "login", status: "fail", data: { username, error: "Identifiants incorrects ou portail indisponible" } });
     await sendHeartbeat({
@@ -1847,7 +1849,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result: "error",
       errorMessage: "Connexion API USA échouée — identifiants incorrects ou portail indisponible",
     });
-    return "login_failed";
+    result = "login_failed";
+    return result;
   }
 
   // ── Sticky proxy/UA : injecter dans le cache si nouveau token ────────────
@@ -1908,7 +1911,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result: "error",
       errorMessage: requestStatus.message,
     });
-    return "error";
+    result = "error";
+    return result;
   }
 
   if (requestStatus.status === "no_request") {
@@ -1919,7 +1923,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result: "not_found",
       errorMessage: requestStatus.message,
     });
-    return "not_found";
+    result = "not_found";
+    return result;
   }
 
   // ── Cas "cancellable" : demande avec applicationId mais pendingAppoStatus=0 (annulable) ──
@@ -1977,7 +1982,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   try {
     const slotResult = await scanUsaSlotsViaAPI(job, session);
-    return slotResult;
+    result = slotResult;
+    return result;
   } finally {
     setUsaSessionProxy(undefined);
   }
@@ -1985,6 +1991,30 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   console.error("[usa] Erreur inattendue dans runUsaApiSession:", error);
   result = "error";
 } finally {
+  // ── Logout propre après chaque cycle — comportement humain ─────────────
+  // Un humain : login → check (~1-3 min) → ferme l'onglet → idle timeout → logout.
+  // Le bundle Angular fait un POST /logout explicite quand le idle timer expire.
+  // Si on ne logout pas et que le prochain scan est dans >15 min, le serveur voit
+  // un JWT inactif pendant >15 min SANS logout reçu → comportement anormal → restriction.
+  // En faisant un logout propre ici, le serveur voit une session normale de 1-3 min
+  // qui se termine proprement, et le prochain cycle démarre avec un login frais.
+  if (username) {
+    try {
+      // Petite pause avant logout (un humain ne clique pas "déconnexion" instantanément)
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 1500));
+      await logoutUsaPortal(username);
+      botLog({
+        applicationId: job.id,
+        step: "logout",
+        status: "ok",
+        data: { username, sessionDurationMs: Date.now() - sessionStartTime, result },
+      });
+    } catch (logoutErr) {
+      // Logout échoué — non bloquant, le token expirera naturellement
+      console.warn(`[usa] Logout échoué (non bloquant): ${logoutErr}`);
+    }
+  }
+
   // Log la fin du comportement humain
   const sessionDuration = Date.now() - sessionStartTime;
   logHumanBehaviorEnd(job.id, `USA Portal - ${username}`, sessionDuration);
