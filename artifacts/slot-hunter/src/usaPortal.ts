@@ -635,6 +635,11 @@ export interface UsaSession {
   /** applicantUUID interne — requis dans le payload de booking.
    * Bundle Angular : this.selectedSlotDetails.applicantUUID */
   applicantUUID?: number;
+  /** appointmentUUID — identifiant unique du RDV (format UUID string).
+   * Capturé depuis /appointments/search ou /scheduledappointmentInfo.
+   * Utilisé dans le Referer dynamique du mode reschedule et dans le filtre /search.
+   * Capture réseau : "0cbcba2c-a420-4d74-b99a-d7431aaa6897" */
+  appointmentUUID?: string;
   /** OFCs autorisés pour ce compte — propagé depuis la réponse de login (data.ofc).
    * Bundle : S = JSON.parse(loggedInApplicantUser).ofc
    * Si non vide, seuls les OFCs dont postUserId figure dans cette liste sont scannés.
@@ -1519,6 +1524,8 @@ async function fetchCancellableSessionIds(
         const appId = typeof item.applicationId === "string" ? item.applicationId : null;
         const apptId = typeof item.appointmentId === "number" ? item.appointmentId :
           (typeof item.appointmentId === "string" ? parseInt(item.appointmentId as string, 10) : undefined);
+        // appointmentUUID est une string UUID — nécessaire pour le Referer dynamique du reschedule
+        const apptUUID = typeof item.appointmentUUID === "string" ? item.appointmentUUID : undefined;
 
         if (appId) {
           session.applicationId = appId;
@@ -1528,6 +1535,10 @@ async function fetchCancellableSessionIds(
         if (apptId !== undefined && !isNaN(apptId)) {
           session.appointmentId = apptId;
           console.log(`[cancellable] ✅ appointmentId depuis showRescheduleButton: ${apptId}`);
+        }
+        if (apptUUID) {
+          session.appointmentUUID = apptUUID;
+          console.log(`[cancellable] ✅ appointmentUUID depuis showRescheduleButton: ${apptUUID}`);
         }
         if (foundViaRescheduleBtn) break;
       }
@@ -1601,7 +1612,8 @@ async function fetchCancellableSessionIds(
           session.applicantUUID = applicantUUID;
         }
         if (appointmentUUID) {
-          console.log(`[cancellable] appointmentUUID: ${appointmentUUID}`);
+          session.appointmentUUID = appointmentUUID;
+          console.log(`[cancellable] ✅ appointmentUUID depuis scheduledappointmentInfo: ${appointmentUUID}`);
         }
         if (foundViaInfo) break;
       }
@@ -1658,12 +1670,14 @@ async function fetchCancellableSessionIds(
   if (session.appointmentId === undefined || session.applicantId === undefined) {
     try {
       console.log(`[cancellable] POST /appointments/search (applicationId=${session.applicationId})...`);
-      const searchPayload = {
-        operation: "AND",
-        searchObjects: [
-          { key: "applicationId", value: session.applicationId, feildType: "STRING", operation: "EQUAL" },
-        ],
-      };
+      // Capture réseau : le portail filtre par applicationId ET appointmentUUID quand disponible
+      const searchObjects: Array<Record<string, string>> = [
+        { key: "applicationId", value: session.applicationId, feildType: "STRING", operation: "EQUAL" },
+      ];
+      if (session.appointmentUUID) {
+        searchObjects.push({ key: "appointmentUUID", value: session.appointmentUUID, feildType: "STRING", operation: "EQUAL" });
+      }
+      const searchPayload = { operation: "AND", searchObjects };
       const searchH = {
         ...stdH,
         "X-Correlation-key": corrId(),
@@ -1697,10 +1711,20 @@ async function fetchCancellableSessionIds(
             session.applicantId = target.applicantId;
             console.log(`[cancellable] ✅ applicantId depuis /search: ${session.applicantId}`);
           }
+          // applicantId peut aussi être une string GSS (ex: "RQUP3HHVQHOD")
+          if (typeof target.applicantId === "string" && target.applicantId.length > 0 && session.applicantId === undefined) {
+            session.applicantId = target.applicantId;
+            console.log(`[cancellable] ✅ applicantId (GSS) depuis /search: ${session.applicantId}`);
+          }
           const uuid = target.applicantUUID ?? target.appointmentUUID;
           if (typeof uuid === "number" && session.applicantUUID === undefined) {
             session.applicantUUID = uuid;
             console.log(`[cancellable] ✅ applicantUUID depuis /search: ${uuid}`);
+          }
+          // appointmentUUID est une string UUID (ex: "0cbcba2c-a420-4d74-b99a-d7431aaa6897")
+          if (typeof target.appointmentUUID === "string" && !session.appointmentUUID) {
+            session.appointmentUUID = target.appointmentUUID;
+            console.log(`[cancellable] ✅ appointmentUUID depuis /search: ${session.appointmentUUID}`);
           }
         }
       } else {
@@ -2448,15 +2472,29 @@ async function findFirstSlotForOfc(
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
   if (appDetails.applicantUUID) basePayload.applicantUUID = appDetails.applicantUUID;
-  // Mode reporter : rescheduleYN=true signale au serveur qu'on modifie un RDV existant
-  if (rescheduleYN) basePayload.rescheduleYN = true;
+  // Capture réseau 13/05/2026 : en mode reschedule, le payload NE contient PAS rescheduleYN.
+  // Seuls 6 champs : postUserId, applicantId, visaType, visaClass, locationType, applicationId.
+  // Le champ applicantUUID n'est PAS dans le payload de slot non plus (seulement dans le booking).
 
-  // Referer : en mode reschedule, les requêtes viennent de la page "Mes rendez-vous" / "Rebook"
-  // En mode normal (nouveau créneau), elles viennent de la page "create-appointment"
-  const slotReferer = referer ?? REFERER_CREATE_APT;
+  // Referer en mode reschedule : URL dynamique avec les paramètres du RDV existant.
+  // Capture réseau : /home/appointment/slot?type=POST&appUUID=xxx&applicantId=RQUP3HHVQHOD&ofcAppointmentDate=
+  // En mode normal : /home/dashboard/create-appointment
+  let slotReferer: string;
+  if (rescheduleYN && session.appointmentUUID) {
+    const locType = appDetails.appointmentLocationType ?? ofc.officeType ?? "POST";
+    const appUUID = session.appointmentUUID;
+    const applId = typeof appDetails.applicantId === "string" ? appDetails.applicantId : String(appDetails.applicantId);
+    slotReferer = `https://www.usvisaappt.com/visaapplicantui/home/appointment/slot?type=${locType}&appUUID=${appUUID}&applicantId=${applId}&ofcAppointmentDate=`;
+  } else {
+    slotReferer = referer ?? REFERER_CREATE_APT;
+  }
 
-  // Toutes les requêtes de slot incluent les cookies APP_ID_TOBE + missionId (POST avec body)
-  const hdrs = sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, slotReferer, true);
+  // Capture réseau 13/05/2026 : en mode reschedule, PAS de cookies APP_ID_TOBE/missionId.
+  // Le portail n'envoie que les cookies GA. Seul le Bearer token authentifie la requête.
+  // En mode normal (nouveau booking), les cookies sont nécessaires.
+  const hdrs = rescheduleYN
+    ? authHeaders(session.accessToken, slotReferer, true)
+    : sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, slotReferer, true);
 
   /**
    * Vérifie le status HTTP et lève une erreur circuit-breaker si critique.
@@ -2566,7 +2604,25 @@ async function findFirstSlotForOfc(
     });
     if (!await checkSlotResponse(res, "getSlotDates")) return null;
     const raw = await res.json();
-    slotDates = Array.isArray(raw) ? raw as UsaSlotDate[] : [];
+    // Parsing adaptatif : le portail peut retourner deux formats selon le mode :
+    //   A) Tableau d'objets : [{date: "...", slotsAvailable: N}] (nouveau booking)
+    //   B) Tableau de strings ISO : ["2026-09-04T00:00:00.000+00:00", ...] (reschedule)
+    // Capture réseau 13/05/2026 : format B confirmé en mode reschedule.
+    if (Array.isArray(raw) && raw.length > 0) {
+      if (typeof raw[0] === "string") {
+        // Format B : tableau de strings ISO → convertir en UsaSlotDate[]
+        slotDates = (raw as string[]).map(dateStr => ({
+          date: dateStr.split("T")[0],  // "2026-09-04T00:00:00.000+00:00" → "2026-09-04"
+          slotsAvailable: 1,            // au moins 1 créneau disponible (le serveur ne donne pas le compte)
+        }));
+        console.log(`[usa] getSlotDates: format string[] détecté (${slotDates.length} dates) — parsing adaptatif`);
+      } else {
+        // Format A : tableau d'objets (format historique)
+        slotDates = raw as UsaSlotDate[];
+      }
+    } else {
+      slotDates = [];
+    }
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
     console.warn(`[usa] getSlotDates erreur: ${err}`);
