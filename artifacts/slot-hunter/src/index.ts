@@ -17,7 +17,7 @@ import { runSpainSession, runSpainWatcherProbe } from "./spainPortal.js";
 // lance un Playwright qui navigue vers l'URL directe, résout hCaptcha, persiste le cookie.
 // Coût : ~60-120s par setup (captcha externe), zéro VOWINT requis.
 
-// Timeout global par setup : 4 min (le lock Convex dure 5 min)
+// Timeout global par setup : 4 min (le lock Convex dure 13 min)
 const CEV_SETUP_TIMEOUT_MS = 4 * 60_000;
 
 async function startCevSetupLoop(): Promise<void> {
@@ -72,10 +72,9 @@ async function startCevSetupLoop(): Promise<void> {
                 : { success: false, error: "CONVEX_ACTIVATE_FAILED" };
             } else {
               // Pas de créneaux — session consommée (single-use), attendre le prochain cycle.
-              // NE PAS resetCevSetupLock : le lock Convex (5 min) empêche de re-checker
-              // cette session trop vite. Avec un lock de 5 min, on fait max ~12 checks/heure
-              // par session, ce qui reste dans la limite de 5 clics/heure VOWINT avec marge.
-              // On ajuste : on ne libère pas le lock, il expirera naturellement.
+              // NE PAS resetCevSetupLock : le lock Convex (13 min) empêche de re-checker
+              // cette session trop vite. Avec un lock de 13 min, on fait max ~4 checks/heure
+              // par session, ce qui respecte la limite de 5 clics/heure VOWINT.
               console.log(`[CEV-SETUP] ℹ️  Pas de créneaux (redirectUrl=${httpResult.redirectUrl?.slice(0, 60)}) session=${s.sessionId} — lock expire dans ~13 min`);
               r = { success: true }; // Pas une erreur — juste pas de créneaux
             }
@@ -115,9 +114,12 @@ async function startCevSetupLoop(): Promise<void> {
 
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
-          // Reset le compteur d'échecs de login après un succès
-          // (les anciens échecs étaient peut-être dus à un proxy mort, pas aux identifiants)
-          await resetCevSetupLock(s.sessionId).catch(() => {});
+          // NE PAS resetCevSetupLock ici — le lock de 13 min doit expirer naturellement
+          // pour respecter la limite de 5 clics/heure VOWINT.
+          // On ne reset le lock que si la session a été activée (slots trouvés),
+          // car dans ce cas le status passe à "active" et la session sort du pool needs_setup.
+          // Pour le cas "pas de créneaux", la session reste needs_setup et le lock
+          // empêche un re-check avant 13 min (60/5 = 12 min minimum entre clics).
         } else {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
 
@@ -146,18 +148,17 @@ async function startCevSetupLoop(): Promise<void> {
             console.log(`[CEV-SETUP] 🔓 Déverrouillage session=${s.sessionId} (timeout)`);
             await resetCevSetupLock(s.sessionId).catch(() => {});
           }
-          // Autres erreurs (HCAPTCHA_FAILED, NO_SESSION_COOKIE…) : le lock expire naturellement (5 min)
+          // Autres erreurs (HCAPTCHA_FAILED, NO_SESSION_COOKIE…) : le lock expire naturellement (13 min)
         }
       }
     } catch (err) {
       console.warn("[CEV-SETUP] Erreur boucle:", err);
     }
 
-    // Intervalle de boucle : 60s. Le rate limiting est géré par le lock Convex (5 min)
+    // Intervalle de boucle : 60s. Le rate limiting est géré par le lock Convex (13 min)
     // qui empêche de re-checker la même session trop vite.
-    // Avec un lock de 5 min → max 12 checks/heure par session.
-    // La limite VOWINT est 5 clics/heure → il faut un lock d'au moins 12 min côté Convex.
-    // TODO: Augmenter le lock Convex à 13 min pour respecter la limite 5/heure.
+    // Avec un lock de 13 min → max ~4-5 checks/heure par session.
+    // La limite VOWINT est 5 clics/heure → le lock de 13 min la respecte avec marge.
     await new Promise((r) => setTimeout(r, 60_000));
   }
 }
