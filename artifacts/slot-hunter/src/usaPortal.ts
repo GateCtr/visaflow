@@ -2462,19 +2462,16 @@ async function findFirstSlotForOfc(
     visaType: (appDetails as unknown as Record<string, unknown>).visaTypeKey ?? appDetails.visaType,
     visaClass: appDetails.visaClass,
     // locationType : déterminé par le portail Angular via this.ofcOrPost.
-    // Bundle Angular : this.ofcOrPost = "OFC" par défaut (nouveau booking).
+    // Capture réseau 13/05/2026 (nouveau booking Baze, compte sabowaryan@gmail.com) :
+    //   Le navigateur envoie locationType: "POST" pour Kinshasa (officeType="POST") → 200 OK.
+    // Le bot envoyait "POST" aussi mais recevait 404 "applicant not found" — la différence
+    // venait des COOKIES (APP_ID_TOBE/missionId) qui perturbaient la résolution côté serveur.
+    // Fix : ne PAS envoyer les cookies de session pour getFirstAvailableMonth (voir hdrs ci-dessous).
+    //
     // En mode reschedule, le portail utilise l'appointmentLocationType du RDV existant (ex: "POST").
-    //
-    // IMPORTANT : Pour un nouveau booking, le portail envoie TOUJOURS "OFC" dans locationType,
-    // même quand le bureau physique a officeType="POST" (cas Kinshasa mission 323).
-    // La raison : l'étape courante est la biométrie (IS_BIOMETRIC_CAPTURE_SUPPORTED: "yes"),
-    // donc le serveur attend locationType="OFC" — il retourne 404 si on envoie "POST"
-    // avec pendingAppoStatus=1 car le RDV POST ne peut être réservé qu'après l'OFC.
-    //
-    // En mode reschedule, le RDV POST existant a déjà été lié → on utilise son type.
     locationType: rescheduleYN
       ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
-      : "OFC",
+      : (ofc.officeType ?? "OFC"),
     applicationId: appDetails.applicationId,
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
@@ -2498,10 +2495,12 @@ async function findFirstSlotForOfc(
 
   // Capture réseau 13/05/2026 : en mode reschedule, PAS de cookies APP_ID_TOBE/missionId.
   // Le portail n'envoie que les cookies GA. Seul le Bearer token authentifie la requête.
-  // En mode normal (nouveau booking), les cookies sont nécessaires.
-  const hdrs = rescheduleYN
-    ? authHeaders(session.accessToken, slotReferer, true)
-    : sessionHeaders(session.accessToken, appDetails.applicationId, session.missionId, slotReferer, true);
+  // IMPORTANT: Capture 13/05/2026 (nouveau booking Baze) confirme que le navigateur
+  // N'ENVOIE PAS non plus APP_ID_TOBE/missionId pour un nouveau booking !
+  // Le serveur retourne 404 "applicant not found" quand ces cookies sont présents
+  // car ils perturbent la résolution de l'applicant côté serveur.
+  // → Utiliser authHeaders (Bearer seulement) pour TOUS les modes de getFirstAvailableMonth/getSlotDates/getSlotTime.
+  const hdrs = authHeaders(session.accessToken, slotReferer, true);
 
   /**
    * Vérifie le status HTTP et lève une erreur circuit-breaker si critique.
