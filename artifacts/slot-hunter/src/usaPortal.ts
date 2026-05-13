@@ -3231,22 +3231,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         execute: async () => await callSanityCheck(session),
         critical: true
       },
-      {
-        name: "FCS Payment Check",
-        execute: async () => {
-          const fcsOk = await checkFcsPayment(session);
-          if (!fcsOk) {
-            console.warn("[usa] checkFcs indique paiement non confirmé — scan interrompu");
-            await sendHeartbeat({
-              applicationId: job.id,
-              result: "payment_required",
-              errorMessage: "FCS payment check failed — paiement non confirmé côté serveur",
-            });
-            throw new Error("FCS payment check failed");
-          }
-        },
-        critical: true
-      },
+      // NOTE: checkFcsPayment retiré du warm-up (mai 2026).
+      // Le portail Angular actuel ne l'appelle plus dans le flux de booking
+      // (absent des captures réseau 12-13/05/2026). L'endpoint retourne 401
+      // systématiquement — probablement migré ou supprimé côté serveur.
+      // Le paiement est déjà vérifié via getUserHistoryApplicantPaymentStatus
+      // (pendingAppoStatus !== 0 ↔ paiement confirmé).
       {
         name: "Menu Navigation",
         execute: async () => await simulateMenuClick(session, job.id)
