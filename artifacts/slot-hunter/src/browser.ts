@@ -90,9 +90,10 @@ export interface BrowserOverrides {
    * Forcer un proxy spécifique par nom :
    *   "brightdata" → BRIGHTDATA_PROXY_URL  (portail belge CEV — priorité 1)
    *   "iproyal"    → IPROYAL_PROXY_URL     (portail Espagne — priorité 2)
+   *   "2captcha"   → proxy résidentiel rotatif 2captcha (IP propre, bypass CF)
    *   "auto"       → sélection automatique (défaut)
    */
-  proxySource?: "brightdata" | "iproyal" | "auto";
+  proxySource?: "brightdata" | "iproyal" | "2captcha" | "auto";
   /** Mode headless (true par défaut) */
   headless?: boolean;
 }
@@ -113,6 +114,9 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
       proxyAddress = BRIGHTDATA_PROXY_URL;
     } else if (proxySource === "iproyal" && IPROYAL_PROXY_URL) {
       proxyAddress = IPROYAL_PROXY_URL;
+    } else if (proxySource === "2captcha" && proxyPool.isConfigured) {
+      const poolResult = await proxyPool.getProxy();
+      proxyAddress = poolResult?.proxy ?? PROXY_URL;
     } else {
       // auto : iProyal → 2captcha → PROXY_URL statique
       if (IPROYAL_PROXY_URL) {
