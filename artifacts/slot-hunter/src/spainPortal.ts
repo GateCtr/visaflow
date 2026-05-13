@@ -1585,6 +1585,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
       acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+      proxySource: "2captcha",  // IP résidentielle → bypass Cloudflare naturellement
     });
 
     const payloadHits: unknown[] = [];
