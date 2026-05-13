@@ -364,6 +364,7 @@ export default function AdminApplicationDetail() {
   const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
   const completeDossierOnly = useMutation(api.admin.completeDossierOnly);
   const adjustSlotSuccessFee = useMutation(api.admin.adjustSlotSuccessFee);
+  const updateSlotUrgencyTier = useMutation(api.admin.updateSlotUrgencyTier);
   const setHunterConfig = useMutation(api.hunter.setHunterConfig);
   const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
   const checkCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
@@ -387,6 +388,10 @@ export default function AdminApplicationDetail() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [visaUploading, setVisaUploading] = useState(false);
   const [showAdjustFee, setShowAdjustFee] = useState(false);
+  const [showChangeTier, setShowChangeTier] = useState(false);
+  const [newTierValue, setNewTierValue] = useState<SlotUrgencyTier | "">("");
+  const [changeTierReason, setChangeTierReason] = useState("");
+  const [changeTierSaving, setChangeTierSaving] = useState(false);
   const [trackingLinkCopied, setTrackingLinkCopied] = useState(false);
   const [adjustFeeInput, setAdjustFeeInput] = useState("");
   const [adjustFeeReason, setAdjustFeeReason] = useState("");
@@ -528,6 +533,28 @@ export default function AdminApplicationDetail() {
       toast({ variant: "destructive", title: "Erreur", description: msg });
     } finally {
       setAdjustFeeSaving(false);
+    }
+  };
+
+  const handleChangeTier = async () => {
+    if (!appId || !newTierValue) return;
+    setChangeTierSaving(true);
+    try {
+      await updateSlotUrgencyTier({
+        applicationId: appId,
+        newTier: newTierValue,
+        reason: changeTierReason.trim() || undefined,
+      });
+      const label = SLOT_URGENCY_TIERS[newTierValue].label;
+      toast({ title: "Tier mis à jour", description: `Nouveau tier : ${label}. L'intervalle de scan sera modifié au prochain cycle.` });
+      setShowChangeTier(false);
+      setNewTierValue("");
+      setChangeTierReason("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur lors du changement de tier";
+      toast({ variant: "destructive", title: "Erreur", description: msg });
+    } finally {
+      setChangeTierSaving(false);
     }
   };
 
@@ -915,6 +942,70 @@ export default function AdminApplicationDetail() {
                         disabled={adjustFeeSaving}
                       >
                         {adjustFeeSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmer"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Change urgency tier — slot_only only, admin can upgrade/downgrade */}
+            {canAdjustFee && urgencyTierKey && (
+              <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+                    <Pencil className="w-4 h-4" />
+                    Changer le tier d'urgence
+                    <span className="text-xs font-normal text-blue-600 ml-1">
+                      — actuel : {urgencyTier?.label ?? urgencyTierKey}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-blue-300 text-blue-800 hover:bg-blue-100"
+                    onClick={() => {
+                      setShowChangeTier((v) => !v);
+                      if (!showChangeTier) setNewTierValue("");
+                    }}
+                  >
+                    {showChangeTier ? "Annuler" : "Modifier"}
+                  </Button>
+                </div>
+                {showChangeTier && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-blue-700">
+                      Le nouveau tier prendra effet au prochain cycle de scan (pas besoin de redemarrer le bot).
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <select
+                        className="h-8 text-sm rounded-md border border-blue-200 px-2 bg-white"
+                        value={newTierValue}
+                        onChange={(e) => setNewTierValue(e.target.value as SlotUrgencyTier)}
+                      >
+                        <option value="">-- Choisir --</option>
+                        {(Object.keys(SLOT_URGENCY_TIERS) as SlotUrgencyTier[])
+                          .filter((k) => k !== urgencyTierKey)
+                          .map((k) => (
+                            <option key={k} value={k}>
+                              {SLOT_URGENCY_TIERS[k].label} ({SLOT_URGENCY_TIERS[k].tagline})
+                            </option>
+                          ))}
+                      </select>
+                      <Input
+                        type="text"
+                        placeholder="Motif (optionnel)"
+                        className="h-8 text-sm flex-1 min-w-[150px]"
+                        value={changeTierReason}
+                        onChange={(e) => setChangeTierReason(e.target.value)}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white px-4"
+                        onClick={handleChangeTier}
+                        disabled={changeTierSaving || !newTierValue}
+                      >
+                        {changeTierSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmer"}
                       </Button>
                     </div>
                   </div>
