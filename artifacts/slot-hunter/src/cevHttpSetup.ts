@@ -43,8 +43,9 @@ export interface CevHttpSetupResult {
   sessionCookie?: string;
   validUntilMs?: number;
   integrationUrl?: string;
-  redirectUrl?: string;       // URL retournée par SetCaptchaToken (indique si slots dispo)
-  slotsAvailable?: boolean;   // true si redirectUrl contient SelectSlot
+  redirectUrl?: string;       // URL retournée par SetCaptchaToken
+  slotsAvailable?: boolean;   // true si session active pour polling
+  needsPlaywrightNavigation?: boolean; // true si le cookie seul ne suffit pas (401) → Playwright doit naviguer vers redirectUrl
   error?: string;
 }
 
@@ -564,9 +565,44 @@ export async function setupCevSessionHttp(
     // ── DÉCISION D'ACTIVATION ────────────────────────────────────────────────
     // - slots_found → activer (booking immédiat)
     // - no_slots → activer (poll continu pendant 15 min, slots peuvent apparaître)
-    // - session_dead → NE PAS activer (cookie inutilisable sans navigation)
+    // - session_dead → RETOURNER success=false avec erreur spécifique
+    //   pour que index.ts NE relance PAS immédiatement (lock 13 min respecté)
     // - error → activer quand même (laisser le polling normal retry)
-    const slotsAvailable = pollResult !== "session_dead";
+
+    if (pollResult === "session_dead") {
+      // Le cookie seul ne suffit pas pour /Home/AvailableTimeSlots (401).
+      // STRATÉGIE HYBRIDE : retourner success=true avec le cookie + redirectUrl
+      // et le flag needsPlaywrightNavigation=true.
+      // Le caller (index.ts) lancera Playwright UNIQUEMENT pour naviguer vers
+      // redirectUrl avec le cookie déjà obtenu — PAS de re-login VOWINT, PAS de re-captcha.
+      // Playwright interceptera les requêtes réseau pour capturer les slots.
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_setup_complete",
+        status: "ok",
+        data: {
+          validUntil: captchaData.validUntil,
+          redirectUrl: captchaRedirectUrl,
+          pollResult,
+          slotsAvailable: false,
+          needsPlaywrightNavigation: true,
+          activationReason: "SESSION_DEAD_NEEDS_PLAYWRIGHT_NAVIGATION",
+          integrationUrl: integrationUrl.slice(0, 80),
+          hint: "Cookie obtenu via HTTP. Playwright naviguera vers redirectUrl pour activer la session et intercepter les slots.",
+        },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl || undefined,
+        slotsAvailable: false,
+        needsPlaywrightNavigation: true,
+      };
+    }
+
+    const slotsAvailable = true; // no_slots ou slots_found ou error → activer
 
     botLog({
       applicationId: clientId,
@@ -581,9 +617,7 @@ export async function setupCevSessionHttp(
           ? "SLOTS_FOUND_IMMEDIATE_POLL"
           : pollResult === "no_slots"
             ? "SESSION_ALIVE_NO_SLOTS_ACTIVATE_FOR_POLLING"
-            : pollResult === "session_dead"
-              ? "SESSION_DEAD_COOKIE_ALONE_NOT_ENOUGH"
-              : "ERROR_ACTIVATE_FOR_RETRY",
+            : "ERROR_ACTIVATE_FOR_RETRY",
         integrationUrl: integrationUrl.slice(0, 80),
       },
     });
