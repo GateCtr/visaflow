@@ -36,7 +36,9 @@ const USA_APPOINTMENT_URL = `${USA_BASE}/visaappointmentapi`;
 const USA_NOTIFICATION_URL = `${USA_BASE}/visanotificationapi`;
 const USA_PAYMENT_URL = `${USA_BASE}/visapaymentapi/v1`;
 const USA_WORKFLOW_URL = `${USA_BASE}/visaworkflowprocessor`;
-const USA_INTEGRATION_URL = `${USA_BASE}/visaintegrationapi`; // sanity check
+const USA_INTEGRATION_URL = `${USA_BASE}/visaintegrationapi`;
+// sanity check : migré de visaintegrationapi vers visaapplicantapi/v1 (mai 2026)
+const USA_APPLICANT_API_URL = `${USA_BASE}/visaapplicantapi/v1`;
 
 // Bundle Angular (booking flow) : slotBookingService.getFilteredOfcPostList(De)
 //   → GET visaAdminUrl + "/lookupcdt/wizard/getpost" avec params :
@@ -85,9 +87,10 @@ const USA_SHOW_RESCHEDULE_BUTTON_URL = `${USA_APPOINTMENT_URL}/appointments/show
 // Anti-détection : endpoints que le vrai portail appelle dans son flux normal
 const USA_LANDING_PAGE_URL = `${USA_APPOINTMENT_URL}/appointments/getLandingPageDeatils`;
 // Retourne l'URL de base du sanity check — le stepType est ajouté en query param par l'appelant.
-// Bundle Angular : this.sanityCheckUrl+`/visa/sanitycheck/${f}`,null,E?{params:{stepType:E}}:{}
+// Bundle Angular (maj mai 2026) : endpoint migré de visaintegrationapi vers visaapplicantapi/v1
+// Capture réelle : POST /visaapplicantapi/v1/visa/sanitycheck/{appId}?stepType=slotBooking → 200
 const USA_SANITY_CHECK_URL = (applicationId: string, stepType: "slotBooking" | "appointmentLetter") =>
-  `${USA_INTEGRATION_URL}/visa/sanitycheck/${applicationId}?stepType=${stepType}`;
+  `${USA_APPLICANT_API_URL}/visa/sanitycheck/${applicationId}?stepType=${stepType}`;
 const USA_FCS_CHECK_URL = (applicationId: string) =>
   `${USA_PAYMENT_URL}/feecollection/checkFcs/${applicationId}`;
 

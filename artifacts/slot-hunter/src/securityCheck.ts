@@ -25,7 +25,7 @@ const CRITICAL_ENDPOINTS = [
   { name: "ofcList",         url: `${USA_BASE}/visaadministrationapi/v1/ofcuser/ofclist/323`, method: "GET",  expectedCodes: [200, 401, 403] },
   { name: "slotDates",       url: `${USA_BASE}/visaadministrationapi/v1/modifyslot/getSlotDates`, method: "GET", expectedCodes: [200, 400, 401, 403] },
   { name: "slotTime",        url: `${USA_BASE}/visaadministrationapi/v1/modifyslot/getSlotTime`,  method: "GET", expectedCodes: [200, 400, 401, 403] },
-  { name: "sanityCheck",     url: `${USA_BASE}/visaintegrationapi/visa/sanitycheck/TEST`,    method: "GET",  expectedCodes: [200, 400, 401, 403, 404] },
+  { name: "sanityCheck",     url: `${USA_BASE}/visaapplicantapi/v1/visa/sanitycheck/TEST`,    method: "GET",  expectedCodes: [200, 400, 401, 403, 404] },
   { name: "fcsCheck",        url: `${USA_BASE}/visapaymentapi/v1/feecollection/checkFcs/TEST`, method: "GET", expectedCodes: [200, 400, 401, 403, 404] },
   { name: "landingPage",     url: `${USA_BASE}/visaappointmentapi/appointment/getLandingPageDeatils`, method: "GET", expectedCodes: [200, 400, 401, 403] },
   { name: "schedule",        url: `${USA_BASE}/visaappointmentapi/appointments/schedule`,    method: "PUT",  expectedCodes: [400, 401, 403, 415, 422] },
