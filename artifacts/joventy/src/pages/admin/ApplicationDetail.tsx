@@ -404,7 +404,7 @@ export default function AdminApplicationDetail() {
   const [logExpanded, setLogExpanded] = useState<Set<string>>(new Set());
   const [logCopied, setLogCopied] = useState<string | null>(null);
   const [logClearing, setLogClearing] = useState(false);
-  const LOG_PAGE_SIZE = 50;
+  const LOG_PAGE_SIZE = 12;
 
   const clearLogsByApp = useMutation(api.botLogs.clearByApplication);
 
