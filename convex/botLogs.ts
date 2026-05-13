@@ -80,3 +80,36 @@ export const countRecentFails = query({
     return logs.filter((l) => l.status === "fail").length;
   },
 });
+
+/** Supprime tous les logs d'une application spécifique. */
+export const clearByApplication = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const logs = await ctx.db
+      .query("botLogs")
+      .withIndex("by_application", (q) =>
+        q.eq("applicationId", args.applicationId)
+      )
+      .collect();
+    for (const log of logs) {
+      await ctx.db.delete(log._id);
+    }
+    return { deleted: logs.length };
+  },
+});
+
+/** Supprime tous les logs bot (global). */
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const logs = await ctx.db
+      .query("botLogs")
+      .withIndex("by_ts")
+      .order("desc")
+      .collect();
+    for (const log of logs) {
+      await ctx.db.delete(log._id);
+    }
+    return { deleted: logs.length };
+  },
+});

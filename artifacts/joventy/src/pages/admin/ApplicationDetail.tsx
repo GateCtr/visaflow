@@ -343,7 +343,10 @@ export default function AdminApplicationDetail() {
   const [logPage, setLogPage] = useState(0);
   const [logExpanded, setLogExpanded] = useState<Set<string>>(new Set());
   const [logCopied, setLogCopied] = useState<string | null>(null);
+  const [logClearing, setLogClearing] = useState(false);
   const LOG_PAGE_SIZE = 50;
+
+  const clearLogsByApp = useMutation(api.botLogs.clearByApplication);
 
   const app = useQuery(api.applications.get, appId ? { id: appId } : "skip");
   const messages = useQuery(api.messages.list, appId ? { applicationId: appId } : "skip") ?? [];
@@ -1876,6 +1879,24 @@ export default function AdminApplicationDetail() {
                     Effacer filtres
                   </button>
                 )}
+                <button
+                  onClick={async () => {
+                    if (!appId) return;
+                    if (!confirm("Supprimer tous les logs de ce dossier ?")) return;
+                    setLogClearing(true);
+                    try {
+                      await clearLogsByApp({ applicationId: appId });
+                    } catch (err) {
+                      console.error("[admin] Erreur suppression logs:", err);
+                    } finally {
+                      setLogClearing(false);
+                    }
+                  }}
+                  disabled={logClearing}
+                  className={`${logStepFilter || logStatusFilter ? "" : "ml-auto "}px-2.5 py-1 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-50`}
+                >
+                  {logClearing ? "Suppression…" : "Vider"}
+                </button>
               </div>
 
               {/* Filters */}

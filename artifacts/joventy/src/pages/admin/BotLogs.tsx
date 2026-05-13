@@ -56,6 +56,22 @@ function BotLogsTab() {
   const [page, setPage]                 = useState(0);
   const [expanded, setExpanded]         = useState<Set<string>>(new Set());
   const [copied, setCopied]             = useState<string | null>(null);
+  const [clearing, setClearing]         = useState(false);
+
+  const clearAllLogs = useMutation(api.botLogs.clearAll);
+
+  const handleClearAll = async () => {
+    if (!confirm("Supprimer TOUS les logs bot ? Cette action est irréversible.")) return;
+    setClearing(true);
+    try {
+      const result = await clearAllLogs();
+      console.log(`[admin] ${result.deleted} logs supprimés`);
+    } catch (err) {
+      console.error("[admin] Erreur lors de la suppression des logs:", err);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const logs = useQuery(api.botLogs.listRecent, {
     limit: 500,
@@ -143,6 +159,16 @@ function BotLogsTab() {
           <span className="text-xs text-muted-foreground self-center ml-auto">
             {logs === undefined ? "Chargement…" : `${filtered.length} événement${filtered.length !== 1 ? "s" : ""}`}
           </span>
+
+          {filtered.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="px-2.5 py-1.5 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-50 self-center"
+            >
+              {clearing ? "Suppression…" : "Vider les logs"}
+            </button>
+          )}
         </div>
       </div>
 
