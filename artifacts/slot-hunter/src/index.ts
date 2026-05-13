@@ -7,6 +7,7 @@ import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { setupCevSessionHttp } from "./cevHttpSetup.js";
+import { navigateCevRedirectWithPlaywright } from "./cevPlaywrightNavigate.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
@@ -54,32 +55,68 @@ async function startCevSetupLoop(): Promise<void> {
           );
 
           if (httpResult.success) {
-            // NOUVELLE LOGIQUE : Toujours activer la session après un setup réussi.
-            // Le cookie ASP.NET_SessionId est valide pendant ~15 min (validUntil).
-            // On active la session pour que le polling /Home/AvailableTimeSlots puisse
-            // détecter les slots en temps réel. C'est le polling qui tranchera,
-            // PAS la redirectUrl initiale.
-            //
-            // Même si la destination finale est "NoAvailability", le cookie est valide
-            // et le polling peut potentiellement retourner des slots (race condition
-            // entre le moment où le serveur a checké et le moment où on poll).
-            console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — activation pour polling (slotsAvailable=${httpResult.slotsAvailable})`);
-            const { activateCevSession } = await import("./convexClient.js");
-            const activated = await activateCevSession(
-              s.sessionId,
-              httpResult.sessionCookie!,
-              httpResult.validUntilMs,
-              httpResult.integrationUrl,
-            );
-            if (activated) {
-              r = { success: true };
-              if (httpResult.slotsAvailable) {
-                console.log(`[CEV-SETUP] 🚨 DESTINATION = SLOTS POSSIBLES session=${s.sessionId} — booking prioritaire`);
+            // ── APPROCHE HYBRIDE ─────────────────────────────────────────────
+            // Si needsPlaywrightNavigation = true : le cookie est obtenu mais le
+            // poll direct (401) ne marche pas. On lance Playwright pour naviguer
+            // vers redirectUrl avec le cookie injecté — PAS de re-login, PAS de re-captcha.
+            // Coût : 0 clic VOWINT, 0 captcha, juste ~10s de browser.
+            if (httpResult.needsPlaywrightNavigation && httpResult.redirectUrl) {
+              console.log(`[CEV-SETUP] 🎭 Approche hybride session=${s.sessionId} — Playwright navigue vers redirectUrl (cookie déjà obtenu)`);
+
+              const fullCookie = `ASP.NET_SessionId=${httpResult.sessionCookie}; PreferredCulture=en-US`;
+              const navResult = await navigateCevRedirectWithPlaywright(
+                fullCookie,
+                httpResult.redirectUrl,
+                s.applicationId,
+              );
+
+              if (navResult.status === "slot_found") {
+                // 🚨 SLOTS TROUVÉS — activer la session pour booking
+                console.log(`[CEV-SETUP] 🚨 SLOTS TROUVÉS via hybride session=${s.sessionId}!`);
+                const { activateCevSession } = await import("./convexClient.js");
+                await activateCevSession(
+                  s.sessionId,
+                  httpResult.sessionCookie!,
+                  httpResult.validUntilMs,
+                  httpResult.integrationUrl,
+                );
+                // Déclencher le booking immédiatement
+                await reportSlotFound({
+                  applicationId: s.applicationId,
+                  date: "detection_hybride",
+                  time: new Date().toISOString(),
+                  location: "CEV - Ambassade de Belgique (hybride)",
+                });
+                r = { success: true };
+              } else if (navResult.status === "no_availability") {
+                // Pas de créneaux — session consommée (single-use), lock maintenu 13 min
+                console.log(`[CEV-SETUP] ℹ️  Pas de créneaux (hybride) session=${s.sessionId} — lock expire dans ~13 min`);
+                r = { success: true }; // Pas une erreur, juste pas de slots
               } else {
-                console.log(`[CEV-SETUP] 📡 Session activée pour polling session=${s.sessionId} — le polling /Home/AvailableTimeSlots détectera les slots`);
+                // Erreur navigation
+                console.log(`[CEV-SETUP] ❌ Erreur hybride session=${s.sessionId}: ${navResult.error}`);
+                r = { success: false, error: navResult.error ?? "PLAYWRIGHT_NAV_ERROR" };
               }
             } else {
-              r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+              // Cas normal : poll direct a fonctionné (no_slots ou slots_found)
+              console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — activation pour polling (slotsAvailable=${httpResult.slotsAvailable})`);
+              const { activateCevSession } = await import("./convexClient.js");
+              const activated = await activateCevSession(
+                s.sessionId,
+                httpResult.sessionCookie!,
+                httpResult.validUntilMs,
+                httpResult.integrationUrl,
+              );
+              if (activated) {
+                r = { success: true };
+                if (httpResult.slotsAvailable) {
+                  console.log(`[CEV-SETUP] 🚨 SLOTS POSSIBLES session=${s.sessionId} — booking prioritaire`);
+                } else {
+                  console.log(`[CEV-SETUP] 📡 Session activée pour polling session=${s.sessionId}`);
+                }
+              } else {
+                r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+              }
             }
           } else {
             console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);
@@ -99,7 +136,6 @@ async function startCevSetupLoop(): Promise<void> {
         // - RATE_LIMIT / ErrorTooManyAttempts : compte bloqué 60 min
         const skipPlaywright = (
           r.error === "CEV_VOWINT_SESSION_FAILED" ||
-          r.error === "CEV_SESSION_DEAD_NO_POLL" ||
           (r.error ?? "").includes("RATE_LIMIT") ||
           (r.error ?? "").includes("TooManyAttempts")
         );
