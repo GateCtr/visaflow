@@ -1056,4 +1056,125 @@ http.route({
   }),
 });
 
+// ─── Slot Discovery : événements de dates captées/ignorées par le bot ─────────
+http.route({
+  path: "/hunter/slot-discovery",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      destination: string;
+      office: string;
+      dateFound: string;
+      timeFound?: string;
+      outcome: "captured" | "ignored";
+      reason?: string;
+      context?: Record<string, unknown>;
+      discoveredAt: number;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.applicationId || !body.destination || !body.office || !body.dateFound || !body.outcome) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.slotDiscoveries.internalAdd, {
+        applicationId: body.applicationId as Id<"applications">,
+        destination: body.destination,
+        office: body.office,
+        dateFound: body.dateFound,
+        timeFound: body.timeFound,
+        outcome: body.outcome,
+        reason: body.reason,
+        context: body.context ? JSON.stringify(body.context) : undefined,
+        discoveredAt: body.discoveredAt ?? Date.now(),
+      });
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/slot-discovery error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+http.route({
+  path: "/hunter/slot-discovery/batch",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      events: Array<{
+        applicationId: string;
+        destination: string;
+        office: string;
+        dateFound: string;
+        timeFound?: string;
+        outcome: "captured" | "ignored";
+        reason?: string;
+        context?: Record<string, unknown>;
+        discoveredAt: number;
+      }>;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.events || !Array.isArray(body.events) || body.events.length === 0) {
+      return new Response("Missing or empty events array", { status: 400 });
+    }
+
+    try {
+      const sanitized = body.events.map((e) => ({
+        applicationId: e.applicationId as Id<"applications">,
+        destination: e.destination,
+        office: e.office,
+        dateFound: e.dateFound,
+        timeFound: e.timeFound,
+        outcome: e.outcome as "captured" | "ignored",
+        reason: e.reason,
+        context: e.context ? JSON.stringify(e.context) : undefined,
+        discoveredAt: e.discoveredAt ?? Date.now(),
+      }));
+
+      await ctx.runMutation(internal.slotDiscoveries.internalAddBatch, {
+        events: sanitized,
+      });
+
+      return new Response(JSON.stringify({ ok: true, count: sanitized.length }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/slot-discovery/batch error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

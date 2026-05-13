@@ -2,7 +2,7 @@ import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { ProxyAgent } from "undici";
 import { Impit } from "impit";
 import { randomDelay, proxyPool, launchBrowser } from "./browser.js";
-import { reportSlotFound, sendHeartbeat, uploadFile, botLog, type HunterJob } from "./convexClient.js";
+import { reportSlotFound, sendHeartbeat, uploadFile, botLog, reportSlotDiscovery, reportSlotDiscoveryBatch, type SlotDiscoveryEvent, type HunterJob } from "./convexClient.js";
 import { 
   humanLikeDelay, 
   humanPause, 
@@ -2427,7 +2427,8 @@ async function findFirstSlotForOfc(
   dateFrom?: string,
   dateDeadline?: string,
   rescheduleYN?: boolean,
-  referer?: string
+  referer?: string,
+  discoveryEvents?: SlotDiscoveryEvent[]
 ): Promise<SlotFound | null> {
   const basePayload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
@@ -2514,7 +2515,18 @@ async function findFirstSlotForOfc(
 
   // Vérification immédiate : si le premier mois disponible dépasse la date limite, inutile de continuer
   if (dateDeadline && firstMonth.date > dateDeadline) {
-    console.log(`[usa] ⏭ OFC ${ofc.postName} ignoré — premier mois (${firstMonth.date}) après date limite (${dateDeadline})`);
+    console.log(`[usa] ⏭ OFC ${ofc.postName} IGNORÉ — premier mois (${firstMonth.date}) après date limite (${dateDeadline})`);
+    console.log(`[usa] 📊 [DISCOVERY] Date captée: ${firstMonth.date} | Statut: IGNORÉE | Raison: après deadline (${dateDeadline})`);
+    // Enregistrer l'événement de découverte
+    discoveryEvents?.push({
+      applicationId: appDetails.applicationId,
+      destination: "usa",
+      office: ofc.postName,
+      dateFound: firstMonth.date.split("T")[0],
+      outcome: "ignored",
+      reason: "after_deadline",
+      context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date },
+    });
     return null;
   }
 
@@ -2564,13 +2576,33 @@ async function findFirstSlotForOfc(
   // Filtrer les dates hors fenêtre (dateFrom et dateDeadline)
   if (dateFrom || dateDeadline) {
     const before = slotDates.length;
+    const ignoredDates: string[] = [];
     slotDates = slotDates.filter(d => {
-      if (dateFrom && d.date < dateFrom) return false;
-      if (dateDeadline && d.date > dateDeadline) return false;
+      if (dateFrom && d.date < dateFrom) {
+        ignoredDates.push(d.date);
+        return false;
+      }
+      if (dateDeadline && d.date > dateDeadline) {
+        ignoredDates.push(d.date);
+        return false;
+      }
       return true;
     });
     if (slotDates.length < before) {
-      console.log(`[usa] Filtre fenêtre : ${before - slotDates.length} date(s) hors plage ignorée(s)`);
+      console.log(`[usa] 📊 Filtre fenêtre : ${before - slotDates.length} date(s) hors plage ignorée(s) → ${ignoredDates.join(", ")}`);
+      // Enregistrer chaque date ignorée par le filtre de fenêtre
+      for (const ignoredDate of ignoredDates) {
+        const reason = (dateFrom && ignoredDate < dateFrom) ? "before_from_date" : "after_deadline";
+        discoveryEvents?.push({
+          applicationId: appDetails.applicationId,
+          destination: "usa",
+          office: ofc.postName,
+          dateFound: ignoredDate.split("T")[0],
+          outcome: "ignored",
+          reason,
+          context: { dateFrom, dateDeadline, window: `${fromDate} → ${toDate}` },
+        });
+      }
     }
   }
 
@@ -2580,7 +2612,7 @@ async function findFirstSlotForOfc(
   }
 
   console.log(`[usa] 📆 ${slotDates.length} date(s) avec créneaux pour ${ofc.postName}: ${slotDates.slice(0, 3).map(d => d.date).join(", ")}`);
-
+  console.log(`[usa] 📊 [DISCOVERY] ${slotDates.length} date(s) dans la fenêtre pour ${ofc.postName} — vérification horaires...`);
   // 3. Horaires pour la première date disponible
   const targetDate = slotDates[0].date;
   let timeSlots: UsaTimeSlot[];
@@ -2621,7 +2653,17 @@ async function findFirstSlotForOfc(
   }
 
   if (timeSlots.length === 0) {
+    console.log(`[usa] 📊 [DISCOVERY] Date captée: ${targetDate} | Statut: IGNORÉE | Raison: aucun horaire disponible`);
     console.log(`[usa] Aucun horaire disponible pour ${ofc.postName} le ${targetDate}`);
+    discoveryEvents?.push({
+      applicationId: appDetails.applicationId,
+      destination: "usa",
+      office: ofc.postName,
+      dateFound: targetDate.split("T")[0],
+      outcome: "ignored",
+      reason: "no_time_slots",
+      context: { dateFrom, dateDeadline },
+    });
     return null;
   }
 
@@ -2630,6 +2672,16 @@ async function findFirstSlotForOfc(
   const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
 
   console.log(`[usa] 🎯 CRÉNEAU TROUVÉ — ${ofc.postName} le ${targetDate} à ${time} (slotId=${slot.slotId})`);
+  console.log(`[usa] 📊 [DISCOVERY] Date captée: ${targetDate} à ${time} | Statut: RETENUE pour booking | OFC: ${ofc.postName}`);
+  discoveryEvents?.push({
+    applicationId: appDetails.applicationId,
+    destination: "usa",
+    office: ofc.postName,
+    dateFound: targetDate.split("T")[0],
+    timeFound: time,
+    outcome: "captured",
+    context: { slotId: slot.slotId, totalTimeSlotsAvailable: timeSlots.length },
+  });
   return {
     date: targetDate,
     time,
@@ -2643,6 +2695,17 @@ async function findFirstSlotForOfc(
 // ─────────────────────────────────────────────────────────────
 // Conversion temps 24h → format UItime Angular (12h AM/PM)
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Envoie le batch d'événements de découverte avec l'applicationId du job.
+ * Les événements dans findFirstSlotForOfc utilisent le portalApplicationId,
+ * mais pour Convex on a besoin du job.id (= Convex application _id).
+ */
+function reportSlotDiscovery_batch(events: SlotDiscoveryEvent[], jobId: string): void {
+  // Overrider applicationId avec le jobId Convex (les events ont le portalApplicationId)
+  const eventsWithJobId = events.map(e => ({ ...e, applicationId: jobId }));
+  reportSlotDiscoveryBatch(eventsWithJobId);
+}
 
 /**
  * Reproduit exactement setUItime() du bundle Angular (portail US Visa).
@@ -3484,6 +3547,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     console.log(`[usa] 🔄 Round-robin OFC : scanning ${ofcToScan[0].postName} (${cursor % ofcList.length + 1}/${ofcList.length})`);
   }
 
+  // Collecteur d'événements de découverte de dates (pour stats et analyse de fréquence)
+  const scanDiscoveryEvents: SlotDiscoveryEvent[] = [];
+
   try {
     for (const ofc of ofcToScan) {
       console.log(`[usa] Scan OFC: ${ofc.postName} (postUserId=${ofc.postUserId})`);
@@ -3496,7 +3562,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         found = await findFirstSlotForOfc(
           session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline,
           rescheduleMode,
-          rescheduleMode ? REFERER_MANAGE_APT : undefined
+          rescheduleMode ? REFERER_MANAGE_APT : undefined,
+          scanDiscoveryEvents
         );
       } catch (err) {
         // Gestion des erreurs pour findFirstSlotForOfc
@@ -3717,7 +3784,26 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
 
   console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
-  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName) } });
+
+  // ── Résumé des découvertes de dates pour ce cycle ──
+  if (scanDiscoveryEvents.length > 0) {
+    const captured = scanDiscoveryEvents.filter(e => e.outcome === "captured").length;
+    const ignored = scanDiscoveryEvents.filter(e => e.outcome === "ignored").length;
+    const reasons = scanDiscoveryEvents
+      .filter(e => e.outcome === "ignored")
+      .reduce<Record<string, number>>((acc, e) => {
+        acc[e.reason ?? "unknown"] = (acc[e.reason ?? "unknown"] ?? 0) + 1;
+        return acc;
+      }, {});
+    const reasonStr = Object.entries(reasons).map(([r, n]) => `${r}:${n}`).join(", ");
+    console.log(`[usa] 📊 [SCAN STATS] Dates découvertes: ${scanDiscoveryEvents.length} | Retenues: ${captured} | Ignorées: ${ignored} (${reasonStr})`);
+    // Envoyer le batch vers Convex pour analyse de fréquence
+    reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
+  } else {
+    console.log(`[usa] 📊 [SCAN STATS] Aucune date découverte sur ce cycle (portail vide ou erreur API)`);
+  }
+
+  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName), discoveryCount: scanDiscoveryEvents.length, discoveredIgnored: scanDiscoveryEvents.filter(e => e.outcome === "ignored").length } });
   await sendHeartbeat({ applicationId: job.id, result: "not_found" });
   return "not_found";
   } catch (error) {

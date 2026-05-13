@@ -360,4 +360,22 @@ export default defineSchema({
   })
     .index("by_application", ["applicationId"])
     .index("by_status", ["status"]),
+
+  // Slot discoveries — chaque date captée/ignorée par le bot (analyse fréquence disponibilité)
+  slotDiscoveries: defineTable({
+    applicationId: v.id("applications"),
+    destination: v.string(),        // "usa", "schengen", "spain"
+    office: v.string(),             // nom du bureau (ex: "Kinshasa", "Bruxelles")
+    dateFound: v.string(),          // date découverte au format YYYY-MM-DD
+    timeFound: v.optional(v.string()), // heure si disponible (ex: "8:00")
+    outcome: v.union(v.literal("captured"), v.literal("ignored")),
+    reason: v.optional(v.string()), // raison si ignoré (after_deadline, before_from_date, no_time_slots)
+    context: v.optional(v.string()), // JSON stringifié avec contexte additionnel
+    discoveredAt: v.number(),       // timestamp de la découverte
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_destination", ["destination"])
+    .index("by_discovered", ["discoveredAt"])
+    .index("by_destination_office", ["destination", "office"])
+    .index("by_date_found", ["dateFound"]),
 });
