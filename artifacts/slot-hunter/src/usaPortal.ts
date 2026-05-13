@@ -2051,6 +2051,9 @@ interface UsaAppDetails {
   /** UUID de l'applicant — inclus dans le payload de booking (bundle Angular : selectedSlotDetails.applicantUUID).
    * Peut être string (sessionStorage) ou number (parseInt). On stocke string, parseInt au booking. */
   applicantUUID?: string | number;
+  /** visaTypeKey — short code format from /appointments/search (e.g. "NIV", "IV").
+   * Used directly in slot payloads (getFirstAvailableMonth, getSlotDates, etc.). */
+  visaTypeKey?: string;
 }
 
 interface UsaFirstAvailableMonthResponse {
@@ -3288,6 +3291,64 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
 
   // 1. Récupérer les détails de la demande (applicantId, visaType, visaClass, appointmentId, applicantUUID)
+  // ── NEW: appeler /appointments/search AVANT getApplicationDetails ──────────
+  // Le vrai navigateur utilise cette API pour obtenir visaType, visaClass, applicantId, appointmentId
+  // avec des valeurs fiables et plates (pas de nesting gssApplicants).
+  let searchDetails: {
+    visaType?: string;
+    visaClass?: string;
+    applicantId?: string;
+    appointmentId?: number;
+    appointmentLocationType?: string;
+    visaCategory?: string;
+  } | null = null;
+  try {
+    const searchPayload = {
+      operation: "AND",
+      searchObjects: [
+        { key: "applicationId", value: session.applicationId, feildType: "STRING", operation: "EQUAL" },
+      ],
+    };
+    const searchHeaders = authHeaders(session.accessToken, REFERER_CREATE_APT, true);
+    const searchRes = await usaFetch(USA_SEARCH_URL, {
+      method: "POST",
+      headers: searchHeaders,
+      body: JSON.stringify(searchPayload),
+    });
+    console.log(`[usa] /appointments/search → HTTP ${searchRes.status}`);
+    if (searchRes.ok) {
+      const searchRaw = await searchRes.text();
+      console.log(`[usa] /appointments/search réponse: ${searchRaw.slice(0, 600)}`);
+      let searchRows: Record<string, unknown>[] = [];
+      try { searchRows = JSON.parse(searchRaw) as Record<string, unknown>[]; } catch { /* non-JSON */ }
+      // Filter for appointmentStatus === "NEW" entries (same as Angular bundle logic)
+      const newEntries = searchRows.filter(r => r.appointmentStatus === "NEW");
+      const target = newEntries[0] ?? searchRows[0];
+      if (target) {
+        searchDetails = {
+          visaType: typeof target.visaType === "string" ? target.visaType : undefined,
+          visaClass: typeof target.visaClass === "string" ? target.visaClass : undefined,
+          applicantId: typeof target.applicantId === "string" ? target.applicantId : undefined,
+          appointmentId: typeof target.appointmentId === "number" ? target.appointmentId : undefined,
+          appointmentLocationType: typeof target.appointmentLocationType === "string" ? target.appointmentLocationType : undefined,
+          visaCategory: typeof target.visaCategory === "string" ? target.visaCategory : undefined,
+        };
+        console.log(`[usa] ✅ searchDetails: visaType=${searchDetails.visaType}, visaClass=${searchDetails.visaClass}, applicantId=${searchDetails.applicantId}, appointmentId=${searchDetails.appointmentId}, locationType=${searchDetails.appointmentLocationType}, visaCategory=${searchDetails.visaCategory}`);
+        // Propagate applicantId GSS into session early
+        if (searchDetails.applicantId && !session.applicantId) {
+          session.applicantId = searchDetails.applicantId;
+          console.log(`[usa] applicantId GSS depuis /appointments/search: ${searchDetails.applicantId}`);
+        }
+      }
+    } else {
+      console.warn(`[usa] /appointments/search HTTP ${searchRes.status} — will fallback to getApplicationDetails`);
+    }
+  } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
+    console.warn(`[usa] /appointments/search ignoré: ${err}`);
+  }
+
+  // Fallback: getApplicationDetails (may return nested gssApplicants format with undefined fields)
   const appDetails = await getUsaApplicationDetails(session, session.applicationId);
   if (!appDetails) {
     console.warn("[usa] getApplicationDetails échoué — tentative avec userID comme applicantId");
@@ -3309,6 +3370,22 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     visaCategory: earlyTransformData?.visaCategoryKey ?? "VisitorVisas",
     locationType: "OFC",
   };
+
+  // ── Override effectiveDetails with searchDetails (priority: search > appDetails > defaults) ──
+  if (searchDetails) {
+    if (searchDetails.visaType) {
+      effectiveDetails.visaType = searchDetails.visaType;
+      effectiveDetails.visaTypeKey = searchDetails.visaType;
+    }
+    if (searchDetails.visaClass) effectiveDetails.visaClass = searchDetails.visaClass;
+    if (searchDetails.applicantId) effectiveDetails.applicantId = searchDetails.applicantId;
+    if (searchDetails.appointmentId !== undefined) effectiveDetails.appointmentId = searchDetails.appointmentId;
+    if (searchDetails.appointmentLocationType) effectiveDetails.appointmentLocationType = searchDetails.appointmentLocationType;
+    if (searchDetails.visaCategory) effectiveDetails.visaCategory = searchDetails.visaCategory;
+    // Set locationType from search's appointmentLocationType for slot payloads
+    if (searchDetails.appointmentLocationType) effectiveDetails.locationType = searchDetails.appointmentLocationType;
+    console.log(`[usa] effectiveDetails enrichi depuis /appointments/search: visaType=${effectiveDetails.visaType}, visaClass=${effectiveDetails.visaClass}, applicantId=${effectiveDetails.applicantId}, locationType=${effectiveDetails.locationType}`);
+  }
 
   // Propager appointmentId et applicantUUID depuis getApplicationDetails → session.
   // Source bundle : selectedSlotDetails = relatedAppList[0] (filtrée "NEW")
