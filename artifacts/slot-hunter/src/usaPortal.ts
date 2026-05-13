@@ -3128,6 +3128,27 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   }
   // ────────────────────────────────────────────────────────────────────────────
 
+  // 0. Récupérer d'abord getTransformData pour obtenir le bon applicantId (GSS string)
+  //    Le portail Angular fait la même chose : getTransformData AVANT getApplicationDetails.
+  //    Sans ça, getApplicationDetails est appelé avec userID (2720819) au lieu de "RQUP3HHVQHOD"
+  //    et retourne 404 en mode cancellable/reschedule.
+  let earlyTransformData: { stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string; visaCategoryKey?: string; applicantId?: string; visaTypeKey?: string } | null = null;
+  try {
+    earlyTransformData = await getUsaTransformData(session, session.applicationId);
+    if (earlyTransformData) {
+      if (earlyTransformData.stateCode) session.stateCode = earlyTransformData.stateCode;
+      if (earlyTransformData.appointmentPriority) session.appointmentPriority = earlyTransformData.appointmentPriority;
+      // Propager applicantId GSS dans la session pour que getApplicationDetails l'utilise
+      if (earlyTransformData.applicantId && !session.applicantId) {
+        session.applicantId = earlyTransformData.applicantId;
+        console.log(`[usa] applicantId GSS depuis getTransformData (early): ${earlyTransformData.applicantId}`);
+      }
+    }
+  } catch (err) {
+    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
+    console.warn(`[usa] getTransformData early ignoré: ${err}`);
+  }
+
   // 1. Récupérer les détails de la demande (applicantId, visaType, visaClass, appointmentId, applicantUUID)
   const appDetails = await getUsaApplicationDetails(session, session.applicationId);
   if (!appDetails) {
@@ -3145,9 +3166,9 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
     // NOTE: "NIV" = Non-Immigrant Visa. Pour les Immigrant Visas (IV), getTransformData
     // retournera la bonne valeur (ex: visaTypekey="IV", visaClass="IR1", visaCategory="ImmigrantVisas").
     // Le bot ne code JAMAIS le type de visa en dur pour le booking — il vient toujours de l'API.
-    visaType: "NIV",
-    visaClass: "B1/B2",
-    visaCategory: "VisitorVisas",
+    visaType: earlyTransformData?.visaCategory ?? "NIV",
+    visaClass: earlyTransformData?.visaClass ?? "B1/B2",
+    visaCategory: earlyTransformData?.visaCategoryKey ?? "VisitorVisas",
     locationType: "OFC",
   };
 
@@ -3176,7 +3197,7 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   console.log(`[anti-detection] 🚀 Début exécution du flow: ${selectedFlow.join(" → ")}`);
   
   // Variables pour stocker les résultats des étapes
-  let transformDataResult: any = null;
+  let transformDataResult: any = earlyTransformData;
   let ofcListResult: UsaOfc[] = [];
   let scanResult: SessionResult = "not_found";
   
