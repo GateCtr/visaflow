@@ -153,7 +153,24 @@ export async function completeCevCaptcha(
     }
 
     // SelectSlot page (ou autre page calendrier) → créneaux disponibles
-    botLog({ applicationId: clientId, step: 'cev_slots_available', status: 'ok', data: { validUntil: data.validUntil, finalUrl, bodyPreview: probeBodyPreview.slice(0, 500), htmlRaw: probeBodyRaw.slice(0, 5000) } });
+    // LOG COMPLET du HTML pour reverse-engineering — c'est la première fois qu'on voit cette page
+    botLog({
+      applicationId: clientId,
+      step: 'cev_slots_available',
+      status: 'ok',
+      data: {
+        validUntil: data.validUntil,
+        finalUrl,
+        bodyPreview: probeBodyPreview.slice(0, 1000),
+        htmlRaw: probeBodyRaw.slice(0, 8000),
+        hasAvailableTimeSlots: probeBodyRaw.toLowerCase().includes("availabletimeslots"),
+        hasGetAvailableTimeSlotsForPublic: probeBodyRaw.toLowerCase().includes("getavailabletimeslotsforpublic"),
+        hasCalendar: probeBodyRaw.toLowerCase().includes("calendar") || probeBodyRaw.toLowerCase().includes("datepicker"),
+        hasSharedScripts: probeBodyRaw.toLowerCase().includes("sharedscripts"),
+        hasFormAction: probeBodyRaw.toLowerCase().includes("form") && probeBodyRaw.toLowerCase().includes("action"),
+        bodyLength: probeBodyRaw.length,
+      },
+    });
     return { status: 'ready', session };
   } catch (err) {
     botLog({ applicationId: clientId, step: 'cev_captcha_exception', status: 'fail', data: { error: String(err) } });

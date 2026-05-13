@@ -399,16 +399,107 @@ export async function setupCevSessionHttp(
       },
     });
 
-    // Analyser le redirectUrl pour déterminer si des créneaux sont disponibles.
-    // La capture réseau montre :
-    //   - redirectUrl = "/Integration/VOW/{guid1}/{guid2}" → le serveur va rediriger vers SelectSlot ou NoAvailability
-    //   - Si on suit : integrationUrl → 302 → SelectSlot → 302 → NoAvailability = session MORTE
-    //   - La session CEV est SINGLE-USE : un seul passage dans le flow de redirections la tue.
+    // ══════════════════════════════════════════════════════════════════════════
+    // ÉTAPE 7 : SUIVRE la redirectUrl pour découvrir la destination réelle
+    // ══════════════════════════════════════════════════════════════════════════
+    // AVANT : on regardait juste le string "selectslot" dans redirectUrl.
+    // PROBLÈME : la redirectUrl est TOUJOURS une URL intermédiaire du type
+    //   /Integration/VOW/{orgGuid}/{appGuid}/{sessionGuid}/{tokenGuid}/en-US
+    // Elle ne contient JAMAIS "selectslot" directement.
+    // Le VRAI verdict arrive quand on suit cette URL (302 chain).
     //
-    // Stratégie : NE PAS suivre les redirections. Utiliser le cookie pour POST /Home/AvailableTimeSlots.
-    // Si l'API retourne des slots → booking. Si 302/403 → session morte, refaire un setup.
+    // NOUVELLE STRATÉGIE :
+    //   1. Suivre redirectUrl avec redirect:'follow' pour voir la destination finale
+    //   2. Logger le contenu COMPLET (HTML body) pour reverse-engineer la structure
+    //   3. TOUJOURS activer la session — le polling /Home/AvailableTimeSlots est la
+    //      seule source de vérité fiable. Même si on arrive sur "NoAvailability",
+    //      le cookie est valide et le polling peut détecter des slots plus tard.
     const captchaRedirectUrl = captchaData.redirectUrl ?? "";
-    const slotsAvailable = captchaRedirectUrl.toLowerCase().includes("selectslot");
+    
+    // Construire l'URL complète si relative
+    const fullRedirectUrl = captchaRedirectUrl.startsWith("http")
+      ? captchaRedirectUrl
+      : `${CEV_BASE}${captchaRedirectUrl}`;
+
+    // Suivre la chaîne de redirections pour découvrir la destination réelle
+    let finalDestinationUrl = fullRedirectUrl;
+    let finalPageBody = "";
+    let probeStatus = 0;
+    let probeError: string | undefined;
+
+    try {
+      const probeRes = await fetch(fullRedirectUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "Cookie": fullCevCookie,
+          "User-Agent": ua,
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Referer": `${CEV_BASE}/Captcha`,
+          "Cache-Control": "no-cache",
+        },
+        signal: AbortSignal.timeout(20_000),
+      });
+      finalDestinationUrl = probeRes.url;
+      probeStatus = probeRes.status;
+      try { finalPageBody = await probeRes.text(); } catch { /* ignore */ }
+    } catch (err) {
+      probeError = err instanceof Error ? err.message : String(err);
+    }
+
+    // Classifier la destination
+    const finalUrlLower = finalDestinationUrl.toLowerCase();
+    const isNoAvailability = finalUrlLower.includes("noavailability");
+    const isSessionExpired = finalUrlLower.includes("sessionexpired") || finalUrlLower.includes("/captcha");
+    const isSelectSlot = finalUrlLower.includes("selectslot");
+    const isErrorPage = finalUrlLower.includes("/error/");
+
+    // Extraire le texte visible (sans HTML/scripts) pour le log
+    const visibleText = finalPageBody
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1000);
+
+    // Log COMPLET de la découverte — c'est le log le plus important
+    // pour comprendre ce que le portail fait réellement
+    botLog({
+      applicationId: clientId,
+      step: "cev_http_redirect_discovery",
+      status: "ok",
+      data: {
+        originalRedirectUrl: captchaRedirectUrl,
+        finalDestinationUrl,
+        probeStatus,
+        probeError: probeError ?? null,
+        isNoAvailability,
+        isSessionExpired,
+        isSelectSlot,
+        isErrorPage,
+        bodyLength: finalPageBody.length,
+        visibleText,
+        // Premiers 5000 chars du HTML brut — essentiel pour reverse-engineering
+        htmlRaw: finalPageBody.slice(0, 5000),
+        // Chercher des marqueurs connus
+        hasAvailableTimeSlots: finalPageBody.toLowerCase().includes("availabletimeslots"),
+        hasGetAvailableTimeSlotsForPublic: finalPageBody.toLowerCase().includes("getavailabletimeslotsforpublic"),
+        hasCalendar: finalPageBody.toLowerCase().includes("calendar") || finalPageBody.toLowerCase().includes("datepicker"),
+        hasSharedScripts: finalPageBody.toLowerCase().includes("sharedscripts"),
+        hasFormAction: finalPageBody.toLowerCase().includes("form") && finalPageBody.toLowerCase().includes("action"),
+      },
+    });
+
+    // DÉCISION : TOUJOURS activer la session.
+    // Raison : le cookie ASP.NET_SessionId est valide pendant ~15 min (validUntil).
+    // Même si la destination finale est NoAvailability, le polling via
+    // POST /Home/AvailableTimeSlots peut fonctionner avec ce cookie.
+    // C'est le polling qui déterminera s'il y a des slots, PAS la redirectUrl.
+    //
+    // La seule exception : si la session est expirée (captcha invalide, etc.)
+    const slotsAvailable = !isSessionExpired;
 
     botLog({
       applicationId: clientId,
@@ -417,7 +508,15 @@ export async function setupCevSessionHttp(
       data: {
         validUntil: captchaData.validUntil,
         redirectUrl: captchaRedirectUrl,
+        finalDestinationUrl,
         slotsAvailable,
+        activationReason: isSessionExpired
+          ? "SESSION_EXPIRED_NO_ACTIVATE"
+          : isNoAvailability
+            ? "NO_AVAILABILITY_BUT_COOKIE_VALID_ACTIVATE_FOR_POLLING"
+            : isSelectSlot
+              ? "SELECT_SLOT_PAGE_ACTIVATE"
+              : "UNKNOWN_PAGE_ACTIVATE_FOR_DISCOVERY",
         integrationUrl: integrationUrl.slice(0, 80),
       },
     });
