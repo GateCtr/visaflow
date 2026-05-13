@@ -308,9 +308,14 @@ function isRushHour(): boolean {
 }
 
 // ─── Silence Radio : IP cooldown entre deux incursions consécutives ─────────
-// Normal : 2-3 min. Rush hours : 45-90 s (session USA API ~2 min → cycle total ~3 min).
+// Normal : 2-3 min entre dossiers de tiers DIFFÉRENTS.
+// Entre dossiers du MÊME tier (stagger mode) : réduit à 30-60s pour maximiser
+// la couverture temporelle — les scans sont déjà décalés dans l'intervalle.
+// Rush hours : 45-90 s (session USA API ~2 min → cycle total ~3 min).
 const SILENCE_RADIO_MIN_MS = 2 * 60_000;
 const SILENCE_RADIO_MAX_MS = 3 * 60_000;
+const SILENCE_RADIO_SAME_TIER_MIN_MS = 30_000;  // 30s entre dossiers staggerés
+const SILENCE_RADIO_SAME_TIER_MAX_MS = 60_000;  // 60s entre dossiers staggerés
 
 // ─── Polling quand aucun job n'est dû ───────────────────────────────────────
 const IDLE_POLL_MIN_MS = 60_000;
@@ -327,6 +332,14 @@ const MAX_LOGIN_FAILURES = 3;
 // Auto-pause après N erreurs transitoires consécutives (429/403/réseau) sur le même dossier.
 // Évite d'harceler le portail en boucle si le compte est rate-limité ou bloqué.
 const MAX_CONSECUTIVE_ERRORS = 5;
+
+// ─── Stagger : décalage automatique des dossiers pour couverture maximale ───
+// Quand plusieurs dossiers partagent le même tier (ex: 3× tres_urgent),
+// leurs échéances sont réparties uniformément dans l'intervalle du tier.
+// Ex: tier tres_urgent (3-5 min), 3 dossiers → décalés de ~1m20 entre eux.
+// Cela garantit une couverture quasi-continue au lieu de 3 scans simultanés.
+const staggerOffsets = new Map<string, number>(); // jobId → offset en ms
+let lastStaggeredTier: string | null = null; // pour le silence radio réduit
 
 // ─── Vérification bundle portail USA (clé AES) ───────────────────────────────
 // Une fois par jour : télécharge le bundle Angular du portail et vérifie que
@@ -402,6 +415,10 @@ function getSilenceRadioMs(): number {
   if (isRushHour()) {
     return Math.round(RUSH_SILENCE_MIN_MS + Math.random() * (RUSH_SILENCE_MAX_MS - RUSH_SILENCE_MIN_MS));
   }
+  // Silence réduit si le prochain job est du même tier (scans staggerés)
+  if (lastStaggeredTier !== null) {
+    return Math.round(SILENCE_RADIO_SAME_TIER_MIN_MS + Math.random() * (SILENCE_RADIO_SAME_TIER_MAX_MS - SILENCE_RADIO_SAME_TIER_MIN_MS));
+  }
   return Math.round(SILENCE_RADIO_MIN_MS + Math.random() * (SILENCE_RADIO_MAX_MS - SILENCE_RADIO_MIN_MS));
 }
 
@@ -409,6 +426,76 @@ function formatMs(ms: number): string {
   const min = Math.floor(ms / 60_000);
   const sec = Math.round((ms % 60_000) / 1000);
   return `${min}m${sec}s`;
+}
+
+// ─── Stagger : répartition uniforme des dossiers dans l'intervalle du tier ──
+/**
+ * Calcule et applique les décalages initiaux pour les dossiers actifs.
+ * Appelée UNE FOIS au démarrage et quand de nouveaux dossiers apparaissent.
+ *
+ * Logique : pour N dossiers du même tier, l'intervalle est divisé en N parts.
+ * Chaque dossier reçoit un offset = (index / N) × intervalle_tier.
+ * Les dossiers sont triés par ID pour garantir un ordre stable.
+ *
+ * Ex: 3 dossiers tres_urgent (intervalle moyen 4 min) :
+ *   - Dossier A : offset 0s   → scan à T+0
+ *   - Dossier B : offset 80s  → scan à T+1m20
+ *   - Dossier C : offset 160s → scan à T+2m40
+ *   → Couverture : un scan toutes les ~80s au lieu de 3 en même temps
+ */
+function staggerInitialSchedules(jobs: HunterJob[]): void {
+  const activeJobs = jobs.filter((j) =>
+    !pausedJobs.has(j.id) &&
+    j.hunterConfig?.isActive === true &&
+    !!j.portalUrl &&
+    !completedJobs.has(j.id),
+  );
+
+  // Grouper par tier
+  const byTier = new Map<string, HunterJob[]>();
+  for (const job of activeJobs) {
+    const tier = job.urgencyTier ?? "standard";
+    const group = byTier.get(tier) ?? [];
+    group.push(job);
+    byTier.set(tier, group);
+  }
+
+  const now = Date.now();
+
+  for (const [tier, tierJobs] of byTier.entries()) {
+    if (tierJobs.length <= 1) continue; // Pas besoin de stagger pour un seul dossier
+
+    // Trier par ID pour un ordre stable (même résultat à chaque appel)
+    tierJobs.sort((a, b) => a.id.localeCompare(b.id));
+
+    const rush = tier === "tres_urgent" && isRushHour();
+    const cfg = rush
+      ? { min: RUSH_INTERVAL_MIN_MS, max: RUSH_INTERVAL_MAX_MS }
+      : (URGENCY_INTERVAL[tier] ?? URGENCY_INTERVAL.standard);
+    const avgInterval = (cfg.min + cfg.max) / 2;
+
+    // Diviser l'intervalle en N parts égales
+    const staggerStep = Math.round(avgInterval / tierJobs.length);
+
+    for (let i = 0; i < tierJobs.length; i++) {
+      const job = tierJobs[i];
+      const offset = i * staggerStep;
+      staggerOffsets.set(job.id, offset);
+
+      // Ne planifier que si le job n'a PAS déjà une échéance (premier démarrage)
+      if (!scheduledNextDue.has(job.id)) {
+        const due = now + offset;
+        scheduledNextDue.set(job.id, due);
+      }
+    }
+
+    log("INFO", `📐 Stagger ${tier}: ${tierJobs.length} dossiers décalés de ${formatMs(staggerStep)} (intervalle ${formatMs(avgInterval)})`);
+    for (let i = 0; i < tierJobs.length; i++) {
+      const job = tierJobs[i];
+      const offset = staggerOffsets.get(job.id) ?? 0;
+      log("INFO", `   └─ [${job.applicantName}] offset +${formatMs(offset)}`);
+    }
+  }
 }
 
 /**
@@ -445,6 +532,28 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
   });
 
   return due[0];
+}
+
+/**
+ * Vérifie si un autre dossier du même tier est dû prochainement (< 2 min).
+ * Utilisé pour décider si le silence radio doit être réduit (mode stagger).
+ * Ignore le dossier qu'on vient de traiter (currentTier match + pas le même job).
+ */
+function findNextDueJobSoon(jobs: HunterJob[], currentTier: string): HunterJob | null {
+  const now = Date.now();
+  const soonThreshold = now + 2 * 60_000; // dans les 2 prochaines minutes
+
+  const candidates = jobs.filter((j) =>
+    !pausedJobs.has(j.id) &&
+    !completedJobs.has(j.id) &&
+    j.hunterConfig?.isActive === true &&
+    !!j.portalUrl &&
+    j.urgencyTier === currentTier &&
+    getNextCheckDue(j) <= soonThreshold &&
+    getNextCheckDue(j) > now, // pas encore dû mais bientôt
+  );
+
+  return candidates.length > 0 ? candidates[0] : null;
 }
 
 function getTimeUntilNextDue(jobs: HunterJob[]): number {
@@ -506,6 +615,9 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
   }
   for (const jobId of scheduledNextDue.keys()) {
     if (!freshJobIds.has(jobId)) scheduledNextDue.delete(jobId);
+  }
+  for (const jobId of staggerOffsets.keys()) {
+    if (!freshJobIds.has(jobId)) staggerOffsets.delete(jobId);
   }
 }
 
@@ -590,10 +702,15 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
 
   // Planifier le prochain cycle : générer l'intervalle UNE SEULE FOIS ici,
   // stocké dans scheduledNextDue, lu de façon déterministe par getNextCheckDue.
+  // Le stagger est maintenu : on utilise l'intervalle du tier mais on conserve
+  // l'offset relatif du dossier pour garder la répartition uniforme.
   const intervalMs = generateIntervalMs(job.urgencyTier);
   const nextDue = Date.now() + intervalMs;
   scheduledNextDue.set(job.id, nextDue);
   log("INFO", `[${job.applicantName}] Prochain check dans ${formatMs(intervalMs)} (${new Date(nextDue).toLocaleTimeString("fr-CD")})`);
+
+  // Tracker le tier du dernier job exécuté pour adapter le silence radio
+  lastStaggeredTier = job.urgencyTier;
 }
 
 /**
@@ -839,7 +956,7 @@ async function main(): Promise<void> {
   const proxyStatus = [brightdataStatus, iproyalStatus, fallbackStatus].filter(Boolean).join(" | ");
   log("INFO", `Proxy: ${proxyStatus}`);
   log("INFO", "Intervalles tier — tres_urgent:3-5m (rush:1-2m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
-  log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
+  log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | stagger ${formatMs(SILENCE_RADIO_SAME_TIER_MIN_MS)}–${formatMs(SILENCE_RADIO_SAME_TIER_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
   log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
@@ -888,6 +1005,10 @@ async function main(): Promise<void> {
     }
 
     syncAdminResets(jobs);
+
+    // Stagger : répartir les dossiers du même tier dans l'intervalle
+    // (recalcule si de nouveaux dossiers apparaissent ou si le tier change)
+    staggerInitialSchedules(jobs);
 
     // Vérification quotidienne du bundle portail USA (non bloquante)
     await checkPortalBundleKey(jobs);
@@ -948,8 +1069,18 @@ async function main(): Promise<void> {
     await handleResult(due, result);
 
     if (result !== "slot_found") {
+      // Adapter le silence radio selon le contexte :
+      // - Si un autre dossier du même tier est bientôt dû (stagger), silence réduit
+      // - Sinon, silence normal pour cooldown IP
+      const nextJob = findNextDueJobSoon(jobs, due.urgencyTier);
+      if (nextJob) {
+        lastStaggeredTier = due.urgencyTier;
+      } else {
+        lastStaggeredTier = null;
+      }
       const silenceMs = getSilenceRadioMs();
-      log("INFO", `📻 Silence radio ${formatMs(silenceMs)} (cooldown IP)...`);
+      const silenceType = lastStaggeredTier ? "stagger" : isRushHour() ? "rush" : "normal";
+      log("INFO", `📻 Silence radio ${formatMs(silenceMs)} (${silenceType})...`);
       await new Promise((r) => setTimeout(r, silenceMs));
     }
   }
