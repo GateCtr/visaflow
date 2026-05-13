@@ -2241,7 +2241,7 @@ async function getUsaApplicationDetails(
 async function getUsaTransformData(
   session: UsaSession,
   applicationId: string,
-): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string; applicantId?: string; visaTypeKey?: string } | null> {
+): Promise<{ stateCode?: string; appointmentPriority?: string; paymentStatus?: string; visaClass?: string; visaCategory?: string; visaCategoryKey?: string; applicantId?: string; visaTypeKey?: string } | null> {
   const url = USA_TRANSFORM_DATA_URL(applicationId);
   const hdrs = sessionHeaders(session.accessToken, applicationId, session.missionId, REFERER_REQUESTS, false);
   try {
@@ -2278,14 +2278,21 @@ async function getUsaTransformData(
     const visaClass        = typeof td.visaClass        === "string" ? td.visaClass        : undefined;
     const visaCategory     = typeof td.visaCategory     === "string" ? td.visaCategory     :
                              (typeof td.visaCategoryCode === "string" ? td.visaCategoryCode : undefined);
+    // visaCategorykey (ex: "StudentsandExchangeVisitors") — c'est le CODE que le portail Angular
+    // envoie dans l'URL lookupcdt/wizard/getpost?visaCategory=... 
+    // DIFFÉRENT de visaCategory (label: "Students and Exchange Visitors") qui cause un 404.
+    // Fallback: on tente aussi visaCategoryCode (champ du search response) et enfin on strip les espaces du label.
+    const visaCategoryKey  = typeof td.visaCategorykey  === "string" ? td.visaCategorykey  :
+                             (typeof td.visaCategoryCode === "string" ? td.visaCategoryCode :
+                             (typeof td.visaCategory === "string" ? td.visaCategory.replace(/\s+/g, "") : undefined));
     // applicantId GSS (ex: "RQUP3HHVQHOD") — utilisé dans les payloads slot si getApplicationDetails échoue
     const applicantId      = typeof td.applicantid      === "string" ? td.applicantid      :
                              (typeof td.applicantId      === "string" ? td.applicantId      : undefined);
     // visaTypekey (ex: "NIV") — c'est ce que le portail envoie dans les payloads slot, PAS visaType ("Non-immigrant Visa")
     const visaTypeKey      = typeof td.visaTypekey      === "string" ? td.visaTypekey      : undefined;
 
-    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} visaClass=${visaClass ?? "(vide)"} visaCategory=${visaCategory ?? "(vide)"} applicantId=${applicantId ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
-    return { stateCode, appointmentPriority, paymentStatus, visaClass, visaCategory, applicantId, visaTypeKey };
+    console.log(`[usa] getTransformData: stateCode=${stateCode ?? "(vide)"} priority=${appointmentPriority ?? "(vide)"} visaClass=${visaClass ?? "(vide)"} visaCategory=${visaCategory ?? "(vide)"} visaCategoryKey=${visaCategoryKey ?? "(vide)"} applicantId=${applicantId ?? "(vide)"} paymentStatus=${paymentStatus ?? "?"}`);
+    return { stateCode, appointmentPriority, paymentStatus, visaClass, visaCategory, visaCategoryKey, applicantId, visaTypeKey };
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError) throw err;
     console.warn(`[usa] getTransformData erreur: ${err} — ignoré`);
@@ -3205,8 +3212,10 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           // Utiliser les données de getTransformData en priorité (plus fiables que getApplicationDetails
           // pour les cas cancellable/reschedule où appointmentStatus n'est plus "NEW")
           const ofcVisaClass = transformDataResult?.visaClass ?? effectiveDetails.visaClass;
-          // visaCategory pour l'URL getpost (ex: "VisitorVisas") — distinct de visaType ("NIV") pour les slot payloads
-          const ofcVisaCategory = transformDataResult?.visaCategory ?? effectiveDetails.visaCategory ?? effectiveDetails.visaType;
+          // visaCategory pour l'URL getpost — DOIT être le code clé (ex: "StudentsandExchangeVisitors")
+          // PAS le label humain (ex: "Students and Exchange Visitors") qui retourne 404.
+          // Priorité : visaCategorykey > visaCategoryCode (effectiveDetails) > fallback strip espaces
+          const ofcVisaCategory = transformDataResult?.visaCategoryKey ?? effectiveDetails.visaCategory ?? effectiveDetails.visaType;
 
           // Bundle : appointmentPriority "group" + reschedule → "regular" (bot = pas de reschedule donc on envoie tel quel)
           const ofcPriority = session.appointmentPriority;
@@ -3361,11 +3370,13 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
   if (ofcListResult.length === 0 && session.applicationId) {
     try {
       const ofcPriority = session.appointmentPriority;
+      // Utiliser visaCategoryKey (code) en priorité pour éviter le 404 avec le label humain
+      const fallbackVisaCategory = transformDataResult?.visaCategoryKey ?? effectiveDetails.visaCategory ?? effectiveDetails.visaType;
       ofcListResult = await getUsaOfcList(
         session,
         session.missionId,
         effectiveDetails.visaClass,
-        effectiveDetails.visaCategory ?? effectiveDetails.visaType,
+        fallbackVisaCategory,
         session.stateCode,
         ofcPriority,
       );
