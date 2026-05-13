@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { VISA_PRICING } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "./constants";
 import { coreMarkSlotFound, getEffectiveSuccessModel as getSuccessModel } from "./slotFoundHelper";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -796,6 +796,51 @@ export const adjustSlotSuccessFee = mutation({
         ...(app.logs ?? []),
         makeLog(
           `Prime de succès ajustée : ${prevFee} $ → ${args.newSuccessFee} $${args.reason ? ` (${args.reason})` : ""}.`,
+          identity?.name ?? "admin"
+        ),
+      ],
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const updateSlotUrgencyTier = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    newTier: v.union(
+      v.literal("standard"),
+      v.literal("prioritaire"),
+      v.literal("urgent"),
+      v.literal("tres_urgent")
+    ),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+    if ((app as { servicePackage?: string }).servicePackage !== "slot_only") {
+      throw new Error("Changement de tier uniquement disponible pour les dossiers Créneau Uniquement");
+    }
+
+    const prevTier = ((app as { slotUrgencyTier?: string }).slotUrgencyTier ?? "standard") as SlotUrgencyTier;
+    if (prevTier === args.newTier) {
+      throw new Error(`Le dossier est déjà en tier "${SLOT_URGENCY_TIERS[prevTier].label}"`);
+    }
+
+    const prevLabel = SLOT_URGENCY_TIERS[prevTier].label;
+    const newLabel = SLOT_URGENCY_TIERS[args.newTier].label;
+
+    await ctx.db.patch(args.applicationId, {
+      slotUrgencyTier: args.newTier,
+      updatedAt: Date.now(),
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          `Tier urgence changé : ${prevLabel} → ${newLabel}${args.reason ? ` (${args.reason})` : ""}.`,
           identity?.name ?? "admin"
         ),
       ],
