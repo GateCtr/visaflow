@@ -2529,7 +2529,8 @@ async function findFirstSlotForOfc(
       throw new TokenExpiredError();
     }
     if (!res.ok) {
-      console.log(`[usa] ${endpoint} HTTP ${res.status} pour OFC ${ofc.postName}`);
+      const errBody = await res.text().catch(() => "");
+      console.log(`[usa] ${endpoint} HTTP ${res.status} pour OFC ${ofc.postName} — body: ${errBody.slice(0, 300)}`);
       return false;
     }
     return true;
