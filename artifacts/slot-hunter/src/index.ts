@@ -54,29 +54,32 @@ async function startCevSetupLoop(): Promise<void> {
           );
 
           if (httpResult.success) {
-            // Le portail CEV est single-use : après SetCaptchaToken, le serveur
-            // a déjà vérifié la disponibilité. Si redirectUrl ne contient pas "SelectSlot",
-            // il n'y a pas de créneaux et la session est morte.
-            if (httpResult.slotsAvailable) {
-              // 🚨 SLOTS DISPONIBLES — activer la session pour booking immédiat
-              console.log(`[CEV-SETUP] 🚨 SLOTS DISPONIBLES session=${s.sessionId} — activation pour booking`);
-              const { activateCevSession } = await import("./convexClient.js");
-              const activated = await activateCevSession(
-                s.sessionId,
-                httpResult.sessionCookie!,
-                httpResult.validUntilMs,
-                httpResult.integrationUrl,
-              );
-              r = activated
-                ? { success: true }
-                : { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+            // NOUVELLE LOGIQUE : Toujours activer la session après un setup réussi.
+            // Le cookie ASP.NET_SessionId est valide pendant ~15 min (validUntil).
+            // On active la session pour que le polling /Home/AvailableTimeSlots puisse
+            // détecter les slots en temps réel. C'est le polling qui tranchera,
+            // PAS la redirectUrl initiale.
+            //
+            // Même si la destination finale est "NoAvailability", le cookie est valide
+            // et le polling peut potentiellement retourner des slots (race condition
+            // entre le moment où le serveur a checké et le moment où on poll).
+            console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — activation pour polling (slotsAvailable=${httpResult.slotsAvailable})`);
+            const { activateCevSession } = await import("./convexClient.js");
+            const activated = await activateCevSession(
+              s.sessionId,
+              httpResult.sessionCookie!,
+              httpResult.validUntilMs,
+              httpResult.integrationUrl,
+            );
+            if (activated) {
+              r = { success: true };
+              if (httpResult.slotsAvailable) {
+                console.log(`[CEV-SETUP] 🚨 DESTINATION = SLOTS POSSIBLES session=${s.sessionId} — booking prioritaire`);
+              } else {
+                console.log(`[CEV-SETUP] 📡 Session activée pour polling session=${s.sessionId} — le polling /Home/AvailableTimeSlots détectera les slots`);
+              }
             } else {
-              // Pas de créneaux — session consommée (single-use), attendre le prochain cycle.
-              // NE PAS resetCevSetupLock : le lock Convex (13 min) empêche de re-checker
-              // cette session trop vite. Avec un lock de 13 min, on fait max ~4 checks/heure
-              // par session, ce qui respecte la limite de 5 clics/heure VOWINT.
-              console.log(`[CEV-SETUP] ℹ️  Pas de créneaux (redirectUrl=${httpResult.redirectUrl?.slice(0, 60)}) session=${s.sessionId} — lock expire dans ~13 min`);
-              r = { success: true }; // Pas une erreur — juste pas de créneaux
+              r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
             }
           } else {
             console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);

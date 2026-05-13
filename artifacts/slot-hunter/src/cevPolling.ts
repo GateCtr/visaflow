@@ -212,20 +212,47 @@ async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollRes
       // 302 redirect = session expirée ou NoAvailability
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get("location") ?? "";
+        // LOG: capturer le redirect pour comprendre le comportement
+        console.log(`[CEV-POLL-API] 🔀 Redirect ${res.status} → ${loc} (month=${body.month}/${body.year})`);
         if (loc.includes("SessionExpired") || loc.includes("Captcha")) {
           return { status: "session_expired" };
         }
-        // Autre redirect — fallback vers stratégie 2
+        if (loc.includes("NoAvailability")) {
+          // NoAvailability via redirect — pas de slots mais session peut être encore valide
+          continue; // essayer le mois suivant avant de conclure
+        }
+        // Autre redirect inconnu — LOG complet pour discovery
+        console.log(`[CEV-POLL-API] ⚠️  Redirect inconnu: ${loc}`);
         return null;
       }
 
       if (!res.ok) {
-        // Erreur serveur inattendue — fallback
+        // Erreur serveur inattendue — LOG le status et le body
+        let errorBody = "";
+        try { errorBody = await res.text(); } catch { /* ignore */ }
+        console.log(`[CEV-POLL-API] ❌ HTTP ${res.status} — body: ${errorBody.slice(0, 500)}`);
         return null;
       }
 
-      // Réponse JSON — parser les slots
-      const raw = await res.json() as unknown;
+      // Réponse OK — capturer le CONTENU BRUT pour discovery
+      const rawText = await res.text();
+      let raw: unknown;
+      try {
+        raw = JSON.parse(rawText);
+      } catch {
+        // Pas du JSON — LOG complet pour comprendre
+        console.log(`[CEV-POLL-API] 🔍 Réponse non-JSON (month=${body.month}/${body.year}): ${rawText.slice(0, 2000)}`);
+        // Si c'est du HTML (page d'erreur renvoyée en 200)
+        if (rawText.toLowerCase().includes("noavailability") || rawText.toLowerCase().includes("session")) {
+          return { status: "session_expired" };
+        }
+        return null;
+      }
+
+      // LOG: toujours logger la réponse brute pour reverse-engineering
+      const rawType = Array.isArray(raw) ? "array" : (raw === null ? "null" : typeof raw);
+      const rawPreview = rawText.slice(0, 2000);
+      console.log(`[CEV-POLL-API] 📊 Réponse (month=${body.month}/${body.year}): type=${rawType} len=${rawText.length} preview=${rawPreview.slice(0, 200)}`);
 
       // Réponse vide ou tableau vide = pas de créneaux ce mois
       if (raw === null || (Array.isArray(raw) && raw.length === 0)) {
@@ -234,18 +261,19 @@ async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollRes
 
       // Si c'est un tableau non-vide ou un objet avec des données → slots trouvés !
       if (Array.isArray(raw) && raw.length > 0) {
-        const preview = JSON.stringify(raw).slice(0, 2000);
-        return { status: "slot_found", bodyPreview: preview };
+        console.log(`[CEV-POLL-API] 🚨 SLOTS TROUVÉS! (month=${body.month}/${body.year}) count=${raw.length} raw=${rawPreview}`);
+        return { status: "slot_found", bodyPreview: rawPreview };
       }
 
-      // Objet avec des clés → probablement des slots
       if (typeof raw === "object" && raw !== null && Object.keys(raw as object).length > 0) {
         const preview = JSON.stringify(raw).slice(0, 2000);
+        console.log(`[CEV-POLL-API] 🚨 SLOTS (objet)! (month=${body.month}/${body.year}) keys=${Object.keys(raw as object).join(",")} raw=${preview}`);
         return { status: "slot_found", bodyPreview: preview };
       }
 
     } catch (err) {
-      // Erreur réseau/timeout — fallback vers stratégie 2
+      // Erreur réseau/timeout — LOG et fallback vers stratégie 2
+      console.log(`[CEV-POLL-API] ⚡ Erreur réseau (month=${body.month}/${body.year}): ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }
@@ -315,7 +343,10 @@ export async function pollCevSlot(
           if (bodyHasSlotMarkers(body)) {
             return { status: "slot_found", bodyPreview: body.slice(0, 2000) };
           }
-          // 3. 200 sans marqueur ni erreur connue → on ne risque PAS un faux positif
+          // 3. 200 sans marqueur ni erreur connue → LOG complet pour discovery
+          console.log(`[CEV-POLL-FALLBACK] 🔍 Page 200 inconnue (url=${r2.url ?? next}):`);
+          console.log(`[CEV-POLL-FALLBACK]   bodyLen=${body.length}`);
+          console.log(`[CEV-POLL-FALLBACK]   htmlPreview=${body.slice(0, 3000)}`);
           return {
             status: "error",
             error: "Page 200 sans marqueur de créneau ni erreur connue (à investiguer)",
@@ -343,7 +374,10 @@ export async function pollCevSlot(
       if (bodyHasSlotMarkers(body)) {
         return { status: "slot_found", bodyPreview: body.slice(0, 2000) };
       }
-      // Pas de marqueur — pas de faux positif
+      // Pas de marqueur — LOG complet pour discovery
+      console.log(`[CEV-POLL-FALLBACK] 🔍 Page 200 directe inconnue (url=${entryUrl}):`);
+      console.log(`[CEV-POLL-FALLBACK]   bodyLen=${body.length}`);
+      console.log(`[CEV-POLL-FALLBACK]   htmlPreview=${body.slice(0, 3000)}`);
       return {
         status: "error",
         error: "Page 200 directe sans marqueur (captcha probable, session à rafraîchir)",
