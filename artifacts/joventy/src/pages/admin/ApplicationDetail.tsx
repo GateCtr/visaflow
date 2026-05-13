@@ -40,6 +40,66 @@ import {
   Check,
 } from "lucide-react";
 
+function NextSessionCountdown({ endedAt, urgencyTier, isActive }: { endedAt: string; urgencyTier: string; isActive: boolean }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!isActive) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isActive]);
+
+  if (!isActive) {
+    return (
+      <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
+        <Pause className="w-3.5 h-3.5 text-slate-400" />
+        <span className="text-xs text-slate-500 font-medium">Hunter en pause</span>
+      </div>
+    );
+  }
+
+  // Intervalles par tier (alignés avec index.ts du slot-hunter)
+  const TIER_INTERVALS: Record<string, { min: number; max: number }> = {
+    tres_urgent:  { min:  3 * 60_000, max:  5 * 60_000 },
+    urgent:       { min: 15 * 60_000, max: 20 * 60_000 },
+    prioritaire:  { min: 25 * 60_000, max: 35 * 60_000 },
+    standard:     { min: 45 * 60_000, max: 60 * 60_000 },
+  };
+
+  const interval = TIER_INTERVALS[urgencyTier] ?? TIER_INTERVALS.standard;
+  const avgInterval = (interval.min + interval.max) / 2;
+  const endedAtMs = new Date(endedAt).getTime();
+  const nextSessionAt = endedAtMs + avgInterval;
+  const remaining = nextSessionAt - now;
+
+  if (remaining <= 0) {
+    return (
+      <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 animate-pulse">
+        <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+        <span className="text-xs text-blue-700 font-medium">Prochaine session imminente…</span>
+      </div>
+    );
+  }
+
+  const mins = Math.floor(remaining / 60_000);
+  const secs = Math.floor((remaining % 60_000) / 1000);
+  const display = mins > 0 ? `${mins}m ${secs.toString().padStart(2, "0")}s` : `${secs}s`;
+  const progress = Math.max(0, Math.min(100, ((avgInterval - remaining) / avgInterval) * 100));
+
+  return (
+    <div className="mt-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
+      <div className="flex items-center gap-2">
+        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+        <span className="text-xs text-indigo-700 font-semibold">Prochaine session dans {display}</span>
+        <span className="text-[10px] text-indigo-400 ml-auto">{urgencyTier}</span>
+      </div>
+      <div className="mt-1.5 h-1 bg-indigo-100 rounded-full overflow-hidden">
+        <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function PaymentReceiptModal({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <div
@@ -1821,12 +1881,19 @@ export default function AdminApplicationDetail() {
             blocked: "Compte potentiellement bloqué",
             restricted: "Compte restreint",
             error: "Erreur",
+            session_end: "Fin de session",
+            session_start: "Début de session",
+            human_behavior: "Comportement humain",
+            appointment_status: "Statut demande",
+            anti_detection: "Anti-détection",
           };
           const stepIcons: Record<string, string> = {
             login: "🔑", ofc_list: "🏛️", scan: "🔄",
             slots_found: "📅", booking_attempt: "📝", booking_success: "✅",
             booking_fail: "❌", confirmation_letter: "📄", not_found: "🔍",
             rate_limit: "⛔", blocked: "🚫", restricted: "🔒", error: "⚠️",
+            session_end: "🏁", session_start: "🚀", human_behavior: "🤖",
+            appointment_status: "📋", anti_detection: "🛡️",
           };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {
@@ -1979,6 +2046,15 @@ export default function AdminApplicationDetail() {
                             </button>
                           )}
                         </div>
+
+                        {/* Countdown to next session — affiché uniquement pour le PREMIER session_end (le plus récent) */}
+                        {log.step === "session_end" && log._id === (pageSlice.find((l: Doc<"botLogs">) => l.step === "session_end")?._id) && (
+                          <NextSessionCountdown
+                            endedAt={parsedData?.endedAt as string | undefined ?? new Date(log.ts).toISOString()}
+                            urgencyTier={(app as unknown as { slotUrgencyTier?: string })?.slotUrgencyTier ?? "standard"}
+                            isActive={(app as unknown as { hunterConfig?: { isActive?: boolean } })?.hunterConfig?.isActive ?? false}
+                          />
+                        )}
 
                         {parsedData && (
                           <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
