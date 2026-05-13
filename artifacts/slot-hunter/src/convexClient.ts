@@ -662,6 +662,66 @@ export async function reportSpainWatcherScan(payload: {
   }
 }
 
+// ─── Slot Discovery (dates captées / ignorées par le bot) ─────────────────────
+
+export interface SlotDiscoveryEvent {
+  applicationId: string;
+  destination: string;
+  office: string;
+  /** Date trouvée sur le portail (YYYY-MM-DD) */
+  dateFound: string;
+  /** Heure trouvée (optionnel, ex: "8:00 AM") */
+  timeFound?: string;
+  /** "captured" = date retenue pour booking, "ignored" = date écartée */
+  outcome: "captured" | "ignored";
+  /** Raison de l'ignorement (ex: "after_deadline", "before_from_date", "no_time_slots") */
+  reason?: string;
+  /** Contexte additionnel (deadline, fenêtre admin, etc.) */
+  context?: Record<string, unknown>;
+}
+
+/**
+ * Envoie un événement de découverte de créneau au backend Convex.
+ * Fire-and-forget — ne bloque pas le chemin critique du scan.
+ */
+export function reportSlotDiscovery(event: SlotDiscoveryEvent): void {
+  const url = `${CONVEX_SITE_URL}/hunter/slot-discovery`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Hunter-Key": HUNTER_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...event,
+      discoveredAt: Date.now(),
+    }),
+  }).catch((err) =>
+    console.warn("[convexClient] reportSlotDiscovery fire-and-forget error:", err)
+  );
+}
+
+/**
+ * Envoie un batch d'événements de découverte (fin de cycle de scan).
+ * Fire-and-forget.
+ */
+export function reportSlotDiscoveryBatch(events: SlotDiscoveryEvent[]): void {
+  if (events.length === 0) return;
+  const url = `${CONVEX_SITE_URL}/hunter/slot-discovery/batch`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Hunter-Key": HUNTER_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      events: events.map((e) => ({ ...e, discoveredAt: Date.now() })),
+    }),
+  }).catch((err) =>
+    console.warn("[convexClient] reportSlotDiscoveryBatch fire-and-forget error:", err)
+  );
+}
+
 export async function uploadFile(base64: string, contentType: string): Promise<string | null> {
   const url = `${CONVEX_SITE_URL}/hunter/upload-screenshot`;
   try {

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Grid3X3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Grid3X3, BarChart3, Eye, EyeOff, TrendingUp } from "lucide-react";
 
 const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   usa:      { bg: "bg-blue-100",   text: "text-blue-800",   dot: "bg-blue-500" },
@@ -84,10 +84,11 @@ function AppointmentCard({ app, compact = false }: { app: Appointment; compact?:
 
 export default function AdminCalendar() {
   const data = useQuery(api.admin.getCalendarData);
+  const discoveryStats = useQuery(api.slotDiscoveries.getStats, {});
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState<string | null>(toISODateKey(today));
-  const [view, setView] = useState<"month" | "list">("month");
+  const [view, setView] = useState<"month" | "list" | "discoveries">("month");
 
   const appointments = useMemo<Appointment[]>(() => data ?? [], [data]);
 
@@ -160,6 +161,12 @@ export default function AdminCalendar() {
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${view === "list" ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
           >
             <List className="w-4 h-4" /> Liste
+          </button>
+          <button
+            onClick={() => setView("discoveries")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${view === "discoveries" ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+          >
+            <BarChart3 className="w-4 h-4" /> Découvertes
           </button>
         </div>
       </div>
@@ -273,7 +280,7 @@ export default function AdminCalendar() {
             )}
           </div>
         </div>
-      ) : (
+      ) : view === "list" ? (
         /* List view */
         <div className="space-y-8">
           {upcoming.length > 0 && (
@@ -365,7 +372,237 @@ export default function AdminCalendar() {
             </div>
           )}
         </div>
+      ) : (
+        /* Discoveries view — stats de dates captées/ignorées par le bot */
+        <DiscoveriesPanel stats={discoveryStats} />
       )}
+    </div>
+  );
+}
+
+// ─── Composant Découvertes (heatmap, stats, feed) ────────────────────────────
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const DAY_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+const REASON_LABELS: Record<string, string> = {
+  after_deadline: "Après deadline",
+  before_from_date: "Avant date min",
+  no_time_slots: "Pas d'horaires",
+};
+
+type DiscoveryStats = {
+  totalCaptured: number;
+  totalIgnored: number;
+  totalDiscoveries: number;
+  byDateFound: Record<string, { captured: number; ignored: number; reasons: Record<string, number> }>;
+  byHour: Record<number, { captured: number; ignored: number }>;
+  byDayOfWeek: Record<number, { captured: number; ignored: number }>;
+  byReason: Record<string, number>;
+  recent: Array<{
+    _id: string;
+    destination: string;
+    office: string;
+    dateFound: string;
+    timeFound?: string;
+    outcome: "captured" | "ignored";
+    reason?: string;
+    discoveredAt: number;
+  }>;
+};
+
+function DiscoveriesPanel({ stats }: { stats: DiscoveryStats | null | undefined }) {
+  if (stats === undefined) {
+    return <div className="p-12 text-center text-muted-foreground">Chargement des statistiques de découverte...</div>;
+  }
+  if (!stats || stats.totalDiscoveries === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-border p-16 text-center">
+        <BarChart3 className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+        <p className="text-muted-foreground font-medium">Aucune découverte de date enregistrée</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Les dates trouvées (captées ou ignorées) par le bot apparaîtront ici dès le prochain scan.
+        </p>
+      </div>
+    );
+  }
+
+  const maxHourVal = Math.max(...HOURS.map(h => (stats.byHour[h]?.captured ?? 0) + (stats.byHour[h]?.ignored ?? 0)), 1);
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-primary">{stats.totalDiscoveries}</p>
+              <p className="text-xs text-muted-foreground">Dates découvertes (30j)</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-green-200 shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+              <Eye className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-green-700">{stats.totalCaptured}</p>
+              <p className="text-xs text-muted-foreground">Retenues (booking tenté)</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+              <EyeOff className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-amber-700">{stats.totalIgnored}</p>
+              <p className="text-xs text-muted-foreground">Ignorées (hors fenêtre)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Hourly heatmap — quand l'ambassade libère des créneaux */}
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="text-sm font-bold text-primary mb-1 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-secondary" />
+            Heures de disponibilité (UTC)
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Quand le portail rend des créneaux disponibles
+          </p>
+          <div className="grid grid-cols-12 gap-1">
+            {HOURS.map((h) => {
+              const data = stats.byHour[h] ?? { captured: 0, ignored: 0 };
+              const total = data.captured + data.ignored;
+              const intensity = total / maxHourVal;
+              const bgColor = total === 0
+                ? "bg-slate-100"
+                : intensity > 0.7
+                  ? "bg-green-500"
+                  : intensity > 0.4
+                    ? "bg-green-300"
+                    : intensity > 0.1
+                      ? "bg-green-200"
+                      : "bg-green-100";
+              return (
+                <div key={h} className="flex flex-col items-center gap-0.5" title={`${h}h UTC: ${total} découverte(s) (${data.captured} retenues, ${data.ignored} ignorées)`}>
+                  <div className={`w-full aspect-square rounded-sm ${bgColor} transition-colors`} />
+                  {h % 3 === 0 && <span className="text-[8px] text-muted-foreground">{h}h</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-100 inline-block" /> 0</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-200 inline-block" /> Peu</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-300 inline-block" /> Moyen</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> Beaucoup</span>
+          </div>
+        </div>
+
+        {/* Day of week distribution */}
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="text-sm font-bold text-primary mb-1 flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-secondary" />
+            Jours de la semaine
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Jours où des créneaux sont détectés
+          </p>
+          <div className="space-y-2">
+            {DAY_NAMES.map((name, dow) => {
+              const data = stats.byDayOfWeek[dow] ?? { captured: 0, ignored: 0 };
+              const total = data.captured + data.ignored;
+              const maxDow = Math.max(...Object.values(stats.byDayOfWeek).map(d => d.captured + d.ignored), 1);
+              const pct = (total / maxDow) * 100;
+              return (
+                <div key={dow} className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-600 w-8">{name}</span>
+                  <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden relative">
+                    {data.captured > 0 && (
+                      <div
+                        className="absolute left-0 top-0 h-full bg-green-400 rounded-full"
+                        style={{ width: `${(data.captured / maxDow) * 100}%` }}
+                      />
+                    )}
+                    {data.ignored > 0 && (
+                      <div
+                        className="absolute top-0 h-full bg-amber-300 rounded-full"
+                        style={{ left: `${(data.captured / maxDow) * 100}%`, width: `${(data.ignored / maxDow) * 100}%` }}
+                      />
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground w-8 text-right">{total}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-400 inline-block" /> Retenues</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-300 inline-block" /> Ignorées</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Reasons breakdown */}
+      {Object.keys(stats.byReason).length > 0 && (
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
+            <EyeOff className="w-4 h-4 text-amber-500" />
+            Raisons d'ignorement
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(stats.byReason).sort(([, a], [, b]) => b - a).map(([reason, count]) => (
+              <div key={reason} className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-xl border border-amber-200">
+                <span className="text-sm font-bold text-amber-700">{count}</span>
+                <span className="text-xs text-amber-600">{REASON_LABELS[reason] ?? reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent discoveries feed */}
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+        <h3 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-secondary" />
+          Dernières découvertes
+        </h3>
+        {stats.recent.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucune découverte récente.</p>
+        ) : (
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {stats.recent.map((d) => (
+              <div key={d._id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${d.outcome === "captured" ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${d.outcome === "captured" ? "bg-green-500" : "bg-amber-500"}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-primary">{d.dateFound}</span>
+                    {d.timeFound && <span className="text-[10px] text-slate-500">{d.timeFound}</span>}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.outcome === "captured" ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"}`}>
+                      {d.outcome === "captured" ? "Retenue" : "Ignorée"}
+                    </span>
+                    {d.reason && (
+                      <span className="text-[10px] text-muted-foreground">({REASON_LABELS[d.reason] ?? d.reason})</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{d.office} — {DEST_LABELS[d.destination] ?? d.destination}</p>
+                </div>
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                  {new Date(d.discoveredAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
