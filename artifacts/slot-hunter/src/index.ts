@@ -90,7 +90,21 @@ async function startCevSetupLoop(): Promise<void> {
         }
 
         // ── Stratégie 2 : Playwright (fallback si HTTP échoue) ───────────────
-        if (!r.success && r.error !== "CEV_VOWINT_SESSION_FAILED") {
+        // NE PAS lancer Playwright si :
+        // - CEV_VOWINT_SESSION_FAILED : identifiants VOWINT invalides
+        // - CEV_SESSION_DEAD_NO_POLL : cookie CEV ne permet pas le poll direct (401)
+        //   → le serveur exige de naviguer vers redirectUrl, ce qui TUE la session.
+        //   Playwright ferait la même chose et grillerait un clic VOWINT pour rien.
+        //   → Laisser le lock 13 min expirer naturellement.
+        // - RATE_LIMIT / ErrorTooManyAttempts : compte bloqué 60 min
+        const skipPlaywright = (
+          r.error === "CEV_VOWINT_SESSION_FAILED" ||
+          r.error === "CEV_SESSION_DEAD_NO_POLL" ||
+          (r.error ?? "").includes("RATE_LIMIT") ||
+          (r.error ?? "").includes("TooManyAttempts")
+        );
+
+        if (!r.success && !skipPlaywright) {
           // Timeout global de 4 min — si Playwright bloque
           let timedOut = false;
           const timeoutHandle = setTimeout(() => { timedOut = true; }, CEV_SETUP_TIMEOUT_MS);
@@ -128,11 +142,34 @@ async function startCevSetupLoop(): Promise<void> {
 
           const isLoginFailure = r.error === "CEV_VOWINT_SESSION_FAILED";
           const isTimeout = r.error === "TIMEOUT_4MIN";
+          const isSessionDead = r.error === "CEV_SESSION_DEAD_NO_POLL";
+          const isTooManyAttempts = (r.error ?? "").includes("TooManyAttempts") || (r.error ?? "").includes("RATE_LIMIT");
           // Ne pas compter comme login failure si c'est un rate limit (bouton désactivé)
           // ou si le setup a été déclenché par un auto_renewal (session expirée normalement)
-          const isRateLimit = (r.error ?? "").includes("RATE_LIMIT") || (r.error ?? "").includes("rate_limit");
+          const isRateLimit = isTooManyAttempts;
 
-          if (isLoginFailure && !isRateLimit) {
+          if (isTooManyAttempts) {
+            // VOWINT rate-limit atteint (5 clics/heure) — PAUSER la session
+            // Le compte est bloqué pendant 60 minutes par VOWINT.
+            console.log(`[CEV-SETUP] 🚫 RATE-LIMIT VOWINT session=${s.sessionId} — session PAUSÉE (60 min de blocage VOWINT)`);
+            try {
+              const loginResult = await recordCevSetupLoginFail(s.sessionId, r.error ?? "RATE_LIMIT_TOO_MANY_ATTEMPTS");
+              if (loginResult.paused) {
+                console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE — trop de clics bouton RDV`);
+              }
+            } catch (err) {
+              console.warn(`[CEV-SETUP] recordCevSetupLoginFail échoué: ${err}`);
+            }
+            // NE PAS reset le lock — laisser expirer naturellement (13 min)
+          } else if (isSessionDead) {
+            // Le cookie CEV seul ne permet pas le poll API (401).
+            // Le serveur exige de naviguer vers redirectUrl, ce qui consumer la session.
+            // → NE PAS relancer Playwright (même résultat), NE PAS reset le lock.
+            // → Laisser le lock de 13 min expirer naturellement.
+            // → Le prochain cycle fera un nouveau setup complet (1 clic VOWINT).
+            console.log(`[CEV-SETUP] 🔒 Session=${s.sessionId} cookie seul insuffisant pour poll (401) — lock maintenu 13 min`);
+            // Pas de resetCevSetupLock → la session ne sera pas re-tentée avant 13 min
+          } else if (isLoginFailure && !isRateLimit) {
             // Échec de login VOWINT : incrémenter le compteur persisté dans Convex.
             // Après 3 échecs cumulés (même après redémarrages Railway) → session auto-pausée.
             try {

@@ -564,9 +564,33 @@ export async function setupCevSessionHttp(
     // ── DÉCISION D'ACTIVATION ────────────────────────────────────────────────
     // - slots_found → activer (booking immédiat)
     // - no_slots → activer (poll continu pendant 15 min, slots peuvent apparaître)
-    // - session_dead → NE PAS activer (cookie inutilisable sans navigation)
+    // - session_dead → RETOURNER success=false avec erreur spécifique
+    //   pour que index.ts NE relance PAS immédiatement (lock 13 min respecté)
     // - error → activer quand même (laisser le polling normal retry)
-    const slotsAvailable = pollResult !== "session_dead";
+
+    if (pollResult === "session_dead") {
+      // Le cookie seul ne suffit pas pour /Home/AvailableTimeSlots.
+      // Le serveur exige qu'on navigue d'abord vers redirectUrl (ce qui tue la session).
+      // → On retourne success=false avec une erreur SPÉCIFIQUE qui indique au caller
+      //   de NE PAS lancer le fallback Playwright et de laisser le lock 13 min expirer.
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_setup_complete",
+        status: "warn",
+        data: {
+          validUntil: captchaData.validUntil,
+          redirectUrl: captchaRedirectUrl,
+          pollResult,
+          slotsAvailable: false,
+          activationReason: "SESSION_DEAD_COOKIE_ALONE_NOT_ENOUGH",
+          integrationUrl: integrationUrl.slice(0, 80),
+          hint: "Le cookie post-captcha ne permet pas de poll /Home/AvailableTimeSlots directement (401). Il faut naviguer vers redirectUrl mais ça consumer la session. Attente 13 min avant retry.",
+        },
+      });
+      return { success: false, error: "CEV_SESSION_DEAD_NO_POLL" };
+    }
+
+    const slotsAvailable = true; // no_slots ou slots_found ou error → activer
 
     botLog({
       applicationId: clientId,
@@ -581,9 +605,7 @@ export async function setupCevSessionHttp(
           ? "SLOTS_FOUND_IMMEDIATE_POLL"
           : pollResult === "no_slots"
             ? "SESSION_ALIVE_NO_SLOTS_ACTIVATE_FOR_POLLING"
-            : pollResult === "session_dead"
-              ? "SESSION_DEAD_COOKIE_ALONE_NOT_ENOUGH"
-              : "ERROR_ACTIVATE_FOR_RETRY",
+            : "ERROR_ACTIVATE_FOR_RETRY",
         integrationUrl: integrationUrl.slice(0, 80),
       },
     });
