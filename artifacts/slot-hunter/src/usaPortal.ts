@@ -2461,13 +2461,20 @@ async function findFirstSlotForOfc(
     // Le portail Angular envoie visaTypekey (ex: "NIV") dans getFirstAvailableMonth/getSlotDates/getSlotTime
     visaType: (appDetails as unknown as Record<string, unknown>).visaTypeKey ?? appDetails.visaType,
     visaClass: appDetails.visaClass,
-    // locationType : déterminé par le type du bureau sélectionné (ofc.officeType)
-    // Bundle Angular : this.ofcOrPost — "OFC" si bureau OFC, "POST" si bureau POST
-    // Pour Kinshasa (pas de bureau OFC séparé) → locationType="POST" même pour un nouveau booking
-    // En mode reschedule, utiliser le type de l'appointment existant si disponible
+    // locationType : déterminé par le portail Angular via this.ofcOrPost.
+    // Bundle Angular : this.ofcOrPost = "OFC" par défaut (nouveau booking).
+    // En mode reschedule, le portail utilise l'appointmentLocationType du RDV existant (ex: "POST").
+    //
+    // IMPORTANT : Pour un nouveau booking, le portail envoie TOUJOURS "OFC" dans locationType,
+    // même quand le bureau physique a officeType="POST" (cas Kinshasa mission 323).
+    // La raison : l'étape courante est la biométrie (IS_BIOMETRIC_CAPTURE_SUPPORTED: "yes"),
+    // donc le serveur attend locationType="OFC" — il retourne 404 si on envoie "POST"
+    // avec pendingAppoStatus=1 car le RDV POST ne peut être réservé qu'après l'OFC.
+    //
+    // En mode reschedule, le RDV POST existant a déjà été lié → on utilise son type.
     locationType: rescheduleYN
-      ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC")
-      : (ofc.officeType ?? "OFC"),
+      ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
+      : "OFC",
     applicationId: appDetails.applicationId,
   };
   // Bundle Angular : applicationDetails.applicantUUID est inclus dans le payload de booking
