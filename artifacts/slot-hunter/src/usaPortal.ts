@@ -1976,6 +1976,32 @@ interface UsaOfc {
   postCode?: string;
 }
 
+/** Réponse brute de l'API /lookupcdt/wizard/getpost — champs réels du serveur.
+ * Le portail renvoie `ofcName` et `code`, pas `postName`/`postCode`. */
+interface UsaOfcRaw {
+  postUserId: number;
+  missionId?: number;
+  ofcName?: string;
+  postName?: string;  // Certaines missions renvoient postName au lieu de ofcName
+  ofcAddress?: string;
+  countryCode?: string;
+  stateCode?: string;
+  city?: string;
+  officeType: string;
+  code?: string;
+  status?: string;
+}
+
+/** Normalise la réponse brute de l'API OFC en UsaOfc interne. */
+function normalizeOfc(raw: UsaOfcRaw): UsaOfc {
+  return {
+    postUserId: raw.postUserId,
+    postName: raw.ofcName ?? raw.postName ?? raw.city ?? `OFC-${raw.postUserId}`,
+    officeType: raw.officeType,
+    postCode: raw.code,
+  };
+}
+
 interface UsaAppDetails {
   applicantId: number | string;
   applicationId: string;
@@ -2332,7 +2358,9 @@ async function getUsaOfcList(
       return [];
     }
     const data = await res.json();
-    const list = Array.isArray(data) ? data as UsaOfc[] : [];
+    // L'API retourne des champs `ofcName`/`code` (pas `postName`/`postCode`) — normaliser.
+    const rawList = Array.isArray(data) ? data as UsaOfcRaw[] : [];
+    const list: UsaOfc[] = rawList.map(normalizeOfc);
 
     // Étape 1 : filtre par officeType — bundle: je.filter(B => B.officeType === this.ofcOrPost)
     // Le portail Angular utilise `this.ofcOrPost` qui vaut "OFC" par défaut (nouveau booking)

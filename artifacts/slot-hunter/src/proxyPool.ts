@@ -119,14 +119,17 @@ export class ProxyPool {
   private async refresh(): Promise<void> {
     const key = this.apiKey;
     const ip  = this.serverIp!;
+    // 2captcha proxy API — utilise le paramètre `ip` pour whitelister l'IP serveur.
+    // Certaines versions de l'API attendent aussi `server_ip` — on envoie les deux pour compatibilité.
     const url =
       `https://api.2captcha.com/proxy/generate_white_list_connections` +
-      `?key=${key}&protocol=http&connection_count=${POOL_SIZE}&ip=${encodeURIComponent(ip)}`;
+      `?key=${key}&protocol=http&connection_count=${POOL_SIZE}&ip=${encodeURIComponent(ip)}&server_ip=${encodeURIComponent(ip)}`;
 
     try {
       const res  = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       const json = await res.json() as {
         status: string;
+        message?: string;
         request?: string;
         data?: string[];
       };
@@ -138,11 +141,13 @@ export class ProxyPool {
         console.log(`[ProxyPool] ✅ ${this.pool.length} residential IPs loaded from 2captcha`);
       } else if (
         json.request?.includes('IP_NOT_WHITELISTED') ||
-        json.request?.includes('NOT_WHITELISTED')
+        json.request?.includes('NOT_WHITELISTED') ||
+        json.status === 'ERROR_MISSING_IP' ||
+        json.status === 'ERROR_IP_NOT_WHITELISTED'
       ) {
         this.whitelistError = true;
         this.whitelistErrorAt = Date.now();
-        console.error(`[ProxyPool] ❌ IP ${ip} not whitelisted in 2captcha`);
+        console.error(`[ProxyPool] ❌ IP ${ip} not whitelisted or missing in 2captcha (status: ${json.status})`);
         console.error(`[ProxyPool] → Go to 2captcha.com/proxy → "IP whitelist" → Add: ${ip}`);
       } else {
         console.error(`[ProxyPool] ❌ Refresh failed: ${JSON.stringify(json)}`);
