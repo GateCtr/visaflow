@@ -611,13 +611,18 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
 }
 
 /**
- * Vérifie si un autre dossier du même tier est dû prochainement (< 2 min).
+ * Vérifie si un autre dossier du même tier est dû prochainement (< 4 min).
  * Utilisé pour décider si le silence radio doit être réduit (mode stagger).
  * Ignore le dossier qu'on vient de traiter (currentTier match + pas le même job).
+ *
+ * Seuil à 4 min (et non 2 min) car quand le stagger est exactement 2 min,
+ * un seuil de 2 min rate le dossier suivant de justesse (condition > now).
+ * Avec 4 min le bot détecte toujours le prochain dossier staggeré et utilise
+ * le silence radio réduit (30-60s) au lieu du normal (2-3 min).
  */
 function findNextDueJobSoon(jobs: HunterJob[], currentTier: string): HunterJob | null {
   const now = Date.now();
-  const soonThreshold = now + 2 * 60_000; // dans les 2 prochaines minutes
+  const soonThreshold = now + 4 * 60_000; // dans les 4 prochaines minutes (couvre stagger 2min)
 
   const candidates = jobs.filter((j) =>
     !pausedJobs.has(j.id) &&
