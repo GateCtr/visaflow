@@ -373,6 +373,8 @@ export default defineSchema({
     outcome: v.union(v.literal("captured"), v.literal("ignored")),
     reason: v.optional(v.string()), // raison si ignoré (after_deadline, before_from_date, no_time_slots)
     context: v.optional(v.string()), // JSON stringifié avec contexte additionnel
+    /** Mode de scan : "schedule" (nouveau booking) ou "reschedule" (reporter un RDV existant). */
+    mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
     discoveredAt: v.number(),       // timestamp de la PREMIÈRE découverte
     /** Nombre de fois où ce créneau a été vu (dédupliqué sur 24h). */
     seenCount: v.optional(v.number()),
