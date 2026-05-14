@@ -96,6 +96,12 @@ const USA_FCS_CHECK_URL = (applicationId: string) =>
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+// Durée maximale d'une session en cache avant invalidation automatique.
+// Même si le JWT est techniquement valide 55 min, le portail détecte les sessions
+// inactives après ~15 min. On invalide à 10 min pour éviter de réutiliser un token
+// après un logout raté ou un crash (cf. analyse de la contradiction JWT 55 min vs session réelle).
+const MAX_SESSION_AGE_MS = 10 * 60 * 1000;
+
 // ─────────────────────────────────────────────────────────────
 // Circuit-breaker : erreurs HTTP critiques pendant le scan
 // ─────────────────────────────────────────────────────────────
@@ -461,6 +467,10 @@ interface CachedToken {
   expiresAt: number;
   userID: number;
   fullName: string;
+  /** Timestamp (Date.now()) du moment où le token a été créé/rafraîchi.
+   * Utilisé pour invalider le cache après MAX_SESSION_AGE_MS même si le JWT est
+   * techniquement encore valide — protection contre les logouts ratés. */
+  sessionStartedAt: number;
   /** Index dans USA_UA_POOL assigné lors du login — réutilisé pour toute la durée du JWT.
    * Un même JWT vu depuis des UAs différents est une empreinte bot détectable. */
   uaIndex?: number;
@@ -501,7 +511,17 @@ function isCachedTokenValid(cached: CachedToken): boolean {
   // Le jitter ±5 min est fixé au moment du login et conservé tout au long du JWT.
   // Résultat : chaque compte se reconnecte à un moment légèrement différent,
   // ce qui brise le pattern "login toutes les 55 min pile" détectable par le portail.
-  return Date.now() < cached.expiresAt - TOKEN_REFRESH_BUFFER_MS - cached.jitterMs;
+  const now = Date.now();
+
+  // Protection contre les logouts ratés : si la session a été créée il y a plus de
+  // MAX_SESSION_AGE_MS (10 min), on invalide le cache indépendamment de l'exp JWT.
+  // Le portail détecte les sessions inactives après ~15 min — on coupe avant.
+  const sessionAge = now - cached.sessionStartedAt;
+  if (sessionAge >= MAX_SESSION_AGE_MS) {
+    return false;
+  }
+
+  return now < cached.expiresAt - TOKEN_REFRESH_BUFFER_MS - cached.jitterMs;
 }
 
 async function refreshUsaToken(cached: CachedToken, username: string): Promise<CachedToken | null> {
@@ -552,6 +572,9 @@ async function refreshUsaToken(cached: CachedToken, username: string): Promise<C
       // Jitter conservé du login initial — la dispersion temporelle reste cohérente
       // sur toute la chaîne de refreshs d'un même compte.
       jitterMs: cached.jitterMs,
+      // Réinitialiser le timestamp de session au moment du refresh — le nouveau token
+      // démarre une nouvelle fenêtre de MAX_SESSION_AGE_MS.
+      sessionStartedAt: Date.now(),
     };
   } catch (err) {
     console.warn("[usa] Erreur lors du refresh:", err);
@@ -971,6 +994,7 @@ export async function getUsaSession(
       userID: session.userID,
       fullName: session.fullName,
       jitterMs,
+      sessionStartedAt: Date.now(),
     });
 
     return session;
