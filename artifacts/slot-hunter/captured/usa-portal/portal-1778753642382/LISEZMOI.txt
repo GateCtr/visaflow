@@ -1,0 +1,14 @@
+Capture portail USA (Angular) — usvisaappt.com
+
+Démarrage : https://www.usvisaappt.com/visaapplicantui/login
+Proxy : oui
+
+Fichiers :
+  - network.har          Trafic réseau (DevTools / analyse HAR)
+  - auth-trace.json      Requêtes « sensibles » + JWT décodé (requête et réponse)
+  - responses-index.json Liste minimale des réponses
+  - storage.json         localStorage + sessionStorage (tronqué)
+  - cookies.json         Cookies du contexte Playwright
+  - console.jsonl        Logs console navigateur
+
+Comparer avec le bot : src/usaPortal/usa-http.ts (usaFetch, impit vs fetch+proxy).

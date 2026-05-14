@@ -1,0 +1,15 @@
+[
+  {
+    "t": "2026-05-14T10:45:52.583Z",
+    "method": "GET",
+    "url": "https://www.usvisaappt.com/visaadministrationapi/v1/globalconfiguration/getby/Captcha",
+    "status": 200,
+    "requestCookieSnippet": "",
+    "responseAuthHeaders": {
+      "access-control-expose-headers": "Authorization, Refreshtoken, Set-Cookie, csrfToken"
+    },
+    "responseBodySnippet": "[{\"id\":6,\"type\":\"Captcha\",\"globalValue\":\"true\",\"status\":\"ACTIVE\",\"recaptchaSiteKey\":\"6LdVVDAqAAAAAK4DS06UwosT8o1SA_3WhzUDAWAp\",\"recaptchaSecretKey\":\"6LdVVDAqAAAAALuuEbn3TPamHtWHEJvNPEDlbxt-\"}]",
+    "decodedRequestAuthorizationPayload": null,
+    "decodedResponseAuthorizationPayload": null
+  }
+]

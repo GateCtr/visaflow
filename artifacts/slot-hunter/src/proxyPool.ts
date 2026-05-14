@@ -307,3 +307,48 @@ export async function detectPublicIp(): Promise<string | null> {
   console.error('[ProxyPool] ❌ Could not detect public IP — proxy pool disabled');
   return null;
 }
+
+/** Objet `proxy` Playwright : gère `http://user:pass@host:port` et `http://host:port:user:pass` (2captcha). */
+export function parseHttpProxyUrlForPlaywright(
+  raw: string,
+): { server: string; username?: string; password?: string } | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  let candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+
+  if (!candidate.includes("@")) {
+    const withoutScheme = candidate.replace(/^https?:\/\//i, "");
+    const parts = withoutScheme.split(":");
+    if (parts.length >= 4) {
+      const password = parts[parts.length - 1]!;
+      const username = parts[parts.length - 2]!;
+      const port = parts[parts.length - 3]!;
+      const hostParts = parts.slice(0, parts.length - 3);
+      if (/^\d{1,5}$/.test(port) && hostParts.length > 0) {
+        const looksLikeIpv4 =
+          hostParts.length === 4 &&
+          hostParts.every((s) => /^\d{1,3}$/.test(s) && Number(s) <= 255);
+        const host = looksLikeIpv4 ? hostParts.join(".") : hostParts.join(".");
+        const hostInServer = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+        const scheme = candidate.toLowerCase().startsWith("https") ? "https" : "http";
+        return {
+          server: `${scheme}://${hostInServer}:${port}`,
+          username: decodeURIComponent(username),
+          password: decodeURIComponent(password),
+        };
+      }
+    }
+  }
+
+  try {
+    const u = new URL(candidate);
+    return {
+      server: `${u.protocol}//${u.host}`,
+      ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
+      ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}

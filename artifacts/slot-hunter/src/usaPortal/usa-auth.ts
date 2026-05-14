@@ -3,6 +3,7 @@ import {
   usaFetch,
   getBrowserHeaders,
   hasUsaProxy,
+  authHeaders,
 } from "./usa-http.js";
 import {
   USA_LOGIN_URL,
@@ -17,6 +18,22 @@ import { isRestrictedBody } from "./account-restriction.js";
 import { encryptPortalCredentials } from "./crypto.js";
 import type { UsaSession, UsaLoginResponse } from "./types.js";
 
+/** Extrait un access token Cognito depuis un corps JSON (login ou refresh). */
+function pickAccessTokenFromJsonBody(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const o = body as Record<string, unknown>;
+  for (const k of ["accessToken", "AccessToken", "access_token"]) {
+    const v = o[k];
+    if (typeof v === "string" && v.length > 0) return v.trim();
+  }
+  const ar = o.AuthenticationResult;
+  if (ar && typeof ar === "object") {
+    const at = (ar as Record<string, unknown>).AccessToken;
+    if (typeof at === "string" && at.length > 0) return at.trim();
+  }
+  return "";
+}
+
 /**
  * Déconnecte l'utilisateur du portail USA et vide le cache de token.
  * Appelle POST /identity/user/logout avec le Bearer token en en-tête.
@@ -30,10 +47,7 @@ export async function logoutUsaPortal(username: string): Promise<void> {
     try {
       const res = await usaFetch(USA_LOGOUT_URL, {
         method: "POST",
-        headers: {
-          ...getBrowserHeaders(),
-          Authorization: `Bearer ${cached.accessToken}`,
-        },
+        headers: authHeaders(cached.accessToken, REFERER_DASHBOARD, false),
         body: null,
       });
       console.log(`[usa] Logout HTTP ${res.status} — ${username}`);
@@ -126,8 +140,23 @@ export async function loginUsaPortal(
     throw new Error("Réponse non-JSON du portail USA");
   }
 
-  let accessToken = response.headers.get("authorization");
-  let refreshToken = response.headers.get("refreshtoken") ?? "";
+  if (process.env.USA_DEBUG_LOGIN_JSON === "1") {
+    console.warn(`[usa] DEBUG login JSON (tronqué): ${JSON.stringify(data).slice(0, 1500)}`);
+    console.warn(`[usa] DEBUG login header names: ${[...response.headers.keys()].join(", ")}`);
+  }
+
+  const stripBearer = (t: string | null | undefined): string => {
+    if (!t) return "";
+    return t.trim().replace(/^Bearer\s+/i, "").trim();
+  };
+
+  // Les API visa attendent en général l’access token Cognito ; le header Authorization du login
+  // peut ne contenir que l’id token (token_use=id). Préférer le corps JSON quand présent.
+  let accessToken =
+    stripBearer(pickAccessTokenFromJsonBody(data))
+    || stripBearer(typeof data.accessToken === "string" ? data.accessToken : "")
+    || stripBearer(response.headers.get("authorization"));
+  let refreshToken = stripBearer(response.headers.get("refreshtoken")) ?? "";
 
   // ── Extraction csrfToken robuste ───────────────────────────────────────────
   // Le bundle Angular lit : F.headers.get("Csrftoken") (header de réponse custom).
@@ -199,17 +228,33 @@ export async function loginUsaPortal(
           console.warn(`[usa] csrfToken toujours absent après refresh même IP — headers: [${hdrs}]`);
           console.warn(`[usa] ⚠️ Le serveur ne renvoie pas Csrftoken — les PUT (booking) pourront échouer.`);
         }
-        // Le refresh peut renvoyer un nouveau couple access/refresh ; l'ancien access peut
-        // alors être rejeté sur les API suivantes si on ne pivote pas.
+        // Le refresh peut renvoyer l’access token dans le corps JSON (Cognito) alors que le header
+        // ne porte que l’id token — lire le corps en priorité.
         if (refreshRes.ok) {
-          const newAccess = refreshRes.headers.get("authorization");
-          const newRefresh = refreshRes.headers.get("refreshtoken");
-          if (newAccess && newAccess !== accessToken) {
-            accessToken = newAccess;
-            console.log("[usa] JWT access pivoté après refresh post-login (cohérence session)");
+          const refreshTxt = await refreshRes.text();
+          let refreshParsed: unknown = null;
+          try {
+            refreshParsed = JSON.parse(refreshTxt) as unknown;
+          } catch {
+            /* corps vide ou non-JSON */
           }
+          const fromRefreshBody = stripBearer(pickAccessTokenFromJsonBody(refreshParsed));
+          if (process.env.USA_DEBUG_LOGIN_JSON === "1") {
+            console.warn(`[usa] DEBUG refresh corps (tronqué): ${refreshTxt.slice(0, 1200)}`);
+          }
+          if (fromRefreshBody) {
+            accessToken = fromRefreshBody;
+            console.log("[usa] JWT access depuis corps JSON /refreshToken (préféré au header)");
+          } else {
+            const newAccess = refreshRes.headers.get("authorization");
+            if (newAccess && stripBearer(newAccess) !== stripBearer(accessToken)) {
+              accessToken = stripBearer(newAccess);
+              console.log("[usa] JWT access pivoté après refresh post-login (cohérence session)");
+            }
+          }
+          const newRefresh = refreshRes.headers.get("refreshtoken");
           if (newRefresh) {
-            refreshToken = newRefresh;
+            refreshToken = stripBearer(newRefresh);
           }
         }
       } catch (refreshErr) {

@@ -1,0 +1,13 @@
+{
+  "endedAt": "2026-05-14T10:59:57.120Z",
+  "sessionDir": "D:\\dev\\visaflow\\artifacts\\slot-hunter\\captured\\usa-portal\\portal-1778756394428",
+  "totalResponses": 1,
+  "count401": 0,
+  "count403": 0,
+  "authTraceRows": 0,
+  "hints": [
+    "Comparer token_use (id vs access) : auth-trace.json → decodedRequestAuthorizationPayload vs decodedResponseAuthorizationPayload.",
+    "Si login renvoie accessToken null dans le JSON mais authorization en header, noter la différence avec le bot (usa-auth.ts).",
+    "Si 401 seulement avec proxy côté bot : comparer TLS (impit sans proxy vs fetch+undici avec proxy) dans usa-http.ts."
+  ]
+}

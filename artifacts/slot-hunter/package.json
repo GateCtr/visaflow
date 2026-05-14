@@ -34,7 +34,9 @@
     "spain:analyze:latest": "tsx scripts/analyze-spain-capture.ts",
     "usa:capture": "tsx scripts/usa-capture-session.ts",
     "usa:capture:interactive": "tsx scripts/usa-capture-interactive.ts",
-    "usa:capture:cookies": "tsx scripts/usa-capture-with-cookies.ts"
+    "usa:capture:cookies": "tsx scripts/usa-capture-with-cookies.ts",
+    "usa:portal:capture": "tsx scripts/usa-portal-capture.ts",
+    "usa:test:jwt-ip": "tsx src/test-usa-jwt-ip-binding.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

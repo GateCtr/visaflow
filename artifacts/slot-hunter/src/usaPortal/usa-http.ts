@@ -183,20 +183,20 @@ export async function refreshUsaToken(cached: CachedToken, username: string): Pr
       return null;
     }
 
-    const newAccessToken = res.headers.get("authorization");
-    const newRefreshToken = res.headers.get("refreshtoken") ?? cached.refreshToken;
+    const newAccessRaw = res.headers.get("authorization")?.trim().replace(/^Bearer\s+/i, "").trim() ?? "";
+    const newRefreshRaw = res.headers.get("refreshtoken")?.trim().replace(/^Bearer\s+/i, "").trim();
 
-    if (!newAccessToken) {
+    if (!newAccessRaw) {
       console.warn("[usa] Refresh: aucun token dans la réponse");
       return null;
     }
 
-    const expiresAt = parseJwtExpiry(newAccessToken) || Date.now() + 55 * 60 * 1000;
+    const expiresAt = parseJwtExpiry(newAccessRaw) || Date.now() + 55 * 60 * 1000;
     console.log("[usa] Token renouvelé avec succès");
 
     return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
+      accessToken: newAccessRaw,
+      refreshToken: newRefreshRaw || cached.refreshToken,
       // Le CSRF token ne change pas lors du refresh (le bundle n'en capture pas un nouveau
       // dans fetchNewRefreshToken — seul l'Authorization header est sauvegardé).
       csrfToken: cached.csrfToken,
@@ -228,9 +228,10 @@ export function authHeaders(
   referer: string = REFERER_DASHBOARD,
   withBody = true
 ): Record<string, string> {
+  const token = accessToken.trim().replace(/^Bearer\s+/i, "").trim();
   const h: Record<string, string> = {
     ...getBrowserHeaders(),
-    "Authorization": `Bearer ${accessToken}`,
+    "Authorization": `Bearer ${token}`,
     "Referer": referer,
   };
   if (withBody) h["Content-Type"] = "application/json";

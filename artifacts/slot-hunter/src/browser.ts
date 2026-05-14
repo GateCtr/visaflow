@@ -2,7 +2,7 @@ import { chromium as baseChromium } from "playwright";
 import { addExtra } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, BrowserContext, Page, LaunchOptions } from "playwright";
-import { ProxyPool } from "./proxyPool.js";
+import { ProxyPool, parseHttpProxyUrlForPlaywright } from "./proxyPool.js";
 
 const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
@@ -134,16 +134,7 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   // On extrait username/password explicitement si présents dans l'URL.
   let proxyConfig: { server: string; username?: string; password?: string } | undefined;
   if (proxyAddress) {
-    try {
-      const u = new URL(proxyAddress);
-      proxyConfig = {
-        server: `${u.protocol}//${u.host}`,
-        ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
-        ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
-      };
-    } catch {
-      proxyConfig = { server: proxyAddress };
-    }
+    proxyConfig = parseHttpProxyUrlForPlaywright(proxyAddress);
   }
 
   const locale         = overrides?.locale         ?? "fr-FR";
@@ -280,14 +271,5 @@ export function buildStickyIproyalUrl(proxyUrl: string, sessionId?: string): str
  * Parse une URL proxy en objet { server, username, password } pour Playwright.
  */
 export function parseProxyUrl(proxyUrl: string): { server: string; username?: string; password?: string } | undefined {
-  try {
-    const u = new URL(proxyUrl);
-    return {
-      server: `${u.protocol}//${u.host}`,
-      ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
-      ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
-    };
-  } catch {
-    return undefined;
-  }
+  return parseHttpProxyUrlForPlaywright(proxyUrl);
 }
