@@ -159,6 +159,45 @@ export class ProxyPool {
     }
   }
 
+  /**
+   * Force la rotation du proxy pour un compte (IP brûlée/restreinte).
+   * Supprime l'ancien sticky et assigne immédiatement une nouvelle IP depuis le pool.
+   * Retourne la nouvelle URL proxy ou null si le pool est vide.
+   */
+  async rotateStickyProxy(accountKey: string): Promise<string | null> {
+    const key = accountKey.toLowerCase();
+    const oldEntry = this.stickyMap.get(key);
+    const oldProxy = oldEntry?.proxy ?? "(aucun)";
+    this.stickyMap.delete(key);
+    
+    // Assigner un nouveau proxy (différent de l'ancien si possible)
+    const result = await this.getProxy();
+    if (!result) {
+      console.warn(`[ProxyPool] 🔄 Rotation demandée pour ${key.slice(0, 8)}… mais pool vide`);
+      return null;
+    }
+
+    // Si le pool est petit, on pourrait retomber sur la même IP — on essaie 3 fois
+    let newProxy = result.proxy;
+    if (newProxy === oldProxy && this.pool.length > 1) {
+      for (let i = 0; i < 3; i++) {
+        const retry = await this.getProxy();
+        if (retry && retry.proxy !== oldProxy) {
+          newProxy = retry.proxy;
+          break;
+        }
+      }
+    }
+
+    const stickyEntry: StickyProxy = {
+      proxy: newProxy,
+      expiresAt: Date.now() + IP_LIFETIME_MS,
+    };
+    this.stickyMap.set(key, stickyEntry);
+    console.log(`[ProxyPool] 🔄 Sticky proxy ROTATÉ pour ${key.slice(0, 8)}… : ${oldProxy.slice(0, 20)}… → ${newProxy.slice(0, 20)}…`);
+    return newProxy;
+  }
+
   /** Nombre de proxies sticky actifs. */
   get stickyCount(): number {
     // Nettoyer les entrées expirées
