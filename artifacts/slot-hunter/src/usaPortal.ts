@@ -97,12 +97,16 @@ const USA_FCS_CHECK_URL = (applicationId: string) =>
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // ── Inactivité côté portail USA (~15 min sans trafic API authentifié → session morte) ──
-// Le cache doit refléter ça : on suit la dernière réponse OK portant le Bearer (usaFetch).
+// Le cache reflète ça via lastActivityAt (usaFetch touche le cache après réponse OK Bearer).
+// Keep-alive (~8 min) réduit le risque entre deux scans.
+// Le JWT est lié à l’IP du proxy — invalidation aussi via proxyExpiresAt dans le cache.
 const USA_PORTAL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 /** Marge sous le seuil d’inactivité du portail : au-delà, on force refresh/login. */
 const MAX_AUTH_IDLE_MS = USA_PORTAL_IDLE_TIMEOUT_MS - 2 * 60 * 1000; // 13 min
 /** Plafond calendaire depuis login/refresh : rotation même si l’activité API est continue (JWT ~1h). */
 const MAX_SESSION_ABSOLUTE_MS = 50 * 60 * 1000;
+/** Buffer avant expiration sticky proxy : invalider le token pour éviter les 401 IP-bound. */
+const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────
 // Circuit-breaker : erreurs HTTP critiques pendant le scan
@@ -543,18 +547,22 @@ interface CachedToken {
   fullName: string;
   /** Timestamp (Date.now()) du moment où le token a été créé/rafraîchi (login ou refresh). */
   sessionStartedAt: number;
-  /** Dernière réponse HTTP OK avec ce accessToken (Bearer) — aligné sur l’inactivité ~15 min du portail. */
-  lastActivityAt?: number;
   /** Index dans USA_UA_POOL assigné lors du login — réutilisé pour toute la durée du JWT.
    * Un même JWT vu depuis des UAs différents est une empreinte bot détectable. */
   uaIndex?: number;
   /** Proxy résidentiel assigné lors du login — réutilisé pour toute la durée du JWT.
    * Un même JWT vu depuis des IPs différentes est détectable côté serveur. */
   proxyUrl?: string;
+  /** Timestamp d'expiration du proxy sticky (IP résidentielle).
+   * Le JWT est lié à l'IP du login — si le proxy expire, le token est invalide
+   * côté serveur (401 garanti). On invalide le cache AVANT que ça arrive. */
+  proxyExpiresAt?: number;
   /** Jitter aléatoire ±5 min (en ms) appliqué sur TOKEN_REFRESH_BUFFER_MS.
    * Évite un pattern de login prédictible à intervalle fixe de ~55 min.
    * Calculé une fois au login — conservé lors des refreshs pour une dispersion cohérente. */
   jitterMs: number;
+  /** Dernière activité API avec ce Bearer (usaFetch) + keep-alive — aligné inactivité ~15 min portail. */
+  lastActivityAt: number;
   /** OFCs autorisés pour ce compte — extrait de loggedInApplicantUser.ofc au login.
    * Bundle : S?.length>0 && (ofcList = ofcList.filter(B => S.some(se => se.postUserId===B.postUserId)))
    * Vide (non filtré) si le compte n'a pas de restriction d'OFC. */
@@ -587,8 +595,16 @@ function isCachedTokenValid(cached: CachedToken): boolean {
   // ce qui brise le pattern "login toutes les 55 min pile" détectable par le portail.
   const now = Date.now();
 
-  // Inactivité API : le portail coupe ~15 min sans appel authentifié — on invalide à 13 min
-  // depuis la dernière réponse OK avec ce Bearer (usaFetch met à jour lastActivityAt).
+  // JWT lié à l’IP du login : invalider avant expiration du sticky proxy (évite 401 en cascade).
+  if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt - PROXY_EXPIRY_BUFFER_MS) {
+    console.log(
+      `[usa] Token invalidé : proxy expire dans ${Math.round((cached.proxyExpiresAt - now) / 1000)}s — re-login nécessaire avec nouvelle IP`,
+    );
+    return false;
+  }
+
+  // Inactivité API : portail ~15 min sans appel authentifié — on invalide à 13 min depuis
+  // la dernière réponse OK avec ce Bearer (usaFetch met à jour lastActivityAt).
   const lastAct = cached.lastActivityAt ?? cached.sessionStartedAt;
   if (now - lastAct >= MAX_AUTH_IDLE_MS) {
     return false;
@@ -603,7 +619,101 @@ function isCachedTokenValid(cached: CachedToken): boolean {
   return now < cached.expiresAt - TOKEN_REFRESH_BUFFER_MS - cached.jitterMs;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Keep-alive : ping léger pour éviter le timeout d'inactivité serveur (15 min)
+// ─────────────────────────────────────────────────────────────────────────────
+// Le portail USA invalide les sessions côté serveur après ~15 min sans activité API.
+// Ce keep-alive envoie un GET léger (getLandingPageDetails) toutes les ~8 min
+// pour maintenir la session active sans déclencher de soupçon.
+const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000; // 8 min entre chaque ping
+
+/**
+ * Vérifie si un keep-alive est nécessaire et l'envoie si oui.
+ * Appelé au début de chaque cycle de scan (runUsaApiSession) quand un token en cache est réutilisé.
+ * Met à jour lastActivityAt dans le cache en cas de succès.
+ * 
+ * @returns true si le keep-alive a réussi (ou n'était pas nécessaire), false si la session est morte.
+ */
+async function sendKeepAliveIfNeeded(cached: CachedToken, username: string): Promise<boolean> {
+  const now = Date.now();
+  const timeSinceActivity = now - cached.lastActivityAt;
+  
+  // Pas besoin si une activité récente (< 8 min)
+  if (timeSinceActivity < KEEP_ALIVE_INTERVAL_MS) {
+    return true;
+  }
+
+  const inactiveMin = Math.round(timeSinceActivity / 60000);
+  console.log(`[usa] 🏓 Keep-alive nécessaire — ${inactiveMin} min depuis dernière activité`);
+
+  try {
+    // getLandingPageDetails est un endpoint léger que le portail Angular appelle
+    // lors de la navigation normale (dashboard). Il ne déclenche pas d'action métier.
+    const res = await usaFetch(USA_LANDING_PAGE_URL, {
+      method: "GET",
+      headers: authHeaders(cached.accessToken, REFERER_DASHBOARD, false),
+    });
+
+    if (res.status === 401) {
+      // Session morte côté serveur — le keep-alive est arrivé trop tard
+      console.warn(`[usa] 🏓 Keep-alive ÉCHOUÉ (401) — session expirée côté serveur après ${inactiveMin} min d'inactivité`);
+      return false;
+    }
+
+    if (res.status === 429) {
+      // Rate limit — pas grave, la requête a quand même été vue par le serveur
+      console.warn(`[usa] 🏓 Keep-alive rate-limited (429) — session probablement encore active`);
+      cached.lastActivityAt = now;
+      return true;
+    }
+
+    if (res.ok || res.status < 500) {
+      // Succès ou erreur client non-401 — la session est active
+      console.log(`[usa] 🏓 Keep-alive OK — session maintenue active`);
+      cached.lastActivityAt = now;
+      return true;
+    }
+
+    // Erreur serveur 5xx — ne pas invalider la session, le serveur peut être temporairement down
+    console.warn(`[usa] 🏓 Keep-alive HTTP ${res.status} — serveur en erreur, session non invalidée`);
+    return true;
+  } catch (err) {
+    // Erreur réseau — proxy down ou timeout. Ne pas invalider immédiatement.
+    console.warn(`[usa] 🏓 Keep-alive erreur réseau: ${err} — non bloquant`);
+    return true;
+  }
+}
+
+/**
+ * Met à jour lastActivityAt après un appel API réussi.
+ * Appelé depuis les fonctions de scan après chaque requête réussie.
+ */
+function updateSessionActivity(username: string): void {
+  const cacheKey = username.toLowerCase();
+  const cached = tokenCache.get(cacheKey);
+  if (cached) {
+    cached.lastActivityAt = Date.now();
+  }
+}
+
 async function refreshUsaToken(cached: CachedToken, username: string): Promise<CachedToken | null> {
+  // ── Guard proxy : le JWT est lié à l'IP du login. Si le proxy a expiré,
+  // le refresh passera par une nouvelle IP → le serveur renverra 401.
+  // Mieux vaut forcer un re-login complet avec la nouvelle IP assignée.
+  if (cached.proxyExpiresAt && Date.now() >= cached.proxyExpiresAt) {
+    console.warn(`[usa] Refresh AVORTÉ : proxy expiré — re-login complet nécessaire (nouvelle IP requise)`);
+    return null;
+  }
+  // Vérifier aussi que le proxy sticky dans le pool n'a pas changé d'URL
+  // (rotation forcée suite à restriction, par exemple).
+  if (cached.proxyUrl) {
+    const currentSticky = proxyPool.getStickyProxyInfo(username);
+    if (currentSticky && currentSticky.proxy !== cached.proxyUrl) {
+      console.warn(`[usa] Refresh AVORTÉ : IP proxy a changé (rotation détectée) — re-login complet nécessaire`);
+      return null;
+    }
+  }
+
   console.log("[usa] Renouvellement token via refresh token...");
   try {
     // Bundle Angular : http.post(authURL+"/refreshToken", {refreshToken, username}, {observe:"response"})
@@ -648,6 +758,8 @@ async function refreshUsaToken(cached: CachedToken, username: string): Promise<C
       // Proxy + UA hérités du token précédent — sticky pour toute la chaîne de refresh.
       uaIndex: cached.uaIndex,
       proxyUrl: cached.proxyUrl,
+      // proxyExpiresAt hérité — l'IP n'a pas changé, l'expiration reste la même.
+      proxyExpiresAt: cached.proxyExpiresAt,
       // Jitter conservé du login initial — la dispersion temporelle reste cohérente
       // sur toute la chaîne de refreshs d'un même compte.
       jitterMs: cached.jitterMs,
@@ -1099,6 +1211,7 @@ export async function getUsaSession(
     const jitterMs = Math.floor((Math.random() * 2 - 1) * 5 * 60 * 1000);
     // uaIndex et proxyUrl sont volontairement absents ici — runUsaApiSession les injecte
     // immédiatement après (il connaît le proxy + UA assignés pour ce nouveau token).
+    // proxyExpiresAt est aussi injecté par runUsaApiSession quand le proxy est acquis.
     tokenCache.set(cacheKey, {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
@@ -1993,6 +2106,28 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   setUsaSessionProxy(sessionProxy);
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ── Keep-alive : si on réutilise une session cachée, vérifier qu'elle est active ─
+  // Le portail tue les sessions après ~15 min d'inactivité. Si le dernier scan
+  // remonte à > 8 min, on envoie un ping léger AVANT de tenter quoi que ce soit.
+  if (hasStickyCache && cachedSticky) {
+    const keepAliveOk = await sendKeepAliveIfNeeded(cachedSticky, username);
+    if (!keepAliveOk) {
+      // Session morte côté serveur — supprimer le cache et forcer un re-login
+      console.warn(`[usa] ⚠️ Session morte (keep-alive 401) — suppression cache, re-login au prochain cycle`);
+      tokenCache.delete(cacheKeySticky);
+      proxyPool.releaseStickyProxy(username);
+      botLog({ applicationId: job.id, step: "keep_alive", status: "fail", data: { username, error: "Session expirée côté serveur — re-login nécessaire" } });
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "error",
+        errorMessage: "Session expirée côté serveur (inactivité ~15 min) — re-login au prochain cycle",
+      });
+      result = "error";
+      return result;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   let session: UsaSession | null = null;
   try {
     session = await getUsaSession(username, password, twoCaptchaApiKey);
@@ -2042,6 +2177,16 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     if (freshEntry) {
       freshEntry.proxyUrl = sessionProxy;
       freshEntry.uaIndex  = sessionUaIdx;
+      // Synchroniser la durée de vie du token avec celle du proxy.
+      // Le JWT ne peut pas survivre à son IP — on prend le min(JWT exp, proxy exp).
+      const proxyInfo = proxyPool.getStickyProxyInfo(username);
+      if (proxyInfo) {
+        freshEntry.proxyExpiresAt = proxyInfo.expiresAt;
+        // Si le proxy expire avant le JWT, ajuster expiresAt effectif
+        if (proxyInfo.expiresAt < freshEntry.expiresAt) {
+          console.log(`[usa] ⏱ Token expirera avec le proxy dans ${Math.round((proxyInfo.expiresAt - Date.now()) / 60000)} min (avant JWT ${Math.round((freshEntry.expiresAt - Date.now()) / 60000)} min)`);
+        }
+      }
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
@@ -3420,6 +3565,12 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "applicationId manquant" });
       return "error";
     }
+
+  // ── Mise à jour activité session — chaque appel à scanUsaSlotsViaAPI maintient la session vivante ──
+  const scanUsername = job.hunterConfig.embassyUsername;
+  if (scanUsername) {
+    updateSessionActivity(scanUsername);
+  }
 
   // ── Sélection du flow aléatoire pour variabilité anti-détection ───────────
   const selectedFlow = selectRandomFlow();
