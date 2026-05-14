@@ -1,7 +1,8 @@
 Capture portail USA (Angular) — usvisaappt.com
 
 Démarrage : https://www.usvisaappt.com/visaapplicantui/login
-Proxy : oui
+IP publique (machine / sortie Internet) : 102.206.241.131
+Proxy : (aucun — direct)
 Navigateur : chrome (installation système, pas Chromium Playwright)
 
 Fichiers :

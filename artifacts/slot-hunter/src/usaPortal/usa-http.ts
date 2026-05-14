@@ -238,6 +238,22 @@ export function authHeaders(
   return h;
 }
 
+// Version alternative sans "Bearer " prefix - à tester si les 401 persistent
+export function authHeadersNoBearer(
+  accessToken: string,
+  referer: string = REFERER_DASHBOARD,
+  withBody = true
+): Record<string, string> {
+  const token = accessToken.trim().replace(/^Bearer\s+/i, "").trim();
+  const h: Record<string, string> = {
+    ...getBrowserHeaders(),
+    "Authorization": token, // Pas de "Bearer " prefix
+    "Referer": referer,
+  };
+  if (withBody) h["Content-Type"] = "application/json";
+  return h;
+}
+
 // ─── Pool UA Chrome/Edge pour les appels API USA ─────────────────────────────
 // Le portail Angular envoie des requêtes depuis Chrome uniquement → pas de Firefox/Safari ici.
 // Sec-CH-UA doit correspondre exactement à la version Chrome dans le User-Agent (cohérence).

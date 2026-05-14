@@ -1,10 +1,10 @@
 {
-  "endedAt": "2026-05-14T10:34:15.407Z",
-  "sessionDir": "D:\\dev\\visaflow\\artifacts\\slot-hunter\\captured\\usa-portal\\portal-1778754596654",
-  "totalResponses": 75,
+  "endedAt": "2026-05-14T11:17:37.345Z",
+  "sessionDir": "D:\\dev\\visaflow\\artifacts\\slot-hunter\\captured\\usa-portal\\portal-1778757216520",
+  "totalResponses": 182,
   "count401": 0,
   "count403": 0,
-  "authTraceRows": 2,
+  "authTraceRows": 87,
   "hints": [
     "Comparer token_use (id vs access) : auth-trace.json → decodedRequestAuthorizationPayload vs decodedResponseAuthorizationPayload.",
     "Si login renvoie accessToken null dans le JSON mais authorization en header, noter la différence avec le bot (usa-auth.ts).",

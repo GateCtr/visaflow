@@ -1,0 +1,62 @@
+[
+  {
+    "name": "APP_ID_TOBE",
+    "value": "8618-cdbd-ff29-d749",
+    "domain": "www.usvisaappt.com",
+    "path": "/visaapplicantui/",
+    "expires": 1778843763,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "missionId",
+    "value": "323",
+    "domain": "www.usvisaappt.com",
+    "path": "/visaapplicantui/",
+    "expires": 1778843763,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "REQUEST_ID_IN_DISP",
+    "value": "60b3cf9b-3551-49b7-aa43-71dabcf379a5",
+    "domain": "www.usvisaappt.com",
+    "path": "/visaapplicantui/",
+    "expires": 1778843816,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_GRECAPTCHA",
+    "value": "09AKhCRwjpQXeeXw-HD5JDzKhfA_BrUaDdJEIGXVjXuypP7X5obqwUKLkj9gCDzFAggYleRCx9pIMBEaccwMK2Qn0",
+    "domain": "www.google.com",
+    "path": "/recaptcha",
+    "expires": 1794309277.072451,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.1286780266.1778757228",
+    "domain": ".usvisaappt.com",
+    "path": "/",
+    "expires": 1813317227.885895,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "_ga_CSLL4ZEK4L",
+    "value": "GS2.1.s1778757227$o1$g1$t1778757440$j60$l0$h0",
+    "domain": ".usvisaappt.com",
+    "path": "/",
+    "expires": 1813317440.129718,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  }
+]

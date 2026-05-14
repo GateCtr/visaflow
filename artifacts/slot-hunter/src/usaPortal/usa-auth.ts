@@ -150,13 +150,33 @@ export async function loginUsaPortal(
     return t.trim().replace(/^Bearer\s+/i, "").trim();
   };
 
-  // Les API visa attendent en général l’access token Cognito ; le header Authorization du login
-  // peut ne contenir que l’id token (token_use=id). Préférer le corps JSON quand présent.
-  let accessToken =
-    stripBearer(pickAccessTokenFromJsonBody(data))
-    || stripBearer(typeof data.accessToken === "string" ? data.accessToken : "")
-    || stripBearer(response.headers.get("authorization"));
-  let refreshToken = stripBearer(response.headers.get("refreshtoken")) ?? "";
+  // CORRECTION : D'après la capture manuelle, le token est dans le header Authorization
+  // sans préfixe "Bearer ", et le body JSON a accessToken: null
+  // Le token est un token ID (token_use: "id") mais fonctionne pour l'authentification API
+  let accessToken = "";
+  let refreshToken = "";
+  
+  // 1. Essayer d'abord le header Authorization
+  const authHeader = response.headers.get("authorization");
+  if (authHeader) {
+    // Le header peut contenir "Bearer " ou pas - on le normalise
+    accessToken = stripBearer(authHeader);
+    console.log(`[usa] Token extrait du header Authorization (${accessToken.length} chars)`);
+  }
+  
+  // 2. Fallback : essayer le body JSON (pour compatibilité)
+  if (!accessToken) {
+    accessToken =
+      stripBearer(pickAccessTokenFromJsonBody(data))
+      || stripBearer(typeof data.accessToken === "string" ? data.accessToken : "");
+  }
+  
+  // 3. Refresh token depuis le header
+  const refreshHeader = response.headers.get("refreshtoken");
+  if (refreshHeader) {
+    refreshToken = stripBearer(refreshHeader);
+    console.log(`[usa] Refresh token extrait du header RefreshToken (${refreshToken.length} chars)`);
+  }
 
   // ── Extraction csrfToken robuste ───────────────────────────────────────────
   // Le bundle Angular lit : F.headers.get("Csrftoken") (header de réponse custom).
