@@ -98,9 +98,11 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // Durée maximale d'une session en cache avant invalidation automatique.
 // Même si le JWT est techniquement valide 55 min, le portail détecte les sessions
-// inactives après ~15 min. On invalide à 10 min pour éviter de réutiliser un token
-// après un logout raté ou un crash (cf. analyse de la contradiction JWT 55 min vs session réelle).
-const MAX_SESSION_AGE_MS = 10 * 60 * 1000;
+// inactives après ~15 min. On invalide à 25 min — assez pour couvrir 5-10 cycles rush
+// sans re-login, tout en restant sous le seuil d'inactivité du portail.
+// IMPORTANT : les appels API (getFirstAvailableMonth, etc.) comptent comme activité,
+// donc tant qu'on fait des scans réguliers, la session reste active côté serveur.
+const MAX_SESSION_AGE_MS = 25 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────
 // Circuit-breaker : erreurs HTTP critiques pendant le scan
@@ -228,6 +230,12 @@ function markAccountRestricted(username: string, durationMs?: number, retryAfter
   const attemptInfo = attemptCount > 1 ? ` (tentative ${attemptCount}, backoff exponentiel)` : '';
   
   console.warn(`[usa] 🔒 Compte ${username} marqué "restreint" jusqu'à ${endTime} UTC (~${durationMinutes} min${attemptInfo})`);
+  
+  // ── Rotation proxy : l'IP actuelle est potentiellement brûlée ──────────
+  // Libérer le sticky proxy pour que le prochain cycle assigne une IP fraîche.
+  // Cela évite de réutiliser une IP qui a déclenché une restriction.
+  proxyPool.releaseStickyProxy(username);
+  console.log(`[usa] 🔄 Sticky proxy libéré pour ${username} — nouvelle IP au prochain cycle`);
   
   // Si la restriction est levée (après expiration), réinitialiser le compteur
   setTimeout(() => {
@@ -1886,21 +1894,42 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
   } else {
-    // ── Proxy résidentiel 2captcha (prioritaire pour USA) ──────────────────
+    // ── Proxy résidentiel 2captcha (OBLIGATOIRE pour USA) ──────────────────
     // Les IPs résidentielles du pool 2captcha sont STABLES pendant 30 min
     // (contrairement à iProyal/BrightData qui changent d'IP mid-session).
     // Le serveur USA lie le JWT à l'IP du login → on utilise getStickyProxy()
     // pour assigner UNE IP fixe par compte sur toute la durée du token.
-    // Fallback : connexion directe Railway (IP fixe) si le pool est indisponible.
-    const stickyProxyUrl = await proxyPool.getStickyProxy(username);
+    //
+    // ⚠️ JAMAIS de fallback Railway direct — l'IP fixe Railway se fait restricter
+    // après quelques logins. On attend que le pool soit disponible.
+    const PROXY_ACQUIRE_MAX_RETRIES = 4;
+    const PROXY_ACQUIRE_WAIT_MS = 5_000; // 5s entre retries
+    let stickyProxyUrl: string | null = null;
+
+    for (let attempt = 1; attempt <= PROXY_ACQUIRE_MAX_RETRIES; attempt++) {
+      stickyProxyUrl = await proxyPool.getStickyProxy(username);
+      if (stickyProxyUrl) break;
+      if (attempt < PROXY_ACQUIRE_MAX_RETRIES) {
+        console.warn(`[usa] ⏳ Proxy pool indisponible (tentative ${attempt}/${PROXY_ACQUIRE_MAX_RETRIES}) — attente ${PROXY_ACQUIRE_WAIT_MS / 1000}s...`);
+        await new Promise(r => setTimeout(r, PROXY_ACQUIRE_WAIT_MS));
+      }
+    }
+
     if (stickyProxyUrl) {
       sessionProxy = stickyProxyUrl;
       const maskedProxy = stickyProxyUrl.replace(/:([^:@]+)@/, ":***@");
       console.log(`[usa] Nouveau token → proxy 2captcha sticky: ${maskedProxy}`);
     } else {
-      // Pool vide ou non configuré → Railway direct (fallback sûr)
-      sessionProxy = undefined;
-      console.log(`[usa] Nouveau token → connexion DIRECTE (pool 2captcha indisponible — fallback IP Railway)`);
+      // Pool toujours vide après retries → ABORTER le cycle (ne JAMAIS exposer l'IP Railway)
+      console.error(`[usa] 🚫 Proxy pool indisponible après ${PROXY_ACQUIRE_MAX_RETRIES} tentatives — cycle AVORTÉ (protection IP Railway)`);
+      botLog({ applicationId: job.id, step: "proxy", status: "fail", data: { username, error: "Proxy pool indisponible — cycle avorté" } });
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: "Proxy pool indisponible — cycle avorté (ne pas exposer IP Railway)",
+      });
+      result = "not_found";
+      return result;
     }
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
   }
@@ -1909,9 +1938,6 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   _sessionUa = USA_UA_POOL[sessionUaIdx];
   console.log(`[usa] UA: ${_sessionUa.ua.match(/(?:Chrome|Edg)\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60)}`);
   setUsaSessionProxy(sessionProxy);
-  if (!sessionProxy) {
-    console.warn("[usa] ⚠️ Aucun proxy résidentiel 2captcha — appels API via IP Railway directe (fallback)");
-  }
   // ──────────────────────────────────────────────────────────────────────────
 
   let session: UsaSession | null = null;
@@ -2095,14 +2121,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   console.error("[usa] Erreur inattendue dans runUsaApiSession:", error);
   result = "error";
 } finally {
-  // ── Logout propre après chaque cycle — comportement humain ─────────────
-  // Un humain : login → check (~1-3 min) → ferme l'onglet → idle timeout → logout.
-  // Le bundle Angular fait un POST /logout explicite quand le idle timer expire.
-  // Si on ne logout pas et que le prochain scan est dans >15 min, le serveur voit
-  // un JWT inactif pendant >15 min SANS logout reçu → comportement anormal → restriction.
-  // En faisant un logout propre ici, le serveur voit une session normale de 1-3 min
-  // qui se termine proprement, et le prochain cycle démarre avec un login frais.
-  if (username) {
+  // ── Logout conditionnel — ne PAS logout systématiquement en rush hour ──────
+  // Problème : logout + re-login toutes les 2 min (rush) = trop de logins → restriction.
+  // Solution : garder la session active entre les cycles si le prochain check est < 5 min.
+  // Le portail considère les appels API comme activité → session non-idle.
+  //
+  // On logout SEULEMENT si :
+  //   1. Le prochain check est dans > 5 min (inter-cycle long → risque session idle)
+  //   2. Ou si le scan a échoué avec login_failed/error (session corrompue)
+  //   3. Ou si l'intervalle tier n'est PAS tres_urgent/urgent (sessions longues = idle risk)
+  const shouldLogout = result === "login_failed" || result === "error" ||
+    (job.urgencyTier !== "tres_urgent" && job.urgencyTier !== "urgent");
+  
+  if (username && shouldLogout) {
     try {
       // Petite pause avant logout (un humain ne clique pas "déconnexion" instantanément)
       await new Promise(r => setTimeout(r, 500 + Math.random() * 1500));
@@ -2117,6 +2148,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       // Logout échoué — non bloquant, le token expirera naturellement
       console.warn(`[usa] Logout échoué (non bloquant): ${logoutErr}`);
     }
+  } else if (username && !shouldLogout) {
+    console.log(`[usa] 🔄 Session maintenue (tier=${job.urgencyTier}) — réutilisation token au prochain cycle`);
   }
 
   // Log la fin du comportement humain
