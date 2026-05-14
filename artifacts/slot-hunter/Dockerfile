@@ -14,11 +14,13 @@ COPY tsconfig.json ./
 COPY artifacts/slot-hunter/package.json ./artifacts/slot-hunter/package.json
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV VERCEL=true  # Skip browser installation in prepare:browsers script
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1  # Skip browser download during playwright installation
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
-# Install exact Chromium version matching the installed playwright package
-RUN cd artifacts/slot-hunter && npx playwright install chromium
+# Chromium is already installed in the base Playwright image
+# No need to install it again
 
 COPY artifacts/slot-hunter ./artifacts/slot-hunter
 

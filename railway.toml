@@ -1,5 +1,5 @@
 [build]
-dockerfilePath = "Dockerfile"
+dockerfilePath = "artifacts/slot-hunter/Dockerfile"
 
 [deploy]
 startCommand = "pnpm --filter @workspace/slot-hunter run start"
