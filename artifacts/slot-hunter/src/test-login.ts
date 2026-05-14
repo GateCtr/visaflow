@@ -7,8 +7,8 @@
 import { loginUsaPortal, checkUsaAppointmentRequestStatus, setUsaSessionProxy } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 
-const EMAIL    = "ilungadieuvie7@gmail.com";
-const PASSWORD = "Bukel0204@KC";
+const EMAIL    = "screentapinc@gmail.com";
+const PASSWORD = "Akollad@2026";
 
 // portalApplicationId facultatif — undefined = sélection automatique
 const PORTAL_APP_ID: string | undefined = undefined;

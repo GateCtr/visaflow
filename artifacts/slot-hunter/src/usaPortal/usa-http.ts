@@ -292,12 +292,34 @@ export const USA_UA_POOL: ReadonlyArray<{ ua: string; chUa: string; platform: st
   },
 ];
 
-// UA actif pour la session courante — changé à chaque appel de runUsaApiSession()
+// UA actif pour la session courante — STICKY par compte pour éviter la détection Cognito
 let _sessionUa = USA_UA_POOL[1]; // Chrome/135 Windows par défaut
+
+// Map compte → index UA pour maintenir le même fingerprint
+const accountUaMap = new Map<string, number>();
 
 export function pickSessionUa(): void {
   _sessionUa = USA_UA_POOL[Math.floor(Math.random() * USA_UA_POOL.length)];
   console.log(`[usa] UA session: ${_sessionUa.ua.match(/Chrome\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60)}`);
+}
+
+export function getStickyUaForAccount(username: string): number {
+  const cacheKey = username.toLowerCase();
+  
+  if (accountUaMap.has(cacheKey)) {
+    // Réutiliser le même UA pour ce compte
+    const uaIndex = accountUaMap.get(cacheKey)!;
+    _sessionUa = USA_UA_POOL[uaIndex];
+    console.log(`[usa] 🔄 UA sticky réutilisé pour ${username}: Chrome/${_sessionUa.ua.match(/Chrome\/([\d.]+)/)?.[1]}`);
+    return uaIndex;
+  } else {
+    // Nouveau compte → choisir un UA et le garder
+    const uaIndex = Math.floor(Math.random() * USA_UA_POOL.length);
+    accountUaMap.set(cacheKey, uaIndex);
+    _sessionUa = USA_UA_POOL[uaIndex];
+    console.log(`[usa] 📝 Nouveau UA sticky pour ${username}: Chrome/${_sessionUa.ua.match(/Chrome\/([\d.]+)/)?.[1]}`);
+    return uaIndex;
+  }
 }
 
 /** Génère un ID de corrélation de 15 caractères aléatoires comme le bundle Angular. */
@@ -347,29 +369,38 @@ let _usaProxyUrl: string | undefined;
 
 /**
  * Génère une URL iProyal avec session sticky.
- * iProyal : les paramètres _session-{id}_lifetime-{durée} sont ajoutés AU MOT DE PASSE.
- * Format : user:password_session-{8chars}_lifetime-{60m}@host:port
- * Cela force le routeur iProyal à maintenir la même IP de sortie pendant toute la durée de la session.
- * Ref: https://docs.iproyal.com/proxies/residential/proxy/rotation
+ * iProyal fournit des URLs avec format: host:port:user:password_session-xxx_lifetime-30m
+ * Si l'URL de base ne contient pas déjà _session-, on en ajoute un.
+ * Si elle en contient déjà, on la retourne telle quelle.
  */
 export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60): string {
   try {
     const parsed = new URL(baseUrl);
-    // Générer un session ID aléatoire de 8 caractères alphanumériques
+    let password = decodeURIComponent(parsed.password);
+    
+    // Vérifier si le mot de passe contient déjà _session-
+    if (password.includes("_session-") && password.includes("_lifetime-")) {
+      // L'URL contient déjà une session sticky, la retourner telle quelle
+      const sessionMatch = password.match(/_session-([^_]+)/);
+      const lifetimeMatch = password.match(/_lifetime-([^m]+)m/);
+      if (sessionMatch && lifetimeMatch) {
+        console.log(`[usa] 🔒 Proxy sticky déjà présent: session=${sessionMatch[1]}, lifetime=${lifetimeMatch[1]}m`);
+      }
+      return baseUrl;
+    }
+    
+    // Ajouter une session sticky
     const sessionId = Array.from({ length: 8 }, () =>
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 62)]
     ).join("");
-    // Ajouter les paramètres sticky au mot de passe (après le password existant)
-    // Si le password contient déjà _session-, on le remplace pour éviter les doublons
-    let password = decodeURIComponent(parsed.password);
-    password = password.replace(/_session-[^_]+/g, "").replace(/_lifetime-[^_]+/g, "");
+    
     password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
     parsed.password = encodeURIComponent(password);
     console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m`);
     return parsed.toString();
   } catch {
-    // Si le parsing d'URL échoue, retourner l'URL d'origine (non-sticky)
-    console.warn(`[usa] ⚠️ Impossible de parser l'URL proxy pour sticky session — fallback rotatif`);
+    // Si le parsing d'URL échoue, retourner l'URL d'origine
+    console.warn(`[usa] ⚠️ Impossible de parser l'URL proxy — fallback`);
     return baseUrl;
   }
 }
@@ -377,9 +408,9 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyUrl = proxyUrl;
-    _usaProxyAgent = new ProxyAgent(proxyUrl);
+    _usaProxyAgent = undefined; // On n'utilise plus ProxyAgent, on utilise impit avec proxyUrl
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[usa] Proxy résidentiel actif (undici): ${masked}`);
+    console.log(`[usa] Proxy résidentiel actif (impit): ${masked}`);
   } else {
     _usaProxyUrl = undefined;
     _usaProxyAgent = undefined;
@@ -404,13 +435,26 @@ export function setUsaSessionProxy(proxyUrl: string | undefined): void {
 // browser:"chrome" = fingerprint TLS du dernier Chrome supporté par impit.
 // redirect:"follow" = suit les redirections comme un vrai navigateur.
 let _impitInstance: InstanceType<typeof Impit> | undefined;
+let _impitProxyUrl: string | undefined;
 
-function getImpitInstance(): InstanceType<typeof Impit> {
-  if (!_impitInstance) {
-    _impitInstance = new Impit({
+function getImpitInstance(proxyUrl?: string): InstanceType<typeof Impit> {
+  // Si le proxy a changé, recréer l'instance impit
+  if (!_impitInstance || (proxyUrl && proxyUrl !== _impitProxyUrl) || (!proxyUrl && _impitProxyUrl)) {
+    const options: any = {
       browser: "chrome",
-    });
-    console.log("[usa] ✅ impit initialisé (fingerprint TLS Chrome) — indétectable JA3/JA4");
+    };
+    
+    if (proxyUrl) {
+      options.proxyUrl = proxyUrl;
+      _impitProxyUrl = proxyUrl;
+      const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[usa] ✅ impit initialisé avec proxy: ${masked} (fingerprint TLS Chrome)`);
+    } else {
+      _impitProxyUrl = undefined;
+      console.log("[usa] ✅ impit initialisé sans proxy (fingerprint TLS Chrome) — indétectable JA3/JA4");
+    }
+    
+    _impitInstance = new Impit(options);
   }
   return _impitInstance;
 }
@@ -447,17 +491,12 @@ function touchCachedTokenActivity(headers: HeadersInit | undefined, res: Respons
 
 export async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
   let res: Response;
-  if (_usaProxyAgent) {
-    // Si un proxy est configuré (cas futur), utiliser le fetch natif avec ProxyAgent.
-    // impit ne supporte pas directement undici ProxyAgent.
-    // @ts-expect-error — dispatcher est une option interne undici non présente dans RequestInit standard
-    res = await fetch(url, { ...options, dispatcher: _usaProxyAgent });
-  } else {
-    // Mode normal (sans proxy) : utiliser impit pour le fingerprint TLS Chrome.
-    // Les headers sont passés tels quels — impit ne les modifie PAS quand on les fournit.
-    const impit = getImpitInstance();
-    res = await impit.fetch(url, options as Parameters<typeof impit.fetch>[1]) as unknown as Response;
-  }
+  
+  // Toujours utiliser impit pour le fingerprint TLS Chrome, avec ou sans proxy
+  // impit supporte nativement les proxies via l'option proxyUrl
+  const impit = getImpitInstance(_usaProxyUrl);
+  res = await impit.fetch(url, options as Parameters<typeof impit.fetch>[1]) as unknown as Response;
+  
   touchCachedTokenActivity(options.headers, res);
   return res;
 }
@@ -480,7 +519,7 @@ export function setActiveSessionUaFromPoolIndex(i: number): void {
 }
 
 export function hasUsaProxy(): boolean {
-  return _usaProxyAgent !== undefined;
+  return _usaProxyUrl !== undefined;
 }
 
 export function getActiveSessionUaLogLabel(): string {

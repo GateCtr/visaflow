@@ -13,6 +13,7 @@ export interface CachedToken {
   proxyExpiresAt?: number;
   jitterMs: number;
   lastActivityAt: number;
+  lastScanTime?: number; // Dernier scan pour délai minimum entre les scans
   allowedOfcs?: Array<{ postUserId: number }>;
 }
 

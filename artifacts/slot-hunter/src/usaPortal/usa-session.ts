@@ -7,7 +7,7 @@ import {
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
-import { USA_MISSION_ID } from "./config.js";
+import { USA_MISSION_ID, PROACTIVE_REFRESH_MS } from "./config.js";
 import { AccountRestrictedError } from "./errors.js";
 import {
   isAccountRestricted,
@@ -36,8 +36,42 @@ export async function getUsaSession(
   const cached = tokenCache.get(cacheKey);
 
   if (cached) {
+    // ── Refresh proactif : rafraîchir AVANT expiration pour éviter re-login ──
+    // Cognito token expire après 1h (3600s). On rafraîchit 8 min avant expiration.
+    // Cela évite le pattern login→expire→re-login qui déclenche "temporarily restricted".
+    const now = Date.now();
+    const timeUntilExpiry = cached.expiresAt - now;
+    
+    if (timeUntilExpiry > 0 && timeUntilExpiry < PROACTIVE_REFRESH_MS) {
+      // Token valide mais expire bientôt → refresh proactif
+      const remainingMin = Math.round(timeUntilExpiry / 60000);
+      console.log(`[usa] 🔄 Refresh proactif: token expire dans ${remainingMin} min (Cognito safe)`);
+      
+      try {
+        const refreshed = await refreshUsaToken(cached, username);
+        if (refreshed) {
+          tokenCache.set(cacheKey, refreshed);
+          console.log(`[usa] ✅ Token rafraîchi proactivement (nouvelle expiration: ${new Date(refreshed.expiresAt).toISOString()})`);
+          return {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            csrfToken: refreshed.csrfToken,
+            userID: refreshed.userID,
+            fullName: refreshed.fullName,
+            applicationId: null,
+            pendingAppoStatus: null,
+            missionId: USA_MISSION_ID,
+            allowedOfcs: cached.allowedOfcs ?? [],
+          };
+        }
+      } catch (refreshErr) {
+        console.warn(`[usa] ⚠️ Refresh proactif échoué (continuer avec token actuel):`, refreshErr);
+        // Continuer avec le token actuel - il est encore valide pour quelques minutes
+      }
+    }
+    
     if (isCachedTokenValid(cached)) {
-      const remainingMin = Math.round((cached.expiresAt - Date.now()) / 60000);
+      const remainingMin = Math.round((cached.expiresAt - now) / 60000);
       console.log(`[usa] Token en cache valide pour ${cached.fullName} (expire dans ~${remainingMin} min)`);
       return {
         accessToken: cached.accessToken,

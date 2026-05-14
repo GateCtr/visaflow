@@ -54,10 +54,24 @@ export const USA_FCS_CHECK_URL = (applicationId: string) =>
   `${USA_PAYMENT_URL}/feecollection/checkFcs/${applicationId}`;
 
 export const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+export const PROACTIVE_REFRESH_MS = 8 * 60 * 1000; // Rafraîchir 8 min avant expiration Cognito
 
 export const USA_PORTAL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 export const MAX_AUTH_IDLE_MS = USA_PORTAL_IDLE_TIMEOUT_MS - 2 * 60 * 1000;
 export const MAX_SESSION_ABSOLUTE_MS = 50 * 60 * 1000;
+// Durée max réaliste d'une session humaine (30-90 min max - portail déconnecte après 15 min inactivité)
+export const MAX_HUMAN_SESSION_MS = 90 * 60 * 1000; // 90 minutes max
+// Pause courte entre sessions (10-30 min - réaliste)
+export const MIN_SESSION_BREAK_MS = 10 * 60 * 1000; // 10 min
+export const MAX_SESSION_BREAK_MS = 30 * 60 * 1000; // 30 min
+// Pause nocturne réduite (00h30-04h00 - créneaux rares)
+export const NIGHT_PAUSE_START_HOUR = 0; // 0h (minuit)
+export const NIGHT_PAUSE_START_MINUTE = 30; // 30 min
+export const NIGHT_PAUSE_END_HOUR = 4; // 4h
+export const NIGHT_PAUSE_END_MINUTE = 0; // 0 min
+// Heures d'activité normales (presque 24h sauf creux nocturne)
+export const HUMAN_ACTIVE_START_HOUR = 4; // 4h
+export const HUMAN_ACTIVE_END_HOUR = 0; // 0h (minuit) - avec minute check
 export const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
 
 export const REFERER_LOGIN = "https://www.usvisaappt.com/visaapplicantui/login";
