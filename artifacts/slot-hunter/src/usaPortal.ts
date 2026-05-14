@@ -1886,16 +1886,23 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
   } else {
-    // ── Mode SANS PROXY pour le portail USA ────────────────────────────────
-    // Les proxies résidentiels (iProyal, BrightData) causent des 401 systématiques
-    // car leur session sticky ne maintient pas une IP constante entre le login et
-    // les appels suivants. Le serveur USA lie le JWT à l'IP du login.
-    // Solution : connexion directe via IP Railway (fixe et stable).
-    // BrightData bloque les POST vers usvisaappt.com (nécessite KYC).
-    // iProyal sticky sessions → 504 Gateway Timeout ou changement d'IP mid-session.
-    sessionProxy = undefined;
+    // ── Proxy résidentiel 2captcha (prioritaire pour USA) ──────────────────
+    // Les IPs résidentielles du pool 2captcha sont STABLES pendant 30 min
+    // (contrairement à iProyal/BrightData qui changent d'IP mid-session).
+    // Le serveur USA lie le JWT à l'IP du login → on utilise getStickyProxy()
+    // pour assigner UNE IP fixe par compte sur toute la durée du token.
+    // Fallback : connexion directe Railway (IP fixe) si le pool est indisponible.
+    const stickyProxyUrl = await proxyPool.getStickyProxy(username);
+    if (stickyProxyUrl) {
+      sessionProxy = stickyProxyUrl;
+      const maskedProxy = stickyProxyUrl.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[usa] Nouveau token → proxy 2captcha sticky: ${maskedProxy}`);
+    } else {
+      // Pool vide ou non configuré → Railway direct (fallback sûr)
+      sessionProxy = undefined;
+      console.log(`[usa] Nouveau token → connexion DIRECTE (pool 2captcha indisponible — fallback IP Railway)`);
+    }
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
-    console.log(`[usa] Nouveau token → connexion DIRECTE (sans proxy — IP Railway fixe)`);
   }
 
   // Activer le proxy et l'UA choisis pour TOUTE cette session
@@ -1903,7 +1910,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   console.log(`[usa] UA: ${_sessionUa.ua.match(/(?:Chrome|Edg)\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60)}`);
   setUsaSessionProxy(sessionProxy);
   if (!sessionProxy) {
-    console.warn("[usa] ⚠️ Aucun proxy résidentiel — appels API via IP Railway directe");
+    console.warn("[usa] ⚠️ Aucun proxy résidentiel 2captcha — appels API via IP Railway directe (fallback)");
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -2080,6 +2087,9 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     return result;
   } finally {
     setUsaSessionProxy(undefined);
+    // Note: NE PAS libérer le sticky proxy ici — on le garde pour le prochain cycle
+    // du même compte. Le proxy sera automatiquement libéré après expiration (30 min).
+    // proxyPool.releaseStickyProxy(username) → seulement si logout explicite.
   }
 } catch (error) {
   console.error("[usa] Erreur inattendue dans runUsaApiSession:", error);

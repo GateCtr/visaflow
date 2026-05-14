@@ -1,6 +1,6 @@
-const REFRESH_MS        = 25 * 60_000;
+const REFRESH_MS        = 15 * 60_000;
 const WHITELIST_RETRY_MS = 30 * 60_000;
-const POOL_SIZE          = 50;
+const POOL_SIZE          = 100;
 const IP_LIFETIME_MS     = 30 * 60_000;
 
 export interface PoolState {
@@ -10,6 +10,14 @@ export interface PoolState {
   whitelistError: boolean;
   whitelistErrorAt: string | null;
   mode: '2captcha' | 'unconfigured';
+  stickyCount: number;
+}
+
+/** Proxy assigné de manière sticky à un compte — même IP pendant toute la durée du JWT. */
+export interface StickyProxy {
+  proxy: string;
+  /** Timestamp d'expiration de l'IP résidentielle (lifetime 2captcha = 30 min). */
+  expiresAt: number;
 }
 
 export class ProxyPool {
@@ -19,6 +27,8 @@ export class ProxyPool {
   private whitelistError = false;
   private whitelistErrorAt: number | null = null;
   private readonly apiKey: string;
+  /** Map account → sticky proxy (même IP pendant toute la session JWT). */
+  private stickyMap = new Map<string, StickyProxy>();
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -42,13 +52,13 @@ export class ProxyPool {
 
   private startAutoRefresh(): void {
     const timer = setInterval(() => {
-      console.log('[ProxyPool] ⏱ Auto-refresh triggered (25 min interval)');
+      console.log('[ProxyPool] ⏱ Auto-refresh triggered (15 min interval)');
       this.refresh().catch(err => {
         console.error('[ProxyPool] Auto-refresh error:', err);
       });
     }, REFRESH_MS);
     timer.unref();
-    console.log('[ProxyPool] 🔄 Auto-refresh loop started (every 25 min)');
+    console.log('[ProxyPool] 🔄 Auto-refresh loop started (every 15 min)');
   }
 
   getState(): PoolState {
@@ -63,6 +73,7 @@ export class ProxyPool {
         ? new Date(this.whitelistErrorAt).toISOString()
         : null,
       mode: this.apiKey.length > 0 ? '2captcha' : 'unconfigured',
+      stickyCount: this.stickyCount,
     };
   }
 
@@ -94,6 +105,62 @@ export class ProxyPool {
 
     const expiresAt = new Date(this.lastRefresh + IP_LIFETIME_MS).toISOString();
     return { proxy: `http://${proxy}`, expiresAt };
+  }
+
+  /**
+   * Obtient un proxy sticky pour un compte donné (portail USA).
+   * 
+   * Le serveur USA lie le JWT à l'IP du login → il faut garder la MÊME IP
+   * pendant toute la durée du token (10 min max dans notre config).
+   * 
+   * Comportement :
+   *  - Si le compte a déjà un proxy sticky non expiré → le réutilise.
+   *  - Sinon → en assigne un nouveau depuis le pool (round-robin) et le mémorise.
+   *  - Si le pool est vide ou non configuré → retourne null (fallback Railway direct).
+   * 
+   * @param accountKey  Identifiant unique du compte (email lowercase).
+   */
+  async getStickyProxy(accountKey: string): Promise<string | null> {
+    const key = accountKey.toLowerCase();
+
+    // Vérifier si un proxy sticky existe et est encore valide
+    const existing = this.stickyMap.get(key);
+    if (existing && Date.now() < existing.expiresAt) {
+      return existing.proxy;
+    }
+
+    // Proxy expiré ou inexistant → en assigner un nouveau
+    const result = await this.getProxy();
+    if (!result) return null;
+
+    const stickyEntry: StickyProxy = {
+      proxy: result.proxy,
+      expiresAt: Date.now() + IP_LIFETIME_MS,
+    };
+    this.stickyMap.set(key, stickyEntry);
+    console.log(`[ProxyPool] 📌 Sticky proxy assigné à ${key.slice(0, 8)}… : ${result.proxy} (expire dans ${IP_LIFETIME_MS / 60_000} min)`);
+    return result.proxy;
+  }
+
+  /**
+   * Libère le proxy sticky d'un compte (fin de session ou logout).
+   * L'IP retourne dans la rotation générale au prochain refresh.
+   */
+  releaseStickyProxy(accountKey: string): void {
+    const key = accountKey.toLowerCase();
+    if (this.stickyMap.delete(key)) {
+      console.log(`[ProxyPool] 🔓 Sticky proxy libéré pour ${key.slice(0, 8)}…`);
+    }
+  }
+
+  /** Nombre de proxies sticky actifs. */
+  get stickyCount(): number {
+    // Nettoyer les entrées expirées
+    const now = Date.now();
+    for (const [k, v] of this.stickyMap.entries()) {
+      if (now >= v.expiresAt) this.stickyMap.delete(k);
+    }
+    return this.stickyMap.size;
   }
 
   async forceWhitelistRefresh(): Promise<{ ok: boolean; message: string; serverIp: string | null }> {
@@ -138,7 +205,7 @@ export class ProxyPool {
         this.pool = [...json.data].sort(() => Math.random() - 0.5);
         this.lastRefresh = Date.now();
         this.whitelistError = false;
-        console.log(`[ProxyPool] ✅ ${this.pool.length} residential IPs loaded from 2captcha`);
+        console.log(`[ProxyPool] ✅ ${this.pool.length} residential IPs loaded from 2captcha (pool target: ${POOL_SIZE})`);
       } else if (
         json.request?.includes('IP_NOT_WHITELISTED') ||
         json.request?.includes('NOT_WHITELISTED') ||

@@ -14,7 +14,7 @@ const DRY_RUN = process.env.DRY_RUN === "true";
 
 // ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
 // les problèmes de résolution workspace sur Railway).
-// Fallback automatique : BrightData (CEV) | iProyal (Espagne) → 2captcha pool → PROXY_URL statique → direct.
+// Priorité : 2captcha pool (IPs stables 30 min) → iProyal (Espagne) → BrightData (CEV) → PROXY_URL statique → direct.
 export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 
 // ─── User-Agents desktop uniquement ─────────────────────────────────────────
@@ -103,7 +103,7 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   const viewport = randomViewport();
 
   // ── Résolution du proxy ───────────────────────────────────────────────────
-  // Priorité globale : BrightData (CEV) | iProyal (Espagne) | 2captcha pool | PROXY_URL statique | direct
+  // Priorité globale : BrightData (CEV) | iProyal (Espagne) | 2captcha pool (USA prioritaire) | PROXY_URL statique | direct
   // forceNoProxy: true → bypass total (retry après ERR_PROXY_CONNECTION_FAILED)
   const forceNoProxy  = overrides?.forceNoProxy ?? false;
   const proxySource   = overrides?.proxySource ?? "auto";
@@ -118,12 +118,12 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
       const poolResult = await proxyPool.getProxy();
       proxyAddress = poolResult?.proxy ?? PROXY_URL;
     } else {
-      // auto : iProyal → 2captcha → PROXY_URL statique
-      if (IPROYAL_PROXY_URL) {
-        proxyAddress = IPROYAL_PROXY_URL;
-      } else if (proxyPool.isConfigured) {
+      // auto : 2captcha (priorité USA — IPs stables 30 min) → iProyal → PROXY_URL statique
+      if (proxyPool.isConfigured) {
         const poolResult = await proxyPool.getProxy();
-        proxyAddress = poolResult?.proxy ?? PROXY_URL;
+        proxyAddress = poolResult?.proxy ?? IPROYAL_PROXY_URL ?? PROXY_URL;
+      } else if (IPROYAL_PROXY_URL) {
+        proxyAddress = IPROYAL_PROXY_URL;
       } else {
         proxyAddress = PROXY_URL;
       }
