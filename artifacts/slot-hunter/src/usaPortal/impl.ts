@@ -186,54 +186,16 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     sessionUaIdx = getStickyUaForAccount(username);
     // Appliquer l'UA
     setActiveSessionUaFromPoolIndex(sessionUaIdx);
-    // ── Proxy résidentiel iProyal (OBLIGATOIRE pour USA) ──────────────────
-    // Les IPs résidentielles iProyal sont STABLES avec session sticky (30-60 min)
-    // Le serveur USA lie le JWT à l'IP du login → on utilise makeIproyalStickyUrl()
-    // pour assigner UNE IP fixe par compte sur toute la durée du token.
-    //
-    // ⚠️ JAMAIS de fallback Railway direct — l'IP fixe Railway se fait restricter
-    // après quelques logins.
-    const IPROYAL_BASE_URL = process.env.IPROYAL_PROXY_URL;
+    // ── DÉSACTIVATION PROXY POUR USA (cause 401) ──────────────────────────
+    // Le proxy iProyal cause des 401 sur les endpoints API USA.
+    // Sans proxy, les endpoints fonctionnent (testé manuellement).
+    // On utilise donc la connexion directe (IP Railway fixe).
+    // 
+    // ⚠️ IMPORTANT: L'IP Railway est stable et fonctionne pour USA.
+    // Le portail USA lie le JWT à l'IP du login → IP fixe = OK.
+    sessionProxy = undefined;
+    console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA (cause 401) — connexion directe Railway`);
     
-    if (!IPROYAL_BASE_URL) {
-      console.error(`[usa] 🚫 IPROYAL_PROXY_URL non configuré dans .env.local — cycle AVORTÉ`);
-      botLog({ applicationId: job.id, step: "proxy", status: "fail", data: { username, error: "IPROYAL_PROXY_URL non configuré" } });
-      await sendHeartbeat({
-        applicationId: job.id,
-        result: "not_found",
-        errorMessage: "IPROYAL_PROXY_URL non configuré — cycle avorté",
-      });
-      result = "not_found";
-      return result;
-    }
-
-    // Créer une URL proxy sticky avec session unique pour ce compte
-    // Durée: 30 minutes (cohérent avec la durée de vie du proxy)
-    const stickyProxyUrl = makeIproyalStickyUrl(IPROYAL_BASE_URL, 30);
-    
-    if (stickyProxyUrl) {
-      sessionProxy = stickyProxyUrl;
-      const maskedProxy = stickyProxyUrl.replace(/:([^:@]+)@/, ":***@");
-      console.log(`[usa] Nouveau token → proxy iProyal sticky: ${maskedProxy}`);
-      
-      // DEBUG: Vérifier le format du proxy
-      if (stickyProxyUrl.includes("@")) {
-        console.log(`[usa] 🔍 Format proxy: http://user:pass@host:port (OK pour undici)`);
-      } else {
-        console.log(`[usa] ⚠️ Format proxy: host:port seulement (PAS user:pass - peut causer 401)`);
-      }
-    } else {
-      // Échec création URL proxy → ABORTER le cycle
-      console.error(`[usa] 🚫 Impossible de créer URL proxy iProyal — cycle AVORTÉ`);
-      botLog({ applicationId: job.id, step: "proxy", status: "fail", data: { username, error: "Impossible de créer URL proxy iProyal" } });
-      await sendHeartbeat({
-        applicationId: job.id,
-        result: "not_found",
-        errorMessage: "Impossible de créer URL proxy iProyal — cycle avorté",
-      });
-      result = "not_found";
-      return result;
-    }
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
   }
 
