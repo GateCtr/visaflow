@@ -149,6 +149,20 @@ export class ProxyPool {
   }
 
   /**
+   * Retourne les infos complètes du proxy sticky d'un compte (URL + expiration).
+   * Utilisé par usaPortal pour synchroniser la durée de vie du JWT avec celle du proxy.
+   * Retourne null si aucun proxy sticky n'est assigné ou s'il est expiré.
+   */
+  getStickyProxyInfo(accountKey: string): StickyProxy | null {
+    const key = accountKey.toLowerCase();
+    const existing = this.stickyMap.get(key);
+    if (existing && Date.now() < existing.expiresAt) {
+      return existing;
+    }
+    return null;
+  }
+
+  /**
    * Libère le proxy sticky d'un compte (fin de session ou logout).
    * L'IP retourne dans la rotation générale au prochain refresh.
    */
