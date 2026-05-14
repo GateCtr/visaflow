@@ -28,7 +28,7 @@ async function getCfClearanceWithCapsolver() {
   }
   
   if (!proxyUrl) {
-    console.warn('⚠️  AVERTISSEMENT: Aucun proxy configuré, Capsolver peut échouer');
+    console.warn('de AVERTISSEMENT: Aucun proxy configuré, Capsolver peut échouer');
   }
   
   // Lancer le navigateur avec proxy
