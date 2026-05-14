@@ -320,6 +320,108 @@ async function solveTurnstileViaCapsolver(
 
 // ─── Cloudflare Turnstile ─────────────────────────────────────────────────────
 
+// ─── 2captcha Turnstile via createTask API (format moderne) ──────────────────
+
+const TWOCAPTCHA_CREATE_TASK_URL = "https://api.2captcha.com/createTask";
+const TWOCAPTCHA_GET_RESULT_URL = "https://api.2captcha.com/getTaskResult";
+const TWOCAPTCHA_TURNSTILE_POLL_MS = 5_000;
+const TWOCAPTCHA_TURNSTILE_MAX_POLLS = 36; // 3 min max
+
+interface TwoCaptchaCreateTaskResponse {
+  errorId: number;
+  errorCode?: string;
+  errorDescription?: string;
+  taskId?: number;
+}
+
+interface TwoCaptchaGetResultResponse {
+  errorId: number;
+  errorCode?: string;
+  status: "processing" | "ready";
+  solution?: { token?: string; userAgent?: string };
+}
+
+/**
+ * Résout Cloudflare Turnstile via l'API createTask de 2captcha (format moderne).
+ * Utilise TurnstileTaskProxyless — 2captcha résout avec son propre pool de proxys.
+ * 
+ * Avantage : API unifiée, même format que CapSolver/Anti-Captcha.
+ * Doc : https://api.2captcha.com — méthode createTask + TurnstileTaskProxyless
+ */
+async function solveTurnstileVia2captchaCreateTask(
+  apiKey: string,
+  siteKey: string,
+  pageUrl: string,
+): Promise<string | null> {
+  console.log(`[captcha] Turnstile → 2captcha createTask (TurnstileTaskProxyless) | siteKey: ${siteKey.slice(0, 14)}… | page: ${pageUrl}`);
+
+  // 1. Créer la tâche
+  let taskId: number;
+  try {
+    const createRes = await fetch(TWOCAPTCHA_CREATE_TASK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientKey: apiKey,
+        task: {
+          type: "TurnstileTaskProxyless",
+          websiteURL: pageUrl,
+          websiteKey: siteKey,
+        },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = (await createRes.json()) as TwoCaptchaCreateTaskResponse;
+
+    if (data.errorId !== 0 || !data.taskId) {
+      console.error(`[captcha] 2captcha createTask erreur: ${data.errorCode ?? data.errorId} — ${data.errorDescription ?? "unknown"}`);
+      return null;
+    }
+    taskId = data.taskId;
+    console.log(`[captcha] 2captcha Turnstile tâche créée: ${taskId}`);
+  } catch (err) {
+    console.error("[captcha] 2captcha createTask réseau:", err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  // 2. Poller le résultat
+  for (let i = 1; i <= TWOCAPTCHA_TURNSTILE_MAX_POLLS; i++) {
+    await new Promise(r => setTimeout(r, TWOCAPTCHA_TURNSTILE_POLL_MS));
+
+    try {
+      const resultRes = await fetch(TWOCAPTCHA_GET_RESULT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey, taskId }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = (await resultRes.json()) as TwoCaptchaGetResultResponse;
+
+      if (data.errorId !== 0) {
+        console.error(`[captcha] 2captcha getTaskResult erreur: ${data.errorCode ?? data.errorId}`);
+        return null;
+      }
+
+      if (data.status === "ready") {
+        const token = data.solution?.token ?? null;
+        if (token) {
+          console.log(`[captcha] 2captcha Turnstile token reçu en ${i * TWOCAPTCHA_TURNSTILE_POLL_MS / 1000}s (longueur: ${token.length})`);
+          return token;
+        }
+        console.error("[captcha] 2captcha: status ready mais token absent");
+        return null;
+      }
+
+      process.stdout.write(`[captcha] 2captcha Turnstile #${i}/${TWOCAPTCHA_TURNSTILE_MAX_POLLS} — processing…\r`);
+    } catch (err) {
+      console.warn(`[captcha] 2captcha poll #${i} réseau erreur:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  console.error("\n[captcha] 2captcha Turnstile timeout — aucune solution reçue");
+  return null;
+}
+
 async function submitTurnstileTask(
   apiKey: string,
   siteKey: string,
@@ -677,8 +779,21 @@ export async function detectAndSolveTurnstile(
   console.log(`[captcha] Type: Turnstile standard | sitekey: ${sitekey.slice(0, 14)}…`);
   let token: string | null = null;
 
-  // Priorité 1 : Anti-Captcha TurnstileTaskProxyless
-  if (anticaptchaApiKey) {
+  // Priorité 1 : 2captcha TurnstileTaskProxyless (API createTask — plus fiable et unifié)
+  // 2captcha est priorisé car on a déjà un abonnement proxy+captcha combiné,
+  // et le token Turnstile résolu via leur réseau est cohérent avec nos IPs résidentielles.
+  if (twoCaptchaApiKey) {
+    console.log("[captcha] Turnstile → 2captcha TurnstileTaskProxyless (priorité 1)");
+    token = await solveTurnstileVia2captchaCreateTask(twoCaptchaApiKey, sitekey, pageUrl).catch(() => null);
+    if (token) {
+      console.log("[captcha] ✅ 2captcha Turnstile token reçu");
+    } else {
+      console.warn("[captcha] 2captcha Turnstile échec — fallback Anti-Captcha");
+    }
+  }
+
+  // Priorité 2 : Anti-Captcha TurnstileTaskProxyless
+  if (!token && anticaptchaApiKey) {
     console.log("[captcha] Turnstile → Anti-Captcha TurnstileTaskProxyless");
     token = await solveTurnstileViaAntiCaptcha(anticaptchaApiKey, sitekey, pageUrl).catch(() => null);
     if (token) {
@@ -688,33 +803,20 @@ export async function detectAndSolveTurnstile(
     }
   }
 
-  // Priorité 2 : CapSolver AntiTurnstileTaskProxyLess
+  // Priorité 3 : CapSolver AntiTurnstileTaskProxyLess
   if (!token && capsolverApiKey) {
     console.log("[captcha] Turnstile → CapSolver AntiTurnstileTaskProxyLess");
     token = await solveTurnstileViaCapsolver(capsolverApiKey, sitekey, pageUrl).catch(() => null);
     if (token) {
       console.log("[captcha] ✅ CapSolver Turnstile token reçu");
     } else {
-      console.warn("[captcha] CapSolver Turnstile échec — fallback 2captcha");
+      console.warn("[captcha] CapSolver Turnstile échec — aucun fallback restant");
     }
   }
 
-  // Priorité 3 : 2captcha (fallback)
   if (!token) {
-    if (!twoCaptchaApiKey) {
-      console.warn("[captcha] Turnstile : aucune clé captcha disponible (Anti-Captcha, CapSolver ni 2captcha)");
-      return "no_key";
-    }
-    console.log("[captcha] Turnstile → 2captcha");
-    let taskId: string | null = null;
-    try {
-      taskId = await submitTurnstileTask(twoCaptchaApiKey, sitekey, pageUrl);
-    } catch (err) {
-      console.error("[captcha] 2captcha Turnstile soumission échouée:", err instanceof Error ? err.message : String(err));
-      return "failed";
-    }
-    if (!taskId) return "failed";
-    token = await pollCaptchaSolution(twoCaptchaApiKey, taskId);
+    console.error("[captcha] Turnstile : tous les providers ont échoué");
+    return "failed";
   }
 
   if (!token) return "failed";
