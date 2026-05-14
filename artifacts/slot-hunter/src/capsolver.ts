@@ -292,7 +292,18 @@ export async function solveAndApplyCloudflareChallenge(
   }
   
   // 2. Appliquer la solution
-  const applied = await applyCapSolverSolution(page, solution);
+  if (!solution.token) {
+    console.error("[capsolver] Solution reçue sans token");
+    return false;
+  }
+  
+  const applied = await applyCapSolverSolution(page, {
+    token: solution.token,
+    userAgent: solution.userAgent,
+    cookies: solution.cookies,
+    headers: solution.headers,
+    proxy: solution.proxy,
+  });
   
   if (!applied) {
     console.error("[capsolver] Échec application solution");

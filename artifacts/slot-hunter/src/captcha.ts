@@ -352,22 +352,32 @@ async function solveTurnstileVia2captchaCreateTask(
   apiKey: string,
   siteKey: string,
   pageUrl: string,
+  action?: string,
+  cData?: string,
+  chlPageData?: string,
 ): Promise<string | null> {
   console.log(`[captcha] Turnstile → 2captcha createTask (TurnstileTaskProxyless) | siteKey: ${siteKey.slice(0, 14)}… | page: ${pageUrl}`);
 
   // 1. Créer la tâche
   let taskId: number;
   try {
+    const task: any = {
+      type: "TurnstileTaskProxyless",
+      websiteURL: pageUrl,
+      websiteKey: siteKey,
+    };
+
+    // Ajouter les paramètres supplémentaires pour les pages de défi Cloudflare
+    if (action) task.action = action;
+    if (cData) task.data = cData;
+    if (chlPageData) task.pagedata = chlPageData;
+
     const createRes = await fetch(TWOCAPTCHA_CREATE_TASK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clientKey: apiKey,
-        task: {
-          type: "TurnstileTaskProxyless",
-          websiteURL: pageUrl,
-          websiteKey: siteKey,
-        },
+        task,
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -779,14 +789,114 @@ export async function detectAndSolveTurnstile(
   console.log(`[captcha] Type: Turnstile standard | sitekey: ${sitekey.slice(0, 14)}…`);
   let token: string | null = null;
 
+  // Essayer d'intercepter les paramètres Cloudflare pour les pages de défi
+  let action: string | undefined;
+  let cData: string | undefined;
+  let chlPageData: string | undefined;
+
   // Priorité 1 : 2captcha TurnstileTaskProxyless (API createTask — plus fiable et unifié)
   // 2captcha est priorisé car on a déjà un abonnement proxy+captcha combiné,
   // et le token Turnstile résolu via leur réseau est cohérent avec nos IPs résidentielles.
   if (twoCaptchaApiKey) {
     console.log("[captcha] Turnstile → 2captcha TurnstileTaskProxyless (priorité 1)");
-    token = await solveTurnstileVia2captchaCreateTask(twoCaptchaApiKey, sitekey, pageUrl).catch(() => null);
+    
+    // Injecter le code pour intercepter window.turnstile.render
+    try {
+      await page.evaluate(() => {
+        const w = window as any;
+        if (w.turnstile && !w._turnstileIntercepted) {
+          w._turnstileIntercepted = true;
+          w.turnstile = new Proxy(w.turnstile, {
+            get(target, prop) {
+              if (prop === "render") {
+                return function (a: any, b: any) {
+                  const p = {
+                    websiteURL: window.location.href,
+                    websiteKey: b.sitekey,
+                    action: b.action,
+                    cData: b.cData,
+                    chlPageData: b.chlPageData,
+                    userAgent: navigator.userAgent,
+                  };
+                  
+                  // Sauvegarder les paramètres dans window.params
+                  w.params = p;
+                  
+                  // Sauvegarder le callback dans window.cfCallback
+                  w.cfCallback = b.callback;
+                  
+                  // Appeler la fonction render originale
+                  return target.render.apply(target, arguments);
+                };
+              }
+              return (target as any)[prop];
+            },
+          });
+        }
+      });
+    } catch (err) {
+      console.warn("[captcha] Erreur injection interception:", err);
+    }
+    
+    // Essayer d'intercepter les paramètres Cloudflare
+    try {
+      const params = await page.evaluate(() => {
+        const w = window as any;
+        if (w.params) {
+          return w.params;
+        }
+        return null;
+      }).catch(() => null);
+      
+      if (params) {
+        action = params.action;
+        cData = params.cData;
+        chlPageData = params.chlPageData;
+        console.log(`[captcha] Paramètres Cloudflare interceptés: action=${action ? 'oui' : 'non'}, cData=${cData ? 'oui' : 'non'}, chlPageData=${chlPageData ? 'oui' : 'non'}`);
+      }
+    } catch (err) {
+      console.warn("[captcha] Erreur interception paramètres:", err);
+    }
+    
+    token = await solveTurnstileVia2captchaCreateTask(
+      twoCaptchaApiKey, 
+      sitekey, 
+      pageUrl,
+      action,
+      cData,
+      chlPageData
+    ).catch(() => null);
+    
     if (token) {
       console.log("[captcha] ✅ 2captcha Turnstile token reçu");
+      
+      // Exécuter le callback avec le token
+      try {
+        await page.evaluate((t: string) => {
+          const w = window as any;
+          if (w.cfCallback && typeof w.cfCallback === 'function') {
+            console.log("[captcha] Exécution du callback Turnstile avec le token");
+            w.cfCallback(t);
+          } else {
+            // Fallback: essayer de trouver et remplir le champ cf-turnstile-response
+            const input = document.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement;
+            if (input) {
+              input.value = t;
+              console.log("[captcha] Champ cf-turnstile-response rempli");
+            }
+          }
+        }, token);
+        
+        // Attendre un peu pour laisser le temps au callback de s'exécuter
+        await new Promise(r => setTimeout(r, 2000));
+        
+        // Recharger la page
+        console.log("[captcha] Rechargement après injection token...");
+        await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+        
+      } catch (err) {
+        console.warn("[captcha] Erreur exécution callback:", err);
+      }
     } else {
       console.warn("[captcha] 2captcha Turnstile échec — fallback Anti-Captcha");
     }

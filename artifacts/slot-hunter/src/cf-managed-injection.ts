@@ -247,7 +247,7 @@ export async function solveManagedChallengeWithAdaptedInjection(
               }
             }
           }
-          return target.apply(thisArg, args);
+          return target.apply(thisArg, args as [input: URL | RequestInfo, init?: RequestInit]);
         },
       });
       

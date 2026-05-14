@@ -192,7 +192,8 @@ export class BookititApiClient {
         try {
           return JSON.parse(cleaned);
         } catch (err2) {
-          throw new Error(`Failed to parse JSONP: ${err2.message}. Raw: ${cleaned.substring(0, 200)}`);
+          const errMsg = err2 instanceof Error ? err2.message : String(err2);
+          throw new Error(`Failed to parse JSONP: ${errMsg}. Raw: ${cleaned.substring(0, 200)}`);
         }
       }
     }
@@ -201,7 +202,8 @@ export class BookititApiClient {
     try {
       return JSON.parse(body);
     } catch (err) {
-      throw new Error(`Response is not valid JSON or JSONP: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Response is not valid JSON or JSONP: ${errMsg}`);
     }
   }
 
@@ -403,8 +405,9 @@ export async function testBookititApi() {
     
     return { success: true, servicesCount: services.length };
   } catch (error) {
-    console.error('❌ API Error:', error.message);
-    return { success: false, error: error.message };
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ API Error:', errMsg);
+    return { success: false, error: errMsg };
   }
 }
 

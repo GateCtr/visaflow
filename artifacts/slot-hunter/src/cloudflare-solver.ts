@@ -121,11 +121,13 @@ async function strategyAntiCaptchaTurnstile(
 ): Promise<boolean> {
   console.log("[cloudflare-solver] Stratégie Anti-Captcha Turnstile standard");
   
-  const result = await detectAndSolveTurnstile(page, {
-    anticaptchaApiKey,
-    capsolverApiKey,
+  const result = await detectAndSolveTurnstile(
+    page,
     twoCaptchaApiKey,
-  });
+    capsolverApiKey,
+    undefined, // proxyUrl
+    anticaptchaApiKey
+  );
   
   return result === 'solved';
 }
@@ -275,7 +277,7 @@ export async function solveCloudflareIntelligently(
   }
   
   // Si échec, essayer les fallbacks
-  if (!success && strategy !== 'auto') {
+  if (!success && (strategy as string) !== 'auto') {
     console.log("[cloudflare-solver] Échec de la stratégie principale, essai des fallbacks...");
     
     const fallbacks: Array<{ name: string; fn: () => Promise<boolean> }> = [];
@@ -319,7 +321,7 @@ export async function solveCloudflareIntelligently(
       try {
         success = await fallback.fn();
         if (success) {
-          strategy = fallback.name;
+          strategy = fallback.name as 'capsolver' | 'anticaptcha' | 'turnstile' | 'cookie';
           console.log(`[cloudflare-solver] Fallback ${fallback.name} réussi`);
           break;
         }

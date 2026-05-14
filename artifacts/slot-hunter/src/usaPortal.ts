@@ -96,13 +96,13 @@ const USA_FCS_CHECK_URL = (applicationId: string) =>
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-// Durée maximale d'une session en cache avant invalidation automatique.
-// Même si le JWT est techniquement valide 55 min, le portail détecte les sessions
-// inactives après ~15 min. On invalide à 25 min — assez pour couvrir 5-10 cycles rush
-// sans re-login, tout en restant sous le seuil d'inactivité du portail.
-// IMPORTANT : les appels API (getFirstAvailableMonth, etc.) comptent comme activité,
-// donc tant qu'on fait des scans réguliers, la session reste active côté serveur.
-const MAX_SESSION_AGE_MS = 25 * 60 * 1000;
+// ── Inactivité côté portail USA (~15 min sans trafic API authentifié → session morte) ──
+// Le cache doit refléter ça : on suit la dernière réponse OK portant le Bearer (usaFetch).
+const USA_PORTAL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+/** Marge sous le seuil d’inactivité du portail : au-delà, on force refresh/login. */
+const MAX_AUTH_IDLE_MS = USA_PORTAL_IDLE_TIMEOUT_MS - 2 * 60 * 1000; // 13 min
+/** Plafond calendaire depuis login/refresh : rotation même si l’activité API est continue (JWT ~1h). */
+const MAX_SESSION_ABSOLUTE_MS = 50 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────
 // Circuit-breaker : erreurs HTTP critiques pendant le scan
@@ -541,10 +541,10 @@ interface CachedToken {
   expiresAt: number;
   userID: number;
   fullName: string;
-  /** Timestamp (Date.now()) du moment où le token a été créé/rafraîchi.
-   * Utilisé pour invalider le cache après MAX_SESSION_AGE_MS même si le JWT est
-   * techniquement encore valide — protection contre les logouts ratés. */
+  /** Timestamp (Date.now()) du moment où le token a été créé/rafraîchi (login ou refresh). */
   sessionStartedAt: number;
+  /** Dernière réponse HTTP OK avec ce accessToken (Bearer) — aligné sur l’inactivité ~15 min du portail. */
+  lastActivityAt?: number;
   /** Index dans USA_UA_POOL assigné lors du login — réutilisé pour toute la durée du JWT.
    * Un même JWT vu depuis des UAs différents est une empreinte bot détectable. */
   uaIndex?: number;
@@ -587,11 +587,16 @@ function isCachedTokenValid(cached: CachedToken): boolean {
   // ce qui brise le pattern "login toutes les 55 min pile" détectable par le portail.
   const now = Date.now();
 
-  // Protection contre les logouts ratés : si la session a été créée il y a plus de
-  // MAX_SESSION_AGE_MS (10 min), on invalide le cache indépendamment de l'exp JWT.
-  // Le portail détecte les sessions inactives après ~15 min — on coupe avant.
+  // Inactivité API : le portail coupe ~15 min sans appel authentifié — on invalide à 13 min
+  // depuis la dernière réponse OK avec ce Bearer (usaFetch met à jour lastActivityAt).
+  const lastAct = cached.lastActivityAt ?? cached.sessionStartedAt;
+  if (now - lastAct >= MAX_AUTH_IDLE_MS) {
+    return false;
+  }
+
+  // Plafond absolu depuis login/refresh (indépendant de l’activité).
   const sessionAge = now - cached.sessionStartedAt;
-  if (sessionAge >= MAX_SESSION_AGE_MS) {
+  if (sessionAge >= MAX_SESSION_ABSOLUTE_MS) {
     return false;
   }
 
@@ -646,9 +651,10 @@ async function refreshUsaToken(cached: CachedToken, username: string): Promise<C
       // Jitter conservé du login initial — la dispersion temporelle reste cohérente
       // sur toute la chaîne de refreshs d'un même compte.
       jitterMs: cached.jitterMs,
-      // Réinitialiser le timestamp de session au moment du refresh — le nouveau token
-      // démarre une nouvelle fenêtre de MAX_SESSION_AGE_MS.
+      // Réinitialiser les horodatages au refresh — nouveau JWT / nouvelle fenêtre absolue.
       sessionStartedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      allowedOfcs: cached.allowedOfcs,
     };
   } catch (err) {
     console.warn("[usa] Erreur lors du refresh:", err);
@@ -950,17 +956,51 @@ function getImpitInstance(): InstanceType<typeof Impit> {
   return _impitInstance;
 }
 
+/** Extrait le JWT Bearer des en-têtes de requête (formats Headers, tableau ou objet). */
+function extractBearerFromHeaders(headers: HeadersInit | undefined): string | undefined {
+  if (!headers) return undefined;
+  if (headers instanceof Headers) {
+    const v = headers.get("Authorization") ?? headers.get("authorization");
+    return v?.startsWith("Bearer ") ? v.slice(7).trim() : undefined;
+  }
+  if (Array.isArray(headers)) {
+    const row = headers.find(([k]) => k.toLowerCase() === "authorization");
+    const v = row?.[1];
+    return v?.startsWith("Bearer ") ? v.slice(7).trim() : undefined;
+  }
+  const o = headers as Record<string, string>;
+  const v = o.Authorization ?? o.authorization;
+  return typeof v === "string" && v.startsWith("Bearer ") ? v.slice(7).trim() : undefined;
+}
+
+/** Met à jour lastActivityAt si la requête était authentifiée et la réponse OK. */
+function touchCachedTokenActivity(headers: HeadersInit | undefined, res: Response): void {
+  if (!res.ok) return;
+  const bearer = extractBearerFromHeaders(headers);
+  if (!bearer) return;
+  for (const cached of tokenCache.values()) {
+    if (cached.accessToken === bearer) {
+      cached.lastActivityAt = Date.now();
+      return;
+    }
+  }
+}
+
 async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  let res: Response;
   if (_usaProxyAgent) {
     // Si un proxy est configuré (cas futur), utiliser le fetch natif avec ProxyAgent.
     // impit ne supporte pas directement undici ProxyAgent.
     // @ts-expect-error — dispatcher est une option interne undici non présente dans RequestInit standard
-    return fetch(url, { ...options, dispatcher: _usaProxyAgent });
+    res = await fetch(url, { ...options, dispatcher: _usaProxyAgent });
+  } else {
+    // Mode normal (sans proxy) : utiliser impit pour le fingerprint TLS Chrome.
+    // Les headers sont passés tels quels — impit ne les modifie PAS quand on les fournit.
+    const impit = getImpitInstance();
+    res = await impit.fetch(url, options as Parameters<typeof impit.fetch>[1]) as unknown as Response;
   }
-  // Mode normal (sans proxy) : utiliser impit pour le fingerprint TLS Chrome.
-  // Les headers sont passés tels quels — impit ne les modifie PAS quand on les fournit.
-  const impit = getImpitInstance();
-  return impit.fetch(url, options as Parameters<typeof impit.fetch>[1]) as unknown as Response;
+  touchCachedTokenActivity(options.headers, res);
+  return res;
 }
 
 
@@ -1069,6 +1109,7 @@ export async function getUsaSession(
       fullName: session.fullName,
       jitterMs,
       sessionStartedAt: Date.now(),
+      lastActivityAt: Date.now(),
     });
 
     return session;
@@ -1187,8 +1228,8 @@ export async function loginUsaPortal(
     throw new Error("Réponse non-JSON du portail USA");
   }
 
-  const accessToken = response.headers.get("authorization");
-  const refreshToken = response.headers.get("refreshtoken");
+  let accessToken = response.headers.get("authorization");
+  let refreshToken = response.headers.get("refreshtoken") ?? "";
 
   // ── Extraction csrfToken robuste ───────────────────────────────────────────
   // Le bundle Angular lit : F.headers.get("Csrftoken") (header de réponse custom).
@@ -1233,36 +1274,48 @@ export async function loginUsaPortal(
     // Il ne bloque QUE les opérations PUT (booking/reschedule).
     // On continue avec un warning plutôt que de crasher.
 
-    // ── Fallback : retry login sans proxy pour capturer le csrfToken ────────
-    // Si le proxy résidentiel filtre les headers non-standard, un appel direct
-    // (sans dispatcher) devrait recevoir le header Csrftoken du serveur.
-    // On ne refait PAS un vrai login (risque de lockout) — on réutilise le JWT
-    // déjà obtenu. On fait juste un GET /refreshToken sans proxy pour lire les headers.
-    // NOTE: si le serveur a vraiment supprimé le header (migration), ce fallback échouera aussi.
+    // ── Fallback : POST /refreshToken via le MÊME egress que le login (usaFetch) ─
+    // NE JAMAIS utiliser fetch() direct ici quand un proxy est actif : le portail lie
+    // le JWT à l'IP du login — un refresh depuis l'IP Railway (ou toute autre IP) casse
+    // la session et les GET suivants (ex. payment status) répondent 401.
+    // On ne refait pas un login complet — on réutilise refreshToken + username.
     if (_usaProxyAgent) {
-      console.log("[usa] Tentative de récupération csrfToken via appel direct (sans proxy, TLS Chrome)...");
+      console.log("[usa] Tentative de récupération csrfToken via POST /refreshToken (même proxy / même IP que le login)...");
       try {
-        // Fallback : appel direct sans proxy pour capturer le csrfToken
-        const directRes = await fetch(USA_REFRESH_URL, {
+        const refreshRes = await usaFetch(USA_REFRESH_URL, {
           method: "POST",
           headers: {
             ...getBrowserHeaders(),
             "Content-Type": "application/json",
             "Referer": REFERER_DASHBOARD,
           },
-          body: JSON.stringify({ refreshToken: refreshToken ?? "", username }),
+          body: JSON.stringify({ refreshToken, username }),
         });
-        const directCsrf = directRes.headers.get("Csrftoken") ?? directRes.headers.get("csrftoken") ?? "";
-        if (directCsrf) {
-          csrfToken = directCsrf;
-          console.log(`[usa] ✅ csrfToken récupéré via appel direct (sans proxy): ${csrfToken.slice(0, 8)}...`);
+        const viaProxyCsrf =
+          refreshRes.headers.get("Csrftoken") ?? refreshRes.headers.get("csrftoken") ?? "";
+        if (viaProxyCsrf) {
+          csrfToken = viaProxyCsrf;
+          console.log(`[usa] ✅ csrfToken récupéré via refresh (même egress): ${csrfToken.slice(0, 8)}...`);
         } else {
-          const directHeaders = [...directRes.headers.entries()].map(([k]) => k).join(", ");
-          console.warn(`[usa] csrfToken TOUJOURS absent sans proxy — headers directs: [${directHeaders}]`);
-          console.warn(`[usa] ⚠️ Le serveur ne renvoie plus le header Csrftoken — les PUT (booking) échoueront.`);
+          const hdrs = [...refreshRes.headers.entries()].map(([k]) => k).join(", ");
+          console.warn(`[usa] csrfToken toujours absent après refresh même IP — headers: [${hdrs}]`);
+          console.warn(`[usa] ⚠️ Le serveur ne renvoie pas Csrftoken — les PUT (booking) pourront échouer.`);
         }
-      } catch (directErr) {
-        console.warn(`[usa] Fallback direct échoué: ${directErr instanceof Error ? directErr.message : directErr}`);
+        // Le refresh peut renvoyer un nouveau couple access/refresh ; l'ancien access peut
+        // alors être rejeté sur les API suivantes si on ne pivote pas.
+        if (refreshRes.ok) {
+          const newAccess = refreshRes.headers.get("authorization");
+          const newRefresh = refreshRes.headers.get("refreshtoken");
+          if (newAccess && newAccess !== accessToken) {
+            accessToken = newAccess;
+            console.log("[usa] JWT access pivoté après refresh post-login (cohérence session)");
+          }
+          if (newRefresh) {
+            refreshToken = newRefresh;
+          }
+        }
+      } catch (refreshErr) {
+        console.warn(`[usa] Fallback refresh même-IP échoué: ${refreshErr instanceof Error ? refreshErr.message : refreshErr}`);
       }
     }
   }
