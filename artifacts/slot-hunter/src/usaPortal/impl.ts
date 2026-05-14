@@ -32,6 +32,7 @@ import {
   getAccountRestrictionDeadline,
 } from "./account-restriction.js";
 import {
+  MIN_HUMAN_SESSION_MS,
   MAX_HUMAN_SESSION_MS,
   MIN_SESSION_BREAK_MS,
   MAX_SESSION_BREAK_MS,
@@ -41,6 +42,8 @@ import {
   NIGHT_PAUSE_END_MINUTE,
   HUMAN_ACTIVE_START_HOUR,
   HUMAN_ACTIVE_END_HOUR,
+  MIN_KEEP_ALIVE_INTERVAL_MS,
+  MAX_KEEP_ALIVE_INTERVAL_MS,
 } from "./config.js";
 
 export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
@@ -58,24 +61,59 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return result;
     }
 
-    // ── Délai minimum entre les scans pour éviter la détection Cognito ──────
+    // ── Délai variable entre les scans pour éviter la détection Cognito ──────
     // AWS Cognito détecte les patterns trop réguliers et les sessions simultanées.
     // Après votre test manuel, nous savons que 2 sessions simultanées = restriction.
-    // Solution : augmenter drastiquement les délais entre les scans.
+    // Solution : intervalles variables et plus longs.
     const cacheKey = username.toLowerCase();
     const cached = tokenCache.get(cacheKey);
-    const MIN_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum
-    const MAX_SCAN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes maximum
+    
+    // Intervalles variables selon le tier (mais plus variables)
+    let MIN_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum
+    let MAX_SCAN_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes maximum
+    
+    // Ajuster selon le tier du job
+    const tier = job.hunterConfig.tier;
+    if (tier === "tres_urgent") {
+      MIN_SCAN_INTERVAL_MS = 3 * 60 * 1000; // 3-8 min pour très urgent
+      MAX_SCAN_INTERVAL_MS = 8 * 60 * 1000;
+    } else if (tier === "urgent") {
+      MIN_SCAN_INTERVAL_MS = 8 * 60 * 1000; // 8-15 min pour urgent
+      MAX_SCAN_INTERVAL_MS = 15 * 60 * 1000;
+    } else if (tier === "prioritaire") {
+      MIN_SCAN_INTERVAL_MS = 12 * 60 * 1000; // 12-20 min pour prioritaire
+      MAX_SCAN_INTERVAL_MS = 20 * 60 * 1000;
+    } else {
+      MIN_SCAN_INTERVAL_MS = 15 * 60 * 1000; // 15-30 min pour standard
+      MAX_SCAN_INTERVAL_MS = 30 * 60 * 1000;
+    }
     
     if (cached?.lastScanTime) {
       const timeSinceLastScan = Date.now() - cached.lastScanTime;
+      // Déterminer un intervalle variable pour ce scan spécifique
       const minWaitTime = MIN_SCAN_INTERVAL_MS + Math.random() * (MAX_SCAN_INTERVAL_MS - MIN_SCAN_INTERVAL_MS);
       
       if (timeSinceLastScan < minWaitTime) {
         const waitTime = minWaitTime - timeSinceLastScan;
         const waitSeconds = Math.round(waitTime / 1000);
-        console.log(`[usa] ⏱️ Délai ANTI-RESTRICTION: attente ${waitSeconds}s (5-10min) avant prochain scan`);
-        await new Promise(r => setTimeout(r, waitTime));
+        const waitMinutes = Math.round(waitTime / 60000);
+        console.log(`[usa] ⏱️ Délai ANTI-RESTRICTION: attente ${waitMinutes}min (${waitSeconds}s) avant prochain scan`);
+        
+        // Ajouter de petites pauses aléatoires pendant l'attente (comportement humain)
+        const totalWait = waitTime;
+        const chunkSize = 30_000 + Math.random() * 60_000; // 30-90 secondes par chunk
+        let remaining = totalWait;
+        
+        while (remaining > 0) {
+          const chunk = Math.min(chunkSize, remaining);
+          await new Promise(r => setTimeout(r, chunk));
+          remaining -= chunk;
+          
+          // Petite activité aléatoire (log) pour simuler un humain
+          if (remaining > 0 && Math.random() > 0.7) {
+            console.log(`[usa] ⏳ En attente... ${Math.round(remaining/1000)}s restantes`);
+          }
+        }
       }
     }
 
@@ -126,17 +164,29 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return "not_found";
     }
     
-    // 2. Vérifier durée session (max 90 minutes)
+    // 2. Vérifier durée session (30-120 minutes aléatoire par session)
     if (cached?.sessionStartedAt) {
       const sessionDuration = Date.now() - cached.sessionStartedAt;
-      if (sessionDuration >= MAX_HUMAN_SESSION_MS) {
+      // Déterminer une durée de session aléatoire pour cette session spécifique
+      // Stockée dans le cache pour cohérence
+      let targetSessionDuration = cached.targetSessionDuration;
+      if (!targetSessionDuration) {
+        // Nouvelle session : déterminer une durée aléatoire
+        targetSessionDuration = MIN_HUMAN_SESSION_MS + Math.random() * (MAX_HUMAN_SESSION_MS - MIN_HUMAN_SESSION_MS);
+        cached.targetSessionDuration = targetSessionDuration;
+        const targetMinutes = Math.round(targetSessionDuration / 60000);
+        console.log(`[usa] ⏰ Nouvelle session humaine: durée cible ${targetMinutes}min`);
+      }
+      
+      if (sessionDuration >= targetSessionDuration) {
         const sessionMinutes = Math.round(sessionDuration / 60000);
-        console.log(`[usa] ⏰ Session trop longue (${sessionMinutes}min > 90min) — logout forcé + pause`);
+        const targetMinutes = Math.round(targetSessionDuration / 60000);
+        console.log(`[usa] ⏰ Session terminée (${sessionMinutes}min ≥ ${targetMinutes}min) — logout forcé + pause`);
         
         // Logout propre
         try {
           await logoutUsaPortal(username);
-          console.log(`[usa] ✅ Logout forcé après session longue`);
+          console.log(`[usa] ✅ Logout forcé après session humaine`);
         } catch (logoutErr) {
           console.warn(`[usa] Logout échoué (non bloquant): ${logoutErr}`);
         }
@@ -145,10 +195,10 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         tokenCache.delete(cacheKey);
         proxyPool.releaseStickyProxy(username);
         
-        // Calculer pause (10-30 min)
+        // Calculer pause variable (5-45 min)
         const pauseDuration = MIN_SESSION_BREAK_MS + Math.random() * (MAX_SESSION_BREAK_MS - MIN_SESSION_BREAK_MS);
         const pauseMinutes = Math.round(pauseDuration / 60000);
-        console.log(`[usa] ☕ Pause humaine: ${pauseMinutes}min avant prochaine session`);
+        console.log(`[usa] ☕ Pause humaine variable: ${pauseMinutes}min avant prochaine session`);
         
         await sendHeartbeat({
           applicationId: job.id,
@@ -465,17 +515,31 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     if (cached?.sessionStartedAt) {
       const sessionDuration = Date.now() - cached.sessionStartedAt;
       const sessionMinutes = Math.round(sessionDuration / 60000);
-      const remainingMinutes = Math.round((MAX_HUMAN_SESSION_MS - sessionDuration) / 60000);
+      const targetDuration = cached.targetSessionDuration || MAX_HUMAN_SESSION_MS;
+      const remainingMinutes = Math.round((targetDuration - sessionDuration) / 60000);
       
       if (remainingMinutes > 0) {
-        console.log(`[usa] 🔄 Session maintenue (${sessionMinutes}min écoulées, ${remainingMinutes}min restantes)`);
+        const targetTotalMinutes = Math.round(targetDuration / 60000);
+        console.log(`[usa] 🔄 Session maintenue (${sessionMinutes}/${targetTotalMinutes}min)`);
         
         // Mettre à jour lastActivityAt et lastScanTime
         cached.lastActivityAt = Date.now();
         cached.lastScanTime = Date.now();
-        console.log(`[usa] 📊 Activité mise à jour: ${new Date(cached.lastActivityAt).toISOString()}`);
+        
+        // Simuler une activité humaine aléatoire (log occasionnel)
+        if (Math.random() > 0.8) {
+          const activities = [
+            "📊 Session active",
+            "👤 Utilisateur connecté", 
+            "🔄 Maintien session",
+            "⏳ Prochain scan bientôt",
+            "📱 Activité normale"
+          ];
+          const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+          console.log(`[usa] ${randomActivity} — ${remainingMinutes}min restantes`);
+        }
       } else {
-        console.log(`[usa] ⏰ Session atteint limite humaine (90min) — sera logout au prochain cycle`);
+        console.log(`[usa] ⏰ Session atteint limite humaine (${Math.round(targetDuration/60000)}min) — sera logout au prochain cycle`);
       }
     } else {
       console.log(`[usa] 🔄 Nouvelle session démarrée`);

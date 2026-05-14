@@ -118,7 +118,7 @@ export async function navigateCevRedirectWithPlaywright(
 
     // Naviguer vers la redirectUrl
     console.log(`[CEV-NAV] Navigation → ${fullRedirectUrl.slice(0, 80)}...`);
-    await page.goto(fullRedirectUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(fullRedirectUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
     // Attendre que la page se stabilise (JS inline peut appeler getAvailableTimeSlotsForPublic)
     // Utiliser setTimeout au lieu de page.waitForTimeout pour éviter l'erreur

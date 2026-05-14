@@ -15,6 +15,8 @@ export interface CachedToken {
   lastActivityAt: number;
   lastScanTime?: number; // Dernier scan pour délai minimum entre les scans
   allowedOfcs?: Array<{ postUserId: number }>;
+  targetSessionDuration?: number; // Durée cible aléatoire pour cette session (30-120 min)
+  keepAliveInterval?: number; // Intervalle de keep-alive variable pour cette session (5-12 min)
 }
 
 export interface UsaLoginResponse {

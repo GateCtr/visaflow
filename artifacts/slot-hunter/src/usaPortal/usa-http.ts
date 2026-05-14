@@ -14,7 +14,8 @@ import {
   REFERER_LOGIN,
   REFERER_DASHBOARD,
   REFERER_CREATE_APT,
-  KEEP_ALIVE_INTERVAL_MS,
+  MIN_KEEP_ALIVE_INTERVAL_MS,
+  MAX_KEEP_ALIVE_INTERVAL_MS,
 } from "./config.js";
 
 export const tokenCache = new Map<string, CachedToken>();
@@ -71,8 +72,8 @@ export function isCachedTokenValid(cached: CachedToken): boolean {
 // Keep-alive : ping léger pour éviter le timeout d'inactivité serveur (15 min)
 // ─────────────────────────────────────────────────────────────────────────────
 // Le portail USA invalide les sessions côté serveur après ~15 min sans activité API.
-// Ce keep-alive envoie un GET léger (getLandingPageDetails) toutes les ~8 min
-// pour maintenir la session active sans déclencher de soupçon.
+// Ce keep-alive envoie un GET léger (getLandingPageDetails) à intervalles variables (5-12 min)
+// pour maintenir la session active sans pattern détectable.
 
 
 /**
@@ -86,13 +87,25 @@ export async function sendKeepAliveIfNeeded(cached: CachedToken, username: strin
   const now = Date.now();
   const timeSinceActivity = now - cached.lastActivityAt;
   
-  // Pas besoin si une activité récente (< 8 min)
-  if (timeSinceActivity < KEEP_ALIVE_INTERVAL_MS) {
+  // Déterminer un intervalle de keep-alive variable pour cette session
+  // Stocké dans le cache pour cohérence
+  let keepAliveInterval = cached.keepAliveInterval;
+  if (!keepAliveInterval) {
+    // Nouvelle session : déterminer un intervalle aléatoire (5-12 min)
+    keepAliveInterval = MIN_KEEP_ALIVE_INTERVAL_MS + Math.random() * (MAX_KEEP_ALIVE_INTERVAL_MS - MIN_KEEP_ALIVE_INTERVAL_MS);
+    cached.keepAliveInterval = keepAliveInterval;
+    const intervalMinutes = Math.round(keepAliveInterval / 60000);
+    console.log(`[usa] ⏱️ Intervalle keep-alive variable: ${intervalMinutes}min`);
+  }
+  
+  // Pas besoin si une activité récente (< intervalle variable)
+  if (timeSinceActivity < keepAliveInterval) {
     return true;
   }
 
   const inactiveMin = Math.round(timeSinceActivity / 60000);
-  console.log(`[usa] 🏓 Keep-alive nécessaire — ${inactiveMin} min depuis dernière activité`);
+  const targetMin = Math.round(keepAliveInterval / 60000);
+  console.log(`[usa] 🏓 Keep-alive nécessaire — ${inactiveMin}min (seuil: ${targetMin}min) depuis dernière activité`);
 
   try {
     // getLandingPageDetails est un endpoint léger que le portail Angular appelle
@@ -333,11 +346,30 @@ function generateCorrelationId(): string {
 }
 
 export function getBrowserHeaders(jobId?: string): Record<string, string> {
+  // Variabilité dans les headers Accept-Encoding (parfois omis, parfois complet)
+  const acceptEncodings = [
+    "gzip, deflate, br, zstd",
+    "gzip, deflate, br",
+    "gzip, deflate",
+    "gzip"
+  ];
+  const randomEncoding = acceptEncodings[Math.floor(Math.random() * acceptEncodings.length)];
+  
+  // Variabilité dans Accept-Language
+  const acceptLanguages = [
+    "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
+    "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "fr-CD,fr;q=0.9"
+  ];
+  const randomLanguage = acceptLanguages[Math.floor(Math.random() * acceptLanguages.length)];
+  
   const baseHeaders = {
     "Accept":             "application/json, text/plain, */*",
-    // Chrome 123+ inclut zstd — son absence est un signal JA4H bot identifiable
-    "Accept-Encoding":    "gzip, deflate, br, zstd",
-    "Accept-Language":    "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
+    // Variabilité dans Accept-Encoding pour éviter les patterns
+    "Accept-Encoding":    randomEncoding,
+    // Variabilité dans Accept-Language
+    "Accept-Language":    randomLanguage,
     "Cache-Control":      "no-cache",
     // NOTE : LanguageId N'est PAS ajouté ici.
     // L'intercepteur Angular ne l'envoie QUE pour /getLandingPageDeatils et /generatewizardtemplate.

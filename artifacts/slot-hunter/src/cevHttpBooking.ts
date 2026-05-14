@@ -77,7 +77,7 @@ async function fetchFollowRedirects(
         'Upgrade-Insecure-Requests': '1',
       }),
       redirect: 'manual',
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (res.status === 302 || res.status === 301) {
@@ -255,7 +255,7 @@ async function fetchAvailableTimeSlots(
         'Accept': 'application/json, text/javascript, */*; q=0.01',
       }),
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
@@ -362,7 +362,7 @@ async function submitSlotSelection(
         }),
         body,
         redirect: 'follow',
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(30_000),
       });
 
       const html = await res.text().catch(() => '');

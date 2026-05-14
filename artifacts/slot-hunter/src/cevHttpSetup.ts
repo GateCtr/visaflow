@@ -78,7 +78,7 @@ async function getVowintSession(
     method: "GET",
     headers: { "User-Agent": ua, "Accept": "text/html" },
     redirect: "follow",
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!loginPageRes.ok) {
     return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
@@ -107,7 +107,7 @@ async function getVowintSession(
       Password: vowintPassword,
     }).toString(),
     redirect: "manual",
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(30_000),
   });
   if (loginRes.status !== 302) {
     botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
@@ -123,7 +123,7 @@ async function getVowintSession(
       method: "GET",
       headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/` },
       redirect: "manual",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(20_000),
     });
     cookies = mergeCookies(cookies, r);
     if (r.status >= 300 && r.status < 400) { redirectUrl = r.headers.get("location"); }
@@ -144,7 +144,7 @@ async function getVowintSession(
       method: "GET",
       headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/en`, "Upgrade-Insecure-Requests": "1" },
       redirect: "follow",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
     if (pageRes.ok) {
       const html = await pageRes.text();
@@ -158,7 +158,7 @@ async function getVowintSession(
       await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
         method: "GET",
         headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(20_000),
       }).then(r => { cookies = mergeCookies(cookies, r); return r.text(); }).catch(() => {});
 
       // GET MyList (DataTables AJAX)
@@ -166,7 +166,7 @@ async function getVowintSession(
       const listRes = await fetch(dtUrl, {
         method: "GET",
         headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       });
       if (listRes.ok) {
         const text = await listRes.text();
@@ -244,7 +244,7 @@ export async function setupCevSessionHttp(
           "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
         },
         redirect: "manual",
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       });
 
       if (eRes.ok) {
@@ -300,7 +300,7 @@ export async function setupCevSessionHttp(
         "Referer": `${VOWINT_BASE}/`,
       },
       redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     let cevSessionCookie: string | null = null;
@@ -349,7 +349,7 @@ export async function setupCevSessionHttp(
         "Accept": "application/json, text/javascript, */*; q=0.01",
       },
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!captchaRes.ok) {
@@ -468,7 +468,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
           clientKey: ANTICAPTCHA_KEY,
           task: { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY },
         }),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       });
       const createData = await createRes.json() as { errorId: number; taskId?: number };
       if (createData.errorId === 0 && createData.taskId) {
@@ -505,7 +505,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
           clientKey: CAPSOLVER_KEY,
           task: { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY },
         }),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       });
       const createData = await createRes.json() as { errorId: number; taskId?: string };
       if (createData.errorId === 0 && createData.taskId) {

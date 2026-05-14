@@ -59,11 +59,12 @@ export const PROACTIVE_REFRESH_MS = 8 * 60 * 1000; // Rafraîchir 8 min avant ex
 export const USA_PORTAL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 export const MAX_AUTH_IDLE_MS = USA_PORTAL_IDLE_TIMEOUT_MS - 2 * 60 * 1000;
 export const MAX_SESSION_ABSOLUTE_MS = 50 * 60 * 1000;
-// Durée max réaliste d'une session humaine (30-90 min max - portail déconnecte après 15 min inactivité)
-export const MAX_HUMAN_SESSION_MS = 90 * 60 * 1000; // 90 minutes max
-// Pause courte entre sessions (10-30 min - réaliste)
-export const MIN_SESSION_BREAK_MS = 10 * 60 * 1000; // 10 min
-export const MAX_SESSION_BREAK_MS = 30 * 60 * 1000; // 30 min
+// Durée max réaliste d'une session humaine (30-120 min max - portail déconnecte après 15 min inactivité)
+export const MIN_HUMAN_SESSION_MS = 30 * 60 * 1000; // 30 minutes min
+export const MAX_HUMAN_SESSION_MS = 120 * 60 * 1000; // 120 minutes max
+// Pause variable entre sessions (5-45 min - plus réaliste et aléatoire)
+export const MIN_SESSION_BREAK_MS = 5 * 60 * 1000; // 5 min
+export const MAX_SESSION_BREAK_MS = 45 * 60 * 1000; // 45 min
 // Pause nocturne réduite (00h30-04h00 - créneaux rares)
 export const NIGHT_PAUSE_START_HOUR = 0; // 0h (minuit)
 export const NIGHT_PAUSE_START_MINUTE = 30; // 30 min
@@ -80,5 +81,7 @@ export const REFERER_REQUESTS = "https://www.usvisaappt.com/visaapplicantui/home
 export const REFERER_CREATE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment";
 export const REFERER_MANAGE_APT = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/manage-appointment";
 
-export const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000;
+// Keep-alive variable (5-12 min - plus aléatoire)
+export const MIN_KEEP_ALIVE_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+export const MAX_KEEP_ALIVE_INTERVAL_MS = 12 * 60 * 1000; // 12 min
 export const WARMUP_INTERVAL_MS = 8 * 60 * 1000;

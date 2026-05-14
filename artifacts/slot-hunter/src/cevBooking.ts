@@ -183,9 +183,9 @@ async function establishCevSession(
     };
     page.on('response', onResponse);
 
-    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'commit', timeout: 30_000 });
+    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'commit', timeout: 60_000 });
     // Attendre que le DOM soit suffisamment chargé pour interagir (best-effort)
-    await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
 
     // BrightData peut retourner HTTP 402 "bad_endpoint" pour visaonweb.diplomatie.be.
     // Le listener ci-dessus couvre le GET initial ; on vérifie aussi le contenu de la page.
@@ -219,7 +219,7 @@ async function establishCevSession(
       await randomDelay(300, 700);
       await humanClick(page, 'button[type="submit"]');
       // Utiliser domcontentloaded (networkidle peut ne jamais se stabiliser sur VOWINT/AngularJS)
-      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
       await randomDelay(1_000, 2_000); // laisser le redirect s'établir
 
       // Vérifier BrightData 402 sur le POST login AVANT d'analyser l'URL
@@ -267,9 +267,9 @@ async function establishCevSession(
 
     // domcontentloaded d'abord, puis on attend networkidle en best-effort
     // AngularJS fait du XHR polling — networkidle peut ne jamais se stabiliser
-    await page.goto(targetUrl, { waitUntil: 'commit', timeout: 30_000 });
-    await page.waitForLoadState('domcontentloaded', { timeout: 20_000 }).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+    await page.goto(targetUrl, { waitUntil: 'commit', timeout: 60_000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
     await randomDelay(2_000, 4_000);
     await humanScroll(page); // scroll naturel — évite le pattern "goto → clic immédiat"

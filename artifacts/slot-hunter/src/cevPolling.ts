@@ -93,7 +93,7 @@ async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string): Pr
           Referer: `${VOWINT_BASE}/`,
         },
         redirect: "manual",
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       });
 
       const loc = r.headers.get("location");
@@ -201,7 +201,7 @@ async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollRes
         },
         body: JSON.stringify(body),
         redirect: "manual",
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(20_000),
       });
 
       // 403/401 = session expirée (captcha non résolu ou cookie mort)
@@ -447,7 +447,7 @@ export async function captureSelectSlotWithoutRedirect(
         "Upgrade-Insecure-Requests": "1",
       },
       redirect: "manual", // IMPORTANT: ne pas suivre automatiquement
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     // Capturer tous les headers
