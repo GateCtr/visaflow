@@ -84,7 +84,8 @@ function AppointmentCard({ app, compact = false }: { app: Appointment; compact?:
 
 export default function AdminCalendar() {
   const data = useQuery(api.admin.getCalendarData);
-  const discoveryStats = useQuery(api.slotDiscoveries.getStats, {});
+  const [modeFilter, setModeFilter] = useState<"schedule" | "reschedule" | undefined>(undefined);
+  const discoveryStats = useQuery(api.slotDiscoveries.getStats, modeFilter ? { mode: modeFilter } : {});
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState<string | null>(toISODateKey(today));
@@ -374,7 +375,7 @@ export default function AdminCalendar() {
         </div>
       ) : (
         /* Discoveries view — stats de dates captées/ignorées par le bot */
-        <DiscoveriesPanel stats={discoveryStats} />
+        <DiscoveriesPanel stats={discoveryStats} modeFilter={modeFilter} setModeFilter={setModeFilter} />
       )}
     </div>
   );
@@ -398,6 +399,7 @@ type DiscoveryStats = {
   byHour: Record<number, { captured: number; ignored: number }>;
   byDayOfWeek: Record<number, { captured: number; ignored: number }>;
   byReason: Record<string, number>;
+  byMode: Record<string, number>;
   recent: Array<{
     _id: string;
     destination: string;
@@ -406,11 +408,12 @@ type DiscoveryStats = {
     timeFound?: string;
     outcome: "captured" | "ignored";
     reason?: string;
+    mode?: "schedule" | "reschedule";
     discoveredAt: number;
   }>;
 };
 
-function DiscoveriesPanel({ stats }: { stats: DiscoveryStats | null | undefined }) {
+function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: DiscoveryStats | null | undefined; modeFilter: "schedule" | "reschedule" | undefined; setModeFilter: (m: "schedule" | "reschedule" | undefined) => void }) {
   if (stats === undefined) {
     return <div className="p-12 text-center text-muted-foreground">Chargement des statistiques de découverte...</div>;
   }
@@ -430,8 +433,31 @@ function DiscoveriesPanel({ stats }: { stats: DiscoveryStats | null | undefined 
 
   return (
     <div className="space-y-6">
+      {/* Mode filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-muted-foreground">Mode :</span>
+        <button
+          onClick={() => setModeFilter(undefined)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!modeFilter ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+        >
+          Tous
+        </button>
+        <button
+          onClick={() => setModeFilter("schedule")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${modeFilter === "schedule" ? "bg-blue-600 text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+        >
+          Schedule
+        </button>
+        <button
+          onClick={() => setModeFilter("reschedule")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${modeFilter === "reschedule" ? "bg-purple-600 text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+        >
+          Reschedule
+        </button>
+      </div>
+
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
@@ -462,6 +488,23 @@ function DiscoveriesPanel({ stats }: { stats: DiscoveryStats | null | undefined 
             <div>
               <p className="text-2xl font-bold text-amber-700">{stats.totalIgnored}</p>
               <p className="text-xs text-muted-foreground">Ignorées (hors fenêtre)</p>
+            </div>
+          </div>
+        </div>
+        {/* Mode breakdown card */}
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+              <CalendarDays className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-blue-700">{stats.byMode?.schedule ?? 0}</span>
+                <span className="text-[10px] text-muted-foreground">sched.</span>
+                <span className="text-sm font-bold text-purple-700">{stats.byMode?.reschedule ?? 0}</span>
+                <span className="text-[10px] text-muted-foreground">resched.</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Par mode</p>
             </div>
           </div>
         </div>
@@ -591,6 +634,11 @@ function DiscoveriesPanel({ stats }: { stats: DiscoveryStats | null | undefined 
                     </span>
                     {d.reason && (
                       <span className="text-[10px] text-muted-foreground">({REASON_LABELS[d.reason] ?? d.reason})</span>
+                    )}
+                    {d.mode && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.mode === "reschedule" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                        {d.mode === "reschedule" ? "♻️ resched." : "📅 sched."}
+                      </span>
                     )}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">{d.office} — {DEST_LABELS[d.destination] ?? d.destination}</p>

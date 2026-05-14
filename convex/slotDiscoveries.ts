@@ -21,6 +21,7 @@ async function upsertDiscovery(
     outcome: "captured" | "ignored";
     reason?: string;
     context?: string;
+    mode?: "schedule" | "reschedule";
     discoveredAt: number;
   }
 ): Promise<boolean> {
@@ -80,6 +81,7 @@ export const add = mutation({
     outcome: v.union(v.literal("captured"), v.literal("ignored")),
     reason: v.optional(v.string()),
     context: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
     discoveredAt: v.number(),
   },
   handler: async (ctx, args) => {
@@ -101,6 +103,7 @@ export const addBatch = mutation({
       outcome: v.union(v.literal("captured"), v.literal("ignored")),
       reason: v.optional(v.string()),
       context: v.optional(v.string()),
+      mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
       discoveredAt: v.number(),
     })),
   },
@@ -124,6 +127,7 @@ export const internalAdd = internalMutation({
     outcome: v.union(v.literal("captured"), v.literal("ignored")),
     reason: v.optional(v.string()),
     context: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
     discoveredAt: v.number(),
   },
   handler: async (ctx, args) => {
@@ -142,6 +146,7 @@ export const internalAddBatch = internalMutation({
       outcome: v.union(v.literal("captured"), v.literal("ignored")),
       reason: v.optional(v.string()),
       context: v.optional(v.string()),
+      mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
       discoveredAt: v.number(),
     })),
   },
@@ -160,6 +165,7 @@ export const getStats = query({
   args: {
     destination: v.optional(v.string()),
     office: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
     since: v.optional(v.number()), // timestamp — par défaut 30 derniers jours
   },
   handler: async (ctx, args) => {
@@ -172,10 +178,11 @@ export const getStats = query({
 
     const all = await q.take(5000);
 
-    // Filtrer par destination/office en mémoire (index ne couvre pas combo)
+    // Filtrer par destination/office/mode en mémoire (index ne couvre pas combo)
     const filtered = all.filter((d) => {
       if (args.destination && d.destination !== args.destination) return false;
       if (args.office && d.office !== args.office) return false;
+      if (args.mode && d.mode !== args.mode) return false;
       return true;
     });
 
@@ -231,6 +238,13 @@ export const getStats = query({
       }
     }
 
+    // Regrouper par mode (schedule vs reschedule)
+    const byMode: Record<string, number> = {};
+    for (const d of filtered) {
+      const m = d.mode ?? "unknown";
+      byMode[m] = (byMode[m] ?? 0) + 1;
+    }
+
     return {
       totalCaptured,
       totalIgnored,
@@ -239,6 +253,7 @@ export const getStats = query({
       byHour,
       byDayOfWeek,
       byReason,
+      byMode,
       // Dernières découvertes brutes (pour le feed temps réel) — dédupliquées avec seenCount
       recent: filtered.slice(0, 50).map((d) => ({
         _id: d._id,
@@ -248,6 +263,7 @@ export const getStats = query({
         timeFound: d.timeFound,
         outcome: d.outcome,
         reason: d.reason,
+        mode: d.mode,
         discoveredAt: d.discoveredAt,
         seenCount: (d as any).seenCount ?? 1,
         lastSeenAt: (d as any).lastSeenAt ?? d.discoveredAt,

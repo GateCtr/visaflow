@@ -1073,6 +1073,7 @@ http.route({
       outcome: "captured" | "ignored";
       reason?: string;
       context?: Record<string, unknown>;
+      mode?: "schedule" | "reschedule";
       discoveredAt: number;
     };
 
@@ -1096,6 +1097,7 @@ http.route({
         outcome: body.outcome,
         reason: body.reason,
         context: body.context ? JSON.stringify(body.context) : undefined,
+        mode: body.mode,
         discoveredAt: body.discoveredAt ?? Date.now(),
       });
 
@@ -1131,6 +1133,7 @@ http.route({
         outcome: "captured" | "ignored";
         reason?: string;
         context?: Record<string, unknown>;
+        mode?: "schedule" | "reschedule";
         discoveredAt: number;
       }>;
     };
@@ -1155,6 +1158,7 @@ http.route({
         outcome: e.outcome as "captured" | "ignored",
         reason: e.reason,
         context: e.context ? JSON.stringify(e.context) : undefined,
+        mode: e.mode,
         discoveredAt: e.discoveredAt ?? Date.now(),
       }));
 

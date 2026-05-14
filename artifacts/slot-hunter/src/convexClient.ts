@@ -678,6 +678,8 @@ export interface SlotDiscoveryEvent {
   reason?: string;
   /** Contexte additionnel (deadline, fenêtre admin, etc.) */
   context?: Record<string, unknown>;
+  /** Mode de scan : "schedule" (nouveau booking) ou "reschedule" (reporter un RDV existant). */
+  mode?: "schedule" | "reschedule";
 }
 
 /**

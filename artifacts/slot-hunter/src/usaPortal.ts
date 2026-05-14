@@ -2711,6 +2711,7 @@ async function findFirstSlotForOfc(
       outcome: "ignored",
       reason: "after_deadline",
       context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date },
+      mode: rescheduleYN ? "reschedule" : "schedule",
     });
     return null;
   }
@@ -2804,6 +2805,7 @@ async function findFirstSlotForOfc(
           outcome: "ignored",
           reason,
           context: { dateFrom, dateDeadline, window: `${fromDate} → ${toDate}` },
+          mode: rescheduleYN ? "reschedule" : "schedule",
         });
       }
     }
@@ -2866,6 +2868,7 @@ async function findFirstSlotForOfc(
       outcome: "ignored",
       reason: "no_time_slots",
       context: { dateFrom, dateDeadline },
+      mode: rescheduleYN ? "reschedule" : "schedule",
     });
     return null;
   }
@@ -2884,6 +2887,7 @@ async function findFirstSlotForOfc(
     timeFound: time,
     outcome: "captured",
     context: { slotId: slot.slotId, totalTimeSlotsAvailable: timeSlots.length },
+    mode: rescheduleYN ? "reschedule" : "schedule",
   });
   return {
     date: targetDate,
