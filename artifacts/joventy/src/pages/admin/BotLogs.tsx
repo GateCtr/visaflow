@@ -3,6 +3,18 @@ import { useQuery, useMutation } from "convex/react";
 import { Link } from "wouter";
 import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Terminal,
   CheckCircle2,
@@ -277,11 +289,15 @@ function BotLogsTab() {
   const [copied, setCopied]             = useState<string | null>(null);
   const [clearing, setClearing]         = useState(false);
   const [clearProgress, setClearProgress] = useState("");
+  const [showClearDialog, setShowClearDialog] = useState(false);
 
   const clearAllLogs = useMutation(api.botLogs.clearAll);
 
   const handleClearAll = async () => {
-    if (!confirm("Supprimer TOUS les logs bot ? Cette action est irreversible.")) return;
+    setShowClearDialog(true);
+  }
+
+  const confirmClearAll = async () => {
     setClearing(true);
     setClearProgress("Suppression en cours...");
     let totalDeleted = 0;
@@ -397,14 +413,34 @@ function BotLogsTab() {
             {logs === undefined ? "..." : `${filtered.length} log${filtered.length !== 1 ? "s" : ""}`}
           </span>
 
-          <button
-            onClick={handleClearAll}
-            disabled={clearing || !logs || logs.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-40"
-          >
-            <Trash2 className="w-3 h-3" />
-            {clearing ? clearProgress || "..." : "Vider"}
-          </button>
+          <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+            <AlertDialogTrigger asChild>
+              <button
+                disabled={clearing || !logs || logs.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-40"
+              >
+                <Trash2 className="w-3 h-3" />
+                {clearing ? clearProgress || "..." : "Vider"}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Supprimer TOUS les logs bot</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir supprimer TOUS les logs bot ? Cette action est irréversible.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmClearAll}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Supprimer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 

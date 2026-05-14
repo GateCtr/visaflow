@@ -2,6 +2,18 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   KeyRound,
   Plus,
@@ -581,6 +593,30 @@ export default function CevSessions() {
 
   const [showNewModal, setShowNewModal] = useState(false);
   const [resetSession, setResetSession] = useState<ResetSession | null>(null);
+  const [restartSessionId, setRestartSessionId] = useState<Id<"cevSessions"> | null>(null);
+  const [deleteSessionId, setDeleteSessionId] = useState<Id<"cevSessions"> | null>(null);
+
+  const handleRestartSession = (sessionId: Id<"cevSessions">, applicantName: string) => {
+    setRestartSessionId(sessionId);
+  };
+
+  const handleDeleteSession = (sessionId: Id<"cevSessions">, applicantName: string) => {
+    setDeleteSessionId(sessionId);
+  };
+
+  const confirmRestartSession = () => {
+    if (restartSessionId) {
+      setStatus({ sessionId: restartSessionId, status: "needs_setup" });
+      setRestartSessionId(null);
+    }
+  };
+
+  const confirmDeleteSession = () => {
+    if (deleteSessionId) {
+      deleteSession({ sessionId: deleteSessionId });
+      setDeleteSessionId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -731,31 +767,65 @@ export default function CevSessions() {
 
                         {/* Relancer config auto : session expirée */}
                         {s.status === "expired" && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Relancer la configuration auto pour ${s.applicantName} ?`)) {
-                                setStatus({ sessionId: s._id, status: "needs_setup" });
-                              }
-                            }}
-                            className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
-                            title="Relancer la configuration auto"
-                          >
-                            <Bot className="w-4 h-4" />
-                          </button>
+                          <AlertDialog open={restartSessionId === s._id} onOpenChange={(open) => !open && setRestartSessionId(null)}>
+                            <AlertDialogTrigger asChild>
+                              <button
+                                onClick={() => handleRestartSession(s._id, s.applicantName)}
+                                className="p-1.5 rounded hover:bg-violet-50 text-violet-600"
+                                title="Relancer la configuration auto"
+                              >
+                                <Bot className="w-4 h-4" />
+                              </button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Relancer la configuration auto</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Êtes-vous sûr de vouloir relancer la configuration auto pour {s.applicantName} ?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={confirmRestartSession}
+                                  className="bg-violet-600 hover:bg-violet-700"
+                                >
+                                  Relancer
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         )}
 
                         {/* Supprimer */}
-                        <button
-                          onClick={() => {
-                            if (confirm(`Supprimer la session pour ${s.applicantName} ?`)) {
-                              deleteSession({ sessionId: s._id });
-                            }
-                          }}
-                          className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <AlertDialog open={deleteSessionId === s._id} onOpenChange={(open) => !open && setDeleteSessionId(null)}>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              onClick={() => handleDeleteSession(s._id, s.applicantName)}
+                              className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Supprimer la session</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Êtes-vous sûr de vouloir supprimer la session pour {s.applicantName} ?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={confirmDeleteSession}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Supprimer
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </td>
                   </tr>

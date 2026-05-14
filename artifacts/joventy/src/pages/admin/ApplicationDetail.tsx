@@ -10,6 +10,17 @@ import { formatDate, formatDateOnly } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   Send,
@@ -644,7 +655,16 @@ export default function AdminApplicationDetail() {
   const urgencyTier = urgencyTierKey ? SLOT_URGENCY_TIERS[urgencyTierKey] : null;
   const canAdjustFee = isSlotOnly && !isSuccessFeePaid;
 
-  const docsByKey = Object.fromEntries(docs.filter((d: Doc<"documents">) => !d.isAdminUpload).map((d: Doc<"documents">) => [d.docKey, d]));
+  const docsByKey = Object.fromEntries(
+    docs
+      .filter((d: Doc<"documents"> & { url?: string | null }) => !d.isAdminUpload)
+      .map((d: Doc<"documents"> & { url?: string | null }) => [d.docKey, { 
+        _id: d._id, 
+        url: d.url ?? null, 
+        verifiedByAdmin: d.verifiedByAdmin, 
+        isAdminUpload: d.isAdminUpload 
+      }])
+  );
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
@@ -1814,14 +1834,19 @@ export default function AdminApplicationDetail() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Documents admin (versions officielles, attestations, etc.)</p>
                 {/* Existing admin docs */}
                 <div>
-                  {docs.filter((d: Doc<"documents">) => d.isAdminUpload).map((doc: Doc<"documents">) => (
+                  {docs.filter((d: Doc<"documents"> & { url?: string | null }) => d.isAdminUpload).map((doc: Doc<"documents"> & { url?: string | null }) => (
                     <DocUploadRow
                       key={`admin-${doc._id}`}
                       appId={appId!}
                       docKey={doc.docKey}
                       label={doc.label}
                       required={false}
-                      existingDoc={doc}
+                      existingDoc={{ 
+                        _id: doc._id, 
+                        url: doc.url ?? null, 
+                        verifiedByAdmin: doc.verifiedByAdmin, 
+                        isAdminUpload: doc.isAdminUpload 
+                      }}
                       isAdminContext={true}
                     />
                   ))}
@@ -1946,24 +1971,43 @@ export default function AdminApplicationDetail() {
                     Effacer filtres
                   </button>
                 )}
-                <button
-                  onClick={async () => {
-                    if (!appId) return;
-                    if (!confirm("Supprimer tous les logs de ce dossier ?")) return;
-                    setLogClearing(true);
-                    try {
-                      await clearLogsByApp({ applicationId: appId });
-                    } catch (err) {
-                      console.error("[admin] Erreur suppression logs:", err);
-                    } finally {
-                      setLogClearing(false);
-                    }
-                  }}
-                  disabled={logClearing}
-                  className={`${logStepFilter || logStatusFilter ? "" : "ml-auto "}px-2.5 py-1 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-50`}
-                >
-                  {logClearing ? "Suppression…" : "Vider"}
-                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      disabled={logClearing}
+                      className={`${logStepFilter || logStatusFilter ? "" : "ml-auto "}px-2.5 py-1 text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-50`}
+                    >
+                      {logClearing ? "Suppression…" : "Vider"}
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer tous les logs</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer tous les logs de ce dossier ? Cette action est irréversible.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={async () => {
+                          if (!appId) return;
+                          setLogClearing(true);
+                          try {
+                            await clearLogsByApp({ applicationId: appId });
+                          } catch (err) {
+                            console.error("[admin] Erreur suppression logs:", err);
+                          } finally {
+                            setLogClearing(false);
+                          }
+                        }}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
 
               {/* Filters */}

@@ -1,7 +1,19 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/format";
 import {
@@ -14,6 +26,8 @@ export default function AdminReviews() {
   const approve = useMutation(api.reviews.approve);
   const reject = useMutation(api.reviews.reject);
   const remove = useMutation(api.reviews.remove);
+  const [deleteReviewId, setDeleteReviewId] = useState<Id<"reviews"> | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleApprove(id: Id<"reviews">) {
     try {
@@ -34,12 +48,21 @@ export default function AdminReviews() {
   }
 
   async function handleDelete(id: Id<"reviews">) {
-    if (!confirm("Supprimer définitivement cet avis ?")) return;
+    setDeleteReviewId(id);
+  }
+
+  async function confirmDelete() {
+    if (!deleteReviewId) return;
+    
+    setIsDeleting(true);
     try {
-      await remove({ reviewId: id });
+      await remove({ reviewId: deleteReviewId });
       toast({ title: "Avis supprimé" });
+      setDeleteReviewId(null);
     } catch (e: unknown) {
       toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -136,14 +159,36 @@ export default function AdminReviews() {
                   </Button>
                 )}
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleDelete(review._id)}
-                  className="h-8 gap-1.5 text-xs border-red-200 text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+                <AlertDialog open={deleteReviewId === review._id} onOpenChange={(open) => !open && setDeleteReviewId(null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDelete(review._id)}
+                      className="h-8 gap-1.5 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer définitivement cet avis</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer cet avis ? Cette action est irréversible.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={confirmDelete}
+                        disabled={isDeleting}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        {isDeleting ? "Suppression..." : "Supprimer"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
 
