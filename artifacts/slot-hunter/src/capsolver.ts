@@ -47,7 +47,7 @@ export async function checkCapSolverBalance(apiKey: string): Promise<number | nu
     if (data.errorId === 0) {
       return data.balance;
     } else {
-      console.error(`[capsolver] Erreur balance: ${data.errorCode || data.errorId}`);
+      console.error(`[capsolver] Erreur balance: ${data.errorId}`);
       return null;
     }
   } catch (error) {

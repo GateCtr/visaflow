@@ -103,8 +103,14 @@ export class ProxyPool {
     const proxy = this.pool.shift()!;
     this.pool.push(proxy);
 
+    // Vérifier si l'URL contient déjà le protocole
+    let proxyUrl = proxy;
+    if (!proxyUrl.startsWith('http://') && !proxyUrl.startsWith('https://')) {
+      proxyUrl = `http://${proxyUrl}`;
+    }
+
     const expiresAt = new Date(this.lastRefresh + IP_LIFETIME_MS).toISOString();
-    return { proxy: `http://${proxy}`, expiresAt };
+    return { proxy: proxyUrl, expiresAt };
   }
 
   /**
