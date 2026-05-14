@@ -121,7 +121,9 @@ export async function navigateCevRedirectWithPlaywright(
     await page.goto(fullRedirectUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
     // Attendre que la page se stabilise (JS inline peut appeler getAvailableTimeSlotsForPublic)
-    await page.waitForTimeout(5_000);
+    // Utiliser setTimeout au lieu de page.waitForTimeout pour éviter l'erreur
+    // "Target page, context or browser has been closed" si le browser ferme entre-temps.
+    await new Promise(r => setTimeout(r, 5_000));
 
     // Vérifier l'URL finale
     const finalUrl = page.url();

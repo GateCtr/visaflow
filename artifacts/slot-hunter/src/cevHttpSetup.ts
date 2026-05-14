@@ -376,259 +376,40 @@ export async function setupCevSessionHttp(
       return { success: false, error: "CAPTCHA_NO_VALID_UNTIL" };
     }
 
-    // Le serveur renvoie validUntil sans suffixe 'Z', donc on doit l'ajouter
-    // pour que JavaScript l'interprète correctement comme UTC
+    // validUntil parsing
     const validUntilStr = captchaData.validUntil.endsWith('Z') 
       ? captchaData.validUntil 
       : captchaData.validUntil + 'Z';
     const validUntilMs = new Date(validUntilStr).getTime();
-    
-    // DEBUG: Loguer la comparaison des timestamps
-    const nowMs = Date.now();
-    const remainingMs = validUntilMs - nowMs;
-    botLog({
-      applicationId: clientId,
-      step: "cev_http_validuntil_debug",
-      status: "ok",
-      data: {
-        validUntilStr,
-        validUntilMs,
-        nowMs,
-        remainingMs,
-        remainingSeconds: Math.floor(remainingMs / 1000),
-        isExpired: remainingMs <= 0,
-      },
-    });
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 7 : POLL D'ABORD, puis suivre redirect SI session vivante
+    // ÉTAPE 7 : Retourner la session pour navigation Playwright
     // ══════════════════════════════════════════════════════════════════════════
-    // LEÇON APPRISE : suivre la redirectUrl TUE la session (single-use).
-    // Le serveur ne permet qu'un seul passage dans la chaîne de redirections.
-    //
-    // STRATÉGIE FINALE :
-    //   1. NE PAS suivre la redirectUrl
-    //   2. Tenter immédiatement POST /Home/AvailableTimeSlots avec le cookie
-    //   3. Si le poll retourne des SLOTS → LOG COMPLET + suivre redirect pour
-    //      capturer la page calendrier (reverse-engineering du formulaire booking)
-    //   4. Si le poll retourne [] (vide) → session valide, pas de slots, activer pour polling continu
-    //   5. Si le poll retourne 403/302 → session morte sans même avoir suivi le redirect
-    //      (= le cookie seul ne suffit pas pour poll, il faut d'abord naviguer)
-    //
-    // Ce test nous dira si le cookie post-SetCaptchaToken est DIRECTEMENT
-    // utilisable pour /Home/AvailableTimeSlots ou s'il faut naviguer d'abord.
+    // Le cookie seul ne suffit PAS pour POST /Home/AvailableTimeSlots (retourne 401).
+    // Il FAUT d'abord naviguer vers redirectUrl via Playwright pour activer la session.
+    // Le poll immédiat a été retiré car il retourne TOUJOURS session_dead (401).
     const captchaRedirectUrl = captchaData.redirectUrl ?? "";
-    const fullRedirectUrl = captchaRedirectUrl.startsWith("http")
-      ? captchaRedirectUrl
-      : `${CEV_BASE}${captchaRedirectUrl}`;
-
-    // ── POLL IMMÉDIAT : tester si le cookie fonctionne pour l'API ────────────
-    let pollResult: "slots_found" | "no_slots" | "session_dead" | "error" = "error";
-    let pollRawResponse = "";
-    let pollHttpStatus = 0;
-    let pollRedirectLocation = "";
-
-    try {
-      const now = new Date();
-      const pollBody = { month: now.getMonth() + 1, year: now.getFullYear() };
-
-      const pollRes = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cookie": fullCevCookie,
-          "User-Agent": ua,
-          "X-Requested-With": "XMLHttpRequest",
-          "Accept": "application/json, text/javascript, */*; q=0.01",
-          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Referer": fullRedirectUrl,
-          "Origin": CEV_BASE,
-        },
-        body: JSON.stringify(pollBody),
-        redirect: "manual",
-        signal: AbortSignal.timeout(15_000),
-      });
-
-      pollHttpStatus = pollRes.status;
-
-      if (pollRes.status === 403 || pollRes.status === 401) {
-        pollResult = "session_dead";
-        pollRawResponse = `HTTP ${pollRes.status}`;
-      } else if (pollRes.status >= 300 && pollRes.status < 400) {
-        pollRedirectLocation = pollRes.headers.get("location") ?? "";
-        pollResult = "session_dead";
-        pollRawResponse = `Redirect ${pollRes.status} → ${pollRedirectLocation}`;
-      } else if (pollRes.ok) {
-        pollRawResponse = await pollRes.text();
-        // Parser le JSON
-        try {
-          const parsed = JSON.parse(pollRawResponse);
-          if (Array.isArray(parsed) && parsed.length === 0) {
-            pollResult = "no_slots";
-          } else if (Array.isArray(parsed) && parsed.length > 0) {
-            pollResult = "slots_found";
-          } else if (parsed === null) {
-            pollResult = "no_slots";
-          } else if (typeof parsed === "object" && Object.keys(parsed).length > 0) {
-            pollResult = "slots_found";
-          } else {
-            pollResult = "no_slots";
-          }
-        } catch {
-          // Pas du JSON → probablement HTML (session redirigée en 200)
-          pollResult = "session_dead";
-        }
-      } else {
-        pollRawResponse = await pollRes.text().catch(() => "");
-        pollResult = "error";
-      }
-    } catch (err) {
-      pollRawResponse = err instanceof Error ? err.message : String(err);
-      pollResult = "error";
-    }
-
-    // LOG du résultat du poll immédiat — c'est LE log crucial
-    botLog({
-      applicationId: clientId,
-      step: "cev_http_immediate_poll",
-      status: pollResult === "slots_found" ? "ok" : pollResult === "no_slots" ? "ok" : "warn",
-      data: {
-        pollResult,
-        pollHttpStatus,
-        pollRedirectLocation: pollRedirectLocation || null,
-        pollRawResponsePreview: pollRawResponse.slice(0, 3000),
-        pollRawResponseLength: pollRawResponse.length,
-        redirectUrl: captchaRedirectUrl,
-        note: pollResult === "session_dead"
-          ? "Cookie SEUL ne suffit pas pour /Home/AvailableTimeSlots — la session nécessite de naviguer vers redirectUrl d'abord"
-          : pollResult === "slots_found"
-            ? "🚨 SLOTS TROUVÉS VIA POLL IMMÉDIAT — session valide sans navigation!"
-            : pollResult === "no_slots"
-              ? "Session valide (poll OK), aucun créneau ce mois — activer pour polling continu"
-              : "Erreur réseau ou serveur",
-      },
-    });
-
-    // ── SI SLOTS TROUVÉS : suivre le redirect pour capturer la page calendrier ──
-    // C'est le cas de reverse-engineering : on veut voir la page SelectSlot,
-    // ses formulaires, ses inputs, ses endpoints AJAX inline.
-    // On sait que ça va "consumer" la session, mais on a déjà les slots en JSON.
-    let reverseEngineeringCapture: Record<string, unknown> | null = null;
-
-    if (pollResult === "slots_found") {
-      try {
-        const probeRes = await fetch(fullRedirectUrl, {
-          method: "GET",
-          redirect: "follow",
-          headers: {
-            "Cookie": fullCevCookie,
-            "User-Agent": ua,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": `${CEV_BASE}/Captcha`,
-            "Cache-Control": "no-cache",
-          },
-          signal: AbortSignal.timeout(20_000),
-        });
-        const finalUrl = probeRes.url;
-        const pageBody = await probeRes.text().catch(() => "");
-
-        reverseEngineeringCapture = {
-          finalUrl,
-          httpStatus: probeRes.status,
-          bodyLength: pageBody.length,
-          htmlRaw: pageBody.slice(0, 8000),
-          hasAvailableTimeSlots: pageBody.toLowerCase().includes("availabletimeslots"),
-          hasGetAvailableTimeSlotsForPublic: pageBody.toLowerCase().includes("getavailabletimeslotsforpublic"),
-          hasCalendar: pageBody.toLowerCase().includes("calendar") || pageBody.toLowerCase().includes("datepicker"),
-          hasFormAction: pageBody.toLowerCase().includes("<form") && pageBody.toLowerCase().includes("action"),
-          hasSharedScripts: pageBody.toLowerCase().includes("sharedscripts"),
-          hasSelectSlot: pageBody.toLowerCase().includes("selectslot"),
-        };
-
-        botLog({
-          applicationId: clientId,
-          step: "cev_http_reverse_engineering_capture",
-          status: "ok",
-          data: reverseEngineeringCapture,
-        });
-      } catch (err) {
-        botLog({
-          applicationId: clientId,
-          step: "cev_http_reverse_engineering_capture",
-          status: "warn",
-          data: { error: err instanceof Error ? err.message : String(err) },
-        });
-      }
-    }
-
-    // ── DÉCISION D'ACTIVATION ────────────────────────────────────────────────
-    // - slots_found → activer (booking immédiat)
-    // - no_slots → activer (poll continu pendant 15 min, slots peuvent apparaître)
-    // - session_dead → RETOURNER success=false avec erreur spécifique
-    //   pour que index.ts NE relance PAS immédiatement (lock 13 min respecté)
-    // - error → activer quand même (laisser le polling normal retry)
-
-    if (pollResult === "session_dead") {
-      // Le cookie seul ne suffit pas pour /Home/AvailableTimeSlots (401).
-      // STRATÉGIE HYBRIDE : retourner success=true avec le cookie + redirectUrl
-      // et le flag needsPlaywrightNavigation=true.
-      // Le caller (index.ts) lancera Playwright UNIQUEMENT pour naviguer vers
-      // redirectUrl avec le cookie déjà obtenu — PAS de re-login VOWINT, PAS de re-captcha.
-      // Playwright interceptera les requêtes réseau pour capturer les slots.
-      botLog({
-        applicationId: clientId,
-        step: "cev_http_setup_complete",
-        status: "ok",
-        data: {
-          validUntil: captchaData.validUntil,
-          redirectUrl: captchaRedirectUrl,
-          pollResult,
-          slotsAvailable: false,
-          needsPlaywrightNavigation: true,
-          activationReason: "SESSION_DEAD_NEEDS_PLAYWRIGHT_NAVIGATION",
-          integrationUrl: integrationUrl.slice(0, 80),
-          hint: "Cookie obtenu via HTTP. Playwright naviguera vers redirectUrl pour activer la session et intercepter les slots.",
-        },
-      });
-      return {
-        success: true,
-        sessionCookie: cevSessionCookie,
-        validUntilMs,
-        integrationUrl,
-        redirectUrl: captchaRedirectUrl || undefined,
-        slotsAvailable: false,
-        needsPlaywrightNavigation: true,
-      };
-    }
-
-    const slotsAvailable = true; // no_slots ou slots_found ou error → activer
 
     botLog({
       applicationId: clientId,
       step: "cev_http_setup_complete",
       status: "ok",
       data: {
-        validUntil: captchaData.validUntil,
         redirectUrl: captchaRedirectUrl,
-        pollResult,
-        slotsAvailable,
-        activationReason: pollResult === "slots_found"
-          ? "SLOTS_FOUND_IMMEDIATE_POLL"
-          : pollResult === "no_slots"
-            ? "SESSION_ALIVE_NO_SLOTS_ACTIVATE_FOR_POLLING"
-            : "ERROR_ACTIVATE_FOR_RETRY",
+        slotsAvailable: false,
+        needsPlaywrightNavigation: true,
+        activationReason: "COOKIE_NEEDS_PLAYWRIGHT_NAVIGATION",
         integrationUrl: integrationUrl.slice(0, 80),
       },
     });
-
     return {
       success: true,
-      sessionCookie: cevSessionCookie,  // Valeur brute (sans "ASP.NET_SessionId=")
+      sessionCookie: cevSessionCookie,
       validUntilMs,
       integrationUrl,
       redirectUrl: captchaRedirectUrl || undefined,
-      slotsAvailable,
+      slotsAvailable: false,
+      needsPlaywrightNavigation: true,
     };
 
   } catch (err) {
