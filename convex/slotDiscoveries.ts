@@ -2,8 +2,72 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Fenêtre de déduplication : si un event identique (même office+dateFound+outcome+applicationId)
+// existe dans les dernières 24h, on met à jour au lieu de créer un doublon.
+const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Ajoute un événement de découverte de créneau.
+ * Logique upsert commune : cherche un doublon récent, met à jour ou crée.
+ * Retourne true si un nouveau document a été créé, false si mis à jour.
+ */
+async function upsertDiscovery(
+  ctx: { db: any },
+  args: {
+    applicationId: Id<"applications">;
+    destination: string;
+    office: string;
+    dateFound: string;
+    timeFound?: string;
+    outcome: "captured" | "ignored";
+    reason?: string;
+    context?: string;
+    discoveredAt: number;
+  }
+): Promise<boolean> {
+  const cutoff = args.discoveredAt - DEDUP_WINDOW_MS;
+
+  // Chercher un doublon récent (même applicationId + office + dateFound + outcome)
+  const existing = await ctx.db
+    .query("slotDiscoveries")
+    .withIndex("by_application", (q: any) => q.eq("applicationId", args.applicationId))
+    .filter((q: any) =>
+      q.and(
+        q.eq(q.field("office"), args.office),
+        q.eq(q.field("dateFound"), args.dateFound),
+        q.eq(q.field("outcome"), args.outcome),
+        q.gte(q.field("discoveredAt"), cutoff)
+      )
+    )
+    .first();
+
+  if (existing) {
+    // Doublon trouvé → mettre à jour seenCount + seenAt + lastSeenAt
+    const currentSeenAt: number[] = existing.seenAt ?? [existing.discoveredAt];
+    // Limiter seenAt à 100 entrées max pour éviter un document trop gros
+    const updatedSeenAt = [...currentSeenAt, args.discoveredAt].slice(-100);
+
+    await ctx.db.patch(existing._id, {
+      seenCount: (existing.seenCount ?? 1) + 1,
+      seenAt: updatedSeenAt,
+      lastSeenAt: args.discoveredAt,
+      // Mettre à jour le timeFound si on en a un nouveau et pas l'ancien
+      ...(args.timeFound && !existing.timeFound ? { timeFound: args.timeFound } : {}),
+    });
+    return false; // pas de nouveau document
+  }
+
+  // Pas de doublon → créer un nouveau document
+  await ctx.db.insert("slotDiscoveries", {
+    ...args,
+    seenCount: 1,
+    seenAt: [args.discoveredAt],
+    lastSeenAt: args.discoveredAt,
+  });
+  return true; // nouveau document créé
+}
+
+/**
+ * Ajoute un événement de découverte de créneau (avec déduplication 24h).
  * Appelé par le bot via HTTP (fire-and-forget).
  */
 export const add = mutation({
@@ -19,22 +83,12 @@ export const add = mutation({
     discoveredAt: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("slotDiscoveries", {
-      applicationId: args.applicationId,
-      destination: args.destination,
-      office: args.office,
-      dateFound: args.dateFound,
-      timeFound: args.timeFound,
-      outcome: args.outcome,
-      reason: args.reason,
-      context: args.context,
-      discoveredAt: args.discoveredAt,
-    });
+    await upsertDiscovery(ctx, args);
   },
 });
 
 /**
- * Ajoute un batch d'événements (optimisé pour éviter N appels HTTP).
+ * Ajoute un batch d'événements (avec déduplication 24h par event).
  */
 export const addBatch = mutation({
   args: {
@@ -52,13 +106,13 @@ export const addBatch = mutation({
   },
   handler: async (ctx, args) => {
     for (const event of args.events) {
-      await ctx.db.insert("slotDiscoveries", event);
+      await upsertDiscovery(ctx, event);
     }
   },
 });
 
 /**
- * Internal mutation pour insertion depuis les HTTP actions.
+ * Internal mutation pour insertion depuis les HTTP actions (avec déduplication).
  */
 export const internalAdd = internalMutation({
   args: {
@@ -73,7 +127,7 @@ export const internalAdd = internalMutation({
     discoveredAt: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("slotDiscoveries", args);
+    await upsertDiscovery(ctx, args);
   },
 });
 
@@ -93,7 +147,7 @@ export const internalAddBatch = internalMutation({
   },
   handler: async (ctx, args) => {
     for (const event of args.events) {
-      await ctx.db.insert("slotDiscoveries", event);
+      await upsertDiscovery(ctx, event);
     }
   },
 });
@@ -144,21 +198,29 @@ export const getStats = query({
     }
 
     // Regrouper par heure de découverte (heatmap horaire — quand le portail libère des créneaux)
+    // Utilise seenAt[] quand disponible (toutes les observations), sinon discoveredAt seul.
     const byHour: Record<number, { captured: number; ignored: number }> = {};
     for (const d of filtered) {
-      const hour = new Date(d.discoveredAt).getUTCHours();
-      if (!byHour[hour]) byHour[hour] = { captured: 0, ignored: 0 };
-      if (d.outcome === "captured") byHour[hour].captured++;
-      else byHour[hour].ignored++;
+      const timestamps: number[] = (d as any).seenAt ?? [d.discoveredAt];
+      for (const ts of timestamps) {
+        const hour = new Date(ts).getUTCHours();
+        if (!byHour[hour]) byHour[hour] = { captured: 0, ignored: 0 };
+        if (d.outcome === "captured") byHour[hour].captured++;
+        else byHour[hour].ignored++;
+      }
     }
 
     // Regrouper par jour de la semaine (0=dimanche, 6=samedi)
+    // Utilise seenAt[] pour plus de précision sur les jours actifs.
     const byDayOfWeek: Record<number, { captured: number; ignored: number }> = {};
     for (const d of filtered) {
-      const dow = new Date(d.discoveredAt).getUTCDay();
-      if (!byDayOfWeek[dow]) byDayOfWeek[dow] = { captured: 0, ignored: 0 };
-      if (d.outcome === "captured") byDayOfWeek[dow].captured++;
-      else byDayOfWeek[dow].ignored++;
+      const timestamps: number[] = (d as any).seenAt ?? [d.discoveredAt];
+      for (const ts of timestamps) {
+        const dow = new Date(ts).getUTCDay();
+        if (!byDayOfWeek[dow]) byDayOfWeek[dow] = { captured: 0, ignored: 0 };
+        if (d.outcome === "captured") byDayOfWeek[dow].captured++;
+        else byDayOfWeek[dow].ignored++;
+      }
     }
 
     // Regrouper par raison d'ignorement
@@ -177,7 +239,7 @@ export const getStats = query({
       byHour,
       byDayOfWeek,
       byReason,
-      // Dernières découvertes brutes (pour le feed temps réel)
+      // Dernières découvertes brutes (pour le feed temps réel) — dédupliquées avec seenCount
       recent: filtered.slice(0, 50).map((d) => ({
         _id: d._id,
         destination: d.destination,
@@ -187,6 +249,8 @@ export const getStats = query({
         outcome: d.outcome,
         reason: d.reason,
         discoveredAt: d.discoveredAt,
+        seenCount: (d as any).seenCount ?? 1,
+        lastSeenAt: (d as any).lastSeenAt ?? d.discoveredAt,
       })),
     };
   },

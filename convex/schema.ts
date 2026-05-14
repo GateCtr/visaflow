@@ -362,6 +362,8 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // Slot discoveries — chaque date captée/ignorée par le bot (analyse fréquence disponibilité)
+  // Dédupliquées par (applicationId + office + dateFound + outcome) sur 24h.
+  // seenCount/seenAt trackent combien de fois et quand le créneau a été vu (heatmap heures).
   slotDiscoveries: defineTable({
     applicationId: v.id("applications"),
     destination: v.string(),        // "usa", "schengen", "spain"
@@ -371,7 +373,13 @@ export default defineSchema({
     outcome: v.union(v.literal("captured"), v.literal("ignored")),
     reason: v.optional(v.string()), // raison si ignoré (after_deadline, before_from_date, no_time_slots)
     context: v.optional(v.string()), // JSON stringifié avec contexte additionnel
-    discoveredAt: v.number(),       // timestamp de la découverte
+    discoveredAt: v.number(),       // timestamp de la PREMIÈRE découverte
+    /** Nombre de fois où ce créneau a été vu (dédupliqué sur 24h). */
+    seenCount: v.optional(v.number()),
+    /** Timestamps de chaque observation (alimente le graphe "heures de disponibilité"). */
+    seenAt: v.optional(v.array(v.number())),
+    /** Timestamp de la dernière observation. */
+    lastSeenAt: v.optional(v.number()),
   })
     .index("by_application", ["applicationId"])
     .index("by_destination", ["destination"])
