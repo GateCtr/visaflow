@@ -146,17 +146,22 @@ class TokenExpiredError extends Error {
  * La restriction dure typiquement 15-30 min côté portail.
  */
 class AccountRestrictedError extends Error {
-  constructor(public readonly retryAfterMs: number = 60 * 60 * 1000) {
-    super(`Compte temporairement restreint par le portail — attendre ${Math.round(retryAfterMs / 60000)} min`);
+  constructor(
+    public readonly retryAfterMs?: number,
+    public readonly retryAfterHeader?: string
+  ) {
+    const durationMs = retryAfterMs ?? 60 * 60 * 1000;
+    super(`Compte temporairement restreint par le portail — attendre ${Math.round(durationMs / 60000)} min`);
     this.name = "AccountRestrictedError";
   }
 }
 
 // ─── Restriction account-level : map username → timestamp fin de restriction ──
 // Quand "Access temporarily restricted" est détecté, on enregistre la fin de la
-// fenêtre (maintenant + 60 min). Tous les appels au compte sont bloqués jusqu'à
+// fenêtre avec backoff exponentiel. Tous les appels au compte sont bloqués jusqu'à
 // ce timestamp, SANS toucher au cache de token (le JWT reste valide).
 const accountRestrictedUntil = new Map<string, number>();
+const accountRestrictionAttempts = new Map<string, number>();
 
 /** Vrai si le compte est actuellement en cooldown côté portail. */
 export function isAccountRestricted(username: string): boolean {
@@ -164,12 +169,73 @@ export function isAccountRestricted(username: string): boolean {
   return until !== undefined && Date.now() < until;
 }
 
-/** Marque un compte comme restreint pendant `durationMs` ms (défaut 60 min). */
-function markAccountRestricted(username: string, durationMs = 60 * 60 * 1000): void {
-  const until = Date.now() + durationMs;
-  accountRestrictedUntil.set(username.toLowerCase(), until);
+/** Obtient le nombre de tentatives de restriction pour un compte. */
+function getRestrictionAttemptCount(username: string): number {
+  return accountRestrictionAttempts.get(username.toLowerCase()) || 0;
+}
+
+/** Incrémente le compteur de tentatives de restriction. */
+function incrementRestrictionAttempt(username: string): void {
+  const key = username.toLowerCase();
+  const current = getRestrictionAttemptCount(username);
+  accountRestrictionAttempts.set(key, current + 1);
+}
+
+/** Réinitialise le compteur de tentatives après une période de succès. */
+function resetRestrictionAttempts(username: string): void {
+  accountRestrictionAttempts.delete(username.toLowerCase());
+}
+
+/** Calcule la durée de restriction avec backoff exponentiel. */
+function calculateRestrictionDuration(attemptCount: number, retryAfterHeader?: string): number {
+  // Priorité 1 : Header Retry-After du serveur (si présent)
+  if (retryAfterHeader) {
+    const seconds = parseInt(retryAfterHeader, 10);
+    if (!isNaN(seconds) && seconds > 0) {
+      return seconds * 1000; // Convertir en millisecondes
+    }
+  }
+  
+  // Priorité 2 : Backoff exponentiel basé sur le nombre de tentatives
+  const baseDuration = 60 * 60 * 1000; // 1 heure de base
+  const maxDuration = 24 * 60 * 60 * 1000; // Maximum 24 heures
+  
+  if (attemptCount <= 0) {
+    return baseDuration; // Première restriction : 1 heure
+  }
+  
+  // Backoff exponentiel : 1h, 2h, 4h, 8h, 16h, 24h (max)
+  const exponentialDuration = baseDuration * Math.pow(2, attemptCount - 1);
+  return Math.min(exponentialDuration, maxDuration);
+}
+
+/** Marque un compte comme restreint avec backoff exponentiel. */
+function markAccountRestricted(username: string, durationMs?: number, retryAfterHeader?: string): void {
+  const key = username.toLowerCase();
+  
+  // Incrémenter le compteur de tentatives
+  incrementRestrictionAttempt(username);
+  const attemptCount = getRestrictionAttemptCount(username);
+  
+  // Calculer la durée (avec backoff exponentiel si non spécifiée)
+  const calculatedDuration = durationMs ?? calculateRestrictionDuration(attemptCount, retryAfterHeader);
+  
+  const until = Date.now() + calculatedDuration;
+  accountRestrictedUntil.set(key, until);
+  
   const endTime = new Date(until).toISOString().slice(11, 16);
-  console.warn(`[usa] 🔒 Compte ${username} marqué "restreint" jusqu'à ${endTime} UTC (~${Math.round(durationMs / 60000)} min)`);
+  const durationMinutes = Math.round(calculatedDuration / 60000);
+  const attemptInfo = attemptCount > 1 ? ` (tentative ${attemptCount}, backoff exponentiel)` : '';
+  
+  console.warn(`[usa] 🔒 Compte ${username} marqué "restreint" jusqu'à ${endTime} UTC (~${durationMinutes} min${attemptInfo})`);
+  
+  // Si la restriction est levée (après expiration), réinitialiser le compteur
+  setTimeout(() => {
+    if (!isAccountRestricted(username)) {
+      resetRestrictionAttempts(username);
+      console.log(`[usa] ✅ Compte ${username} : restriction expirée, compteur réinitialisé`);
+    }
+  }, calculatedDuration + 1000); // +1s pour être sûr
 }
 
 /** Teste si un corps de réponse 401 indique une restriction temporaire vs un token expiré. */
@@ -966,7 +1032,7 @@ export async function getUsaSession(
       // AccountRestrictedError : le portail a refusé le login avec "temporarily restricted".
       // Enregistrer la restriction et retourner null — PAS d'exception qui casserait l'auto-pause.
       if (err instanceof AccountRestrictedError) {
-        markAccountRestricted(username, err.retryAfterMs);
+        markAccountRestricted(username, err.retryAfterMs, err.retryAfterHeader);
         pendingLogin.delete(cacheKey);
         return null;
       }
@@ -1099,7 +1165,11 @@ export async function loginUsaPortal(
     // NE PAS traiter comme une erreur de credentials — lever AccountRestrictedError
     // pour que getUsaSession puisse enregistrer la fenêtre de restriction sans loop.
     if (response.status === 401 && isRestrictedBody(rawBody + detail)) {
-      throw new AccountRestrictedError(60 * 60 * 1000);
+      const retryAfter = response.headers.get("Retry-After");
+      throw new AccountRestrictedError(
+        retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined,
+        retryAfter ?? undefined
+      );
     }
     throw new Error(`HTTP ${response.status}: ${detail}`);
   }
@@ -1292,8 +1362,8 @@ export async function checkUsaAppointmentRequestStatus(
         // Le guard isAccountRestricted() dans getUsaSession bloquera les prochains cycles.
         if (res.status === 401 && isRestrictedBody(errBody)) {
           const username = [...tokenCache.entries()].find(([, v]) => v.accessToken === session.accessToken)?.[0] ?? "";
-          if (username) markAccountRestricted(username);
-          console.warn(`[usa] Compte temporairement restreint (401 sur appointment status) — cycles ignorés 60 min`);
+          if (username) markAccountRestricted(username, undefined, undefined);
+          console.warn(`[usa] Compte temporairement restreint (401 sur appointment status) — cycles ignorés avec backoff exponentiel`);
           return { status: "error", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: `Compte restreint (401)`, missionId: USA_MISSION_ID };
         }
         // Vraie expiration de token ou 403 : vider le cache pour forcer reconnexion
@@ -2360,7 +2430,7 @@ async function getUsaTransformData(
     if (res.status === 403) throw new AccountBlockedError("getTransformData");
     if (res.status === 401) {
       const b = await res.text().catch(() => "");
-      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      if (isRestrictedBody(b)) throw new AccountRestrictedError(undefined, undefined);
       throw new TokenExpiredError();
     }
     if (!res.ok) {
@@ -2434,7 +2504,7 @@ async function getUsaOfcList(
     }
     if (res.status === 401) {
       const b = await res.text().catch(() => "");
-      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      if (isRestrictedBody(b)) throw new AccountRestrictedError(undefined, undefined);
       throw new TokenExpiredError();
     }
     if (!res.ok) {
@@ -2581,8 +2651,8 @@ async function findFirstSlotForOfc(
     if (res.status === 401) {
       const body401 = await res.text().catch(() => "");
       if (isRestrictedBody(body401)) {
-        console.error(`[usa] ⛔ COMPTE RESTREINT (401) sur ${endpoint} — 60 min de pause`);
-        throw new AccountRestrictedError();
+        console.error(`[usa] ⛔ COMPTE RESTREINT (401) sur ${endpoint} — pause avec backoff exponentiel`);
+        throw new AccountRestrictedError(undefined, undefined);
       }
       console.error(`[usa] ⛔ TOKEN EXPIRÉ (401) sur ${endpoint} — arrêt scan`);
       throw new TokenExpiredError();
@@ -3014,7 +3084,7 @@ async function bookUsaSlot(
     }
     if (res.status === 401) {
       const b = await res.text().catch(() => "");
-      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      if (isRestrictedBody(b)) throw new AccountRestrictedError(undefined, undefined);
       throw new TokenExpiredError();
     }
 
@@ -3129,7 +3199,7 @@ async function rescheduleUsaSlot(
     if (res.status === 403) throw new AccountBlockedError(USA_RESCHEDULE_URL);
     if (res.status === 401) {
       const b = await res.text().catch(() => "");
-      if (isRestrictedBody(b)) throw new AccountRestrictedError();
+      if (isRestrictedBody(b)) throw new AccountRestrictedError(undefined, undefined);
       throw new TokenExpiredError();
     }
     if (res.status === 409) {
@@ -3646,8 +3716,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
       }
       if (err instanceof AccountRestrictedError) {
         const username = job.hunterConfig.embassyUsername ?? "";
-        if (username) markAccountRestricted(username, err.retryAfterMs);
-        console.warn(`[usa] 🔒 Compte restreint — pause 60 min (cache préservé)`);
+        if (username) markAccountRestricted(username, err.retryAfterMs, err.retryAfterHeader);
+        console.warn(`[usa] 🔒 Compte restreint — pause avec backoff exponentiel (cache préservé)`);
         botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: err.message } });
         await sendHeartbeat({
           applicationId: job.id,
@@ -3788,8 +3858,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
         }
         if (err instanceof AccountRestrictedError) {
           const username = job.hunterConfig.embassyUsername ?? "";
-          if (username) markAccountRestricted(username, err.retryAfterMs);
-          console.warn(`[usa] 🔒 Compte restreint pendant le scan OFC ${ofc.postName} — pause 60 min (cache préservé)`);
+          if (username) markAccountRestricted(username, err.retryAfterMs, err.retryAfterHeader);
+          console.warn(`[usa] 🔒 Compte restreint pendant le scan OFC ${ofc.postName} — pause avec backoff exponentiel (cache préservé)`);
           botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", ofc: ofc.postName, error: err.message } });
           await sendHeartbeat({
             applicationId: job.id,
@@ -3875,8 +3945,8 @@ async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): Promise<
           }
           if (bookErr instanceof AccountRestrictedError) {
             const username = job.hunterConfig.embassyUsername ?? "";
-            if (username) markAccountRestricted(username, bookErr.retryAfterMs);
-            console.warn(`[usa] 🔒 Compte restreint lors du booking — pause 60 min (cache préservé)`);
+            if (username) markAccountRestricted(username, bookErr.retryAfterMs, bookErr.retryAfterHeader);
+            console.warn(`[usa] 🔒 Compte restreint lors du booking — pause avec backoff exponentiel (cache préservé)`);
             botLog({ applicationId: job.id, step: "error", status: "warn", data: { flow: "usa", phase: "restricted", error: "Compte restreint lors du booking" } });
             await sendHeartbeat({ applicationId: job.id, result: "not_found", errorMessage: `Compte restreint lors du booking — pause 60 min` });
             return "not_found";
