@@ -1,5 +1,6 @@
 /**
- * Portail USA — point d’entrée. Modules : `impl.ts`, `usa-http.ts`, `scan-slot-booking.ts`,
+ * Portail USA — point d’entrée. Modules : `impl.ts`, `usa-session.ts`, `usa-auth.ts`, `usa-http.ts`,
+ * `scan-slot-booking.ts` (+ `usa-scan-main`, `usa-scan-types`, `usa-scan-preflight`, `usa-scan-details`, `usa-scan-find`, `usa-scan-book`, `usa-scan-confirmation`),
  * `appointments-api.ts`, `anti-detection.ts`, `config.ts`, `types.ts`, `crypto.ts`, `errors.ts`, `account-restriction.ts`.
  */
 export { USA_ENC_SEC_KEY, updateAesKey, encryptPortalCredentials } from "./crypto.js";
@@ -11,9 +12,6 @@ export {
   checkUsaAppointmentRequestStatus,
   getUsaAppointmentRequests,
 } from "./appointments-api.js";
-export {
-  getUsaSession,
-  logoutUsaPortal,
-  loginUsaPortal,
-  runUsaApiSession,
-} from "./impl.js";
+export { logoutUsaPortal, loginUsaPortal } from "./usa-auth.js";
+export { getUsaSession } from "./usa-session.js";
+export { runUsaApiSession } from "./impl.js";
