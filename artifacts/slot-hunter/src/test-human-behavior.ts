@@ -12,7 +12,7 @@ import {
   MAX_KEEP_ALIVE_INTERVAL_MS,
 } from "./usaPortal/config.js";
 
-function simulateHumanBehavior() {
+async function simulateHumanBehavior() {
   console.log("=".repeat(60));
   console.log(" TEST COMPORTEMENT HUMAIN AMÉLIORÉ");
   console.log("=".repeat(60));

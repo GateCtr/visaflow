@@ -2,7 +2,7 @@ FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
 WORKDIR /app
 
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@10.32.1
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json package.json ./
 COPY artifacts/slot-hunter/package.json ./artifacts/slot-hunter/
