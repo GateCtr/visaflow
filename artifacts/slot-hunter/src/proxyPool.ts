@@ -188,9 +188,12 @@ export class ProxyPool {
     const ip  = this.serverIp!;
     // 2captcha proxy API — utilise le paramètre `ip` pour whitelister l'IP serveur.
     // Certaines versions de l'API attendent aussi `server_ip` — on envoie les deux pour compatibilité.
+    // country=cd → IPs résidentielles du Congo (RDC) exclusivement.
+    // Les comptes USA visa sont basés à Kinshasa — des connexions depuis un pays africain cohérent
+    // sont beaucoup plus crédibles que des IPs aléatoires de pays différents (mode mixte par défaut).
     const url =
       `https://api.2captcha.com/proxy/generate_white_list_connections` +
-      `?key=${key}&protocol=http&connection_count=${POOL_SIZE}&ip=${encodeURIComponent(ip)}&server_ip=${encodeURIComponent(ip)}`;
+      `?key=${key}&protocol=http&connection_count=${POOL_SIZE}&country=cd&ip=${encodeURIComponent(ip)}&server_ip=${encodeURIComponent(ip)}`;
 
     try {
       const res  = await fetch(url, { signal: AbortSignal.timeout(15_000) });
