@@ -3,11 +3,10 @@ import {
   pendingLogin,
   parseJwtExpiry,
   isCachedTokenValid,
-  refreshUsaToken,
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
-import { USA_MISSION_ID, PROACTIVE_REFRESH_MIN_MS, PROACTIVE_REFRESH_MAX_MS } from "./config.js";
+import { USA_MISSION_ID } from "./config.js";
 import { AccountRestrictedError } from "./errors.js";
 import {
   isAccountRestricted,
@@ -36,49 +35,21 @@ export async function getUsaSession(
   const cached = tokenCache.get(cacheKey);
 
   if (cached) {
-    // ── Refresh proactif : rafraîchir AVANT expiration pour éviter re-login ──
-    // AWS Cognito recommande de rafraîchir les tokens à ~75% de leur durée de vie.
-    // Token Cognito = 60 min → refresh idéal entre 42-48 min après login (12-18 min avant expiry).
-    // Plage variable pour éviter un pattern temporel détectable (pas toujours à 45 min pile).
+    // ── REFRESH PROACTIF DÉSACTIVÉ ───────────────────────────────────────────
+    // RAISON : Le portail USA invalide l'ancien JWT côté serveur dès qu'un refresh
+    // est effectué. Si un appel API est en cours avec l'ancien token au moment du
+    // refresh, il reçoit un 401. C'est exactement ce qui causait la cascade d'erreurs.
+    //
+    // STRATÉGIE : On utilise le token jusqu'à ce qu'il expire naturellement (détecté
+    // par isCachedTokenValid), puis on fait un RE-LOGIN COMPLET au cycle suivant.
+    // Un re-login est plus safe qu'un refresh car :
+    //   - Pas de risque de 401 sur un ancien token en vol
+    //   - Nouvelle IP proxy assignée (si le proxy a expiré entre-temps)
+    //   - Le portail voit un comportement "humain" (déconnexion + reconnexion)
+    //
+    // L'ancien refresh proactif (Cognito 75% rule) est supprimé.
+    // Le token dure ~55min (60min JWT - 5min buffer). C'est suffisant.
     const now = Date.now();
-    const timeUntilExpiry = cached.expiresAt - now;
-    // Seuil de refresh variable par session (calculé une fois au login via jitterMs, ici on utilise une plage)
-    const refreshThreshold = PROACTIVE_REFRESH_MIN_MS + Math.random() * (PROACTIVE_REFRESH_MAX_MS - PROACTIVE_REFRESH_MIN_MS);
-    
-    if (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold) {
-      // Token valide mais expire bientôt → refresh proactif
-      const remainingMin = Math.round(timeUntilExpiry / 60000);
-      console.log(`[usa] 🔄 Refresh proactif: token expire dans ${remainingMin} min (seuil: ${Math.round(refreshThreshold/60000)} min — Cognito 75% rule)`);
-      
-      try {
-        const refreshed = await refreshUsaToken(cached, username);
-        if (refreshed) {
-          // Vérifier que le proxy est encore valide après le refresh.
-          // Si proxyExpiresAt est passé, le token refreshé sera rejeté par le portail (401).
-          if (refreshed.proxyExpiresAt && Date.now() >= refreshed.proxyExpiresAt) {
-            console.warn(`[usa] ⚠️ Proxy expiré après refresh proactif — token invalidé, re-login au prochain cycle`);
-            tokenCache.delete(cacheKey);
-            return null; // Force re-login complet (avec nouvelle IP)
-          }
-          tokenCache.set(cacheKey, refreshed);
-          console.log(`[usa] ✅ Token rafraîchi proactivement (nouvelle expiration: ${new Date(refreshed.expiresAt).toISOString()})`);
-          return {
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-            csrfToken: refreshed.csrfToken,
-            userID: refreshed.userID,
-            fullName: refreshed.fullName,
-            applicationId: null,
-            pendingAppoStatus: null,
-            missionId: USA_MISSION_ID,
-            allowedOfcs: cached.allowedOfcs ?? [],
-          };
-        }
-      } catch (refreshErr) {
-        console.warn(`[usa] ⚠️ Refresh proactif échoué (continuer avec token actuel):`, refreshErr);
-        // Continuer avec le token actuel - il est encore valide pour quelques minutes
-      }
-    }
     
     if (isCachedTokenValid(cached)) {
       const remainingMin = Math.round((cached.expiresAt - now) / 60000);
@@ -96,24 +67,8 @@ export async function getUsaSession(
       };
     }
 
-    console.log("[usa] Token expiré — tentative de renouvellement...");
-    const refreshed = await refreshUsaToken(cached, username);
-    if (refreshed) {
-      tokenCache.set(cacheKey, refreshed);
-      return {
-        accessToken: refreshed.accessToken,
-        refreshToken: refreshed.refreshToken,
-        csrfToken: refreshed.csrfToken,
-        userID: refreshed.userID,
-        fullName: refreshed.fullName,
-        applicationId: null,
-        pendingAppoStatus: null,
-        missionId: USA_MISSION_ID,
-        // Préserver les OFCs autorisés depuis le token précédent — le refresh ne recrée pas la session
-        allowedOfcs: cached.allowedOfcs ?? [],
-      };
-    }
-    console.log("[usa] Refresh échoué — reconnexion complète");
+    // Token expiré → re-login complet (pas de refresh qui invalide l'ancien)
+    console.log("[usa] Token expiré — re-login complet au lieu de refresh (évite 401 en cascade)");
     tokenCache.delete(cacheKey);
   }
 
