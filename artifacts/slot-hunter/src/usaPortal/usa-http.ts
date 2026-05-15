@@ -2,6 +2,7 @@ import { ProxyAgent } from "undici";
 import { Impit } from "impit";
 import { proxyPool } from "../browser.js";
 import { getVariableBrowserHeaders } from "../humanBehavior.js";
+import { getDeviceConsistencyHeaders } from "./device-fingerprint.js";
 import type { CachedToken, UsaSession } from "./types.js";
 import {
   USA_REFRESH_URL,
@@ -26,6 +27,11 @@ export const tokenCache = new Map<string, CachedToken>();
  * Deux logins simultanés peuvent déclencher un lockout côté portail.
  */
 export const pendingLogin = new Map<string, Promise<UsaSession | null>>();
+
+// ── Username de la session active (pour device fingerprint headers) ───────────
+// Set par updateSessionActivity() à chaque cycle de scan.
+// Utilisé par getBrowserHeaders() pour enrichir avec les device consistency headers.
+let _activeSessionUsername: string | undefined;
 
 export function parseJwtExpiry(token: string): number {
   try {
@@ -151,6 +157,7 @@ export async function sendKeepAliveIfNeeded(cached: CachedToken, username: strin
  */
 export function updateSessionActivity(username: string): void {
   const cacheKey = username.toLowerCase();
+  _activeSessionUsername = cacheKey;
   const cached = tokenCache.get(cacheKey);
   if (cached) {
     cached.lastActivityAt = Date.now();
@@ -390,7 +397,19 @@ export function getBrowserHeaders(jobId?: string): Record<string, string> {
   };
   
   // Ajouter de la variabilité humaine aux headers
-  return getVariableBrowserHeaders(baseHeaders, jobId);
+  const withVariability = getVariableBrowserHeaders(baseHeaders, jobId);
+
+  // ── Device fingerprint headers — cohérence anti-WAF préventive ──────────────
+  // Si un username de session est actif, enrichir avec des headers stables par compte.
+  // Ces headers imitent les Client Hints étendus que Chrome envoie quand le serveur
+  // les demande (Accept-CH). Même si le portail ne les requiert pas encore, leur
+  // présence renforce la cohérence du "navigateur" simulé face à un futur WAF.
+  if (_activeSessionUsername) {
+    const deviceHeaders = getDeviceConsistencyHeaders(_activeSessionUsername);
+    Object.assign(withVariability, deviceHeaders);
+  }
+
+  return withVariability;
 }
 
 // ─── Proxy résidentiel pour les appels API USA ────────────────────────────────
