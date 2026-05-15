@@ -52,32 +52,18 @@ export interface BundleCheckReport {
 }
 
 /**
- * Récupère l'email de l'admin actuel via Convex.
- * Le backend Convex expose un endpoint /hunter/admin-email qui retourne l'email
- * de l'admin principal (premier admin actif dans la table users).
+ * Récupère l'email de l'admin depuis la variable d'environnement.
+ * Pattern identique à convex/emails.ts (JOVENTY_ADMIN_EMAIL).
+ * Pas besoin d'appel HTTP — l'email admin est configuré en env Railway.
  */
-async function getAdminEmail(): Promise<string | null> {
-  if (!CONVEX_SITE_URL || !HUNTER_API_KEY) return null;
-
-  try {
-    const url = `${CONVEX_SITE_URL}/hunter/admin-email`;
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { "X-Hunter-Key": HUNTER_API_KEY },
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!res.ok) {
-      console.warn(`[admin-report] Impossible de récupérer l'email admin: HTTP ${res.status}`);
-      return null;
-    }
-
-    const data = (await res.json()) as { email?: string };
-    return data.email ?? null;
-  } catch (err) {
-    console.warn(`[admin-report] Erreur récupération email admin: ${err}`);
+function getAdminEmail(): string | null {
+  const email = process.env.JOVENTY_ADMIN_EMAIL;
+  if (!email) {
+    console.warn(`[admin-report] JOVENTY_ADMIN_EMAIL non configurée — rapport non envoyé`);
+    console.warn(`[admin-report] → Ajoutez JOVENTY_ADMIN_EMAIL dans les variables d'environnement Railway`);
     return null;
   }
+  return email;
 }
 
 /**
@@ -92,8 +78,8 @@ export async function sendAdminBundleCheckReport(report: BundleCheckReport): Pro
     return false;
   }
 
-  // Récupérer l'email admin depuis Convex
-  const adminEmail = await getAdminEmail();
+  // Récupérer l'email admin depuis la variable d'environnement
+  const adminEmail = getAdminEmail();
   if (!adminEmail) {
     console.warn("[admin-report] Email admin introuvable — rapport non envoyé");
     return false;
