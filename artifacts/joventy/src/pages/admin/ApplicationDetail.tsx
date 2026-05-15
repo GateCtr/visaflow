@@ -1379,6 +1379,7 @@ export default function AdminApplicationDetail() {
             captcha: "Bloqué par CAPTCHA",
             error: "Erreur technique",
             slot_captured: "Créneau capturé !",
+            payment_required: "💳 Paiement MRV requis",
           };
           return (
             <div className="bg-white rounded-2xl border border-purple-200 shadow-sm overflow-hidden">
