@@ -68,6 +68,8 @@ const hunterConfig = v.object({
   // Mode reporter USA — cherche un créneau antérieur au RDV existant
   rescheduleMode: v.optional(v.boolean()),
   rescheduleExistingDate: v.optional(v.string()),      // "YYYY-MM-DD" — date du RDV actuel (deadline = veille)
+  // Proxy résidentiel USA (sticky 60 min — désactivé par défaut)
+  useResidentialProxy: v.optional(v.boolean()),
 });
 
 export default defineSchema({
