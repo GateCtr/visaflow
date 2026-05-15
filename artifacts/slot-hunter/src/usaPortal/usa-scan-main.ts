@@ -257,9 +257,9 @@ export async function runUsaSlotScanMain(
           break;
           
         case "noise":
-          // Envoyer des requêtes bruit anti-détection
-          await sendAntiDetectionNoise(session, job.id);
-          await randomInterStepPause(800, 2000, job.id);
+          // No-op — noise requests supprimées (15/05/2026)
+          // Un humain qui cherche un créneau ne consulte pas /help ou /faq
+          await randomInterStepPause(300, 800, job.id);
           break;
           
         case "ofc":

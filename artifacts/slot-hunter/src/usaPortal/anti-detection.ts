@@ -5,7 +5,6 @@ import {
   humanPause,
   shuffleArray,
   randomSubset,
-  simulateMenuClick,
   simulatePageRefresh,
 } from "../humanBehavior.js";
 import { usaFetch, authHeaders } from "./usa-http.js";
@@ -38,9 +37,17 @@ export async function randomInterStepPause(minMs: number = 500, maxMs: number = 
 }
 
 /**
- * Définit différents flows possibles pour varier la séquence des requêtes
+ * Définit différents flows possibles pour varier la séquence des requêtes.
+ *
+ * NOTE (15/05/2026) : les flows "noise" ont été SUPPRIMÉS.
+ * Un humain qui cherche un créneau sur ce portail ne va JAMAIS consulter /help, /faq,
+ * /contact ou /privacy entre deux scans. Il reste focalisé sur la page des créneaux
+ * et fait F5 en boucle. Envoyer des requêtes vers ces pages est un SIGNAL DE BOT
+ * car aucun utilisateur réel ne lit les CGU pendant qu'il cherche frénétiquement un créneau.
+ * Le portail utilise DAP (Digital Analytics Program — dap.digitalgov.gov) + Google Analytics
+ * côté navigateur, mais ces trackers ne voient que les pages HTML chargées (pas les XHR API).
  */
-type FlowStep = "login" | "status" | "ofc" | "dates" | "times" | "warmup" | "noise" | "transform";
+type FlowStep = "login" | "status" | "ofc" | "dates" | "times" | "warmup" | "transform";
 const POSSIBLE_FLOWS: FlowStep[][] = [
   ["login", "status", "ofc", "dates", "times"],
   ["login", "status", "dates", "ofc", "times"],
@@ -60,48 +67,19 @@ export function selectRandomFlow(): FlowStep[] {
 }
 
 /**
- * Envoie des requêtes "bruit" occasionnelles pour simuler la navigation humaine
+ * @deprecated SUPPRIMÉ le 15/05/2026 — Les requêtes "bruit" vers /api/help, /api/faq, /api/contact
+ * sont CONTRE-PRODUCTIVES. Un humain obsédé par un créneau ne consulte JAMAIS ces pages.
+ * C'est un signal de bot détectable par analyse comportementale (séquence anormale).
+ * Le portail utilise DAP (dap.digitalgov.gov) + GA pour le tracking — ces endpoints
+ * n'existent même pas côté API (404) et ne sont pas appelés par l'app Angular en SPA.
+ * 
+ * Fonction conservée comme no-op pour ne pas casser les imports existants.
  */
 export async function sendAntiDetectionNoise(
-  session: UsaSession, 
-  jobId?: string
+  _session: UsaSession, 
+  _jobId?: string
 ): Promise<void> {
-  if (Math.random() < 0.15) { // 15% du temps
-    const noiseEndpoints = [
-      `${USA_BASE}/api/help`,
-      `${USA_BASE}/api/faq`,
-      `${USA_BASE}/api/contact`,
-      `${USA_BASE}/api/privacy`,
-      `${USA_BASE}/visaapplicantui/home/dashboard/help`,
-      `${USA_BASE}/visaapplicantui/home/dashboard/faq`
-    ];
-    
-    const endpoint = noiseEndpoints[Math.floor(Math.random() * noiseEndpoints.length)];
-    try {
-      console.log(`[anti-detection] 📡 Requête bruit vers: ${endpoint}`);
-      await usaFetch(endpoint, {
-        method: "GET",
-        headers: authHeaders(session.accessToken, REFERER_DASHBOARD, false)
-      });
-      
-      // Log la requête bruit
-      if (jobId) {
-        botLog({
-          applicationId: jobId,
-          step: "anti_detection",
-          status: "ok",
-          data: {
-            type: "noise_request",
-            endpoint: endpoint,
-            timestamp: Date.now()
-          }
-        });
-      }
-    } catch (error) {
-      // Ignorer les erreurs (comportement humain - les requêtes peuvent échouer)
-      console.log(`[anti-detection] Requête bruit échouée (comportement normal): ${error}`);
-    }
-  }
+  // No-op — supprimé volontairement (voir commentaire ci-dessus)
 }
 
 /**
@@ -224,15 +202,18 @@ export async function executeWithHumanVariability(
     await humanPause(500, `après ${step.name} `, jobId);
   }
   
-  // 30% du temps : simuler un clic de menu supplémentaire
+  // 30% du temps : simuler un rafraîchissement supplémentaire (F5)
+  // Un humain qui cherche un créneau fait F5 en boucle — pas de navigation vers d'autres pages
   if (Math.random() < 0.3) {
-    await simulateMenuClick({}, jobId);
-    await humanPause(200, "après clic menu ", jobId);
+    await simulatePageRefresh(jobId);
+    await humanPause(200, "après refresh ", jobId);
   }
   
-  // 10% du temps : simuler un rafraîchissement
+  // 10% du temps : pause plus longue (humain qui regarde son téléphone)
   if (Math.random() < 0.1) {
-    await simulatePageRefresh(jobId);
+    const pauseMs = 2000 + Math.random() * 4000;
+    console.log(`[human] 📱 Pause distraction: ${Math.round(pauseMs / 1000)}s`);
+    await new Promise(resolve => setTimeout(resolve, pauseMs));
   }
 }
 

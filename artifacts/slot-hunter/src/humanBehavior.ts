@@ -180,40 +180,34 @@ export function randomSubset<T>(array: T[], min: number = 1, max?: number): T[] 
 }
 
 /**
- * Simule un clic humain sur un menu non-essentiel
+ * Simule un comportement humain réaliste entre les scans.
+ * 
+ * NOTE (15/05/2026) : Les anciens "clics de menu" vers /api/help, /api/faq, /api/terms
+ * ont été SUPPRIMÉS. Un humain qui cherche un créneau de visa ne consulte JAMAIS ces pages.
+ * Il reste sur la page des créneaux et fait F5 ou clique "Retour" puis revient.
+ * 
+ * Comportement réaliste :
+ * - Pause variable (l'humain regarde l'écran, réfléchit, attend)
+ * - Parfois il ne fait rien pendant quelques secondes (lecture de l'écran)
  */
-export async function simulateMenuClick(session: any, jobId?: string): Promise<void> {
-  const fakeEndpoints = [
-    '/api/help',
-    '/api/faq', 
-    '/api/contact',
-    '/api/privacy',
-    '/api/terms'
-  ];
+export async function simulateMenuClick(_session: unknown, jobId?: string): Promise<void> {
+  // Simuler un humain qui "regarde l'écran" — pas de requête réseau inutile
+  const thinkingMs = 300 + Math.random() * 800;
+  console.log(`[human] 👀 Lecture écran simulée (${Math.round(thinkingMs)}ms)`);
   
-  const endpoint = fakeEndpoints[Math.floor(Math.random() * fakeEndpoints.length)];
-  console.log(`[human] 🖱️ Clic simulé sur ${endpoint}`);
-  
-  // Log le clic de menu dans botLog si jobId fourni
   if (jobId) {
     botLog({
       applicationId: jobId,
       step: "human_behavior",
       status: "ok",
       data: {
-        type: "menu_click_simulated",
-        endpoint: endpoint
+        type: "screen_reading",
+        durationMs: thinkingMs
       }
     });
   }
   
-  // Ne pas attendre la réponse (fire-and-forget comme un vrai navigateur)
-  try {
-    // Simuler juste le début de la requête
-    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
-  } catch {
-    // Ignorer les erreurs
-  }
+  await new Promise(resolve => setTimeout(resolve, thinkingMs));
 }
 
 /**

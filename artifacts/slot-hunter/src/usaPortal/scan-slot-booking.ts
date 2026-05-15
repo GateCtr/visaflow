@@ -9,7 +9,6 @@ import {
   humanPause,
   shouldSimulateNetworkError,
   simulateNetworkTimeout,
-  simulateMenuClick,
   simulatePageRefresh,
 } from "../humanBehavior.js";
 import { WARMUP_INTERVAL_MS } from "./config.js";
@@ -88,12 +87,9 @@ export async function scanUsaSlotsViaAPI(job: HunterJob, session: UsaSession): P
       // Le paiement est déjà vérifié via getUserHistoryApplicantPaymentStatus
       // (pendingAppoStatus !== 0 ↔ paiement confirmé).
       {
-        name: "Menu Navigation",
-        execute: async () => await simulateMenuClick(session, job.id)
-      },
-      {
         name: "Page Refresh",
-        execute: async () => await simulatePageRefresh(job.id)
+        execute: async () => await simulatePageRefresh(job.id),
+        critical: false
       }
     ], "warm-up ", job.id);
 
