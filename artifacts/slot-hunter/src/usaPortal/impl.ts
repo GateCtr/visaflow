@@ -64,6 +64,27 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return result;
     }
 
+    // ── Guard restriction compte (AVANT toute action) ──────────────────────
+    // Si le compte est déjà marqué restreint par un cycle précédent,
+    // NE RIEN FAIRE du tout — pas de proxy check, pas de log "session démarrée",
+    // juste retourner immédiatement. Économise le pre-flight check et évite le
+    // faux log "Aucun créneau disponible" / "not_found" qui pollue les stats.
+    if (isAccountRestricted(username)) {
+      const until = getAccountRestrictionDeadline(username.toLowerCase())!;
+      const remainMin = Math.round((until - Date.now()) / 60000);
+      console.log(`[usa] 🔒 ${username} en restriction — ${remainMin} min restantes. Cycle SKIP total.`);
+      botLog({ applicationId: job.id, step: "restriction_skip", status: "warn", data: { username, remainMin } });
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: `Compte restreint — skip total (${remainMin} min restantes)`,
+      });
+      // Ne PAS logger "Fin session comportement humain" ni "not_found" comme résultat
+      // — on retourne directement sans passer par le finally block normal
+      logHumanBehaviorEnd(job.id, `USA Portal - ${username} (restriction skip)`, 0);
+      return "not_found";
+    }
+
     // ── Initialiser les headers de session (fixés pour toute la durée) ──────
     // Un vrai Chrome envoie les mêmes Accept-Encoding/Language pendant toute sa session.
     // Randomiser par requête = signal bot. On fixe une fois au début.
