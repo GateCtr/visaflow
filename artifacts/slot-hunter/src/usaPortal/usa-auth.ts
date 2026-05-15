@@ -5,6 +5,7 @@ import {
   authHeaders,
 } from "./usa-http.js";
 import {
+  USA_BASE,
   USA_LOGIN_URL,
   USA_LOGOUT_URL,
   USA_MISSION_ID,
@@ -66,6 +67,26 @@ export async function loginUsaPortal(
   _captchaToken?: string | null  // Conservé pour compatibilité — le CAPTCHA n'est pas requis par l'API
 ): Promise<UsaSession | null> {
   console.log(`[usa] Connexion API pour ${username} avec credentials AES chiffrés...`);
+
+  // ── Pre-login warm-up : simuler le chargement de la page de login ──────────
+  // Un vrai navigateur charge la page de login AVANT d'envoyer les credentials.
+  // Le portail Angular fait un GET /globalconfiguration/getby/Captcha au chargement.
+  // Sans cet appel, le pattern "POST /login sans GET préalable" = signal de bot.
+  // Ce GET est NON-authentifié (pas de Bearer) et rapide (~200ms).
+  try {
+    const warmupHeaders = {
+      ...getBrowserHeaders(),
+      "Referer": REFERER_LOGIN,
+    };
+    // Supprimer Content-Type pour un GET (les navigateurs ne l'envoient pas sur les GET)
+    delete (warmupHeaders as Record<string, string | undefined>)["Content-Type"];
+    await usaFetch(`${USA_BASE}/visaadministrationapi/v1/globalconfiguration/getby/Captcha`, {
+      method: "GET",
+      headers: warmupHeaders,
+    });
+  } catch {
+    // Ignorer les erreurs — ce warm-up est optionnel et non-bloquant
+  }
 
   // Le portail USA attend les credentials chiffrés en AES-256-CBC dans le champ "authorization"
   // Format découvert dans le bundle Angular public : { authorization: "Basic " + encrypt(user:pass) }

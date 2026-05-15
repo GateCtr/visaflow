@@ -423,8 +423,16 @@ let _usaProxyUrl: string | undefined;
  * iProyal fournit des URLs avec format: host:port:user:password_session-xxx_lifetime-30m
  * Si l'URL de base ne contient pas déjà _session-, on en ajoute un.
  * Si elle en contient déjà, on la retourne telle quelle.
+ * 
+ * ROTATION IP (anti-Fraud Control) :
+ * Le session ID est dérivé du jour actuel (hash déterministe) → même IP pendant 24h.
+ * Tous les jours à minuit, le session ID change → nouvelle IP résidentielle.
+ * Cela évite qu'une même IP résidentielle soit utilisée 20h/jour pendant des semaines
+ * (pattern détectable par les systèmes de fraud control qui mesurent la durée d'usage).
+ * 
+ * Le sessionId intègre aussi le username pour que chaque compte ait sa propre IP.
  */
-export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60): string {
+export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60, username?: string): string {
   try {
     const parsed = new URL(baseUrl);
     let password = decodeURIComponent(parsed.password);
@@ -440,14 +448,26 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
       return baseUrl;
     }
     
-    // Ajouter une session sticky
-    const sessionId = Array.from({ length: 8 }, () =>
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 62)]
-    ).join("");
+    // ── Générer un session ID stable par jour + compte (rotation IP quotidienne) ──
+    // Hash déterministe : même jour + même username → même session ID → même IP.
+    // Jour suivant → nouveau hash → nouvelle IP résidentielle.
+    // Le username est inclus pour isoler les comptes (IPs différentes).
+    const today = new Date().toISOString().slice(0, 10); // "2026-05-15"
+    const seed = `${today}:${(username ?? "default").toLowerCase()}:iproyal-rotate`;
+    let hash = 0;
+    for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
+    // Convertir en base62 (8 chars) — même format que l'ancien random
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let sessionId = "";
+    let h = Math.abs(hash);
+    for (let i = 0; i < 8; i++) {
+      sessionId += chars[h % 62];
+      h = Math.floor(h / 62) + (i + 1) * 7; // Ajout pour avoir 8 chars distincts
+    }
     
     password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
     parsed.password = encodeURIComponent(password);
-    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m`);
+    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation quotidienne)`);
     return parsed.toString();
   } catch {
     // Si le parsing d'URL échoue, retourner l'URL d'origine
@@ -542,6 +562,15 @@ function touchCachedTokenActivity(headers: HeadersInit | undefined, res: Respons
 
 export async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
   let res: Response;
+  
+  // ── Jitter réseau réaliste (anti-Bot Control) ─────────────────────────────
+  // Un vrai navigateur a une latence variable : DNS lookup (10-50ms), TCP connect (20-80ms),
+  // TLS handshake (30-100ms), rendering pause (50-200ms). Total = 50-400ms de "bruit" naturel.
+  // Sans jitter : les requêtes partent à intervalle quasi-constant → signature de bot.
+  // IMPORTANT : le jitter est AVANT la requête (simule le temps de "préparation" navigateur),
+  // pas APRÈS (le temps de réponse serveur est déjà variable naturellement).
+  const jitterMs = 30 + Math.random() * 170; // 30-200ms (léger, ne ralentit pas significativement)
+  await new Promise(r => setTimeout(r, jitterMs));
   
   // Toujours utiliser impit pour le fingerprint TLS Chrome, avec ou sans proxy
   // impit supporte nativement les proxies via l'option proxyUrl

@@ -261,7 +261,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // Le JWT est lié à l'IP → le proxy doit rester le même pendant toute la session.
     const adminWantsProxy = job.hunterConfig.useResidentialProxy === true;
     if (adminWantsProxy && process.env.IPROYAL_PROXY_URL) {
-      const stickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 60);
+      const stickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 60, username);
       sessionProxy = stickyUrl;
       console.log(`[usa] 🌐 Proxy résidentiel ACTIVÉ par admin (sticky 60min)`);
     } else {

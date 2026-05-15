@@ -136,14 +136,36 @@ export function getStableDeviceId(username: string): string {
  * Retourne les headers supplémentaires cohérents avec le device profile.
  * Ces headers imitent les données qu'un vrai navigateur Chrome envoie
  * et que WAF/Cognito peuvent vérifier pour cohérence.
+ * 
+ * Inclut :
+ * - Sec-CH-UA-Arch / Sec-CH-UA-Bitness (Client Hints étendus)
+ * - Sec-CH-UA-Full-Version-List (version complète — envoyé quand le serveur demande Accept-CH)
+ * - X-Device-Fingerprint (hash stable par compte — anti "new device" detection)
+ * - Viewport-Width (envoyé par Chrome quand Accept-CH: Viewport-Width est présent)
  */
 export function getDeviceConsistencyHeaders(username: string): Record<string, string> {
   const profile = getDeviceProfile(username);
+  
+  // Extraire la résolution pour le viewport
+  const [width] = profile.screenResolution.split("x").map(Number);
+  // Le viewport est légèrement plus petit que la résolution (scrollbar, taskbar)
+  const viewportWidth = width - (profile.platform === "Win32" ? 17 : 15);
+  
   return {
-    // Sec-CH-UA-Platform est déjà dans getBrowserHeaders via USA_UA_POOL
-    // On ajoute des headers optionnels que Chrome envoie parfois
+    // Client Hints étendus — Chrome les envoie si le serveur répond avec Accept-CH
     "Sec-CH-UA-Arch": profile.platform === "Win32" ? '"x86"' : '"arm"',
     "Sec-CH-UA-Bitness": '"64"',
+    // Full-Version-List — version exacte (plus précis que Sec-CH-UA)
+    // Format identique à Chrome réel : marque;v="major.minor.build.patch"
+    "Sec-CH-UA-Full-Version-List": profile.platform === "Win32"
+      ? '"Chromium";v="135.0.7049.115", "Google Chrome";v="135.0.7049.115", "Not-A.Brand";v="8.0.0.0"'
+      : '"Chromium";v="136.0.7103.92", "Google Chrome";v="136.0.7103.92", "Not-A.Brand";v="8.0.0.0"',
+    // Viewport-Width — cohérent avec la résolution du device profile
+    "Viewport-Width": String(viewportWidth),
+    // Device fingerprint stable (hash du compte) — anti "new device" Cognito
+    // Si Cognito Advanced Security track les devices, ce header constant par compte
+    // signale "c'est toujours le même appareil" même après redéploiement Railway.
+    "X-Device-Fingerprint": profile.deviceId,
   };
 }
 
