@@ -64,12 +64,33 @@ async function startCevSetupLoop(): Promise<void> {
             if (httpResult.needsPlaywrightNavigation && httpResult.redirectUrl) {
               console.log(`[CEV-SETUP] 🎭 Approche hybride session=${s.sessionId} — Playwright navigue vers redirectUrl (cookie déjà obtenu)`);
 
-              const fullCookie = `ASP.NET_SessionId=${httpResult.sessionCookie}; PreferredCulture=en-US`;
-              const navResult = await navigateCevRedirectWithPlaywright(
-                fullCookie,
-                httpResult.redirectUrl,
-                s.applicationId,
-              );
+              // ── Guard Playwright disponibilité ─────────────────────────────
+              // Si l'image Docker n'a pas le bon Chromium (version mismatch),
+              // Playwright throw immédiatement. On catch pour éviter de crasher
+              // la boucle CEV entière et on skip gracieusement.
+              let navResult: Awaited<ReturnType<typeof navigateCevRedirectWithPlaywright>>;
+              try {
+                const fullCookie = `ASP.NET_SessionId=${httpResult.sessionCookie}; PreferredCulture=en-US`;
+                navResult = await navigateCevRedirectWithPlaywright(
+                  fullCookie,
+                  httpResult.redirectUrl,
+                  s.applicationId,
+                );
+              } catch (pwErr) {
+                const pwMsg = pwErr instanceof Error ? pwErr.message : String(pwErr);
+                if (pwMsg.includes("Executable doesn't exist") || pwMsg.includes("browserType.launch")) {
+                  console.error(`[CEV-SETUP] ⚠️ Playwright indisponible (image Docker obsolète?) — skip hybride`);
+                  console.error(`[CEV-SETUP]    Erreur: ${pwMsg.slice(0, 150)}`);
+                  console.error(`[CEV-SETUP]    → Mettre à jour l'image Docker vers la version requise par Playwright`);
+                  // Ne pas crasher la boucle — marquer comme erreur récupérable
+                  r = { success: false, error: "PLAYWRIGHT_UNAVAILABLE" };
+                  // Sortir du bloc hybride — on ne retry PAS avec Playwright complet
+                  // (il échouera aussi). Attendre le fix Docker.
+                  continue;
+                }
+                // Autre erreur Playwright inattendue → propager normalement
+                throw pwErr;
+              }
 
               if (navResult.status === "slot_found") {
                 // 🚨 SLOTS TROUVÉS — activer la session pour booking
@@ -137,6 +158,7 @@ async function startCevSetupLoop(): Promise<void> {
         // - RATE_LIMIT / ErrorTooManyAttempts : compte bloqué 60 min
         const skipPlaywright = (
           r.error === "CEV_VOWINT_SESSION_FAILED" ||
+          r.error === "PLAYWRIGHT_UNAVAILABLE" ||
           (r.error ?? "").includes("RATE_LIMIT") ||
           (r.error ?? "").includes("TooManyAttempts")
         );
@@ -229,7 +251,12 @@ async function startCevSetupLoop(): Promise<void> {
         }
       }
     } catch (err) {
-      console.warn("[CEV-SETUP] Erreur boucle:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes("Executable doesn't exist") || errMsg.includes("browserType.launch")) {
+        console.warn("[CEV-SETUP] Erreur boucle: Playwright indisponible (image Docker obsolète) — retry dans 60s");
+      } else {
+        console.warn("[CEV-SETUP] Erreur boucle:", err);
+      }
     }
 
     // Intervalle de boucle : 60s. Le rate limiting est géré par le lock Convex (13 min)

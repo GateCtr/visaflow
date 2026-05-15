@@ -610,6 +610,27 @@ function touchCachedTokenActivity(headers: HeadersInit | undefined, res: Respons
 export async function usaFetch(url: string, options: RequestInit = {}): Promise<Response> {
   let res: Response;
   
+  // ── Mid-session proxy guard (Pillar 2) ────────────────────────────────────
+  // Si un proxy est actif ET qu'il est déclaré mort mid-session, BLOQUER la requête
+  // plutôt que de la laisser partir via IP directe Railway (ce qui exposerait le compte).
+  if (_usaProxyUrl) {
+    const { checkProxyLiveness, isSessionFrozen } = await import("./proxy-session-guard.js");
+    
+    // Check rapide (non-bloquant si intervalle pas écoulé)
+    const proxyAlive = await checkProxyLiveness();
+    
+    if (!proxyAlive || isSessionFrozen()) {
+      console.error(`[usa] 🛑 REQUÊTE BLOQUÉE — proxy mort mid-session (session gelée)`);
+      console.error(`[usa]    URL: ${url.slice(0, 80)}…`);
+      console.error(`[usa]    → Protège le compte contre l'IP mismatch`);
+      // Retourner une fausse réponse 503 au lieu de laisser partir la requête
+      return new Response(
+        JSON.stringify({ error: "PROXY_DEAD_MID_SESSION", message: "Session frozen — proxy died mid-session" }),
+        { status: 503, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
+
   // ── Jitter réseau réaliste (anti-Bot Control) ─────────────────────────────
   // Un vrai navigateur a une latence variable : DNS lookup (10-50ms), TCP connect (20-80ms),
   // TLS handshake (30-100ms), rendering pause (50-200ms). Total = 50-400ms de "bruit" naturel.
