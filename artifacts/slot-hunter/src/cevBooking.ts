@@ -183,9 +183,9 @@ async function establishCevSession(
     };
     page.on('response', onResponse);
 
-    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'commit', timeout: 60_000 });
+    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'commit', timeout: 90_000 });
     // Attendre que le DOM soit suffisamment chargé pour interagir (best-effort)
-    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
 
     // BrightData peut retourner HTTP 402 "bad_endpoint" pour visaonweb.diplomatie.be.
     // Le listener ci-dessus couvre le GET initial ; on vérifie aussi le contenu de la page.
@@ -219,7 +219,7 @@ async function establishCevSession(
       await randomDelay(300, 700);
       await humanClick(page, 'button[type="submit"]');
       // Utiliser domcontentloaded (networkidle peut ne jamais se stabiliser sur VOWINT/AngularJS)
-      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+      await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
       await randomDelay(1_000, 2_000); // laisser le redirect s'établir
 
       // Vérifier BrightData 402 sur le POST login AVANT d'analyser l'URL
@@ -267,8 +267,8 @@ async function establishCevSession(
 
     // domcontentloaded d'abord, puis on attend networkidle en best-effort
     // AngularJS fait du XHR polling — networkidle peut ne jamais se stabiliser
-    await page.goto(targetUrl, { waitUntil: 'commit', timeout: 60_000 });
-    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await page.goto(targetUrl, { waitUntil: 'commit', timeout: 90_000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
     await randomDelay(2_000, 4_000);
@@ -326,7 +326,7 @@ async function establishCevSession(
       rdvBtn.click(),
     ]);
 
-    await newPage.waitForLoadState('domcontentloaded', { timeout: 20_000 });
+    await newPage.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
     await randomDelay(1_500, 3_000); // laisser les cookies s'établir dans le jar
 
     // Fallback : si le premier event de navigation était déjà /Captcha, essayer l'URL courante
@@ -421,7 +421,7 @@ async function completebookingViaUI(
       { timeout: 12_000 },
     ).catch(() => null);
 
-    await page.goto(calendarUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+    await page.goto(calendarUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
 
     botLog({ applicationId: config.clientId, step: 'cev_calendar_loaded', status: 'ok', data: { url: calendarUrl } });
 
@@ -1544,7 +1544,7 @@ export async function runCevDirectSessionSetup(
     } else {
       // ── Mode URL directe (legacy) : naviguer → extraire cookie ──────────────
       const integrationUrl = credentialsOrUrl as string;
-      await page.goto(integrationUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await page.goto(integrationUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
       await randomDelay(1_500, 2_500); // laisser les cookies s'établir
 
       const currentUrl = page.url();
@@ -1795,8 +1795,8 @@ export async function bookWithExistingSession(
 
     // Naviguer vers l'URL d'intégration avec le cookie injecté
     // Le serveur va vérifier la session et rediriger vers SelectSlot (ou NoAvailability)
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
 
     const currentUrl = page.url();
     botLog({
