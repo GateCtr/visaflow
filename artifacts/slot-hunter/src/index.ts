@@ -771,8 +771,24 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
     case "payment_required":
       consecutiveLoginFailures.delete(job.id);
       consecutiveErrors.delete(job.id);
-      log("WARN", `[${job.applicantName}] 💳 Paiement portail requis — frais consulaires non validés par le portail`);
-      break;
+      // ── AUTO-PAUSE : paiement non confirmé ─────────────────────────────────
+      // Le portail USA ne retourne aucun créneau sans paiement MRV VERIFIED.
+      // Scanner en boucle est inutile (résultats vides) et augmente le risque
+      // de détection (pattern bot: scanner sans paiement = impossible pour un humain).
+      // On met le job en pause jusqu'à ce que l'admin relance après paiement.
+      pausedJobs.add(job.id);
+      log("WARN", `[${job.applicantName}] 💳 Paiement MRV non confirmé — auto-pause (reprendra après reset admin)`);
+      try {
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "payment_required",
+          errorMessage: "Paiement MRV non confirmé (paymentStatus ≠ VERIFIED) — bot en pause. Effectuez le paiement sur usvisaappt.com puis relancez.",
+          shouldPause: true,
+        });
+      } catch (err) {
+        log("WARN", `[${job.applicantName}] Heartbeat pause payment échoué: ${err}`);
+      }
+      return; // pas de reschedule : le job est en pause
 
     case "not_found":
       consecutiveLoginFailures.delete(job.id);
