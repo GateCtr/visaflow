@@ -63,6 +63,47 @@ export async function runUsaSlotScanMain(
     console.warn(`[usa] getTransformData early ignoré: ${err}`);
   }
 
+  // ── VÉRIFICATION PAIEMENT MRV ─────────────────────────────────────────────
+  // Le portail USA n'autorise la recherche de créneaux que si le paiement MRV est confirmé.
+  // D'après le bundle Angular et les captures réseau, paymentStatus="VERIFIED" signifie
+  // que le MRV receipt est validé et le calendrier est accessible.
+  // Sans paiement, les endpoints getSlotDates/getSlotTime retournent des tableaux vides
+  // (pas d'erreur HTTP, juste aucun créneau) → gaspillage de requêtes + pattern bot.
+  //
+  // Stratégie :
+  //   - paymentStatus === "VERIFIED" → OK, continuer le scan
+  //   - paymentStatus absent/undefined → getTransformData a échoué, on laisse passer (grace)
+  //   - paymentStatus !== "VERIFIED" (ex: null, "", "PENDING") → bloquer le scan
+  if (earlyTransformData?.paymentStatus !== undefined && earlyTransformData.paymentStatus !== null) {
+    const ps = earlyTransformData.paymentStatus;
+    if (ps !== "VERIFIED") {
+      console.warn(`[usa] 💳 Paiement MRV non confirmé (paymentStatus="${ps}") — scan bloqué pour économiser les requêtes`);
+      botLog({
+        applicationId: job.id,
+        step: "payment_check",
+        status: "warn",
+        data: {
+          flow: "usa",
+          paymentStatus: ps,
+          applicationId: session.applicationId,
+          message: "Paiement MRV non vérifié — scan bloqué",
+        },
+      });
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "payment_required",
+        errorMessage: `Paiement MRV non confirmé (paymentStatus="${ps}") — l'utilisateur doit effectuer le paiement sur usvisaappt.com`,
+      });
+      return "payment_required";
+    }
+    console.log(`[usa] ✅ Paiement MRV vérifié (paymentStatus="${ps}") — scan autorisé`);
+  } else if (earlyTransformData === null) {
+    // getTransformData a échoué complètement — on ne peut pas vérifier le paiement.
+    // Dans ce cas, on laisse passer le scan (grace) car l'échec peut être temporaire.
+    console.log(`[usa] ⚠️ paymentStatus inconnu (getTransformData échoué) — scan autorisé par défaut (grace)`);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   // 1. Récupérer les détails de la demande (applicantId, visaType, visaClass, appointmentId, applicantUUID)
   // ── NEW: appeler /appointments/search AVANT getApplicationDetails ──────────
   // Le vrai navigateur utilise cette API pour obtenir visaType, visaClass, applicantId, appointmentId
