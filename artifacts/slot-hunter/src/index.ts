@@ -208,13 +208,15 @@ async function startCevSetupLoop(): Promise<void> {
           const isRateLimit = isTooManyAttempts;
 
           if (isTooManyAttempts) {
-            // VOWINT rate-limit atteint (5 clics/heure) — PAUSER la session
+            // VOWINT rate-limit atteint (5 clics/heure) — lock 60 min + incrémente compteur
             // Le compte est bloqué pendant 60 minutes par VOWINT.
-            console.log(`[CEV-SETUP] 🚫 RATE-LIMIT VOWINT session=${s.sessionId} — session PAUSÉE (60 min de blocage VOWINT)`);
+            console.log(`[CEV-SETUP] 🚫 RATE-LIMIT VOWINT session=${s.sessionId} — lock 60 min (blocage VOWINT)`);
             try {
               const loginResult = await recordCevSetupLoginFail(s.sessionId, r.error ?? "RATE_LIMIT_TOO_MANY_ATTEMPTS");
               if (loginResult.paused) {
-                console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE — trop de clics bouton RDV`);
+                console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE — trop de clics bouton RDV (${loginResult.loginFailCount}/3)`);
+              } else {
+                console.log(`[CEV-SETUP] ⚠️  Rate-limit #${loginResult.loginFailCount}/3 session=${s.sessionId} — prochaine tentative dans 60 min`);
               }
             } catch (err) {
               console.warn(`[CEV-SETUP] recordCevSetupLoginFail échoué: ${err}`);
@@ -236,11 +238,11 @@ async function startCevSetupLoop(): Promise<void> {
               if (loginResult.paused) {
                 console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE après ${loginResult.loginFailCount} échecs de login — vérifier identifiants VOWINT`);
               } else {
-                console.log(`[CEV-SETUP] ⚠️  Login fail #${loginResult.loginFailCount}/3 session=${s.sessionId} — lock libéré, prochaine tentative dans 60s`);
+                const backoffMin = loginResult.loginFailCount === 1 ? 2 : loginResult.loginFailCount === 2 ? 5 : 10;
+                console.log(`[CEV-SETUP] ⚠️  Login fail #${loginResult.loginFailCount}/3 session=${s.sessionId} — prochaine tentative dans ${backoffMin} min`);
               }
             } catch (err) {
-              console.warn(`[CEV-SETUP] recordCevSetupLoginFail échoué: ${err} — reset lock pour retry`);
-              await resetCevSetupLock(s.sessionId).catch(() => {});
+              console.warn(`[CEV-SETUP] recordCevSetupLoginFail échoué: ${err}`);
             }
           } else if (isTimeout) {
             // Timeout Playwright : déverrouiller pour permettre une nouvelle tentative immédiate
@@ -355,12 +357,19 @@ async function startCevPollingLoop(): Promise<void> {
         } else if (r.status === "session_expired") {
           console.log(`[CEV-POLL] ⏱️  Session expirée session=${s.sessionId} (${ms}ms) — demande re-setup...`);
           await recordCevSessionCheck(s.sessionId, "session_expired", "auto_renewal_requested");
-          // Reset le lock/compteur d'échecs pour que la boucle de setup puisse reprendre
-          // (sinon l'auto-pause bloque indéfiniment après 3 anciens échecs)
-          await resetCevSetupLock(s.sessionId).catch(() => {});
+          // NE PAS resetCevSetupLock ici — le lock de 3 min posé par internalRecordCheck
+          // empêche un re-setup immédiat et évite de spam VOWINT.
+          // Le setup reprendra après expiration du lock (3 min minimum entre tentatives).
         } else if (r.status === "error") {
           console.log(`[CEV-POLL] ❌ Erreur session=${s.sessionId}: ${r.error} (${ms}ms)`);
-          await recordCevSessionCheck(s.sessionId, "error", r.error);
+          // Si l'erreur est "URL d'entrée invalide", c'est que l'integrationUrl n'a pas
+          // été capturée correctement — marquer session_expired pour forcer un re-setup
+          // (mais via le lock de 3 min, pas immédiat).
+          if (r.error?.includes("URL d'entrée invalide")) {
+            await recordCevSessionCheck(s.sessionId, "session_expired", "auto_renewal_requested");
+          } else {
+            await recordCevSessionCheck(s.sessionId, "error", r.error);
+          }
         } else {
           // no_slot — log discret
           await recordCevSessionCheck(s.sessionId, "no_slot");
