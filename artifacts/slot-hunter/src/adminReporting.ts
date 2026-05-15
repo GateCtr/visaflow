@@ -13,7 +13,7 @@
 import { botLog } from "./convexClient.js";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "bot@joventy.com";
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "bot@joventy.cd";
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";
 
