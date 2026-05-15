@@ -4,11 +4,12 @@
  * NE scanner PAS les créneaux, NE booke PAS — diagnostic uniquement.
  */
 
-import { loginUsaPortal, checkUsaAppointmentRequestStatus, setUsaSessionProxy } from "./usaPortal.js";
+import { loginUsaPortal, checkUsaAppointmentRequestStatus, setUsaSessionProxy, makeIproyalStickyUrl } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
+import { usaFetch } from "./usaPortal/usa-http.js";
 
-const EMAIL    = "screentapinc@gmail.com";
-const PASSWORD = "Akollad@2026";
+const EMAIL    = process.env.USA_EMAIL || "cbampasa@gmail.com";
+const PASSWORD = process.env.USA_PASSWORD || "Akollad@2026";
 
 // portalApplicationId facultatif — undefined = sélection automatique
 const PORTAL_APP_ID: string | undefined = undefined;
@@ -24,12 +25,14 @@ async function getPublicIp(): Promise<string> {
 }
 
 async function resolveProxyUrl(): Promise<string | undefined> {
-  // Priorité : iProyal > 2captcha pool > aucun
+  // Priorité : iProyal sticky > 2captcha pool > aucun
   const iproyal = process.env.IPROYAL_PROXY_URL;
   if (iproyal) {
-    const masked = iproyal.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[proxy] ✅ iProyal résidentiel actif: ${masked}`);
-    return iproyal;
+    // Créer une URL sticky (même session pour login + API)
+    const stickyUrl = makeIproyalStickyUrl(iproyal, 60);
+    const masked = stickyUrl.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[proxy] ✅ iProyal résidentiel sticky actif: ${masked}`);
+    return stickyUrl;
   }
   if (proxyPool.isConfigured) {
     console.log("[proxy] Chargement des IPs résidentielles 2captcha...");
@@ -65,6 +68,15 @@ async function main() {
   const proxyUrl = await resolveProxyUrl();
   setUsaSessionProxy(proxyUrl);
 
+  // Vérifier l'IP vue par usaFetch (le vrai pipeline du bot)
+  try {
+    const ipRes = await usaFetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(10_000) });
+    const ipData = await ipRes.json() as { ip: string };
+    console.log(`IP usaFetch: ${ipData.ip} ${proxyUrl ? "(via proxy)" : "(direct)"}`);
+  } catch (e: any) {
+    console.warn(`IP usaFetch: échec (${e.message})`);
+  }
+
   console.log("-".repeat(60));
 
   // ── 1. Login ───────────────────────────────────────────────
@@ -97,6 +109,13 @@ async function main() {
     );
   }
   console.log(`   accessToken  : ${session.accessToken?.slice(0, 20)}...`);
+
+  // Vérifier IP après login (détecter si elle a changé)
+  try {
+    const ipRes2 = await usaFetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(10_000) });
+    const ipData2 = await ipRes2.json() as { ip: string };
+    console.log(`   IP post-login: ${ipData2.ip}`);
+  } catch {}
 
   // ── 2. Statut du dossier ────────────────────────────────────
   console.log("\n[2/2] Vérification statut dossier...");

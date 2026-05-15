@@ -2,13 +2,11 @@ import {
   tokenCache,
   usaFetch,
   getBrowserHeaders,
-  hasUsaProxy,
   authHeaders,
 } from "./usa-http.js";
 import {
   USA_LOGIN_URL,
   USA_LOGOUT_URL,
-  USA_REFRESH_URL,
   USA_MISSION_ID,
   REFERER_LOGIN,
   REFERER_DASHBOARD,
@@ -216,71 +214,30 @@ export async function loginUsaPortal(
     const headerEntries = [...response.headers.entries()];
     const headerNames = headerEntries.map(([k]) => k).join(", ");
     console.warn(`[usa] ⚠️ csrfToken ABSENT de la réponse login — headers reçus: [${headerNames}]`);
-    console.warn(`[usa] Headers détaillés: ${JSON.stringify(Object.fromEntries(headerEntries)).slice(0, 1000)}`);
     // Le csrfToken vide n'empêche PAS le login ni le polling (GET).
     // Il ne bloque QUE les opérations PUT (booking/reschedule).
-    // On continue avec un warning plutôt que de crasher.
-
-    // ── Fallback : POST /refreshToken via le MÊME egress que le login (usaFetch) ─
-    // NE JAMAIS utiliser fetch() direct ici quand un proxy est actif : le portail lie
-    // le JWT à l'IP du login — un refresh depuis l'IP Railway (ou toute autre IP) casse
-    // la session et les GET suivants (ex. payment status) répondent 401.
-    // On ne refait pas un login complet — on réutilise refreshToken + username.
-    if (hasUsaProxy()) {
-      console.log("[usa] Tentative de récupération csrfToken via POST /refreshToken (même proxy / même IP que le login)...");
-      try {
-        const refreshRes = await usaFetch(USA_REFRESH_URL, {
-          method: "POST",
-          headers: {
-            ...getBrowserHeaders(),
-            "Content-Type": "application/json",
-            "Referer": REFERER_DASHBOARD,
-          },
-          body: JSON.stringify({ refreshToken, username }),
-        });
-        const viaProxyCsrf =
-          refreshRes.headers.get("Csrftoken") ?? refreshRes.headers.get("csrftoken") ?? "";
-        if (viaProxyCsrf) {
-          csrfToken = viaProxyCsrf;
-          console.log(`[usa] ✅ csrfToken récupéré via refresh (même egress): ${csrfToken.slice(0, 8)}...`);
-        } else {
-          const hdrs = [...refreshRes.headers.entries()].map(([k]) => k).join(", ");
-          console.warn(`[usa] csrfToken toujours absent après refresh même IP — headers: [${hdrs}]`);
-          console.warn(`[usa] ⚠️ Le serveur ne renvoie pas Csrftoken — les PUT (booking) pourront échouer.`);
-        }
-        // Le refresh peut renvoyer l’access token dans le corps JSON (Cognito) alors que le header
-        // ne porte que l’id token — lire le corps en priorité.
-        if (refreshRes.ok) {
-          const refreshTxt = await refreshRes.text();
-          let refreshParsed: unknown = null;
-          try {
-            refreshParsed = JSON.parse(refreshTxt) as unknown;
-          } catch {
-            /* corps vide ou non-JSON */
-          }
-          const fromRefreshBody = stripBearer(pickAccessTokenFromJsonBody(refreshParsed));
-          if (process.env.USA_DEBUG_LOGIN_JSON === "1") {
-            console.warn(`[usa] DEBUG refresh corps (tronqué): ${refreshTxt.slice(0, 1200)}`);
-          }
-          if (fromRefreshBody) {
-            accessToken = fromRefreshBody;
-            console.log("[usa] JWT access depuis corps JSON /refreshToken (préféré au header)");
-          } else {
-            const newAccess = refreshRes.headers.get("authorization");
-            if (newAccess && stripBearer(newAccess) !== stripBearer(accessToken)) {
-              accessToken = stripBearer(newAccess);
-              console.log("[usa] JWT access pivoté après refresh post-login (cohérence session)");
-            }
-          }
-          const newRefresh = refreshRes.headers.get("refreshtoken");
-          if (newRefresh) {
-            refreshToken = stripBearer(newRefresh);
-          }
-        }
-      } catch (refreshErr) {
-        console.warn(`[usa] Fallback refresh même-IP échoué: ${refreshErr instanceof Error ? refreshErr.message : refreshErr}`);
-      }
-    }
+    //
+    // ── HISTORIQUE : pourquoi le refresh post-login a été SUPPRIMÉ ────────────
+    // Anciennement, on faisait un POST /refreshToken ici pour tenter de récupérer
+    // le csrfToken quand il était absent des headers de login. La théorie était que
+    // le proxy iProyal filtrait le header non-standard "Csrftoken".
+    //
+    // PROBLÈME IDENTIFIÉ (investigation 15/05/2026) :
+    //   1. Le serveur NE renvoie JAMAIS le csrfToken au login ni au refresh (confirmé
+    //      par les captures navigateur réelles dans captured/usa-portal/ du 14/05/2026).
+    //   2. Le refresh immédiat post-login PIVOTE le access token (Cognito émet un nouveau JWT).
+    //   3. Ce nouveau token est rejeté en 401 par getUserHistoryApplicantPaymentStatus
+    //      et d'autres endpoints — probablement car Cognito a un délai de propagation
+    //      ou invalide l'ancien token qui n'a jamais été "utilisé" côté serveur.
+    //   4. Résultat : le bot obtenait systématiquement un 401 au premier appel API
+    //      quand useResidentialProxy était activé (car hasUsaProxy() = true → refresh).
+    //
+    // FIX : Ne PAS faire de refresh immédiat. Le token original du login fonctionne
+    // parfaitement pour tous les GET (scan créneaux, status dossier). Le csrfToken
+    // sera récupéré via le refresh proactif normal (~45 min après login) si nécessaire
+    // pour les opérations PUT (booking/reschedule).
+    // ───────────────────────────────────────────────────────────────────────────────
+    console.log(`[usa] csrfToken absent — comportement normal du serveur. Sera récupéré au refresh proactif si nécessaire pour le booking.`);
   }
 
   if (data.msg && (data.msg.toLowerCase().includes("invalid") || data.msg.toLowerCase().includes("incorrect"))) {
