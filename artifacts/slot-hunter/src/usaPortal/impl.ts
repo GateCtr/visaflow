@@ -17,6 +17,7 @@ import {
   authHeaders,
   getStickyUaForAccount,
   makeIproyalStickyUrl,
+  rotateIproyalSession,
 } from "./usa-http.js";
 import { scanUsaSlotsViaAPI } from "./scan-slot-booking.js";
 import {
@@ -306,6 +307,10 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[usa] getUsaSession échoué: ${msg}`);
+    // Si erreur réseau (proxy 504, tunnel rejeté) → forcer rotation IP iProyal au prochain login
+    if (msg.includes("Proxy") || msg.includes("tunnel") || msg.includes("504") || msg.includes("Réseau")) {
+      rotateIproyalSession(username);
+    }
     botLog({ applicationId: job.id, step: "login", status: "fail", data: { username, error: msg.slice(0, 300) } });
     await sendHeartbeat({
       applicationId: job.id,
@@ -358,6 +363,15 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         if (proxyInfo.expiresAt < freshEntry.expiresAt) {
           console.log(`[usa] ⏱ Token expirera avec le proxy dans ${Math.round((proxyInfo.expiresAt - Date.now()) / 60000)} min (avant JWT ${Math.round((freshEntry.expiresAt - Date.now()) / 60000)} min)`);
         }
+      } else if (sessionProxy) {
+        // ── iProyal sticky direct (pas via proxyPool) : calculer l'expiration manuellement ──
+        // Le lifetime iProyal est de 60 min depuis la création de la session sticky.
+        // On utilise 55 min comme expiration effective (marge de sécurité de 5 min).
+        const IPROYAL_EFFECTIVE_LIFETIME_MS = 55 * 60 * 1000;
+        freshEntry.proxyExpiresAt = Date.now() + IPROYAL_EFFECTIVE_LIFETIME_MS;
+        const proxyExpMin = Math.round(IPROYAL_EFFECTIVE_LIFETIME_MS / 60000);
+        const jwtExpMin = Math.round((freshEntry.expiresAt - Date.now()) / 60000);
+        console.log(`[usa] ⏱ Proxy iProyal expire dans ${proxyExpMin} min (JWT: ${jwtExpMin} min) — token invalidé avant expiration proxy`);
       }
     }
   }

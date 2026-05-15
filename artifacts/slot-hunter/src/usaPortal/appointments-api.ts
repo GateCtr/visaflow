@@ -5,6 +5,7 @@ import {
   authHeaders,
   sessionHeaders,
   getBrowserHeaders,
+  rotateIproyalSession,
 } from "./usa-http.js";
 import type { UsaSession, UsaAppointmentRequest } from "./types.js";
 import {
@@ -76,6 +77,8 @@ export async function checkUsaAppointmentRequestStatus(
         if (cacheKey) {
           console.warn(`[usa] ${res.status} sur appointment status — cache token vidé pour reconnexion`);
           tokenCache.delete(cacheKey);
+          // Forcer rotation IP iProyal : le proxy a probablement expiré ou l'IP est brûlée
+          rotateIproyalSession(cacheKey);
         }
       }
       return { status: "error", applicationId: null, pendingAppoStatus: null, primaryApplicant: null, message: `HTTP ${res.status}`, missionId: USA_MISSION_ID };

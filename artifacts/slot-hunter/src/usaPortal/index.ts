@@ -6,7 +6,7 @@
 export { USA_ENC_SEC_KEY, updateAesKey, encryptPortalCredentials } from "./crypto.js";
 export type { SessionResult, UsaSession, UsaAppointmentRequest } from "./types.js";
 export { isAccountRestricted } from "./account-restriction.js";
-export { makeIproyalStickyUrl, setUsaSessionProxy } from "./usa-http.js";
+export { makeIproyalStickyUrl, setUsaSessionProxy, rotateIproyalSession } from "./usa-http.js";
 export { downloadUsaConfirmationPdf } from "./scan-slot-booking.js";
 export {
   checkUsaAppointmentRequestStatus,

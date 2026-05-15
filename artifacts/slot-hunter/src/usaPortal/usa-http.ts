@@ -438,28 +438,21 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
     const parsed = new URL(baseUrl);
     let password = decodeURIComponent(parsed.password);
     
-    // Vérifier si le mot de passe contient déjà _session-
+    // Supprimer l'ancienne session sticky si présente (force une nouvelle session ID)
+    // Cas : re-login après 401/504 — l'ancienne session iProyal est morte,
+    // il faut en créer une nouvelle même si on est dans la même demi-journée.
     if (password.includes("_session-") && password.includes("_lifetime-")) {
-      // L'URL contient déjà une session sticky, la retourner telle quelle
-      const sessionMatch = password.match(/_session-([^_]+)/);
-      const lifetimeMatch = password.match(/_lifetime-([^m]+)m/);
-      if (sessionMatch && lifetimeMatch) {
-        console.log(`[usa] 🔒 Proxy sticky déjà présent: session=${sessionMatch[1]}, lifetime=${lifetimeMatch[1]}m`);
-      }
-      return baseUrl;
+      password = password.replace(/_session-[^_]+_lifetime-\d+m/, "");
     }
     
     // ── Générer un session ID stable par demi-journée + compte (rotation IP toutes les 12h) ──
     // Hash déterministe : même demi-journée + même username → même session ID → même IP.
     // Changement à ~00h00 UTC et ~12h00 UTC → nouvelle IP résidentielle.
-    // SAFE : le changement d'IP n'arrive JAMAIS mid-session car :
-    //   - Les sessions durent 30-120min max (puis logout + releaseStickyProxy)
-    //   - Le nouveau sessionId ne prend effet qu'au prochain login (après release)
-    //   - Le JWT en cache garde l'ancien proxyUrl → pas de 401 mid-session
-    // Le username est inclus pour isoler les comptes (IPs différentes).
+    // On ajoute un compteur de rotation pour forcer une nouvelle IP après un 401/504.
     const now = new Date();
     const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:iproyal-rotate`;
+    const rotationCount = _iproyalRotationCount.get((username ?? "default").toLowerCase()) ?? 0;
+    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:iproyal-rotate:r${rotationCount}`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     // Convertir en base62 (8 chars) — même format que l'ancien random
@@ -473,13 +466,27 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
     
     password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
     parsed.password = encodeURIComponent(password);
-    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation toutes les 12h — ${halfDay})`);
+    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation toutes les 12h — ${halfDay}, rot#${rotationCount})`);
     return parsed.toString();
   } catch {
     // Si le parsing d'URL échoue, retourner l'URL d'origine
     console.warn(`[usa] ⚠️ Impossible de parser l'URL proxy — fallback`);
     return baseUrl;
   }
+}
+
+/** Compteur de rotation iProyal par compte — incrémenté après un 401/504 pour forcer une nouvelle IP. */
+const _iproyalRotationCount = new Map<string, number>();
+
+/**
+ * Force la rotation du proxy iProyal pour un compte donné.
+ * Appelé après un 401 ou ProxyTunnelError (504) pour obtenir une nouvelle IP au prochain login.
+ */
+export function rotateIproyalSession(username: string): void {
+  const key = username.toLowerCase();
+  const current = _iproyalRotationCount.get(key) ?? 0;
+  _iproyalRotationCount.set(key, current + 1);
+  console.log(`[usa] 🔄 Rotation proxy iProyal demandée pour ${key.slice(0, 12)}… (rot#${current + 1})`);
 }
 
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {

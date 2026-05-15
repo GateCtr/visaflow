@@ -53,6 +53,13 @@ export async function getUsaSession(
       try {
         const refreshed = await refreshUsaToken(cached, username);
         if (refreshed) {
+          // Vérifier que le proxy est encore valide après le refresh.
+          // Si proxyExpiresAt est passé, le token refreshé sera rejeté par le portail (401).
+          if (refreshed.proxyExpiresAt && Date.now() >= refreshed.proxyExpiresAt) {
+            console.warn(`[usa] ⚠️ Proxy expiré après refresh proactif — token invalidé, re-login au prochain cycle`);
+            tokenCache.delete(cacheKey);
+            return null; // Force re-login complet (avec nouvelle IP)
+          }
           tokenCache.set(cacheKey, refreshed);
           console.log(`[usa] ✅ Token rafraîchi proactivement (nouvelle expiration: ${new Date(refreshed.expiresAt).toISOString()})`);
           return {
