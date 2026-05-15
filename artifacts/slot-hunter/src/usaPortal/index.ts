@@ -16,5 +16,6 @@ export {
   getUsaAppointmentRequests,
 } from "./appointments-api.js";
 export { logoutUsaPortal, loginUsaPortal } from "./usa-auth.js";
+export { checkCaptchaConfig, resolveLoginCaptchaIfNeeded } from "./captcha-gate.js";
 export { getUsaSession } from "./usa-session.js";
 export { runUsaApiSession } from "./impl.js";
