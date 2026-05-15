@@ -1672,37 +1672,67 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         }
       }
 
-      // ── Attente initialisation widget Bookitit (max 25s) ─────────────────────
+      // ── Attente initialisation widget Bookitit (max 40s) ─────────────────────
       // Le dialog natif "Welcome / Bienvenido" (window.alert) est géré par
       // page.on("dialog") ci-dessus — auto-accepté dès le chargement.
       //
-      // Après le dismiss de l'alert, citaconsular.es affiche la vue "custom" Bookitit
-      // (texte "Para solicitar cita pulse en el botón continuar" + bouton vert).
-      // Cette vue correspond à la route '' → 'custom' du router Backbone.
-      // IMPORTANT : Backbone ne push pas "#custom" dans l'URL pour la route par défaut
-      // → hash reste "" même si le widget est chargé en vue custom.
+      // Après le dismiss de l'alert, citaconsular.es charge le widget Bookitit en
+      // plusieurs étapes asynchrones :
+      //   1. loadermaec.js → JSONP /onlinebookings/main → injecte HTML widget
+      //   2. RequireJS charge app.js → JSONP widgetconfigurations → config OK
+      //   3. Backbone Router démarre → route '' = 'custom' → CustomView.start()
+      //   4. CustomView.start() → montre #idBktDefaultCustomContainer + bouton Continuar
       //
-      // Condition "prêt" : container Bookitit visible ET (hash non-vide OU vue custom visible)
+      // Le container #idBktWidgetDefaultBodyContainer est visible dès l'étape 1,
+      // MAIS le bouton #idDivBktCustomContinueButton n'apparaît qu'à l'étape 4.
+      // On doit attendre le bouton LUI-MÊME (ou un hash non-vide si le widget skip custom).
       {
-        console.log("[spain-watcher] Attente init widget Bookitit (max 25s)…");
+        console.log("[spain-watcher] Attente init widget Bookitit + bouton Continuar (max 40s)…");
         const t0 = Date.now();
-        while (Date.now() - t0 < 25_000) {
-          await new Promise((r) => setTimeout(r, 1500));
-          const ready: boolean = await page.evaluate(() => {
-            const container = document.getElementById("idBktWidgetDefaultBodyContainer");
-            if (!container) return false;
-            if (window.getComputedStyle(container).display === "none") return false;
-            // Hash non-vide : widget passé au-delà de la vue custom
-            if (window.location.hash.length > 1) return true;
-            // Hash vide : vérifier si la vue custom est visible (route '' = custom)
+        let widgetReady = false;
+        while (Date.now() - t0 < 40_000) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const status: { ready: boolean; reason: string } = await page.evaluate(() => {
+            // Cas 1 : hash non-vide → widget a déjà dépassé la vue custom
+            if (window.location.hash.length > 1) {
+              return { ready: true, reason: "hash:" + window.location.hash };
+            }
+            // Cas 2 : bouton Continuar visible → widget en vue custom, prêt à cliquer
+            const btn = document.getElementById("idDivBktCustomContinueButton");
+            if (btn && btn.offsetParent !== null) {
+              return { ready: true, reason: "continue_button_visible" };
+            }
+            // Cas 3 : vue custom container visible (bouton peut être en cours de rendu)
             const customView = document.getElementById("idBktDefaultCustomContainer");
-            return !!(customView && customView.offsetParent !== null);
-          }).catch(() => false);
-          if (ready) {
-            const h = await page.evaluate(() => window.location.hash).catch(() => "");
-            console.log(`[spain-watcher] Widget initialisé, hash="${h || "(custom view)"}"`);
+            if (customView && customView.offsetParent !== null) {
+              // Vérifier si le bouton existe mais est caché (loading en cours)
+              if (btn) return { ready: false, reason: "custom_visible_btn_hidden" };
+              return { ready: false, reason: "custom_visible_no_btn_yet" };
+            }
+            // Cas 4 : "No hay horas" déjà affiché (pas de créneaux, court-circuit)
+            const body = document.body.textContent ?? "";
+            if (body.indexOf("No hay horas disponibles") >= 0 || body.indexOf("No available hours") >= 0) {
+              return { ready: true, reason: "no_availability_immediate" };
+            }
+            // Container principal pas encore visible
+            const container = document.getElementById("idBktWidgetDefaultBodyContainer");
+            if (!container) return { ready: false, reason: "no_container" };
+            if (window.getComputedStyle(container).display === "none") return { ready: false, reason: "container_hidden" };
+            return { ready: false, reason: "container_visible_loading" };
+          }).catch(() => ({ ready: false, reason: "evaluate_error" }));
+
+          if (status.ready) {
+            console.log(`[spain-watcher] Widget prêt: ${status.reason}`);
+            widgetReady = true;
             break;
           }
+          // Log périodique (toutes les 10s) pour diagnostic
+          if ((Date.now() - t0) % 10_000 < 2100) {
+            console.log(`[spain-watcher] Attente widget… (${Math.round((Date.now() - t0) / 1000)}s, état: ${status.reason})`);
+          }
+        }
+        if (!widgetReady) {
+          console.log("[spain-watcher] ⚠️ Widget Bookitit non initialisé après 40s — tentative de continuer quand même");
         }
       }
 
@@ -1754,20 +1784,41 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         // Le bouton #idDivBktCustomContinueButton (texte "Continue / Continuar")
         // navigue vers #services. On attend jusqu'à 12s que le hash change.
         if (currentHash === "" || currentHash === "#custom") {
-          const customClicked: boolean = await page.evaluate(() => {
-            // Sélecteur exact du bundle custom.js : #idDivBktCustomContinueButton
-            const btn = document.getElementById("idDivBktCustomContinueButton");
-            if (btn && btn.offsetParent !== null) { btn.click(); return true; }
-            // Fallback : n'importe quel bouton visible dans le container custom
-            const container = document.getElementById("idBktDefaultCustomContainer");
-            if (!container) return false;
-            const candidates = container.querySelectorAll("button, a, input[type='button'], input[type='submit']");
-            for (let i = 0; i < candidates.length; i++) {
-              const el = candidates[i] as HTMLElement;
-              if (el.offsetParent !== null) { el.click(); return true; }
-            }
-            return false;
-          }).catch(() => false);
+          // Attendre que le bouton soit effectivement rendu (max 15s)
+          // Le widget Bookitit fait plusieurs appels async (JSONP widgetconfigurations)
+          // avant que CustomView.start() rende le bouton #idDivBktCustomContinueButton.
+          let customClicked = false;
+          for (let waitAttempt = 0; waitAttempt < 5; waitAttempt++) {
+            customClicked = await page.evaluate(() => {
+              // Sélecteur exact du bundle custom.js : #idDivBktCustomContinueButton
+              const btn = document.getElementById("idDivBktCustomContinueButton");
+              if (btn && btn.offsetParent !== null) { btn.click(); return true; }
+              // Fallback : n'importe quel bouton/div visible avec "continuar/continue" dans le container custom
+              const container = document.getElementById("idBktDefaultCustomContainer");
+              if (!container) return false;
+              const candidates = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+                  el.click();
+                  return true;
+                }
+              }
+              // Fallback 2 : n'importe quel élément cliquable visible dans le container
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                if (el.offsetParent !== null && el.id && el.id.toLowerCase().indexOf("continue") >= 0) {
+                  el.click();
+                  return true;
+                }
+              }
+              return false;
+            }).catch(() => false);
+
+            if (customClicked) break;
+            // Attendre 3s avant la prochaine tentative (widget en cours de chargement)
+            await new Promise((r) => setTimeout(r, 3000));
+          }
 
           if (customClicked) {
             console.log("[spain-watcher] Vue custom → Continue cliqué — attente hash (max 12s)");
@@ -1781,9 +1832,9 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
             }
             continue;
           } else {
-            console.log("[spain-watcher] Vue custom : bouton Continue introuvable — attente 4s");
-            await new Promise((r) => setTimeout(r, 4000));
-            continue;
+            console.log("[spain-watcher] Vue custom : bouton Continue introuvable après 15s — skip");
+            // Ne pas boucler indéfiniment — sortir de la boucle de steps
+            break;
           }
         }
 
