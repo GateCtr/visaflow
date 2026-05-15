@@ -425,12 +425,13 @@ let _usaProxyUrl: string | undefined;
  * Si elle en contient déjà, on la retourne telle quelle.
  * 
  * ROTATION IP (anti-Fraud Control) :
- * Le session ID est dérivé du jour actuel (hash déterministe) → même IP pendant 24h.
- * Tous les jours à minuit, le session ID change → nouvelle IP résidentielle.
- * Cela évite qu'une même IP résidentielle soit utilisée 20h/jour pendant des semaines
- * (pattern détectable par les systèmes de fraud control qui mesurent la durée d'usage).
- * 
- * Le sessionId intègre aussi le username pour que chaque compte ait sa propre IP.
+ * Le session ID est dérivé de la demi-journée actuelle (AM/PM) + username.
+ * → Même IP pendant 12h (stable pour le JWT), nouvelle IP à chaque changement de demi-journée.
+ * Changements à ~00h00 UTC et ~12h00 UTC. SAFE car :
+ *   - Les sessions durent 30-120min max (puis logout force un releaseStickyProxy)
+ *   - Le changement de sessionId ne prend effet qu'au prochain login (après release)
+ *   - Le JWT en cache garde l'ancien proxyUrl → pas de 401 mid-session
+ * Cela évite qu'une même IP résidentielle soit utilisée 20h/jour pendant des semaines.
  */
 export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60, username?: string): string {
   try {
@@ -448,12 +449,17 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
       return baseUrl;
     }
     
-    // ── Générer un session ID stable par jour + compte (rotation IP quotidienne) ──
-    // Hash déterministe : même jour + même username → même session ID → même IP.
-    // Jour suivant → nouveau hash → nouvelle IP résidentielle.
+    // ── Générer un session ID stable par demi-journée + compte (rotation IP toutes les 12h) ──
+    // Hash déterministe : même demi-journée + même username → même session ID → même IP.
+    // Changement à ~00h00 UTC et ~12h00 UTC → nouvelle IP résidentielle.
+    // SAFE : le changement d'IP n'arrive JAMAIS mid-session car :
+    //   - Les sessions durent 30-120min max (puis logout + releaseStickyProxy)
+    //   - Le nouveau sessionId ne prend effet qu'au prochain login (après release)
+    //   - Le JWT en cache garde l'ancien proxyUrl → pas de 401 mid-session
     // Le username est inclus pour isoler les comptes (IPs différentes).
-    const today = new Date().toISOString().slice(0, 10); // "2026-05-15"
-    const seed = `${today}:${(username ?? "default").toLowerCase()}:iproyal-rotate`;
+    const now = new Date();
+    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
+    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:iproyal-rotate`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     // Convertir en base62 (8 chars) — même format que l'ancien random
@@ -467,7 +473,7 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
     
     password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
     parsed.password = encodeURIComponent(password);
-    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation quotidienne)`);
+    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation toutes les 12h — ${halfDay})`);
     return parsed.toString();
   } catch {
     // Si le parsing d'URL échoue, retourner l'URL d'origine
