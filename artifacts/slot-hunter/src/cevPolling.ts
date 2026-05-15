@@ -296,6 +296,13 @@ export async function pollCevSlot(
     if (apiResult !== null) return apiResult;
 
     // ── Stratégie 2 (fallback) : GET integrationUrl → suivre redirections ───
+    // Si l'integrationUrl est absente ou invalide, ne pas tenter le fallback —
+    // retourner session_expired pour déclencher un re-setup propre (avec lock 3 min).
+    if (!integrationUrl || integrationUrl === "pending" || integrationUrl === "non_capturee") {
+      console.log(`[CEV-POLL] ⚠️  API retourna null ET integrationUrl invalide (${integrationUrl ?? 'undefined'}) — session_expired`);
+      return { status: "session_expired" };
+    }
+
     const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua);
     if (!resolved.ok) {
       return { status: "error", error: resolved.error };

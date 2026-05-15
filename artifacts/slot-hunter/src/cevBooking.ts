@@ -316,9 +316,26 @@ async function establishCevSession(
     let capturedIntegrationUrl: string | null = null;
     const [newPage] = await Promise.all([
       context.waitForEvent('page', { timeout: 15_000 }).then(pg => {
+        // Capturer les requêtes de navigation ET les réponses de redirection
         pg.on('request', (req) => {
           if (!capturedIntegrationUrl && req.isNavigationRequest() && req.url().includes('/Integration/VOW/')) {
             capturedIntegrationUrl = req.url();
+          }
+        });
+        // Fallback: capturer l'URL depuis les redirections (302) dans les réponses
+        pg.on('response', (res) => {
+          if (!capturedIntegrationUrl) {
+            const resUrl = res.url();
+            if (resUrl.includes('/Integration/VOW/')) {
+              capturedIntegrationUrl = resUrl;
+            }
+            // Si la réponse est un redirect, vérifier le header Location
+            if (res.status() >= 300 && res.status() < 400) {
+              const loc = res.headers()['location'];
+              if (loc && loc.includes('/Integration/VOW/')) {
+                capturedIntegrationUrl = loc.startsWith('http') ? loc : `https://appointment.cloud.diplomatie.be${loc}`;
+              }
+            }
           }
         });
         return pg;
@@ -329,10 +346,40 @@ async function establishCevSession(
     await newPage.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
     await randomDelay(1_500, 3_000); // laisser les cookies s'établir dans le jar
 
-    // Fallback : si le premier event de navigation était déjà /Captcha, essayer l'URL courante
+    // Fallback 1 : si le premier event de navigation était déjà /Captcha, essayer l'URL courante
     if (!capturedIntegrationUrl) {
       const tabUrl = newPage.url();
       if (tabUrl.includes('/Integration/VOW/')) capturedIntegrationUrl = tabUrl;
+    }
+
+    // Fallback 2 : extraire l'URL d'intégration depuis la page /Captcha elle-même
+    // La page Captcha de CEV contient souvent un lien/form-action vers /Integration/VOW/...
+    if (!capturedIntegrationUrl) {
+      try {
+        const pageContent = await newPage.content();
+        const vowMatch = pageContent.match(/https?:\/\/appointment\.cloud\.diplomatie\.be\/Integration\/VOW\/[^\s"'<>]+/i);
+        if (vowMatch) {
+          capturedIntegrationUrl = vowMatch[0];
+        }
+      } catch { /* ignore - page may not be ready */ }
+    }
+
+    // Fallback 3 : construire l'URL depuis le VOWINT redirect (si on a le GetEAppointmentUrl)
+    // En dernier recours, on peut récupérer l'URL depuis l'historique de navigation du page
+    if (!capturedIntegrationUrl) {
+      try {
+        // Vérifier si la page originale (VOWINT) a un lien GetEAppointmentUrl visible
+        const mainFrameUrl = newPage.mainFrame().url();
+        // Chercher dans les frames de la page principale
+        const allFrames = newPage.frames();
+        for (const frame of allFrames) {
+          const fUrl = frame.url();
+          if (fUrl.includes('/Integration/VOW/')) {
+            capturedIntegrationUrl = fUrl;
+            break;
+          }
+        }
+      } catch { /* ignore */ }
     }
 
     const newPageUrl = newPage.url();

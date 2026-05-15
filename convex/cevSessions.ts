@@ -154,7 +154,8 @@ export const setSessionStatus = mutation({
     if (args.status === "expired" && !session.expiredAt) {
       patch.expiredAt = Date.now();
     }
-    // Quand on relance le setup, on remet les compteurs à zéro
+    // Quand l'ADMIN relance manuellement le setup, on remet les compteurs à zéro
+    // (action volontaire après vérification des identifiants)
     if (args.status === "needs_setup") {
       patch.loginFailCount = 0;
       patch.lastError = undefined;
@@ -273,6 +274,9 @@ export const internalActivateSession = internalMutation({
       autoRenewalCount: renewalCount,
       lastAutoRenewalAt: renewalCount > 0 ? now : undefined,
       totalPollingDurationMs: previousDuration + lastActiveDuration,
+      // Reset loginFailCount sur activation réussie — le setup a fonctionné,
+      // donc les identifiants sont bons et VOWINT n'est pas en rate-limit.
+      loginFailCount: 0,
     };
 
     // Si le bot a découvert l'URL d'intégration (mode credentials), la stocker
@@ -405,7 +409,20 @@ export const internalRecordSetupLoginFail = internalMutation({
     const patch: Record<string, unknown> = {
       loginFailCount,
       setupAttempts,
-      lockedUntil: 0, // libérer le lock immédiatement
+      // Backoff progressif selon le type d'erreur et le nombre d'échecs :
+      // - TooManyAttempts/RATE_LIMIT : lock 60 min (durée du blocage VOWINT)
+      // - Autres échecs : lock progressif 2min → 5min → 10min selon le nombre d'échecs
+      lockedUntil: (() => {
+        const isTooManyAttempts = errorDetail && (
+          errorDetail.includes("TooManyAttempts") || errorDetail.includes("RATE_LIMIT")
+        );
+        if (isTooManyAttempts) {
+          return now + 60 * 60_000; // 60 min — VOWINT bloque pendant 1 heure
+        }
+        // Backoff progressif pour les autres erreurs
+        const backoffMinutes = loginFailCount === 1 ? 2 : loginFailCount === 2 ? 5 : 10;
+        return now + backoffMinutes * 60_000;
+      })(),
       lastError: errorDetail ?? `VOWINT login failed (attempt ${loginFailCount})`,
       lastSetupError: errorDetail ?? `VOWINT login failed (attempt ${loginFailCount})`,
     };
@@ -490,8 +507,13 @@ export const internalRecordCheck = internalMutation({
       // remettre en needs_setup au lieu d'expirer définitivement.
       if (args.error === "auto_renewal_requested" && session.vowintEmail) {
         patch.status = "needs_setup";
-        patch.lockedUntil = 0;
-        patch.loginFailCount = 0;
+        // NE PAS remettre loginFailCount à 0 ici — sinon le compteur d'échecs
+        // ne s'accumule jamais et l'auto-pause (3 échecs) ne se déclenche pas
+        // quand VOWINT rate-limit le compte (TooManyAttempts).
+        // Le loginFailCount n'est remis à 0 que manuellement par l'admin
+        // (updateVowintCredentials) ou après un setup RÉUSSI.
+        // Ajouter un délai de 3 min entre auto-renewals pour éviter de spam VOWINT.
+        patch.lockedUntil = now + 3 * 60_000;
       } else {
         patch.status = "expired";
         patch.expiredAt = now;
