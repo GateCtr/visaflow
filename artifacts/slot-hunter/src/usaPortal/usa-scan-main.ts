@@ -72,19 +72,25 @@ export async function runUsaSlotScanMain(
   //
   // Stratégie :
   //   - paymentStatus === "VERIFIED" → OK, continuer le scan
-  //   - paymentStatus absent/undefined → getTransformData a échoué, on laisse passer (grace)
-  //   - paymentStatus !== "VERIFIED" (ex: null, "", "PENDING") → bloquer le scan
-  if (earlyTransformData?.paymentStatus !== undefined && earlyTransformData.paymentStatus !== null) {
-    const ps = earlyTransformData.paymentStatus;
-    if (ps !== "VERIFIED") {
-      console.warn(`[usa] 💳 Paiement MRV non confirmé (paymentStatus="${ps}") — scan bloqué pour économiser les requêtes`);
+  //   - earlyTransformData === null → getTransformData a complètement échoué (réseau/401),
+  //     on laisse passer (grace) car l'échec peut être temporaire
+  //   - paymentStatus absent/undefined/""/autre → paiement non fait, bloquer le scan
+  if (earlyTransformData !== null) {
+    const ps = earlyTransformData?.paymentStatus;
+    if (ps === "VERIFIED") {
+      console.log(`[usa] ✅ Paiement MRV vérifié (paymentStatus="VERIFIED") — scan autorisé`);
+    } else {
+      // paymentStatus est undefined (champ absent du JSON = pas de paiement fait)
+      // ou une valeur autre que "VERIFIED" (ex: "", "PENDING", etc.)
+      const displayStatus = ps ?? "(absent)";
+      console.warn(`[usa] 💳 Paiement MRV non confirmé (paymentStatus=${displayStatus}) — scan bloqué`);
       botLog({
         applicationId: job.id,
         step: "payment_check",
         status: "warn",
         data: {
           flow: "usa",
-          paymentStatus: ps,
+          paymentStatus: displayStatus,
           applicationId: session.applicationId,
           message: "Paiement MRV non vérifié — scan bloqué",
         },
@@ -92,14 +98,13 @@ export async function runUsaSlotScanMain(
       await sendHeartbeat({
         applicationId: job.id,
         result: "payment_required",
-        errorMessage: `Paiement MRV non confirmé (paymentStatus="${ps}") — l'utilisateur doit effectuer le paiement sur usvisaappt.com`,
+        errorMessage: `Paiement MRV non confirmé (paymentStatus=${displayStatus}) — l'utilisateur doit effectuer le paiement sur usvisaappt.com`,
       });
       return "payment_required";
     }
-    console.log(`[usa] ✅ Paiement MRV vérifié (paymentStatus="${ps}") — scan autorisé`);
-  } else if (earlyTransformData === null) {
-    // getTransformData a échoué complètement — on ne peut pas vérifier le paiement.
-    // Dans ce cas, on laisse passer le scan (grace) car l'échec peut être temporaire.
+  } else {
+    // getTransformData a échoué complètement (null) — on ne peut pas vérifier le paiement.
+    // Laisser passer le scan (grace) car l'échec peut être temporaire (réseau, 500, etc.)
     console.log(`[usa] ⚠️ paymentStatus inconnu (getTransformData échoué) — scan autorisé par défaut (grace)`);
   }
   // ──────────────────────────────────────────────────────────────────────────
