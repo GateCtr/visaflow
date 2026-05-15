@@ -18,6 +18,7 @@ import {
   getStickyUaForAccount,
   makeIproyalStickyUrl,
   rotateIproyalSession,
+  initSessionHeaders,
 } from "./usa-http.js";
 import { scanUsaSlotsViaAPI } from "./scan-slot-booking.js";
 import {
@@ -61,6 +62,11 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result = "error";
       return result;
     }
+
+    // ── Initialiser les headers de session (fixés pour toute la durée) ──────
+    // Un vrai Chrome envoie les mêmes Accept-Encoding/Language pendant toute sa session.
+    // Randomiser par requête = signal bot. On fixe une fois au début.
+    initSessionHeaders(username);
 
     // ── Délai variable entre les scans pour éviter la détection Cognito ──────
     // AWS Cognito détecte les patterns trop réguliers et les sessions simultanées.

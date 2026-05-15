@@ -352,31 +352,65 @@ function generateCorrelationId(): string {
   return result;
 }
 
-export function getBrowserHeaders(jobId?: string): Record<string, string> {
-  // Variabilité dans les headers Accept-Encoding (parfois omis, parfois complet)
-  const acceptEncodings = [
-    "gzip, deflate, br, zstd",
-    "gzip, deflate, br",
-    "gzip, deflate",
-    "gzip"
-  ];
-  const randomEncoding = acceptEncodings[Math.floor(Math.random() * acceptEncodings.length)];
+// ── Headers Accept-* FIXÉS PAR SESSION (pas par requête) ─────────────────────
+// Un vrai navigateur Chrome envoie TOUJOURS les mêmes Accept-Encoding et Accept-Language
+// pendant toute une session. Randomiser par requête = signal bot détectable par un WAF
+// qui corrèle "même JWT mais Accept-Language change toutes les 3min".
+// 
+// Ces valeurs sont fixées au login (via initSessionHeaders) et gardées jusqu'au logout.
+// Chaque compte a ses propres valeurs (sticky, comme le UA).
+const SESSION_ENCODINGS = [
+  "gzip, deflate, br, zstd",
+  "gzip, deflate, br",
+  "gzip, deflate, br",  // doublon volontaire — la majorité des Chrome envoient br
+  "gzip, deflate, br, zstd",
+];
+const SESSION_LANGUAGES = [
+  "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
+  "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+  "fr;q=0.9,en-US;q=0.8,en;q=0.7",
+  "fr-CD,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+];
+
+// Map compte → headers fixés pour la session (Accept-Encoding, Accept-Language)
+const sessionHeadersMap = new Map<string, { encoding: string; language: string }>();
+
+/**
+ * Initialise les headers de session pour un compte.
+ * Appelé au login (1 fois) — les valeurs restent stables pendant toute la session.
+ * Si déjà initialisé (session réutilisée), ne change rien.
+ */
+export function initSessionHeaders(username: string): void {
+  const key = username.toLowerCase();
+  if (sessionHeadersMap.has(key)) return; // déjà initialisé
   
-  // Variabilité dans Accept-Language
-  const acceptLanguages = [
-    "fr-CD,fr;q=0.9,en-US;q=0.6,en;q=0.5",
-    "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "fr-CD,fr;q=0.9"
-  ];
-  const randomLanguage = acceptLanguages[Math.floor(Math.random() * acceptLanguages.length)];
+  // Choix déterministe basé sur le hash du username (même valeurs après redéploiement)
+  let hash = 0;
+  for (const ch of key) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
+  
+  const encoding = SESSION_ENCODINGS[hash % SESSION_ENCODINGS.length];
+  const language = SESSION_LANGUAGES[(hash >> 4) % SESSION_LANGUAGES.length];
+  
+  sessionHeadersMap.set(key, { encoding, language });
+}
+
+/** Retourne les headers Accept-* fixés pour la session active. */
+function getSessionAcceptHeaders(): { encoding: string; language: string } {
+  if (_activeSessionUsername && sessionHeadersMap.has(_activeSessionUsername)) {
+    return sessionHeadersMap.get(_activeSessionUsername)!;
+  }
+  // Fallback si pas de session active (pre-login) : valeurs par défaut Chrome
+  return { encoding: "gzip, deflate, br, zstd", language: "fr-CD,fr;q=0.9,en-US;q=0.8,en;q=0.7" };
+}
+
+export function getBrowserHeaders(jobId?: string): Record<string, string> {
+  // Headers Accept-* FIXÉS pour la durée de la session (pas randomisés par requête)
+  const { encoding, language } = getSessionAcceptHeaders();
   
   const baseHeaders = {
     "Accept":             "application/json, text/plain, */*",
-    // Variabilité dans Accept-Encoding pour éviter les patterns
-    "Accept-Encoding":    randomEncoding,
-    // Variabilité dans Accept-Language
-    "Accept-Language":    randomLanguage,
+    "Accept-Encoding":    encoding,
+    "Accept-Language":    language,
     "Cache-Control":      "no-cache",
     // NOTE : LanguageId N'est PAS ajouté ici.
     // L'intercepteur Angular ne l'envoie QUE pour /getLandingPageDeatils et /generatewizardtemplate.
