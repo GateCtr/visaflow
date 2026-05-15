@@ -1793,25 +1793,39 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
               // Sélecteur exact du bundle custom.js : #idDivBktCustomContinueButton
               const btn = document.getElementById("idDivBktCustomContinueButton");
               if (btn && btn.offsetParent !== null) { btn.click(); return true; }
-              // Fallback : n'importe quel bouton/div visible avec "continuar/continue" dans le container custom
+              // Fallback 1 : bouton/div visible avec "continuar/continue" dans le container custom
               const container = document.getElementById("idBktDefaultCustomContainer");
-              if (!container) return false;
-              const candidates = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
-              for (let i = 0; i < candidates.length; i++) {
-                const el = candidates[i] as HTMLElement;
-                if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+              if (container) {
+                const candidates = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
+                for (let i = 0; i < candidates.length; i++) {
+                  const el = candidates[i] as HTMLElement;
+                  if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+                    el.click();
+                    return true;
+                  }
+                }
+                for (let i = 0; i < candidates.length; i++) {
+                  const el = candidates[i] as HTMLElement;
+                  if (el.offsetParent !== null && el.id && el.id.toLowerCase().indexOf("continue") >= 0) {
+                    el.click();
+                    return true;
+                  }
+                }
+              }
+              // Fallback 2 : chercher dans TOUT le DOM par texte "Continue/Continuar"
+              // (certaines pages custom n'utilisent pas #idBktDefaultCustomContainer)
+              const allClickable = document.querySelectorAll("a, button, div[onclick], span[onclick], input[type='button'], input[type='submit'], [role='button']");
+              for (let i = 0; i < allClickable.length; i++) {
+                const el = allClickable[i] as HTMLElement;
+                const txt = (el.textContent || "").trim().toLowerCase();
+                if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0 || txt.indexOf("next") >= 0) && el.offsetParent !== null) {
                   el.click();
                   return true;
                 }
               }
-              // Fallback 2 : n'importe quel élément cliquable visible dans le container
-              for (let i = 0; i < candidates.length; i++) {
-                const el = candidates[i] as HTMLElement;
-                if (el.offsetParent !== null && el.id && el.id.toLowerCase().indexOf("continue") >= 0) {
-                  el.click();
-                  return true;
-                }
-              }
+              // Fallback 3 : élément avec id/class contenant "continue"
+              const byAttr = document.querySelector("[id*='ontinue'], [id*='ontinuar'], [class*='ontinue'], [class*='ontinuar']") as HTMLElement | null;
+              if (byAttr && byAttr.offsetParent !== null) { byAttr.click(); return true; }
               return false;
             }).catch(() => false);
 
