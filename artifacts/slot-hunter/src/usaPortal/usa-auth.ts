@@ -15,6 +15,7 @@ import {
 import { RateLimitError, AccountRestrictedError } from "./errors.js";
 import { isRestrictedBody } from "./account-restriction.js";
 import { encryptPortalCredentials } from "./crypto.js";
+import { resolveLoginCaptchaIfNeeded } from "./captcha-gate.js";
 import type { UsaSession, UsaLoginResponse } from "./types.js";
 
 /** Extrait un access token Cognito depuis un corps JSON (login ou refresh). */
@@ -64,37 +65,48 @@ export async function logoutUsaPortal(username: string): Promise<void> {
 export async function loginUsaPortal(
   username: string,
   password: string,
-  _captchaToken?: string | null  // Conservé pour compatibilité — le CAPTCHA n'est pas requis par l'API
+  _captchaToken?: string | null  // Conservé pour compatibilité — résolution auto si requis
 ): Promise<UsaSession | null> {
   console.log(`[usa] Connexion API pour ${username} avec credentials AES chiffrés...`);
 
-  // ── Pre-login warm-up : simuler le chargement de la page de login ──────────
-  // Un vrai navigateur charge la page de login AVANT d'envoyer les credentials.
+  // ── Pre-login : warm-up + détection CAPTCHA dynamique ──────────────────────
   // Le portail Angular fait un GET /globalconfiguration/getby/Captcha au chargement.
-  // Sans cet appel, le pattern "POST /login sans GET préalable" = signal de bot.
-  // Ce GET est NON-authentifié (pas de Bearer) et rapide (~200ms).
-  try {
-    const warmupHeaders = {
-      ...getBrowserHeaders(),
-      "Referer": REFERER_LOGIN,
-    };
-    // Supprimer Content-Type pour un GET (les navigateurs ne l'envoient pas sur les GET)
-    delete (warmupHeaders as Record<string, string | undefined>)["Content-Type"];
-    await usaFetch(`${USA_BASE}/visaadministrationapi/v1/globalconfiguration/getby/Captcha`, {
-      method: "GET",
-      headers: warmupHeaders,
-    });
-  } catch {
-    // Ignorer les erreurs — ce warm-up est optionnel et non-bloquant
+  // Ce module combine le warm-up (signal "page chargée" pour le serveur) ET la
+  // détection du CAPTCHA. Si activé, il résout automatiquement via 2captcha.
+  //
+  // Le token reCAPTCHA est valide ~2 minutes — résolu JUSTE avant le POST /login.
+  let captchaToken: string | null = _captchaToken ?? null;
+
+  if (!captchaToken) {
+    try {
+      captchaToken = await resolveLoginCaptchaIfNeeded();
+      if (captchaToken) {
+        console.log(`[usa] 🔐 CAPTCHA résolu automatiquement — token injecté dans le login`);
+      }
+    } catch (err) {
+      // CAPTCHA requis mais résolution échouée — on continue quand même
+      // Le serveur rejettera le login si le token est vraiment obligatoire
+      console.error(`[usa] ⚠️ Résolution CAPTCHA échouée: ${err instanceof Error ? err.message : err}`);
+      console.error(`[usa] Tentative de login sans CAPTCHA (peut échouer si le serveur l'exige)`);
+    }
   }
 
   // Le portail USA attend les credentials chiffrés en AES-256-CBC dans le champ "authorization"
   // Format découvert dans le bundle Angular public : { authorization: "Basic " + encrypt(user:pass) }
-  const body = {
+  const body: Record<string, string> = {
     authorization: `Basic ${encryptPortalCredentials(username, password)}`,
   };
 
-  console.log(`[usa] Body login: {authorization: "Basic <AES_encrypted(${username}:***)}"}`);
+  // Si un CAPTCHA a été résolu, l'ajouter au body.
+  // Le bundle Angular valide le CAPTCHA côté client, mais le serveur peut aussi
+  // vérifier le token via l'API Google reCAPTCHA (server-side verification).
+  // Champ probable : "captcha" ou "recaptcha" ou "g-recaptcha-response"
+  if (captchaToken) {
+    body["captcha"] = captchaToken;
+    console.log(`[usa] Body login inclut le token CAPTCHA (${captchaToken.length} chars)`);
+  }
+
+  console.log(`[usa] Body login: {authorization: "Basic <AES_encrypted(${username}:***)}"}${captchaToken ? " + captcha token" : ""}`);
 
   // Bundle Angular : loginUser() vide sessionStorage avant login
   // Notre bot utilise une Map en mémoire (comportement équivalent)
