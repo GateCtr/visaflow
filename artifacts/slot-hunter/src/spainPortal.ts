@@ -1758,14 +1758,29 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
             // Sélecteur exact du bundle custom.js : #idDivBktCustomContinueButton
             const btn = document.getElementById("idDivBktCustomContinueButton");
             if (btn && btn.offsetParent !== null) { btn.click(); return true; }
-            // Fallback : n'importe quel bouton visible dans le container custom
+            // Fallback 1 : container custom standard
             const container = document.getElementById("idBktDefaultCustomContainer");
-            if (!container) return false;
-            const candidates = container.querySelectorAll("button, a, input[type='button'], input[type='submit']");
-            for (let i = 0; i < candidates.length; i++) {
-              const el = candidates[i] as HTMLElement;
-              if (el.offsetParent !== null) { el.click(); return true; }
+            if (container) {
+              const candidates = container.querySelectorAll("button, a, input[type='button'], input[type='submit']");
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                if (el.offsetParent !== null) { el.click(); return true; }
+              }
             }
+            // Fallback 2 : chercher par texte "Continue" / "Continuar" dans tout le DOM
+            // (certaines pages custom n'utilisent pas les IDs standard Bookitit)
+            const allClickable = document.querySelectorAll("a, button, div[onclick], span[onclick], input[type='button'], input[type='submit']");
+            for (let i = 0; i < allClickable.length; i++) {
+              const el = allClickable[i] as HTMLElement;
+              const txt = (el.textContent ?? "").trim().toLowerCase();
+              if ((txt.includes("continu") || txt.includes("siguiente") || txt.includes("next")) && el.offsetParent !== null) {
+                el.click();
+                return true;
+              }
+            }
+            // Fallback 3 : chercher un élément avec id contenant "continue" ou "continuar"
+            const byId = document.querySelector("[id*='ontinue'], [id*='ontinuar'], [class*='ontinue']") as HTMLElement | null;
+            if (byId && byId.offsetParent !== null) { byId.click(); return true; }
             return false;
           }).catch(() => false);
 
