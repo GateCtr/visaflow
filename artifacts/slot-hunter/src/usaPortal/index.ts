@@ -8,6 +8,9 @@ export type { SessionResult, UsaSession, UsaAppointmentRequest } from "./types.j
 export { isAccountRestricted } from "./account-restriction.js";
 export { makeIproyalStickyUrl, setUsaSessionProxy, rotateIproyalSession } from "./usa-http.js";
 export { downloadUsaConfirmationPdf } from "./scan-slot-booking.js";
+export { preFlightProxyCheck } from "./proxy-health-check.js";
+export { generateCognitoEncodedData, detectCognitoEncodedDataUsage } from "./cognito-telemetry.js";
+export { handle409Retry } from "./retry-409-logic.js";
 export {
   checkUsaAppointmentRequestStatus,
   getUsaAppointmentRequests,

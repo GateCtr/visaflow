@@ -4,6 +4,7 @@ import {
   logHumanBehaviorStart,
   logHumanBehaviorEnd,
 } from "../humanBehavior.js";
+import { preFlightProxyCheck } from "./proxy-health-check.js";
 
 import {
   tokenCache,
@@ -304,6 +305,35 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result = "error";
       return result;
     }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── PILLAR 1 : Pre-Flight Proxy Health Check ────────────────────────────────
+  // Si un proxy résidentiel est actif, vérifier sa connectivité AVANT de tenter
+  // le login. Un proxy instable → latence > 5s ou timeout → ABORT immédiat.
+  // On ne risque JAMAIS un login avec un proxy mort (préserve la réputation du compte).
+  if (sessionProxy) {
+    const proxyHealth = await preFlightProxyCheck(sessionProxy, job.id);
+    if (!proxyHealth.healthy) {
+      console.error(`[usa] ❌ PRE-FLIGHT PROXY CHECK FAILED — session avortée pour préserver le compte`);
+      console.error(`[usa]    Raison: ${proxyHealth.error}`);
+      botLog({
+        applicationId: job.id,
+        step: "proxy_preflight_abort",
+        status: "fail",
+        data: { username, proxy: sessionProxy.replace(/:([^:@]+)@/, ":***@"), error: proxyHealth.error, latencyMs: proxyHealth.latencyMs },
+      });
+      // Forcer rotation IP pour le prochain cycle
+      rotateIproyalSession(username);
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "error",
+        errorMessage: `Proxy instable (${proxyHealth.error}) — session avortée, rotation IP programmée`,
+      });
+      result = "error";
+      return result;
+    }
+    console.log(`[usa] ✅ Pre-flight proxy OK — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
   }
   // ──────────────────────────────────────────────────────────────────────────
 

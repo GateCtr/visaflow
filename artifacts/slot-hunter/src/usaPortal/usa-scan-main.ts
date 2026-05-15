@@ -20,6 +20,7 @@ import {
   sendAntiDetectionNoise,
   ofcCursor,
 } from "./anti-detection.js";
+import { handle409Retry, type Retry409Context } from "./retry-409-logic.js";
 import type { UsaOfc, UsaAppDetails, SlotFound } from "./usa-scan-types.js";
 import { toYMD } from "./usa-scan-types.js";
 import { getUsaApplicationDetails, getUsaTransformData, getUsaOfcList } from "./usa-scan-details.js";
@@ -674,10 +675,55 @@ export async function runUsaSlotScanMain(
         await randomDelay(1000, 2000);
 
         // 409 = créneau pris en concurrence AVANT notre booking.
-        // Ne pas signaler le slot comme trouvé (on ne l'a pas obtenu) — scanner le prochain OFC.
+        // PILLAR 3 : Retry intelligent — chercher les slots restants au lieu d'abandonner
         if (!booking.success && booking.statusCode === 409) {
-          console.log("[usa] Conflit 409 — le créneau a été pris avant nous. Poursuite du scan...");
-          botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { flow: "usa", reason: "Conflit 409 — créneau pris par un autre utilisateur", ofc: found.ofcName, date: found.date } });
+          console.log("[usa] ⚠️ Conflit 409 — lancement retry intelligent (slots restants + dates alternatives)...");
+          botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { flow: "usa", reason: "Conflit 409 — retry intelligent activé", ofc: found.ofcName, date: found.date } });
+
+          // Construire le contexte pour le retry
+          const retryCtx: Retry409Context = {
+            session,
+            basePayload: found.bookingBase,
+            originalDate: found.date,
+            failedSlotId: found.slotId,
+            availableDates: [], // sera rempli par les dates déjà découvertes si disponibles
+            isReschedule: rescheduleMode || session.isReschedule === true,
+            ofcName: found.ofcName,
+            jobId: job.id,
+            slotHeaders: authHeaders(session.accessToken, rescheduleMode ? REFERER_MANAGE_APT : REFERER_CREATE_APT, true),
+            fromDate: slotDateFrom ?? new Date().toISOString().slice(0, 10),
+            toDate: slotDateDeadline ?? new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
+          };
+
+          const retryResult = await handle409Retry(retryCtx);
+          if (retryResult) {
+            // Booking réussi via retry !
+            const retryBooking = retryResult.bookingResult;
+            let pdfStorageId: string | undefined;
+            botLog({
+              applicationId: job.id,
+              step: "booking_success",
+              status: "ok",
+              data: { flow: "usa", ofc: retryResult.ofcName, date: retryResult.date, time: retryResult.time, appointmentId: retryBooking.appointmentId, via: "409_retry" },
+            });
+
+            const pdf = await downloadUsaConfirmationPdf(session, session.applicationId!, retryBooking.appointmentId);
+            if (pdf) {
+              const b64 = pdf.toString("base64");
+              pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+            }
+
+            await reportSlotFound({
+              applicationId: job.id,
+              date: retryResult.date,
+              time: retryResult.time,
+              location: `${retryResult.ofcName} — Ambassade USA (slotId=${retryResult.slotId}, via 409-retry)`,
+              confirmationCode: retryBooking.appointmentId?.toString(),
+              screenshotStorageId: pdfStorageId,
+            });
+            return "slot_found";
+          }
+          // Retry exhausté — continuer vers l'OFC suivante
           continue;
         }
 

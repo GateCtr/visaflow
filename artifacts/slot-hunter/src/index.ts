@@ -11,6 +11,7 @@ import { navigateCevRedirectWithPlaywright } from "./cevPlaywrightNavigate.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
+import { sendAdminBundleCheckReport, type BundleCheckReport } from "./adminReporting.js";
 import { runSpainSession, runSpainWatcherProbe } from "./spainPortal.js";
 
 // ─── CEV Setup loop — établissement automatique de sessions (needs_setup) ────
@@ -924,6 +925,8 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
     // 3. Vérifier si la clé actuelle est toujours présente
     if (bundleText.includes(USA_ENC_SEC_KEY)) {
       log("INFO", `🔍 Bundle check ✅ — clé AES inchangée (bundle: ${bundleName})`);
+      // PILLAR 4 : Envoyer le rapport admin quotidien
+      await sendBundleReport(activeJobs, bundleName, true, false, USA_ENC_SEC_KEY);
       return;
     }
 
@@ -942,6 +945,8 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
       log("INFO", `   Nouvelle clé   : ${newKey}`);
       log("INFO", "   Les jobs USA reprennent avec la nouvelle clé immédiatement.");
       log("INFO", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      // PILLAR 4 : Rapport admin — clé auto-extraite
+      await sendBundleReport(activeJobs, bundleName, true, true, newKey, oldKey);
       return;
     }
 
@@ -978,6 +983,47 @@ async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<void> {
 // Boucle indépendante, tourne en background.
 // Intervalle configurable depuis Convex (défaut 15 min).
 // Si un créneau est trouvé : upload screenshot → Convex → email admin.
+
+// ─── PILLAR 4 : Helper pour envoyer le rapport admin ────────────────────────
+async function sendBundleReport(
+  activeJobs: HunterJob[],
+  bundleName: string,
+  aesKeyValid: boolean,
+  aesKeyAutoExtracted: boolean,
+  currentAesKey: string,
+  previousAesKey?: string,
+): Promise<void> {
+  try {
+    const report: BundleCheckReport = {
+      bundleName,
+      aesKeyValid,
+      aesKeyAutoExtracted,
+      currentAesKey,
+      previousAesKey,
+      activeJobsCount: activeJobs.filter(j => j.hunterConfig?.isActive && !pausedJobs.has(j.id)).length,
+      pausedJobsCount: pausedJobs.size,
+      completedJobsCount: completedJobs.size,
+      errorJobsCount: [...consecutiveErrors.values()].filter(v => v >= 3).length,
+      jobDetails: activeJobs
+        .filter(j => j.hunterConfig?.isActive)
+        .slice(0, 20)
+        .map(j => ({
+          applicantName: j.applicantName,
+          urgencyTier: j.urgencyTier,
+          lastResult: j.hunterConfig.lastResult ?? "",
+          lastCheckAt: j.hunterConfig.lastCheckAt ?? null,
+        })),
+      checkedAt: Date.now(),
+      proxyPoolStatus: proxyPool.isConfigured ? `Configured (${proxyPool.getState().size} IPs)` : "Unconfigured (direct)",
+      serverIp: proxyPool.getState().serverIp,
+    };
+    await sendAdminBundleCheckReport(report);
+  } catch (err) {
+    log("WARN", `[admin-report] Erreur envoi rapport: ${err}`);
+  }
+}
+
+// ─── Spain Watcher Loop — veille créneaux Espagne ────────────────────────────
 
 async function startSpainWatcherLoop(): Promise<void> {
   log("INFO", "[SPAIN-WATCHER] Boucle démarrée");
