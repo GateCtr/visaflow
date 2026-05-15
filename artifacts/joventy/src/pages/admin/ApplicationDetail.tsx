@@ -453,6 +453,7 @@ export default function AdminApplicationDetail() {
   const [hunterScheduleUrl, setHunterScheduleUrl] = useState("");
   const [hunterRescheduleMode, setHunterRescheduleMode] = useState(false);
   const [hunterRescheduleExistingDate, setHunterRescheduleExistingDate] = useState("");
+  const [hunterUseProxy, setHunterUseProxy] = useState(false);
   const [hunterSaving, setHunterSaving] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaBalanceChecking, setCaptchaBalanceChecking] = useState(false);
@@ -503,6 +504,7 @@ export default function AdminApplicationDetail() {
         setHunterScheduleUrl(hc.scheduleUrl ?? "");
         setHunterRescheduleMode(hc.rescheduleMode ?? false);
         setHunterRescheduleExistingDate(hc.rescheduleExistingDate ?? "");
+        setHunterUseProxy((hc as { useResidentialProxy?: boolean }).useResidentialProxy ?? false);
       } else {
         setHunterUsername("");
         setHunterPassword("");
@@ -515,6 +517,7 @@ export default function AdminApplicationDetail() {
         setHunterScheduleUrl("");
         setHunterRescheduleMode(false);
         setHunterRescheduleExistingDate("");
+        setHunterUseProxy(false);
       }
     }
   }, [app?._id]);
@@ -1351,7 +1354,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined, rescheduleMode: hunterRescheduleMode || undefined, rescheduleExistingDate: hunterRescheduleExistingDate || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined, rescheduleMode: hunterRescheduleMode || undefined, rescheduleExistingDate: hunterRescheduleExistingDate || undefined, useResidentialProxy: hunterUseProxy || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1587,6 +1590,29 @@ export default function AdminApplicationDetail() {
                         Vérifier l'URL dans un nouvel onglet
                       </a>
                     )}
+                  </div>
+                )}
+
+                {/* Proxy résidentiel USA */}
+                {app.destination === "usa" && (
+                  <div className="space-y-3 border border-teal-200 bg-teal-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-teal-800 uppercase tracking-wide flex items-center gap-1.5">
+                        🌐 Proxy Résidentiel (USA)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setHunterUseProxy((v) => !v)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hunterUseProxy ? "bg-teal-500" : "bg-slate-300"}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${hunterUseProxy ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-teal-700">
+                      Active un proxy résidentiel sticky (60 min) via iProyal pour masquer l'IP datacenter Railway.
+                      <strong> Attention :</strong> le portail USA lie le JWT à l'IP du login — si le proxy change mid-session, les requêtes échoueront (401).
+                      Ne l'activer que si Railway est bloqué ou si vous constatez des restrictions liées à l'IP.
+                    </p>
                   </div>
                 )}
 

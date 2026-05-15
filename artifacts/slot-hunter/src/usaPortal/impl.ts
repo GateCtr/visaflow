@@ -241,10 +241,18 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // Sans proxy, les endpoints fonctionnent (testé manuellement).
     // On utilise donc la connexion directe (IP Railway fixe).
     // 
-    // ⚠️ IMPORTANT: L'IP Railway est stable et fonctionne pour USA.
-    // Le portail USA lie le JWT à l'IP du login → IP fixe = OK.
-    sessionProxy = undefined;
-    console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA (cause 401) — connexion directe Railway`);
+    // ⚠️ SAUF si l'admin active useResidentialProxy dans la config hunter.
+    // Dans ce cas, on utilise un proxy sticky 60 min via iProyal.
+    // Le JWT est lié à l'IP → le proxy doit rester le même pendant toute la session.
+    const adminWantsProxy = job.hunterConfig.useResidentialProxy === true;
+    if (adminWantsProxy && process.env.IPROYAL_PROXY_URL) {
+      const stickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 60);
+      sessionProxy = stickyUrl;
+      console.log(`[usa] 🌐 Proxy résidentiel ACTIVÉ par admin (sticky 60min)`);
+    } else {
+      sessionProxy = undefined;
+      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA (cause 401) — connexion directe Railway`);
+    }
     
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
   }

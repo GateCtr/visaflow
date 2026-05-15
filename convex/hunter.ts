@@ -41,6 +41,8 @@ export const setHunterConfig = mutation({
     // Mode reporter USA
     rescheduleMode: v.optional(v.boolean()),
     rescheduleExistingDate: v.optional(v.string()),
+    // Proxy résidentiel USA (sticky 60 min — désactivé par défaut car IP binding JWT)
+    useResidentialProxy: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -81,6 +83,8 @@ export const setHunterConfig = mutation({
         // Mode reporter USA — défini explicitement par l'admin (pas préservé, toujours écrasé)
         rescheduleMode: args.rescheduleMode ?? undefined,
         rescheduleExistingDate: args.rescheduleExistingDate || undefined,
+        // Proxy résidentiel USA
+        useResidentialProxy: args.useResidentialProxy ?? undefined,
       },
       updatedAt: Date.now(),
     });

@@ -53,6 +53,8 @@ export interface HunterJob {
     // Mode reporter USA
     rescheduleMode?: boolean;
     rescheduleExistingDate?: string;
+    // Proxy résidentiel USA
+    useResidentialProxy?: boolean;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";
