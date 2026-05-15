@@ -54,7 +54,15 @@ export const USA_FCS_CHECK_URL = (applicationId: string) =>
   `${USA_PAYMENT_URL}/feecollection/checkFcs/${applicationId}`;
 
 export const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
-export const PROACTIVE_REFRESH_MS = 8 * 60 * 1000; // Rafraîchir 8 min avant expiration Cognito
+// ── Refresh proactif Cognito ─────────────────────────────────────────────────
+// AWS recommande de rafraîchir les tokens à ~75% de leur durée de vie.
+// Token Cognito du portail USA = 60 min → refresh idéal à ~45 min (= 15 min avant expiry).
+// On ajoute une variabilité ±3 min pour éviter un pattern "refresh à 45 min pile".
+// Plage effective : refresh entre 12-18 min avant expiration (42-48 min après login).
+export const PROACTIVE_REFRESH_MIN_MS = 12 * 60 * 1000; // 12 min avant expiration (min)
+export const PROACTIVE_REFRESH_MAX_MS = 18 * 60 * 1000; // 18 min avant expiration (max)
+// Valeur fixe conservée pour compatibilité (utilisée comme fallback)
+export const PROACTIVE_REFRESH_MS = 15 * 60 * 1000; // 15 min avant expiration (centre)
 
 export const USA_PORTAL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 export const MAX_AUTH_IDLE_MS = USA_PORTAL_IDLE_TIMEOUT_MS - 2 * 60 * 1000;

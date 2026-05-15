@@ -7,7 +7,7 @@ import {
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
-import { USA_MISSION_ID, PROACTIVE_REFRESH_MS } from "./config.js";
+import { USA_MISSION_ID, PROACTIVE_REFRESH_MIN_MS, PROACTIVE_REFRESH_MAX_MS } from "./config.js";
 import { AccountRestrictedError } from "./errors.js";
 import {
   isAccountRestricted,
@@ -37,15 +37,18 @@ export async function getUsaSession(
 
   if (cached) {
     // ── Refresh proactif : rafraîchir AVANT expiration pour éviter re-login ──
-    // Cognito token expire après 1h (3600s). On rafraîchit 8 min avant expiration.
-    // Cela évite le pattern login→expire→re-login qui déclenche "temporarily restricted".
+    // AWS Cognito recommande de rafraîchir les tokens à ~75% de leur durée de vie.
+    // Token Cognito = 60 min → refresh idéal entre 42-48 min après login (12-18 min avant expiry).
+    // Plage variable pour éviter un pattern temporel détectable (pas toujours à 45 min pile).
     const now = Date.now();
     const timeUntilExpiry = cached.expiresAt - now;
+    // Seuil de refresh variable par session (calculé une fois au login via jitterMs, ici on utilise une plage)
+    const refreshThreshold = PROACTIVE_REFRESH_MIN_MS + Math.random() * (PROACTIVE_REFRESH_MAX_MS - PROACTIVE_REFRESH_MIN_MS);
     
-    if (timeUntilExpiry > 0 && timeUntilExpiry < PROACTIVE_REFRESH_MS) {
+    if (timeUntilExpiry > 0 && timeUntilExpiry < refreshThreshold) {
       // Token valide mais expire bientôt → refresh proactif
       const remainingMin = Math.round(timeUntilExpiry / 60000);
-      console.log(`[usa] 🔄 Refresh proactif: token expire dans ${remainingMin} min (Cognito safe)`);
+      console.log(`[usa] 🔄 Refresh proactif: token expire dans ${remainingMin} min (seuil: ${Math.round(refreshThreshold/60000)} min — Cognito 75% rule)`);
       
       try {
         const refreshed = await refreshUsaToken(cached, username);
