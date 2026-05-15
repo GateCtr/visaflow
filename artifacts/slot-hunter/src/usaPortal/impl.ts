@@ -138,24 +138,39 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const currentTotalMinutes = currentHour * 60 + currentMinute;
     
     // 1. Vérifier pause nocturne réduite (00h30-04h00)
-    const nightStartMinutes = NIGHT_PAUSE_START_HOUR * 60 + NIGHT_PAUSE_START_MINUTE; // 0*60 + 30 = 30
-    const nightEndMinutes = NIGHT_PAUSE_END_HOUR * 60 + NIGHT_PAUSE_END_MINUTE; // 4*60 + 0 = 240
+    // ── Jitter quotidien sur la pause nocturne ─────────────────────────────────
+    // Un humain ne commence pas et ne finit pas à la même heure exacte chaque jour.
+    // Variation ±30 min sur start ET end, déterministe par jour (même valeur toute la journée).
+    // Résultat : un jour le bot dort 00h15-03h45, un autre 00h50-04h20, etc.
+    // La couverture reste à 19-21h/jour (variation totale = ±30min sur chaque borne).
+    const todayStr = now.toISOString().slice(0, 10); // "2026-05-15"
+    let dayHash = 0;
+    for (const ch of todayStr) dayHash = (dayHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
+    const nightStartJitterMin = (dayHash % 61) - 30; // -30 à +30 minutes
+    const nightEndJitterMin = ((dayHash >> 7) % 61) - 30; // -30 à +30 minutes (valeur différente)
+    
+    const nightStartMinutes = (NIGHT_PAUSE_START_HOUR * 60 + NIGHT_PAUSE_START_MINUTE + nightStartJitterMin + 1440) % 1440;
+    const nightEndMinutes = (NIGHT_PAUSE_END_HOUR * 60 + NIGHT_PAUSE_END_MINUTE + nightEndJitterMin + 1440) % 1440;
     
     let isNightTime = false;
     if (nightStartMinutes < nightEndMinutes) {
-      // Pause normale (00h30-04h00)
+      // Pause normale (ex: 00h15-04h20)
       isNightTime = currentTotalMinutes >= nightStartMinutes && currentTotalMinutes < nightEndMinutes;
     } else {
-      // Pause qui traverse minuit (ex: 22h-08h)
+      // Pause qui traverse minuit (ex: 23h50-04h00)
       isNightTime = currentTotalMinutes >= nightStartMinutes || currentTotalMinutes < nightEndMinutes;
     }
     
     if (isNightTime) {
-      const nightStartStr = `${NIGHT_PAUSE_START_HOUR.toString().padStart(2, '0')}:${NIGHT_PAUSE_START_MINUTE.toString().padStart(2, '0')}`;
-      const nightEndStr = `${NIGHT_PAUSE_END_HOUR.toString().padStart(2, '0')}:${NIGHT_PAUSE_END_MINUTE.toString().padStart(2, '0')}`;
+      const nightStartH = Math.floor(nightStartMinutes / 60);
+      const nightStartM = nightStartMinutes % 60;
+      const nightEndH = Math.floor(nightEndMinutes / 60);
+      const nightEndM = nightEndMinutes % 60;
+      const nightStartStr = `${nightStartH.toString().padStart(2, '0')}:${nightStartM.toString().padStart(2, '0')}`;
+      const nightEndStr = `${nightEndH.toString().padStart(2, '0')}:${nightEndM.toString().padStart(2, '0')}`;
       const currentStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
       
-      console.log(`[usa] 🌙 Pause nocturne réduite activée (${currentStr}) — reprise à ${nightEndStr}`);
+      console.log(`[usa] 🌙 Pause nocturne activée (${currentStr}) — reprise à ${nightEndStr} (jitter: start${nightStartJitterMin >= 0 ? "+" : ""}${nightStartJitterMin}min, end${nightEndJitterMin >= 0 ? "+" : ""}${nightEndJitterMin}min)`);
       await sendHeartbeat({
         applicationId: job.id,
         result: "not_found",

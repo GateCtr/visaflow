@@ -452,6 +452,29 @@ const scheduledNextDue = new Map<string, number>();
 const lastIntervalUsed = new Map<string, number>();
 let lastRushState: boolean | null = null; // pour logger les transitions rush ↔ normal
 
+// ─── Distribution gaussienne pour les intervalles (anti-pattern bot) ─────────
+// Un uniform random produit une distribution plate → signature de bot.
+// Un humain a un rythme naturel CENTRÉ sur une valeur avec des écarts occasionnels.
+// Box-Muller transform : génère un nombre aléatoire normalement distribué.
+function gaussianRandom(mean: number, stddev: number, minClamp: number, maxClamp: number): number {
+  const u1 = Math.random();
+  const u2 = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const raw = mean + z * stddev;
+  return Math.max(minClamp, Math.min(raw, maxClamp));
+}
+
+// ─── Skip intelligent : simuler un humain distrait (HORS rush uniquement) ───
+// Un humain ne scanne pas avec une régularité parfaite. Parfois il rate un cycle
+// (regarde son téléphone, va aux toilettes, perd le WiFi 30s).
+// JAMAIS pendant les rush hours → aucune perte de capture quand les créneaux apparaissent.
+function shouldSkipCycle(urgencyTier: string): boolean {
+  if (isRushHour()) return false; // JAMAIS skip en rush → probabilité de capture maximale
+  if (urgencyTier === "tres_urgent") return Math.random() < 0.05; // 5% hors rush
+  if (urgencyTier === "urgent") return Math.random() < 0.07; // 7% hors rush
+  return Math.random() < 0.10; // 10% pour prioritaire/standard (plus cool)
+}
+
 function generateIntervalMs(urgencyTier: string): number {
   const rush = urgencyTier === "tres_urgent" && isRushHour();
 
@@ -473,12 +496,20 @@ function generateIntervalMs(urgencyTier: string): number {
   const last = lastIntervalUsed.get(urgencyTier);
   // Anti-répétition : écart minimal 30s en rush, 90s en normal
   const minGap = rush ? 30_000 : 90_000;
-  let interval = cfg.min + Math.random() * (cfg.max - cfg.min);
+
+  // ── Distribution gaussienne au lieu de uniform random ───────────────────────
+  // Centre = milieu de la plage, écart-type = ~25% de la plage.
+  // Résultat : 68% des intervalles sont proches du centre (naturel),
+  //            27% sont plus courts ou plus longs (variabilité),
+  //            5% sont aux extrêmes (humain très distrait ou très pressé).
+  const center = (cfg.min + cfg.max) / 2;
+  const stddev = (cfg.max - cfg.min) * 0.25;
+  let interval = gaussianRandom(center, stddev, cfg.min, cfg.max);
 
   if (last !== undefined) {
     let attempts = 0;
     while (Math.abs(interval - last) < minGap && attempts < 6) {
-      interval = cfg.min + Math.random() * (cfg.max - cfg.min);
+      interval = gaussianRandom(center, stddev, cfg.min, cfg.max);
       attempts++;
     }
   }
@@ -1136,6 +1167,20 @@ async function main(): Promise<void> {
     const overdueMs = Date.now() - getNextCheckDue(due);
     const overdueStr = overdueMs > 0 ? ` (+${formatMs(overdueMs)} de retard)` : "";
     log("INFO", `▶ [${due.applicantName}] Check ${due.urgencyTier}${overdueStr}`);
+
+    // ── Skip intelligent : simuler un humain distrait (HORS rush uniquement) ──
+    // Un humain ne scanne pas avec une perfection mécanique. Parfois il rate un cycle.
+    // JAMAIS pendant les rush hours → capture maximale quand les créneaux apparaissent.
+    if (shouldSkipCycle(due.urgencyTier)) {
+      log("INFO", `[${due.applicantName}] 💭 Skip aléatoire (humain distrait) — cycle ignoré`);
+      // Replanifier normalement comme si c'était un not_found
+      const skipInterval = generateIntervalMs(due.urgencyTier);
+      scheduledNextDue.set(due.id, Date.now() + skipInterval);
+      log("INFO", `[${due.applicantName}] Prochain check dans ${formatMs(skipInterval)}`);
+      // Silence radio réduit (skip = pas de requête envoyée → pas besoin de cooldown long)
+      await new Promise((r) => setTimeout(r, 5_000 + Math.random() * 10_000));
+      continue;
+    }
 
     let result: SessionResult;
     try {
