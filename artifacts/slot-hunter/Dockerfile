@@ -14,8 +14,10 @@ COPY tsconfig.json ./
 COPY artifacts/slot-hunter/package.json ./artifacts/slot-hunter/package.json
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ENV VERCEL=true  # Skip browser installation in prepare:browsers script
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1  # Skip browser download during playwright installation
+# Skip browser installation in prepare:browsers script
+ENV VERCEL=true
+# Skip browser download during playwright installation
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
