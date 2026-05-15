@@ -5,6 +5,7 @@ import {
   logHumanBehaviorEnd,
 } from "../humanBehavior.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
+import { initProxyGuard, releaseProxyGuard } from "./proxy-session-guard.js";
 
 import {
   tokenCache,
@@ -352,6 +353,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       return result;
     }
     console.log(`[usa] ✅ Pre-flight proxy OK — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
+    // Initialiser le mid-session proxy guard avec l'IP de sortie connue
+    initProxyGuard(username, sessionProxy!, proxyHealth.exitIp ?? undefined);
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -636,6 +639,9 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       console.log(`[usa] 🔄 Nouvelle session démarrée`);
     }
   }
+
+  // Libérer le proxy guard mid-session
+  releaseProxyGuard(username);
 
   // Log la fin du comportement humain
   const sessionDuration = Date.now() - sessionStartTime;
