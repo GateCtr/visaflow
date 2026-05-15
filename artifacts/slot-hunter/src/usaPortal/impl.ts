@@ -225,29 +225,26 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       if (sessionDuration >= targetSessionDuration) {
         const sessionMinutes = Math.round(sessionDuration / 60000);
         const targetMinutes = Math.round(targetSessionDuration / 60000);
-        console.log(`[usa] ⏰ Session terminée (${sessionMinutes}min ≥ ${targetMinutes}min) — logout forcé + pause`);
+        console.log(`[usa] ⏰ Session terminée (${sessionMinutes}min ≥ ${targetMinutes}min) — PAS de logout (anti-restriction Cognito)`);
         
-        // Logout propre
-        try {
-          await logoutUsaPortal(username);
-          console.log(`[usa] ✅ Logout forcé après session humaine`);
-        } catch (logoutErr) {
-          console.warn(`[usa] Logout échoué (non bloquant): ${logoutErr}`);
-        }
-        
-        // Supprimer cache
+        // ── STRATÉGIE ANTI-RESTRICTION : NE PAS LOGOUT ──────────────────────
+        // Le pattern logout→re-login rapide est le TRIGGER #1 des restrictions Cognito.
+        // Au lieu de logout, on supprime simplement le cache token pour forcer un
+        // re-login AU PROCHAIN CYCLE (après la pause). Le JWT expirera naturellement
+        // côté serveur (~60 min) — c'est le comportement d'un humain qui ferme
+        // son navigateur sans cliquer "déconnexion" (très courant).
         tokenCache.delete(cacheKey);
         proxyPool.releaseStickyProxy(username);
         
-        // Calculer pause variable (5-45 min)
-        const pauseDuration = MIN_SESSION_BREAK_MS + Math.random() * (MAX_SESSION_BREAK_MS - MIN_SESSION_BREAK_MS);
+        // Calculer pause variable (15-45 min) — MINIMUM 15 min pour éviter le session-cycling
+        const pauseDuration = 15 * 60 * 1000 + Math.random() * (MAX_SESSION_BREAK_MS - 15 * 60 * 1000);
         const pauseMinutes = Math.round(pauseDuration / 60000);
-        console.log(`[usa] ☕ Pause humaine variable: ${pauseMinutes}min avant prochaine session`);
+        console.log(`[usa] ☕ Pause inter-session: ${pauseMinutes}min (sans logout — JWT expire naturellement)`);
         
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
-          errorMessage: `Pause session humaine (${pauseMinutes}min) — cycle ignoré`,
+          errorMessage: `Pause inter-session (${pauseMinutes}min) — cycle ignoré`,
         });
         return "not_found";
       }

@@ -35,7 +35,7 @@ function calculateRestrictionDuration(attemptCount: number, retryAfterHeader?: s
     }
   }
 
-  const baseDuration = 60 * 60 * 1000;
+  const baseDuration = 3 * 60 * 60 * 1000; // 3h — le portail ne dit PAS combien de temps, et l'expérience montre que 1h ne suffit souvent pas
   const maxDuration = 24 * 60 * 60 * 1000;
 
   if (attemptCount <= 0) {
