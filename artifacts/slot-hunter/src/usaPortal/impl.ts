@@ -140,7 +140,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     console.log(`[zero-risk] 🆔 Fingerprint appliqué: ${fingerprint.platform}, ${fingerprint.timezone}, ${fingerprint.acceptLanguage.split(',')[0]}`);
     
     // 3. Vérifier toutes les conditions avant de continuer
-    const preCheck = await preScanCheck(username, job.id);
+    const preCheck = await preScanCheck(username, job.id, job.urgencyTier);
     if (!preCheck.proceed) {
       console.log(`[zero-risk] ⚠️ Scan bloqué: ${preCheck.reason}`);
       
@@ -175,23 +175,29 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     console.log("[zero-risk] ✅ Tous les checks passés, continuation...");
     
     // 4. Vérifier la fenêtre de scan via l'orchestrateur
-    const orchestratorCheck = scanOrchestrator.canScanNow(username);
-    if (!orchestratorCheck.canScan) {
-      console.log(`[zero-risk] 🎯 Orchestrateur: ${orchestratorCheck.reason}`);
-      
-      if (orchestratorCheck.waitMs && orchestratorCheck.waitMs > 0) {
-        const waitMinutes = Math.round(orchestratorCheck.waitMs / 60000);
-        console.log(`[zero-risk] ⏳ Fenêtre de scan: attente ${waitMinutes} min`);
+    // Bypass pour urgent/tres_urgent (déjà géré par le stagger du scheduler)
+    const bypassOrchestratorWindow = job.urgencyTier === "urgent" || job.urgencyTier === "tres_urgent";
+    if (!bypassOrchestratorWindow) {
+      const orchestratorCheck = scanOrchestrator.canScanNow(username);
+      if (!orchestratorCheck.canScan) {
+        console.log(`[zero-risk] 🎯 Orchestrateur: ${orchestratorCheck.reason}`);
         
-        if (orchestratorCheck.waitMs > 10 * 60 * 1000) { // > 10 min
-          await sendHeartbeat({
-            applicationId: job.id,
-            result: "not_found",
-            errorMessage: `Fenêtre de scan: ${orchestratorCheck.reason}`,
-          });
-          return "not_found";
+        if (orchestratorCheck.waitMs && orchestratorCheck.waitMs > 0) {
+          const waitMinutes = Math.round(orchestratorCheck.waitMs / 60000);
+          console.log(`[zero-risk] ⏳ Fenêtre de scan: attente ${waitMinutes} min`);
+          
+          if (orchestratorCheck.waitMs > 10 * 60 * 1000) { // > 10 min
+            await sendHeartbeat({
+              applicationId: job.id,
+              result: "not_found",
+              errorMessage: `Fenêtre de scan: ${orchestratorCheck.reason}`,
+            });
+            return "not_found";
+          }
         }
       }
+    } else {
+      console.log(`[zero-risk] 🎯 Orchestrateur: bypass (tier=${job.urgencyTier})`);
     }
 
     // ── Guard restriction compte (AVANT toute action) ──────────────────────

@@ -561,13 +561,20 @@ export function initializeZeroRiskStrategy(username: string, totalAccounts: numb
 }
 
 /**
- * Vérifie toutes les conditions avant un scan
+ * Vérifie toutes les conditions avant un scan.
+ * Les dossiers urgent/tres_urgent bypass la fenêtre orchestrateur
+ * (le stagger du scheduler gère déjà l'anti-détection pour ces tiers).
  */
 export async function preScanCheck(
   username: string, 
-  jobId: string
+  jobId: string,
+  urgencyTier?: string
 ): Promise<{ proceed: boolean; reason: string; waitMs?: number }> {
   const checks: Array<{ name: string; result: boolean; reason: string; waitMs?: number }> = [];
+  
+  // Bypass orchestrator window for urgent/tres_urgent — le scheduler stagger
+  // gère déjà la répartition temporelle, pas besoin d'une double contrainte.
+  const bypassOrchestrator = urgencyTier === "urgent" || urgencyTier === "tres_urgent";
   
   // 1. Heatmap avoidance
   const heatmapCheck = shouldAvoidHeatmap();
@@ -577,14 +584,22 @@ export async function preScanCheck(
     reason: heatmapCheck.reason || "OK"
   });
   
-  // 2. Scan orchestrator
-  const orchestratorCheck = scanOrchestrator.canScanNow(username);
-  checks.push({
-    name: "Orchestrator",
-    result: orchestratorCheck.canScan,
-    reason: orchestratorCheck.reason,
-    waitMs: orchestratorCheck.waitMs
-  });
+  // 2. Scan orchestrator (bypassed pour urgent/tres_urgent)
+  if (bypassOrchestrator) {
+    checks.push({
+      name: "Orchestrator",
+      result: true,
+      reason: `Bypass (tier=${urgencyTier})`
+    });
+  } else {
+    const orchestratorCheck = scanOrchestrator.canScanNow(username);
+    checks.push({
+      name: "Orchestrator",
+      result: orchestratorCheck.canScan,
+      reason: orchestratorCheck.reason,
+      waitMs: orchestratorCheck.waitMs
+    });
+  }
   
   // 3. Anomaly detection
   const pauseCheck = anomalyDetector.shouldPause(username);
