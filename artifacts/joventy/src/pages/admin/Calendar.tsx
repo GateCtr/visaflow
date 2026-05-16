@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Grid3X3, BarChart3, Eye, EyeOff, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Grid3X3, BarChart3, Eye, EyeOff, TrendingUp, Download } from "lucide-react";
 
 const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   usa:      { bg: "bg-blue-100",   text: "text-blue-800",   dot: "bg-blue-500" },
@@ -456,6 +456,9 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: Discove
         </button>
       </div>
 
+      {/* Export CSV buttons */}
+      <ExportCsvButtons modeFilter={modeFilter} />
+
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
@@ -651,6 +654,93 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: Discove
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+// ── Export CSV Component ─────────────────────────────────────────────────────
+type ExportPeriod = "1m" | "3m" | "6m" | "1y";
+const EXPORT_PERIODS: { key: ExportPeriod; label: string; days: number }[] = [
+  { key: "1m", label: "1 mois", days: 30 },
+  { key: "3m", label: "3 mois", days: 90 },
+  { key: "6m", label: "6 mois", days: 180 },
+  { key: "1y", label: "1 an", days: 365 },
+];
+
+function ExportCsvButtons({ modeFilter }: { modeFilter?: "schedule" | "reschedule" }) {
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod | null>(null);
+
+  // Query data only when export is requested (by setting exportPeriod)
+  const since = exportPeriod
+    ? Date.now() - EXPORT_PERIODS.find(p => p.key === exportPeriod)!.days * 24 * 60 * 60 * 1000
+    : undefined;
+
+  const exportData = useQuery(
+    api.slotDiscoveries.exportForPeriod,
+    since !== undefined ? { since, ...(modeFilter ? { mode: modeFilter } : {}) } : "skip"
+  );
+
+  // Trigger download when data arrives
+  useMemo(() => {
+    if (!exportData || !exportPeriod) return;
+    if (exportData.length === 0) {
+      alert("Aucune donnée à exporter pour cette période.");
+      setExportPeriod(null);
+      return;
+    }
+
+    // Generate CSV with BOM for Excel compatibility
+    const headers = ["Date trouvée", "Heure", "Bureau", "Destination", "Résultat", "Raison", "Mode", "Découvert le", "Nb observations"];
+    const csvLines = [
+      headers.join(";"),
+      ...exportData.map(r => [
+        r.dateFound,
+        r.timeFound,
+        r.office,
+        r.destination,
+        r.outcome === "captured" ? "Retenue" : "Ignorée",
+        r.reason,
+        r.mode === "reschedule" ? "Reschedule" : r.mode === "schedule" ? "Schedule" : "",
+        r.discoveredAt,
+        r.seenCount.toString(),
+      ].join(";")),
+    ];
+    const csv = csvLines.join("\n");
+
+    // Download file
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `decouvertes_${exportPeriod}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportPeriod(null);
+  }, [exportData, exportPeriod]);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+        <Download className="w-3.5 h-3.5" />
+        Export CSV :
+      </span>
+      {EXPORT_PERIODS.map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => setExportPeriod(key)}
+          disabled={exportPeriod !== null}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+            exportPeriod === key
+              ? "bg-slate-200 text-slate-500 border-slate-300 cursor-wait animate-pulse"
+              : "bg-white border-border text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+          }`}
+        >
+          {exportPeriod === key ? "Export..." : label}
+        </button>
+      ))}
     </div>
   );
 }

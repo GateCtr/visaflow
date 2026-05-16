@@ -289,3 +289,48 @@ export const listByApplication = query({
       .take(limit);
   },
 });
+
+
+
+/**
+ * Exporte les decouvertes brutes pour une periode donnee (CSV export).
+ * Retourne jusqu'a 10000 rows pour couvrir 1 an de donnees.
+ */
+export const exportForPeriod = query({
+  args: {
+    since: v.number(), // timestamp debut
+    until: v.optional(v.number()), // timestamp fin (defaut: maintenant)
+    destination: v.optional(v.string()),
+    office: v.optional(v.string()),
+    mode: v.optional(v.union(v.literal("schedule"), v.literal("reschedule"))),
+  },
+  handler: async (ctx, args) => {
+    const until = args.until ?? Date.now();
+
+    const all = await ctx.db
+      .query("slotDiscoveries")
+      .withIndex("by_discovered", (qb) => qb.gte("discoveredAt", args.since))
+      .order("asc")
+      .take(10000);
+
+    const filtered = all.filter((d) => {
+      if (d.discoveredAt > until) return false;
+      if (args.destination && d.destination !== args.destination) return false;
+      if (args.office && d.office !== args.office) return false;
+      if (args.mode && d.mode !== args.mode) return false;
+      return true;
+    });
+
+    return filtered.map((d) => ({
+      dateFound: d.dateFound,
+      timeFound: d.timeFound ?? "",
+      office: d.office,
+      destination: d.destination,
+      outcome: d.outcome,
+      reason: d.reason ?? "",
+      mode: d.mode ?? "",
+      discoveredAt: new Date(d.discoveredAt).toISOString(),
+      seenCount: (d as any).seenCount ?? 1,
+    }));
+  },
+});
