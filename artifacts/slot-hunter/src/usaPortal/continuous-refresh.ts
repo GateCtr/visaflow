@@ -285,6 +285,10 @@ export interface ContinuousRefreshConfig {
   dateFrom?: string;
   /** Date limite admin. */
   dateDeadline?: string;
+  /** Deadline absolue (timestamp ms) au-delà de laquelle le refresh DOIT s'arrêter.
+   *  Utilisé pour respecter le timeout du scheduler externe.
+   *  Si non fourni, le budget interne de 42 min s'applique. */
+  absoluteDeadlineMs?: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -348,18 +352,28 @@ function computeSmartInterval(username: string): number {
  * v2 : intervalles adaptatifs, alternance endpoints, coordination dossiers.
  */
 export async function runContinuousRefresh(config: ContinuousRefreshConfig): Promise<ContinuousRefreshResult> {
-  const { session, job, ofcs, appDetails, referer, username, rescheduleYN, dateFrom, dateDeadline } = config;
+  const { session, job, ofcs, appDetails, referer, username, rescheduleYN, dateFrom, dateDeadline, absoluteDeadlineMs } = config;
   const startTime = Date.now();
   let totalRefreshes = 0;
   let windowsCompleted = 0;
   let landingPageCount = 0;
   let firstAvailableMonthCount = 0;
 
+  // Calculer le budget effectif : min(budget interne 42 min, deadline externe - marge 60s)
+  let effectiveBudgetMs = TOTAL_REFRESH_BUDGET_MS;
+  if (absoluteDeadlineMs) {
+    const externalBudget = absoluteDeadlineMs - Date.now() - 60_000; // 60s de marge pour cleanup
+    if (externalBudget > 0 && externalBudget < effectiveBudgetMs) {
+      effectiveBudgetMs = externalBudget;
+      console.log(`[refresh] ⏱ Budget réduit par deadline externe: ${Math.round(effectiveBudgetMs / 60000)} min (au lieu de ${Math.round(TOTAL_REFRESH_BUDGET_MS / 60000)} min)`);
+    }
+  }
+
   // Prediction state pour le logging
   const predState = getCurrentPredictionScore(username);
 
   console.log(
-    `[refresh] 🔄 Démarrage refresh continu v2 — budget ${Math.round(TOTAL_REFRESH_BUDGET_MS / 60000)} min, ` +
+    `[refresh] 🔄 Démarrage refresh continu v2 — budget ${Math.round(effectiveBudgetMs / 60000)} min, ` +
     `max ${MAX_WINDOWS} fenêtres | prediction=${predState.window} (×${predState.multiplier.toFixed(2)}) | ` +
     `server_health=${serverHealth.healthScore.toFixed(2)}`,
   );
@@ -370,7 +384,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
     status: "ok",
     data: {
       version: "v2",
-      budgetMin: Math.round(TOTAL_REFRESH_BUDGET_MS / 60000),
+      budgetMin: Math.round(effectiveBudgetMs / 60000),
       maxWindows: MAX_WINDOWS,
       ofcCount: ofcs.length,
       offices: ofcs.map(o => o.postName),
@@ -388,7 +402,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
   for (let windowIdx = 0; windowIdx < MAX_WINDOWS; windowIdx++) {
     // ── Vérifications de sécurité avant chaque fenêtre ──
     const elapsed = Date.now() - startTime;
-    if (elapsed >= TOTAL_REFRESH_BUDGET_MS) {
+    if (elapsed >= effectiveBudgetMs) {
       console.log(`[refresh] ⏱ Budget temps épuisé (${Math.round(elapsed / 60000)} min) — arrêt`);
       unregisterDossierRefresh(job.id);
       return makeResult("budget_exhausted", totalRefreshes, windowsCompleted, elapsed);
@@ -517,7 +531,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
       await new Promise(r => setTimeout(r, finalInterval));
 
       // Vérification budget global
-      if (Date.now() - startTime >= TOTAL_REFRESH_BUDGET_MS) break;
+      if (Date.now() - startTime >= effectiveBudgetMs) break;
       if (totalRefreshes >= MAX_TOTAL_REFRESHES) break;
     }
 
