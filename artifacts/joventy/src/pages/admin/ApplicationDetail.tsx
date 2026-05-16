@@ -1272,22 +1272,22 @@ export default function AdminApplicationDetail() {
         )}
 
         {/* ===== RESULT PANEL — Appointment model (USA, Turquie) ===== */}
-        {!isEvisaModel && (isSlotHunting || isSlotFound) && !isCompleted && (
+        {!isEvisaModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
           <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="p-5 border-b border-border bg-slate-50 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-secondary" />
               <h2 className="font-bold text-primary text-base">
-                {isSlotFound ? "Créneau Enregistré" : "Enregistrer un Créneau"}
+                {isCompleted ? "Rendez-vous Confirmé" : isSlotFound ? "Créneau Enregistré" : "Enregistrer un Créneau"}
               </h2>
               <span className="ml-auto text-[11px] text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
                 {pricing?.successCopy?.triggerLabel ?? "Rendez-vous"}
               </span>
             </div>
             <div className="p-6">
-              {isSlotFound && app.appointmentDetails ? (
+              {(isSlotFound || isCompleted) && app.appointmentDetails ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-1">
                   <p className="text-sm text-green-800 font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> Créneau capturé — client en attente de paiement
+                    <CheckCircle2 className="w-4 h-4" /> {isCompleted ? "Dossier complété — rendez-vous confirmé" : "Créneau capturé — client en attente de paiement"}
                   </p>
                   <p className="text-sm text-slate-700">Date : <strong>{formatDateOnly(app.appointmentDetails.date)}</strong></p>
                   <p className="text-sm text-slate-700">Heure : <strong>{app.appointmentDetails.time}</strong></p>
