@@ -2139,11 +2139,22 @@ export default function AdminApplicationDetail() {
                         {parsedData && (
                           <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
                             {Object.entries(parsedData).map(([k, val]) => {
-                              const strVal = Array.isArray(val)
-                                ? (val as unknown[]).join(", ")
-                                : typeof val === "object" && val !== null
-                                ? JSON.stringify(val)
-                                : String(val);
+                              let strVal: string;
+                              if (Array.isArray(val)) {
+                                // Tableau d'objets → extraire le champ "name" ou "postName" si disponible
+                                strVal = (val as unknown[]).map((item) => {
+                                  if (typeof item === "string" || typeof item === "number") return String(item);
+                                  if (typeof item === "object" && item !== null) {
+                                    const obj = item as Record<string, unknown>;
+                                    return (obj.name ?? obj.postName ?? obj.label ?? JSON.stringify(item)) as string;
+                                  }
+                                  return String(item);
+                                }).join(", ");
+                              } else if (typeof val === "object" && val !== null) {
+                                strVal = JSON.stringify(val);
+                              } else {
+                                strVal = String(val);
+                              }
                               const isLong = strVal.length > 200;
                               const display = isLong && !isExpanded ? strVal.slice(0, 200) + "…" : strVal;
                               return (
