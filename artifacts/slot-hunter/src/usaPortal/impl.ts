@@ -476,15 +476,45 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
               sessionProxy = ipStickyUrl;
               console.log(`[usa] 🌐 FALLBACK iProyal OK (${ipHealth.latencyMs}ms) — sticky 60min`);
             } else {
-              // Les deux proxies sont down → connexion directe (Railway IP fixe)
-              console.warn(`[usa] ⚠️ iProyal aussi DOWN: ${ipHealth.error} — fallback connexion directe`);
-              sessionProxy = undefined;
-              console.log(`[usa] 🔌 FALLBACK connexion directe Railway (les 2 proxies down)`);
+              // BrightData + iProyal DOWN → fallback 2captcha rotatif
+              console.warn(`[usa] ⚠️ iProyal aussi DOWN: ${ipHealth.error} — tentative 2captcha...`);
+              if (proxyPool.isConfigured) {
+                const poolResult = await proxyPool.getProxy();
+                if (poolResult?.proxy) {
+                  sessionProxy = poolResult.proxy;
+                  console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (BrightData + iProyal down)`);
+                } else {
+                  console.error(`[usa] ❌ TOUS LES PROXIES DOWN (BD + iProyal + 2captcha) — ABORT session`);
+                  await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée pour protéger l'IP" });
+                  result = "error";
+                  return result;
+                }
+              } else {
+                console.error(`[usa] ❌ BD + iProyal DOWN + 2captcha non configuré — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
             }
           } else {
-            // Pas d'iProyal configuré → connexion directe
-            sessionProxy = undefined;
-            console.log(`[usa] 🔌 BrightData DOWN + pas d'iProyal — connexion directe Railway`);
+            // Pas d'iProyal configuré → fallback 2captcha
+            if (proxyPool.isConfigured) {
+              const poolResult = await proxyPool.getProxy();
+              if (poolResult?.proxy) {
+                sessionProxy = poolResult.proxy;
+                console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (BrightData down, pas d'iProyal)`);
+              } else {
+                console.error(`[usa] ❌ BrightData DOWN + 2captcha pool vide — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
+            } else {
+              console.error(`[usa] ❌ BrightData DOWN + aucun fallback configuré — ABORT session`);
+              await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "BrightData down, aucun fallback — session avortée" });
+              result = "error";
+              return result;
+            }
           }
         }
       } else if (hasIproyal) {
@@ -496,18 +526,49 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
           sessionProxy = ipStickyUrl;
           console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 60min`);
         } else {
-          // iProyal DOWN → connexion directe
-          console.warn(`[usa] ⚠️ iProyal pre-flight FAILED: ${ipHealth.error} — connexion directe`);
-          sessionProxy = undefined;
-          console.log(`[usa] 🔌 iProyal DOWN — fallback connexion directe Railway`);
+          // iProyal DOWN → fallback 2captcha rotatif
+          console.warn(`[usa] ⚠️ iProyal pre-flight FAILED: ${ipHealth.error} — tentative 2captcha...`);
+          if (proxyPool.isConfigured) {
+            const poolResult = await proxyPool.getProxy();
+            if (poolResult?.proxy) {
+              sessionProxy = poolResult.proxy;
+              console.log(`[usa] 🌐 FALLBACK 2captcha rotatif OK — IP résidentielle depuis pool`);
+            } else {
+              console.error(`[usa] ❌ TOUS LES PROXIES DOWN (iProyal + 2captcha) — ABORT session (IP Railway jamais exposée)`);
+              await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée pour protéger l'IP" });
+              result = "error";
+              return result;
+            }
+          } else {
+            console.error(`[usa] ❌ iProyal DOWN + 2captcha non configuré — ABORT session`);
+            await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Proxy down et pas de fallback — session avortée" });
+            result = "error";
+            return result;
+          }
+        }
+      } else if (proxyPool.isConfigured) {
+        // Ni BrightData ni iProyal → utiliser 2captcha rotatif
+        const poolResult = await proxyPool.getProxy();
+        if (poolResult?.proxy) {
+          sessionProxy = poolResult.proxy;
+          console.log(`[usa] 🌐 2captcha résidentiel rotatif (seul proxy configuré)`);
+        } else {
+          console.error(`[usa] ❌ 2captcha pool vide — ABORT session (IP Railway jamais exposée)`);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Pool 2captcha vide — session avortée" });
+          result = "error";
+          return result;
         }
       } else {
-        sessionProxy = undefined;
-        console.log(`[usa] 🔌 Proxy demandé mais aucun configuré — connexion directe Railway`);
+        // AUCUN proxy configuré → ABORT (ne JAMAIS exposer l'IP Railway)
+        console.error(`[usa] ❌ AUCUN proxy configuré (useResidentialProxy=true mais 0 provider) — ABORT`);
+        await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Aucun proxy configuré — session avortée pour protéger l'IP Railway" });
+        result = "error";
+        return result;
       }
     } else {
+      // useResidentialProxy = false → connexion directe autorisée par l'admin
       sessionProxy = undefined;
-      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA — connexion directe Railway`);
+      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ par admin — connexion directe Railway`);
     }
     
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
