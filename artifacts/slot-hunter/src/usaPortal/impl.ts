@@ -54,6 +54,8 @@ import {
   SCAN_CUTOFF_BEFORE_EXPIRY_MS,
   MIN_COOLDOWN_AFTER_EXPIRY_MS,
   MAX_COOLDOWN_AFTER_EXPIRY_MS,
+  MIN_SCANS_PER_SESSION,
+  MAX_SCANS_PER_SESSION,
 } from "./config.js";
 
 // Stratégie Zero-Risk
@@ -783,6 +785,57 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   // ── Simulation comportement humain avant scan ──────────────────────────────
   console.log("[zero-risk] 👤 Préparation scan avec comportement humain...");
+  await simulateFullHumanBehavior();
+  
+  // ── Vérifier le cap de scans par session ──────────────────────────────────
+  // Un humain ne fait pas 40 F5 en 2h. Il fait 8-15 checks puis part.
+  // Si le cap est atteint, terminer la session (sans logout) et forcer une pause.
+  const scanCapCacheKey = username.toLowerCase();
+  const scanCapCached = tokenCache.get(scanCapCacheKey);
+  if (scanCapCached) {
+    const currentScanCount = (scanCapCached.scanCount ?? 0) + 1;
+    scanCapCached.scanCount = currentScanCount;
+    
+    // Calculer le cap pour cette session (randomisé une fois, persisté dans le cache)
+    let sessionScanCap = scanCapCached.sessionScanCap;
+    if (!sessionScanCap) {
+      sessionScanCap = MIN_SCANS_PER_SESSION + Math.floor(Math.random() * (MAX_SCANS_PER_SESSION - MIN_SCANS_PER_SESSION + 1));
+      scanCapCached.sessionScanCap = sessionScanCap;
+      console.log(`[anti-detect] 📊 Cap scans cette session: ${sessionScanCap}`);
+    }
+    
+    if (currentScanCount >= sessionScanCap) {
+      console.log(`[anti-detect] 🛑 CAP SCANS ATTEINT (${currentScanCount}/${sessionScanCap}) — fin de session forcée`);
+      
+      // Supprimer le cache et forcer une pause inter-session
+      tokenCache.delete(scanCapCacheKey);
+      proxyPool.releaseStickyProxy(username);
+      
+      const pauseDuration = 15 * 60 * 1000 + Math.random() * (MAX_SESSION_BREAK_MS - 15 * 60 * 1000);
+      const pauseMinutes = Math.round(pauseDuration / 60000);
+      console.log(`[anti-detect] ☕ Pause post-cap: ${pauseMinutes}min (humain découragé)`);
+      
+      botLog({
+        applicationId: job.id,
+        step: "scan_cap_reached",
+        status: "warn",
+        data: { username, scanCount: currentScanCount, scanCap: sessionScanCap, pauseMinutes },
+      });
+      
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: `Cap scans atteint (${currentScanCount}/${sessionScanCap}) — pause ${pauseMinutes}min`,
+      });
+      
+      result = "not_found";
+      return result;
+    }
+    
+    if (currentScanCount > 1) {
+      console.log(`[anti-detect] 📊 Scan #${currentScanCount}/${sessionScanCap} cette session`);
+    }
+  }
   await simulateFullHumanBehavior();
   
   // ── Obtenir les paramètres adaptés à la santé du serveur ──────────────────

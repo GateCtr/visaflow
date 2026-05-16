@@ -99,6 +99,15 @@ export const SCAN_CUTOFF_BEFORE_EXPIRY_MS = 8 * 60 * 1000; // 8 min avant expira
 export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min min
 export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 25 * 60 * 1000; // 25 min max
 
+// ── Cap de scans par session (anti-détection activité excessive) ─────────────
+// Un humain qui cherche un créneau ne fait pas 40 F5 en 2h sans interruption.
+// Il fait un burst de 8-15 vérifications, puis se décourage et part faire autre chose.
+// Sans cap : le bot scanne toute la session_duration (25-120 min) = pattern bot.
+// Avec cap : le bot s'arrête après N scans (8-15 variable) et force une pause longue.
+// Le cap est randomisé par session pour éviter un pattern "toujours 12 scans".
+export const MIN_SCANS_PER_SESSION = 8;   // Minimum de scans avant arrêt
+export const MAX_SCANS_PER_SESSION = 15;  // Maximum de scans avant arrêt forcé
+
 // ── Stratégie "Zero-Risk" - Multi-couche anti-détection ──────────────────────
 
 // 1. Session Duration Randomization - Profils de durée variables
