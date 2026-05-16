@@ -11,6 +11,7 @@ import { navigateCevRedirectWithPlaywright } from "./cevPlaywrightNavigate.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
+import { autoWhitelistIp } from "./ip-whitelist.js";
 import { sendAdminBundleCheckReport, type BundleCheckReport } from "./adminReporting.js";
 import { runSpainSession, runSpainWatcherProbe } from "./spainPortal.js";
 
@@ -1160,6 +1161,20 @@ async function main(): Promise<void> {
   const serverIp = await detectPublicIp();
   if (serverIp) {
     log("INFO", `IP serveur (Railway): ${serverIp}`);
+
+    // Auto-whitelist chez IPRoyal + vérification 2Captcha
+    const whitelistResult = await autoWhitelistIp(serverIp);
+    if (whitelistResult.iproyal.ok) {
+      log("INFO", `IPRoyal whitelist: ✅ ${whitelistResult.iproyal.message}`);
+    } else {
+      log("WARN", `IPRoyal whitelist: ❌ ${whitelistResult.iproyal.message}`);
+    }
+    if (whitelistResult.twocaptcha.ok) {
+      log("INFO", `2Captcha whitelist: ✅ ${whitelistResult.twocaptcha.message}`);
+    } else {
+      log("WARN", `2Captcha whitelist: ❌ ${whitelistResult.twocaptcha.message}`);
+    }
+
     if (process.env.TWOCAPTCHA_API_KEY) {
       await proxyPool.initialize(serverIp);
     }
