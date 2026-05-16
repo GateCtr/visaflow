@@ -7,7 +7,6 @@ import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { pollCevSlot } from "./cevPolling.js";
 import { setupCevSessionHttp } from "./cevHttpSetup.js";
-import { navigateCevRedirectWithPlaywright } from "./cevPlaywrightNavigate.js";
 import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
@@ -66,89 +65,32 @@ async function startCevSetupLoop(): Promise<void> {
           );
 
           if (httpResult.success) {
-            // ── APPROCHE HYBRIDE ─────────────────────────────────────────────
-            // Si needsPlaywrightNavigation = true : le cookie est obtenu mais le
-            // poll direct (401) ne marche pas. On lance Playwright pour naviguer
-            // vers redirectUrl avec le cookie injecté — PAS de re-login, PAS de re-captcha.
-            // Coût : 0 clic VOWINT, 0 captcha, juste ~10s de browser.
-            if (httpResult.needsPlaywrightNavigation && httpResult.redirectUrl) {
-              console.log(`[CEV-SETUP] 🎭 Approche hybride session=${s.sessionId} — Playwright navigue vers redirectUrl (cookie déjà obtenu)`);
-
-              // ── Guard Playwright disponibilité ─────────────────────────────
-              // Si l'image Docker n'a pas le bon Chromium (version mismatch),
-              // Playwright throw immédiatement. On catch pour éviter de crasher
-              // la boucle CEV entière et on skip gracieusement.
-              let navResult: Awaited<ReturnType<typeof navigateCevRedirectWithPlaywright>>;
-              try {
-                const fullCookie = `ASP.NET_SessionId=${httpResult.sessionCookie}; PreferredCulture=en-US`;
-                navResult = await navigateCevRedirectWithPlaywright(
-                  fullCookie,
-                  httpResult.redirectUrl,
-                  s.applicationId,
-                );
-              } catch (pwErr) {
-                const pwMsg = pwErr instanceof Error ? pwErr.message : String(pwErr);
-                if (pwMsg.includes("Executable doesn't exist") || pwMsg.includes("browserType.launch")) {
-                  console.error(`[CEV-SETUP] ⚠️ Playwright indisponible (image Docker obsolète?) — skip hybride`);
-                  console.error(`[CEV-SETUP]    Erreur: ${pwMsg.slice(0, 150)}`);
-                  console.error(`[CEV-SETUP]    → Mettre à jour l'image Docker vers la version requise par Playwright`);
-                  // Ne pas crasher la boucle — marquer comme erreur récupérable
-                  r = { success: false, error: "PLAYWRIGHT_UNAVAILABLE" };
-                  // Sortir du bloc hybride — on ne retry PAS avec Playwright complet
-                  // (il échouera aussi). Attendre le fix Docker.
-                  continue;
-                }
-                // Autre erreur Playwright inattendue → propager normalement
-                throw pwErr;
-              }
-
-              if (navResult.status === "slot_found") {
-                // 🚨 SLOTS TROUVÉS — activer la session pour booking
-                console.log(`[CEV-SETUP] 🚨 SLOTS TROUVÉS via hybride session=${s.sessionId}!`);
-                const { activateCevSession } = await import("./convexClient.js");
-                await activateCevSession(
-                  s.sessionId,
-                  httpResult.sessionCookie!,
-                  httpResult.validUntilMs,
-                  httpResult.integrationUrl,
-                );
+            // ── Session HTTP activée — le redirect a été suivi, verdict obtenu ──
+            // needsPlaywrightNavigation est toujours false maintenant (session activée via HTTP)
+            console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — verdict: slotsAvailable=${httpResult.slotsAvailable}`);
+            const { activateCevSession } = await import("./convexClient.js");
+            const activated = await activateCevSession(
+              s.sessionId,
+              httpResult.sessionCookie!,
+              httpResult.validUntilMs,
+              httpResult.integrationUrl,
+            );
+            if (activated) {
+              r = { success: true };
+              if (httpResult.slotsAvailable) {
+                console.log(`[CEV-SETUP] 🚨 SLOTS DISPONIBLES session=${s.sessionId} — booking prioritaire`);
                 // Déclencher le booking immédiatement
                 await reportSlotFound({
                   applicationId: s.applicationId,
-                  date: "detection_hybride",
+                  date: "detection_http",
                   time: new Date().toISOString(),
-                  location: "CEV - Ambassade de Belgique (hybride)",
+                  location: "CEV - Ambassade de Belgique (HTTP pur)",
                 });
-                r = { success: true };
-              } else if (navResult.status === "no_availability") {
-                // Pas de créneaux — session consommée (single-use), lock maintenu 13 min
-                console.log(`[CEV-SETUP] ℹ️  Pas de créneaux (hybride) session=${s.sessionId} — lock expire dans ~13 min`);
-                r = { success: true }; // Pas une erreur, juste pas de slots
               } else {
-                // Erreur navigation
-                console.log(`[CEV-SETUP] ❌ Erreur hybride session=${s.sessionId}: ${navResult.error}`);
-                r = { success: false, error: navResult.error ?? "PLAYWRIGHT_NAV_ERROR" };
+                console.log(`[CEV-SETUP] 📡 Pas de créneaux — session activée pour polling session=${s.sessionId}`);
               }
             } else {
-              // Cas normal : poll direct a fonctionné (no_slots ou slots_found)
-              console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — activation pour polling (slotsAvailable=${httpResult.slotsAvailable})`);
-              const { activateCevSession } = await import("./convexClient.js");
-              const activated = await activateCevSession(
-                s.sessionId,
-                httpResult.sessionCookie!,
-                httpResult.validUntilMs,
-                httpResult.integrationUrl,
-              );
-              if (activated) {
-                r = { success: true };
-                if (httpResult.slotsAvailable) {
-                  console.log(`[CEV-SETUP] 🚨 SLOTS POSSIBLES session=${s.sessionId} — booking prioritaire`);
-                } else {
-                  console.log(`[CEV-SETUP] 📡 Session activée pour polling session=${s.sessionId}`);
-                }
-              } else {
-                r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
-              }
+              r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
             }
           } else {
             console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);
@@ -161,13 +103,11 @@ async function startCevSetupLoop(): Promise<void> {
         // ── Stratégie 2 : Playwright (fallback si HTTP échoue) ───────────────
         // NE PAS lancer Playwright si :
         // - CEV_VOWINT_SESSION_FAILED : identifiants VOWINT invalides
-        // - CEV_SESSION_DEAD_NO_POLL : cookie CEV ne permet pas le poll direct (401)
-        //   → le serveur exige de naviguer vers redirectUrl, ce qui TUE la session.
-        //   Playwright ferait la même chose et grillerait un clic VOWINT pour rien.
-        //   → Laisser le lock 13 min expirer naturellement.
+        // - SESSION_EXPIRED_AFTER_REDIRECT : session activée mais expirée (re-captcha nécessaire)
         // - RATE_LIMIT / ErrorTooManyAttempts : compte bloqué 60 min
         const skipPlaywright = (
           r.error === "CEV_VOWINT_SESSION_FAILED" ||
+          r.error === "SESSION_EXPIRED_AFTER_REDIRECT" ||
           r.error === "PLAYWRIGHT_UNAVAILABLE" ||
           (r.error ?? "").includes("RATE_LIMIT") ||
           (r.error ?? "").includes("TooManyAttempts")
