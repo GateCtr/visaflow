@@ -234,8 +234,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // Ajuster selon le tier du job
     const tier = job.urgencyTier;
     if (tier === "tres_urgent") {
-      MIN_SCAN_INTERVAL_MS = 3 * 60 * 1000; // 3-8 min pour très urgent
-      MAX_SCAN_INTERVAL_MS = 8 * 60 * 1000;
+      MIN_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5-10 min pour très urgent (réduit de 3-8 → 5-10 pour sécurité)
+      MAX_SCAN_INTERVAL_MS = 10 * 60 * 1000;
     } else if (tier === "urgent") {
       MIN_SCAN_INTERVAL_MS = 8 * 60 * 1000; // 8-15 min pour urgent
       MAX_SCAN_INTERVAL_MS = 15 * 60 * 1000;
