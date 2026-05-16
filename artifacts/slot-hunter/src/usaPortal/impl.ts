@@ -13,11 +13,14 @@ import {
   USA_UA_POOL,
   setActiveSessionUaFromPoolIndex,
   isCachedTokenValid,
+  isSessionApproachingExpiry,
+  isSessionInCooldown,
   sendKeepAliveIfNeeded,
   getActiveSessionUaLogLabel,
   usaFetch,
   authHeaders,
   getStickyUaForAccount,
+  setAccountFingerprint,
   makeIproyalStickyUrl,
   rotateIproyalSession,
   initSessionHeaders,
@@ -48,7 +51,23 @@ import {
   HUMAN_ACTIVE_END_HOUR,
   MIN_KEEP_ALIVE_INTERVAL_MS,
   MAX_KEEP_ALIVE_INTERVAL_MS,
+  SCAN_CUTOFF_BEFORE_EXPIRY_MS,
+  MIN_COOLDOWN_AFTER_EXPIRY_MS,
+  MAX_COOLDOWN_AFTER_EXPIRY_MS,
 } from "./config.js";
+
+// Stratégie Zero-Risk
+import {
+  initializeZeroRiskStrategy,
+  preScanCheck,
+  postScanUpdate,
+  simulateFullHumanBehavior,
+  getRandomSessionDuration,
+  getFingerprintForToday,
+  anomalyDetector,
+  gracefulDegradation,
+  scanOrchestrator,
+} from "./zero-risk-strategy.js";
 
 export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   const { embassyUsername: username, embassyPassword: password, twoCaptchaApiKey } = job.hunterConfig;
@@ -63,6 +82,81 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       console.error("[usa] Identifiants portail manquants dans hunterConfig");
       result = "error";
       return result;
+    }
+
+    // ── Initialisation stratégie Zero-Risk ─────────────────────────────────
+    // IMPORTANT: Doit être fait AVANT toute autre vérification
+    console.log("[zero-risk] 🛡️ Initialisation stratégie Zero-Risk...");
+    
+    // 1. Initialiser la stratégie pour ce compte
+    // TODO: Récupérer le nombre total de comptes depuis la config admin
+    const totalAccounts = 1; // Par défaut, à remplacer par valeur réelle
+    initializeZeroRiskStrategy(username, totalAccounts);
+    
+    // 2. Appliquer le fingerprint cycling pour aujourd'hui
+    const fingerprint = getFingerprintForToday(username);
+    // Adapter le fingerprint au format attendu par setAccountFingerprint
+    const adaptedFingerprint = {
+      ua: fingerprint.ua,
+      chUa: fingerprint.ua, // Utiliser le même UA pour chUa
+      platform: fingerprint.platform
+    };
+    setAccountFingerprint(username, adaptedFingerprint);
+    console.log(`[zero-risk] 🆔 Fingerprint appliqué: ${fingerprint.platform}, ${fingerprint.timezone}, ${fingerprint.acceptLanguage.split(',')[0]}`);
+    
+    // 3. Vérifier toutes les conditions avant de continuer
+    const preCheck = await preScanCheck(username, job.id);
+    if (!preCheck.proceed) {
+      console.log(`[zero-risk] ⚠️ Scan bloqué: ${preCheck.reason}`);
+      
+      if (preCheck.waitMs && preCheck.waitMs > 0) {
+        const waitMinutes = Math.round(preCheck.waitMs / 60000);
+        console.log(`[zero-risk] ⏳ Attente recommandée: ${waitMinutes} min`);
+        
+        // Si l'attente est > 5 min, on skip complètement
+        if (preCheck.waitMs > 5 * 60 * 1000) {
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "not_found",
+            errorMessage: `Zero-Risk: ${preCheck.reason} (attente ${waitMinutes}min)`,
+          });
+          return "not_found";
+        }
+        
+        // Petite attente si < 5 min
+        console.log(`[zero-risk] ⏳ Attente de ${Math.round(preCheck.waitMs / 1000)}s...`);
+        await new Promise(r => setTimeout(r, preCheck.waitMs!));
+      } else {
+        // Pas d'attente spécifiée, on skip
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "not_found",
+          errorMessage: `Zero-Risk: ${preCheck.reason}`,
+        });
+        return "not_found";
+      }
+    }
+    
+    console.log("[zero-risk] ✅ Tous les checks passés, continuation...");
+    
+    // 4. Vérifier la fenêtre de scan via l'orchestrateur
+    const orchestratorCheck = scanOrchestrator.canScanNow(username);
+    if (!orchestratorCheck.canScan) {
+      console.log(`[zero-risk] 🎯 Orchestrateur: ${orchestratorCheck.reason}`);
+      
+      if (orchestratorCheck.waitMs && orchestratorCheck.waitMs > 0) {
+        const waitMinutes = Math.round(orchestratorCheck.waitMs / 60000);
+        console.log(`[zero-risk] ⏳ Fenêtre de scan: attente ${waitMinutes} min`);
+        
+        if (orchestratorCheck.waitMs > 10 * 60 * 1000) { // > 10 min
+          await sendHeartbeat({
+            applicationId: job.id,
+            result: "not_found",
+            errorMessage: `Fenêtre de scan: ${orchestratorCheck.reason}`,
+          });
+          return "not_found";
+        }
+      }
     }
 
     // ── Guard restriction compte (AVANT toute action) ──────────────────────
@@ -95,8 +189,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // AWS Cognito détecte les patterns trop réguliers et les sessions simultanées.
     // Après votre test manuel, nous savons que 2 sessions simultanées = restriction.
     // Solution : intervalles variables et plus longs.
-    const cacheKey = username.toLowerCase();
-    const cached = tokenCache.get(cacheKey);
+    const delayCacheKey = username.toLowerCase();
+    const delayCached = tokenCache.get(delayCacheKey);
     
     // Intervalles variables selon le tier (mais plus variables)
     let MIN_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum
@@ -118,8 +212,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       MAX_SCAN_INTERVAL_MS = 30 * 60 * 1000;
     }
     
-    if (cached?.lastScanTime) {
-      const timeSinceLastScan = Date.now() - cached.lastScanTime;
+    if (delayCached?.lastScanTime) {
+      const timeSinceLastScan = Date.now() - delayCached.lastScanTime;
       // Déterminer un intervalle variable pour ce scan spécifique
       const minWaitTime = MIN_SCAN_INTERVAL_MS + Math.random() * (MAX_SCAN_INTERVAL_MS - MIN_SCAN_INTERVAL_MS);
       
@@ -151,8 +245,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // VOTRE TEST A MONTRÉ : 2 navigateurs connectés en même temps = restriction
     // Conseil utilisateur : NE PAS se connecter manuellement pendant que le bot tourne
     // Attendre au moins 5-10 min après la dernière activité du bot
-    if (cached?.lastActivityAt) {
-      const timeSinceLastActivity = Date.now() - cached.lastActivityAt;
+    if (delayCached?.lastActivityAt) {
+      const timeSinceLastActivity = Date.now() - delayCached.lastActivityAt;
       if (timeSinceLastActivity < 10 * 60 * 1000) { // 10 minutes
         console.log(`[usa] ⚠️ AVERTISSEMENT : Bot actif il y a ${Math.round(timeSinceLastActivity/60000)}min`);
         console.log(`[usa] ⚠️ Évitez de vous connecter manuellement pour ne pas déclencher de restriction`);
@@ -210,17 +304,17 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     }
     
     // 2. Vérifier durée session (30-120 minutes aléatoire par session)
-    if (cached?.sessionStartedAt) {
-      const sessionDuration = Date.now() - cached.sessionStartedAt;
+    if (delayCached?.sessionStartedAt) {
+      const sessionDuration = Date.now() - delayCached.sessionStartedAt;
       // Déterminer une durée de session aléatoire pour cette session spécifique
       // Stockée dans le cache pour cohérence
-      let targetSessionDuration = cached.targetSessionDuration;
+      let targetSessionDuration = delayCached.targetSessionDuration;
       if (!targetSessionDuration) {
-        // Nouvelle session : déterminer une durée aléatoire
-        targetSessionDuration = MIN_HUMAN_SESSION_MS + Math.random() * (MAX_HUMAN_SESSION_MS - MIN_HUMAN_SESSION_MS);
-        cached.targetSessionDuration = targetSessionDuration;
+        // Nouvelle session : déterminer une durée aléatoire avec stratégie Zero-Risk
+        targetSessionDuration = getRandomSessionDuration(username);
+        delayCached.targetSessionDuration = targetSessionDuration;
         const targetMinutes = Math.round(targetSessionDuration / 60000);
-        console.log(`[usa] ⏰ Nouvelle session humaine: durée cible ${targetMinutes}min`);
+        console.log(`[zero-risk] ⏰ Nouvelle session: durée cible ${targetMinutes}min`);
       }
       
       if (sessionDuration >= targetSessionDuration) {
@@ -234,7 +328,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         // re-login AU PROCHAIN CYCLE (après la pause). Le JWT expirera naturellement
         // côté serveur (~60 min) — c'est le comportement d'un humain qui ferme
         // son navigateur sans cliquer "déconnexion" (très courant).
-        tokenCache.delete(cacheKey);
+        tokenCache.delete(delayCacheKey);
         proxyPool.releaseStickyProxy(username);
         
         // Calculer pause variable (15-45 min) — MINIMUM 15 min pour éviter le session-cycling
@@ -258,16 +352,16 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   //  • Cache hit (token valide) → réutiliser le proxy et l'UA du cache
   //  • Nouveau token (login ou expiry) → assigner un nouveau proxy + UA,
   //    puis les stocker dans le cache juste après le login réussi.
-  const cacheKeySticky = username.toLowerCase();
-  const cachedSticky = tokenCache.get(cacheKeySticky);
-  const hasStickyCache = cachedSticky !== undefined && isCachedTokenValid(cachedSticky);
+  const stickyCacheKey = username.toLowerCase();
+  const stickyCached = tokenCache.get(stickyCacheKey);
+  const hasStickyCache = stickyCached !== undefined && isCachedTokenValid(stickyCached);
 
   let sessionProxy: string | undefined;
   let sessionUaIdx: number;
 
-  if (hasStickyCache && cachedSticky) {
-    sessionProxy  = cachedSticky.proxyUrl;
-    sessionUaIdx  = cachedSticky.uaIndex ?? Math.floor(Math.random() * USA_UA_POOL.length);
+  if (hasStickyCache && stickyCached) {
+    sessionProxy  = stickyCached.proxyUrl;
+    sessionUaIdx  = stickyCached.uaIndex ?? Math.floor(Math.random() * USA_UA_POOL.length);
     const maskedProxy = sessionProxy ? sessionProxy.replace(/:([^:@]+)@/, ":***@") : "aucun (direct)";
     console.log(`[usa] Token en cache → proxy sticky: ${maskedProxy} | UA idx ${sessionUaIdx}`);
     
@@ -308,12 +402,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // ── Keep-alive : si on réutilise une session cachée, vérifier qu'elle est active ─
   // Le portail tue les sessions après ~15 min d'inactivité. Si le dernier scan
   // remonte à > 8 min, on envoie un ping léger AVANT de tenter quoi que ce soit.
-  if (hasStickyCache && cachedSticky) {
-    const keepAliveOk = await sendKeepAliveIfNeeded(cachedSticky, username);
+  if (hasStickyCache && stickyCached) {
+    const keepAliveOk = await sendKeepAliveIfNeeded(stickyCached, username);
     if (!keepAliveOk) {
       // Session morte côté serveur — supprimer le cache et forcer un re-login
       console.warn(`[usa] ⚠️ Session morte (keep-alive 401) — suppression cache, re-login au prochain cycle`);
-      tokenCache.delete(cacheKeySticky);
+      tokenCache.delete(stickyCacheKey);
       proxyPool.releaseStickyProxy(username);
       botLog({ applicationId: job.id, step: "keep_alive", status: "fail", data: { username, error: "Session expirée côté serveur — re-login nécessaire" } });
       await sendHeartbeat({
@@ -364,6 +458,11 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[usa] getUsaSession échoué: ${msg}`);
+    
+    // ── Tracking erreur pour anomaly detection ──────────────────────────────
+    anomalyDetector.recordMetric(username, 'error', 1);
+    anomalyDetector.recordMetric(username, 'responseTime', 10000); // 10s pour erreur
+    
     // Si erreur réseau (proxy 504, tunnel rejeté) → forcer rotation IP iProyal au prochain login
     if (msg.includes("Proxy") || msg.includes("tunnel") || msg.includes("504") || msg.includes("Réseau")) {
       rotateIproyalSession(username);
@@ -407,7 +506,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // On les injecte maintenant pour que les sessions suivantes (cache hit)
   // réutilisent exactement la même identité réseau.
   if (!hasStickyCache) {
-    const freshEntry = tokenCache.get(cacheKeySticky);
+    const freshEntry = tokenCache.get(stickyCacheKey);
     if (freshEntry) {
       freshEntry.proxyUrl = sessionProxy;
       freshEntry.uaIndex  = sessionUaIdx;
@@ -548,9 +647,115 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     },
   });
 
+  // ── Vérifier si la session approche de l'expiration (algorithme "Session-First, Login-Last") ──
+  const sessionCacheKey = username.toLowerCase();
+  const sessionCached = tokenCache.get(sessionCacheKey);
+  if (sessionCached) {
+    // Vérifier si on doit arrêter les scans (cutoff avant expiration)
+    if (isSessionApproachingExpiry(sessionCached)) {
+      const timeToExpiry = sessionCached.expiresAt - Date.now();
+      const cutoffMinutes = Math.round(timeToExpiry / 60000);
+      console.log(`[usa] ⏰ CUTOFF ACTIVÉ — token expire dans ${cutoffMinutes} min (< 8 min) — arrêt des scans`);
+      console.log(`[usa] ⏳ Phase de repos: ${Math.round((SCAN_CUTOFF_BEFORE_EXPIRY_MS - timeToExpiry) / 60000)} min avant expiration, puis cooldown 5-8 min`);
+      
+      botLog({
+        applicationId: job.id,
+        step: "scan_cutoff",
+        status: "warn",
+        data: {
+          username,
+          timeToExpiryMs: timeToExpiry,
+          cutoffMinutes,
+          action: "Arrêt des scans — phase de repos avant re-login"
+        }
+      });
+      
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: `Cutoff activé — token expire dans ${cutoffMinutes} min — arrêt des scans, re-login après cooldown`
+      });
+      
+      // Supprimer le cache pour forcer un re-login au prochain cycle
+      tokenCache.delete(sessionCacheKey);
+      return "not_found";
+    }
+    
+    // Vérifier si on est en phase de cooldown
+    if (isSessionInCooldown(sessionCached)) {
+      const timeSinceExpiry = Date.now() - sessionCached.expiresAt;
+      const cooldownDuration = sessionCached.cooldownDurationMs ?? 
+        (MIN_COOLDOWN_AFTER_EXPIRY_MS + Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS));
+      const remainingCooldown = Math.max(0, cooldownDuration - timeSinceExpiry);
+      const remainingMinutes = Math.round(remainingCooldown / 60000);
+      
+      console.log(`[usa] ⏳ COOLDOWN ACTIF — ${remainingMinutes} min avant prochain login`);
+      console.log(`[usa] 📊 Statistiques: session ${Math.round((Date.now() - sessionCached.sessionStartedAt) / 60000)} min, scans ${sessionCached.scanCount || 0}`);
+      
+      botLog({
+        applicationId: job.id,
+        step: "cooldown",
+        status: "warn",
+        data: {
+          username,
+          remainingCooldownMs: remainingCooldown,
+          remainingMinutes,
+          sessionDurationMs: Date.now() - sessionCached.sessionStartedAt,
+          scanCount: sessionCached.scanCount || 0
+        }
+      });
+      
+      await sendHeartbeat({
+        applicationId: job.id,
+        result: "not_found",
+        errorMessage: `Cooldown actif — ${remainingMinutes} min avant prochain login`
+      });
+      
+      return "not_found";
+    }
+  }
+
+  // ── Simulation comportement humain avant scan ──────────────────────────────
+  console.log("[zero-risk] 👤 Préparation scan avec comportement humain...");
+  await simulateFullHumanBehavior();
+  
+  // ── Obtenir les paramètres adaptés à la santé du serveur ──────────────────
+  const scanParams = gracefulDegradation.getScanParameters();
+  console.log(`[zero-risk] 🏥 Niveau serveur: ${scanParams.level}`);
+  console.log(`[zero-risk] ⚙️ Paramètres: interval=${Math.round(scanParams.intervalMs/60000)}min, timeout=${Math.round(scanParams.timeoutMs/1000)}s, retries=${scanParams.retries}`);
+
   try {
-    const slotResult = await scanUsaSlotsViaAPI(job, session);
-    result = slotResult;
+    // Mesurer le temps de réponse du scan
+    const scanStartTime = Date.now();
+    let hadError = false;
+    let hadCaptcha = false;
+    
+    try {
+      const slotResult = await scanUsaSlotsViaAPI(job, session);
+      result = slotResult;
+      
+      // Détecter les erreurs basées sur le résultat
+      if (result === "error" || result === "login_failed") {
+        hadError = true;
+      }
+      
+      // TODO: Détecter les captchas (à implémenter dans scanUsaSlotsViaAPI)
+      // hadCaptcha = slotResult.hadCaptcha || false;
+      
+    } catch (scanError) {
+      hadError = true;
+      console.error("[zero-risk] ❌ Erreur pendant le scan:", scanError);
+      result = "error";
+    }
+    
+    const responseTime = Date.now() - scanStartTime;
+    
+    // Mettre à jour les métriques post-scan avec les données réelles
+    postScanUpdate(username, responseTime, hadError, hadCaptcha);
+    
+    // Log détaillé des métriques
+    console.log(`[zero-risk] 📊 Métriques scan: ${responseTime}ms, erreur=${hadError}, captcha=${hadCaptcha}`);
+    
     return result;
   } finally {
     setUsaSessionProxy(undefined);
@@ -560,6 +765,13 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   }
 } catch (error) {
   console.error("[usa] Erreur inattendue dans runUsaApiSession:", error);
+  
+  // ── Tracking erreur pour anomaly detection ──────────────────────────────
+  if (username) {
+    anomalyDetector.recordMetric(username, 'error', 1);
+    anomalyDetector.recordMetric(username, 'responseTime', 15000); // 15s pour erreur grave
+  }
+  
   result = "error";
 } finally {
   // ── LOGOUT STRATÉGIQUE (anti-détection 24h/24) ─────────────────────────────
@@ -572,14 +784,14 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   //   3. Session trop longue (>2h) → simuler humain qui se déconnecte
   //
   // MAIS: on évite les logout trop fréquents (<30 min entre sessions)
-  const cacheKey = username.toLowerCase();
-  const cached = tokenCache.get(cacheKey);
+  const logoutCacheKey = username.toLowerCase();
+  const logoutCached = tokenCache.get(logoutCacheKey);
   
   let shouldLogout = result === "login_failed" || result === "error";
   
   // Vérifier si session trop longue (déjà géré plus tôt, mais double-check)
-  if (cached?.sessionStartedAt) {
-    const sessionDuration = Date.now() - cached.sessionStartedAt;
+  if (logoutCached?.sessionStartedAt) {
+    const sessionDuration = Date.now() - logoutCached.sessionStartedAt;
     if (sessionDuration >= MAX_HUMAN_SESSION_MS) {
       console.log(`[usa] ⏰ Fin de session humaine (${Math.round(sessionDuration/60000)}min) — logout planifié`);
       shouldLogout = true;
@@ -603,13 +815,13 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     }
   } else if (username) {
     // Maintenir la session seulement si pas trop longue
-    const cacheKey = username.toLowerCase();
-    const cached = tokenCache.get(cacheKey);
+    const maintainCacheKey = username.toLowerCase();
+    const maintainCached = tokenCache.get(maintainCacheKey);
     
-    if (cached?.sessionStartedAt) {
-      const sessionDuration = Date.now() - cached.sessionStartedAt;
+    if (maintainCached?.sessionStartedAt) {
+      const sessionDuration = Date.now() - maintainCached.sessionStartedAt;
       const sessionMinutes = Math.round(sessionDuration / 60000);
-      const targetDuration = cached.targetSessionDuration || MAX_HUMAN_SESSION_MS;
+      const targetDuration = maintainCached.targetSessionDuration || getRandomSessionDuration(username);
       const remainingMinutes = Math.round((targetDuration - sessionDuration) / 60000);
       
       if (remainingMinutes > 0) {
@@ -617,8 +829,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         console.log(`[usa] 🔄 Session maintenue (${sessionMinutes}/${targetTotalMinutes}min)`);
         
         // Mettre à jour lastActivityAt et lastScanTime
-        cached.lastActivityAt = Date.now();
-        cached.lastScanTime = Date.now();
+        maintainCached.lastActivityAt = Date.now();
+        maintainCached.lastScanTime = Date.now();
         
         // Simuler une activité humaine aléatoire (log occasionnel)
         if (Math.random() > 0.8) {

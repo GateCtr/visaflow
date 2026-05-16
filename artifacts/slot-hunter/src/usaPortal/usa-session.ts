@@ -3,6 +3,8 @@ import {
   pendingLogin,
   parseJwtExpiry,
   isCachedTokenValid,
+  isSessionInCooldown,
+  getTimeUntilNextLogin,
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
@@ -35,22 +37,9 @@ export async function getUsaSession(
   const cached = tokenCache.get(cacheKey);
 
   if (cached) {
-    // ── REFRESH PROACTIF DÉSACTIVÉ ───────────────────────────────────────────
-    // RAISON : Le portail USA invalide l'ancien JWT côté serveur dès qu'un refresh
-    // est effectué. Si un appel API est en cours avec l'ancien token au moment du
-    // refresh, il reçoit un 401. C'est exactement ce qui causait la cascade d'erreurs.
-    //
-    // STRATÉGIE : On utilise le token jusqu'à ce qu'il expire naturellement (détecté
-    // par isCachedTokenValid), puis on fait un RE-LOGIN COMPLET au cycle suivant.
-    // Un re-login est plus safe qu'un refresh car :
-    //   - Pas de risque de 401 sur un ancien token en vol
-    //   - Nouvelle IP proxy assignée (si le proxy a expiré entre-temps)
-    //   - Le portail voit un comportement "humain" (déconnexion + reconnexion)
-    //
-    // L'ancien refresh proactif (Cognito 75% rule) est supprimé.
-    // Le token dure ~55min (60min JWT - 5min buffer). C'est suffisant.
     const now = Date.now();
     
+    // Vérifier si le token est encore valide pour les scans
     if (isCachedTokenValid(cached)) {
       const remainingMin = Math.round((cached.expiresAt - now) / 60000);
       console.log(`[usa] Token en cache valide pour ${cached.fullName} (expire dans ~${remainingMin} min)`);
@@ -67,7 +56,15 @@ export async function getUsaSession(
       };
     }
 
-    // Token expiré → re-login complet (pas de refresh qui invalide l'ancien)
+    // Vérifier si on est en phase de cooldown
+    if (isSessionInCooldown(cached)) {
+      const timeUntilNextLogin = getTimeUntilNextLogin(cached);
+      const remainingCooldownMin = Math.round(timeUntilNextLogin / 60000);
+      console.log(`[usa] Session en cooldown pour ${cached.fullName} — ${remainingCooldownMin} min avant prochain login`);
+      return null; // Retourner null pour indiquer qu'il faut attendre
+    }
+
+    // Token expiré et pas en cooldown → re-login complet
     console.log("[usa] Token expiré — re-login complet au lieu de refresh (évite 401 en cascade)");
     tokenCache.delete(cacheKey);
   }

@@ -17,6 +17,9 @@ import {
   REFERER_CREATE_APT,
   MIN_KEEP_ALIVE_INTERVAL_MS,
   MAX_KEEP_ALIVE_INTERVAL_MS,
+  SCAN_CUTOFF_BEFORE_EXPIRY_MS,
+  MIN_COOLDOWN_AFTER_EXPIRY_MS,
+  MAX_COOLDOWN_AFTER_EXPIRY_MS,
 } from "./config.js";
 
 export const tokenCache = new Map<string, CachedToken>();
@@ -318,6 +321,9 @@ let _sessionUa = USA_UA_POOL[1]; // Chrome/135 Windows par défaut
 // Map compte → index UA pour maintenir le même fingerprint
 const accountUaMap = new Map<string, number>();
 
+// Map compte → fingerprint cycle (pour Zero-Risk strategy)
+const accountFingerprintMap = new Map<string, { ua: string; chUa: string; platform: string }>();
+
 export function pickSessionUa(): void {
   _sessionUa = USA_UA_POOL[Math.floor(Math.random() * USA_UA_POOL.length)];
   console.log(`[usa] UA session: ${_sessionUa.ua.match(/Chrome\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60)}`);
@@ -325,6 +331,14 @@ export function pickSessionUa(): void {
 
 export function getStickyUaForAccount(username: string): number {
   const cacheKey = username.toLowerCase();
+  
+  // Vérifier d'abord si on a un fingerprint cycle pour aujourd'hui
+  if (accountFingerprintMap.has(cacheKey)) {
+    const fingerprint = accountFingerprintMap.get(cacheKey)!;
+    _sessionUa = fingerprint;
+    console.log(`[zero-risk] 🆔 Fingerprint cycle réutilisé pour ${username}: ${fingerprint.platform}`);
+    return 0; // Index 0 car fingerprint personnalisé
+  }
   
   if (accountUaMap.has(cacheKey)) {
     // Réutiliser le même UA pour ce compte
@@ -340,6 +354,16 @@ export function getStickyUaForAccount(username: string): number {
     console.log(`[usa] 📝 Nouveau UA sticky pour ${username}: Chrome/${_sessionUa.ua.match(/Chrome\/([\d.]+)/)?.[1]}`);
     return uaIndex;
   }
+}
+
+/**
+ * Définit un fingerprint cycle pour un compte (Zero-Risk strategy)
+ */
+export function setAccountFingerprint(username: string, fingerprint: { ua: string; chUa: string; platform: string }): void {
+  const cacheKey = username.toLowerCase();
+  accountFingerprintMap.set(cacheKey, fingerprint);
+  _sessionUa = fingerprint;
+  console.log(`[zero-risk] 🆔 Fingerprint cycle défini pour ${username}: ${fingerprint.platform}`);
 }
 
 /** Génère un ID de corrélation de 15 caractères aléatoires comme le bundle Angular. */
@@ -672,4 +696,93 @@ export function hasUsaProxy(): boolean {
 
 export function getActiveSessionUaLogLabel(): string {
   return _sessionUa.ua.match(/(?:Chrome|Edg)\/[\d.]+/)?.[0] ?? _sessionUa.ua.slice(0, 60);
+}
+
+
+// ── Fonctions pour l'algorithme "Session-First, Login-Last" ──────────────────
+
+/**
+ * Vérifie si la session est en phase de cooldown (après expiration du token).
+ * Retourne true si le token est expiré ET qu'on est dans la période de repos obligatoire.
+ */
+export function isSessionInCooldown(cached: CachedToken): boolean {
+  const now = Date.now();
+  
+  // Si le token n'est pas encore expiré, pas de cooldown
+  if (now < cached.expiresAt) {
+    return false;
+  }
+  
+  // Vérifier si on est dans la période de cooldown après expiration
+  // Le cooldown commence à l'expiration du token et dure 5-8 min
+  const timeSinceExpiry = now - cached.expiresAt;
+  const cooldownDuration = cached.cooldownDurationMs ?? 
+    (MIN_COOLDOWN_AFTER_EXPIRY_MS + Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS));
+  
+  // Stocker la durée du cooldown pour cette session
+  if (!cached.cooldownDurationMs) {
+    cached.cooldownDurationMs = cooldownDuration;
+  }
+  
+  return timeSinceExpiry < cooldownDuration;
+}
+
+/**
+ * Vérifie si la session approche de l'expiration et doit arrêter les scans.
+ * Retourne true si le token expire dans moins de SCAN_CUTOFF_BEFORE_EXPIRY_MS.
+ */
+export function isSessionApproachingExpiry(cached: CachedToken): boolean {
+  const now = Date.now();
+  const timeToExpiry = cached.expiresAt - now;
+  return timeToExpiry < SCAN_CUTOFF_BEFORE_EXPIRY_MS;
+}
+
+/**
+ * Vérifie si un token en cache est valide pour les scans (incluant le cutoff).
+ * Diffère de isCachedTokenValid() qui vérifie la validité pour le login/refresh.
+ */
+export function isCachedTokenValidForScans(cached: CachedToken): boolean {
+  // D'abord vérifier la validité basique
+  if (!isCachedTokenValid(cached)) {
+    return false;
+  }
+  
+  // Ensuite vérifier qu'on n'est pas en phase de cutoff
+  if (isSessionApproachingExpiry(cached)) {
+    return false;
+  }
+  
+  // Enfin vérifier qu'on n'est pas en cooldown
+  if (isSessionInCooldown(cached)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Calcule le temps restant avant le prochain login possible.
+ * Retourne 0 si le login est possible maintenant.
+ * Retourne le nombre de ms à attendre si en cooldown.
+ */
+export function getTimeUntilNextLogin(cached: CachedToken): number {
+  const now = Date.now();
+  
+  // Si le token n'est pas encore expiré, pas besoin de login
+  if (now < cached.expiresAt) {
+    return 0;
+  }
+  
+  // Si en cooldown, calculer le temps restant
+  if (isSessionInCooldown(cached)) {
+    const timeSinceExpiry = now - cached.expiresAt;
+    const cooldownDuration = cached.cooldownDurationMs ?? 
+      (MIN_COOLDOWN_AFTER_EXPIRY_MS + Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS));
+    
+    const remainingCooldown = cooldownDuration - timeSinceExpiry;
+    return Math.max(0, remainingCooldown);
+  }
+  
+  // Si le token est expiré mais pas en cooldown, login possible maintenant
+  return 0;
 }

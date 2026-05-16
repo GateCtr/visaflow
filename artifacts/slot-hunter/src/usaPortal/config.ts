@@ -83,6 +83,101 @@ export const HUMAN_ACTIVE_START_HOUR = 4; // 4h
 export const HUMAN_ACTIVE_END_HOUR = 0; // 0h (minuit) - avec minute check
 export const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
 
+// ── Algorithme "Session-First, Login-Last" ──────────────────────────────────
+// Arrêter les scans avant l'expiration du token pour éviter les re-logins immédiats
+// et ajouter un cooldown humain entre les sessions
+export const SCAN_CUTOFF_BEFORE_EXPIRY_MS = 8 * 60 * 1000; // 8 min avant expiration
+// Cooldown obligatoire après expiration du token avant re-login (5-8 min gaussien)
+export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 5 * 60 * 1000; // 5 min min
+export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min max
+
+// ── Stratégie "Zero-Risk" - Multi-couche anti-détection ──────────────────────
+
+// 1. Session Duration Randomization - Profils de durée variables
+export const SESSION_DURATION_PROFILES = [
+  { min: 25, max: 40, weight: 0.3 },   // Court (25-40 min) - 30%
+  { min: 40, max: 70, weight: 0.5 },   // Moyen (40-70 min) - 50%  
+  { min: 70, max: 120, weight: 0.2 },  // Long (70-120 min) - 20%
+];
+
+// 2. Heatmap Avoidance - Heures à éviter (UTC)
+export const HEATMAP_RISK_ZONES = [
+  { hour: 9, risk: 0.8, description: "Morning peak" },    // 9h-10h
+  { hour: 14, risk: 0.7, description: "Afternoon peak" }, // 14h-15h  
+  { hour: 18, risk: 0.6, description: "Evening peak" },   // 18h-19h
+];
+
+// 3. Anomaly Detection - Seuils de déclenchement
+export const ANOMALY_DETECTION_THRESHOLDS = {
+  responseTimeSpike: 5000,    // >5s de réponse = anomalie
+  errorRateIncrease: 0.3,     // >30% d'erreurs = anomalie
+  captchaFrequency: 0.2,      // >20% de captchas = anomalie
+  consecutiveErrors: 3,       // 3 erreurs consécutives
+  errorWindowMs: 5 * 60 * 1000, // Fenêtre de 5 min pour les erreurs
+};
+
+// 4. Graceful Degradation - Niveaux de santé serveur
+export const SERVER_HEALTH_LEVELS = {
+  HEALTHY: { threshold: 0.8, intervalMs: 180000, timeoutMs: 30000, retries: 3 },
+  DEGRADED: { threshold: 0.5, intervalMs: 300000, timeoutMs: 45000, retries: 2 },
+  STRESSED: { threshold: 0.3, intervalMs: 600000, timeoutMs: 60000, retries: 1 },
+  CRITICAL: { threshold: 0.0, intervalMs: 900000, timeoutMs: 90000, retries: 0 },
+};
+
+// 5. Behavioral Model - Actions humaines simulées
+export const HUMAN_ACTION_MODEL = {
+  thinking: { min: 2000, max: 8000, probability: 0.4 },
+  reading: { min: 5000, max: 15000, probability: 0.3 },
+  navigating: { min: 3000, max: 10000, probability: 0.2 },
+  idle: { min: 10000, max: 30000, probability: 0.1 },
+};
+
+// 6. Fingerprint Cycling - Profils cohérents pour utilisateur basé à Kinshasa (RDC)
+export const FINGERPRINT_CYCLES = [
+  { // Jour 1 : Chrome Windows - Kinshasa (français générique)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    acceptLanguage: "fr,fr-FR;q=0.9,en;q=0.8",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+  { // Jour 2 : Chrome Windows - Kinshasa (français Congo)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    acceptLanguage: "fr-CD,fr;q=0.9,en;q=0.8,ln;q=0.7",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+  { // Jour 3 : Edge Windows - Kinshasa
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
+    acceptLanguage: "fr,fr-CD;q=0.9,en;q=0.8",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+  { // Jour 4 : Chrome Windows - Kinshasa (version légèrement plus ancienne)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    acceptLanguage: "fr,en;q=0.9,fr-FR;q=0.8",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+  { // Jour 5 : Chrome macOS - Kinshasa (utilisateur Mac)
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    acceptLanguage: "fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7",
+    timezone: "Africa/Kinshasa",
+    platform: "macOS"
+  },
+  { // Jour 6 : Chrome Windows - Kinshasa (avec lingala)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    acceptLanguage: "fr,fr-CD;q=0.9,ln;q=0.8,en;q=0.7",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+  { // Jour 7 : Chrome Windows - Kinshasa (simple)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    acceptLanguage: "fr-FR,fr;q=0.9,en;q=0.8",
+    timezone: "Africa/Kinshasa",
+    platform: "Windows"
+  },
+];
+
 export const REFERER_LOGIN = "https://www.usvisaappt.com/visaapplicantui/login";
 export const REFERER_DASHBOARD = "https://www.usvisaappt.com/visaapplicantui/home/dashboard";
 export const REFERER_REQUESTS = "https://www.usvisaappt.com/visaapplicantui/home/dashboard/requests";

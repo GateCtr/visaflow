@@ -17,6 +17,8 @@ export interface CachedToken {
   allowedOfcs?: Array<{ postUserId: number }>;
   targetSessionDuration?: number; // Durée cible aléatoire pour cette session (30-120 min)
   keepAliveInterval?: number; // Intervalle de keep-alive variable pour cette session (5-12 min)
+  cooldownDurationMs?: number; // Durée du cooldown après expiration du token (5-8 min)
+  scanCount?: number; // Nombre de scans effectués pendant cette session
 }
 
 export interface UsaLoginResponse {
