@@ -205,3 +205,30 @@ export const REFERER_MANAGE_APT = "https://www.usvisaappt.com/visaapplicantui/ho
 export const MIN_KEEP_ALIVE_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 export const MAX_KEEP_ALIVE_INTERVAL_MS = 12 * 60 * 1000; // 12 min
 export const WARMUP_INTERVAL_MS = 8 * 60 * 1000;
+
+// ── Smart Refresh v2 — Configuration ─────────────────────────────────────────
+
+// #5 Smart Refresh Interval — adapte la fréquence 20-180s selon fenêtre + santé
+export const SMART_REFRESH_INTERVAL_MIN_MS = 20 * 1000;   // 20s (fenêtre chaude, concurrence extrême)
+export const SMART_REFRESH_INTERVAL_MAX_MS = 180 * 1000;  // 3 min (fenêtre froide, serveur stressé)
+export const SMART_REFRESH_INTERVAL_BASE_MS = 60 * 1000;  // 60s (base avant multiplicateurs)
+
+// #6 Stealthy Alternation — ratio des endpoints
+export const STEALTHY_LANDING_PAGE_RATIO = 0.33;  // 1/3 getLandingPage
+// Le reste (2/3) = getFirstAvailableMonth (le vrai check)
+
+// #7 Dual-Dossier Coverage — coordination inter-dossiers
+export const DOSSIER_COORDINATION_STALE_MS = 10 * 60 * 1000; // Entrée considérée morte après 10 min
+export const DOSSIER_COORDINATION_MIN_BREAK_MS = 30 * 1000;  // Pause minimum même si coordination
+
+// #1 Early Bird — Prediction
+export const PREDICTION_HISTORY_DAYS = 7;        // Historique sur 7 jours glissants
+export const PREDICTION_HOT_THRESHOLD = 0.4;     // Score >= 0.4 = fenêtre chaude
+export const PREDICTION_WARM_THRESHOLD = 0.2;    // Score >= 0.2 = fenêtre tiède
+export const PREDICTION_MIN_OBSERVATIONS = 3;    // Minimum d'observations pour fiabilité
+
+// #9 Competitive Intelligence — Durée de vie des slots
+export const COMPETITION_EXTREME_MS = 30 * 1000;     // < 30s = concurrence extrême
+export const COMPETITION_HIGH_MS = 2 * 60 * 1000;    // < 2 min = haute
+export const COMPETITION_MODERATE_MS = 5 * 60 * 1000; // < 5 min = modérée
+export const COMPETITION_LOW_MS = 10 * 60 * 1000;    // < 10 min = faible

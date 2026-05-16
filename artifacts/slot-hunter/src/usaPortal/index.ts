@@ -28,3 +28,30 @@ export {
   invalidatePaymentStatusCache,
   cleanupScanBehaviorState,
 } from "./scan-behavior.js";
+
+// ── Smart Refresh v2 exports ─────────────────────────────────────────────────
+export {
+  recordSlotObservation,
+  injectHistoricalObservations,
+  isHotWindow,
+  getRefreshMultiplier,
+  getNextHotWindow,
+  getHotWindows,
+  getCurrentPredictionScore,
+  logPredictionSummary,
+} from "./slot-prediction.js";
+
+export {
+  recordSlotAppearance,
+  recordSlotDisappearance,
+  recordAllSlotsGone,
+  getCompetitionLevel,
+  getCompetitionStats,
+  getCompetitionRefreshMultiplier,
+  logCompetitionIntelligence,
+} from "./competitive-intelligence.js";
+
+export {
+  registerDossierRefresh,
+  unregisterDossierRefresh,
+} from "./continuous-refresh.js";
