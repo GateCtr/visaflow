@@ -108,6 +108,7 @@ export const internalRecordScan = internalMutation({
     slotInfo: v.optional(v.string()),
     screenshotStorageId: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    pageCaptures: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const watcher = await ctx.db
@@ -124,6 +125,7 @@ export const internalRecordScan = internalMutation({
       slotInfo: args.slotInfo,
       screenshotStorageId: args.screenshotStorageId,
       errorMessage: args.errorMessage,
+      pageCaptures: args.pageCaptures,
     });
 
     // Prune old scans (keep last MAX_SCANS)
