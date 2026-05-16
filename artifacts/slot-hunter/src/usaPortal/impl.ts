@@ -368,8 +368,6 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         return "not_found";
       }
     }
-      return "not_found";
-    }
     
     // 2. Vérifier durée session (30-120 minutes aléatoire par session)
     if (delayCached?.sessionStartedAt) {
