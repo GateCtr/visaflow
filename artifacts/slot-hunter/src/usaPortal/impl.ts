@@ -447,6 +447,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   let sessionProxy: string | undefined;
   let sessionUaIdx: number;
+  let preFlightExitIp: string | undefined; // IP de sortie du pre-flight (évite un 2ème check pour les nouvelles sessions)
 
   if (hasStickyCache && stickyCached) {
     sessionProxy  = stickyCached.proxyUrl;
@@ -480,6 +481,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
         if (ipHealth.healthy) {
           sessionProxy = ipStickyUrl;
+          preFlightExitIp = ipHealth.exitIp ?? undefined;
           console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 60min`);
         } else {
           // iProyal DOWN → fallback BrightData si disponible
@@ -491,6 +493,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
             if (bdHealth.healthy) {
               sessionProxy = bdStickyUrl;
+              preFlightExitIp = bdHealth.exitIp ?? undefined;
               startBrightDataKeepAlive(bdStickyUrl, username);
               console.log(`[usa] 🌐 FALLBACK BrightData OK (${bdHealth.latencyMs}ms) — sticky + keep-alive`);
             } else {
@@ -594,28 +597,34 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── PILLAR 1 : Pre-Flight Proxy Health Check ────────────────────────────────
-  // Le pre-flight est maintenant intégré dans la sélection proxy avec failover (ci-dessus).
-  // On initialise juste le proxy guard mid-session si un proxy a été sélectionné.
+  // Le pre-flight est intégré dans la sélection proxy avec failover (ci-dessus).
+  // On initialise le proxy guard mid-session SANS refaire un check (déjà fait au failover).
+  // L'IP de sortie est déjà connue depuis le pre-flight initial.
   if (sessionProxy) {
-    // Vérifier la latence une dernière fois (le proxy a déjà passé le pre-flight dans le failover)
-    // et initialiser le mid-session proxy guard avec l'IP de sortie connue.
-    const proxyHealth = await preFlightProxyCheck(sessionProxy, job.id);
-    if (!proxyHealth.healthy) {
-      // Cas rare : proxy est tombé entre la sélection et ici (quelques ms)
-      console.error(`[usa] ❌ Proxy tombé juste après sélection — session avortée`);
-      rotateIproyalSession(username);
-      rotateBrightDataSession(username);
-      stopBrightDataKeepAlive(username);
-      await sendHeartbeat({
-        applicationId: job.id,
-        result: "error",
-        errorMessage: `Proxy instable (${proxyHealth.error}) — session avortée, rotation IP programmée`,
-      });
-      result = "error";
-      return result;
+    if (hasStickyCache) {
+      // Session réutilisée → vérifier que le proxy est toujours vivant + obtenir IP actuelle.
+      const proxyHealth = await preFlightProxyCheck(sessionProxy, job.id);
+      if (!proxyHealth.healthy) {
+        console.error(`[usa] ❌ Proxy mort mid-cache — session avortée`);
+        rotateIproyalSession(username);
+        rotateBrightDataSession(username);
+        stopBrightDataKeepAlive(username);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "error",
+          errorMessage: `Proxy instable (${proxyHealth.error}) — session avortée, rotation IP programmée`,
+        });
+        result = "error";
+        return result;
+      }
+      console.log(`[usa] ✅ Proxy confirmé — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
+      initProxyGuard(username, sessionProxy!, proxyHealth.exitIp ?? undefined);
+    } else {
+      // Nouveau token → le pre-flight a DÉJÀ été fait dans le failover ci-dessus.
+      // On réutilise l'IP connue → économie de ~2-5s par cycle (pas de 2ème HTTP call).
+      console.log(`[usa] ✅ Proxy guard initialisé (IP pre-flight: ${preFlightExitIp ?? "inconnue"})`);
+      initProxyGuard(username, sessionProxy!, preFlightExitIp);
     }
-    console.log(`[usa] ✅ Proxy confirmé — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
-    initProxyGuard(username, sessionProxy!, proxyHealth.exitIp ?? undefined);
   }
   // ──────────────────────────────────────────────────────────────────────────
 

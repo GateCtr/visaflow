@@ -551,13 +551,9 @@ export function initializeZeroRiskStrategy(username: string, totalAccounts: numb
   // 1. Enregistrer dans l'orchestrateur
   scanOrchestrator.registerAccount(username, totalAccounts);
   
-  // 2. Obtenir l'empreinte digitale du jour
-  const fingerprint = getFingerprintForToday(username);
-  console.log(`[zero-risk] 🆔 ${username}: ${fingerprint.platform}, ${fingerprint.timezone}, ${fingerprint.acceptLanguage.split(',')[0]}`);
-  
-  // 3. Déterminer la durée de session
-  const sessionDuration = getRandomSessionDuration(username);
-  console.log(`[zero-risk] ⏰ ${username}: session ${Math.round(sessionDuration / 60000)}min`);
+  // 2. Déterminer la durée de session (log une seule fois, pas de log fingerprint ici
+  //    car impl.ts le fait déjà après setAccountFingerprint)
+  getRandomSessionDuration(username);
 }
 
 /**

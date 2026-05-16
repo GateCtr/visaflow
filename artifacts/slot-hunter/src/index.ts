@@ -406,8 +406,8 @@ const RUSH_WINDOWS: { start: number; end: number }[] = [
   { start:  7, end:  9 },
   { start: 12, end: 14 },
 ];
-const RUSH_INTERVAL_MIN_MS =  3 * 60_000; // 3 min (réduit de 1 min → 3 min pour sécurité anti-restriction)
-const RUSH_INTERVAL_MAX_MS =  4 * 60_000; // 4 min (réduit de 2 min → 4 min)
+const RUSH_INTERVAL_MIN_MS =  5 * 60_000; // 5 min — aligné sur le MIN_SCAN_INTERVAL de impl.ts pour éviter les cycles gaspillés
+const RUSH_INTERVAL_MAX_MS =  7 * 60_000; // 7 min — garde un avantage vs normal (5-10 min) tout en restant safe
 const RUSH_SILENCE_MIN_MS   =      45_000; // 45 s
 const RUSH_SILENCE_MAX_MS   =      90_000; // 90 s
 

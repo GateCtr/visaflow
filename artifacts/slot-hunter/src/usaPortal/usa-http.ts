@@ -338,7 +338,6 @@ export function getStickyUaForAccount(username: string): number {
   if (accountFingerprintMap.has(cacheKey)) {
     const fingerprint = accountFingerprintMap.get(cacheKey)!;
     _sessionUa = fingerprint;
-    console.log(`[zero-risk] 🆔 Fingerprint cycle réutilisé pour ${username}: ${fingerprint.platform}`);
     return 0; // Index 0 car fingerprint personnalisé
   }
   
@@ -365,7 +364,6 @@ export function setAccountFingerprint(username: string, fingerprint: { ua: strin
   const cacheKey = username.toLowerCase();
   accountFingerprintMap.set(cacheKey, fingerprint);
   _sessionUa = fingerprint;
-  console.log(`[zero-risk] 🆔 Fingerprint cycle défini pour ${username}: ${fingerprint.platform}`);
 }
 
 /** Génère un ID de corrélation de 15 caractères aléatoires comme le bundle Angular. */
