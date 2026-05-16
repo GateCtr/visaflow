@@ -717,10 +717,11 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
 
   if (job.destination === "usa") {
     console.log(`[navigator] Destination USA → mode API directe (sans Playwright login)`);
-    // Timeout identique aux sessions Playwright : si le portail ne répond plus,
-    // le process ne se bloque pas indéfiniment. La session USA peut prendre plus
-    // de temps (warm-up + scan multi-OFCs), donc on accorde 8 minutes.
-    const usaTimeoutMs = 8 * 60 * 1000;
+    // Timeout pour les sessions USA API :
+    // Le refresh continu v2 a un budget de 42 min + le scan initial prend ~3-5 min.
+    // Total max réaliste : ~50 min. On met 52 min pour laisser une marge de cleanup.
+    // ANCIEN : 8 min → causait des "Session timed out" systématiques pendant le refresh.
+    const usaTimeoutMs = 52 * 60 * 1000;
     return withTimeout(runUsaApiSession(job), usaTimeoutMs);
   }
 
