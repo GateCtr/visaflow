@@ -25,6 +25,12 @@ import {
   rotateIproyalSession,
   initSessionHeaders,
 } from "./usa-http.js";
+import {
+  makeBrightDataStickyUrl,
+  rotateBrightDataSession,
+  startBrightDataKeepAlive,
+  stopBrightDataKeepAlive,
+} from "./brightdata-proxy.js";
 import { scanUsaSlotsViaAPI } from "./scan-slot-booking.js";
 import {
   checkUsaAppointmentRequestStatus,
@@ -396,6 +402,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         // son navigateur sans cliquer "déconnexion" (très courant).
         tokenCache.delete(delayCacheKey);
         proxyPool.releaseStickyProxy(username);
+        stopBrightDataKeepAlive(username);
         
         // Calculer pause variable (15-45 min) — MINIMUM 15 min pour éviter le session-cycling
         const pauseDuration = 15 * 60 * 1000 + Math.random() * (MAX_SESSION_BREAK_MS - 15 * 60 * 1000);
@@ -438,22 +445,24 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     sessionUaIdx = getStickyUaForAccount(username);
     // Appliquer l'UA
     setActiveSessionUaFromPoolIndex(sessionUaIdx);
-    // ── DÉSACTIVATION PROXY POUR USA (cause 401) ──────────────────────────
-    // Le proxy iProyal cause des 401 sur les endpoints API USA.
-    // Sans proxy, les endpoints fonctionnent (testé manuellement).
-    // On utilise donc la connexion directe (IP Railway fixe).
-    // 
-    // ⚠️ SAUF si l'admin active useResidentialProxy dans la config hunter.
-    // Dans ce cas, on utilise un proxy sticky 60 min via iProyal.
+    // ── SÉLECTION PROXY RÉSIDENTIEL (BrightData > iProyal > direct) ──────
     // Le JWT est lié à l'IP → le proxy doit rester le même pendant toute la session.
+    // Priorité : BrightData (sticky session + keep-alive) > iProyal > connexion directe.
     const adminWantsProxy = job.hunterConfig.useResidentialProxy === true;
-    if (adminWantsProxy && process.env.IPROYAL_PROXY_URL) {
+    if (adminWantsProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
+      // BrightData résidentiel sticky (session dans le username, keep-alive auto)
+      const stickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username);
+      sessionProxy = stickyUrl;
+      // Démarrer le keep-alive proxy (ping toutes les 2-3 min pour éviter idle timeout)
+      startBrightDataKeepAlive(stickyUrl, username);
+      console.log(`[usa] 🌐 BrightData résidentiel ACTIVÉ (sticky + keep-alive auto)`);
+    } else if (adminWantsProxy && process.env.IPROYAL_PROXY_URL) {
       const stickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 60, username);
       sessionProxy = stickyUrl;
-      console.log(`[usa] 🌐 Proxy résidentiel ACTIVÉ par admin (sticky 60min)`);
+      console.log(`[usa] 🌐 iProyal résidentiel ACTIVÉ par admin (sticky 60min)`);
     } else {
       sessionProxy = undefined;
-      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA (cause 401) — connexion directe Railway`);
+      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA — connexion directe Railway`);
     }
     
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
@@ -475,6 +484,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       console.warn(`[usa] ⚠️ Session morte (keep-alive 401) — suppression cache, re-login au prochain cycle`);
       tokenCache.delete(stickyCacheKey);
       proxyPool.releaseStickyProxy(username);
+      stopBrightDataKeepAlive(username);
       botLog({ applicationId: job.id, step: "keep_alive", status: "fail", data: { username, error: "Session expirée côté serveur — re-login nécessaire" } });
       await sendHeartbeat({
         applicationId: job.id,
@@ -504,6 +514,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       });
       // Forcer rotation IP pour le prochain cycle
       rotateIproyalSession(username);
+      rotateBrightDataSession(username);
       await sendHeartbeat({
         applicationId: job.id,
         result: "error",
@@ -529,9 +540,10 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     anomalyDetector.recordMetric(username, 'error', 1);
     anomalyDetector.recordMetric(username, 'responseTime', 10000); // 10s pour erreur
     
-    // Si erreur réseau (proxy 504, tunnel rejeté) → forcer rotation IP iProyal au prochain login
+    // Si erreur réseau (proxy 504, tunnel rejeté) → forcer rotation IP au prochain login
     if (msg.includes("Proxy") || msg.includes("tunnel") || msg.includes("504") || msg.includes("Réseau")) {
       rotateIproyalSession(username);
+      rotateBrightDataSession(username);
     }
     botLog({ applicationId: job.id, step: "login", status: "fail", data: { username, error: msg.slice(0, 300) } });
     await sendHeartbeat({
@@ -808,6 +820,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       // Supprimer le cache et forcer une pause inter-session
       tokenCache.delete(scanCapCacheKey);
       proxyPool.releaseStickyProxy(username);
+      stopBrightDataKeepAlive(username);
       
       const pauseDuration = 15 * 60 * 1000 + Math.random() * (MAX_SESSION_BREAK_MS - 15 * 60 * 1000);
       const pauseMinutes = Math.round(pauseDuration / 60000);
@@ -935,11 +948,13 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       // Proxy mort → garder le cache (le guard proxy-expiry cooldown s'appliquera)
       // Juste libérer le sticky proxy pour rotation IP au prochain login
       proxyPool.releaseStickyProxy(username);
+      stopBrightDataKeepAlive(username);
       console.log(`[usa] 🔒 Cache CONSERVÉ (proxy mort) — cooldown ${Math.round(MIN_COOLDOWN_AFTER_EXPIRY_MS / 60000)}-${Math.round(MAX_COOLDOWN_AFTER_EXPIRY_MS / 60000)} min avant re-login`);
     } else {
       // Autre erreur (credentials, réseau, 401 non-proxy) → supprimer le cache
       tokenCache.delete(logoutCacheKey);
       proxyPool.releaseStickyProxy(username);
+      stopBrightDataKeepAlive(username);
       console.log(`[usa] 🗑️ Cache supprimé (${result}) — JWT expirera naturellement côté serveur`);
     }
   } else if (username) {
@@ -964,6 +979,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         // Session trop longue → supprimer le cache (pas de logout explicite)
         tokenCache.delete(maintainCacheKey);
         proxyPool.releaseStickyProxy(username);
+        stopBrightDataKeepAlive(username);
         console.log(`[usa] ⏰ Session expirée naturellement (${sessionMinutes}min) — cache supprimé, pas de logout`);
       }
     } else {
