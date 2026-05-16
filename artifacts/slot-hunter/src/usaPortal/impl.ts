@@ -445,24 +445,104 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     sessionUaIdx = getStickyUaForAccount(username);
     // Appliquer l'UA
     setActiveSessionUaFromPoolIndex(sessionUaIdx);
-    // ── SÉLECTION PROXY RÉSIDENTIEL (BrightData > iProyal > direct) ──────
+    // ── SÉLECTION PROXY RÉSIDENTIEL AVEC FAILOVER (iProyal > BrightData > 2captcha) ──
     // Le JWT est lié à l'IP → le proxy doit rester le même pendant toute la session.
-    // Priorité : BrightData (sticky session + keep-alive) > iProyal > connexion directe.
+    // Priorité : iProyal (sticky 60min) > BrightData (sticky + keep-alive, KYC requis) > 2captcha rotatif.
+    // FAILOVER : Si le proxy prioritaire échoue au pre-flight, on essaie le suivant
+    // AVANT de créer le JWT (donc pas de changement d'IP mid-session).
+    // NOTE: BrightData requiert une vérification KYC pour les POST sur les sites .gov.
+    //       Une fois le KYC complété, inverser la priorité (BrightData > iProyal).
     const adminWantsProxy = job.hunterConfig.useResidentialProxy === true;
-    if (adminWantsProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-      // BrightData résidentiel sticky (session dans le username, keep-alive auto)
-      const stickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username);
-      sessionProxy = stickyUrl;
-      // Démarrer le keep-alive proxy (ping toutes les 2-3 min pour éviter idle timeout)
-      startBrightDataKeepAlive(stickyUrl, username);
-      console.log(`[usa] 🌐 BrightData résidentiel ACTIVÉ (sticky + keep-alive auto)`);
-    } else if (adminWantsProxy && process.env.IPROYAL_PROXY_URL) {
-      const stickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 60, username);
-      sessionProxy = stickyUrl;
-      console.log(`[usa] 🌐 iProyal résidentiel ACTIVÉ par admin (sticky 60min)`);
+    if (adminWantsProxy) {
+      const hasBrightData = !!process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL;
+      const hasIproyal = !!process.env.IPROYAL_PROXY_URL;
+
+      if (hasIproyal) {
+        // Tenter iProyal en premier (sticky 60min, pas de KYC requis)
+        const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 60, username);
+        const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);
+
+        if (ipHealth.healthy) {
+          sessionProxy = ipStickyUrl;
+          console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 60min`);
+        } else {
+          // iProyal DOWN → fallback BrightData si disponible
+          console.warn(`[usa] ⚠️ iProyal pre-flight FAILED: ${ipHealth.error} — tentative fallback...`);
+
+          if (hasBrightData) {
+            const bdStickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
+            const bdHealth = await preFlightProxyCheck(bdStickyUrl, job.id);
+
+            if (bdHealth.healthy) {
+              sessionProxy = bdStickyUrl;
+              startBrightDataKeepAlive(bdStickyUrl, username);
+              console.log(`[usa] 🌐 FALLBACK BrightData OK (${bdHealth.latencyMs}ms) — sticky + keep-alive`);
+            } else {
+              // iProyal + BrightData DOWN → fallback 2captcha rotatif
+              console.warn(`[usa] ⚠️ BrightData aussi DOWN: ${bdHealth.error} — tentative 2captcha...`);
+              if (proxyPool.isConfigured) {
+                const poolResult = await proxyPool.getProxy();
+                if (poolResult?.proxy) {
+                  sessionProxy = poolResult.proxy;
+                  console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (iProyal + BrightData down)`);
+                } else {
+                  console.error(`[usa] ❌ TOUS LES PROXIES DOWN (iProyal + BD + 2captcha) — ABORT session`);
+                  await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée pour protéger l'IP" });
+                  result = "error";
+                  return result;
+                }
+              } else {
+                console.error(`[usa] ❌ iProyal + BD DOWN + 2captcha non configuré — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
+            }
+          } else {
+            // Pas de BrightData configuré → fallback 2captcha directement
+            console.warn(`[usa] ⚠️ iProyal DOWN + pas de BrightData — tentative 2captcha...`);
+            if (proxyPool.isConfigured) {
+              const poolResult = await proxyPool.getProxy();
+              if (poolResult?.proxy) {
+                sessionProxy = poolResult.proxy;
+                console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (iProyal down, pas de BD)`);
+              } else {
+                console.error(`[usa] ❌ iProyal DOWN + 2captcha pool vide — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
+            } else {
+              console.error(`[usa] ❌ iProyal DOWN + aucun fallback — ABORT session`);
+              await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Proxy down et pas de fallback — session avortée" });
+              result = "error";
+              return result;
+            }
+          }
+        }
+      } else if (hasBrightData) {
+        // Ni BrightData ni iProyal → utiliser 2captcha rotatif
+        const poolResult = await proxyPool.getProxy();
+        if (poolResult?.proxy) {
+          sessionProxy = poolResult.proxy;
+          console.log(`[usa] 🌐 2captcha résidentiel rotatif (seul proxy configuré)`);
+        } else {
+          console.error(`[usa] ❌ 2captcha pool vide — ABORT session (IP Railway jamais exposée)`);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Pool 2captcha vide — session avortée" });
+          result = "error";
+          return result;
+        }
+      } else {
+        // AUCUN proxy configuré → ABORT (ne JAMAIS exposer l'IP Railway)
+        console.error(`[usa] ❌ AUCUN proxy configuré (useResidentialProxy=true mais 0 provider) — ABORT`);
+        await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Aucun proxy configuré — session avortée pour protéger l'IP Railway" });
+        result = "error";
+        return result;
+      }
     } else {
+      // useResidentialProxy = false → connexion directe autorisée par l'admin
       sessionProxy = undefined;
-      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ pour USA — connexion directe Railway`);
+      console.log(`[usa] 🔌 Proxy DÉSACTIVÉ par admin — connexion directe Railway`);
     }
     
     sessionUaIdx = Math.floor(Math.random() * USA_UA_POOL.length);
@@ -498,23 +578,18 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── PILLAR 1 : Pre-Flight Proxy Health Check ────────────────────────────────
-  // Si un proxy résidentiel est actif, vérifier sa connectivité AVANT de tenter
-  // le login. Un proxy instable → latence > 5s ou timeout → ABORT immédiat.
-  // On ne risque JAMAIS un login avec un proxy mort (préserve la réputation du compte).
+  // Le pre-flight est maintenant intégré dans la sélection proxy avec failover (ci-dessus).
+  // On initialise juste le proxy guard mid-session si un proxy a été sélectionné.
   if (sessionProxy) {
+    // Vérifier la latence une dernière fois (le proxy a déjà passé le pre-flight dans le failover)
+    // et initialiser le mid-session proxy guard avec l'IP de sortie connue.
     const proxyHealth = await preFlightProxyCheck(sessionProxy, job.id);
     if (!proxyHealth.healthy) {
-      console.error(`[usa] ❌ PRE-FLIGHT PROXY CHECK FAILED — session avortée pour préserver le compte`);
-      console.error(`[usa]    Raison: ${proxyHealth.error}`);
-      botLog({
-        applicationId: job.id,
-        step: "proxy_preflight_abort",
-        status: "fail",
-        data: { username, proxy: sessionProxy.replace(/:([^:@]+)@/, ":***@"), error: proxyHealth.error, latencyMs: proxyHealth.latencyMs },
-      });
-      // Forcer rotation IP pour le prochain cycle
+      // Cas rare : proxy est tombé entre la sélection et ici (quelques ms)
+      console.error(`[usa] ❌ Proxy tombé juste après sélection — session avortée`);
       rotateIproyalSession(username);
       rotateBrightDataSession(username);
+      stopBrightDataKeepAlive(username);
       await sendHeartbeat({
         applicationId: job.id,
         result: "error",
@@ -523,8 +598,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       result = "error";
       return result;
     }
-    console.log(`[usa] ✅ Pre-flight proxy OK — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
-    // Initialiser le mid-session proxy guard avec l'IP de sortie connue
+    console.log(`[usa] ✅ Proxy confirmé — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
     initProxyGuard(username, sessionProxy!, proxyHealth.exitIp ?? undefined);
   }
   // ──────────────────────────────────────────────────────────────────────────
