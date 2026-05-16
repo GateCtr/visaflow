@@ -736,6 +736,10 @@ export async function runUsaSlotScanMain(
               confirmationCode: retryBooking.appointmentId?.toString(),
               screenshotStorageId: pdfStorageId,
             });
+            // Envoyer les découvertes collectées avant le return
+            if (scanDiscoveryEvents.length > 0) {
+              reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
+            }
             return "slot_found";
           }
           // Retry exhausté — continuer vers l'OFC suivante
@@ -802,6 +806,13 @@ export async function runUsaSlotScanMain(
           confirmationCode: booking.appointmentId?.toString(),
           screenshotStorageId: pdfStorageId,
         });
+
+        // ── 4. Envoyer les événements de découverte collectés pendant ce cycle ──
+        // IMPORTANT: Ce batch doit être envoyé AVANT le return pour que les dates
+        // découvertes (outcome="captured") soient visibles dans le calendrier admin.
+        if (scanDiscoveryEvents.length > 0) {
+          reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
+        }
 
         return "slot_found";
       }
