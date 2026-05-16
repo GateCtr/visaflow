@@ -811,6 +811,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     } catch (scanError) {
       hadError = true;
       console.error("[zero-risk] ❌ Erreur pendant le scan:", scanError);
+      
+      // Si l'erreur vient du proxy-session-guard (503 PROXY_DEAD_MID_SESSION),
+      // forcer l'expiration du proxy dans le cache pour que le cooldown s'applique.
+      const scanErrMsg = scanError instanceof Error ? scanError.message : String(scanError);
+      if (scanErrMsg.includes("PROXY_DEAD") || scanErrMsg.includes("session frozen")) {
+        const frozenCached = tokenCache.get(username.toLowerCase());
+        if (frozenCached && frozenCached.proxyExpiresAt && Date.now() < frozenCached.proxyExpiresAt) {
+          // Forcer l'expiration à maintenant pour déclencher le cooldown
+          frozenCached.proxyExpiresAt = Date.now();
+          console.log(`[usa] 🔒 proxyExpiresAt forcé à maintenant — cooldown s'appliquera au prochain cycle`);
+        }
+      }
+      
       result = "error";
     }
     
@@ -859,11 +872,25 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   const logoutCacheKey = username.toLowerCase();
   
   if (result === "login_failed" || result === "error") {
-    // Token probablement invalide — supprimer le cache pour forcer un re-login
-    // au prochain cycle (APRÈS le cooldown). Pas de requête logout au serveur.
-    tokenCache.delete(logoutCacheKey);
-    proxyPool.releaseStickyProxy(username);
-    console.log(`[usa] 🗑️ Cache supprimé (${result}) — JWT expirera naturellement côté serveur`);
+    // ── IMPORTANT: Ne PAS supprimer le cache si le proxy était actif et est mort ──
+    // Si on supprime le cache, le prochain cycle ne verra pas le proxyExpiresAt
+    // et fera un re-login IMMÉDIAT (sans cooldown) = trigger restriction.
+    // Solution: garder le cache avec proxyExpiresAt pour que usa-session.ts
+    // applique le guard proxy-expiry cooldown au prochain cycle.
+    const errorCached = tokenCache.get(logoutCacheKey);
+    const proxyWasDead = errorCached?.proxyExpiresAt && Date.now() >= errorCached.proxyExpiresAt;
+    
+    if (proxyWasDead) {
+      // Proxy mort → garder le cache (le guard proxy-expiry cooldown s'appliquera)
+      // Juste libérer le sticky proxy pour rotation IP au prochain login
+      proxyPool.releaseStickyProxy(username);
+      console.log(`[usa] 🔒 Cache CONSERVÉ (proxy mort) — cooldown ${Math.round(MIN_COOLDOWN_AFTER_EXPIRY_MS / 60000)}-${Math.round(MAX_COOLDOWN_AFTER_EXPIRY_MS / 60000)} min avant re-login`);
+    } else {
+      // Autre erreur (credentials, réseau, 401 non-proxy) → supprimer le cache
+      tokenCache.delete(logoutCacheKey);
+      proxyPool.releaseStickyProxy(username);
+      console.log(`[usa] 🗑️ Cache supprimé (${result}) — JWT expirera naturellement côté serveur`);
+    }
   } else if (username) {
     // Maintenir la session seulement si pas trop longue
     const maintainCacheKey = username.toLowerCase();
