@@ -53,10 +53,12 @@ export function isCachedTokenValid(cached: CachedToken): boolean {
   // ce qui brise le pattern "login toutes les 55 min pile" détectable par le portail.
   const now = Date.now();
 
-  // JWT lié à l’IP du login : invalider avant expiration du sticky proxy (évite 401 en cascade).
+  // JWT lié à l'IP du login : invalider avant expiration du sticky proxy.
+  // IMPORTANT: le cooldown normal (8-25 min) s'appliquera au prochain cycle,
+  // garantissant qu'il n'y a JAMAIS de re-login rapide après expiration proxy.
   if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt - PROXY_EXPIRY_BUFFER_MS) {
     console.log(
-      `[usa] Token invalidé : proxy expire dans ${Math.round((cached.proxyExpiresAt - now) / 1000)}s — re-login nécessaire avec nouvelle IP`,
+      `[usa] Token invalidé : proxy expire dans ${Math.round((cached.proxyExpiresAt - now) / 1000)}s — re-login avec nouvelle IP après cooldown`,
     );
     return false;
   }

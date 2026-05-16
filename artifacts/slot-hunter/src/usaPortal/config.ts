@@ -81,7 +81,12 @@ export const NIGHT_PAUSE_END_MINUTE = 0; // 0 min
 // Heures d'activité normales (presque 24h sauf creux nocturne)
 export const HUMAN_ACTIVE_START_HOUR = 4; // 4h
 export const HUMAN_ACTIVE_END_HOUR = 0; // 0h (minuit) - avec minute check
-export const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
+// Buffer avant expiration proxy : le bot arrête les scans X min AVANT l'expiration.
+// Permet de garantir un cooldown suffisant entre la "mort" de la session proxy
+// et le re-login qui suivra (avec nouvelle IP).
+// Ancien: 2 min → re-login possible 2 min après invalidation = trop rapide si session longue.
+// Nouveau: 5 min → le cycle "invalidation proxy → cooldown 8-25 min → re-login" est safe.
+export const PROXY_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 // ── Algorithme "Session-First, Login-Last" ──────────────────────────────────
 // Arrêter les scans avant l'expiration du token pour éviter les re-logins immédiats
