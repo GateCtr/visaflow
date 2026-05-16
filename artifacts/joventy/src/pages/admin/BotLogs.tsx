@@ -53,57 +53,91 @@ const SCAN_META = {
   error:     { label: "Erreur",         dot: "bg-red-500",   badge: "bg-red-50 text-red-700 border-red-200",         icon: <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> },
 };
 
-// Step name → human-readable label
+// Step name → human-readable label (couvre tout le cycle bot USA + CEV)
 const STEP_LABELS: Record<string, string> = {
-  cev_http_setup_start: "Setup HTTP",
-  cev_http_login_ok: "Login VOWINT",
-  cev_http_login_failed: "Login echoue",
-  cev_http_vowint_cache_hit: "Cache VOWINT",
-  cev_http_app_id_found: "AppID trouve",
-  cev_http_integration_url: "URL Integration",
-  cev_http_cev_cookie_ok: "Cookie CEV",
-  cev_http_hcaptcha_start: "hCaptcha",
-  cev_http_hcaptcha_solved: "hCaptcha resolu",
-  cev_http_hcaptcha_failed: "hCaptcha echoue",
-  cev_http_captcha_response: "Reponse captcha",
-  cev_http_captcha_submit_failed: "Captcha echoue",
-  cev_http_validuntil_debug: "ValidUntil",
-  cev_http_redirect_discovery: "Redirect discovery",
-  cev_http_setup_complete: "Setup termine",
-  cev_http_setup_error: "Setup erreur",
-  cev_http_no_integration_url: "URL manquante",
-  cev_http_no_cev_cookie: "Cookie absent",
-  cev_http_no_app_id: "AppID absent",
-  cev_captcha_submit: "Captcha envoi",
-  cev_redirect_probe: "Probe redirect",
-  cev_no_availability: "Pas de creneaux",
-  cev_slots_available: "Creneaux dispo!",
-  cev_session_expired: "Session expiree",
-  cev_poll_result: "Poll resultat",
-  cev_poll_no_slots: "Poll: aucun slot",
-  cev_slots_raw_response: "Reponse brute",
-  cev_http_booking_start: "Booking debut",
-  cev_http_booking_confirmed: "Booking confirme!",
-  cev_http_selectslot_fetched: "Page SelectSlot",
-  cev_http_html_discovery: "Discovery HTML",
-  cev_http_available_slots: "Slots API",
-  cev_http_slot_selected: "Slot selectionne",
-  cev_http_submit_attempt: "Soumission",
-  cev_http_submit_response: "Reponse soumission",
-  cev_http_booking_crash: "Booking crash",
-  usa_login: "USA Login",
-  usa_check_slots: "USA Check slots",
-  usa_slot_found: "USA Slot trouve!",
-  usa_no_slots: "USA Aucun slot",
-  usa_error: "USA Erreur",
+  // ── USA Portal — Cycle complet ──
+  login: "🔑 Connexion portail",
+  session_start: "🚀 Début session",
+  session_end: "🏁 Fin session",
+  appointment_status: "📋 Statut dossier",
+  payment_check: "💳 Vérification paiement MRV",
+  ofc_list: "🏛️ Liste bureaux consulaires",
+  scan: "🔄 Scan créneaux",
+  scan_cutoff: "⏰ Arrêt scan (cutoff token)",
+  cooldown: "⏳ Cooldown entre sessions",
+  slots_found: "📅 Créneau détecté !",
+  booking_attempt: "📝 Tentative réservation",
+  booking_success: "✅ Réservation confirmée",
+  booking_fail: "❌ Réservation échouée",
+  confirmation_letter: "📄 Lettre de confirmation",
+  not_found: "🔍 Aucun créneau disponible",
+  error: "⚠️ Erreur",
+  human_behavior: "🧠 Comportement humain",
+  anti_detection: "🛡️ Anti-détection",
+  execution_time: "⏱️ Temps d'exécution",
+  // ── USA Portal — Erreurs spécifiques ──
+  rate_limit: "⛔ Rate limit (429)",
+  blocked: "🚫 Compte bloqué (403)",
+  restricted: "🔒 Compte restreint (401)",
+  token_expired: "🔄 Token expiré",
+  // ── USA Portal — Anciens labels compatibles ──
+  usa_login: "🔑 USA Login",
+  usa_check_slots: "🔄 USA Scan créneaux",
+  usa_slot_found: "📅 USA Créneau trouvé !",
+  usa_no_slots: "🔍 USA Aucun créneau",
+  usa_error: "⚠️ USA Erreur",
+  // ── CEV Portal — Setup HTTP ──
+  cev_http_setup_start: "🔧 Setup HTTP",
+  cev_http_login_ok: "🔑 Login VOWINT",
+  cev_http_login_failed: "❌ Login échoué",
+  cev_http_vowint_cache_hit: "💨 Cache VOWINT",
+  cev_http_app_id_found: "🆔 AppID trouvé",
+  cev_http_integration_url: "🔗 URL Intégration",
+  cev_http_cev_cookie_ok: "🍪 Cookie CEV",
+  cev_http_hcaptcha_start: "🤖 hCaptcha",
+  cev_http_hcaptcha_solved: "✅ hCaptcha résolu",
+  cev_http_hcaptcha_failed: "❌ hCaptcha échoué",
+  cev_http_captcha_response: "📨 Réponse captcha",
+  cev_http_captcha_submit_failed: "❌ Captcha échoué",
+  cev_http_validuntil_debug: "⏰ ValidUntil",
+  cev_http_redirect_discovery: "🔀 Redirect discovery",
+  cev_http_setup_complete: "✅ Setup terminé",
+  cev_http_setup_error: "❌ Setup erreur",
+  cev_http_no_integration_url: "⚠️ URL manquante",
+  cev_http_no_cev_cookie: "⚠️ Cookie absent",
+  cev_http_no_app_id: "⚠️ AppID absent",
+  cev_captcha_submit: "📨 Captcha envoi",
+  cev_redirect_probe: "🔀 Probe redirect",
+  cev_no_availability: "🔍 Pas de créneaux",
+  cev_slots_available: "📅 Créneaux dispo !",
+  cev_session_expired: "⏰ Session expirée",
+  cev_poll_result: "📊 Poll résultat",
+  cev_poll_no_slots: "🔍 Poll: aucun slot",
+  cev_slots_raw_response: "📦 Réponse brute",
+  // ── CEV Portal — Booking ──
+  cev_http_booking_start: "📝 Booking début",
+  cev_http_booking_confirmed: "✅ Booking confirmé !",
+  cev_http_selectslot_fetched: "📄 Page SelectSlot",
+  cev_http_html_discovery: "🔎 Discovery HTML",
+  cev_http_available_slots: "📅 Slots API",
+  cev_http_slot_selected: "✅ Slot sélectionné",
+  cev_http_submit_attempt: "📤 Soumission",
+  cev_http_submit_response: "📥 Réponse soumission",
+  cev_http_booking_crash: "💥 Booking crash",
 };
 
 // Keys that contain sensitive or long data (show truncated by default)
 const LONG_KEYS = new Set(["htmlRaw", "htmlPreview", "bodyPreview", "rawJsonPreview", "responsePreview", "visibleText"]);
 // Keys to highlight as important
-const IMPORTANT_KEYS = new Set(["finalDestinationUrl", "slotsAvailable", "isNoAvailability", "isSelectSlot", "error", "confirmationCode", "bookedDate", "bookedTime", "slotCount", "hasSlots"]);
+const IMPORTANT_KEYS = new Set([
+  "finalDestinationUrl", "slotsAvailable", "isNoAvailability", "isSelectSlot",
+  "error", "confirmationCode", "bookedDate", "bookedTime", "slotCount", "hasSlots",
+  // USA bot fields
+  "ofc", "date", "time", "slotId", "appointmentId", "responseMsg",
+  "paymentStatus", "errorMessage", "phase", "count",
+]);
 // Keys to hide by default (too technical for quick reading)
-const HIDDEN_KEYS = new Set(["ua", "cookieLen", "antiForgeryTokenPreview"]);
+const HIDDEN_KEYS = new Set(["ua", "cookieLen", "antiForgeryTokenPreview", "flow", "randomValue", "modifications"]);
 
 function formatTs(ts: number) {
   const d = new Date(ts);
@@ -579,19 +613,46 @@ function InlinePreview({ data }: { data: string }) {
 
   // Pick the most interesting fields to show inline
   const picks: string[] = [];
-  const priorityKeys = ["error", "finalDestinationUrl", "slotsAvailable", "isNoAvailability", "slotCount", "hasSlots", "httpStatus", "confirmationCode", "bookedDate", "bookedTime", "redirectUrl", "status", "remainingSeconds"];
+  const priorityKeys = [
+    // USA bot cycle fields
+    "ofc", "date", "time", "slotId", "appointmentId", "username", "applicationId",
+    "flow", "phase", "count", "offices", "paymentStatus", "visaClass",
+    "message", "responseMsg", "errorMessage",
+    // CEV fields
+    "error", "finalDestinationUrl", "slotsAvailable", "isNoAvailability",
+    "slotCount", "hasSlots", "httpStatus", "confirmationCode",
+    "bookedDate", "bookedTime", "redirectUrl", "status", "remainingSeconds",
+    // Timing fields
+    "durationMs", "restDurationMs", "nextBurstScans", "type",
+  ];
 
   for (const k of priorityKeys) {
     if (k in parsed && parsed[k] !== null && parsed[k] !== undefined) {
       const v = parsed[k];
       let display: string;
-      if (typeof v === "boolean") display = v ? "true" : "false";
-      else if (typeof v === "number") display = String(v);
-      else if (typeof v === "string") display = v.length > 60 ? v.slice(0, 60) + "..." : v;
-      else display = JSON.stringify(v).slice(0, 60);
+      if (typeof v === "boolean") display = v ? "✓" : "✗";
+      else if (typeof v === "number") {
+        // Format durations nicely
+        if (k.toLowerCase().includes("ms") || k === "durationMs" || k === "restDurationMs") {
+          display = (v / 1000).toFixed(1) + "s";
+        } else {
+          display = String(v);
+        }
+      }
+      else if (typeof v === "string") display = v.length > 50 ? v.slice(0, 50) + "…" : v;
+      else if (Array.isArray(v)) {
+        // Show array items compactly (e.g. offices list)
+        const items = v.map((item: unknown) => {
+          if (typeof item === "object" && item !== null && "name" in item) return (item as { name: string }).name;
+          if (typeof item === "string") return item;
+          return JSON.stringify(item);
+        });
+        display = items.length <= 3 ? items.join(", ") : items.slice(0, 3).join(", ") + ` +${items.length - 3}`;
+      }
+      else display = JSON.stringify(v).slice(0, 50);
       picks.push(`${k}=${display}`);
     }
-    if (picks.length >= 3) break;
+    if (picks.length >= 4) break;
   }
 
   if (picks.length === 0) return null;

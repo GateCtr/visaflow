@@ -1920,32 +1920,41 @@ export default function AdminApplicationDetail() {
         {/* ===== BOT LOG TIMELINE ===== */}
         {botLogs.length > 0 && (() => {
           const stepLabels: Record<string, string> = {
-            login: "Connexion au portail",
-            ofc_list: "Bureaux consulaires",
-            scan: "Scan en cours",
-            slots_found: "Créneau détecté",
+            // ── USA Portal — Cycle complet ──
+            login: "Connexion portail",
+            session_start: "Début session",
+            session_end: "Fin session",
+            appointment_status: "Statut dossier",
+            payment_check: "Vérification paiement MRV",
+            ofc_list: "Liste bureaux consulaires",
+            scan: "Scan créneaux",
+            scan_cutoff: "Arrêt scan (cutoff token)",
+            cooldown: "Cooldown entre sessions",
+            slots_found: "Créneau détecté !",
             booking_attempt: "Tentative de réservation",
             booking_success: "Réservation confirmée",
             booking_fail: "Réservation échouée",
             confirmation_letter: "Lettre de confirmation",
             not_found: "Aucun créneau disponible",
-            rate_limit: "Rate limit (429)",
-            blocked: "Compte potentiellement bloqué",
-            restricted: "Compte restreint",
             error: "Erreur",
-            session_end: "Fin de session",
-            session_start: "Début de session",
             human_behavior: "Comportement humain",
-            appointment_status: "Statut demande",
             anti_detection: "Anti-détection",
+            execution_time: "Temps d'exécution",
+            // ── Erreurs spécifiques ──
+            rate_limit: "Rate limit (429)",
+            blocked: "Compte bloqué (403)",
+            restricted: "Compte restreint (401)",
+            token_expired: "Token expiré",
           };
           const stepIcons: Record<string, string> = {
-            login: "🔑", ofc_list: "🏛️", scan: "🔄",
+            login: "🔑", session_start: "🚀", session_end: "🏁",
+            appointment_status: "📋", payment_check: "💳",
+            ofc_list: "🏛️", scan: "🔄", scan_cutoff: "⏰", cooldown: "⏳",
             slots_found: "📅", booking_attempt: "📝", booking_success: "✅",
             booking_fail: "❌", confirmation_letter: "📄", not_found: "🔍",
-            rate_limit: "⛔", blocked: "🚫", restricted: "🔒", error: "⚠️",
-            session_end: "🏁", session_start: "🚀", human_behavior: "🤖",
-            appointment_status: "📋", anti_detection: "🛡️",
+            rate_limit: "⛔", blocked: "🚫", restricted: "🔒",
+            token_expired: "🔄", error: "⚠️",
+            human_behavior: "🧠", anti_detection: "🛡️", execution_time: "⏱️",
           };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {
