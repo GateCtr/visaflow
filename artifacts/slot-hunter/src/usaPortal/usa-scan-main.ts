@@ -863,6 +863,23 @@ export async function runUsaSlotScanMain(
   const refreshUsername = job.hunterConfig.embassyUsername ?? "";
   const refreshReferer = rescheduleMode ? REFERER_MANAGE_APT : REFERER_CREATE_APT;
 
+  // Calculer la deadline absolue pour le refresh continu :
+  // = min(token expiry - 8 min cutoff, proxy expiry - 5 min buffer)
+  // Cela garantit que le refresh s'arrête AVANT que le token ou le proxy expire.
+  let absoluteDeadlineMs: number | undefined;
+  const refreshCacheEntry = tokenCache.get(refreshUsername.toLowerCase());
+  if (refreshCacheEntry) {
+    const tokenDeadline = refreshCacheEntry.expiresAt - 8 * 60 * 1000; // cutoff 8 min avant expiry
+    const proxyDeadline = refreshCacheEntry.proxyExpiresAt
+      ? refreshCacheEntry.proxyExpiresAt - 5 * 60 * 1000 // 5 min avant proxy expiry
+      : Infinity;
+    absoluteDeadlineMs = Math.min(tokenDeadline, proxyDeadline);
+    // Si la deadline est déjà dans le passé ou très proche, ne pas lancer le refresh
+    if (absoluteDeadlineMs - Date.now() < 2 * 60 * 1000) {
+      absoluteDeadlineMs = undefined; // Trop peu de temps → laisser le budget interne gérer
+    }
+  }
+
   const refreshResult = await runContinuousRefresh({
     session,
     job,
@@ -873,6 +890,7 @@ export async function runUsaSlotScanMain(
     rescheduleYN: rescheduleMode,
     dateFrom: slotDateFrom,
     dateDeadline: slotDateDeadline,
+    absoluteDeadlineMs,
   });
 
   if (refreshResult.slotDetected) {
