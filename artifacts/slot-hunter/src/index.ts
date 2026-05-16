@@ -389,7 +389,7 @@ async function startCevPollingLoop(): Promise<void> {
 // tres_urgent : 3-5 min hors rush, 1-2 min pendant les rush hours.
 // Safe car le token JWT USA est en cache 55 min → aucun re-login supplémentaire.
 const URGENCY_INTERVAL: Record<string, { min: number; max: number }> = {
-  tres_urgent:  { min:  3 * 60_000, max:  5 * 60_000 },
+  tres_urgent:  { min:  5 * 60_000, max: 10 * 60_000 },
   urgent:       { min: 15 * 60_000, max: 20 * 60_000 },
   prioritaire:  { min: 25 * 60_000, max: 35 * 60_000 },
   standard:     { min: 45 * 60_000, max: 60 * 60_000 },
@@ -406,8 +406,8 @@ const RUSH_WINDOWS: { start: number; end: number }[] = [
   { start:  7, end:  9 },
   { start: 12, end: 14 },
 ];
-const RUSH_INTERVAL_MIN_MS =      60_000; // 1 min
-const RUSH_INTERVAL_MAX_MS =  2 * 60_000; // 2 min
+const RUSH_INTERVAL_MIN_MS =  3 * 60_000; // 3 min (réduit de 1 min → 3 min pour sécurité anti-restriction)
+const RUSH_INTERVAL_MAX_MS =  4 * 60_000; // 4 min (réduit de 2 min → 4 min)
 const RUSH_SILENCE_MIN_MS   =      45_000; // 45 s
 const RUSH_SILENCE_MAX_MS   =      90_000; // 90 s
 
@@ -521,9 +521,9 @@ function generateIntervalMs(urgencyTier: string): number {
     lastRushState = rush;
     if (rush) {
       const h = getKinshasaHour();
-      log("INFO", `⚡ RUSH HOUR activé (${h}h00 Kinshasa) — intervalle tres_urgent → 1-2 min`);
+      log("INFO", `⚡ RUSH HOUR activé (${h}h00 Kinshasa) — intervalle tres_urgent → 3-4 min`);
     } else {
-      log("INFO", "📻 RUSH HOUR terminé — retour intervalle normal tres_urgent (3-5 min)");
+      log("INFO", "📻 RUSH HOUR terminé — retour intervalle normal tres_urgent (5-10 min)");
     }
   }
 
@@ -1191,7 +1191,7 @@ async function main(): Promise<void> {
       : "aucun ⚠️ — IP fixe Railway exposée";
   const proxyStatus = [brightdataStatus, iproyalStatus, fallbackStatus].filter(Boolean).join(" | ");
   log("INFO", `Proxy: ${proxyStatus}`);
-  log("INFO", "Intervalles tier — tres_urgent:3-5m (rush:1-2m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
+  log("INFO", "Intervalles tier — tres_urgent:5-10m (rush:3-4m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
   log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | stagger ${formatMs(SILENCE_RADIO_SAME_TIER_MIN_MS)}–${formatMs(SILENCE_RADIO_SAME_TIER_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
   log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);

@@ -8,6 +8,7 @@ export type { SessionResult, UsaSession, UsaAppointmentRequest } from "./types.j
 export { isAccountRestricted } from "./account-restriction.js";
 export { makeIproyalStickyUrl, setUsaSessionProxy, rotateIproyalSession } from "./usa-http.js";
 export { makeBrightDataStickyUrl, rotateBrightDataSession, startBrightDataKeepAlive, stopBrightDataKeepAlive, stopAllBrightDataKeepAlives } from "./brightdata-proxy.js";
+export { startBackgroundKeepAlive, stopBackgroundKeepAlive, stopAllBackgroundKeepAlives } from "./background-keep-alive.js";
 export { downloadUsaConfirmationPdf } from "./scan-slot-booking.js";
 export { preFlightProxyCheck } from "./proxy-health-check.js";
 export { generateCognitoEncodedData, detectCognitoEncodedDataUsage } from "./cognito-telemetry.js";
