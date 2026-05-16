@@ -31,6 +31,10 @@ import {
   startBrightDataKeepAlive,
   stopBrightDataKeepAlive,
 } from "./brightdata-proxy.js";
+import {
+  startBackgroundKeepAlive,
+  stopBackgroundKeepAlive,
+} from "./background-keep-alive.js";
 import { scanUsaSlotsViaAPI } from "./scan-slot-booking.js";
 import {
   checkUsaAppointmentRequestStatus,
@@ -99,6 +103,11 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   // Log le début du comportement humain
   logHumanBehaviorStart(job.id, `USA Portal - ${username}`);
+
+  // ── Arrêter le keep-alive background (le scan prend le relais) ──────────
+  // Le timer envoyait des pings entre les cycles pour maintenir la session.
+  // Maintenant que le scan démarre, il n'est plus nécessaire.
+  stopBackgroundKeepAlive(username);
   
   try {
     if (!username || !password) {
@@ -403,6 +412,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         tokenCache.delete(delayCacheKey);
         proxyPool.releaseStickyProxy(username);
         stopBrightDataKeepAlive(username);
+        stopBackgroundKeepAlive(username);
         
         // Calculer pause variable (15-45 min) — MINIMUM 15 min pour éviter le session-cycling
         const pauseDuration = 15 * 60 * 1000 + Math.random() * (MAX_SESSION_BREAK_MS - 15 * 60 * 1000);
@@ -1049,11 +1059,18 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         // Mettre à jour lastActivityAt et lastScanTime
         maintainCached.lastActivityAt = Date.now();
         maintainCached.lastScanTime = Date.now();
+
+        // ── Démarrer le keep-alive background entre les cycles ──────────────
+        // Le scheduler va dormir 8-20+ min avant le prochain cycle.
+        // Sans ce timer, le serveur kill la session après 15 min d'inactivité.
+        // Le timer envoie un ping toutes les 8-12 min pour garder la session active.
+        startBackgroundKeepAlive(username, job.id);
       } else {
         // Session trop longue → supprimer le cache (pas de logout explicite)
         tokenCache.delete(maintainCacheKey);
         proxyPool.releaseStickyProxy(username);
         stopBrightDataKeepAlive(username);
+        stopBackgroundKeepAlive(username);
         console.log(`[usa] ⏰ Session expirée naturellement (${sessionMinutes}min) — cache supprimé, pas de logout`);
       }
     } else {
