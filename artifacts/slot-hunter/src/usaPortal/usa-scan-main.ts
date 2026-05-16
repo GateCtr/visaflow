@@ -868,11 +868,82 @@ export async function runUsaSlotScanMain(
 
   if (refreshResult.slotDetected) {
     // Un slot a été détecté pendant le refresh continu !
-    // On doit maintenant faire le scan COMPLET (dates + times + booking) pour ce slot.
-    console.log(`[refresh] 🚨 Slot détecté pendant refresh continu — lancement scan complet pour booking...`);
-    
-    // Re-scanner les OFCs pour trouver le slot et le booker
-    // On utilise la même logique que le scan initial mais maintenant on SAIT qu'il y a un slot
+    const useReschedule = rescheduleMode || session.isReschedule === true;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // FAST-PATH : si le refresh a déjà résolu le slot (dates + times), on booke
+    // IMMÉDIATEMENT sans re-scanner. Économise 5-8 secondes de latence critique.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (refreshResult.slotReady) {
+      const sr = refreshResult.slotReady;
+      console.log(`[refresh] ⚡ FAST-PATH BOOKING: ${sr.ofcName} ${sr.date} ${sr.time} (slotId=${sr.slotId}) — SKIP re-scan`);
+      botLog({
+        applicationId: job.id,
+        step: "slots_found",
+        status: "ok",
+        data: { flow: "usa", phase: "fast_path_booking", ofc: sr.ofcName, date: sr.date, time: sr.time, slotId: sr.slotId, refreshCount: refreshResult.totalRefreshes, fastPath: true },
+      });
+
+      // Construire le SlotFound à partir des données fast-path
+      const fastFound: SlotFound = {
+        date: sr.date,
+        time: sr.time,
+        slotId: sr.slotId,
+        ofcName: sr.ofcName,
+        slot: sr.slot as any,
+        bookingBase: sr.bookingBase,
+      };
+
+      let booking: UsaBookingResult;
+      try {
+        booking = useReschedule
+          ? await rescheduleUsaSlot(session, fastFound)
+          : await bookUsaSlot(session, fastFound);
+      } catch (bookErr) {
+        if (bookErr instanceof RateLimitError || bookErr instanceof AccountBlockedError || bookErr instanceof TokenExpiredError || bookErr instanceof AccountRestrictedError) {
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Erreur booking fast-path: ${(bookErr as Error).message}` });
+          return "error";
+        }
+        const msg = bookErr instanceof Error ? bookErr.message : String(bookErr);
+        console.error(`[refresh] ⚡ Fast-path booking erreur: ${msg}`);
+        booking = { success: false, error: msg };
+      }
+
+      if (booking.success) {
+        let pdfStorageId: string | undefined;
+        botLog({ applicationId: job.id, step: "booking_success", status: "ok", data: { flow: "usa", ofc: sr.ofcName, date: sr.date, time: sr.time, appointmentId: booking.appointmentId, via: "fast_path_refresh" } });
+
+        const pdf = await downloadUsaConfirmationPdf(session, session.applicationId!, booking.appointmentId);
+        if (pdf) {
+          const b64 = pdf.toString("base64");
+          pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+        }
+
+        await reportSlotFound({
+          applicationId: job.id,
+          date: sr.date,
+          time: sr.time,
+          location: `${sr.ofcName} — Ambassade USA (slotId=${sr.slotId}, via fast_path_refresh #${refreshResult.totalRefreshes})`,
+          confirmationCode: booking.appointmentId?.toString(),
+          screenshotStorageId: pdfStorageId,
+        });
+
+        if (scanDiscoveryEvents.length > 0) {
+          reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
+        }
+        return "slot_found";
+      }
+
+      // Fast-path booking échoué (409, réseau, etc.) — fallback vers re-scan complet
+      console.warn(`[refresh] ⚡ Fast-path booking échoué (${booking.error}) — fallback re-scan complet...`);
+      botLog({ applicationId: job.id, step: "booking_fail", status: "warn", data: { flow: "usa", phase: "fast_path_fallback", error: booking.error, statusCode: booking.statusCode } });
+    } else {
+      console.log(`[refresh] 🚨 Slot détecté (sans fast-path) — lancement re-scan complet pour booking...`);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // FALLBACK : re-scan complet si fast-path indisponible ou échoué
+    // ══════════════════════════════════════════════════════════════════════════
     for (const ofc of ofcList) {
       let found: SlotFound | null;
       try {
@@ -899,8 +970,6 @@ export async function runUsaSlotScanMain(
           data: { flow: "usa", phase: "continuous_refresh_booking", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, refreshCount: refreshResult.totalRefreshes },
         });
 
-        // Booking
-        const useReschedule = rescheduleMode || session.isReschedule === true;
         let booking: UsaBookingResult;
         try {
           booking = useReschedule
@@ -918,7 +987,7 @@ export async function runUsaSlotScanMain(
 
         if (booking.success) {
           let pdfStorageId: string | undefined;
-          botLog({ applicationId: job.id, step: "booking_success", status: "ok", data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, appointmentId: booking.appointmentId, via: "continuous_refresh" } });
+          botLog({ applicationId: job.id, step: "booking_success", status: "ok", data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, appointmentId: booking.appointmentId, via: "continuous_refresh_rescan" } });
 
           const pdf = await downloadUsaConfirmationPdf(session, session.applicationId!, booking.appointmentId);
           if (pdf) {
@@ -930,7 +999,7 @@ export async function runUsaSlotScanMain(
             applicationId: job.id,
             date: found.date,
             time: found.time,
-            location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, via continuous_refresh #${refreshResult.totalRefreshes})`,
+            location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, via continuous_refresh_rescan #${refreshResult.totalRefreshes})`,
             confirmationCode: booking.appointmentId?.toString(),
             screenshotStorageId: pdfStorageId,
           });

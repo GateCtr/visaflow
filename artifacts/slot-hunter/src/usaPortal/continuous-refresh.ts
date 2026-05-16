@@ -28,13 +28,16 @@ import type { HunterJob, SlotDiscoveryEvent } from "../convexClient.js";
 import { botLog } from "../convexClient.js";
 import {
   USA_FIRST_AVAILABLE_MONTH_URL,
+  USA_SLOT_DATES_URL,
+  USA_SLOT_TIMES_URL,
   SCAN_CUTOFF_BEFORE_EXPIRY_MS,
 } from "./config.js";
 import { usaFetch, authHeaders, tokenCache, updateSessionActivity } from "./usa-http.js";
 import { RateLimitError, AccountBlockedError, TokenExpiredError, AccountRestrictedError } from "./errors.js";
 import { isRestrictedBody } from "./account-restriction.js";
 import { checkProxyLiveness, isSessionFrozen } from "./proxy-session-guard.js";
-import type { UsaOfc, UsaAppDetails } from "./usa-scan-types.js";
+import type { UsaOfc, UsaAppDetails, UsaSlotDate, UsaTimeSlot } from "./usa-scan-types.js";
+import { toYMD, lastDayOfMonth } from "./usa-scan-types.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -67,6 +70,15 @@ const MAX_TOTAL_REFRESHES = 45;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface SlotReadyForBooking {
+  date: string;
+  time: string;
+  slotId: number | string;
+  ofcName: string;
+  slot: unknown; // UsaTimeSlot
+  bookingBase: Record<string, unknown>;
+}
+
 export interface ContinuousRefreshResult {
   /** Résultat : slot trouvé ou pas. */
   slotDetected: boolean;
@@ -80,6 +92,8 @@ export interface ContinuousRefreshResult {
   stopReason: "slot_found" | "budget_exhausted" | "token_expiring" | "proxy_dead" | "error" | "max_refreshes" | "max_windows";
   /** Données du premier mois disponible si slot détecté. */
   firstAvailableMonth?: string;
+  /** Slot prêt pour booking instantané (fast-path: skip full re-scan). */
+  slotReady?: SlotReadyForBooking;
 }
 
 export interface ContinuousRefreshConfig {
@@ -209,6 +223,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
             totalElapsedSec: Math.round(totalElapsed / 1000),
             firstAvailableMonth: refreshResult.firstAvailableMonth,
             ofc: refreshResult.ofcName,
+            fastPath: !!refreshResult.slotReady,
           },
         });
         return {
@@ -218,6 +233,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
           totalDurationMs: totalElapsed,
           stopReason: "slot_found",
           firstAvailableMonth: refreshResult.firstAvailableMonth,
+          slotReady: refreshResult.slotReady,
         };
       }
 
@@ -305,20 +321,23 @@ interface LightRefreshResult {
   firstAvailableMonth?: string;
   ofcName?: string;
   error?: boolean;
+  /** Fast-path: slot fully resolved (dates + times) ready for instant booking. */
+  slotReady?: SlotReadyForBooking;
 }
 
 /**
- * Refresh léger : appelle uniquement getFirstAvailableMonth pour chaque OFC.
- * C'est l'équivalent d'un F5 sur la page des créneaux.
+ * Refresh léger : appelle getFirstAvailableMonth pour chaque OFC.
+ * Si un slot est détecté : enchaine IMMÉDIATEMENT getSlotDates + getSlotTime
+ * pour avoir le slotId prêt pour le booking (fast-path, -5s de latence).
  */
 async function doLightweightRefresh(config: ContinuousRefreshConfig): Promise<LightRefreshResult> {
-  const { session, ofcs, appDetails, referer, rescheduleYN, dateDeadline } = config;
+  const { session, ofcs, appDetails, referer, rescheduleYN, dateFrom, dateDeadline } = config;
 
   // Headers pour les requêtes slot (Bearer uniquement, pas de cookies)
   const hdrs = authHeaders(session.accessToken, referer, true);
 
   for (const ofc of ofcs) {
-    const payload: Record<string, unknown> = {
+    const basePayload: Record<string, unknown> = {
       postUserId: ofc.postUserId,
       applicantId: appDetails.applicantId,
       visaType: (appDetails as unknown as Record<string, unknown>).visaTypeKey ?? appDetails.visaType,
@@ -330,10 +349,11 @@ async function doLightweightRefresh(config: ContinuousRefreshConfig): Promise<Li
     };
 
     try {
+      // ── Étape 1 : getFirstAvailableMonth (léger, 1 POST) ──
       const res = await usaFetch(USA_FIRST_AVAILABLE_MONTH_URL, {
         method: "POST",
         headers: hdrs,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(basePayload),
       });
 
       // Erreurs critiques → propagation
@@ -352,25 +372,131 @@ async function doLightweightRefresh(config: ContinuousRefreshConfig): Promise<Li
       }
 
       if (!res.ok) {
-        // Erreur non-critique → continuer avec le prochain OFC
         continue;
       }
 
       const data = await res.json() as { present?: boolean; date?: string };
 
-      if (data.present && data.date) {
-        // Vérifier que la date est dans la fenêtre autorisée
-        if (dateDeadline && data.date > dateDeadline) {
-          // Slot détecté mais hors fenêtre → pas un vrai résultat pour nous
-          continue;
-        }
-        // SLOT POTENTIEL DÉTECTÉ
-        return {
-          slotDetected: true,
-          firstAvailableMonth: data.date,
-          ofcName: ofc.postName,
-        };
+      if (!data.present || !data.date) {
+        continue; // Pas de slot pour cet OFC
       }
+
+      // Vérifier que la date est dans la fenêtre autorisée
+      if (dateDeadline && data.date > dateDeadline) {
+        continue; // Slot détecté mais hors fenêtre
+      }
+
+      // ══════════════════════════════════════════════════════════════════════
+      // 🚨 SLOT DÉTECTÉ — FAST-PATH : enchainer getSlotDates + getSlotTime
+      // pour avoir le slotId prêt IMMÉDIATEMENT (économise 5-8s vs re-scan)
+      // ══════════════════════════════════════════════════════════════════════
+      console.log(`[refresh] ⚡ FAST-PATH: slot détecté OFC ${ofc.postName} (mois: ${data.date}) — résolution directe...`);
+
+      // ── Étape 2 : getSlotDates ──
+      const monthStart = new Date(data.date);
+      monthStart.setHours(0, 0, 0, 0);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+
+      let fromDateStr = monthStart > tomorrow ? toYMD(monthStart) : toYMD(tomorrow);
+      if (dateFrom && dateFrom > fromDateStr) fromDateStr = dateFrom;
+      let toDateStr = lastDayOfMonth(monthStart);
+      if (dateDeadline && dateDeadline < toDateStr) toDateStr = dateDeadline;
+
+      if (fromDateStr > toDateStr) {
+        // Pas de dates valides dans la fenêtre malgré present:true
+        return { slotDetected: true, firstAvailableMonth: data.date, ofcName: ofc.postName };
+      }
+
+      const datesRes = await usaFetch(USA_SLOT_DATES_URL, {
+        method: "POST",
+        headers: hdrs,
+        body: JSON.stringify({ ...basePayload, fromDate: fromDateStr, toDate: toDateStr }),
+      });
+
+      if (!datesRes.ok) {
+        // Fallback : retourne slot détecté sans fast-path (le re-scan normal prendra le relais)
+        console.warn(`[refresh] ⚡ getSlotDates HTTP ${datesRes.status} — fallback re-scan`);
+        return { slotDetected: true, firstAvailableMonth: data.date, ofcName: ofc.postName };
+      }
+
+      const datesRaw = await datesRes.json();
+      let slotDates: UsaSlotDate[] = [];
+      if (Array.isArray(datesRaw) && datesRaw.length > 0) {
+        if (typeof datesRaw[0] === "string") {
+          slotDates = (datesRaw as string[]).map(d => ({ date: d.split("T")[0], slotsAvailable: 1 }));
+        } else {
+          slotDates = datesRaw as UsaSlotDate[];
+        }
+      }
+
+      // Filtrer par fenêtre admin
+      slotDates = slotDates.filter(d => {
+        if (dateFrom && d.date < dateFrom) return false;
+        if (dateDeadline && d.date > dateDeadline) return false;
+        return true;
+      });
+
+      if (slotDates.length === 0) {
+        console.warn(`[refresh] ⚡ getSlotDates vide après filtrage — fallback re-scan`);
+        return { slotDetected: true, firstAvailableMonth: data.date, ofcName: ofc.postName };
+      }
+
+      const targetDate = slotDates[0].date;
+      console.log(`[refresh] ⚡ Date: ${targetDate} — appel getSlotTime...`);
+
+      // ── Étape 3 : getSlotTime ──
+      const timePayload = {
+        fromDate: fromDateStr,
+        toDate: toDateStr,
+        postUserId: basePayload.postUserId,
+        applicantId: basePayload.applicantId,
+        slotDate: targetDate,
+        visaType: basePayload.visaType,
+        visaClass: basePayload.visaClass,
+        applicationId: basePayload.applicationId,
+        // PAS de locationType ici (conforme au bundle Angular)
+      };
+
+      const timeRes = await usaFetch(USA_SLOT_TIMES_URL, {
+        method: "POST",
+        headers: hdrs,
+        body: JSON.stringify(timePayload),
+      });
+
+      if (!timeRes.ok) {
+        console.warn(`[refresh] ⚡ getSlotTime HTTP ${timeRes.status} — fallback re-scan`);
+        return { slotDetected: true, firstAvailableMonth: data.date, ofcName: ofc.postName };
+      }
+
+      const timeSlots = (await timeRes.json()) as UsaTimeSlot[];
+      if (!Array.isArray(timeSlots) || timeSlots.length === 0) {
+        console.warn(`[refresh] ⚡ getSlotTime vide — slot disparu? fallback re-scan`);
+        return { slotDetected: true, firstAvailableMonth: data.date, ofcName: ofc.postName };
+      }
+
+      // Prendre le premier créneau disponible
+      const bestSlot = timeSlots[0];
+      const slotTime = bestSlot.startTime ?? bestSlot.time ?? "unknown";
+      const slotId = bestSlot.slotId ?? bestSlot.id ?? "unknown";
+
+      console.log(`[refresh] ⚡ FAST-PATH COMPLET: ${ofc.postName} ${targetDate} ${slotTime} (slotId=${slotId})`);
+
+      return {
+        slotDetected: true,
+        firstAvailableMonth: data.date,
+        ofcName: ofc.postName,
+        slotReady: {
+          date: targetDate,
+          time: slotTime,
+          slotId,
+          ofcName: ofc.postName,
+          slot: bestSlot,
+          bookingBase: basePayload,
+        },
+      };
+
     } catch (err) {
       // Erreurs circuit-breaker → signal d'arrêt
       if (
