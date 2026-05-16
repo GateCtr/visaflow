@@ -599,11 +599,18 @@ export async function preScanCheck(
   
   // 3. Anomaly detection
   const pauseCheck = anomalyDetector.shouldPause(username);
+  // Pour tres_urgent : réduire la pause de 30min à 5min max (un créneau peut apparaître à tout moment)
+  const isHighPriority = urgencyTier === "urgent" || urgencyTier === "tres_urgent";
+  const effectivePauseDuration = (pauseCheck.pause && isHighPriority)
+    ? Math.min(pauseCheck.durationMs, 5 * 60 * 1000) // cap à 5 min pour urgent/tres_urgent
+    : pauseCheck.durationMs;
   checks.push({
     name: "Anomaly",
     result: !pauseCheck.pause,
-    reason: pauseCheck.reason || "OK",
-    waitMs: pauseCheck.durationMs
+    reason: pauseCheck.pause && isHighPriority
+      ? `${pauseCheck.reason} (réduit à 5min pour ${urgencyTier})`
+      : (pauseCheck.reason || "OK"),
+    waitMs: effectivePauseDuration
   });
   
   // 4. Server health
