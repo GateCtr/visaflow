@@ -26,6 +26,15 @@ const CEV_SETUP_TIMEOUT_MS = 4 * 60_000;
 async function startCevSetupLoop(): Promise<void> {
   console.log("[CEV-SETUP] Boucle de setup sessions CEV démarrée");
   let heartbeatCounter = 0;
+
+  // ── Tracking local des échecs consécutifs par session ──────────────────────
+  // Si une session échoue N fois de suite (sans rate-limit explicite détecté),
+  // c'est probablement un rate-limit VOWINT non détecté ("onglet mauvais",
+  // page d'erreur inattendue, etc.). On escalade vers un lock 60 min.
+  const sessionFailTracker = new Map<string, { count: number; firstFailAt: number; lastError: string }>();
+  const IMPLICIT_RATE_LIMIT_THRESHOLD = 3; // 3 échecs consécutifs → traiter comme rate-limit
+  const IMPLICIT_RATE_LIMIT_WINDOW_MS = 45 * 60_000; // fenêtre de 45 min (3 × lock de 13 min)
+
   while (true) {
     try {
       const pending = await getPendingCevSetups();
@@ -191,6 +200,8 @@ async function startCevSetupLoop(): Promise<void> {
 
         if (r.success) {
           console.log(`[CEV-SETUP] ✅ Session établie session=${s.sessionId}`);
+          // Reset le tracker d'échecs consécutifs (succès = pas de rate-limit)
+          sessionFailTracker.delete(s.sessionId as string);
           // NE PAS resetCevSetupLock ici — le lock de 13 min doit expirer naturellement
           // pour respecter la limite de 5 clics/heure VOWINT.
           // On ne reset le lock que si la session a été activée (slots trouvés),
@@ -212,6 +223,8 @@ async function startCevSetupLoop(): Promise<void> {
             // VOWINT rate-limit atteint (5 clics/heure) — lock 60 min + incrémente compteur
             // Le compte est bloqué pendant 60 minutes par VOWINT.
             console.log(`[CEV-SETUP] 🚫 RATE-LIMIT VOWINT session=${s.sessionId} — lock 60 min (blocage VOWINT)`);
+            // Reset le tracker implicite — rate-limit explicite détecté, pas besoin d'inférer
+            sessionFailTracker.delete(s.sessionId as string);
             try {
               const loginResult = await recordCevSetupLoginFail(s.sessionId, r.error ?? "RATE_LIMIT_TOO_MANY_ATTEMPTS");
               if (loginResult.paused) {
@@ -249,8 +262,44 @@ async function startCevSetupLoop(): Promise<void> {
             // Timeout Playwright : déverrouiller pour permettre une nouvelle tentative immédiate
             console.log(`[CEV-SETUP] 🔓 Déverrouillage session=${s.sessionId} (timeout)`);
             await resetCevSetupLock(s.sessionId).catch(() => {});
+          } else {
+            // ── Autres erreurs (HCAPTCHA_FAILED, NO_SESSION_COOKIE, NO_INTEGRATION_URL…) ──
+            // Tracker les échecs consécutifs : si on échoue trop souvent sans rate-limit
+            // explicite, c'est probablement un rate-limit déguisé (ex: VOWINT retourne
+            // une page inattendue/"onglet mauvais" au lieu de l'URL d'intégration).
+            const sid = s.sessionId as string;
+            const tracker = sessionFailTracker.get(sid);
+            const now = Date.now();
+
+            if (tracker && (now - tracker.firstFailAt) < IMPLICIT_RATE_LIMIT_WINDOW_MS) {
+              tracker.count += 1;
+              tracker.lastError = r.error ?? "UNKNOWN";
+            } else {
+              // Première erreur ou fenêtre expirée → reset
+              sessionFailTracker.set(sid, { count: 1, firstFailAt: now, lastError: r.error ?? "UNKNOWN" });
+            }
+
+            const currentTracker = sessionFailTracker.get(sid)!;
+            if (currentTracker.count >= IMPLICIT_RATE_LIMIT_THRESHOLD) {
+              // Trop d'échecs consécutifs dans la fenêtre → traiter comme rate-limit implicite
+              console.log(`[CEV-SETUP] 🚫 RATE-LIMIT IMPLICITE session=${s.sessionId} — ${currentTracker.count} échecs en ${Math.round((now - currentTracker.firstFailAt) / 60_000)} min (dernier: ${currentTracker.lastError}) → lock 60 min`);
+              try {
+                const loginResult = await recordCevSetupLoginFail(s.sessionId, `IMPLICIT_RATE_LIMIT_${currentTracker.count}_FAILURES (dernier: ${currentTracker.lastError})`);
+                if (loginResult.paused) {
+                  console.log(`[CEV-SETUP] 🔐 Session=${s.sessionId} AUTO-PAUSÉE (rate-limit implicite, ${loginResult.loginFailCount}/3)`);
+                } else {
+                  console.log(`[CEV-SETUP] ⚠️  Rate-limit implicite #${loginResult.loginFailCount}/3 session=${s.sessionId} — prochaine tentative dans 60 min`);
+                }
+              } catch (err) {
+                console.warn(`[CEV-SETUP] recordCevSetupLoginFail (implicite) échoué: ${err}`);
+              }
+              // Reset le tracker après escalade
+              sessionFailTracker.delete(sid);
+            } else {
+              console.log(`[CEV-SETUP] ⚠️  Échec ${currentTracker.count}/${IMPLICIT_RATE_LIMIT_THRESHOLD} session=${s.sessionId} (${r.error}) — lock 13 min normal`);
+            }
           }
-          // Autres erreurs (HCAPTCHA_FAILED, NO_SESSION_COOKIE…) : le lock expire naturellement (13 min)
+          // Le lock Convex (13 min min) empêche la prochaine tentative pendant un délai raisonnable
         }
       }
     } catch (err) {
