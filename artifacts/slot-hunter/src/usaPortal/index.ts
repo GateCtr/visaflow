@@ -19,3 +19,10 @@ export { logoutUsaPortal, loginUsaPortal } from "./usa-auth.js";
 export { checkCaptchaConfig, resolveLoginCaptchaIfNeeded } from "./captcha-gate.js";
 export { getUsaSession } from "./usa-session.js";
 export { runUsaApiSession } from "./impl.js";
+
+export {
+  getNextScanDelay,
+  resetBurstState,
+  invalidatePaymentStatusCache,
+  cleanupScanBehaviorState,
+} from "./scan-behavior.js";
