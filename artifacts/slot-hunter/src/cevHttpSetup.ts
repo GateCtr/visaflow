@@ -7,12 +7,15 @@
  *   3. GET {integrationUrl} → cookie ASP.NET_SessionId CEV
  *   4. Résoudre hCaptcha via Anti-Captcha
  *   5. POST /Captcha/SetCaptchaToken → validUntil + redirectUrl
+ *   6. GET redirectUrl (follow redirects) → /Integration/VOW/SelectSlot → VERDICT FINAL
+ *      → 200 calendrier = session activée, polling possible
+ *      → 302 → NoAvailability = pas de créneaux
  *
  * Optimisation : les cookies VOWINT sont persistés en mémoire entre les checks.
  * On ne re-login que si la session VOWINT a expiré (401/302 vers login).
  * Seul le GetEAppointmentUrl compte comme "clic" (limite 5/heure).
  *
- * Coût : 1 hCaptcha (~$0.003) par check
+ * Coût : 1 hCaptcha (~$0.003) par check, ZERO Playwright
  */
 
 import { botLog } from "./convexClient.js";
@@ -44,8 +47,8 @@ export interface CevHttpSetupResult {
   validUntilMs?: number;
   integrationUrl?: string;
   redirectUrl?: string;       // URL retournée par SetCaptchaToken
-  slotsAvailable?: boolean;   // true si session active pour polling
-  needsPlaywrightNavigation?: boolean; // true si le cookie seul ne suffit pas (401) → Playwright doit naviguer vers redirectUrl
+  slotsAvailable?: boolean;   // true si la page calendrier (SelectSlot) a été atteinte → polling OK
+  needsPlaywrightNavigation?: boolean; // DEPRECATED: toujours false — le redirect est suivi en HTTP maintenant
   error?: string;
 }
 
@@ -425,23 +428,182 @@ export async function setupCevSessionHttp(
     const validUntilMs = new Date(validUntilStr).getTime();
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 7 : Retourner la session pour navigation Playwright
+    // ÉTAPE 7 : Suivre redirectUrl pour ACTIVER la session et obtenir le VRAI verdict
     // ══════════════════════════════════════════════════════════════════════════
-    // Le cookie seul ne suffit PAS pour POST /Home/AvailableTimeSlots (retourne 401).
-    // Il FAUT d'abord naviguer vers redirectUrl via Playwright pour activer la session.
-    // Le poll immédiat a été retiré car il retourne TOUJOURS session_dead (401).
+    // SetCaptchaToken retourne TOUJOURS une redirectUrl du type :
+    //   /Integration/VOW/{orgId}/{appId}/{sessionGuid}/{tokenGuid}/{lang}
+    // La page finale est déterminée APRÈS navigation :
+    //   → GET redirectUrl → 302 → /Integration/VOW/SelectSlot
+    //     → 302 → /Integration/Error/NoAvailability   (pas de créneaux)
+    //     → 200  page calendrier                      (créneaux dispo → session activée pour polling)
+    // On suit les redirections via fetch(redirect: 'follow') pour obtenir le verdict final.
+    // Cela ACTIVE aussi la session côté serveur — après ça, POST /Home/AvailableTimeSlots fonctionne.
     const captchaRedirectUrl = captchaData.redirectUrl ?? "";
 
-    botLog({
-      applicationId: clientId,
-      step: "cev_http_setup_complete",
-      status: "ok",
-      data: {
+    if (!captchaRedirectUrl) {
+      botLog({ applicationId: clientId, step: "cev_http_no_redirect_url", status: "fail" });
+      return { success: false, error: "CAPTCHA_NO_REDIRECT_URL" };
+    }
+
+    // Construire l'URL absolue si relative
+    const fullRedirectUrl = captchaRedirectUrl.startsWith("http")
+      ? captchaRedirectUrl
+      : `${CEV_BASE}${captchaRedirectUrl}`;
+
+    let finalUrl = fullRedirectUrl;
+    let probeBodyRaw = "";
+    let probeBodyPreview = "";
+    let probeHttpStatus = 0;
+
+    try {
+      const probe = await fetch(fullRedirectUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "Cookie": fullCevCookie,
+          "User-Agent": ua,
+          "Accept": "text/html,application/xhtml+xml,*/*",
+          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Referer": `${CEV_BASE}/Captcha`,
+        },
+        signal: AbortSignal.timeout(30_000),
+      });
+      finalUrl = probe.url; // URL après tous les 302
+      probeHttpStatus = probe.status;
+
+      // Capturer le body pour diagnostiquer
+      try { probeBodyRaw = await probe.text(); } catch { /* ignore */ }
+      // Extraire le texte visible (sans scripts/styles/tags)
+      probeBodyPreview = probeBodyRaw
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_redirect_probe",
+        status: "ok",
+        data: { httpStatus: probeHttpStatus, finalUrl, bodyPreview: probeBodyPreview || "(vide)" },
+      });
+    } catch (probeErr) {
+      const errMsg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_redirect_probe_error",
+        status: "warn",
+        data: { error: errMsg },
+      });
+      // En cas d'échec réseau, retourner la session brute — le polling déterminera l'état
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
         redirectUrl: captchaRedirectUrl,
         slotsAvailable: false,
-        needsPlaywrightNavigation: true,
-        activationReason: "COOKIE_NEEDS_PLAYWRIGHT_NAVIGATION",
-        integrationUrl: integrationUrl.slice(0, 80),
+        needsPlaywrightNavigation: false,
+      };
+    }
+
+    // ── Classifier le verdict final ──────────────────────────────────────────
+
+    // Cas 1 : NoAvailability — pas de créneaux, mais session correctement établie
+    if (finalUrl.includes("NoAvailability")) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_no_availability",
+        status: "ok",
+        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable: false,
+        needsPlaywrightNavigation: false,
+      };
+    }
+
+    // Cas 2 : Session expirée / re-captcha demandé
+    if (finalUrl.includes("SessionExpired") || finalUrl.includes("/Captcha")) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_session_expired",
+        status: "warn",
+        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+      });
+      return { success: false, error: "SESSION_EXPIRED_AFTER_REDIRECT" };
+    }
+
+    // Cas 3 : Page d'erreur générique CEV (/Error/Default, /Error/*)
+    if (finalUrl.includes("/Error/")) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_error_page",
+        status: "warn",
+        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable: false,
+        needsPlaywrightNavigation: false,
+      };
+    }
+
+    // Cas 4 : Page calendrier / SelectSlot → SESSION ACTIVÉE, slots potentiellement disponibles
+    // Vérifier les marqueurs positifs dans le body pour confirmer
+    const bodyLower = probeBodyRaw.toLowerCase();
+    const hasCalendarMarkers = (
+      bodyLower.includes("getavailabletimeslotsforpublic") ||
+      bodyLower.includes("home/availabletimeslots") ||
+      bodyLower.includes("selectslot") ||
+      bodyLower.includes("data-slot-time") ||
+      bodyLower.includes("calendar")
+    );
+
+    if (finalUrl.includes("SelectSlot") || hasCalendarMarkers) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_slots_available",
+        status: "ok",
+        data: {
+          finalUrl,
+          hasCalendarMarkers,
+          validUntil: captchaData.validUntil,
+          bodyPreview: probeBodyPreview.slice(0, 500),
+          htmlRaw: probeBodyRaw.slice(0, 4000),
+        },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable: true,
+        needsPlaywrightNavigation: false,
+      };
+    }
+
+    // Cas 5 : URL inconnue — loguer et retourner la session pour polling
+    botLog({
+      applicationId: clientId,
+      step: "cev_http_verdict_unknown",
+      status: "warn",
+      data: {
+        finalUrl,
+        httpStatus: probeHttpStatus,
+        bodyPreview: probeBodyPreview.slice(0, 500),
+        htmlRaw: probeBodyRaw.slice(0, 4000),
       },
     });
     return {
@@ -449,9 +611,9 @@ export async function setupCevSessionHttp(
       sessionCookie: cevSessionCookie,
       validUntilMs,
       integrationUrl,
-      redirectUrl: captchaRedirectUrl || undefined,
+      redirectUrl: captchaRedirectUrl,
       slotsAvailable: false,
-      needsPlaywrightNavigation: true,
+      needsPlaywrightNavigation: false,
     };
 
   } catch (err) {
