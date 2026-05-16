@@ -12,7 +12,6 @@
 
 import {
   SESSION_DURATION_PROFILES,
-  HEATMAP_RISK_ZONES,
   ANOMALY_DETECTION_THRESHOLDS,
   SERVER_HEALTH_LEVELS,
   HUMAN_ACTION_MODEL,
@@ -62,27 +61,22 @@ export function getRandomSessionDuration(username: string): number {
 // ── 2. Heatmap Avoidance ─────────────────────────────────────────────────────
 
 /**
- * Vérifie si l'heure actuelle est dans une zone à risque
- * Retourne true si le scan devrait être évité
+ * SUPPRIMÉ le 16/05/2026 — Le Heatmap Avoidance contredit les Rush Hours.
+ * 
+ * Le système de Rush Hours dans index.ts accélère les scans pendant 7-9h et 12-14h
+ * (heures où les créneaux apparaissent). Mais le Heatmap Avoidance bloquait 70-80%
+ * des scans à 9h et 14h — exactement pendant les fenêtres les plus productives.
+ * 
+ * Un humain qui cherche frénétiquement un créneau ne "s'auto-évite" PAS pendant
+ * les heures de pointe. Au contraire, c'est là qu'il est le PLUS actif.
+ * 
+ * La protection contre la surcharge serveur est déjà assurée par :
+ * - L'anomaly detection (section 3) qui détecte les temps de réponse lents
+ * - La graceful degradation (section 4) qui adapte l'intervalle à la santé serveur
+ * 
+ * Fonction conservée comme no-op pour ne pas casser les imports existants.
  */
 export function shouldAvoidHeatmap(): { avoid: boolean; reason: string } {
-  const now = new Date();
-  const currentHour = now.getHours();
-  
-  for (const zone of HEATMAP_RISK_ZONES) {
-    if (currentHour === zone.hour) {
-      const skipChance = zone.risk;
-      const shouldSkip = Math.random() < skipChance;
-      
-      if (shouldSkip) {
-        return {
-          avoid: true,
-          reason: `Heatmap avoidance: ${currentHour}h (${zone.description}, risk: ${Math.round(zone.risk * 100)}%)`
-        };
-      }
-    }
-  }
-  
   return { avoid: false, reason: "" };
 }
 

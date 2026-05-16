@@ -7,7 +7,7 @@
  * PROBLÈMES CORRIGÉS :
  * 1. Polling excessif de getUserHistoryApplicantPaymentStatus (cache TTL 5 min)
  * 2. Distribution uniforme des pauses → distribution gamma/burst
- * 3. Absence des événements GA/DAP → envoi de page_view simulés
+ * 3. Events GA SUPPRIMÉS (16/05/2026) — signal de bot depuis serveur
  * 4. Round-robin OFC parfait → rotation imprévisible
  * 5. Timing régulier entre scans → pattern burst humain (F5 rapides puis pause longue)
  * 6. Requêtes API séquentielles → burst parallèle comme Angular
@@ -158,97 +158,34 @@ export async function burstInterStepPause(context: string = "", jobId?: string):
 // car le portail charge DAP (dap.digitalgov.gov) + GTM (G-CSLL4ZEK4L).
 
 /**
- * Envoie un événement page_view simulé vers Google Analytics (même format que la capture).
+ * SUPPRIMÉ le 16/05/2026 — Les events GA envoyés depuis le SERVEUR sont CONTRE-PRODUCTIFS.
  * 
- * Le portail USA utilise :
- * - Google Analytics 4 (G-CSLL4ZEK4L)
- * - DAP (Digital Analytics Program — dap.digitalgov.gov)
+ * Raison : Un vrai navigateur émet les hits GA depuis l'IP CLIENT (côté browser JS).
+ * Le bot les envoyait depuis l'IP SERVEUR (Railway ou proxy résidentiel) — la même IP
+ * qui fait les requêtes API. Cela crée une anomalie : un "navigateur" qui fait des XHR
+ * API ET des hits GA depuis la même IP datacenter/résidentielle = signal de bot.
  * 
- * Un vrai navigateur émet page_view à chaque navigation SPA (Angular router change).
- * Le bot ne navigue pas vraiment → il faut simuler ces events pour paraître normal.
+ * De plus, le portail ne vérifie PAS côté backend que les hits GA sont envoyés.
+ * Le tracking GA est purement côté navigateur (gtag.js + DAP). L'absence de hits
+ * n'est pas détectable par le serveur AVITS.
  * 
- * NOTE: On n'a PAS besoin de résoudre un vrai tracking ID — Google accepte les hits
- * même avec un client_id inventé. L'important est que le serveur voit ces requêtes
- * sortir vers google-analytics.com (si WAF corrèle outbound traffic).
+ * Fonction conservée comme no-op pour ne pas casser les imports existants.
  */
 export async function sendGaPageView(
-  pageTitle: string = "AVITS Sign In",
-  pagePath: string = "/visaapplicantui/login",
-  sessionId?: string,
-  jobId?: string,
+  _pageTitle: string = "AVITS Sign In",
+  _pagePath: string = "/visaapplicantui/login",
+  _sessionId?: string,
+  _jobId?: string,
 ): Promise<void> {
-  // Probabilité 70% d'envoyer l'event (un humain ne déclenche pas un GA event à CHAQUE interaction)
-  if (Math.random() > 0.70) return;
-  
-  const cid = `${Math.floor(Math.random() * 999999999)}.${Math.floor(Date.now() / 1000)}`;
-  const sid = sessionId ?? String(Math.floor(Date.now() / 1000));
-  
-  const params = new URLSearchParams({
-    v: "2",
-    tid: "G-CSLL4ZEK4L",
-    _p: String(Date.now()),
-    cid,
-    sid,
-    en: "page_view",
-    dl: `https://www.usvisaappt.com${pagePath}`,
-    dt: pageTitle,
-    ul: "fr-fr",
-    sr: "1920x1080",
-    _s: "1",
-  });
-  
-  const url = `https://www.google-analytics.com/g/collect?${params.toString()}`;
-  
-  try {
-    // Fire-and-forget — on ne vérifie pas la réponse (GA retourne toujours 204)
-    // On utilise un fetch natif (pas usaFetch) car ce n'est pas une requête vers le portail
-    await fetch(url, {
-      method: "POST",
-      headers: {
-        "User-Agent": getBrowserHeaders()["User-Agent"] ?? "Mozilla/5.0",
-      },
-    }).catch(() => {}); // Ignorer les erreurs réseau silencieusement
-    
-    if (jobId) {
-      botLog({
-        applicationId: jobId,
-        step: "human_behavior",
-        status: "ok",
-        data: { type: "ga_page_view", pagePath, pageTitle },
-      });
-    }
-  } catch {
-    // Silencieux — l'envoi GA ne doit jamais bloquer le scan
-  }
+  // No-op — supprimé volontairement (voir commentaire ci-dessus)
 }
 
 /**
- * Envoie un événement user_engagement vers GA (session active).
- * Le navigateur Angular envoie cet event automatiquement quand l'utilisateur est actif.
+ * SUPPRIMÉ le 16/05/2026 — Même raison que sendGaPageView (voir ci-dessus).
+ * Les events GA depuis le serveur = anomalie réseau détectable.
  */
-export async function sendGaEngagement(engagementTimeMs: number = 10000, jobId?: string): Promise<void> {
-  // 40% de chance d'envoyer (pas à chaque scan)
-  if (Math.random() > 0.40) return;
-  
-  const cid = `${Math.floor(Math.random() * 999999999)}.${Math.floor(Date.now() / 1000)}`;
-  
-  const params = new URLSearchParams({
-    v: "2",
-    tid: "G-CSLL4ZEK4L",
-    _p: String(Date.now()),
-    cid,
-    en: "user_engagement",
-    _et: String(engagementTimeMs),
-    ul: "fr-fr",
-  });
-  
-  const url = `https://www.google-analytics.com/g/collect?${params.toString()}`;
-  
-  try {
-    await fetch(url, { method: "POST" }).catch(() => {});
-  } catch {
-    // Silencieux
-  }
+export async function sendGaEngagement(_engagementTimeMs: number = 10000, _jobId?: string): Promise<void> {
+  // No-op — supprimé volontairement
 }
 
 

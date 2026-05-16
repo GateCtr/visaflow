@@ -87,9 +87,12 @@ export const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
 // Arrêter les scans avant l'expiration du token pour éviter les re-logins immédiats
 // et ajouter un cooldown humain entre les sessions
 export const SCAN_CUTOFF_BEFORE_EXPIRY_MS = 8 * 60 * 1000; // 8 min avant expiration
-// Cooldown obligatoire après expiration du token avant re-login (5-8 min gaussien)
-export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 5 * 60 * 1000; // 5 min min
-export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min max
+// Cooldown obligatoire après expiration du token avant re-login (8-25 min gaussien)
+// CORRIGÉ le 16/05/2026 : ancienne valeur 5-8 min → pattern login ~65 min trop régulier.
+// Avec 8-25 min : cycle complet = 60 + 8-25 = 68-85 min (bien plus variable).
+// Un humain qui se reconnecte met entre 10 et 30 min — il fait autre chose entre-temps.
+export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min min
+export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 25 * 60 * 1000; // 25 min max
 
 // ── Stratégie "Zero-Risk" - Multi-couche anti-détection ──────────────────────
 

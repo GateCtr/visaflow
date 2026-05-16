@@ -69,6 +69,21 @@ import {
   scanOrchestrator,
 } from "./zero-risk-strategy.js";
 
+/**
+ * Extrait le header Sec-CH-UA depuis un User-Agent string.
+ * Chrome envoie "Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"
+ * Edge envoie "Chromium";v="136", "Microsoft Edge";v="136", "Not-A.Brand";v="8"
+ */
+function extractSecChUaFromUserAgent(ua: string): string {
+  const edgeMatch = ua.match(/Edg\/(\d+)/);
+  if (edgeMatch) {
+    return `"Chromium";v="${edgeMatch[1]}", "Microsoft Edge";v="${edgeMatch[1]}", "Not-A.Brand";v="8"`;
+  }
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  const version = chromeMatch?.[1] ?? "136";
+  return `"Chromium";v="${version}", "Google Chrome";v="${version}", "Not-A.Brand";v="8"`;
+}
+
 export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   const { embassyUsername: username, embassyPassword: password, twoCaptchaApiKey } = job.hunterConfig;
   const sessionStartTime = Date.now();
@@ -89,17 +104,20 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     console.log("[zero-risk] 🛡️ Initialisation stratégie Zero-Risk...");
     
     // 1. Initialiser la stratégie pour ce compte
-    // TODO: Récupérer le nombre total de comptes depuis la config admin
-    const totalAccounts = 1; // Par défaut, à remplacer par valeur réelle
+    // Utiliser le nombre de comptes actuellement en cache comme approximation.
+    // tokenCache contient les tokens de TOUS les comptes USA actifs sur cette instance.
+    // +1 pour le compte courant qui n'est peut-être pas encore en cache (premier login).
+    const totalAccounts = Math.max(tokenCache.size + 1, 2);
     initializeZeroRiskStrategy(username, totalAccounts);
     
     // 2. Appliquer le fingerprint cycling pour aujourd'hui
     const fingerprint = getFingerprintForToday(username);
     // Adapter le fingerprint au format attendu par setAccountFingerprint
+    // CORRECTION: générer le Sec-CH-UA depuis le UA (pas le UA string brut)
     const adaptedFingerprint = {
       ua: fingerprint.ua,
-      chUa: fingerprint.ua, // Utiliser le même UA pour chUa
-      platform: fingerprint.platform
+      chUa: extractSecChUaFromUserAgent(fingerprint.ua),
+      platform: `"${fingerprint.platform === "Windows" ? "Windows" : "macOS"}"`,
     };
     setAccountFingerprint(username, adaptedFingerprint);
     console.log(`[zero-risk] 🆔 Fingerprint appliqué: ${fingerprint.platform}, ${fingerprint.timezone}, ${fingerprint.acceptLanguage.split(',')[0]}`);
@@ -261,27 +279,38 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     const currentMinute = now.getMinutes();
     const currentTotalMinutes = currentHour * 60 + currentMinute;
     
-    // 1. Vérifier pause nocturne réduite (00h30-04h00)
-    // ── Jitter quotidien sur la pause nocturne ─────────────────────────────────
-    // Un humain ne commence pas et ne finit pas à la même heure exacte chaque jour.
-    // Variation ±30 min sur start ET end, déterministe par jour (même valeur toute la journée).
-    // Résultat : un jour le bot dort 00h15-03h45, un autre 00h50-04h20, etc.
-    // La couverture reste à 19-21h/jour (variation totale = ±30min sur chaque borne).
+    // 1. Vérifier pause nocturne variable
+    // ── Pause nocturne VARIABLE par jour ET par compte (16/05/2026) ─────────────
+    // PROBLÈME: L'ancienne logique avait une pause fixe 00h30-04h00 ±30min.
+    // Le pattern quotidien était identifiable : toujours ~3.5h de silence à la même heure.
+    // Un humain a des horaires de sommeil VARIABLES (parfois 22h, parfois 2h).
+    //
+    // NOUVELLE LOGIQUE :
+    //   - Début de pause : entre 22h30 et 01h30 (variable par jour + compte)
+    //   - Durée de pause : entre 2h et 5h (variable par jour + compte)
+    //   - Total : couverture 19-22h/jour selon les jours
+    //   - Déterministe par (jour + username) = même comportement si le bot redémarre le même jour
     const todayStr = now.toISOString().slice(0, 10); // "2026-05-15"
-    let dayHash = 0;
-    for (const ch of todayStr) dayHash = (dayHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
-    const nightStartJitterMin = (dayHash % 61) - 30; // -30 à +30 minutes
-    const nightEndJitterMin = ((dayHash >> 7) % 61) - 30; // -30 à +30 minutes (valeur différente)
+    const nightSeed = `${todayStr}:${username.toLowerCase()}:night-v2`;
+    let nightHash = 0;
+    for (const ch of nightSeed) nightHash = (nightHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
     
-    const nightStartMinutes = (NIGHT_PAUSE_START_HOUR * 60 + NIGHT_PAUSE_START_MINUTE + nightStartJitterMin + 1440) % 1440;
-    const nightEndMinutes = (NIGHT_PAUSE_END_HOUR * 60 + NIGHT_PAUSE_END_MINUTE + nightEndJitterMin + 1440) % 1440;
+    // Début entre 22h30 et 01h30 (180 min de plage)
+    // 22h30 = 1350 minutes depuis 00h00
+    const nightStartBase = 1350; // 22h30
+    const nightStartVariation = nightHash % 180; // 0-179 minutes
+    const nightStartMinutes = (nightStartBase + nightStartVariation) % 1440;
+    
+    // Durée entre 2h et 5h (120-300 min)
+    const nightDurationMin = 120 + ((nightHash >> 8) % 181); // 120-300 minutes
+    const nightEndMinutes = (nightStartMinutes + nightDurationMin) % 1440;
     
     let isNightTime = false;
     if (nightStartMinutes < nightEndMinutes) {
-      // Pause normale (ex: 00h15-04h20)
+      // Pause ne traverse pas minuit (rare avec start à 22h30+)
       isNightTime = currentTotalMinutes >= nightStartMinutes && currentTotalMinutes < nightEndMinutes;
     } else {
-      // Pause qui traverse minuit (ex: 23h50-04h00)
+      // Pause traverse minuit (cas normal : ex 23h15-03h45)
       isNightTime = currentTotalMinutes >= nightStartMinutes || currentTotalMinutes < nightEndMinutes;
     }
     
@@ -294,7 +323,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       const nightEndStr = `${nightEndH.toString().padStart(2, '0')}:${nightEndM.toString().padStart(2, '0')}`;
       const currentStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
       
-      console.log(`[usa] 🌙 Pause nocturne activée (${currentStr}) — reprise à ${nightEndStr} (jitter: start${nightStartJitterMin >= 0 ? "+" : ""}${nightStartJitterMin}min, end${nightEndJitterMin >= 0 ? "+" : ""}${nightEndJitterMin}min)`);
+      console.log(`[usa] 🌙 Pause nocturne activée (${currentStr}) — ${nightStartStr} à ${nightEndStr} (durée ${Math.round(nightDurationMin / 60 * 10) / 10}h)`);
       await sendHeartbeat({
         applicationId: job.id,
         result: "not_found",
@@ -774,45 +803,30 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   
   result = "error";
 } finally {
-  // ── LOGOUT STRATÉGIQUE (anti-détection 24h/24) ─────────────────────────────
-  // Ancienne logique: NE JAMAIS LOGOUT (évite pattern login→logout→repeat)
-  // Nouvelle logique: logout périodique pour simuler comportement humain
+  // ── POLITIQUE COHÉRENTE : NE JAMAIS LOGOUT (16/05/2026) ────────────────────
+  // 
+  // RAISON : Un humain qui utilise un portail administratif ferme son navigateur
+  // sans cliquer "Déconnexion" dans 95% des cas. Le JWT expire naturellement
+  // côté serveur (~60 min). Le pattern logout→re-login est le TRIGGER #1 des
+  // restrictions Cognito car il crée un cycle détectable.
   //
-  // On logout dans 3 cas:
-  //   1. Erreur de login (login_failed) → session invalide
-  //   2. Erreur système (error) → besoin de repartir proprement  
-  //   3. Session trop longue (>2h) → simuler humain qui se déconnecte
+  // L'ancien code faisait des logouts conditionnels (erreur, session longue) ce
+  // qui créait un pattern BINAIRE : certaines sessions avec logout, d'autres sans
+  // → corrélable par le portail.
   //
-  // MAIS: on évite les logout trop fréquents (<30 min entre sessions)
+  // NOUVELLE RÈGLE UNIQUE : Ne JAMAIS appeler POST /identity/user/logout.
+  // Si erreur → supprimer le cache token, le JWT expire seul côté serveur.
+  // Si session trop longue → supprimer le cache, pas de logout explicite.
+  //
+  // Seule action : supprimer le cache local si le token est invalide.
   const logoutCacheKey = username.toLowerCase();
-  const logoutCached = tokenCache.get(logoutCacheKey);
   
-  let shouldLogout = result === "login_failed" || result === "error";
-  
-  // Vérifier si session trop longue (déjà géré plus tôt, mais double-check)
-  if (logoutCached?.sessionStartedAt) {
-    const sessionDuration = Date.now() - logoutCached.sessionStartedAt;
-    if (sessionDuration >= MAX_HUMAN_SESSION_MS) {
-      console.log(`[usa] ⏰ Fin de session humaine (${Math.round(sessionDuration/60000)}min) — logout planifié`);
-      shouldLogout = true;
-    }
-  }
-  
-  if (username && shouldLogout) {
-    try {
-      // Petite pause avant logout (un humain ne clique pas "déconnexion" instantanément)
-      await new Promise(r => setTimeout(r, 500 + Math.random() * 1500));
-      await logoutUsaPortal(username);
-      botLog({
-        applicationId: job.id,
-        step: "logout",
-        status: "ok",
-        data: { username, sessionDurationMs: Date.now() - sessionStartTime, result },
-      });
-    } catch (logoutErr) {
-      // Logout échoué — non bloquant, le token expirera naturellement
-      console.warn(`[usa] Logout échoué (non bloquant): ${logoutErr}`);
-    }
+  if (result === "login_failed" || result === "error") {
+    // Token probablement invalide — supprimer le cache pour forcer un re-login
+    // au prochain cycle (APRÈS le cooldown). Pas de requête logout au serveur.
+    tokenCache.delete(logoutCacheKey);
+    proxyPool.releaseStickyProxy(username);
+    console.log(`[usa] 🗑️ Cache supprimé (${result}) — JWT expirera naturellement côté serveur`);
   } else if (username) {
     // Maintenir la session seulement si pas trop longue
     const maintainCacheKey = username.toLowerCase();
@@ -831,21 +845,11 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         // Mettre à jour lastActivityAt et lastScanTime
         maintainCached.lastActivityAt = Date.now();
         maintainCached.lastScanTime = Date.now();
-        
-        // Simuler une activité humaine aléatoire (log occasionnel)
-        if (Math.random() > 0.8) {
-          const activities = [
-            "📊 Session active",
-            "👤 Utilisateur connecté", 
-            "🔄 Maintien session",
-            "⏳ Prochain scan bientôt",
-            "📱 Activité normale"
-          ];
-          const randomActivity = activities[Math.floor(Math.random() * activities.length)];
-          console.log(`[usa] ${randomActivity} — ${remainingMinutes}min restantes`);
-        }
       } else {
-        console.log(`[usa] ⏰ Session atteint limite humaine (${Math.round(targetDuration/60000)}min) — sera logout au prochain cycle`);
+        // Session trop longue → supprimer le cache (pas de logout explicite)
+        tokenCache.delete(maintainCacheKey);
+        proxyPool.releaseStickyProxy(username);
+        console.log(`[usa] ⏰ Session expirée naturellement (${sessionMinutes}min) — cache supprimé, pas de logout`);
       }
     } else {
       console.log(`[usa] 🔄 Nouvelle session démarrée`);
