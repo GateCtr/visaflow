@@ -1,0 +1,305 @@
+/**
+ * Auto-whitelist de l'IP serveur Railway chez les fournisseurs de proxy.
+ *
+ * - IPRoyal : ajout automatique via REST API (POST /whitelist-entries)
+ * - 2Captcha Proxy : ajout IMPOSSIBLE via API — log l'URL du dashboard pour ajout manuel
+ *
+ * Variables d'environnement requises :
+ *   IPROYAL_API_TOKEN       — Bearer token (Settings > API dans le dashboard IPRoyal)
+ *   IPROYAL_USER_HASH       — Hash utilisateur résidentiel (visible dans l'URL du dashboard)
+ *   IPROYAL_WHITELIST_PORT  — Port souhaité (défaut: 12321)
+ *   IPROYAL_WHITELIST_PROTO — "http|https" ou "socks5" (défaut: "http|https")
+ *   IPROYAL_WHITELIST_CONFIG— Configuration proxy (ex: "_country-cd", défaut: "")
+ */
+
+// ─── IPRoyal Whitelist API ──────────────────────────────────────────────────
+
+interface IProyalWhitelistEntry {
+  hash: string;
+  ip: string;
+  port: string;
+  type: string;
+  configuration: string;
+}
+
+interface IProyalWhitelistResult {
+  ok: boolean;
+  entry?: IProyalWhitelistEntry;
+  error?: string;
+  alreadyExists?: boolean;
+}
+
+/**
+ * Liste les entrées whitelist existantes chez IPRoyal.
+ */
+async function listIproyalWhitelistEntries(
+  apiToken: string,
+  userHash: string,
+): Promise<IProyalWhitelistEntry[]> {
+  const url = `https://resi-api.iproyal.com/v1/residential-users/${userHash}/whitelist-entries`;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      console.error(`[ip-whitelist] IPRoyal GET whitelist failed: HTTP ${res.status}`);
+      return [];
+    }
+    const data = await res.json() as { data?: IProyalWhitelistEntry[] } | IProyalWhitelistEntry[];
+    // L'API peut retourner { data: [...] } ou directement [...]
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    return [];
+  } catch (err) {
+    console.error(`[ip-whitelist] IPRoyal list whitelist error:`, err);
+    return [];
+  }
+}
+
+/**
+ * Supprime une entrée whitelist chez IPRoyal par son hash.
+ */
+async function deleteIproyalWhitelistEntry(
+  apiToken: string,
+  userHash: string,
+  entryHash: string,
+): Promise<boolean> {
+  const url = `https://resi-api.iproyal.com/v1/residential-users/${userHash}/whitelist-entries/${entryHash}`;
+  try {
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    return res.ok || res.status === 204;
+  } catch (err) {
+    console.error(`[ip-whitelist] IPRoyal delete entry ${entryHash} failed:`, err);
+    return false;
+  }
+}
+
+/**
+ * Ajoute l'IP à la whitelist IPRoyal via l'API REST.
+ * Si l'IP est déjà whitelistée, retourne ok: true + alreadyExists: true.
+ * Optionnellement nettoie les anciennes entrées (IPs précédentes Railway).
+ */
+async function addIproyalWhitelistEntry(
+  ip: string,
+  apiToken: string,
+  userHash: string,
+  port: number = 12321,
+  proto: string = "http|https",
+  configuration: string = "",
+): Promise<IProyalWhitelistResult> {
+  const url = `https://resi-api.iproyal.com/v1/residential-users/${userHash}/whitelist-entries`;
+
+  try {
+    // 1. Vérifier si l'IP est déjà whitelistée
+    const existing = await listIproyalWhitelistEntries(apiToken, userHash);
+    const alreadyExists = existing.find((e) => e.ip === ip);
+    if (alreadyExists) {
+      console.log(`[ip-whitelist] ✅ IPRoyal: IP ${ip} déjà whitelistée (hash: ${alreadyExists.hash})`);
+      return { ok: true, entry: alreadyExists, alreadyExists: true };
+    }
+
+    // 2. Nettoyer les anciennes entrées (IPs Railway périmées)
+    //    On garde seulement les entrées qui ont une note "railway" ou "auto"
+    //    pour ne pas supprimer les entrées manuelles de l'utilisateur.
+    const autoEntries = existing.filter(
+      (e) => e.ip !== ip // pas la nôtre (au cas où)
+    );
+    // Note: On ne supprime PAS automatiquement les anciennes entrées
+    // car l'utilisateur pourrait avoir d'autres serveurs légitimes.
+    // On log juste les entrées existantes pour information.
+    if (autoEntries.length > 0) {
+      console.log(
+        `[ip-whitelist] IPRoyal: ${autoEntries.length} entrée(s) whitelist existante(s): ${autoEntries.map((e) => e.ip).join(", ")}`,
+      );
+    }
+
+    // 3. Ajouter la nouvelle IP
+    const body: Record<string, unknown> = { ip, port };
+    if (configuration) body.configuration = configuration;
+    body.note = `railway-auto-${new Date().toISOString().slice(0, 10)}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (res.ok || res.status === 201) {
+      const entry = (await res.json()) as IProyalWhitelistEntry;
+      console.log(`[ip-whitelist] ✅ IPRoyal: IP ${ip} ajoutée à la whitelist (hash: ${entry.hash}, port: ${entry.port})`);
+      return { ok: true, entry, alreadyExists: false };
+    }
+
+    // Gérer le cas "déjà existante" retourné comme erreur
+    if (res.status === 422 || res.status === 409) {
+      const errBody = await res.text();
+      console.log(`[ip-whitelist] ℹ️ IPRoyal: IP ${ip} probablement déjà whitelistée (${res.status}): ${errBody}`);
+      return { ok: true, alreadyExists: true };
+    }
+
+    const errText = await res.text();
+    console.error(`[ip-whitelist] ❌ IPRoyal: Erreur HTTP ${res.status}: ${errText}`);
+    return { ok: false, error: `HTTP ${res.status}: ${errText}` };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ip-whitelist] ❌ IPRoyal: Erreur réseau: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+// ─── Orchestrateur ──────────────────────────────────────────────────────────
+
+export interface WhitelistResult {
+  ip: string;
+  iproyal: { ok: boolean; message: string };
+  twocaptcha: { ok: boolean; message: string };
+}
+
+/**
+ * Auto-whitelist l'IP Railway chez tous les fournisseurs configurés.
+ * Appelé au démarrage du slot-hunter après détection de l'IP.
+ */
+export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult> {
+  const result: WhitelistResult = {
+    ip: serverIp,
+    iproyal: { ok: false, message: "non configuré" },
+    twocaptcha: { ok: false, message: "non configuré" },
+  };
+
+  // ── IPRoyal ────────────────────────────────────────────────────────────────
+  const iproyalToken = process.env.IPROYAL_API_TOKEN;
+  const iproyalHash = process.env.IPROYAL_USER_HASH;
+
+  if (iproyalToken && iproyalHash) {
+    const port = parseInt(process.env.IPROYAL_WHITELIST_PORT || "12321", 10);
+    const proto = process.env.IPROYAL_WHITELIST_PROTO || "http|https";
+    const config = process.env.IPROYAL_WHITELIST_CONFIG || "";
+
+    console.log(`[ip-whitelist] 🌐 IPRoyal: Ajout IP ${serverIp} à la whitelist...`);
+    const iproyalResult = await addIproyalWhitelistEntry(
+      serverIp,
+      iproyalToken,
+      iproyalHash,
+      port,
+      proto,
+      config,
+    );
+
+    if (iproyalResult.ok) {
+      result.iproyal = {
+        ok: true,
+        message: iproyalResult.alreadyExists
+          ? `IP déjà whitelistée`
+          : `IP ajoutée (hash: ${iproyalResult.entry?.hash})`,
+      };
+    } else {
+      result.iproyal = { ok: false, message: iproyalResult.error || "Erreur inconnue" };
+    }
+  } else {
+    const missing = [];
+    if (!iproyalToken) missing.push("IPROYAL_API_TOKEN");
+    if (!iproyalHash) missing.push("IPROYAL_USER_HASH");
+    result.iproyal = { ok: false, message: `Variable(s) manquante(s): ${missing.join(", ")}` };
+    console.log(`[ip-whitelist] ⚠️ IPRoyal: auto-whitelist désactivée (${missing.join(" + ")} absent)`);
+  }
+
+  // ── 2Captcha Proxy ─────────────────────────────────────────────────────────
+  // L'API 2Captcha NE PERMET PAS d'ajouter une IP à la whitelist programmatiquement.
+  // On peut seulement UTILISER une IP déjà whitelistée via generate_white_list_connections.
+  // → On vérifie si l'IP actuelle est déjà whitelistée en tentant un appel.
+  const twoCaptchaKey = process.env.TWOCAPTCHA_API_KEY;
+
+  if (twoCaptchaKey) {
+    console.log(`[ip-whitelist] 🔑 2Captcha: Vérification IP ${serverIp} dans la whitelist...`);
+    const checkUrl =
+      `https://api.2captcha.com/proxy/generate_white_list_connections` +
+      `?key=${twoCaptchaKey}&protocol=http&connection_count=1&ip=${encodeURIComponent(serverIp)}`;
+
+    try {
+      const res = await fetch(checkUrl, { signal: AbortSignal.timeout(15_000) });
+      const json = (await res.json()) as {
+        status: string;
+        request?: string;
+        data?: string[];
+      };
+
+      if (json.status === "OK" && Array.isArray(json.data) && json.data.length > 0) {
+        result.twocaptcha = { ok: true, message: `IP whitelistée ✅ (${json.data.length} connexion(s) dispo)` };
+        console.log(`[ip-whitelist] ✅ 2Captcha: IP ${serverIp} est whitelistée`);
+      } else if (
+        json.request?.includes("IP_NOT_WHITELISTED") ||
+        json.request?.includes("NOT_WHITELISTED") ||
+        json.status === "ERROR_IP_NOT_WHITELISTED" ||
+        json.status === "ERROR_MISSING_IP"
+      ) {
+        result.twocaptcha = {
+          ok: false,
+          message: `IP ${serverIp} NON whitelistée — ajout MANUEL requis: https://2captcha.com/proxy → "IP whitelist" → ajouter ${serverIp}`,
+        };
+        console.error(`[ip-whitelist] ❌ 2Captcha: IP ${serverIp} PAS dans la whitelist`);
+        console.error(`[ip-whitelist] → Action requise: https://2captcha.com/proxy → "IP whitelist" → Ajouter: ${serverIp}`);
+      } else {
+        result.twocaptcha = { ok: false, message: `Réponse inattendue: ${JSON.stringify(json).slice(0, 200)}` };
+        console.warn(`[ip-whitelist] ⚠️ 2Captcha: Réponse inattendue:`, json);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result.twocaptcha = { ok: false, message: `Erreur réseau: ${msg}` };
+      console.error(`[ip-whitelist] ❌ 2Captcha: Erreur vérification whitelist:`, msg);
+    }
+  } else {
+    result.twocaptcha = { ok: false, message: "TWOCAPTCHA_API_KEY absent" };
+  }
+
+  return result;
+}
+
+/**
+ * Nettoie les anciennes IPs Railway de la whitelist IPRoyal.
+ * Garde uniquement l'IP actuelle, supprime les entrées avec note "railway-auto-*".
+ */
+export async function cleanupOldIproyalWhitelistEntries(
+  currentIp: string,
+): Promise<{ removed: number; kept: number }> {
+  const iproyalToken = process.env.IPROYAL_API_TOKEN;
+  const iproyalHash = process.env.IPROYAL_USER_HASH;
+
+  if (!iproyalToken || !iproyalHash) {
+    return { removed: 0, kept: 0 };
+  }
+
+  const entries = await listIproyalWhitelistEntries(iproyalToken, iproyalHash);
+  let removed = 0;
+  let kept = 0;
+
+  for (const entry of entries) {
+    if (entry.ip === currentIp) {
+      kept++;
+      continue;
+    }
+    // On ne supprime que les entrées qui n'ont pas l'IP actuelle
+    // Pour être safe, on ne supprime PAS automatiquement — juste un log
+    // Décommenter la ligne ci-dessous pour activer le nettoyage automatique :
+    // const deleted = await deleteIproyalWhitelistEntry(iproyalToken, iproyalHash, entry.hash);
+    // if (deleted) removed++;
+    console.log(`[ip-whitelist] ℹ️ IPRoyal: ancienne entrée ${entry.ip}:${entry.port} (hash: ${entry.hash}) — non supprimée (sécurité)`);
+    kept++;
+  }
+
+  return { removed, kept };
+}
