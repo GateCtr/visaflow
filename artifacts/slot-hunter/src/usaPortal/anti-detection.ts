@@ -8,32 +8,29 @@ import {
   simulatePageRefresh,
 } from "../humanBehavior.js";
 import { usaFetch, authHeaders } from "./usa-http.js";
+import {
+  burstInterStepPause,
+  selectOfcsToScan,
+  isFirstScanOfSession,
+  markFirstScanDone,
+  sendGaPageView,
+  sendGaEngagement,
+  getNextScanDelay,
+} from "./scan-behavior.js";
 
 // ─── Nouvelles fonctions anti-détection ──────────────────────────────────────
 
 /**
- * Pause aléatoire entre les étapes pour simuler le comportement humain
+ * Pause aléatoire entre les étapes — utilise la DISTRIBUTION GAMMA (correction #2)
+ * au lieu de l'ancienne distribution uniforme [minMs, maxMs] qui était un signal de bot.
+ * 
+ * L'ancienne implémentation (300-3000ms uniforme) produisait des pauses "moyennes"
+ * à chaque fois. Un humain a des transitions rapides (< 500ms) ponctuées de longues
+ * pauses (5-12s) — distribution bimodale, pas uniforme.
  */
 export async function randomInterStepPause(minMs: number = 500, maxMs: number = 3000, jobId?: string): Promise<void> {
-  const delay = minMs + Math.random() * (maxMs - minMs);
-  if (delay > 1000) {
-    console.log(`[human] Pause inter-étape: ${Math.round(delay / 1000)}s`);
-    // Log les pauses significatives
-    if (jobId && delay > 2000) {
-      botLog({
-        applicationId: jobId,
-        step: "human_behavior",
-        status: "ok",
-        data: {
-          type: "inter_step_pause",
-          durationMs: delay,
-          minMs,
-          maxMs
-        }
-      });
-    }
-  }
-  await new Promise(resolve => setTimeout(resolve, delay));
+  // Déléguer à burstInterStepPause qui utilise une distribution gamma réaliste
+  await burstInterStepPause("", jobId);
 }
 
 /**
@@ -175,6 +172,9 @@ export function shouldDoWarmup(applicationId: string): boolean {
 
 /**
  * Exécute des étapes avec variabilité humaine (ordre aléatoire, pauses)
+ * 
+ * CORRECTION #3 : Envoie des événements GA/DAP comme un vrai navigateur.
+ * CORRECTION #2 : Utilise burstInterStepPause (gamma) au lieu de humanPause (uniforme).
  */
 export async function executeWithHumanVariability(
   steps: Array<{ name: string; execute: () => Promise<void>; critical?: boolean }>,
@@ -185,11 +185,14 @@ export async function executeWithHumanVariability(
   const criticalSteps = steps.filter(step => step.critical);
   const nonCriticalSteps = steps.filter(step => !step.critical);
   
+  // CORRECTION #3 : Envoyer un événement GA au début (simule le chargement de page)
+  await sendGaPageView("AVITS Dashboard", "/visaapplicantui/home/dashboard", undefined, jobId);
+  
   // Exécuter les étapes critiques dans l'ordre
   for (const step of criticalSteps) {
     console.log(`[human] ${context}Étape critique: ${step.name}`);
     await step.execute();
-    await humanPause(300, `après ${step.name} `, jobId);
+    await burstInterStepPause(`après ${step.name} `, jobId);
   }
   
   // Mélanger et exécuter les étapes non-critiques
@@ -199,14 +202,14 @@ export async function executeWithHumanVariability(
   for (const step of stepsToExecute) {
     console.log(`[human] ${context}Étape aléatoire: ${step.name}`);
     await step.execute();
-    await humanPause(500, `après ${step.name} `, jobId);
+    await burstInterStepPause(`après ${step.name} `, jobId);
   }
   
   // 30% du temps : simuler un rafraîchissement supplémentaire (F5)
   // Un humain qui cherche un créneau fait F5 en boucle — pas de navigation vers d'autres pages
   if (Math.random() < 0.3) {
     await simulatePageRefresh(jobId);
-    await humanPause(200, "après refresh ", jobId);
+    await burstInterStepPause("après refresh ", jobId);
   }
   
   // 10% du temps : pause plus longue (humain qui regarde son téléphone)
@@ -215,6 +218,9 @@ export async function executeWithHumanVariability(
     console.log(`[human] 📱 Pause distraction: ${Math.round(pauseMs / 1000)}s`);
     await new Promise(resolve => setTimeout(resolve, pauseMs));
   }
+  
+  // CORRECTION #3 : Envoyer un événement user_engagement (session active)
+  await sendGaEngagement(undefined, jobId);
 }
 
 // ─── OFC round-robin : scanner 1 seule OFC par cycle (rotation) ─────────────

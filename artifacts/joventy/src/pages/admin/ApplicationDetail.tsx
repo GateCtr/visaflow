@@ -415,7 +415,7 @@ export default function AdminApplicationDetail() {
   const [logExpanded, setLogExpanded] = useState<Set<string>>(new Set());
   const [logCopied, setLogCopied] = useState<string | null>(null);
   const [logClearing, setLogClearing] = useState(false);
-  const LOG_PAGE_SIZE = 12;
+  const LOG_PAGE_SIZE = 20;
 
   const clearLogsByApp = useMutation(api.botLogs.clearByApplication);
 
@@ -1920,32 +1920,53 @@ export default function AdminApplicationDetail() {
         {/* ===== BOT LOG TIMELINE ===== */}
         {botLogs.length > 0 && (() => {
           const stepLabels: Record<string, string> = {
-            login: "Connexion au portail",
-            ofc_list: "Bureaux consulaires",
-            scan: "Scan en cours",
-            slots_found: "Créneau détecté",
+            // ── USA Portal — Cycle complet ──
+            login: "Connexion portail",
+            session_start: "Début session",
+            session_end: "Fin session",
+            appointment_status: "Statut dossier",
+            payment_check: "Vérification paiement MRV",
+            ofc_list: "Liste bureaux consulaires",
+            scan: "Scan créneaux",
+            scan_cutoff: "Arrêt scan (cutoff token)",
+            cooldown: "Cooldown entre sessions",
+            slots_found: "Créneau détecté !",
             booking_attempt: "Tentative de réservation",
             booking_success: "Réservation confirmée",
             booking_fail: "Réservation échouée",
             confirmation_letter: "Lettre de confirmation",
             not_found: "Aucun créneau disponible",
-            rate_limit: "Rate limit (429)",
-            blocked: "Compte potentiellement bloqué",
-            restricted: "Compte restreint",
             error: "Erreur",
-            session_end: "Fin de session",
-            session_start: "Début de session",
             human_behavior: "Comportement humain",
-            appointment_status: "Statut demande",
             anti_detection: "Anti-détection",
+            execution_time: "Temps d'exécution",
+            // ── Erreurs spécifiques ──
+            rate_limit: "Rate limit (429)",
+            blocked: "Compte bloqué (403)",
+            restricted: "Compte restreint (401)",
+            token_expired: "Token expiré",
+            restriction_skip: "Cycle ignoré (compte restreint)",
+            // ── Proxy & réseau ──
+            keep_alive: "Keep-alive session",
+            proxy_preflight_abort: "Proxy mort — session avortée",
+            proxy_health_check: "Vérification santé proxy",
+            // ── Retry 409 (conflit booking) ──
+            "409_retry_start": "Retry 409 — conflit créneau",
+            "409_retry_exhausted": "Retry 409 épuisé",
+            "409_retry_success": "Retry 409 réussi !",
           };
           const stepIcons: Record<string, string> = {
-            login: "🔑", ofc_list: "🏛️", scan: "🔄",
+            login: "🔑", session_start: "🚀", session_end: "🏁",
+            appointment_status: "📋", payment_check: "💳",
+            ofc_list: "🏛️", scan: "🔄", scan_cutoff: "⏰", cooldown: "⏳",
             slots_found: "📅", booking_attempt: "📝", booking_success: "✅",
             booking_fail: "❌", confirmation_letter: "📄", not_found: "🔍",
-            rate_limit: "⛔", blocked: "🚫", restricted: "🔒", error: "⚠️",
-            session_end: "🏁", session_start: "🚀", human_behavior: "🤖",
-            appointment_status: "📋", anti_detection: "🛡️",
+            rate_limit: "⛔", blocked: "🚫", restricted: "🔒",
+            token_expired: "🔄", error: "⚠️",
+            human_behavior: "🧠", anti_detection: "🛡️", execution_time: "⏱️",
+            restriction_skip: "🔒", keep_alive: "🏓",
+            proxy_preflight_abort: "🛑", proxy_health_check: "🌐",
+            "409_retry_start": "🔁", "409_retry_exhausted": "💨", "409_retry_success": "✅",
           };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {
@@ -2130,11 +2151,22 @@ export default function AdminApplicationDetail() {
                         {parsedData && (
                           <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
                             {Object.entries(parsedData).map(([k, val]) => {
-                              const strVal = Array.isArray(val)
-                                ? (val as unknown[]).join(", ")
-                                : typeof val === "object" && val !== null
-                                ? JSON.stringify(val)
-                                : String(val);
+                              let strVal: string;
+                              if (Array.isArray(val)) {
+                                // Tableau d'objets → extraire le champ "name" ou "postName" si disponible
+                                strVal = (val as unknown[]).map((item) => {
+                                  if (typeof item === "string" || typeof item === "number") return String(item);
+                                  if (typeof item === "object" && item !== null) {
+                                    const obj = item as Record<string, unknown>;
+                                    return (obj.name ?? obj.postName ?? obj.label ?? JSON.stringify(item)) as string;
+                                  }
+                                  return String(item);
+                                }).join(", ");
+                              } else if (typeof val === "object" && val !== null) {
+                                strVal = JSON.stringify(val);
+                              } else {
+                                strVal = String(val);
+                              }
                               const isLong = strVal.length > 200;
                               const display = isLong && !isExpanded ? strVal.slice(0, 200) + "…" : strVal;
                               return (

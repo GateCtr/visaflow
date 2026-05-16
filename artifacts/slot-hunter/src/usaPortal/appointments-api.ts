@@ -20,6 +20,10 @@ import {
   REFERER_DASHBOARD,
 } from "./config.js";
 import { markAccountRestricted, isRestrictedBody } from "./account-restriction.js";
+import {
+  getPaymentStatusFromCache,
+  setPaymentStatusCache,
+} from "./scan-behavior.js";
 
 export async function checkUsaAppointmentRequestStatus(
   session: UsaSession,
@@ -54,6 +58,43 @@ export async function checkUsaAppointmentRequestStatus(
 }> {
   const headers = authHeaders(session.accessToken, REFERER_REQUESTS, false);
   let data: UsaAppointmentRequest | null = null;
+
+  // ── CORRECTION ANTI-DÉTECTION #1 : Cache TTL 5 min ──────────────────────
+  // Le bot appelait cette API ~40 fois en 126s. Un humain la déclenche 1-2 fois.
+  // On cache le résultat pour éviter le polling excessif détectable.
+  const cacheUsername = [...tokenCache.entries()].find(([, v]) => v.accessToken === session.accessToken)?.[0] ?? "";
+  const cached = getPaymentStatusFromCache(cacheUsername);
+  if (cached && cached.applicationId) {
+    console.log(`[usa] ♻️ paymentStatus depuis cache (évite polling excessif)`);
+    // Reconstruire la réponse depuis le cache
+    const cachedData = cached.data as UsaAppointmentRequest;
+    if (cachedData) {
+      data = cachedData;
+      // Skip le fetch réseau — utiliser directement les données cachées
+      const appId = data.applicationId ?? null;
+      const appoStatus = data.pendingAppoStatus ?? null;
+      const applicant = data.primaryApplicant ?? null;
+      const serverApplicantId: number | string | undefined =
+        typeof data.applicantId === "number" ? data.applicantId :
+        (typeof data.applicantId === "string" && data.applicantId.length > 0 ? data.applicantId : undefined);
+      const serverAppointmentId: number | undefined =
+        typeof data.appointmentId === "number" ? data.appointmentId : undefined;
+      const serverApplicantUUID: number | undefined =
+        typeof data.applicantUUID === "number" ? data.applicantUUID : undefined;
+      const serverMissionId = typeof data.missionId === "number" && data.missionId > 0
+        ? data.missionId
+        : USA_MISSION_ID;
+
+      if (appoStatus === 0 || appoStatus === null) {
+        if (data.cancellable === true || appId) {
+          return { status: "cancellable", applicationId: appId, pendingAppoStatus: 0, primaryApplicant: applicant, message: `Demande annulable (cache)`, missionId: serverMissionId, applicantId: serverApplicantId, appointmentId: serverAppointmentId, applicantUUID: serverApplicantUUID };
+        }
+        return { status: "no_request", applicationId: appId, pendingAppoStatus: appoStatus, primaryApplicant: applicant, message: `Aucune demande active (cache)`, missionId: serverMissionId, applicantId: serverApplicantId, appointmentId: serverAppointmentId, applicantUUID: serverApplicantUUID };
+      }
+      return { status: "pending", applicationId: appId, pendingAppoStatus: appoStatus, primaryApplicant: applicant, message: `Demande active (cache, status=${appoStatus})`, missionId: serverMissionId, applicantId: serverApplicantId, appointmentId: serverAppointmentId, applicantUUID: serverApplicantUUID };
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   try {
     const res = await usaFetch(USA_PAYMENT_STATUS_URL, { method: "GET", headers });
@@ -150,6 +191,12 @@ export async function checkUsaAppointmentRequestStatus(
   // applicantUUID — requis dans le payload de booking (bundle: selectedSlotDetails.applicantUUID).
   const serverApplicantUUID: number | undefined =
     typeof data.applicantUUID === "number" ? data.applicantUUID : undefined;
+
+  // ── CORRECTION ANTI-DÉTECTION #1 : Mise en cache ────────────────────────
+  if (cacheUsername && data) {
+    setPaymentStatusCache(cacheUsername, data, appId);
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   console.log(`[usa] pendingAppoStatus=${appoStatus} applicationId=${appId} applicant=${applicant}${serverApplicantId !== undefined ? ` applicantId=${serverApplicantId}` : ""}${serverAppointmentId !== undefined ? ` appointmentId=${serverAppointmentId}` : ""}${serverApplicantUUID !== undefined ? ` applicantUUID=${serverApplicantUUID}` : ""}`);
 

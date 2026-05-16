@@ -28,9 +28,17 @@ import { findFirstSlotForOfc } from "./usa-scan-find.js";
 import { bookUsaSlot, rescheduleUsaSlot, reportSlotDiscovery_batch } from "./usa-scan-book.js";
 import type { UsaBookingResult } from "./usa-scan-book.js";
 import { downloadUsaConfirmationPdf } from "./usa-scan-confirmation.js";
+import {
+  selectOfcsToScan,
+  isFirstScanOfSession,
+  markFirstScanDone,
+  sendGaPageView,
+  parallelBurst,
+  burstInterStepPause,
+} from "./scan-behavior.js";
 
 /**
- * Phase principale du scan : contexte demande, flow anti-détection, liste OFC, round-robin, booking.
+ * Phase principale du scan : contexte demande, flow anti-détection, liste OFC, sélection imprévisible, booking.
  */
 export async function runUsaSlotScanMain(
   job: HunterJob,
@@ -42,6 +50,15 @@ export async function runUsaSlotScanMain(
     await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "applicationId manquant" });
     return "error";
   }
+
+  // CORRECTION #3 : Envoyer un événement GA page_view au début du scan
+  // (simule la navigation vers la page de création de RDV)
+  await sendGaPageView(
+    "AVITS Appointment",
+    "/visaapplicantui/home/dashboard/create-appointment",
+    undefined,
+    job.id,
+  );
 
   // 0. Récupérer d'abord getTransformData pour obtenir le bon applicantId (GSS string)
   //    Le portail Angular fait la même chose : getTransformData AVANT getApplicationDetails.
@@ -505,18 +522,16 @@ export async function runUsaSlotScanMain(
     console.log(`[usa] 📅 Fenêtre admin : ${slotDateFrom ?? "illimitée"} → ${slotDateDeadline ?? "illimitée"}`);
   }
 
-  // 3. Scanner les OFCs en round-robin (1 OFC par cycle) pour réduire le nombre
-  //    d'appels API par cycle. Avec N OFCs, chaque OFC est vérifiée toutes les N×(3-5) min
-  //    au lieu de scanner toutes les N à chaque cycle (économie : (N-1)×3 appels/cycle).
-  //    Accepté car les créneaux n'apparaissent pas à la seconde — 10-15 min de latence OK.
-  const cursorKey = session.applicationId;
-  const cursor = ofcCursor.get(cursorKey) ?? 0;
-  const ofcToScan = ofcList.length > 1
-    ? [ofcList[cursor % ofcList.length]]
-    : ofcList;
-  ofcCursor.set(cursorKey, (cursor + 1) % ofcList.length);
+  // 3. Scanner les OFCs avec sélection IMPRÉVISIBLE (correction #4)
+  //    L'ancien round-robin parfait (cursor+1 % N) était un signal de bot détectable.
+  //    Un humain peut re-scanner le même bureau, sauter un bureau, ou en scanner 2 d'un coup.
+  const isFirstScan = isFirstScanOfSession(session.applicationId!);
+  const ofcToScan = selectOfcsToScan(session.applicationId!, ofcList, isFirstScan);
+  if (isFirstScan) {
+    markFirstScanDone(session.applicationId!);
+  }
   if (ofcList.length > 1) {
-    console.log(`[usa] 🔄 Round-robin OFC : scanning ${ofcToScan[0].postName} (${cursor % ofcList.length + 1}/${ofcList.length})`);
+    console.log(`[usa] 🎯 OFCs sélectionnés : ${ofcToScan.map(o => o.postName).join(", ")} (${ofcToScan.length}/${ofcList.length})`);
   }
 
   // Collecteur d'événements de découverte de dates (pour stats et analyse de fréquence)

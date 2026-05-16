@@ -126,3 +126,52 @@ export const clearAll = mutation({
     return { deleted: logs.length, remaining: remaining.length > 0 };
   },
 });
+
+
+/**
+ * Supprime les logs bot filtrés par "flow" (usa, cev, ou autre).
+ * Le flow est déterminé par le préfixe du step ou le champ flow dans data.
+ * Retourne { deleted, remaining } pour pagination batch.
+ */
+export const clearByFlow = mutation({
+  args: { flow: v.union(v.literal("usa"), v.literal("cev"), v.literal("other")) },
+  handler: async (ctx, args) => {
+    const BATCH_SIZE = 500;
+    const logs = await ctx.db
+      .query("botLogs")
+      .withIndex("by_ts")
+      .order("desc")
+      .take(BATCH_SIZE * 2); // Take more to filter
+
+    const isUsaStep = (step: string) =>
+      !step.startsWith("cev_") && !step.startsWith("cev ") &&
+      (step.startsWith("usa_") || ["login", "session_start", "session_end", "appointment_status", "payment_check", "ofc_list", "scan", "scan_cutoff", "cooldown", "slots_found", "booking_attempt", "booking_success", "booking_fail", "confirmation_letter", "not_found", "error", "human_behavior", "anti_detection", "execution_time", "rate_limit", "blocked", "restricted", "token_expired", "restriction_skip", "keep_alive", "proxy_preflight_abort", "proxy_health_check", "409_retry_start", "409_retry_exhausted", "409_retry_success"].includes(step));
+
+    const isCevStep = (step: string) => step.startsWith("cev_") || step.startsWith("cev ");
+
+    const toDelete = logs.filter(log => {
+      if (args.flow === "usa") return isUsaStep(log.step);
+      if (args.flow === "cev") return isCevStep(log.step);
+      // "other" = neither usa nor cev
+      return !isUsaStep(log.step) && !isCevStep(log.step);
+    }).slice(0, BATCH_SIZE);
+
+    for (const log of toDelete) {
+      await ctx.db.delete(log._id);
+    }
+
+    // Check if there are more of this flow to delete
+    const remainingLogs = await ctx.db
+      .query("botLogs")
+      .withIndex("by_ts")
+      .order("desc")
+      .take(10);
+    const remainingOfFlow = remainingLogs.some(log => {
+      if (args.flow === "usa") return isUsaStep(log.step);
+      if (args.flow === "cev") return isCevStep(log.step);
+      return !isUsaStep(log.step) && !isCevStep(log.step);
+    });
+
+    return { deleted: toDelete.length, remaining: remainingOfFlow };
+  },
+});
