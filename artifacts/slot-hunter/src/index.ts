@@ -874,7 +874,13 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
   // stocké dans scheduledNextDue, lu de façon déterministe par getNextCheckDue.
   // Le stagger est maintenu : on utilise l'intervalle du tier mais on conserve
   // l'offset relatif du dossier pour garder la répartition uniforme.
-  const intervalMs = generateIntervalMs(job.urgencyTier);
+  const baseIntervalMs = generateIntervalMs(job.urgencyTier);
+  // ── Per-dossier jitter sur l'intervalle (16/05/2026) ──────────────────────
+  // Le generateIntervalMs produit un intervalle par TIER (partagé entre dossiers).
+  // Ajouter un jitter PER-DOSSIER de ±15% pour désynchroniser les dossiers du même tier.
+  // Résultat: même si le tier donne "4 min", Dossier A obtient 3.6 min et B obtient 4.4 min.
+  const perDossierJitter = (Math.random() * 0.3 - 0.15) * baseIntervalMs;
+  const intervalMs = Math.max(60_000, Math.round(baseIntervalMs + perDossierJitter));
   const nextDue = Date.now() + intervalMs;
   scheduledNextDue.set(job.id, nextDue);
   log("INFO", `[${job.applicantName}] Prochain check dans ${formatMs(intervalMs)} (${new Date(nextDue).toLocaleTimeString("fr-CD")})`);

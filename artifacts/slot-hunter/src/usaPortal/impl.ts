@@ -291,7 +291,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     //   - Total : couverture 19-22h/jour selon les jours
     //   - Déterministe par (jour + username) = même comportement si le bot redémarre le même jour
     const todayStr = now.toISOString().slice(0, 10); // "2026-05-15"
-    const nightSeed = `${todayStr}:${username.toLowerCase()}:night-v2`;
+    // ── Pause nocturne PER-DOSSIER (pas seulement per-username) ─────────────
+    // PROBLÈME: Si plusieurs dossiers partagent le même embassyUsername,
+    // ils dormaient et se réveillaient au MÊME moment → burst de re-logins au réveil.
+    // FIX: Ajouter le job.id dans le seed pour décaler chaque dossier individuellement.
+    // Résultat: Dossier A dort 23h15-03h45, Dossier B dort 23h30-04h10, etc.
+    const nightSeed = `${todayStr}:${username.toLowerCase()}:${job.id}:night-v3`;
     let nightHash = 0;
     for (const ch of nightSeed) nightHash = (nightHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
     
@@ -329,6 +334,38 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         result: "not_found",
         errorMessage: `Pause nocturne ${nightStartStr}-${nightEndStr} — cycle ignoré`,
       });
+      return "not_found";
+    }
+    
+    // ── Stagger de réveil post-pause nocturne ────────────────────────────────
+    // PROBLÈME: Au réveil, si 3 dossiers du même tier sont "dûs", ils font
+    // tous un re-login en burst (30-60s entre eux) = 3 logins en 2 min = restriction.
+    // FIX: Chaque dossier attend un délai UNIQUE (0 à 15 min) après la fin de la pause
+    // nocturne avant son premier scan. Déterministe par job.id pour stabilité.
+    // Résultat: Dossier A démarre à +0 min, B à +5 min, C à +11 min après le réveil.
+    const timeSinceWakeUp = currentTotalMinutes - nightEndMinutes;
+    // timeSinceWakeUp peut être négatif si nightEnd traverse minuit — normaliser
+    const normalizedTimeSinceWakeUp = timeSinceWakeUp >= 0 ? timeSinceWakeUp : timeSinceWakeUp + 1440;
+    
+    // Seulement appliquer dans les 20 premières minutes après le réveil
+    if (normalizedTimeSinceWakeUp < 20) {
+      // Délai de réveil unique par dossier (0 à 15 min)
+      const wakeUpSeed = `${todayStr}:${job.id}:wakeup-stagger`;
+      let wakeHash = 0;
+      for (const ch of wakeUpSeed) wakeHash = (wakeHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
+      const wakeUpDelayMin = wakeHash % 16; // 0-15 minutes
+      
+      if (normalizedTimeSinceWakeUp < wakeUpDelayMin) {
+        const waitMin = wakeUpDelayMin - normalizedTimeSinceWakeUp;
+        console.log(`[usa] 🌅 Stagger réveil: ${username} attend encore ${waitMin} min (dossier démarre à +${wakeUpDelayMin}min après réveil)`);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "not_found",
+          errorMessage: `Stagger réveil — démarrage dans ${waitMin} min`,
+        });
+        return "not_found";
+      }
+    }
       return "not_found";
     }
     
