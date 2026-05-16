@@ -8,7 +8,7 @@ import {
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
-import { USA_MISSION_ID, MIN_COOLDOWN_AFTER_EXPIRY_MS, MAX_COOLDOWN_AFTER_EXPIRY_MS } from "./config.js";
+import { USA_MISSION_ID, MIN_COOLDOWN_AFTER_EXPIRY_MS, MAX_COOLDOWN_AFTER_EXPIRY_MS, PROXY_EXPIRY_BUFFER_MS } from "./config.js";
 import { AccountRestrictedError } from "./errors.js";
 import {
   isAccountRestricted,
@@ -70,16 +70,20 @@ export async function getUsaSession(
     // Sans ça : proxy expire à 55 min, JWT valide jusqu'à 60 min → re-login
     // IMMÉDIAT à 55 min = interval réduit entre sessions = trigger restriction.
     // Solution : imposer un cooldown minimum de 8 min après invalidation proxy.
-    if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt) {
-      // Le proxy est mort — vérifier le temps écoulé depuis la mort
-      const timeSinceProxyDeath = now - cached.proxyExpiresAt;
+    if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt - PROXY_EXPIRY_BUFFER_MS) {
+      // Le proxy est mort OU va mourir dans le buffer — vérifier le cooldown.
+      // IMPORTANT: isCachedTokenValid() invalide le token AVANT l'expiration réelle
+      // (buffer de 2-5 min). Sans ce check élargi, le code fait un re-login immédiat
+      // pendant le buffer → changement d'IP rapide → restriction Cognito.
+      const effectiveDeathTime = cached.proxyExpiresAt - PROXY_EXPIRY_BUFFER_MS;
+      const timeSinceInvalidation = now - effectiveDeathTime;
       const proxyDeathCooldownMs = MIN_COOLDOWN_AFTER_EXPIRY_MS + 
         Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS);
       
-      if (timeSinceProxyDeath < proxyDeathCooldownMs) {
-        const remainingMs = proxyDeathCooldownMs - timeSinceProxyDeath;
+      if (timeSinceInvalidation < proxyDeathCooldownMs) {
+        const remainingMs = proxyDeathCooldownMs - timeSinceInvalidation;
         const remainingMin = Math.round(remainingMs / 60000);
-        console.log(`[usa] 🔒 Proxy expiré — cooldown ${remainingMin} min avant re-login (évite restriction)`);
+        console.log(`[usa] 🔒 Proxy expiré/expirant — cooldown ${remainingMin} min avant re-login (évite restriction)`);
         return null; // Attendre le cooldown
       }
       // Cooldown terminé → OK pour re-login avec nouvelle IP
