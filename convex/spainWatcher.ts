@@ -252,3 +252,32 @@ export const internalGetConfig = internalMutation({
     return watcher ?? null;
   },
 });
+
+
+
+// ─── Mutation: suppression des scans historiques ──────────────────────────────
+
+export const clearScans = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const scans = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_ts")
+      .collect();
+
+    for (const scan of scans) {
+      // Supprimer le screenshot du storage si présent
+      if (scan.screenshotStorageId) {
+        try {
+          await ctx.storage.delete(scan.screenshotStorageId as any);
+        } catch { /* ignore si déjà supprimé */ }
+      }
+      await ctx.db.delete(scan._id);
+    }
+
+    return { deleted: scans.length };
+  },
+});

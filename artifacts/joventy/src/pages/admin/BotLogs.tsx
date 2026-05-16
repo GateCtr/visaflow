@@ -848,6 +848,7 @@ function InlinePreview({ data }: { data: string }) {
 function SpainWatcherTab() {
   const data = useQuery(api.spainWatcher.getWatcher);
   const setWatcher = useMutation(api.spainWatcher.setWatcher);
+  const clearSpainScans = useMutation(api.spainWatcher.clearScans);
 
   const watcher = data?.watcher ?? null;
   const scans   = data?.scans  ?? [];
@@ -988,11 +989,37 @@ function SpainWatcherTab() {
 
       {/* Scan history */}
       <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Flag className="w-4 h-4 text-red-500" />
-          Historique scans
-          {scans.length > 0 && <span className="ml-auto text-[10px] text-muted-foreground">{scans.length}</span>}
-        </h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <Flag className="w-4 h-4 text-red-500" />
+            Historique scans
+            {scans.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full">{scans.length}</span>}
+          </h3>
+          <span className="flex-1" />
+          {scans.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors">
+                  <Trash2 className="w-3 h-3" /> Vider l'historique
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Supprimer l'historique Espagne</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Supprimer tous les scans Espagne ({scans.length} entrées) ? Les screenshots seront aussi supprimés. Cette action est irréversible.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={async () => { await clearSpainScans(); }} className="bg-red-600 hover:bg-red-700">
+                    Supprimer tout
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
 
         {data === undefined ? (
           <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
@@ -1008,18 +1035,21 @@ function SpainWatcherTab() {
                 <div key={scan._id} className="py-3 flex items-start gap-3">
                   <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-slate-800">{meta.label}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
+                        {meta.icon} {meta.label}
+                      </span>
                       <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
+                      <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
                       {scan.screenshotUrl && (
                         <a href={scan.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                          className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1">
+                          className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-medium">
                           <ExternalLink className="w-3 h-3" /> Screenshot
                         </a>
                       )}
                     </div>
                     {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
-                    {scan.errorMessage && <p className="text-[10px] font-mono text-red-500 mt-1">{scan.errorMessage}</p>}
+                    {scan.errorMessage && <p className="text-[10px] font-mono text-red-500 mt-1 truncate">{scan.errorMessage}</p>}
                   </div>
                 </div>
               );
