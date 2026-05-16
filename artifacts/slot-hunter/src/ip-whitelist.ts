@@ -2,6 +2,8 @@
  * Auto-whitelist de l'IP serveur Railway chez les fournisseurs de proxy.
  *
  * - IPRoyal : ajout automatique via REST API (POST /whitelist-entries)
+ *   avec configuration résidentielle sticky : country-cd, city-kinshasa,
+ *   session sticky (8 chars aléatoires), lifetime 59 minutes.
  * - 2Captcha Proxy : ajout IMPOSSIBLE via API — log l'URL du dashboard pour ajout manuel
  *
  * Variables d'environnement requises :
@@ -9,10 +11,50 @@
  *   IPROYAL_USER_HASH       — Hash utilisateur résidentiel (visible dans l'URL du dashboard)
  *   IPROYAL_WHITELIST_PORT  — Port souhaité (défaut: 12321)
  *   IPROYAL_WHITELIST_PROTO — "http|https" ou "socks5" (défaut: "http|https")
- *   IPROYAL_WHITELIST_CONFIG— Configuration proxy (ex: "_country-cd", défaut: "")
+ *   IPROYAL_WHITELIST_CONFIG— Configuration proxy complète (override)
+ *                              Défaut: "_country-cd_city-kinshasa_session-{random8}_lifetime-59m"
+ *
+ * Format IPRoyal configuration (dans le champ password ou whitelist) :
+ *   _country-{iso2}           — Code pays ISO 2 lettres (cd = Congo RDC)
+ *   _city-{city}              — Ville cible (kinshasa)
+ *   _session-{alphanumeric8}  — ID session sticky (8 chars aléatoires, même IP pendant lifetime)
+ *   _lifetime-{duration}      — Durée de la session sticky (ex: 59m, 2h, 1d). Max 7 jours.
+ *                                Un seul format de durée autorisé (s/m/h/d).
+ *   _streaming-1              — Pool haute qualité (optionnel, consomme plus de bande passante)
+ *
+ * Docs : https://docs.iproyal.com/proxies/residential/proxy/rotation
+ *        https://docs.iproyal.com/proxies/residential/proxy/location
+ *        https://docs.iproyal.com/proxies/residential/api/whitelists
  */
 
 // ─── IPRoyal Whitelist API ──────────────────────────────────────────────────
+
+/**
+ * Génère un ID de session aléatoire alphanumérique de 8 caractères
+ * (requis par IPRoyal pour les sessions sticky).
+ */
+function generateSessionId(length: number = 8): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Construit la configuration IPRoyal par défaut pour le whitelist :
+ * _country-cd_city-kinshasa_session-{random8}_lifetime-59m
+ *
+ * Cette configuration assure :
+ * - IP résidentielle depuis Kinshasa, RDC (géolocalisation cohérente avec le consulat)
+ * - Session sticky : même IP pendant 59 minutes (évite les changements IP mid-session)
+ * - Lifetime 59 minutes (max recommandé pour éviter les expirations silencieuses)
+ */
+function buildDefaultIproyalConfig(): string {
+  const sessionId = generateSessionId(8);
+  return `_country-cd_city-kinshasa_session-${sessionId}_lifetime-59m`;
+}
 
 interface IProyalWhitelistEntry {
   hash: string;
@@ -188,9 +230,12 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
   if (iproyalToken && iproyalHash) {
     const port = parseInt(process.env.IPROYAL_WHITELIST_PORT || "12321", 10);
     const proto = process.env.IPROYAL_WHITELIST_PROTO || "http|https";
-    const config = process.env.IPROYAL_WHITELIST_CONFIG || "";
+    // Configuration par défaut : sticky session depuis Kinshasa, RDC, 59 min
+    // Override possible via IPROYAL_WHITELIST_CONFIG
+    const config = process.env.IPROYAL_WHITELIST_CONFIG || buildDefaultIproyalConfig();
 
     console.log(`[ip-whitelist] 🌐 IPRoyal: Ajout IP ${serverIp} à la whitelist...`);
+    console.log(`[ip-whitelist]    Config: ${config}`);
     const iproyalResult = await addIproyalWhitelistEntry(
       serverIp,
       iproyalToken,

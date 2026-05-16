@@ -1021,6 +1021,7 @@ http.route({
       slotInfo?: string;
       screenshotStorageId?: string;
       errorMessage?: string;
+      pageCaptures?: string;
     };
 
     try {
@@ -1039,6 +1040,7 @@ http.route({
         slotInfo: body.slotInfo,
         screenshotStorageId: body.screenshotStorageId,
         errorMessage: body.errorMessage,
+        pageCaptures: body.pageCaptures,
       });
 
       return new Response(JSON.stringify({ ok: true }), {

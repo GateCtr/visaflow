@@ -845,6 +845,257 @@ function InlinePreview({ data }: { data: string }) {
 
 // ─── Spain Watcher Tab ────────────────────────────────────────────────────────
 
+// Page capture types
+interface SpainPageCapture {
+  url: string;
+  method: string;
+  status?: number;
+  statusText?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  cookies?: string[];
+  responseBody?: string;
+  responseType?: string;
+  timing?: { start: number; end: number; duration: number };
+  error?: string;
+}
+
+// Component to display a single captured request
+function SpainCaptureItem({ capture, index }: { capture: SpainPageCapture; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [activeSection, setActiveSection] = useState<"headers" | "response" | "cookies">("headers");
+
+  const statusColor = !capture.status ? "text-slate-400"
+    : capture.status < 300 ? "text-green-600"
+    : capture.status < 400 ? "text-amber-600"
+    : "text-red-600";
+
+  const methodColor = capture.method === "GET" ? "bg-blue-100 text-blue-700"
+    : capture.method === "POST" ? "bg-green-100 text-green-700"
+    : capture.method === "PUT" ? "bg-amber-100 text-amber-700"
+    : capture.method === "DELETE" ? "bg-red-100 text-red-700"
+    : "bg-slate-100 text-slate-700";
+
+  // Parse URL to show path only
+  let urlPath = capture.url;
+  try {
+    const u = new URL(capture.url);
+    urlPath = u.pathname + u.search;
+  } catch { /* keep full */ }
+
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden">
+      {/* Request summary row */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-left"
+      >
+        {expanded ? <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" /> : <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />}
+        <span className="text-[9px] text-slate-300 font-mono w-4">{index + 1}</span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${methodColor}`}>{capture.method}</span>
+        <span className={`text-[10px] font-mono font-semibold ${statusColor}`}>{capture.status ?? "---"}</span>
+        <span className="text-[10px] font-mono text-slate-600 truncate flex-1" title={capture.url}>{urlPath}</span>
+        {capture.timing && (
+          <span className="text-[9px] text-slate-400 font-mono shrink-0">{capture.timing.duration}ms</span>
+        )}
+      </button>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-slate-100">
+          {/* Section tabs */}
+          <div className="flex gap-0.5 bg-slate-50 px-2 py-1 border-b border-slate-100">
+            {(["headers", "response", "cookies"] as const).map(section => (
+              <button
+                key={section}
+                onClick={() => setActiveSection(section)}
+                className={`px-2.5 py-1 text-[10px] font-medium rounded transition-colors ${
+                  activeSection === section ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {section === "headers" ? "Headers" : section === "response" ? "Response" : "Cookies"}
+                {section === "cookies" && capture.cookies && capture.cookies.length > 0 && (
+                  <span className="ml-1 text-[8px] bg-amber-100 text-amber-700 px-1 rounded-full">{capture.cookies.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="px-3 py-2 max-h-72 overflow-auto">
+            {/* Headers section */}
+            {activeSection === "headers" && (
+              <div className="space-y-3">
+                {/* Full URL */}
+                <div>
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">URL</p>
+                  <p className="text-[10px] font-mono text-purple-600 break-all">{capture.url}</p>
+                </div>
+
+                {/* Request Headers */}
+                {capture.requestHeaders && Object.keys(capture.requestHeaders).length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Request Headers</p>
+                    <div className="bg-slate-50 rounded border border-slate-100 divide-y divide-slate-100">
+                      {Object.entries(capture.requestHeaders).map(([k, v]) => (
+                        <div key={k} className="flex gap-2 px-2 py-1">
+                          <span className="text-[10px] font-mono font-semibold text-slate-600 shrink-0">{k}:</span>
+                          <span className="text-[10px] font-mono text-slate-500 break-all">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Response Headers */}
+                {capture.responseHeaders && Object.keys(capture.responseHeaders).length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Response Headers</p>
+                    <div className="bg-slate-50 rounded border border-slate-100 divide-y divide-slate-100">
+                      {Object.entries(capture.responseHeaders).map(([k, v]) => (
+                        <div key={k} className="flex gap-2 px-2 py-1">
+                          <span className="text-[10px] font-mono font-semibold text-teal-700 shrink-0">{k}:</span>
+                          <span className="text-[10px] font-mono text-slate-500 break-all">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Response section */}
+            {activeSection === "response" && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-xs font-bold ${statusColor}`}>{capture.status} {capture.statusText}</span>
+                  {capture.responseType && (
+                    <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{capture.responseType}</span>
+                  )}
+                </div>
+                {capture.responseBody ? (
+                  <pre className="text-[10px] font-mono text-slate-600 bg-slate-900/5 rounded-lg px-3 py-2 border border-slate-200 break-all whitespace-pre-wrap max-h-60 overflow-auto leading-relaxed">
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(capture.responseBody), null, 2);
+                      } catch {
+                        return capture.responseBody;
+                      }
+                    })()}
+                  </pre>
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">Pas de contenu de réponse capturé</p>
+                )}
+                {capture.error && (
+                  <div className="bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                    <p className="text-[10px] font-mono text-red-600">{capture.error}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Cookies section */}
+            {activeSection === "cookies" && (
+              <div>
+                {capture.cookies && capture.cookies.length > 0 ? (
+                  <div className="bg-slate-50 rounded border border-slate-100 divide-y divide-slate-100">
+                    {capture.cookies.map((cookie, i) => (
+                      <div key={i} className="px-2 py-1.5">
+                        <p className="text-[10px] font-mono text-amber-700 break-all">{cookie}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">Aucun cookie capturé</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Component to display all page captures for a scan
+function SpainPageCapturesBlock({ pageCaptures }: { pageCaptures: string }) {
+  const [showCaptures, setShowCaptures] = useState(false);
+  const [filterMethod, setFilterMethod] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+
+  let captures: SpainPageCapture[] = [];
+  try { captures = JSON.parse(pageCaptures) as SpainPageCapture[]; } catch { /* noop */ }
+
+  if (!captures.length) return null;
+
+  const filtered = captures.filter(c => {
+    if (filterMethod && c.method !== filterMethod) return false;
+    if (filterStatus === "2xx" && (!c.status || c.status >= 300)) return false;
+    if (filterStatus === "3xx" && (!c.status || c.status < 300 || c.status >= 400)) return false;
+    if (filterStatus === "4xx" && (!c.status || c.status < 400 || c.status >= 500)) return false;
+    if (filterStatus === "5xx" && (!c.status || c.status < 500)) return false;
+    if (filterStatus === "error" && !c.error) return false;
+    return true;
+  });
+
+  // Stats
+  const methods = [...new Set(captures.map(c => c.method))];
+  const successCount = captures.filter(c => c.status && c.status < 300).length;
+  const errorCount = captures.filter(c => c.error || (c.status && c.status >= 400)).length;
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setShowCaptures(!showCaptures)}
+        className="flex items-center gap-2 text-[10px] font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+      >
+        {showCaptures ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        <span className="flex items-center gap-1.5">
+          Réseau & Requêtes
+          <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px] font-bold">{captures.length}</span>
+          {successCount > 0 && <span className="bg-green-50 text-green-600 px-1 py-0.5 rounded-full text-[9px]">{successCount} ok</span>}
+          {errorCount > 0 && <span className="bg-red-50 text-red-600 px-1 py-0.5 rounded-full text-[9px]">{errorCount} err</span>}
+        </span>
+      </button>
+
+      {showCaptures && (
+        <div className="mt-2 space-y-2">
+          {/* Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={filterMethod}
+              onChange={e => setFilterMethod(e.target.value)}
+              className="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-600"
+            >
+              <option value="">Toutes méthodes</option>
+              {methods.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-600"
+            >
+              <option value="">Tous statuts</option>
+              <option value="2xx">2xx (OK)</option>
+              <option value="3xx">3xx (Redirect)</option>
+              <option value="4xx">4xx (Client err)</option>
+              <option value="5xx">5xx (Server err)</option>
+              <option value="error">Erreurs</option>
+            </select>
+            <span className="text-[9px] text-slate-400">{filtered.length}/{captures.length} requêtes</span>
+          </div>
+
+          {/* Request list */}
+          <div className="space-y-1.5 max-h-[500px] overflow-y-auto">
+            {filtered.map((capture, i) => (
+              <SpainCaptureItem key={i} capture={capture} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SpainWatcherTab() {
   const data = useQuery(api.spainWatcher.getWatcher);
   const setWatcher = useMutation(api.spainWatcher.setWatcher);
@@ -1029,27 +1280,32 @@ function SpainWatcherTab() {
           <p className="text-sm text-muted-foreground text-center py-10">Aucun scan.</p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string }) => {
+            {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string }) => {
               const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
               return (
-                <div key={scan._id} className="py-3 flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
-                        {meta.icon} {meta.label}
-                      </span>
-                      <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
-                      <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
-                      {scan.screenshotUrl && (
-                        <a href={scan.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                          className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-medium">
-                          <ExternalLink className="w-3 h-3" /> Screenshot
-                        </a>
-                      )}
+                <div key={scan._id} className="py-3">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
+                          {meta.icon} {meta.label}
+                        </span>
+                        <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
+                        <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
+                        {scan.screenshotUrl && (
+                          <a href={scan.screenshotUrl} target="_blank" rel="noopener noreferrer"
+                            className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-medium">
+                            <ExternalLink className="w-3 h-3" /> Screenshot
+                          </a>
+                        )}
+                      </div>
+                      {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
+                      {scan.errorMessage && <p className="text-[10px] font-mono text-red-500 mt-1 truncate">{scan.errorMessage}</p>}
+
+                      {/* Page captures - network requests, headers, responses, cookies */}
+                      {scan.pageCaptures && <SpainPageCapturesBlock pageCaptures={scan.pageCaptures} />}
                     </div>
-                    {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
-                    {scan.errorMessage && <p className="text-[10px] font-mono text-red-500 mt-1 truncate">{scan.errorMessage}</p>}
                   </div>
                 </div>
               );
