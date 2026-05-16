@@ -36,6 +36,7 @@ import {
   parallelBurst,
   burstInterStepPause,
 } from "./scan-behavior.js";
+import { runContinuousRefresh } from "./continuous-refresh.js";
 
 /**
  * Phase principale du scan : contexte demande, flow anti-détection, liste OFC, sélection imprévisible, booking.
@@ -826,9 +827,9 @@ export async function runUsaSlotScanMain(
     return "error";
   }
 
-  console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s)`);
+  console.log(`[usa] Aucun créneau disponible sur ${ofcList.length} OFC(s) — lancement refresh continu...`);
 
-  // ── Résumé des découvertes de dates pour ce cycle ──
+  // ── Résumé des découvertes de dates pour le scan initial ──
   if (scanDiscoveryEvents.length > 0) {
     const captured = scanDiscoveryEvents.filter(e => e.outcome === "captured").length;
     const ignored = scanDiscoveryEvents.filter(e => e.outcome === "ignored").length;
@@ -839,14 +840,123 @@ export async function runUsaSlotScanMain(
         return acc;
       }, {});
     const reasonStr = Object.entries(reasons).map(([r, n]) => `${r}:${n}`).join(", ");
-    console.log(`[usa] 📊 [SCAN STATS] Dates découvertes: ${scanDiscoveryEvents.length} | Retenues: ${captured} | Ignorées: ${ignored} (${reasonStr})`);
+    console.log(`[usa] 📊 [SCAN STATS] Dates découvertes (scan initial): ${scanDiscoveryEvents.length} | Retenues: ${captured} | Ignorées: ${ignored} (${reasonStr})`);
     // Envoyer le batch vers Convex pour analyse de fréquence
     reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
   } else {
-    console.log(`[usa] 📊 [SCAN STATS] Aucune date découverte sur ce cycle (portail vide ou erreur API)`);
+    console.log(`[usa] 📊 [SCAN STATS] Aucune date découverte sur le scan initial (portail vide ou erreur API)`);
   }
 
-  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName), discoveryCount: scanDiscoveryEvents.length, discoveredIgnored: scanDiscoveryEvents.filter(e => e.outcome === "ignored").length } });
+  // ── REFRESH CONTINU : rester sur la "page" et rafraîchir à intervalles humains ──
+  // Au lieu de retourner "not_found" immédiatement et attendre 5-15 min,
+  // on simule un humain qui reste sur la page des créneaux et rafraîchit périodiquement.
+  // Cela maximise la couverture temporelle : ~60% du temps au lieu de ~6%.
+  const refreshUsername = job.hunterConfig.embassyUsername ?? "";
+  const refreshReferer = rescheduleMode ? REFERER_MANAGE_APT : REFERER_CREATE_APT;
+
+  const refreshResult = await runContinuousRefresh({
+    session,
+    job,
+    ofcs: ofcList, // Tous les OFCs, pas seulement ceux du scan initial
+    appDetails: effectiveDetails,
+    referer: refreshReferer,
+    username: refreshUsername,
+    rescheduleYN: rescheduleMode,
+    dateFrom: slotDateFrom,
+    dateDeadline: slotDateDeadline,
+  });
+
+  if (refreshResult.slotDetected) {
+    // Un slot a été détecté pendant le refresh continu !
+    // On doit maintenant faire le scan COMPLET (dates + times + booking) pour ce slot.
+    console.log(`[refresh] 🚨 Slot détecté pendant refresh continu — lancement scan complet pour booking...`);
+    
+    // Re-scanner les OFCs pour trouver le slot et le booker
+    // On utilise la même logique que le scan initial mais maintenant on SAIT qu'il y a un slot
+    for (const ofc of ofcList) {
+      let found: SlotFound | null;
+      try {
+        found = await findFirstSlotForOfc(
+          session, ofc, effectiveDetails, slotDateFrom, slotDateDeadline,
+          rescheduleMode,
+          rescheduleMode ? REFERER_MANAGE_APT : undefined,
+          scanDiscoveryEvents
+        );
+      } catch (err) {
+        if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) {
+          console.error(`[refresh] ⛔ Erreur critique pendant booking post-refresh: ${(err as Error).constructor.name}`);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Erreur lors du booking post-refresh: ${(err as Error).message}` });
+          return "error";
+        }
+        continue;
+      }
+
+      if (found) {
+        botLog({
+          applicationId: job.id,
+          step: "slots_found",
+          status: "ok",
+          data: { flow: "usa", phase: "continuous_refresh_booking", ofc: found.ofcName, date: found.date, time: found.time, slotId: found.slotId, refreshCount: refreshResult.totalRefreshes },
+        });
+
+        // Booking
+        const useReschedule = rescheduleMode || session.isReschedule === true;
+        let booking: UsaBookingResult;
+        try {
+          booking = useReschedule
+            ? await rescheduleUsaSlot(session, found)
+            : await bookUsaSlot(session, found);
+        } catch (bookErr) {
+          if (bookErr instanceof RateLimitError || bookErr instanceof AccountBlockedError || bookErr instanceof TokenExpiredError || bookErr instanceof AccountRestrictedError) {
+            await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Erreur booking post-refresh: ${(bookErr as Error).message}` });
+            return "error";
+          }
+          const msg = bookErr instanceof Error ? bookErr.message : String(bookErr);
+          console.error(`[refresh] Erreur booking: ${msg}`);
+          booking = { success: false, error: msg };
+        }
+
+        if (booking.success) {
+          let pdfStorageId: string | undefined;
+          botLog({ applicationId: job.id, step: "booking_success", status: "ok", data: { flow: "usa", ofc: found.ofcName, date: found.date, time: found.time, appointmentId: booking.appointmentId, via: "continuous_refresh" } });
+
+          const pdf = await downloadUsaConfirmationPdf(session, session.applicationId!, booking.appointmentId);
+          if (pdf) {
+            const b64 = pdf.toString("base64");
+            pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+          }
+
+          await reportSlotFound({
+            applicationId: job.id,
+            date: found.date,
+            time: found.time,
+            location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, via continuous_refresh #${refreshResult.totalRefreshes})`,
+            confirmationCode: booking.appointmentId?.toString(),
+            screenshotStorageId: pdfStorageId,
+          });
+
+          if (scanDiscoveryEvents.length > 0) {
+            reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
+          }
+          return "slot_found";
+        } else {
+          console.error(`[refresh] ❌ Booking échoué post-refresh: ${booking.error}`);
+          await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: `Booking échoué post-refresh: ${booking.error}` });
+          return "error";
+        }
+      }
+    }
+
+    // Slot détecté par refresh mais disparu avant qu'on puisse le booker (race condition)
+    console.warn(`[refresh] ⚠️ Slot détecté par refresh mais introuvable lors du scan complet (pris par quelqu'un d'autre)`);
+    botLog({ applicationId: job.id, step: "refresh_slot_lost", status: "warn", data: { flow: "usa", firstAvailableMonth: refreshResult.firstAvailableMonth, totalRefreshes: refreshResult.totalRefreshes } });
+  }
+
+  // Résumé final du refresh continu
+  const coverageMin = Math.round(refreshResult.totalDurationMs / 60000);
+  console.log(`[refresh] 📊 Résumé: ${refreshResult.totalRefreshes} refreshes, ${refreshResult.windowsCompleted} fenêtres, ${coverageMin} min de couverture, arrêt: ${refreshResult.stopReason}`);
+
+  botLog({ applicationId: job.id, step: "not_found", status: "warn", data: { flow: "usa", ofcCount: ofcList.length, offices: ofcList.map((o) => o.postName), discoveryCount: scanDiscoveryEvents.length, discoveredIgnored: scanDiscoveryEvents.filter(e => e.outcome === "ignored").length, continuousRefresh: { totalRefreshes: refreshResult.totalRefreshes, windowsCompleted: refreshResult.windowsCompleted, durationMin: coverageMin, stopReason: refreshResult.stopReason } } });
   await sendHeartbeat({ applicationId: job.id, result: "not_found" });
   return "not_found";
 }
