@@ -78,7 +78,7 @@ export const uploadDocument = mutation({
       await ctx.db.patch(existing._id, {
         storageId: args.storageId,
         uploadedAt: Date.now(),
-        verifiedByAdmin: false,
+        verifiedByAdmin: isAdmin ? true : false,
       });
 
       await ctx.db.patch(args.applicationId, {
@@ -103,7 +103,7 @@ export const uploadDocument = mutation({
       storageId: args.storageId,
       uploadedBy: identity!.subject,
       uploadedAt: Date.now(),
-      verifiedByAdmin: false,
+      verifiedByAdmin: isAdmin ? true : false,
       isAdminUpload: isAdmin,
     });
 
@@ -240,6 +240,9 @@ export const listByApplication = query({
  * Retourne l'URL de téléchargement de la lettre de confirmation d'ambassade (PDF).
  * Accessible uniquement après paiement de la prime de succès (isSuccessFeePaid === true).
  * Les clients non-payants reçoivent null. Les admins reçoivent toujours l'URL.
+ *
+ * Cherche d'abord dans appointmentDetails.screenshotStorageId (capturé par le bot ou l'admin),
+ * puis en fallback dans le document admin avec docKey "booking_confirmation_pdf".
  */
 export const getConfirmationLetterUrl = query({
   args: { applicationId: v.id("applications") },
@@ -257,10 +260,26 @@ export const getConfirmationLetterUrl = query({
     const successFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
     if (!isAdmin && !successFeePaid) return null;
 
+    // Primary source: screenshotStorageId from appointmentDetails
     const storageId = app.appointmentDetails?.screenshotStorageId;
-    if (!storageId) return null;
+    if (storageId) {
+      return ctx.storage.getUrl(storageId as Id<"_storage">);
+    }
 
-    return ctx.storage.getUrl(storageId as Id<"_storage">);
+    // Fallback: look for an admin-uploaded document with docKey "booking_confirmation_pdf"
+    const confirmDoc = await ctx.db
+      .query("documents")
+      .withIndex("by_application_key", (q) =>
+        q.eq("applicationId", args.applicationId).eq("docKey", "booking_confirmation_pdf")
+      )
+      .filter((q) => q.eq(q.field("isAdminUpload"), true))
+      .first();
+
+    if (confirmDoc) {
+      return ctx.storage.getUrl(confirmDoc.storageId as Id<"_storage">);
+    }
+
+    return null;
   },
 });
 

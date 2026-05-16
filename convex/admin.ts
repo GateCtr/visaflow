@@ -213,6 +213,7 @@ export const markSlotFound = mutation({
     time: v.string(),
     location: v.string(),
     confirmationCode: v.optional(v.string()),
+    screenshotStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
