@@ -1945,6 +1945,15 @@ export default function AdminApplicationDetail() {
             blocked: "Compte bloqué (403)",
             restricted: "Compte restreint (401)",
             token_expired: "Token expiré",
+            restriction_skip: "Cycle ignoré (compte restreint)",
+            // ── Proxy & réseau ──
+            keep_alive: "Keep-alive session",
+            proxy_preflight_abort: "Proxy mort — session avortée",
+            proxy_health_check: "Vérification santé proxy",
+            // ── Retry 409 (conflit booking) ──
+            "409_retry_start": "Retry 409 — conflit créneau",
+            "409_retry_exhausted": "Retry 409 épuisé",
+            "409_retry_success": "Retry 409 réussi !",
           };
           const stepIcons: Record<string, string> = {
             login: "🔑", session_start: "🚀", session_end: "🏁",
@@ -1955,6 +1964,9 @@ export default function AdminApplicationDetail() {
             rate_limit: "⛔", blocked: "🚫", restricted: "🔒",
             token_expired: "🔄", error: "⚠️",
             human_behavior: "🧠", anti_detection: "🛡️", execution_time: "⏱️",
+            restriction_skip: "🔒", keep_alive: "🏓",
+            proxy_preflight_abort: "🛑", proxy_health_check: "🌐",
+            "409_retry_start": "🔁", "409_retry_exhausted": "💨", "409_retry_success": "✅",
           };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {

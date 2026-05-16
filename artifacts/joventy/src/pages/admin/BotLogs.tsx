@@ -80,6 +80,15 @@ const STEP_LABELS: Record<string, string> = {
   blocked: "🚫 Compte bloqué (403)",
   restricted: "🔒 Compte restreint (401)",
   token_expired: "🔄 Token expiré",
+  restriction_skip: "🔒 Cycle ignoré (compte restreint)",
+  // ── USA Portal — Proxy & réseau ──
+  keep_alive: "🏓 Keep-alive session",
+  proxy_preflight_abort: "🛑 Proxy mort — session avortée",
+  proxy_health_check: "🌐 Vérification santé proxy",
+  // ── USA Portal — Retry 409 (conflit booking) ──
+  "409_retry_start": "🔁 Retry 409 — conflit créneau",
+  "409_retry_exhausted": "💨 Retry 409 épuisé",
+  "409_retry_success": "✅ Retry 409 réussi !",
   // ── USA Portal — Anciens labels compatibles ──
   usa_login: "🔑 USA Login",
   usa_check_slots: "🔄 USA Scan créneaux",
