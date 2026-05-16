@@ -315,6 +315,35 @@ export const internalClaimNeedsSetup = internalMutation({
       const locked = (s.lockedUntil ?? 0) > now;
       if (locked) continue;
 
+      // ── Guard rate-limit : ne pas claim si la session a été rate-limitée récemment ──
+      // Même si lockedUntil a expiré (13 min), vérifier si la dernière erreur indique
+      // un rate-limit VOWINT et si le temps écoulé depuis est < 60 min.
+      // Cela protège contre les cas où le lock de 13 min expire avant le blocage
+      // VOWINT réel de 60 min (ex: si recordCevSetupLoginFail n'a pas été appelé
+      // correctement, ou si le bot a redémarré et le lock a été reset par erreur).
+      const lastError = (s.lastError ?? "") + " " + (s.lastSetupError ?? "");
+      const isRecentRateLimit = (
+        lastError.includes("RATE_LIMIT") ||
+        lastError.includes("TooManyAttempts") ||
+        lastError.includes("IMPLICIT_RATE_LIMIT")
+      );
+      if (isRecentRateLimit) {
+        // Calculer le temps depuis la dernière tentative ratée
+        const lastAttemptAt = s.lastCheckAt ?? s.lockedUntil ?? 0;
+        const timeSinceLastAttempt = now - lastAttemptAt;
+        const RATE_LIMIT_COOLDOWN_MS = 60 * 60_000; // 60 min = durée blocage VOWINT
+        if (timeSinceLastAttempt < RATE_LIMIT_COOLDOWN_MS) {
+          // Encore dans la fenêtre de cooldown VOWINT → skip ET re-poser le lock
+          // pour éviter que le prochain cycle ne le claim
+          const remainingMs = RATE_LIMIT_COOLDOWN_MS - timeSinceLastAttempt;
+          await ctx.db.patch(s._id, { lockedUntil: now + remainingMs });
+          continue;
+        }
+        // 60 min écoulées → le rate-limit VOWINT est expiré, on peut retenter
+        // Reset lastError pour ne pas re-trigger cette garde au prochain cycle
+        // (si le setup réussit, loginFailCount sera reset par internalActivateSession)
+      }
+
       await ctx.db.patch(s._id, { lockedUntil: now + LOCK_DURATION_MS });
       claimed.push({
         sessionId: s._id,

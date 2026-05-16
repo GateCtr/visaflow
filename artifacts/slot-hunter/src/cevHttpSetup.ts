@@ -249,12 +249,39 @@ export async function setupCevSessionHttp(
 
       if (eRes.ok) {
         const eText = await eRes.text();
+
+        // ── Détection rate-limit VOWINT dans la réponse GetEAppointmentUrl ──
+        // Quand les 5 clics/heure sont épuisés, VOWINT peut retourner :
+        //   - Un HTML/texte contenant des messages d'erreur au lieu de l'URL
+        //   - Un JSON avec un champ erreur type "ErrorTooManyAttempts"
+        const rateLimitPatterns = [
+          /5\s*fois/i, /5\s*times/i, /bloqu[ée]\s*pendant/i, /blocked\s*for/i,
+          /too\s*many\s*attempts/i, /ErrorTooManyAttempts/i, /rate.?limit/i,
+          /maximum.*tentatives/i, /maximum.*attempts/i,
+          /veuillez\s*r[ée]essayer/i, /please\s*try\s*again\s*later/i,
+        ];
+        const isRateLimited = rateLimitPatterns.some(p => p.test(eText));
+        if (isRateLimited) {
+          invalidateVowintCache(vowintEmail);
+          botLog({ applicationId: clientId, step: "cev_http_rate_limit_detected", status: "warn", data: { responsePreview: eText.slice(0, 300) } });
+          return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
+        }
+
         // La réponse peut être :
         //  - JSON : {"url": "https://appointment.cloud.diplomatie.be/Integration/VOW/..."}
         //  - Texte brut : "https://appointment.cloud.diplomatie.be/Integration/VOW/..."
         //  - JSON string : "\"https://appointment.cloud.diplomatie.be/Integration/VOW/...\""
         try {
-          const eData = JSON.parse(eText) as { url?: string } | string;
+          const eData = JSON.parse(eText) as { url?: string; error?: string } | string;
+          // Vérifier aussi un éventuel champ "error" dans le JSON
+          if (typeof eData === "object" && eData?.error) {
+            const errStr = eData.error;
+            if (rateLimitPatterns.some(p => p.test(errStr))) {
+              invalidateVowintCache(vowintEmail);
+              botLog({ applicationId: clientId, step: "cev_http_rate_limit_json", status: "warn", data: { error: errStr } });
+              return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
+            }
+          }
           if (typeof eData === "string" && eData.includes("/Integration/VOW/")) {
             integrationUrl = eData;
           } else if (typeof eData === "object" && eData?.url) {
@@ -266,6 +293,11 @@ export async function setupCevSessionHttp(
             integrationUrl = eText.trim().replace(/^"|"$/g, "");
           }
         }
+      } else if (eRes.status === 429) {
+        // HTTP 429 explicite = rate-limit
+        invalidateVowintCache(vowintEmail);
+        botLog({ applicationId: clientId, step: "cev_http_rate_limit_429", status: "warn", data: { status: eRes.status } });
+        return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
       }
 
       // Fallback: check redirect location
@@ -273,6 +305,16 @@ export async function setupCevSessionHttp(
         const loc = eRes.headers.get("location");
         if (loc?.includes("/Integration/VOW/")) {
           integrationUrl = loc.startsWith("http") ? loc : `${CEV_BASE}${loc}`;
+        }
+        // Vérifier si la redirection pointe vers une page d'erreur/login (= session expirée ou rate-limit)
+        if (!integrationUrl && loc) {
+          const locLower = loc.toLowerCase();
+          if (locLower.includes("error") || locLower.includes("login") || locLower.includes("account")) {
+            invalidateVowintCache(vowintEmail);
+            botLog({ applicationId: clientId, step: "cev_http_redirect_error", status: "warn", data: { redirectTo: loc } });
+            // Possiblement un rate-limit déguisé en redirection vers erreur
+            return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS_REDIRECT" };
+          }
         }
       }
     } else {
