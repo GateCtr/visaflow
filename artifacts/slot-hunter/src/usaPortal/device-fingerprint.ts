@@ -134,39 +134,23 @@ export function getStableDeviceId(username: string): string {
 
 /**
  * Retourne les headers supplémentaires cohérents avec le device profile.
- * Ces headers imitent les données qu'un vrai navigateur Chrome envoie
- * et que WAF/Cognito peuvent vérifier pour cohérence.
  * 
- * Inclut :
- * - Sec-CH-UA-Arch / Sec-CH-UA-Bitness (Client Hints étendus)
- * - Sec-CH-UA-Full-Version-List (version complète — envoyé quand le serveur demande Accept-CH)
- * - X-Device-Fingerprint (hash stable par compte — anti "new device" detection)
- * - Viewport-Width (envoyé par Chrome quand Accept-CH: Viewport-Width est présent)
+ * SUPPRIMÉ le 16/05/2026 — Ces headers Client Hints étendus (Sec-CH-UA-Arch,
+ * Sec-CH-UA-Full-Version-List, Viewport-Width) ne sont envoyés par Chrome QUE
+ * si le serveur les demande via un header de réponse `Accept-CH`.
+ * 
+ * Le portail usvisaappt.com ne les demande PAS actuellement. Les envoyer
+ * spontanément = signal que le "navigateur" est trop coopératif = bot.
+ * 
+ * Le header `X-Device-Fingerprint` est un header INVENTÉ qui n'existe dans
+ * aucun navigateur réel — sa présence est un signal de bot immédiat.
+ * 
+ * Fonction conservée comme no-op pour ne pas casser les imports existants.
+ * Si le portail ajoute un `Accept-CH` à l'avenir, réactiver ces headers.
  */
-export function getDeviceConsistencyHeaders(username: string): Record<string, string> {
-  const profile = getDeviceProfile(username);
-  
-  // Extraire la résolution pour le viewport
-  const [width] = profile.screenResolution.split("x").map(Number);
-  // Le viewport est légèrement plus petit que la résolution (scrollbar, taskbar)
-  const viewportWidth = width - (profile.platform === "Win32" ? 17 : 15);
-  
-  return {
-    // Client Hints étendus — Chrome les envoie si le serveur répond avec Accept-CH
-    "Sec-CH-UA-Arch": profile.platform === "Win32" ? '"x86"' : '"arm"',
-    "Sec-CH-UA-Bitness": '"64"',
-    // Full-Version-List — version exacte (plus précis que Sec-CH-UA)
-    // Format identique à Chrome réel : marque;v="major.minor.build.patch"
-    "Sec-CH-UA-Full-Version-List": profile.platform === "Win32"
-      ? '"Chromium";v="135.0.7049.115", "Google Chrome";v="135.0.7049.115", "Not-A.Brand";v="8.0.0.0"'
-      : '"Chromium";v="136.0.7103.92", "Google Chrome";v="136.0.7103.92", "Not-A.Brand";v="8.0.0.0"',
-    // Viewport-Width — cohérent avec la résolution du device profile
-    "Viewport-Width": String(viewportWidth),
-    // Device fingerprint stable (hash du compte) — anti "new device" Cognito
-    // Si Cognito Advanced Security track les devices, ce header constant par compte
-    // signale "c'est toujours le même appareil" même après redéploiement Railway.
-    "X-Device-Fingerprint": profile.deviceId,
-  };
+export function getDeviceConsistencyHeaders(_username: string): Record<string, string> {
+  // No-op — ne pas envoyer de headers non sollicités par le serveur
+  return {};
 }
 
 /**

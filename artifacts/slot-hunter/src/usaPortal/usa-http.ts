@@ -53,10 +53,12 @@ export function isCachedTokenValid(cached: CachedToken): boolean {
   // ce qui brise le pattern "login toutes les 55 min pile" détectable par le portail.
   const now = Date.now();
 
-  // JWT lié à l’IP du login : invalider avant expiration du sticky proxy (évite 401 en cascade).
+  // JWT lié à l'IP du login : invalider avant expiration du sticky proxy.
+  // IMPORTANT: le cooldown normal (8-25 min) s'appliquera au prochain cycle,
+  // garantissant qu'il n'y a JAMAIS de re-login rapide après expiration proxy.
   if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt - PROXY_EXPIRY_BUFFER_MS) {
     console.log(
-      `[usa] Token invalidé : proxy expire dans ${Math.round((cached.proxyExpiresAt - now) / 1000)}s — re-login nécessaire avec nouvelle IP`,
+      `[usa] Token invalidé : proxy expire dans ${Math.round((cached.proxyExpiresAt - now) / 1000)}s — re-login avec nouvelle IP après cooldown`,
     );
     return false;
   }
@@ -376,6 +378,28 @@ function generateCorrelationId(): string {
   return result;
 }
 
+// ── X-Correlation-key STICKY par "navigation" ────────────────────────────────
+// Le vrai bundle Angular génère ce header UNE FOIS dans le HttpInterceptor singleton
+// et le réutilise pour TOUTES les requêtes de la même "navigation" (page load).
+// Il ne change qu'au rechargement de page (F5 ou navigation SPA route change).
+// Régénérer à chaque requête = signal que ce n'est pas un vrai navigateur Angular.
+//
+// Stratégie : conserver le même correlationId pendant 3-8 min (simule une "navigation")
+// puis le renouveler (simule un rechargement de page ou changement de route Angular).
+let _stickyCorrelationId: string | undefined;
+let _correlationResetAt: number = 0;
+
+function getStickyCorrelationId(): string {
+  const now = Date.now();
+  if (!_stickyCorrelationId || now > _correlationResetAt) {
+    _stickyCorrelationId = generateCorrelationId();
+    // Renouveler dans 3-8 min (simule un rechargement de page)
+    _correlationResetAt = now + (3 * 60_000 + Math.random() * 5 * 60_000);
+    console.log(`[usa] 🔑 Nouveau X-Correlation-key: ${_stickyCorrelationId.slice(0, 6)}… (TTL ${Math.round((_correlationResetAt - now) / 60000)}min)`);
+  }
+  return _stickyCorrelationId;
+}
+
 // ── Headers Accept-* FIXÉS PAR SESSION (pas par requête) ─────────────────────
 // Un vrai navigateur Chrome envoie TOUJOURS les mêmes Accept-Encoding et Accept-Language
 // pendant toute une session. Randomiser par requête = signal bot détectable par un WAF
@@ -451,7 +475,8 @@ export function getBrowserHeaders(jobId?: string): Record<string, string> {
     "Sec-Fetch-Site":     "same-origin",
     "User-Agent":         _sessionUa.ua,
     // Bundle Angular : X-Correlation-key présent sur toutes les requêtes authentifiées
-    "X-Correlation-key":  generateCorrelationId(),
+    // STICKY par navigation (3-8 min) — le vrai Angular ne régénère pas à chaque requête.
+    "X-Correlation-key":  getStickyCorrelationId(),
   };
   
   // Ajouter de la variabilité humaine aux headers

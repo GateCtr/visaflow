@@ -58,9 +58,13 @@ export async function humanPause(baseMs: number, context: string = "", jobId?: s
  * - Ne JAMAIS modifier Authorization, Content-Type, Origin, Referer
  * 
  * Variabilité SAFE uniquement :
- * - Accept-Language : variations mineures (ordre des langues, ajout d'une locale)
  * - Cache-Control / Pragma : suppression de l'un des deux (les navigateurs varient)
  * - X-Correlation-key : déjà aléatoire par construction
+ * 
+ * SUPPRIMÉ (16/05/2026) :
+ * - Accept-Language : Un vrai Chrome NE CHANGE JAMAIS Accept-Language mid-session.
+ *   initSessionHeaders() fixe cette valeur au login — la modifier ici contredit
+ *   ce comportement et crée un signal de bot détectable par corrélation WAF.
  */
 export function getVariableBrowserHeaders(baseHeaders: Record<string, string>, jobId?: string): Record<string, string> {
   const headers = { ...baseHeaders };
@@ -69,7 +73,7 @@ export function getVariableBrowserHeaders(baseHeaders: Record<string, string>, j
 
   // Headers CRITIQUES — ne JAMAIS toucher
   // Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-CH-UA*, 
-  // Accept-Encoding, Authorization, Content-Type, Origin, Referer, User-Agent, Cookie
+  // Accept-Encoding, Accept-Language, Authorization, Content-Type, Origin, Referer, User-Agent, Cookie
 
   // 15% du temps : supprimer Pragma (certains Chrome ne l'envoient pas systématiquement)
   if (r < 0.15) {
@@ -77,17 +81,9 @@ export function getVariableBrowserHeaders(baseHeaders: Record<string, string>, j
     modifications.push("pragma_removed");
   }
 
-  // 10% du temps : variante Accept-Language (ordre légèrement différent)
-  if (r > 0.85 && r < 0.95) {
-    const langVariants = [
-      "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-      "fr-CD,fr;q=0.9,en;q=0.8",
-      "fr;q=0.9,en-US;q=0.8,en;q=0.7,fr-CD;q=0.6",
-      "fr-CD,fr;q=0.9,en-US;q=0.8,en;q=0.7,ln;q=0.5",
-    ];
-    headers["Accept-Language"] = langVariants[Math.floor(Math.random() * langVariants.length)];
-    modifications.push("accept_language_varied");
-  }
+  // Accept-Language : NE PLUS VARIER — fixé par initSessionHeaders() pour toute la session.
+  // Un vrai Chrome envoie TOUJOURS le même Accept-Language pendant toute sa session.
+  // Modifier mid-session = signal de bot immédiat pour tout WAF qui corrèle les headers.
 
   // 8% du temps : ajouter Cache-Control: no-store en plus de no-cache (variante navigateur)
   if (r > 0.42 && r < 0.50) {

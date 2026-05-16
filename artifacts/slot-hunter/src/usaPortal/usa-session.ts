@@ -8,7 +8,7 @@ import {
 } from "./usa-http.js";
 import { loginUsaPortal } from "./usa-auth.js";
 import type { UsaSession } from "./types.js";
-import { USA_MISSION_ID } from "./config.js";
+import { USA_MISSION_ID, MIN_COOLDOWN_AFTER_EXPIRY_MS, MAX_COOLDOWN_AFTER_EXPIRY_MS } from "./config.js";
 import { AccountRestrictedError } from "./errors.js";
 import {
   isAccountRestricted,
@@ -62,6 +62,28 @@ export async function getUsaSession(
       const remainingCooldownMin = Math.round(timeUntilNextLogin / 60000);
       console.log(`[usa] Session en cooldown pour ${cached.fullName} — ${remainingCooldownMin} min avant prochain login`);
       return null; // Retourner null pour indiquer qu'il faut attendre
+    }
+
+    // ── Guard proxy-expiry cooldown ─────────────────────────────────────────
+    // Si le token est invalide à cause de l'expiration PROXY (pas du JWT),
+    // on doit quand même respecter un cooldown avant le re-login.
+    // Sans ça : proxy expire à 55 min, JWT valide jusqu'à 60 min → re-login
+    // IMMÉDIAT à 55 min = interval réduit entre sessions = trigger restriction.
+    // Solution : imposer un cooldown minimum de 8 min après invalidation proxy.
+    if (cached.proxyExpiresAt && now >= cached.proxyExpiresAt) {
+      // Le proxy est mort — vérifier le temps écoulé depuis la mort
+      const timeSinceProxyDeath = now - cached.proxyExpiresAt;
+      const proxyDeathCooldownMs = MIN_COOLDOWN_AFTER_EXPIRY_MS + 
+        Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS);
+      
+      if (timeSinceProxyDeath < proxyDeathCooldownMs) {
+        const remainingMs = proxyDeathCooldownMs - timeSinceProxyDeath;
+        const remainingMin = Math.round(remainingMs / 60000);
+        console.log(`[usa] 🔒 Proxy expiré — cooldown ${remainingMin} min avant re-login (évite restriction)`);
+        return null; // Attendre le cooldown
+      }
+      // Cooldown terminé → OK pour re-login avec nouvelle IP
+      console.log(`[usa] ✅ Cooldown proxy terminé — re-login autorisé avec nouvelle IP`);
     }
 
     // Token expiré et pas en cooldown → re-login complet

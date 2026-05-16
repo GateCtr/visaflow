@@ -81,15 +81,32 @@ export const NIGHT_PAUSE_END_MINUTE = 0; // 0 min
 // Heures d'activité normales (presque 24h sauf creux nocturne)
 export const HUMAN_ACTIVE_START_HOUR = 4; // 4h
 export const HUMAN_ACTIVE_END_HOUR = 0; // 0h (minuit) - avec minute check
-export const PROXY_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
+// Buffer avant expiration proxy : le bot arrête les scans X min AVANT l'expiration.
+// Permet de garantir un cooldown suffisant entre la "mort" de la session proxy
+// et le re-login qui suivra (avec nouvelle IP).
+// Ancien: 2 min → re-login possible 2 min après invalidation = trop rapide si session longue.
+// Nouveau: 5 min → le cycle "invalidation proxy → cooldown 8-25 min → re-login" est safe.
+export const PROXY_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 // ── Algorithme "Session-First, Login-Last" ──────────────────────────────────
 // Arrêter les scans avant l'expiration du token pour éviter les re-logins immédiats
 // et ajouter un cooldown humain entre les sessions
 export const SCAN_CUTOFF_BEFORE_EXPIRY_MS = 8 * 60 * 1000; // 8 min avant expiration
-// Cooldown obligatoire après expiration du token avant re-login (5-8 min gaussien)
-export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 5 * 60 * 1000; // 5 min min
-export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min max
+// Cooldown obligatoire après expiration du token avant re-login (8-25 min gaussien)
+// CORRIGÉ le 16/05/2026 : ancienne valeur 5-8 min → pattern login ~65 min trop régulier.
+// Avec 8-25 min : cycle complet = 60 + 8-25 = 68-85 min (bien plus variable).
+// Un humain qui se reconnecte met entre 10 et 30 min — il fait autre chose entre-temps.
+export const MIN_COOLDOWN_AFTER_EXPIRY_MS = 8 * 60 * 1000; // 8 min min
+export const MAX_COOLDOWN_AFTER_EXPIRY_MS = 25 * 60 * 1000; // 25 min max
+
+// ── Cap de scans par session (anti-détection activité excessive) ─────────────
+// Un humain qui cherche un créneau ne fait pas 40 F5 en 2h sans interruption.
+// Il fait un burst de 8-15 vérifications, puis se décourage et part faire autre chose.
+// Sans cap : le bot scanne toute la session_duration (25-120 min) = pattern bot.
+// Avec cap : le bot s'arrête après N scans (8-15 variable) et force une pause longue.
+// Le cap est randomisé par session pour éviter un pattern "toujours 12 scans".
+export const MIN_SCANS_PER_SESSION = 8;   // Minimum de scans avant arrêt
+export const MAX_SCANS_PER_SESSION = 15;  // Maximum de scans avant arrêt forcé
 
 // ── Stratégie "Zero-Risk" - Multi-couche anti-détection ──────────────────────
 

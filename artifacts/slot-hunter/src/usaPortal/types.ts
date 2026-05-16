@@ -19,6 +19,7 @@ export interface CachedToken {
   keepAliveInterval?: number; // Intervalle de keep-alive variable pour cette session (5-12 min)
   cooldownDurationMs?: number; // Durée du cooldown après expiration du token (5-8 min)
   scanCount?: number; // Nombre de scans effectués pendant cette session
+  sessionScanCap?: number; // Cap de scans randomisé pour cette session (8-15)
 }
 
 export interface UsaLoginResponse {
