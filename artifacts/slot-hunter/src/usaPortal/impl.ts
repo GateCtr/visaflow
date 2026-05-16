@@ -42,6 +42,9 @@ import {
 } from "./appointments-api.js";
 import { logoutUsaPortal } from "./usa-auth.js";
 import { getUsaSession } from "./usa-session.js";
+import { registerDossierRefresh, unregisterDossierRefresh } from "./continuous-refresh.js";
+import { recordSlotObservation, logPredictionSummary } from "./slot-prediction.js";
+import { logCompetitionIntelligence } from "./competitive-intelligence.js";
 
 import type { SessionResult, UsaSession } from "./types.js";
 import {
@@ -948,6 +951,9 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   }
   await simulateFullHumanBehavior();
   
+  // ── Early Bird #1 — Log prédiction courante pour le dashboard ─────────────
+  logPredictionSummary(username, job.id);
+
   // ── Obtenir les paramètres adaptés à la santé du serveur ──────────────────
   const scanParams = gracefulDegradation.getScanParameters();
   console.log(`[zero-risk] 🏥 Niveau serveur: ${scanParams.level}`);
@@ -962,6 +968,13 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     try {
       const slotResult = await scanUsaSlotsViaAPI(job, session);
       result = slotResult;
+      
+      // ── Early Bird #1 — Enregistrer l'observation si slot trouvé ──
+      if (result === "slot_found") {
+        recordSlotObservation(username);
+        logPredictionSummary(username, job.id);
+        logCompetitionIntelligence(job.id);
+      }
       
       // Détecter les erreurs basées sur le résultat
       if (result === "error" || result === "login_failed") {

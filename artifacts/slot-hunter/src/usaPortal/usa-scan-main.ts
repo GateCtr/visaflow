@@ -37,6 +37,8 @@ import {
   burstInterStepPause,
 } from "./scan-behavior.js";
 import { runContinuousRefresh } from "./continuous-refresh.js";
+import { recordSlotObservation } from "./slot-prediction.js";
+import { recordSlotAppearance } from "./competitive-intelligence.js";
 
 /**
  * Phase principale du scan : contexte demande, flow anti-détection, liste OFC, sélection imprévisible, booking.
@@ -815,6 +817,13 @@ export async function runUsaSlotScanMain(
           reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
         }
 
+        // ── Early Bird #1 + Competitive Intelligence #9 ──
+        const slotUsername = job.hunterConfig.embassyUsername ?? "";
+        if (slotUsername) {
+          recordSlotObservation(slotUsername, found.ofcName);
+          recordSlotAppearance(found.ofcName, found.date, found.time);
+        }
+
         return "slot_found";
       }
       // Aucun créneau pour cette OFC lors de ce cycle
@@ -938,6 +947,14 @@ export async function runUsaSlotScanMain(
           if (scanDiscoveryEvents.length > 0) {
             reportSlotDiscovery_batch(scanDiscoveryEvents, job.id);
           }
+
+          // ── Early Bird #1 — Enregistrer l'observation pour le refresh booking ──
+          const refreshSlotUsername = job.hunterConfig.embassyUsername ?? "";
+          if (refreshSlotUsername) {
+            recordSlotObservation(refreshSlotUsername, found.ofcName);
+            recordSlotAppearance(found.ofcName, found.date, found.time);
+          }
+
           return "slot_found";
         } else {
           console.error(`[refresh] ❌ Booking échoué post-refresh: ${booking.error}`);
