@@ -120,7 +120,7 @@ function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" 
     } catch { /* ignore */ }
   }
   // Default USA steps
-  const usaSteps = new Set(["login", "session_start", "session_end", "appointment_status", "payment_check", "ofc_list", "scan", "scan_cutoff", "cooldown", "slots_found", "booking_attempt", "booking_success", "booking_fail", "confirmation_letter", "not_found", "error", "human_behavior", "anti_detection", "execution_time", "rate_limit", "blocked", "restricted", "token_expired", "restriction_skip", "keep_alive", "proxy_preflight_abort", "proxy_health_check", "409_retry_start", "409_retry_exhausted", "409_retry_success", "usa_login", "usa_check_slots", "usa_slot_found", "usa_no_slots", "usa_error"]);
+  const usaSteps = new Set(["login", "session_start", "session_end", "appointment_status", "payment_check", "ofc_list", "scan", "scan_cutoff", "cooldown", "slots_found", "booking_attempt", "booking_success", "booking_fail", "confirmation_letter", "not_found", "error", "human_behavior", "anti_detection", "execution_time", "rate_limit", "blocked", "restricted", "token_expired", "restriction_skip", "keep_alive", "proxy_preflight_abort", "proxy_health_check", "409_retry_start", "409_retry_exhausted", "409_retry_success", "usa_login", "usa_check_slots", "usa_slot_found", "usa_no_slots", "usa_error", "ofc_watcher_started", "ofc_watcher_summary", "ofc_watcher_session_end", "ofc_watcher_slot_detected", "ofc_watcher_scan", "accounts_status", "booking_race_complete", "booking_race_success", "proxy_failover"]);
   if (usaSteps.has(log.step)) return "usa";
   return "other";
 }

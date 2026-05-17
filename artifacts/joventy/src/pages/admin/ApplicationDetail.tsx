@@ -1985,6 +1985,61 @@ export default function AdminApplicationDetail() {
           </div>
         )}
 
+        {/* ===== WATCHER STATUS BANNER ===== */}
+        {(() => {
+          const watcherSummary = botLogs.find((l: Doc<"botLogs">) => l.step === "ofc_watcher_summary");
+          if (!watcherSummary) return null;
+
+          const ageMs = Date.now() - watcherSummary.ts;
+          const isActive = ageMs < 6 * 60 * 1000; // < 6 min = active
+
+          let summaryData: Record<string, unknown> = {};
+          try { summaryData = JSON.parse(watcherSummary.data ?? "{}") as Record<string, unknown>; } catch { /* noop */ }
+
+          const checksCount = (summaryData.checksCount ?? summaryData.totalChecks ?? "—") as string | number;
+          const nextInSec = (summaryData.nextCheckSec ?? summaryData.nextInSec ?? "—") as string | number;
+          const tokenExpiry = summaryData.tokenExpiryMin ?? summaryData.tokenExpireMin;
+          const tokenMax = summaryData.tokenMaxMin ?? 60;
+          const tokenPercent = typeof tokenExpiry === "number" && typeof tokenMax === "number"
+            ? Math.max(0, Math.min(100, (tokenExpiry / tokenMax) * 100))
+            : null;
+
+          return (
+            <div className={`rounded-xl border p-3 mb-4 ${isActive ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
+              <div className="flex items-center gap-2">
+                {isActive ? (
+                  <RefreshCw className="w-4 h-4 text-green-600 animate-spin" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-orange-600" />
+                )}
+                <span className={`text-sm font-semibold ${isActive ? "text-green-800" : "text-orange-800"}`}>
+                  {isActive
+                    ? `Watcher actif — Scan #${checksCount} — prochain dans ${nextInSec}s`
+                    : "Watcher inactif"
+                  }
+                </span>
+                <span className="ml-auto text-[10px] text-slate-500">
+                  {isActive ? "" : `Dernier signal il y a ${Math.floor(ageMs / 60000)}min`}
+                </span>
+              </div>
+              {tokenPercent !== null && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] text-slate-500">Token</span>
+                    <span className="text-[10px] text-slate-500">{typeof tokenExpiry === "number" ? `${tokenExpiry}min restantes` : ""}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${tokenPercent > 30 ? "bg-green-500" : tokenPercent > 10 ? "bg-orange-400" : "bg-red-500"}`}
+                      style={{ width: `${tokenPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ===== BOT LOG TIMELINE ===== */}
         {botLogs.length > 0 && (() => {
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
