@@ -279,6 +279,16 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     return true;
   }
 
+  // FIX-20: Vérifier la restriction AVANT de tenter le login initial.
+  // Un compte restreint (401 "Access temporarily restricted") ne doit JAMAIS tenter un login
+  // jusqu'à la fin de la restriction. Sinon on gaspille un captcha + on aggrave la restriction.
+  if (isAccountRestricted(username)) {
+    const deadline = getAccountRestrictionDeadline(username);
+    const remainingMin = deadline ? Math.round((deadline - Date.now()) / 60_000) : "?";
+    console.warn(`[accounts-ka] 🔒 ${username.slice(0, 12)}… — compte RESTREINT (encore ${remainingMin}min) — skip login initial`);
+    return false;
+  }
+
   // Pas de token valide → login initial (le SEUL login que ce module fait)
   console.log(`[accounts-ka] 🔑 ${username.slice(0, 12)}… — login initial pour keep-alive...`);
   const session = await attemptLogin(account);
