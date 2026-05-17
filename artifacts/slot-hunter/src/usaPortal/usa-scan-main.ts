@@ -345,6 +345,14 @@ export async function runUsaSlotScanMain(
             },
           });
           
+          // ── Cache pour le mode parallèle ──────────────────────────────────────
+          // Stocker les appDetails et OFCs résolus pour que le OFC Watcher
+          // puisse les récupérer après le scan initial.
+          if (ofcListResult.length > 0) {
+            const { cacheResolvedScanData } = await import("./scan-result-cache.js");
+            cacheResolvedScanData(session.username, effectiveDetails, ofcListResult);
+          }
+          
           if (ofcListResult.length === 0) {
             console.warn("[usa] Aucun OFC trouvé — vérifier missionId ou droits d'accès");
             botLog({ applicationId: job.id, step: "ofc_list", status: "warn", data: { flow: "usa", count: 0, missionId: session.missionId } });

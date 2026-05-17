@@ -226,6 +226,48 @@ export function hasActiveWatcher(ofcKey: string): boolean {
 }
 
 /**
+ * Met à jour les appDetails et l'OFC d'un subscriber après un scan initial réussi.
+ * Appelé par le scheduler séquentiel après le premier runHunterSession d'un job USA.
+ */
+export function updateSubscriberAppDetails(
+  ofcKey: string,
+  jobId: string,
+  appDetails: UsaAppDetails,
+): void {
+  const state = activeWatchers.get(ofcKey);
+  if (!state) return;
+  const sub = state.subscribers.get(jobId);
+  if (!sub) return;
+  sub.appDetails = appDetails;
+  console.log(`[ofc-watcher] 📝 [${state.ofc.postName}] appDetails mis à jour pour ${sub.username.slice(0, 12)}… (applicantId=${appDetails.applicantId})`);
+}
+
+/**
+ * Met à jour l'OFC (postUserId) du watcher après résolution par le scan initial.
+ */
+export function updateWatcherOfc(ofcKey: string, ofc: UsaOfc): void {
+  const state = activeWatchers.get(ofcKey);
+  if (!state) return;
+  if (state.ofc.postUserId === 0 && ofc.postUserId !== 0) {
+    state.ofc = ofc;
+    console.log(`[ofc-watcher] 📝 [${state.ofc.postName}] postUserId résolu → ${ofc.postUserId}`);
+  }
+}
+
+/**
+ * Vérifie si le watcher a des appDetails résolus (applicantId != 0).
+ * Le watcher ne devrait commencer à poll que quand au moins un subscriber a des données valides.
+ */
+export function hasResolvedAppDetails(ofcKey: string): boolean {
+  const state = activeWatchers.get(ofcKey);
+  if (!state) return false;
+  for (const sub of state.subscribers.values()) {
+    if (sub.appDetails.applicantId !== 0) return true;
+  }
+  return false;
+}
+
+/**
  * Retourne l'état du watcher pour debug/logging.
  */
 export function getWatcherStatus(ofcKey: string): {
@@ -333,20 +375,33 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
   // Construire le payload (identique à doFirstAvailableMonthRefresh)
   // On a besoin d'un appDetails du premier subscriber pour le payload
-  const firstSub = state.subscribers.values().next().value;
-  if (!firstSub) return; // pas de subscribers
+  // Trouver un subscriber avec des appDetails résolus (applicantId != 0)
+  let activeSub: OfcWatcherSubscriber | undefined;
+  for (const sub of state.subscribers.values()) {
+    if (sub.appDetails.applicantId !== 0) {
+      activeSub = sub;
+      break;
+    }
+  }
+  if (!activeSub) {
+    // Aucun subscriber n'a encore fait son scan initial → attendre
+    if (state.totalRefreshes === 0) {
+      console.log(`[ofc-watcher] ⏳ [${ofc.postName}] En attente du scan initial (appDetails non résolus) — retry dans 30s`);
+    }
+    return;
+  }
 
   const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true);
 
   const payload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
-    applicantId: firstSub.appDetails.applicantId,
-    visaType: (firstSub.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? firstSub.appDetails.visaType,
-    visaClass: firstSub.appDetails.visaClass,
-    locationType: firstSub.rescheduleYN
-      ? (firstSub.appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
+    applicantId: activeSub.appDetails.applicantId,
+    visaType: (activeSub.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? activeSub.appDetails.visaType,
+    visaClass: activeSub.appDetails.visaClass,
+    locationType: activeSub.rescheduleYN
+      ? (activeSub.appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
       : (ofc.officeType ?? "OFC"),
-    applicationId: firstSub.appDetails.applicationId,
+    applicationId: activeSub.appDetails.applicationId,
   };
 
   const reqStart = Date.now();
@@ -374,6 +429,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   }
   if (!res.ok) {
     state.consecutiveErrors++;
+    console.warn(`[ofc-watcher] ⚠️ ${ofc.postName} HTTP ${res.status} (non-fatal, erreur #${state.consecutiveErrors})`);
     return; // Erreur non-fatale
   }
 
