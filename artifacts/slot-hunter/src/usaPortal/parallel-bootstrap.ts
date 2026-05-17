@@ -29,6 +29,7 @@ import {
   initSessionHeaders,
   resetCorrelationOnAction,
   setAccountFingerprint,
+  updateSessionActivity,
 } from "./usa-http.js";
 import { getUsaTransformData, getUsaOfcList, getUsaApplicationDetails } from "./usa-scan-details.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
@@ -122,7 +123,8 @@ export async function bootstrapAccountData(
   // L'intercepteur Angular génère un X-Correlation-key au chargement de page
   // et le réutilise pour TOUTES les requêtes de la même navigation.
   // Sans ce header, le portail voit des requêtes "orphelines" = bot.
-  resetCorrelationOnAction("schedule-appointment/appointment");
+  // FIX 11: Passer le username pour un correlation per-account (mode parallèle safe).
+  resetCorrelationOnAction("schedule-appointment/appointment", username);
   console.log(`[bootstrap] 🔑 X-Correlation-key initialisé`);
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -178,6 +180,11 @@ export async function bootstrapAccountData(
     missionId: USA_MISSION_ID,
     allowedOfcs: cached.allowedOfcs ?? [],
   };
+
+  // ── Activer ce compte comme session courante pour getBrowserHeaders() ────
+  // Sans ça, getSessionAcceptHeaders() et getStickyCorrelationId() utilisent
+  // le fallback global au lieu des valeurs per-account qu'on vient d'initialiser.
+  updateSessionActivity(username);
 
   // ── Émettre le botLog login ──────────────────────────────────────────────
   botLog({
@@ -283,7 +290,7 @@ export async function bootstrapAccountData(
 
   // ── 3. getUsaOfcList → postUserId ────────────────────────────────────────
   // Nouveau referer = nouvelle "page" Angular → renouveler le correlation key
-  resetCorrelationOnAction("schedule-appointment/ofc-selection");
+  resetCorrelationOnAction("schedule-appointment/ofc-selection", username);
 
   let ofcList: UsaOfc[] = [];
   try {

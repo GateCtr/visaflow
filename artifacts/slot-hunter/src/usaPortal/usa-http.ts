@@ -376,7 +376,7 @@ function generateCorrelationId(): string {
   return result;
 }
 
-// ── X-Correlation-key STICKY par "navigation" ────────────────────────────────
+// ── X-Correlation-key STICKY par "navigation" PER-ACCOUNT ────────────────────
 // FIX 6: Rotation sur ACTION (pas timer).
 // Le vrai bundle Angular génère ce header UNE FOIS dans le HttpInterceptor singleton
 // et le réutilise pour TOUTES les requêtes de la même "navigation" (page load).
@@ -387,11 +387,25 @@ function generateCorrelationId(): string {
 //   - Le referer change (transition entre pages simulée)
 //   - Un warm-up ou landing page est appelé (simule un reload de page)
 //   - Garder le même pour les requêtes séquentielles du même "flow" (scan OFC → dates → times)
+//
+// FIX 11: PER-ACCOUNT correlation (pas global).
+// En mode parallèle, plusieurs comptes peuvent exécuter des requêtes simultanément.
+// Si le correlation est global, le 2ème bootstrapAccountData() écrase le correlation
+// du 1er AVANT que ses requêtes ne soient envoyées → requêtes orphelines détectables.
+// Solution : Map<username, { id, lastReferer }> — chaque compte a son propre correlation.
+const accountCorrelationMap = new Map<string, { id: string; lastReferer: string | undefined }>();
+
+// Fallback global pour la rétro-compatibilité (mode séquentiel, appels sans username)
 let _stickyCorrelationId: string | undefined;
 let _lastCorrelationReferer: string | undefined;
 
 function getStickyCorrelationId(): string {
-  // FIX 6: On ne reset plus sur timer. Le reset se fait via resetCorrelationOnAction().
+  // FIX 11: Utiliser le correlation du compte actif si disponible
+  if (_activeSessionUsername) {
+    const accountCorr = accountCorrelationMap.get(_activeSessionUsername);
+    if (accountCorr) return accountCorr.id;
+  }
+  // Fallback global (mode séquentiel ou pas de session active)
   if (!_stickyCorrelationId) {
     _stickyCorrelationId = generateCorrelationId();
     console.log(`[usa] 🔑 Nouveau X-Correlation-key (init): ${_stickyCorrelationId.slice(0, 6)}…`);
@@ -400,20 +414,42 @@ function getStickyCorrelationId(): string {
 }
 
 /**
- * FIX 6: Renouvelle le X-Correlation-key sur un changement d'action/navigation.
+ * FIX 6+11: Renouvelle le X-Correlation-key sur un changement d'action/navigation.
+ * Per-account en mode parallèle, global fallback en mode séquentiel.
+ *
  * Appelé quand :
  *  - Le referer change (nouvelle "page" Angular)
  *  - Un warm-up/landing page est appelé (simule un page reload)
  * NE PAS appeler entre les requêtes séquentielles du même flow.
+ *
+ * @param newReferer — nouvelle "page" Angular simulée
+ * @param username  — compte pour lequel renouveler (mode parallèle)
  */
-export function resetCorrelationOnAction(newReferer?: string): void {
-  if (newReferer && newReferer === _lastCorrelationReferer) {
-    // Même page → même correlation (flow séquentiel)
-    return;
+export function resetCorrelationOnAction(newReferer?: string, username?: string): void {
+  const key = (username ?? _activeSessionUsername)?.toLowerCase();
+
+  if (key) {
+    // Mode per-account (parallèle)
+    const existing = accountCorrelationMap.get(key);
+    if (newReferer && existing && newReferer === existing.lastReferer) {
+      // Même page → même correlation (flow séquentiel intra-compte)
+      return;
+    }
+    const newId = generateCorrelationId();
+    accountCorrelationMap.set(key, { id: newId, lastReferer: newReferer });
+    console.log(`[usa] 🔑 X-Correlation-key renouvelé (${key.slice(0, 8)}…): ${newId.slice(0, 6)}… (referer: ${newReferer?.split('/').pop() ?? 'init'})`);
+    // Sync le global aussi (pour getBrowserHeaders quand _activeSessionUsername = key)
+    _stickyCorrelationId = newId;
+    _lastCorrelationReferer = newReferer;
+  } else {
+    // Fallback global (mode séquentiel, pas de username fourni)
+    if (newReferer && newReferer === _lastCorrelationReferer) {
+      return;
+    }
+    _stickyCorrelationId = generateCorrelationId();
+    _lastCorrelationReferer = newReferer;
+    console.log(`[usa] 🔑 X-Correlation-key renouvelé (action): ${_stickyCorrelationId.slice(0, 6)}… (referer: ${newReferer?.split('/').pop() ?? 'init'})`);
   }
-  _stickyCorrelationId = generateCorrelationId();
-  _lastCorrelationReferer = newReferer;
-  console.log(`[usa] 🔑 X-Correlation-key renouvelé (action): ${_stickyCorrelationId.slice(0, 6)}… (referer: ${newReferer?.split('/').pop() ?? 'init'})`);
 }
 
 // ── Headers Accept-* FIXÉS PAR SESSION (pas par requête) ─────────────────────
