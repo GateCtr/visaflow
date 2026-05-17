@@ -66,6 +66,88 @@ let monitorTimer: ReturnType<typeof setInterval> | null = null;
 /** Intervalle du monitor qui vérifie l'état de tous les comptes (ms). */
 const MONITOR_INTERVAL_MS = 2 * 60_000; // Toutes les 2 min
 
+// ─── FIX-21: Cooldown indépendant du tokenCache ────────────────────────────
+// Le tokenCache peut être vidé (401 dans bg-keepalive, ou restart), ce qui fait
+// que isSessionInCooldown() ne peut plus fonctionner (cached === null → bypass).
+// Ce tracker persiste le timestamp de mort du token INDÉPENDAMMENT du cache,
+// garantissant que le cooldown est TOUJOURS respecté même si le cache est vidé.
+
+import { MIN_COOLDOWN_AFTER_EXPIRY_MS, MAX_COOLDOWN_AFTER_EXPIRY_MS } from "./config.js";
+
+interface CooldownEntry {
+  /** Timestamp exact où le token est devenu invalide/supprimé. */
+  tokenDiedAt: number;
+  /** Durée du cooldown randomisée UNE SEULE FOIS (8-25 min). */
+  cooldownDurationMs: number;
+  /** Timestamp de la fin du cooldown (tokenDiedAt + cooldownDurationMs). */
+  cooldownEndsAt: number;
+}
+
+/** Map indépendante : username (lowercase) → cooldown info. */
+const tokenDeathTracker = new Map<string, CooldownEntry>();
+
+/**
+ * Enregistre la mort d'un token pour un compte.
+ * Ne réenregistre PAS si un cooldown est déjà en cours (évite de reset le timer).
+ */
+function recordTokenDeath(username: string): void {
+  const key = username.toLowerCase();
+  const existing = tokenDeathTracker.get(key);
+  
+  // Si un cooldown est déjà actif et pas encore expiré, ne pas le reset
+  if (existing && Date.now() < existing.cooldownEndsAt) {
+    return;
+  }
+  
+  const now = Date.now();
+  const cooldownDurationMs = MIN_COOLDOWN_AFTER_EXPIRY_MS + 
+    Math.random() * (MAX_COOLDOWN_AFTER_EXPIRY_MS - MIN_COOLDOWN_AFTER_EXPIRY_MS);
+  
+  tokenDeathTracker.set(key, {
+    tokenDiedAt: now,
+    cooldownDurationMs,
+    cooldownEndsAt: now + cooldownDurationMs,
+  });
+  
+  const cooldownMin = Math.round(cooldownDurationMs / 60_000);
+  console.log(`[accounts-ka] ⏱️ Cooldown enregistré pour ${key.slice(0, 12)}… — ${cooldownMin}min (fin à ${new Date(now + cooldownDurationMs).toISOString().slice(11, 16)} UTC)`);
+}
+
+/**
+ * Vérifie si un compte est encore en cooldown via le tracker indépendant.
+ * Retourne true si le re-login ne doit PAS être tenté.
+ */
+export function isInIndependentCooldown(username: string): boolean {
+  const key = username.toLowerCase();
+  const entry = tokenDeathTracker.get(key);
+  if (!entry) return false;
+  
+  if (Date.now() < entry.cooldownEndsAt) {
+    return true; // Encore en cooldown
+  }
+  
+  // Cooldown expiré → nettoyer
+  tokenDeathTracker.delete(key);
+  return false;
+}
+
+/**
+ * Retourne le temps restant du cooldown indépendant (ms). 0 si pas en cooldown.
+ */
+export function getIndependentCooldownRemaining(username: string): number {
+  const key = username.toLowerCase();
+  const entry = tokenDeathTracker.get(key);
+  if (!entry) return 0;
+  return Math.max(0, entry.cooldownEndsAt - Date.now());
+}
+
+/**
+ * Efface le cooldown après un login réussi.
+ */
+function clearTokenDeathTracker(username: string): void {
+  tokenDeathTracker.delete(username.toLowerCase());
+}
+
 // ─── Rotation entre comptes ─────────────────────────────────────────────────
 // Chaque compte a un "budget" de sessions par jour et une durée max d'activité
 // continue. Quand un compte atteint sa limite, il dort et l'autre prend le relais.
@@ -405,6 +487,10 @@ export function getAccountsStatus(): Array<{
 /**
  * Vérifie si un compte est prêt pour un re-login (token mort + cooldown terminé + rotation OK).
  * Appelé par le scheduler pour savoir s'il peut déclencher un login.
+ *
+ * FIX-21: Double vérification cooldown — le tracker indépendant (tokenDeathTracker)
+ * est TOUJOURS consulté, même si le tokenCache a été vidé (401, restart, etc.).
+ * Cela empêche le bypass du cooldown qui causait des re-logins à 2 min au lieu de 8-25 min.
  */
 export function isAccountReadyForRelogin(username: string): boolean {
   const key = username.toLowerCase();
@@ -417,19 +503,31 @@ export function isAccountReadyForRelogin(username: string): boolean {
     return false;
   }
   
-  // Si pas de token → prêt (premier login)
+  // FIX-21: TOUJOURS vérifier le cooldown indépendant en premier.
+  // Ce tracker fonctionne même si le tokenCache a été vidé (401, restart, cleanup).
+  // C'est la protection PRINCIPALE contre les re-logins prématurés.
+  if (isInIndependentCooldown(username)) {
+    const remainingMs = getIndependentCooldownRemaining(username);
+    const remainingMin = Math.round(remainingMs / 60_000);
+    console.log(`[accounts-ka] ⏱️ ${key.slice(0, 12)}… — cooldown indépendant actif (encore ${remainingMin}min)`);
+    return false;
+  }
+  
+  // Si pas de token → le cooldown indépendant est passé (vérifié ci-dessus),
+  // donc on peut permettre le login si la rotation l'autorise.
   if (!cached) return isAccountAllowedToBeActive(username);
   
   // Si token valide → pas besoin de re-login
   if (isCachedTokenValid(cached)) return false;
   
-  // Si en cooldown (8-25 min post-expiry de config.ts) → pas prêt
+  // Si en cooldown via tokenCache (backup — pour les cas où le tracker indépendant
+  // n'a pas été alimenté, ex: sessions restaurées depuis Redis au boot)
   if (isSessionInCooldown(cached)) return false;
   
   // Vérifier que la rotation autorise ce compte à être actif
   if (!isAccountAllowedToBeActive(username)) return false;
   
-  // Token expiré + cooldown terminé + rotation OK + pas restreint → prêt pour re-login
+  // Token expiré + cooldown terminé (les DEUX vérifications) + rotation OK + pas restreint → prêt
   return true;
 }
 
@@ -448,6 +546,8 @@ export async function performScheduledRelogin(username: string): Promise<boolean
     account.lastLoginAt = Date.now();
     account.reloginCount++;
     account.tokenDiedAt = null;
+    // FIX-21: Effacer le cooldown indépendant — login réussi = plus de cooldown
+    clearTokenDeathTracker(account.username);
     // Enregistrer le login dans le tracking de rotation
     recordLoginForRotation(account.username);
     startBackgroundKeepAlive(account.username, account.jobId);
@@ -480,7 +580,12 @@ async function monitorTick(): Promise<void> {
         stopBackgroundKeepAlive(account.username);
         console.log(`[accounts-ka] 💤 ${key.slice(0, 12)}… — token absent, keep-alive arrêté (dormant)`);
       }
-      if (!account.tokenDiedAt) account.tokenDiedAt = now;
+      if (!account.tokenDiedAt) {
+        account.tokenDiedAt = now;
+        // FIX-21: Enregistrer la mort du token dans le tracker indépendant
+        // pour garantir le cooldown même si le tokenCache est vidé.
+        recordTokenDeath(account.username);
+      }
       dormantCount++;
       continue;
     }
@@ -491,7 +596,12 @@ async function monitorTick(): Promise<void> {
         stopBackgroundKeepAlive(account.username);
         console.log(`[accounts-ka] 💤 ${key.slice(0, 12)}… — token expiré/invalide, keep-alive arrêté (dormant, cooldown en cours)`);
       }
-      if (!account.tokenDiedAt) account.tokenDiedAt = now;
+      if (!account.tokenDiedAt) {
+        account.tokenDiedAt = now;
+        // FIX-21: Enregistrer la mort du token dans le tracker indépendant.
+        // Le cooldown de 8-25 min commence ICI, pas au moment du re-login check.
+        recordTokenDeath(account.username);
+      }
       dormantCount++;
       continue;
     }

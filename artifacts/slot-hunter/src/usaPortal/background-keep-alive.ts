@@ -197,8 +197,14 @@ async function bgKeepAliveTick(key: string): Promise<void> {
 
     if (res.status === 401) {
       // Session morte côté serveur malgré le keep-alive
-      console.warn(`[bg-keepalive] ❌ Ping 401 pour ${key.slice(0, 12)}… — session morte, arrêt + invalidation cache`);
-      tokenCache.delete(key);
+      // FIX-21: Ne PAS supprimer le token du cache — le marquer comme expiré.
+      // Si on le supprime, isAccountReadyForRelogin() voit cached===null et bypass
+      // le cooldown de isSessionInCooldown(). En gardant l'entrée avec expiresAt=now,
+      // le cooldown peut fonctionner normalement via le tokenCache en plus du tracker indépendant.
+      console.warn(`[bg-keepalive] ❌ Ping 401 pour ${key.slice(0, 12)}… — session morte, arrêt + marquage expiré`);
+      if (cached) {
+        cached.expiresAt = Date.now(); // Marquer comme expiré MAINTENANT
+      }
       bgTimers.delete(key);
       return;
     }

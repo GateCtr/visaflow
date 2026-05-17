@@ -1571,8 +1571,15 @@ async function main(): Promise<void> {
     //   1. Inscrit les nouveaux dossiers USA activés APRÈS le démarrage
     //   2. Re-login les comptes dormants quand le cooldown est terminé
     // Vérifie toutes les 3-5 min (variable).
-    const { isAccountReadyForRelogin, performScheduledRelogin, getRestTimeRemaining, getSessionsRemainingToday, registerAccountForKeepAlive: registerAccount } = await import("./usaPortal/accounts-keep-alive.js");
+    const { isAccountReadyForRelogin, performScheduledRelogin, getRestTimeRemaining, getSessionsRemainingToday, registerAccountForKeepAlive: registerAccount, getIndependentCooldownRemaining } = await import("./usaPortal/accounts-keep-alive.js");
     const { subscribeToOfcWatcher: subscribeLate, makeOfcKey: makeKey, hasActiveWatcher } = await import("./usaPortal/ofc-watcher.js");
+
+    // FIX-21: Safety net — timestamp du dernier re-login par compte.
+    // Même si toutes les autres vérifications sont passées, imposer un
+    // minimum absolu de 10 min entre deux tentatives de login pour le même compte.
+    // Cela protège contre les edge cases non prévus (race conditions, bugs futurs).
+    const lastReloginAttemptAt = new Map<string, number>();
+    const MIN_RELOGIN_INTERVAL_MS = 10 * 60_000; // 10 min minimum entre deux tentatives
 
     const parallelReloginLoop = async () => {
       // FIX-19: Utiliser le Set partagé pré-peuplé par initParallelWatchers
@@ -1656,6 +1663,20 @@ async function main(): Promise<void> {
             }
 
             if (isAccountReadyForRelogin(username)) {
+              // FIX-21: Safety net — vérifier le minimum absolu entre re-logins.
+              // Même si isAccountReadyForRelogin() dit OK, imposer 10 min minimum
+              // depuis la dernière TENTATIVE (pas le dernier succès) pour ce compte.
+              const lastAttempt = lastReloginAttemptAt.get(key) ?? 0;
+              const timeSinceLastAttempt = Date.now() - lastAttempt;
+              if (timeSinceLastAttempt < MIN_RELOGIN_INTERVAL_MS) {
+                const waitMin = Math.round((MIN_RELOGIN_INTERVAL_MS - timeSinceLastAttempt) / 60_000);
+                log("INFO", `[parallel-relogin] ⏱️ ${username.slice(0, 12)}… — safety net: attente ${waitMin}min (min 10min entre tentatives)`);
+                continue;
+              }
+
+              // Enregistrer la tentative AVANT le login (même si elle échoue)
+              lastReloginAttemptAt.set(key, Date.now());
+
               log("INFO", `[parallel-relogin] 🔑 ${username.slice(0, 12)}… prêt pour re-login (cooldown terminé, ${sessionsLeft} sessions restantes)`);
               const success = await performScheduledRelogin(username);
               if (success) {
