@@ -69,18 +69,58 @@ const MONITOR_INTERVAL_MS = 2 * 60_000; // Toutes les 2 min
 // ─── Rotation entre comptes ─────────────────────────────────────────────────
 // Chaque compte a un "budget" de sessions par jour et une durée max d'activité
 // continue. Quand un compte atteint sa limite, il dort et l'autre prend le relais.
-// Objectif : max 6-8 logins/jour/compte = ~2-3h actif puis 2-3h de repos.
+//
+// FIX-19: Repos ADAPTATIF selon le nombre de comptes du même type :
+//   - 3+ comptes → repos long (2-3.5h) car les autres couvrent
+//   - 2 comptes → repos moyen (45-90 min)
+//   - 1 seul compte (pas de relève) → repos court (15-30 min) juste assez
+//     pour briser le pattern "toujours connecté" sans créer de trou de couverture
 
-/** Durée max d'activité continue avant repos forcé (ms). */
-const MAX_ACTIVE_DURATION_MIN_MS = 2 * 60 * 60_000; // 2h min
-const MAX_ACTIVE_DURATION_MAX_MS = 3.5 * 60 * 60_000; // 3.5h max
+/** Repos selon le nombre de pairs (comptes du même type qui peuvent prendre le relais). */
+function getRestDuration(peerCount: number): { min: number; max: number } {
+  if (peerCount >= 2) {
+    // 3+ comptes total → repos long (les autres couvrent)
+    return { min: 2 * 60 * 60_000, max: 3.5 * 60 * 60_000 }; // 2-3.5h
+  } else if (peerCount === 1) {
+    // 2 comptes total → repos moyen
+    return { min: 45 * 60_000, max: 90 * 60_000 }; // 45-90 min
+  } else {
+    // Seul de son type → repos court (juste briser le pattern)
+    return { min: 15 * 60_000, max: 30 * 60_000 }; // 15-30 min
+  }
+}
 
-/** Durée de repos entre les périodes d'activité (ms). */
-const REST_DURATION_MIN_MS = 2 * 60 * 60_000; // 2h min
-const REST_DURATION_MAX_MS = 3.5 * 60 * 60_000; // 3.5h max
+/** Durée max d'activité continue avant repos forcé — aussi adaptative. */
+function getMaxActiveDuration(peerCount: number): { min: number; max: number } {
+  if (peerCount >= 2) {
+    return { min: 2 * 60 * 60_000, max: 3.5 * 60 * 60_000 }; // 2-3.5h
+  } else if (peerCount === 1) {
+    return { min: 2.5 * 60 * 60_000, max: 4 * 60 * 60_000 }; // 2.5-4h
+  } else {
+    // Seul → peut rester actif plus longtemps (3-5h) car pas de relève
+    return { min: 3 * 60 * 60_000, max: 5 * 60 * 60_000 }; // 3-5h
+  }
+}
 
 /** Max sessions (logins) par compte par jour (24h glissant). */
 const MAX_SESSIONS_PER_DAY = 8;
+
+/** Nombre de pairs actifs pour un compte (comptes du même statut qui peuvent relayer). */
+let _peerCountFn: ((username: string) => number) | null = null;
+
+/**
+ * Configure la fonction de comptage de pairs.
+ * Appelée depuis index.ts avec la connaissance du nombre de comptes par type.
+ */
+export function setRotationPeerCountFn(fn: (username: string) => number): void {
+  _peerCountFn = fn;
+}
+
+function getPeerCount(username: string): number {
+  if (_peerCountFn) return _peerCountFn(username);
+  // Fallback: compter les comptes gérés - 1 (tous sauf le courant)
+  return Math.max(0, managedAccounts.size - 1);
+}
 
 interface AccountRotationState {
   /** Timestamp du début de la période d'activité actuelle. */
@@ -98,9 +138,11 @@ const rotationState = new Map<string, AccountRotationState>();
 function getRotationState(username: string): AccountRotationState {
   const key = username.toLowerCase();
   if (!rotationState.has(key)) {
+    const peerCount = getPeerCount(username);
+    const activeDuration = getMaxActiveDuration(peerCount);
     rotationState.set(key, {
       activeSessionStartedAt: null,
-      currentActiveDurationMs: randomBetween(MAX_ACTIVE_DURATION_MIN_MS, MAX_ACTIVE_DURATION_MAX_MS),
+      currentActiveDurationMs: randomBetween(activeDuration.min, activeDuration.max),
       restingUntil: null,
       loginTimestamps: [],
     });
@@ -128,7 +170,7 @@ export function isAccountAllowedToBeActive(username: string): boolean {
   if (state.restingUntil && now >= state.restingUntil) {
     state.restingUntil = null;
     state.activeSessionStartedAt = null;
-    state.currentActiveDurationMs = randomBetween(MAX_ACTIVE_DURATION_MIN_MS, MAX_ACTIVE_DURATION_MAX_MS);
+    state.currentActiveDurationMs = randomBetween(getMaxActiveDuration(getPeerCount(username)).min, getMaxActiveDuration(getPeerCount(username)).max);
   }
 
   // Vérifier le cap journalier (24h glissant)
@@ -142,12 +184,15 @@ export function isAccountAllowedToBeActive(username: string): boolean {
   if (state.activeSessionStartedAt) {
     const activeDuration = now - state.activeSessionStartedAt;
     if (activeDuration >= state.currentActiveDurationMs) {
-      // Temps d'activité expiré → forcer le repos
-      const restDuration = randomBetween(REST_DURATION_MIN_MS, REST_DURATION_MAX_MS);
+      // Temps d'activité expiré → forcer le repos (durée adaptative)
+      const peerCount = getPeerCount(username);
+      const restCfg = getRestDuration(peerCount);
+      const restDuration = randomBetween(restCfg.min, restCfg.max);
       state.restingUntil = now + restDuration;
       state.activeSessionStartedAt = null;
       const restMin = Math.round(restDuration / 60_000);
-      console.log(`[rotation] 💤 ${username.slice(0, 12)}… — repos forcé ${restMin}min (actif depuis ${Math.round(activeDuration / 60_000)}min)`);
+      const activeMin = Math.round(activeDuration / 60_000);
+      console.log(`[rotation] 💤 ${username.slice(0, 12)}… — repos ${restMin}min (actif ${activeMin}min, peers=${peerCount})`);
       return false;
     }
   }

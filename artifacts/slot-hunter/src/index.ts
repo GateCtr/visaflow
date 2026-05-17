@@ -1368,13 +1368,28 @@ async function main(): Promise<void> {
     // Importer les modules du nouveau système
     const { startOfcWatcher, subscribeToOfcWatcher, makeOfcKey } = await import("./usaPortal/ofc-watcher.js");
     const { runBookingRace } = await import("./usaPortal/booking-race.js");
-    const { registerAccountForKeepAlive, startAccountsMonitor, getReadyAccountCount, getAccountsStatus } = await import("./usaPortal/accounts-keep-alive.js");
+    const { registerAccountForKeepAlive, startAccountsMonitor, getReadyAccountCount, getAccountsStatus, setRotationPeerCountFn } = await import("./usaPortal/accounts-keep-alive.js");
+
+    // FIX-19: Configurer le comptage de pairs pour le repos adaptatif.
+    // Un compte "seul de son type" (ex: seul reschedule) aura un repos court (15-30min).
+    // Le peerCount est basé sur le nombre de comptes gérés - 1 (fallback simple).
+    // TODO: Pour une vraie différenciation NEW/RESCHEDULE, il faudrait passer
+    // le statut de chaque compte et compter les peers du même statut.
+    setRotationPeerCountFn((_username: string) => {
+      // Compter les comptes avec token valide (hors le courant)
+      const readyCount = getReadyAccountCount();
+      return Math.max(0, readyCount - 1);
+    });
 
     // Démarrer le accounts monitor (surveillance tokens — PAS de re-login automatique)
     startAccountsMonitor();
 
     // Boucle d'initialisation : enregistrer les dossiers USA et démarrer les watchers
     let watcherInitialized = false;
+
+    // FIX-19: Set partagé entre initParallelWatchers et parallelReloginLoop
+    // pour éviter les re-inscriptions inutiles au premier tick du relogin loop.
+    const alreadyRegisteredUsernames = new Set<string>();
 
     const initParallelWatchers = async () => {
       let jobs: HunterJob[];
@@ -1403,6 +1418,7 @@ async function main(): Promise<void> {
       // 1. Inscrire chaque compte pour le keep-alive permanent
       for (const job of usaJobs) {
         await registerAccountForKeepAlive(job);
+        alreadyRegisteredUsernames.add(job.hunterConfig.embassyUsername.toLowerCase());
       }
 
       const readyCount = getReadyAccountCount();
@@ -1525,8 +1541,9 @@ async function main(): Promise<void> {
     const { subscribeToOfcWatcher: subscribeLate, makeOfcKey: makeKey, hasActiveWatcher } = await import("./usaPortal/ofc-watcher.js");
 
     const parallelReloginLoop = async () => {
-      // Set pour tracker les comptes déjà inscrits (évite les inscriptions multiples)
-      const registeredUsernames = new Set<string>();
+      // FIX-19: Utiliser le Set partagé pré-peuplé par initParallelWatchers
+      // pour éviter de re-inscrire les comptes déjà gérés au premier tick.
+      const registeredUsernames = alreadyRegisteredUsernames;
 
       while (true) {
         // Vérifier toutes les 3-5 min (variable)

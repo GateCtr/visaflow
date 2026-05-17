@@ -383,144 +383,177 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   }
 
   // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
-  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (compte: ${watcherUsername.slice(0, 12)}…)`);
-  // Construire le payload — utiliser un subscriber avec des données valides
-  // (skip ceux dont le bootstrap a échoué = applicationId vide)
-  let firstSub: OfcWatcherSubscriber | undefined;
-  for (const sub of state.subscribers.values()) {
-    if (sub.appDetails.applicationId && sub.appDetails.applicationId !== "0") {
-      firstSub = sub;
-      break;
-    }
-  }
-  if (!firstSub) {
-    // Aucun subscriber avec des données valides → skip ce cycle
+  // FIX-19: Scanner par GROUPE de locationType (NEW vs RESCHEDULE séparément).
+  // Un dossier NEW utilise locationType depuis appDetails.locationType (résolu par /appointments/search).
+  // Un dossier RESCHEDULE utilise appointmentLocationType du RDV existant.
+  // Le serveur retourne 404 si le locationType ne correspond pas au statut du dossier.
+
+  // Grouper les subscribers valides par locationType effectif
+  const validSubs = [...state.subscribers.values()].filter(
+    sub => sub.appDetails.applicationId && sub.appDetails.applicationId !== "0"
+  );
+
+  if (validSubs.length === 0) {
     console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Aucun subscriber avec applicationId valide — skip`);
     return;
   }
 
-  const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, watcherUsername);
+  // Grouper : reschedule (SCHEDULED) vs new (NEW)
+  const rescheduleGroup = validSubs.filter(s => s.rescheduleYN);
+  const newGroup = validSubs.filter(s => !s.rescheduleYN);
 
-  const payload: Record<string, unknown> = {
-    postUserId: ofc.postUserId,
-    applicantId: firstSub.appDetails.applicantId,
-    visaType: (firstSub.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? firstSub.appDetails.visaType,
-    visaClass: firstSub.appDetails.visaClass,
-    locationType: firstSub.rescheduleYN
-      ? (firstSub.appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
-      : (ofc.officeType ?? "OFC"),
-    applicationId: firstSub.appDetails.applicationId,
-  };
+  // Scanner chaque groupe qui a au moins 1 subscriber
+  const groups: Array<{ label: string; sub: OfcWatcherSubscriber; locationType: string }> = [];
 
-  const reqStart = Date.now();
-
-  const res = await fetcher.fetch(USA_FIRST_AVAILABLE_MONTH_URL, {
-    method: "POST",
-    headers: hdrs,
-    body: JSON.stringify(payload),
-  });
-
-  state.lastLatencyMs = Date.now() - reqStart;
-  state.totalRefreshes++;
-  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST → HTTP ${res.status} (${state.lastLatencyMs}ms) | refresh #${state.totalRefreshes}`);
-
-  // Erreurs critiques → throw pour déclencher le error handling + failover
-  if (res.status === 429 || res.status === 403) {
-    throw new Error(`HTTP_${res.status}`);
+  if (newGroup.length > 0) {
+    const sub = newGroup[0];
+    // FIX-19: Utiliser appDetails.locationType résolu par /appointments/search
+    // au lieu de ofc.officeType. Le search retourne le locationType correct pour ce dossier.
+    const loc = sub.appDetails.locationType ?? sub.appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC";
+    groups.push({ label: "NEW", sub, locationType: loc });
   }
-  if (res.status === 401) {
-    // Token expiré ou compte restreint
-    throw new Error("TOKEN_EXPIRED");
-  }
-  if (res.status === 503) {
-    // Proxy mort (réponse du proxy guard)
-    throw new Error("PROXY_DEAD");
-  }
-  if (!res.ok) {
-    state.consecutiveErrors++;
-    return; // Erreur non-fatale
+  if (rescheduleGroup.length > 0) {
+    const sub = rescheduleGroup[0];
+    const loc = sub.appDetails.appointmentLocationType ?? sub.appDetails.locationType ?? ofc.officeType ?? "POST";
+    groups.push({ label: "RESCHEDULE", sub, locationType: loc });
   }
 
-  // Reset erreurs sur succès
-  state.consecutiveErrors = 0;
+  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (compte: ${watcherUsername.slice(0, 12)}…, groupes: ${groups.map(g => `${g.label}[${g.locationType}]`).join("+")}})`);
 
-  const data = await res.json() as { present?: boolean; date?: string };
+  for (const group of groups) {
+    const { sub: firstSub, locationType, label } = group;
 
-  // Log périodique
-  const pred = getCurrentPredictionScore(watcherUsername);
-  if (state.totalRefreshes % 5 === 0 || state.totalRefreshes <= 3) {
-    console.log(
-      `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} | compte: ${watcherUsername.slice(0, 12)}… | pred=${pred.window} | ` +
-      `latency=${state.lastLatencyMs}ms | subscribers=${state.subscribers.size}`,
-    );
-  }
+    const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, watcherUsername);
 
-  // botLog pour visibilité dans l'interface admin (chaque scan)
-  botLog({
-    applicationId: firstSub.jobId,
-    step: "ofc_watcher_scan",
-    status: data.present ? "ok" : "warn",
-    data: {
-      ofcName: ofc.postName,
-      scanAccount: watcherUsername,
-      refreshNumber: state.totalRefreshes,
-      result: data.present ? `SLOT ${data.date}` : "Pas de créneau",
-      latencyMs: state.lastLatencyMs,
-      subscriberCount: state.subscribers.size,
-      predictionWindow: pred.window,
-    },
-  });
+    const payload: Record<string, unknown> = {
+      postUserId: ofc.postUserId,
+      applicantId: firstSub.appDetails.applicantId,
+      visaType: (firstSub.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? firstSub.appDetails.visaType,
+      visaClass: firstSub.appDetails.visaClass,
+      locationType,
+      applicationId: firstSub.appDetails.applicationId,
+    };
 
-  if (data.present && data.date) {
-    // 🚨 SLOT DÉTECTÉ!
-    console.log(`[ofc-watcher] 🚨🚨🚨 SLOT DÉTECTÉ sur ${ofc.postName}! date=${data.date} (refresh #${state.totalRefreshes})`);
+    const reqStart = Date.now();
 
-    // Enregistrer l'observation (Early Bird + competitive intelligence)
-    recordSlotObservation(watcherUsername, ofc.postName);
-    recordSlotAppearance(ofc.postName, data.date);
-
-    // Filtrer les subscribers selon leur deadline
-    const eligibleSubscribers = [...state.subscribers.values()].filter(sub => {
-      if (sub.dateDeadline && data.date! > sub.dateDeadline) return false;
-      if (sub.dateFrom && data.date! < sub.dateFrom) return false;
-      return true;
+    const res = await fetcher.fetch(USA_FIRST_AVAILABLE_MONTH_URL, {
+      method: "POST",
+      headers: hdrs,
+      body: JSON.stringify(payload),
     });
 
-    if (eligibleSubscribers.length > 0) {
-      // BROADCAST → booking race parallèle
-      const event: SlotDetectedEvent = {
-        ofcName: ofc.postName,
-        firstAvailableMonth: data.date,
-        detectedAt: Date.now(),
-        watcherUsername,
-      };
+    state.lastLatencyMs = Date.now() - reqStart;
+    state.totalRefreshes++;
+    console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST[${label}] → HTTP ${res.status} (${state.lastLatencyMs}ms) | refresh #${state.totalRefreshes}`);
 
-      botLog({
-        applicationId: eligibleSubscribers[0].jobId,
-        step: "ofc_watcher_slot_detected",
-        status: "ok",
-        data: {
-          ofcName: ofc.postName,
-          date: data.date,
-          refreshNumber: state.totalRefreshes,
-          subscriberCount: eligibleSubscribers.length,
-          latencyMs: state.lastLatencyMs,
-        },
+    // Erreurs critiques → throw pour déclencher le error handling + failover
+    if (res.status === 429 || res.status === 403) {
+      throw new Error(`HTTP_${res.status}`);
+    }
+    if (res.status === 401) {
+      throw new Error("TOKEN_EXPIRED");
+    }
+    if (res.status === 503) {
+      throw new Error("PROXY_DEAD");
+    }
+    if (!res.ok) {
+      // 404 non-fatal pour ce groupe — l'autre groupe peut réussir
+      console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] POST[${label}] HTTP ${res.status} — non-fatal, groupe skip`);
+      continue;
+    }
+
+    // Reset erreurs sur succès
+    state.consecutiveErrors = 0;
+
+    const data = await res.json() as { present?: boolean; date?: string };
+
+    // Log périodique
+    const pred = getCurrentPredictionScore(watcherUsername);
+    if (state.totalRefreshes % 5 === 0 || state.totalRefreshes <= 3) {
+      console.log(
+        `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} [${label}] | compte: ${watcherUsername.slice(0, 12)}… | pred=${pred.window} | ` +
+        `latency=${state.lastLatencyMs}ms | subscribers=${state.subscribers.size}`,
+      );
+    }
+
+    // botLog pour visibilité dans l'interface admin
+    botLog({
+      applicationId: firstSub.jobId,
+      step: "ofc_watcher_scan",
+      status: data.present ? "ok" : "warn",
+      data: {
+        ofcName: ofc.postName,
+        scanAccount: watcherUsername,
+        scanGroup: label,
+        locationType,
+        refreshNumber: state.totalRefreshes,
+        result: data.present ? `SLOT ${data.date}` : "Pas de créneau",
+        latencyMs: state.lastLatencyMs,
+        subscriberCount: state.subscribers.size,
+        predictionWindow: pred.window,
+      },
+    });
+
+    if (data.present && data.date) {
+      // 🚨 SLOT DÉTECTÉ!
+      console.log(`[ofc-watcher] 🚨🚨🚨 SLOT DÉTECTÉ sur ${ofc.postName} [${label}]! date=${data.date} (refresh #${state.totalRefreshes})`);
+
+      // Enregistrer l'observation (Early Bird + competitive intelligence)
+      recordSlotObservation(watcherUsername, ofc.postName);
+      recordSlotAppearance(ofc.postName, data.date);
+
+      // FIX-19: Filtrer les subscribers du MÊME GROUPE (NEW ou RESCHEDULE)
+      // Un slot détecté via locationType=POST ne concerne que les dossiers RESCHEDULE.
+      // Un slot détecté via locationType=OFC ne concerne que les dossiers NEW.
+      const groupSubs = label === "RESCHEDULE" ? rescheduleGroup : newGroup;
+      const eligibleSubscribers = groupSubs.filter(sub => {
+        if (sub.dateDeadline && data.date! > sub.dateDeadline) return false;
+        if (sub.dateFrom && data.date! < sub.dateFrom) return false;
+        return true;
       });
 
-      // Appeler le callback de notification (booking race dans index.ts)
-      try {
-        await state.onSlotDetected(event, eligibleSubscribers);
-      } catch (err) {
-        console.error(`[ofc-watcher] ❌ Erreur callback onSlotDetected:`, err);
+      if (eligibleSubscribers.length > 0) {
+        // BROADCAST → booking race parallèle
+        const event: SlotDetectedEvent = {
+          ofcName: ofc.postName,
+          firstAvailableMonth: data.date,
+          detectedAt: Date.now(),
+          watcherUsername,
+        };
+
+        botLog({
+          applicationId: eligibleSubscribers[0].jobId,
+          step: "ofc_watcher_slot_detected",
+          status: "ok",
+          data: {
+            ofcName: ofc.postName,
+            date: data.date,
+            group: label,
+            refreshNumber: state.totalRefreshes,
+            subscriberCount: eligibleSubscribers.length,
+            latencyMs: state.lastLatencyMs,
+          },
+        });
+
+        // Appeler le callback de notification (booking race dans index.ts)
+        try {
+          await state.onSlotDetected(event, eligibleSubscribers);
+        } catch (err) {
+          console.error(`[ofc-watcher] ❌ Erreur callback onSlotDetected:`, err);
+        }
+      } else {
+        console.log(`[ofc-watcher] ⚠️ Slot détecté [${label}] mais aucun subscriber éligible (deadline/dateFrom)`);
       }
     } else {
-      console.log(`[ofc-watcher] ⚠️ Slot détecté mais aucun subscriber éligible (deadline/dateFrom)`);
+      // Pas de slot pour ce groupe → enregistrer (competitive intelligence)
+      recordAllSlotsGone(ofc.postName);
     }
-  } else {
-    // Pas de slot → enregistrer (competitive intelligence)
-    recordAllSlotsGone(ofc.postName);
-  }
+
+    // Petite pause entre les deux requêtes de groupe (anti-burst)
+    if (groups.length > 1 && group !== groups[groups.length - 1]) {
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+    }
+  } // fin boucle groups
 }
 
 // ─── Intervalle adaptatif ───────────────────────────────────────────────────
