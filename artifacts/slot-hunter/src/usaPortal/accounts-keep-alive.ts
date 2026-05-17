@@ -12,16 +12,26 @@
  * FONCTIONNEMENT :
  *   1. Au démarrage, après le login initial de chaque dossier, on inscrit le compte.
  *   2. Un timer per-account envoie des pings toutes les 8-12 min (via background-keep-alive.ts).
- *   3. Si le token expire → re-login automatique (avec cooldown).
- *   4. Si le proxy meurt → rotation + re-login au prochain cycle.
+ *   3. Si le token expire → le compte "dort" pendant le cooldown (8-25 min)
+ *      puis le SCHEDULER (pas ce monitor) décide quand re-login.
+ *   4. Si le proxy meurt → le compte dort jusqu'à la prochaine fenêtre de scan.
+ *
+ * RÈGLE CRITIQUE — PAS DE RE-LOGIN AUTOMATIQUE :
+ *   Le re-login automatique (proactif ou réactif) est un TRIGGER de restriction
+ *   de compte sur le portail USA. Le monitor ne doit JAMAIS re-login un compte.
+ *   Il ne fait que :
+ *     - Maintenir les sessions existantes vivantes (pings)
+ *     - Détecter quand un token est mort et arrêter le keep-alive
+ *     - Reporter le statut pour que le scheduler sache quand relancer un login
  *
  * INTÉGRATION :
  *   - Utilise background-keep-alive.ts pour les pings individuels (déjà implémenté)
- *   - Ajoute la coordination : login initial, monitoring, re-login automatique
- *   - Appelé par index.ts au démarrage et quand de nouveaux dossiers apparaissent
+ *   - Le login initial est fait UNE FOIS par le scheduler lors de l'inscription
+ *   - Les re-logins sont UNIQUEMENT déclenchés par le scheduler principal
+ *     qui respecte les cooldowns de config.ts (8-25 min post-expiry)
  */
 
-import { tokenCache, isCachedTokenValid } from "./usa-http.js";
+import { tokenCache, isCachedTokenValid, isSessionInCooldown } from "./usa-http.js";
 import { getUsaSession } from "./usa-session.js";
 import { startBackgroundKeepAlive, stopBackgroundKeepAlive, isBackgroundKeepAliveActive } from "./background-keep-alive.js";
 import { initProxyGuard } from "./proxy-session-guard.js";
@@ -41,10 +51,10 @@ interface ManagedAccount {
   job: HunterJob;
   /** Timestamp du dernier login réussi. */
   lastLoginAt: number;
-  /** Nombre de re-login effectués. */
+  /** Nombre de re-login effectués (informatif seulement). */
   reloginCount: number;
-  /** Flag si le compte est en phase de cooldown (ne pas re-login). */
-  inCooldown: boolean;
+  /** Timestamp de quand le token est devenu invalide (pour tracking). */
+  tokenDiedAt: number | null;
 }
 
 // ─── État global ────────────────────────────────────────────────────────────
@@ -55,18 +65,12 @@ let monitorTimer: ReturnType<typeof setInterval> | null = null;
 /** Intervalle du monitor qui vérifie l'état de tous les comptes (ms). */
 const MONITOR_INTERVAL_MS = 2 * 60_000; // Toutes les 2 min
 
-/** Cooldown après un re-login automatique (ms). */
-const RELOGIN_COOLDOWN_MS = 10 * 60_000; // 10 min
-
-/** Marge avant expiration JWT pour déclencher un re-login proactif. */
-const PROACTIVE_RELOGIN_BUFFER_MS = 12 * 60_000; // 12 min avant expiry
-
 // ─── API publique ───────────────────────────────────────────────────────────
 
 /**
  * Inscrit un compte pour le keep-alive permanent.
  * Si le compte a déjà un token valide en cache, active immédiatement le ping.
- * Sinon, effectue un login initial.
+ * Sinon, effectue un login initial (SEUL login autorisé par ce module).
  */
 export async function registerAccountForKeepAlive(job: HunterJob): Promise<boolean> {
   const { embassyUsername: username, embassyPassword: password } = job.hunterConfig;
@@ -97,7 +101,7 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     job,
     lastLoginAt: 0,
     reloginCount: 0,
-    inCooldown: false,
+    tokenDiedAt: null,
   };
 
   managedAccounts.set(key, account);
@@ -111,15 +115,16 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     return true;
   }
 
-  // Pas de token valide → login initial
+  // Pas de token valide → login initial (le SEUL login que ce module fait)
   console.log(`[accounts-ka] 🔑 ${username.slice(0, 12)}… — login initial pour keep-alive...`);
   const session = await attemptLogin(account);
   if (session) {
+    account.lastLoginAt = Date.now();
     startBackgroundKeepAlive(username, job.id);
     console.log(`[accounts-ka] ✅ ${username.slice(0, 12)}… inscrit — login OK, keep-alive actif`);
     return true;
   } else {
-    console.warn(`[accounts-ka] ⚠️ ${username.slice(0, 12)}… — login initial échoué, sera retenté par le monitor`);
+    console.warn(`[accounts-ka] ⚠️ ${username.slice(0, 12)}… — login initial échoué`);
     return false;
   }
 }
@@ -135,8 +140,8 @@ export function unregisterAccountFromKeepAlive(username: string): void {
 }
 
 /**
- * Démarre le monitor global qui surveille tous les comptes.
- * Vérifie toutes les 2 min si un token est sur le point d'expirer et re-login si nécessaire.
+ * Démarre le monitor global qui surveille l'état des comptes.
+ * Le monitor ne fait PAS de re-login — il surveille et arrête les keep-alive morts.
  */
 export function startAccountsMonitor(): void {
   if (monitorTimer) return; // Déjà actif
@@ -188,90 +193,127 @@ export function getAccountsStatus(): Array<{
   keepAliveActive: boolean;
   expiresInMin: number | null;
   reloginCount: number;
+  dormantSinceMin: number | null;
 }> {
   const statuses: ReturnType<typeof getAccountsStatus> = [];
+  const now = Date.now();
   for (const [key, account] of managedAccounts) {
     const cached = tokenCache.get(key);
     const valid = cached ? isCachedTokenValid(cached) : false;
-    const expiresIn = cached ? Math.round((cached.expiresAt - Date.now()) / 60_000) : null;
+    const expiresIn = cached ? Math.round((cached.expiresAt - now) / 60_000) : null;
+    const dormant = account.tokenDiedAt ? Math.round((now - account.tokenDiedAt) / 60_000) : null;
     statuses.push({
       username: account.username.slice(0, 15) + "…",
       hasValidToken: valid,
       keepAliveActive: isBackgroundKeepAliveActive(key),
       expiresInMin: expiresIn,
       reloginCount: account.reloginCount,
+      dormantSinceMin: dormant,
     });
   }
   return statuses;
 }
 
-// ─── Logique interne ────────────────────────────────────────────────────────
-
-async function monitorTick(): Promise<void> {
-  const now = Date.now();
-
-  for (const [key, account] of managedAccounts) {
-    // Skip si en cooldown
-    if (account.inCooldown) {
-      if (now - account.lastLoginAt < RELOGIN_COOLDOWN_MS) continue;
-      account.inCooldown = false;
-    }
-
-    const cached = tokenCache.get(key);
-
-    // Cas 1 : Pas de token du tout → re-login
-    if (!cached) {
-      console.log(`[accounts-ka] 🔑 ${key.slice(0, 12)}… — pas de token, re-login...`);
-      await handleRelogin(account);
-      continue;
-    }
-
-    // Cas 2 : Token invalide (expiré, proxy mort, etc.) → re-login
-    if (!isCachedTokenValid(cached)) {
-      console.log(`[accounts-ka] 🔑 ${key.slice(0, 12)}… — token invalide, re-login...`);
-      await handleRelogin(account);
-      continue;
-    }
-
-    // Cas 3 : Token va expirer bientôt → re-login proactif
-    const timeToExpiry = cached.expiresAt - now;
-    if (timeToExpiry < PROACTIVE_RELOGIN_BUFFER_MS) {
-      console.log(`[accounts-ka] 🔑 ${key.slice(0, 12)}… — token expire dans ${Math.round(timeToExpiry / 60_000)}min, re-login proactif...`);
-      // Supprimer le cache pour forcer un nouveau login
-      tokenCache.delete(key);
-      await handleRelogin(account);
-      continue;
-    }
-
-    // Cas 4 : Token valide mais keep-alive pas actif → réactiver
-    if (!isBackgroundKeepAliveActive(key)) {
-      startBackgroundKeepAlive(account.username, account.jobId);
-    }
-  }
+/**
+ * Vérifie si un compte est prêt pour un re-login (token mort + cooldown terminé).
+ * Appelé par le scheduler pour savoir s'il peut déclencher un login.
+ */
+export function isAccountReadyForRelogin(username: string): boolean {
+  const key = username.toLowerCase();
+  const cached = tokenCache.get(key);
+  
+  // Si pas de token → prêt (premier login)
+  if (!cached) return true;
+  
+  // Si token valide → pas besoin de re-login
+  if (isCachedTokenValid(cached)) return false;
+  
+  // Si en cooldown (8-25 min post-expiry de config.ts) → pas prêt
+  if (isSessionInCooldown(cached)) return false;
+  
+  // Token expiré + cooldown terminé → prêt pour re-login
+  return true;
 }
 
-async function handleRelogin(account: ManagedAccount): Promise<void> {
-  const key = account.username.toLowerCase();
+/**
+ * Effectue un re-login pour un compte (appelé UNIQUEMENT par le scheduler).
+ * Respecte les gardes de usa-session.ts (cooldown, restriction, etc.)
+ */
+export async function performScheduledRelogin(username: string): Promise<boolean> {
+  const key = username.toLowerCase();
+  const account = managedAccounts.get(key);
+  if (!account) return false;
 
-  // Arrêter le keep-alive existant
-  stopBackgroundKeepAlive(account.username);
-
+  // Déléguer à getUsaSession qui vérifie toutes les conditions
   const session = await attemptLogin(account);
   if (session) {
     account.lastLoginAt = Date.now();
     account.reloginCount++;
-    account.inCooldown = true; // Cooldown pour ne pas spammer les logins
+    account.tokenDiedAt = null;
     startBackgroundKeepAlive(account.username, account.jobId);
-    console.log(`[accounts-ka] ✅ ${key.slice(0, 12)}… re-login #${account.reloginCount} réussi — keep-alive réactivé`);
-  } else {
-    account.inCooldown = true;
-    account.lastLoginAt = Date.now();
-    console.warn(`[accounts-ka] ❌ ${key.slice(0, 12)}… re-login échoué — retry dans ${RELOGIN_COOLDOWN_MS / 60_000}min`);
+    console.log(`[accounts-ka] ✅ ${key.slice(0, 12)}… re-login planifié #${account.reloginCount} réussi — keep-alive réactivé`);
+    return true;
+  }
+  return false;
+}
+
+// ─── Logique interne ────────────────────────────────────────────────────────
+
+/**
+ * Monitor tick — surveille l'état des comptes.
+ * NE FAIT PAS DE RE-LOGIN. Seulement :
+ *   - Arrête les keep-alive pour les tokens morts
+ *   - Réactive les keep-alive si token redevenu valide (login externe)
+ *   - Log le statut pour debug
+ */
+async function monitorTick(): Promise<void> {
+  const now = Date.now();
+  let readyCount = 0;
+  let dormantCount = 0;
+
+  for (const [key, account] of managedAccounts) {
+    const cached = tokenCache.get(key);
+
+    // Cas 1 : Pas de token → le compte est dormant, arrêter le keep-alive s'il tourne
+    if (!cached) {
+      if (isBackgroundKeepAliveActive(key)) {
+        stopBackgroundKeepAlive(account.username);
+        console.log(`[accounts-ka] 💤 ${key.slice(0, 12)}… — token absent, keep-alive arrêté (dormant)`);
+      }
+      if (!account.tokenDiedAt) account.tokenDiedAt = now;
+      dormantCount++;
+      continue;
+    }
+
+    // Cas 2 : Token invalide → arrêter le keep-alive, marquer comme dormant
+    if (!isCachedTokenValid(cached)) {
+      if (isBackgroundKeepAliveActive(key)) {
+        stopBackgroundKeepAlive(account.username);
+        console.log(`[accounts-ka] 💤 ${key.slice(0, 12)}… — token expiré/invalide, keep-alive arrêté (dormant, cooldown en cours)`);
+      }
+      if (!account.tokenDiedAt) account.tokenDiedAt = now;
+      dormantCount++;
+      continue;
+    }
+
+    // Cas 3 : Token valide — s'assurer que le keep-alive est actif
+    if (!isBackgroundKeepAliveActive(key)) {
+      startBackgroundKeepAlive(account.username, account.jobId);
+      console.log(`[accounts-ka] 🔄 ${key.slice(0, 12)}… — token valide, keep-alive réactivé`);
+    }
+    account.tokenDiedAt = null;
+    readyCount++;
+  }
+
+  // Log périodique (pas à chaque tick pour éviter le spam)
+  if (managedAccounts.size > 0) {
+    console.log(`[accounts-ka] 📊 Status: ${readyCount}/${managedAccounts.size} prêts, ${dormantCount} dormants`);
   }
 }
 
 async function attemptLogin(account: ManagedAccount): Promise<boolean> {
   try {
+    // getUsaSession vérifie : restriction, cooldown, proxy expiry, pendingLogin lock
     const session = await getUsaSession(account.username, account.password);
     if (!session) return false;
 

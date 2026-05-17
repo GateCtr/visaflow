@@ -1351,7 +1351,7 @@ async function main(): Promise<void> {
     const { runBookingRace } = await import("./usaPortal/booking-race.js");
     const { registerAccountForKeepAlive, startAccountsMonitor, getReadyAccountCount, getAccountsStatus } = await import("./usaPortal/accounts-keep-alive.js");
 
-    // Démarrer le accounts monitor (re-login proactif toutes les 2 min)
+    // Démarrer le accounts monitor (surveillance tokens — PAS de re-login automatique)
     startAccountsMonitor();
 
     // Boucle d'initialisation : enregistrer les dossiers USA et démarrer les watchers
@@ -1469,6 +1469,55 @@ async function main(): Promise<void> {
     // Init async (non-bloquant — la boucle legacy démarre en parallèle)
     initParallelWatchers().catch(err => {
       log("ERROR", `[parallel] Erreur initialisation watchers: ${err}`);
+    });
+
+    // ── Scheduler de re-login pour le mode parallèle ──────────────────────────
+    // Les comptes USA en mode parallèle ne sont plus re-login par le monitor.
+    // Le scheduler ci-dessous vérifie périodiquement si un compte est dormant
+    // (token expiré + cooldown 8-25 min terminé) et le re-login.
+    // Cela respecte les timings anti-détection de config.ts.
+    const { isAccountReadyForRelogin, performScheduledRelogin } = await import("./usaPortal/accounts-keep-alive.js");
+
+    const parallelReloginLoop = async () => {
+      while (true) {
+        // Vérifier toutes les 3-5 min (variable) si un compte doit être re-login
+        const checkInterval = 3 * 60_000 + Math.random() * 2 * 60_000;
+        await new Promise(r => setTimeout(r, checkInterval));
+
+        try {
+          const jobs = await getActiveJobs();
+          const usaJobs = jobs.filter(j =>
+            j.destination === "usa" &&
+            j.hunterConfig?.isActive === true &&
+            !pausedJobs.has(j.id) &&
+            !completedJobs.has(j.id)
+          );
+
+          for (const job of usaJobs) {
+            const username = job.hunterConfig.embassyUsername;
+            if (isAccountReadyForRelogin(username)) {
+              log("INFO", `[parallel-relogin] 🔑 ${username.slice(0, 12)}… prêt pour re-login (cooldown terminé)`);
+              const success = await performScheduledRelogin(username);
+              if (success) {
+                log("INFO", `[parallel-relogin] ✅ ${username.slice(0, 12)}… re-login réussi`);
+              } else {
+                log("WARN", `[parallel-relogin] ⏳ ${username.slice(0, 12)}… re-login refusé (cooldown/restriction en cours)`);
+              }
+              // Radio silence entre re-logins de comptes différents (2-4 min)
+              // pour éviter un pattern de logins groupés
+              const silence = 2 * 60_000 + Math.random() * 2 * 60_000;
+              await new Promise(r => setTimeout(r, silence));
+            }
+          }
+        } catch (err) {
+          log("WARN", `[parallel-relogin] Erreur: ${err}`);
+        }
+      }
+    };
+
+    // Lancer en background (non-bloquant)
+    parallelReloginLoop().catch(err => {
+      log("ERROR", `[parallel-relogin] Fatal: ${err}`);
     });
   }
 
