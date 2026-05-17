@@ -1425,21 +1425,14 @@ async function main(): Promise<void> {
       log("INFO", `[parallel] ${readyCount}/${usaJobs.length} comptes prêts (token valide)`);
 
       // 2. Démarrer le watcher OFC (pour Kinshasa = 1 seul OFC, usa:Kinshasa:323)
-      // On utilise le premier dossier tres_urgent comme watcher initial
+      // FIX-20: Essayer chaque compte par ordre d'urgence jusqu'à en trouver un
+      // avec un token valide qui peut bootstrap. Ne plus forcer le premier compte
+      // (qui peut être restreint après un redéploiement).
       const sortedByTier = [...usaJobs].sort((a, b) => {
         const ta = URGENCY_ORDER[a.urgencyTier] ?? 3;
         const tb = URGENCY_ORDER[b.urgencyTier] ?? 3;
         return ta - tb;
       });
-      const watcherJob = sortedByTier[0];
-      const watcherUsername = watcherJob.hunterConfig.embassyUsername;
-
-      // Résoudre le proxy du watcher
-      let watcherProxy: string | undefined;
-      if (watcherJob.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
-        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-        watcherProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
-      }
 
       // L'OFC key pour Kinshasa (le seul OFC USA au Congo)
       const ofcKey = makeOfcKey("usa", "Kinshasa", 323);
@@ -1461,14 +1454,38 @@ async function main(): Promise<void> {
       };
 
       // ── Bootstrap : résoudre les données OFC AVANT de démarrer le watcher ────
-      // Sans bootstrap, le watcher reçoit postUserId:0 et ne peut pas scanner.
+      // FIX-20: Essayer chaque compte (par urgence) jusqu'à trouver un bootstrap réussi.
+      // Un compte restreint ou sans token valide (re-login en cours) sera skippé.
       const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
-      const bootstrapResult = await bootstrapAccountData(watcherJob, watcherUsername);
 
-      if (!bootstrapResult.success || bootstrapResult.ofcList.length === 0) {
-        log("ERROR", `[parallel] Bootstrap échoué pour ${watcherUsername.slice(0, 12)}… — ${bootstrapResult.error ?? "aucun OFC"}`);
-        log("ERROR", `[parallel] Le watcher ne peut pas démarrer sans données OFC valides`);
+      let watcherJob: HunterJob | null = null;
+      let watcherUsername = "";
+      let bootstrapResult: Awaited<ReturnType<typeof bootstrapAccountData>> | null = null;
+
+      for (const candidateJob of sortedByTier) {
+        const candidateUsername = candidateJob.hunterConfig.embassyUsername;
+        log("INFO", `[parallel] Tentative bootstrap: ${candidateUsername.slice(0, 12)}…`);
+        const result = await bootstrapAccountData(candidateJob, candidateUsername);
+        if (result.success && result.ofcList.length > 0) {
+          watcherJob = candidateJob;
+          watcherUsername = candidateUsername;
+          bootstrapResult = result;
+          break;
+        }
+        log("WARN", `[parallel] Bootstrap échoué pour ${candidateUsername.slice(0, 12)}… — ${result.error ?? "aucun OFC"} — essai suivant...`);
+      }
+
+      if (!watcherJob || !bootstrapResult) {
+        log("ERROR", `[parallel] Bootstrap échoué pour TOUS les comptes (${sortedByTier.length}) — watcher non démarré`);
+        log("ERROR", `[parallel] Attente re-login — le relogin loop relancera le watcher`);
         return;
+      }
+
+      // Résoudre le proxy du watcher élu
+      let watcherProxy: string | undefined;
+      if (watcherJob.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
+        watcherProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
       }
 
       // Utiliser le premier OFC résolu (Kinshasa)
