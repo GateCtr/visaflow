@@ -37,6 +37,7 @@ import { startBackgroundKeepAlive, stopBackgroundKeepAlive, isBackgroundKeepAliv
 import { initProxyGuard } from "./proxy-session-guard.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
 import { makeBrightDataStickyUrl, startBrightDataKeepAlive, stopBrightDataKeepAlive } from "./brightdata-proxy.js";
+import { isAccountRestricted, getAccountRestrictionDeadline } from "./account-restriction.js";
 import { proxyPool } from "../browser.js";
 import type { HunterJob } from "../convexClient.js";
 import { botLog } from "../convexClient.js";
@@ -347,6 +348,13 @@ export function isAccountReadyForRelogin(username: string): boolean {
   const key = username.toLowerCase();
   const cached = tokenCache.get(key);
   
+  // FIX-17: Vérifier la restriction portail AVANT tout — évite les pre-flight proxy inutiles
+  // Un compte restreint (401 "Access temporarily restricted") ne doit JAMAIS tenter un login
+  // jusqu'à la date d'expiration de la restriction (~180 min).
+  if (isAccountRestricted(username)) {
+    return false;
+  }
+  
   // Si pas de token → prêt (premier login)
   if (!cached) return isAccountAllowedToBeActive(username);
   
@@ -359,7 +367,7 @@ export function isAccountReadyForRelogin(username: string): boolean {
   // Vérifier que la rotation autorise ce compte à être actif
   if (!isAccountAllowedToBeActive(username)) return false;
   
-  // Token expiré + cooldown terminé + rotation OK → prêt pour re-login
+  // Token expiré + cooldown terminé + rotation OK + pas restreint → prêt pour re-login
   return true;
 }
 

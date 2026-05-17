@@ -450,10 +450,26 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   const pred = getCurrentPredictionScore(watcherUsername);
   if (state.totalRefreshes % 5 === 0 || state.totalRefreshes <= 3) {
     console.log(
-      `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} | pred=${pred.window} | ` +
+      `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} | compte: ${watcherUsername.slice(0, 12)}… | pred=${pred.window} | ` +
       `latency=${state.lastLatencyMs}ms | subscribers=${state.subscribers.size}`,
     );
   }
+
+  // botLog pour visibilité dans l'interface admin (chaque scan)
+  botLog({
+    applicationId: firstSub.jobId,
+    step: "ofc_watcher_scan",
+    status: data.present ? "ok" : "warn",
+    data: {
+      ofcName: ofc.postName,
+      scanAccount: watcherUsername,
+      refreshNumber: state.totalRefreshes,
+      result: data.present ? `SLOT ${data.date}` : "Pas de créneau",
+      latencyMs: state.lastLatencyMs,
+      subscriberCount: state.subscribers.size,
+      predictionWindow: pred.window,
+    },
+  });
 
   if (data.present && data.date) {
     // 🚨 SLOT DÉTECTÉ!
