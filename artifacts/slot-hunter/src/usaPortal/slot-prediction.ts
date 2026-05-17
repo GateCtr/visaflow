@@ -35,7 +35,7 @@ const HOT_THRESHOLD = 0.4;
 const WARM_THRESHOLD = 0.2;
 
 /** Nombre minimum d'observations pour que la prédiction soit fiable. */
-const MIN_OBSERVATIONS = 3;
+const MIN_OBSERVATIONS = 1;
 
 /** Fenêtre de tolérance autour d'une tranche chaude (±1 tranche = ±30 min). */
 const HOT_WINDOW_TOLERANCE_SLOTS = 1;

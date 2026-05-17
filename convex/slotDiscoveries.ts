@@ -1,4 +1,4 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
@@ -332,5 +332,48 @@ export const exportForPeriod = query({
       discoveredAt: new Date(d.discoveredAt).toISOString(),
       seenCount: (d as any).seenCount ?? 1,
     }));
+  },
+});
+
+
+
+/**
+ * Retourne les timestamps de découvertes pour un office donné (7 derniers jours).
+ * Utilisé par le bot pour bootstrapper le modèle de prédiction Early Bird.
+ * Retourne tous les seenAt[] timestamps (observations individuelles) pour alimenter la heatmap.
+ */
+export const getObservationTimestamps = internalQuery({
+  args: {
+    destination: v.string(),
+    office: v.string(),
+    sinceDays: v.optional(v.number()), // par défaut 7 jours
+  },
+  handler: async (ctx, args) => {
+    const days = args.sinceDays ?? 7;
+    const since = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    const discoveries = await ctx.db
+      .query("slotDiscoveries")
+      .withIndex("by_destination_office", (q) =>
+        q.eq("destination", args.destination).eq("office", args.office)
+      )
+      .filter((q) => q.gte(q.field("discoveredAt"), since))
+      .take(1000);
+
+    // Collecter tous les timestamps individuels (seenAt[] si disponible, sinon discoveredAt)
+    const timestamps: number[] = [];
+    for (const d of discoveries) {
+      if (d.seenAt && d.seenAt.length > 0) {
+        for (const ts of d.seenAt) {
+          if (ts >= since) timestamps.push(ts);
+        }
+      } else {
+        timestamps.push(d.discoveredAt);
+      }
+    }
+
+    // Trier chronologiquement
+    timestamps.sort((a, b) => a - b);
+    return { timestamps, count: timestamps.length };
   },
 });

@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan, getBotConfigValue } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
@@ -1289,6 +1289,162 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // ─── PARALLEL MODE : OFC Watcher + Booking Race (Kinshasa) ────────────────
+  // Pilotable depuis l'admin via bot-config Convex (clé: parallel_watcher_mode).
+  // Valeur "1" = activé, tout autre chose ou absent = désactivé.
+  // Fallback sur la variable d'environnement si Convex est inaccessible.
+  let parallelMode = false;
+  try {
+    const convexValue = await getBotConfigValue("parallel_watcher_mode");
+    parallelMode = convexValue === "1";
+    if (parallelMode) {
+      log("INFO", "[parallel] Mode parallèle activé via bot-config Convex (parallel_watcher_mode=1)");
+    } else {
+      // Fallback env var (pour les tests locaux ou si Convex n'a pas encore la clé)
+      parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+      if (parallelMode) {
+        log("INFO", "[parallel] Mode parallèle activé via env PARALLEL_WATCHER_MODE=1 (fallback)");
+      }
+    }
+  } catch {
+    parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+    if (parallelMode) {
+      log("WARN", "[parallel] Convex inaccessible — fallback sur env PARALLEL_WATCHER_MODE=1");
+    }
+  }
+
+  if (parallelMode) {
+    log("INFO", "═══════════════════════════════════════════════════════════════");
+    log("INFO", "🚀 MODE PARALLÈLE ACTIVÉ (PARALLEL_WATCHER_MODE=1)");
+    log("INFO", "   → OFC Watcher partagé + Booking Race + Keep-Alive per-account");
+    log("INFO", "═══════════════════════════════════════════════════════════════");
+
+    // Importer les modules du nouveau système
+    const { startOfcWatcher, subscribeToOfcWatcher, makeOfcKey } = await import("./usaPortal/ofc-watcher.js");
+    const { runBookingRace } = await import("./usaPortal/booking-race.js");
+    const { registerAccountForKeepAlive, startAccountsMonitor, getReadyAccountCount, getAccountsStatus } = await import("./usaPortal/accounts-keep-alive.js");
+
+    // Démarrer le accounts monitor (re-login proactif toutes les 2 min)
+    startAccountsMonitor();
+
+    // Boucle d'initialisation : enregistrer les dossiers USA et démarrer les watchers
+    let watcherInitialized = false;
+
+    const initParallelWatchers = async () => {
+      let jobs: HunterJob[];
+      try {
+        jobs = await getActiveJobs();
+      } catch (err) {
+        log("ERROR", `[parallel] Échec récupération jobs: ${err} — retry dans 30s`);
+        return;
+      }
+
+      const usaJobs = jobs.filter(j =>
+        j.destination === "usa" &&
+        j.hunterConfig?.isActive === true &&
+        !pausedJobs.has(j.id) &&
+        !completedJobs.has(j.id) &&
+        !!j.portalUrl,
+      );
+
+      if (usaJobs.length === 0) {
+        log("INFO", "[parallel] Aucun dossier USA actif — mode legacy uniquement");
+        return;
+      }
+
+      log("INFO", `[parallel] ${usaJobs.length} dossier(s) USA actif(s) — inscription keep-alive...`);
+
+      // 1. Inscrire chaque compte pour le keep-alive permanent
+      for (const job of usaJobs) {
+        await registerAccountForKeepAlive(job);
+      }
+
+      const readyCount = getReadyAccountCount();
+      log("INFO", `[parallel] ${readyCount}/${usaJobs.length} comptes prêts (token valide)`);
+
+      // 2. Démarrer le watcher OFC (pour Kinshasa = 1 seul OFC, usa:Kinshasa:323)
+      // On utilise le premier dossier tres_urgent comme watcher initial
+      const sortedByTier = [...usaJobs].sort((a, b) => {
+        const ta = URGENCY_ORDER[a.urgencyTier] ?? 3;
+        const tb = URGENCY_ORDER[b.urgencyTier] ?? 3;
+        return ta - tb;
+      });
+      const watcherJob = sortedByTier[0];
+      const watcherUsername = watcherJob.hunterConfig.embassyUsername;
+
+      // Résoudre le proxy du watcher
+      let watcherProxy: string | undefined;
+      if (watcherJob.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
+        watcherProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
+      }
+
+      // L'OFC key pour Kinshasa (le seul OFC USA au Congo)
+      const ofcKey = makeOfcKey("usa", "Kinshasa", 323);
+
+      // Callback de slot détecté → lancer la booking race
+      const onSlotDetected = async (event: any, subscribers: any[]) => {
+        log("INFO", `[parallel] 🚨 SLOT BROADCAST → ${subscribers.length} participants en course!`);
+        const raceResult = await runBookingRace(event, subscribers);
+        if (raceResult.successCount > 0) {
+          log("INFO", `[parallel] 🏆 BOOKING RÉUSSI par ${raceResult.winnerJobId?.slice(-6)} en ${Math.round(raceResult.durationMs / 1000)}s`);
+          // Marquer le winner comme completed
+          if (raceResult.winnerJobId) {
+            completedJobs.add(raceResult.winnerJobId);
+            pausedJobs.add(raceResult.winnerJobId);
+          }
+        } else {
+          log("WARN", `[parallel] ❌ Booking race échouée — slot expiré ou tous les participants en erreur`);
+        }
+      };
+
+      // Démarrer le watcher avec l'OFC Kinshasa
+      startOfcWatcher(
+        ofcKey,
+        { postUserId: 0, postName: "Kinshasa", officeType: "OFC" }, // postUserId sera résolu au premier scan
+        323, // missionId USA
+        watcherUsername,
+        watcherProxy,
+        onSlotDetected,
+      );
+
+      // 3. Inscrire TOUS les dossiers comme subscribers du watcher
+      for (const job of usaJobs) {
+        const username = job.hunterConfig.embassyUsername;
+        let subProxy: string | undefined;
+        if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+          const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
+          subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+        }
+
+        subscribeToOfcWatcher(ofcKey, {
+          jobId: job.id,
+          username,
+          proxyUrl: subProxy,
+          job,
+          appDetails: {
+            applicantId: 0, // Sera résolu au premier scan
+            applicationId: job.hunterConfig.portalApplicationId ?? "",
+            visaType: "NIV",
+            visaClass: "",
+          },
+          rescheduleYN: job.hunterConfig.rescheduleMode,
+          dateFrom: job.hunterConfig.slotDateFrom,
+          dateDeadline: job.hunterConfig.slotDateDeadline,
+        });
+      }
+
+      watcherInitialized = true;
+      log("INFO", `[parallel] ✅ Watcher OFC Kinshasa démarré — ${usaJobs.length} subscriber(s)`);
+      log("INFO", `[parallel] Status comptes: ${JSON.stringify(getAccountsStatus())}`);
+    };
+
+    // Init async (non-bloquant — la boucle legacy démarre en parallèle)
+    initParallelWatchers().catch(err => {
+      log("ERROR", `[parallel] Erreur initialisation watchers: ${err}`);
+    });
+  }
+
   while (true) {
     try {
       const pendingTest = await getPendingBotTest();
@@ -1324,7 +1480,13 @@ async function main(): Promise<void> {
     // Vérification quotidienne du bundle portail USA (non bloquante)
     await checkPortalBundleKey(jobs);
 
-    const due = findNextDueJob(jobs);
+    // En mode parallèle, exclure les dossiers USA de la boucle legacy
+    // (ils sont gérés par le watcher OFC + booking race)
+    const legacyJobs = parallelMode
+      ? jobs.filter(j => j.destination !== "usa")
+      : jobs;
+
+    const due = findNextDueJob(legacyJobs);
 
     if (!due) {
       const waitMs = getTimeUntilNextDue(jobs);

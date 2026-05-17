@@ -5,6 +5,14 @@ import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import {
+  getStepLabel,
+  getStepCategory,
+  CATEGORY_META as CATEGORY_META_SHARED,
+  getNarrativePreview,
+  formatDataValue,
+  getGenericPreview,
+} from "@/lib/bot-log-labels";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -53,87 +61,8 @@ const SCAN_META = {
   error:     { label: "Erreur",         dot: "bg-red-500",   badge: "bg-red-50 text-red-700 border-red-200",         icon: <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> },
 };
 
-// Step name → human-readable label (couvre tout le cycle bot USA + CEV)
-const STEP_LABELS: Record<string, string> = {
-  // ── USA Portal — Cycle complet ──
-  login: "🔑 Connexion portail",
-  session_start: "🚀 Début session",
-  session_end: "🏁 Fin session",
-  appointment_status: "📋 Statut dossier",
-  payment_check: "💳 Vérification paiement MRV",
-  ofc_list: "🏛️ Liste bureaux consulaires",
-  scan: "🔄 Scan créneaux",
-  scan_cutoff: "⏰ Arrêt scan (cutoff token)",
-  cooldown: "⏳ Cooldown entre sessions",
-  slots_found: "📅 Créneau détecté !",
-  booking_attempt: "📝 Tentative réservation",
-  booking_success: "✅ Réservation confirmée",
-  booking_fail: "❌ Réservation échouée",
-  confirmation_letter: "📄 Lettre de confirmation",
-  not_found: "🔍 Aucun créneau disponible",
-  error: "⚠️ Erreur",
-  human_behavior: "🧠 Comportement humain",
-  anti_detection: "🛡️ Anti-détection",
-  execution_time: "⏱️ Temps d'exécution",
-  // ── USA Portal — Erreurs spécifiques ──
-  rate_limit: "⛔ Rate limit (429)",
-  blocked: "🚫 Compte bloqué (403)",
-  restricted: "🔒 Compte restreint (401)",
-  token_expired: "🔄 Token expiré",
-  restriction_skip: "🔒 Cycle ignoré (compte restreint)",
-  // ── USA Portal — Proxy & réseau ──
-  keep_alive: "🏓 Keep-alive session",
-  proxy_preflight_abort: "🛑 Proxy mort — session avortée",
-  proxy_health_check: "🌐 Vérification santé proxy",
-  // ── USA Portal — Retry 409 (conflit booking) ──
-  "409_retry_start": "🔁 Retry 409 — conflit créneau",
-  "409_retry_exhausted": "💨 Retry 409 épuisé",
-  "409_retry_success": "✅ Retry 409 réussi !",
-  // ── USA Portal — Anciens labels compatibles ──
-  usa_login: "🔑 USA Login",
-  usa_check_slots: "🔄 USA Scan créneaux",
-  usa_slot_found: "📅 USA Créneau trouvé !",
-  usa_no_slots: "🔍 USA Aucun créneau",
-  usa_error: "⚠️ USA Erreur",
-  // ── CEV Portal — Setup HTTP ──
-  cev_http_setup_start: "🔧 Setup HTTP",
-  cev_http_login_ok: "🔑 Login VOWINT",
-  cev_http_login_failed: "❌ Login échoué",
-  cev_http_vowint_cache_hit: "💨 Cache VOWINT",
-  cev_http_app_id_found: "🆔 AppID trouvé",
-  cev_http_integration_url: "🔗 URL Intégration",
-  cev_http_cev_cookie_ok: "🍪 Cookie CEV",
-  cev_http_hcaptcha_start: "🤖 hCaptcha",
-  cev_http_hcaptcha_solved: "✅ hCaptcha résolu",
-  cev_http_hcaptcha_failed: "❌ hCaptcha échoué",
-  cev_http_captcha_response: "📨 Réponse captcha",
-  cev_http_captcha_submit_failed: "❌ Captcha échoué",
-  cev_http_validuntil_debug: "⏰ ValidUntil",
-  cev_http_redirect_discovery: "🔀 Redirect discovery",
-  cev_http_setup_complete: "✅ Setup terminé",
-  cev_http_setup_error: "❌ Setup erreur",
-  cev_http_no_integration_url: "⚠️ URL manquante",
-  cev_http_no_cev_cookie: "⚠️ Cookie absent",
-  cev_http_no_app_id: "⚠️ AppID absent",
-  cev_captcha_submit: "📨 Captcha envoi",
-  cev_redirect_probe: "🔀 Probe redirect",
-  cev_no_availability: "🔍 Pas de créneaux",
-  cev_slots_available: "📅 Créneaux dispo !",
-  cev_session_expired: "⏰ Session expirée",
-  cev_poll_result: "📊 Poll résultat",
-  cev_poll_no_slots: "🔍 Poll: aucun slot",
-  cev_slots_raw_response: "📦 Réponse brute",
-  // ── CEV Portal — Booking ──
-  cev_http_booking_start: "📝 Booking début",
-  cev_http_booking_confirmed: "✅ Booking confirmé !",
-  cev_http_selectslot_fetched: "📄 Page SelectSlot",
-  cev_http_html_discovery: "🔎 Discovery HTML",
-  cev_http_available_slots: "📅 Slots API",
-  cev_http_slot_selected: "✅ Slot sélectionné",
-  cev_http_submit_attempt: "📤 Soumission",
-  cev_http_submit_response: "📥 Réponse soumission",
-  cev_http_booking_crash: "💥 Booking crash",
-};
+// Step name → human-readable label — now centralized in @/lib/bot-log-labels
+// (imported as getStepLabel)
 
 // Keys that contain sensitive or long data (show truncated by default)
 const LONG_KEYS = new Set(["htmlRaw", "htmlPreview", "bodyPreview", "rawJsonPreview", "responsePreview", "visibleText"]);
@@ -174,55 +103,10 @@ function relativeTime(ts: number): string {
 
 const PAGE_SIZE = 20;
 
-// ─── Catégorisation des steps pour visual grouping ────────────────────────────
-type LogCategory = "work" | "network" | "error" | "behavior";
+// ─── Catégorisation des steps — centralisée dans @/lib/bot-log-labels ─────────
+// (imported as getStepCategory, CATEGORY_META_SHARED)
 
-const STEP_CATEGORIES: Record<string, LogCategory> = {
-  // Travail principal
-  login: "work", session_start: "work", session_end: "work",
-  appointment_status: "work", payment_check: "work", ofc_list: "work",
-  scan: "work", slots_found: "work", booking_attempt: "work",
-  booking_success: "work", booking_fail: "work", confirmation_letter: "work",
-  not_found: "work", usa_login: "work", usa_check_slots: "work",
-  usa_slot_found: "work", usa_no_slots: "work",
-  // CEV travail
-  cev_http_setup_start: "work", cev_http_login_ok: "work", cev_http_app_id_found: "work",
-  cev_http_setup_complete: "work", cev_slots_available: "work",
-  cev_http_booking_start: "work", cev_http_booking_confirmed: "work",
-  cev_http_slot_selected: "work", cev_http_submit_attempt: "work",
-  cev_http_submit_response: "work", cev_no_availability: "work",
-  cev_poll_result: "work", cev_poll_no_slots: "work",
-  // Réseau / Proxy
-  keep_alive: "network", proxy_preflight_abort: "network", proxy_health_check: "network",
-  cev_http_vowint_cache_hit: "network", cev_http_integration_url: "network",
-  cev_http_cev_cookie_ok: "network", cev_http_redirect_discovery: "network",
-  cev_redirect_probe: "network", cev_http_selectslot_fetched: "network",
-  // Erreurs
-  error: "error", rate_limit: "error", blocked: "error", restricted: "error",
-  token_expired: "error", restriction_skip: "error", scan_cutoff: "error",
-  usa_error: "error", booking_fail: "error",
-  cev_http_login_failed: "error", cev_http_setup_error: "error",
-  cev_http_hcaptcha_failed: "error", cev_http_captcha_submit_failed: "error",
-  cev_http_no_integration_url: "error", cev_http_no_cev_cookie: "error",
-  cev_http_no_app_id: "error", cev_session_expired: "error",
-  cev_http_booking_crash: "error", "409_retry_exhausted": "error",
-  // Comportement humain / anti-détection
-  human_behavior: "behavior", anti_detection: "behavior", execution_time: "behavior",
-  cooldown: "behavior", "409_retry_start": "behavior", "409_retry_success": "behavior",
-  cev_http_hcaptcha_start: "behavior", cev_http_hcaptcha_solved: "behavior",
-  cev_http_captcha_response: "behavior", cev_captcha_submit: "behavior",
-};
-
-const CATEGORY_META: Record<LogCategory, { label: string; border: string; bg: string }> = {
-  work:     { label: "Travail",     border: "border-l-blue-400",   bg: "" },
-  network:  { label: "Réseau",      border: "border-l-teal-400",   bg: "bg-teal-50/30" },
-  error:    { label: "Erreur",      border: "border-l-red-400",    bg: "bg-red-50/20" },
-  behavior: { label: "Comportement", border: "border-l-purple-300", bg: "bg-purple-50/20" },
-};
-
-function getStepCategory(step: string): LogCategory {
-  return STEP_CATEGORIES[step] ?? "work";
-}
+const CATEGORY_META = CATEGORY_META_SHARED;
 
 // Determine if a log is USA or CEV based on step name
 function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" | "other" {
@@ -299,14 +183,15 @@ function LogDataValue({ k, val, isExpanded }: { k: string; val: unknown; isExpan
     );
   }
 
-  // JSON objects/arrays — pretty print
+  // JSON objects/arrays — pretty print or use formatDataValue for compact view
   if ((typeof val === "object" && val !== null) || (typeof val === "string" && (val.startsWith("{") || val.startsWith("[")))) {
     try {
       const obj = typeof val === "string" ? JSON.parse(val) : val;
-      const pretty = JSON.stringify(obj, null, 2);
-      if (pretty.length > 200 && !isExpanded) {
-        return <span className="text-slate-600 font-mono text-[10px]">{pretty.slice(0, 120)}...</span>;
+      if (!isExpanded) {
+        // Compact human-readable display (prevents [object Object])
+        return <span className="text-slate-600 font-mono text-[10px]">{formatDataValue(k, obj)}</span>;
       }
+      const pretty = JSON.stringify(obj, null, 2);
       return (
         <pre className="text-[10px] font-mono text-slate-600 bg-slate-100 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
           {pretty}
@@ -652,7 +537,7 @@ function BotLogsTab() {
                 const meta   = STATUS_META[status] ?? STATUS_META.fail;
                 const flag   = log.appDestination ? (DEST_FLAGS[log.appDestination] ?? "\u{1F30D}") : "";
                 const name   = [log.appFirstName, log.appLastName].filter(Boolean).join(" ") || "—";
-                const stepLabel = STEP_LABELS[log.step] || log.step.replace(/_/g, " ");
+                const stepLabel = getStepLabel(log.step);
                 const category = getStepCategory(log.step);
                 const catMeta = CATEGORY_META[category];
 
@@ -712,7 +597,7 @@ function BotLogsTab() {
 
                     {hasData && !isExp && (
                       <div className="ml-6 mt-1">
-                        <InlinePreview data={raw} />
+                        <InlinePreview data={raw} step={log.step} />
                       </div>
                     )}
                   </div>
@@ -782,61 +667,29 @@ function BotLogsTab() {
     </div>
   );
 }
-/** Show a compact inline preview of the most relevant data fields */
-function InlinePreview({ data }: { data: string }) {
+/** Show a compact inline preview — narrative first, fallback to generic */
+function InlinePreview({ data, step }: { data: string; step: string }) {
   let parsed: Record<string, unknown> | null = null;
   try { parsed = JSON.parse(data) as Record<string, unknown>; } catch { return null; }
   if (!parsed) return null;
 
-  // Pick the most interesting fields to show inline
-  const picks: string[] = [];
-  const priorityKeys = [
-    // USA bot cycle fields
-    "ofc", "date", "time", "slotId", "appointmentId", "username", "applicationId",
-    "flow", "phase", "count", "offices", "paymentStatus", "visaClass",
-    "message", "responseMsg", "errorMessage",
-    // CEV fields
-    "error", "finalDestinationUrl", "slotsAvailable", "isNoAvailability",
-    "slotCount", "hasSlots", "httpStatus", "confirmationCode",
-    "bookedDate", "bookedTime", "redirectUrl", "status", "remainingSeconds",
-    // Timing fields
-    "durationMs", "restDurationMs", "nextBurstScans", "type",
-  ];
-
-  for (const k of priorityKeys) {
-    if (k in parsed && parsed[k] !== null && parsed[k] !== undefined) {
-      const v = parsed[k];
-      let display: string;
-      if (typeof v === "boolean") display = v ? "✓" : "✗";
-      else if (typeof v === "number") {
-        // Format durations nicely
-        if (k.toLowerCase().includes("ms") || k === "durationMs" || k === "restDurationMs") {
-          display = (v / 1000).toFixed(1) + "s";
-        } else {
-          display = String(v);
-        }
-      }
-      else if (typeof v === "string") display = v.length > 50 ? v.slice(0, 50) + "…" : v;
-      else if (Array.isArray(v)) {
-        // Show array items compactly (e.g. offices list)
-        const items = v.map((item: unknown) => {
-          if (typeof item === "object" && item !== null && "name" in item) return (item as { name: string }).name;
-          if (typeof item === "string") return item;
-          return JSON.stringify(item);
-        });
-        display = items.length <= 3 ? items.join(", ") : items.slice(0, 3).join(", ") + ` +${items.length - 3}`;
-      }
-      else display = JSON.stringify(v).slice(0, 50);
-      picks.push(`${k}=${display}`);
-    }
-    if (picks.length >= 4) break;
+  // Try narrative preview first
+  const narrative = getNarrativePreview(step, parsed);
+  if (narrative) {
+    return (
+      <div className="text-[11px] text-slate-600 font-medium truncate">
+        {narrative}
+      </div>
+    );
   }
 
-  if (picks.length === 0) return null;
+  // Fallback to generic key=value preview
+  const preview = getGenericPreview(parsed);
+  if (!preview) return null;
 
   return (
     <div className="text-[10px] text-slate-500 font-mono truncate">
-      {picks.join("  \u00B7  ")}
+      {preview}
     </div>
   );
 }

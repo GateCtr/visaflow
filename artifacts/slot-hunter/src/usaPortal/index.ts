@@ -6,9 +6,34 @@
 export { USA_ENC_SEC_KEY, updateAesKey, encryptPortalCredentials } from "./crypto.js";
 export type { SessionResult, UsaSession, UsaAppointmentRequest } from "./types.js";
 export { isAccountRestricted } from "./account-restriction.js";
-export { makeIproyalStickyUrl, setUsaSessionProxy, rotateIproyalSession } from "./usa-http.js";
+export { makeIproyalStickyUrl, setUsaSessionProxy, getLegacyProxyUrl, rotateIproyalSession } from "./usa-http.js";
+export { createSessionFetcher, type UsaFetcher, type UsaFetcherConfig } from "./usa-fetcher.js";
+export {
+  startOfcWatcher,
+  stopOfcWatcher,
+  subscribeToOfcWatcher,
+  unsubscribeFromOfcWatcher,
+  hasActiveWatcher,
+  getWatcherStatus,
+  failoverWatcher,
+  makeOfcKey,
+  stopAllWatchers,
+  getActiveWatcherCount,
+  type OfcWatcherSubscriber,
+  type SlotDetectedEvent,
+  type SlotDetectedCallback,
+} from "./ofc-watcher.js";
+export { runBookingRace, type BookingRaceResult } from "./booking-race.js";
 export { makeBrightDataStickyUrl, rotateBrightDataSession, startBrightDataKeepAlive, stopBrightDataKeepAlive, stopAllBrightDataKeepAlives } from "./brightdata-proxy.js";
 export { startBackgroundKeepAlive, stopBackgroundKeepAlive, stopAllBackgroundKeepAlives } from "./background-keep-alive.js";
+export {
+  registerAccountForKeepAlive,
+  unregisterAccountFromKeepAlive,
+  startAccountsMonitor,
+  stopAccountsMonitor,
+  getReadyAccountCount,
+  getAccountsStatus,
+} from "./accounts-keep-alive.js";
 export { downloadUsaConfirmationPdf } from "./scan-slot-booking.js";
 export { preFlightProxyCheck } from "./proxy-health-check.js";
 export { generateCognitoEncodedData, detectCognitoEncodedDataUsage } from "./cognito-telemetry.js";

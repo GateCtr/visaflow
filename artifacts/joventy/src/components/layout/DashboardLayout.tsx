@@ -21,6 +21,7 @@ import {
   BarChart2,
   CalendarDays,
   Terminal,
+  Settings,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -75,6 +76,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/cev-sessions", label: "Sessions CEV", icon: KeyRound },
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
     { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal, badge: botFailCount },
+    { href: "/admin/bot-settings", label: "Config Bot", icon: Settings },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;

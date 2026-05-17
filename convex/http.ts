@@ -1183,4 +1183,40 @@ http.route({
   }),
 });
 
+// ─── Slot Prediction: historical observation timestamps for Early Bird bootstrap ──
+http.route({
+  path: "/hunter/slot-discovery/timestamps",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const destination = url.searchParams.get("destination");
+    const office = url.searchParams.get("office");
+
+    if (!destination || !office) {
+      return new Response("Missing required query params: destination, office", { status: 400 });
+    }
+
+    try {
+      const result = await ctx.runQuery(internal.slotDiscoveries.getObservationTimestamps, {
+        destination,
+        office,
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("hunter/slot-discovery/timestamps error:", msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

@@ -7,6 +7,16 @@ import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTie
 import { getUploadDocs } from "@convex/visaDocuments";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly } from "@/lib/format";
+import {
+  getStepLabel,
+  getStepCategory,
+  CATEGORY_META,
+  getNarrativePreview,
+  formatDataValue,
+  findLoginDuplicates,
+  calculateSessionInfo,
+  getGenericPreview,
+} from "@/lib/bot-log-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,6 +59,8 @@ import {
   Link,
   Copy,
   Check,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 function NextSessionCountdown({ endedAt, urgencyTier, isActive }: { endedAt: string; urgencyTier: string; isActive: boolean }) {
@@ -1975,55 +1987,6 @@ export default function AdminApplicationDetail() {
 
         {/* ===== BOT LOG TIMELINE ===== */}
         {botLogs.length > 0 && (() => {
-          const stepLabels: Record<string, string> = {
-            // ── USA Portal — Cycle complet ──
-            login: "Connexion portail",
-            session_start: "Début session",
-            session_end: "Fin session",
-            appointment_status: "Statut dossier",
-            payment_check: "Vérification paiement MRV",
-            ofc_list: "Liste bureaux consulaires",
-            scan: "Scan créneaux",
-            scan_cutoff: "Arrêt scan (cutoff token)",
-            cooldown: "Cooldown entre sessions",
-            slots_found: "Créneau détecté !",
-            booking_attempt: "Tentative de réservation",
-            booking_success: "Réservation confirmée",
-            booking_fail: "Réservation échouée",
-            confirmation_letter: "Lettre de confirmation",
-            not_found: "Aucun créneau disponible",
-            error: "Erreur",
-            human_behavior: "Comportement humain",
-            anti_detection: "Anti-détection",
-            execution_time: "Temps d'exécution",
-            // ── Erreurs spécifiques ──
-            rate_limit: "Rate limit (429)",
-            blocked: "Compte bloqué (403)",
-            restricted: "Compte restreint (401)",
-            token_expired: "Token expiré",
-            restriction_skip: "Cycle ignoré (compte restreint)",
-            // ── Proxy & réseau ──
-            keep_alive: "Keep-alive session",
-            proxy_preflight_abort: "Proxy mort — session avortée",
-            proxy_health_check: "Vérification santé proxy",
-            // ── Retry 409 (conflit booking) ──
-            "409_retry_start": "Retry 409 — conflit créneau",
-            "409_retry_exhausted": "Retry 409 épuisé",
-            "409_retry_success": "Retry 409 réussi !",
-          };
-          const stepIcons: Record<string, string> = {
-            login: "🔑", session_start: "🚀", session_end: "🏁",
-            appointment_status: "📋", payment_check: "💳",
-            ofc_list: "🏛️", scan: "🔄", scan_cutoff: "⏰", cooldown: "⏳",
-            slots_found: "📅", booking_attempt: "📝", booking_success: "✅",
-            booking_fail: "❌", confirmation_letter: "📄", not_found: "🔍",
-            rate_limit: "⛔", blocked: "🚫", restricted: "🔒",
-            token_expired: "🔄", error: "⚠️",
-            human_behavior: "🧠", anti_detection: "🛡️", execution_time: "⏱️",
-            restriction_skip: "🔒", keep_alive: "🏓",
-            proxy_preflight_abort: "🛑", proxy_health_check: "🌐",
-            "409_retry_start": "🔁", "409_retry_exhausted": "💨", "409_retry_success": "✅",
-          };
           const dotColors: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-400", fail: "bg-red-500" };
           const badgeColors: Record<string, string> = {
             ok: "bg-green-50 text-green-700 border-green-200",
@@ -2032,9 +1995,17 @@ export default function AdminApplicationDetail() {
           };
           const badgeLabels: Record<string, string> = { ok: "OK", warn: "Attention", fail: "Erreur" };
 
+          // Deduplicate login entries
+          const loginDuplicates = findLoginDuplicates(botLogs as Array<{ _id: string; step: string; ts: number; data?: string | null }>);
+
+          // Session bar
+          const sessionInfo = calculateSessionInfo(botLogs as Array<{ step: string; ts: number; data?: string | null }>);
+
           const allSteps: string[] = Array.from(new Set<string>(botLogs.map((l: Doc<"botLogs">) => l.step))).sort();
 
           const filtered = botLogs.filter((log: Doc<"botLogs">) => {
+            // Hide login duplicates
+            if (loginDuplicates.has(log._id)) return false;
             const matchStep = logStepFilter === "" || log.step.toLowerCase().includes(logStepFilter.toLowerCase());
             const matchStatus = logStatusFilter === "" || log.status === logStatusFilter;
             return matchStep && matchStatus;
@@ -2066,6 +2037,7 @@ export default function AdminApplicationDetail() {
                 <h2 className="font-bold text-primary text-base">Journal du Bot</h2>
                 <span className="text-xs text-muted-foreground">
                   {filtered.length}/{botLogs.length} événement{botLogs.length > 1 ? "s" : ""}
+                  {loginDuplicates.size > 0 && <span className="text-slate-400"> ({loginDuplicates.size} doublons masqués)</span>}
                 </span>
                 {(logStepFilter || logStatusFilter) && (
                   <button
@@ -2114,6 +2086,25 @@ export default function AdminApplicationDetail() {
                 </AlertDialog>
               </div>
 
+              {/* Session progress bar */}
+              {sessionInfo && (
+                <div className="mb-4 px-3 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="text-xs font-semibold text-indigo-700">{sessionInfo.durationDisplay}</span>
+                    {sessionInfo.isActive && (
+                      <span className="ml-auto text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium animate-pulse">EN COURS</span>
+                    )}
+                  </div>
+                  <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ${sessionInfo.isActive ? "bg-indigo-500" : "bg-indigo-400"}`}
+                      style={{ width: `${Math.round(sessionInfo.progress * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Filters */}
               <div className="flex flex-wrap gap-2 mb-4">
                 <div className="relative flex-1 min-w-[180px]">
@@ -2154,7 +2145,7 @@ export default function AdminApplicationDetail() {
               {pageSlice.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Aucun événement correspondant aux filtres</p>
               ) : (
-                <div className="relative border-l-2 border-slate-100 ml-3 space-y-4 pb-2">
+                <div className="relative border-l-2 border-slate-100 ml-3 space-y-3 pb-2">
                   {pageSlice.map((log: Doc<"botLogs">) => {
                     let parsedData: Record<string, unknown> | null = null;
                     try {
@@ -2163,25 +2154,28 @@ export default function AdminApplicationDetail() {
 
                     const isExpanded = logExpanded.has(log._id);
                     const rawStr = log.data ?? "";
-                    const isBig = rawStr.length > 300;
+                    const hasData = rawStr.length > 0;
+                    const category = getStepCategory(log.step);
+                    const catMeta = CATEGORY_META[category];
+                    const narrativePreview = getNarrativePreview(log.step, parsedData);
 
                     return (
-                      <div key={log._id} className="relative pl-6">
-                        <div className={`absolute -left-[7px] top-1.5 w-3 h-3 rounded-full ${dotColors[log.status] ?? "bg-slate-400"} border-2 border-white`} />
+                      <div key={log._id} className={`relative pl-6 border-l-2 -ml-[2px] ${catMeta.border} ${catMeta.bg} rounded-r-lg py-1.5 pr-2`}>
+                        <div className={`absolute -left-[7px] top-3 w-3 h-3 rounded-full ${dotColors[log.status] ?? "bg-slate-400"} border-2 border-white`} />
 
                         <div className="flex items-start gap-2 flex-wrap">
                           <span className="text-sm font-medium text-slate-800">
-                            {stepIcons[log.step] ?? "•"} {stepLabels[log.step] ?? log.step}
+                            {getStepLabel(log.step)}
                           </span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${badgeColors[log.status] ?? ""}`}>
                             {badgeLabels[log.status] ?? log.status}
                           </span>
-                          {isBig && (
+                          {hasData && (
                             <button
                               onClick={() => toggleExpand(log._id)}
-                              className="text-[10px] text-purple-600 hover:text-purple-800 underline underline-offset-2 ml-1"
+                              className="text-slate-400 hover:text-slate-700 transition-colors ml-1"
                             >
-                              {isExpanded ? "Réduire" : `Voir tout (${rawStr.length} cars)`}
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                             </button>
                           )}
                           {log.data && (
@@ -2195,7 +2189,21 @@ export default function AdminApplicationDetail() {
                           )}
                         </div>
 
-                        {/* Countdown to next session — affiché uniquement pour le PREMIER session_end (le plus récent) */}
+                        {/* Narrative inline preview (always visible) */}
+                        {narrativePreview && !isExpanded && (
+                          <p className="mt-1 text-[11px] text-slate-600 font-medium leading-relaxed">
+                            {narrativePreview}
+                          </p>
+                        )}
+
+                        {/* Generic preview fallback */}
+                        {!narrativePreview && parsedData && !isExpanded && (
+                          <p className="mt-1 text-[10px] text-slate-500 font-mono truncate">
+                            {getGenericPreview(parsedData)}
+                          </p>
+                        )}
+
+                        {/* Countdown to next session */}
                         {log.step === "session_end" && log._id === (pageSlice.find((l: Doc<"botLogs">) => l.step === "session_end")?._id) && (
                           <NextSessionCountdown
                             endedAt={parsedData?.endedAt as string | undefined ?? new Date(log.ts).toISOString()}
@@ -2204,44 +2212,28 @@ export default function AdminApplicationDetail() {
                           />
                         )}
 
-                        {parsedData && (
-                          <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-0.5 border border-slate-100">
-                            {Object.entries(parsedData).map(([k, val]) => {
-                              let strVal: string;
-                              if (Array.isArray(val)) {
-                                // Tableau d'objets → extraire le champ "name" ou "postName" si disponible
-                                strVal = (val as unknown[]).map((item) => {
-                                  if (typeof item === "string" || typeof item === "number") return String(item);
-                                  if (typeof item === "object" && item !== null) {
-                                    const obj = item as Record<string, unknown>;
-                                    return (obj.name ?? obj.postName ?? obj.label ?? JSON.stringify(item)) as string;
-                                  }
-                                  return String(item);
-                                }).join(", ");
-                              } else if (typeof val === "object" && val !== null) {
-                                strVal = JSON.stringify(val);
-                              } else {
-                                strVal = String(val);
-                              }
-                              const isLong = strVal.length > 200;
-                              const display = isLong && !isExpanded ? strVal.slice(0, 200) + "…" : strVal;
-                              return (
-                                <div key={k} className="flex gap-1.5 flex-wrap">
-                                  <span className="text-slate-400 font-medium shrink-0">{k}:</span>
-                                  <span className="text-slate-700 break-all font-mono text-[10px] leading-relaxed">{display}</span>
-                                </div>
-                              );
-                            })}
+                        {/* Expanded data view — formatted */}
+                        {isExpanded && parsedData && (
+                          <div className="mt-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 space-y-1 border border-slate-100">
+                            {Object.entries(parsedData).map(([k, val]) => (
+                              <div key={k} className="flex gap-1.5 flex-wrap">
+                                <span className="text-slate-400 font-medium shrink-0">{k}:</span>
+                                <span className="text-slate-700 break-all font-mono text-[10px] leading-relaxed">
+                                  {formatDataValue(k, val)}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         )}
 
-                        {!parsedData && log.data && (
-                          <div className="mt-1.5 text-[10px] font-mono text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 break-all leading-relaxed">
-                            {isBig && !isExpanded ? log.data.slice(0, 300) + "…" : log.data}
+                        {/* Raw non-JSON data */}
+                        {isExpanded && !parsedData && log.data && (
+                          <div className="mt-2 text-[10px] font-mono text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 break-all leading-relaxed">
+                            {log.data}
                           </div>
                         )}
 
-                        <p className="text-xs text-muted-foreground mt-1">{formatDate(log.ts)}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">{formatDate(log.ts)}</p>
                       </div>
                     );
                   })}
