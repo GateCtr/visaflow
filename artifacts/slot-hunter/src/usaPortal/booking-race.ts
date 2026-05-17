@@ -160,9 +160,26 @@ async function participateInRace(
   const logPrefix = `[race:${username.slice(0, 8)}]`;
 
   // 1. Vérifier que le token est en cache et valide
-  const cached = tokenCache.get(username.toLowerCase());
+  //    Si le token est expiré (compte en repos), tenter un re-login d'urgence.
+  //    Le slot reste dispo ~30-60s, le login prend ~3-5s → acceptable.
+  let cached = tokenCache.get(username.toLowerCase());
   if (!cached || Date.now() >= cached.expiresAt) {
-    throw new Error("TOKEN_EXPIRED — pas de re-login pendant la race");
+    console.log(`${logPrefix} ⚡ Token expiré — re-login d'urgence pour la race...`);
+    try {
+      const { getUsaSession } = await import("./usa-session.js");
+      const session = await getUsaSession(username, job.hunterConfig.embassyPassword);
+      if (!session) {
+        throw new Error("TOKEN_EXPIRED — re-login d'urgence échoué (cooldown/restriction)");
+      }
+      cached = tokenCache.get(username.toLowerCase());
+      if (!cached || Date.now() >= cached.expiresAt) {
+        throw new Error("TOKEN_EXPIRED — re-login réussi mais token invalide");
+      }
+      console.log(`${logPrefix} ✅ Re-login d'urgence réussi — participation à la race!`);
+    } catch (loginErr) {
+      const msg = loginErr instanceof Error ? loginErr.message : String(loginErr);
+      throw new Error(`TOKEN_EXPIRED — ${msg}`);
+    }
   }
 
   // 2. Construire la session à partir du cache
