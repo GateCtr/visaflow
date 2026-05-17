@@ -34,6 +34,7 @@ export const STEP_LABELS: Record<string, string> = {
   continuous_refresh_slot_detected: "🎉 CRÉNEAU DÉTECTÉ pendant le refresh !",
 
   // ── USA Portal — Erreurs spécifiques ──
+  session_skip: "⏭️ Session ignorée",
   rate_limit: "⛔ Rate limit (429)",
   blocked: "🚫 Compte bloqué (403)",
   restricted: "🔒 Compte restreint (401)",
@@ -130,6 +131,7 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   // Erreurs
   error: "error", rate_limit: "error", blocked: "error", restricted: "error",
   token_expired: "error", restriction_skip: "error", scan_cutoff: "error",
+  session_skip: "error",
   usa_error: "error",
   cev_http_login_failed: "error", cev_http_setup_error: "error",
   cev_http_hcaptcha_failed: "error", cev_http_captcha_submit_failed: "error",
@@ -181,11 +183,20 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
       const num = data.windowNumber ?? "?";
       const refreshes = data.windowRefreshes ?? "?";
       const duration = data.windowDurationSec ?? "?";
-      const durationMin = typeof duration === "number" ? Math.round(duration / 60) : duration;
+      let durationStr: string;
+      if (typeof duration === "number") {
+        const mins = Math.floor(duration / 60);
+        const secs = Math.round(duration % 60);
+        durationStr = mins > 0 ? `${mins}min${secs > 0 ? ` ${secs}s` : ""}` : `${secs}s`;
+      } else if (typeof duration === "string") {
+        durationStr = duration;
+      } else {
+        durationStr = "?";
+      }
       const landing = data.landingPageCount ?? 0;
       const firstAvail = data.firstAvailableMonthCount ?? 0;
       const health = typeof data.serverHealth === "number" ? (data.serverHealth >= 0.8 ? "sain" : "dégradé") : "?";
-      return `Fenêtre #${num} — ${refreshes} refreshes en ${durationMin}min (landing: ${landing}, firstAvail: ${firstAvail}) | serveur: ${health}`;
+      return `Fenêtre #${num} — ${refreshes} refreshes en ${durationStr} (landing: ${landing}, firstAvail: ${firstAvail}) | serveur: ${health}`;
     }
 
     case "continuous_refresh_end": {
@@ -208,8 +219,15 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
       const ip = data.exitIp ?? "?";
       const latency = data.latencyMs ?? "?";
       const healthy = data.healthy;
-      const mark = healthy ? "✓" : "✗";
-      return `IP ${ip} — ${latency}ms ${mark}`;
+      const mark = healthy ? "✓ oui" : "✗ non";
+      const threshold = data.thresholdMs;
+      const latencyStr = typeof latency === "number"
+        ? (latency >= 1000 ? `${(latency / 1000).toFixed(1)}s` : `${latency}ms`)
+        : `${latency}`;
+      const thresholdStr = threshold && typeof threshold === "number"
+        ? ` (seuil: ${threshold >= 1000 ? `${(threshold / 1000).toFixed(1)}s` : `${threshold}ms`})`
+        : "";
+      return `IP ${ip} — ${latencyStr} ${mark}${thresholdStr}`;
     }
 
     case "scan_cutoff": {
@@ -231,42 +249,68 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
       return `Compte ${username} restreint — cycle ignoré`;
     }
 
-    case "scan_cap_reached": {
-      const count = data.scanCount ?? "?";
-      const cap = data.scanCap ?? "?";
-      const pause = data.pauseMinutes ?? "?";
-      return `${count}/${cap} scans — pause ${pause}min`;
-    }
-
     case "login": {
       const user = data.username ?? data.fullName ?? data.email ?? "";
       const appId = data.applicationId ?? "";
-      if (user) return `Connecté en tant que ${user}${appId ? ` (ID: ${appId})` : ""}`;
+      const userId = data.userID ?? "";
+      const missionId = data.missionId ?? "";
+      const csrf = data.csrfToken;
+      if (user) {
+        let details = `Connecté en tant que ${user}`;
+        if (userId) details += ` (userID: ${userId})`;
+        else if (appId) details += ` (ID: ${appId})`;
+        if (missionId) details += ` — mission ${missionId}`;
+        if (csrf === "ABSENT") details += " — CSRF absent";
+        return details;
+      }
       return null;
     }
 
     case "session_start": {
+      const portal = data.portal ?? "";
       const email = data.username ?? data.email ?? "";
-      return email ? `Session démarrée — ${email}` : null;
+      if (portal) return `${portal}`;
+      if (email) return `Session démarrée — ${email}`;
+      return null;
     }
 
     case "session_end": {
-      const duration = data.durationMin ?? data.totalDurationMin;
-      if (typeof duration === "number") return `Session terminée (${duration}min)`;
-      return null;
+      const portal = data.portal ?? "";
+      const duration = data.duration ?? data.durationMin ?? data.totalDurationMin ?? "";
+      const hunterPause = data.hunterPaused ?? data.hunterStatus;
+      let text = "";
+      if (portal) text = `${portal}`;
+      if (duration) {
+        const durStr = typeof duration === "number" ? `${duration}min` : String(duration);
+        text += text ? ` — durée: ${durStr}` : `Session terminée (${durStr})`;
+      }
+      if (hunterPause) text += " · Hunter en pause";
+      return text || null;
     }
 
     case "ofc_list": {
       const offices = formatOfficesList(data.offices);
       const visaClass = data.visaClass ?? "";
-      if (offices) return `${offices}${visaClass ? ` (${visaClass})` : ""}`;
-      return null;
+      const visaType = data.visaType ?? "";
+      const count = data.count;
+      let text = "";
+      if (offices) text = offices;
+      else if (typeof count === "number") text = `${count} bureau${count > 1 ? "x" : ""}`;
+      if (visaClass || visaType) {
+        const visa = [visaClass, visaType].filter(Boolean).join("/");
+        text += text ? ` (${visa})` : visa;
+      }
+      return text || null;
     }
 
     case "scan": {
       const ofc = data.ofc ?? data.officeName ?? "";
-      const result = data.slotsAvailable === true || data.hasSlots === true ? "créneau trouvé !" : "aucun créneau";
+      const phase = data.phase ?? "";
+      const hasSlots = data.slotsAvailable === true || data.hasSlots === true;
+      const result = hasSlots ? "créneau trouvé !" : "aucun créneau";
+      if (ofc && phase) return `${ofc} — ${phase} — ${result}`;
       if (ofc) return `${ofc} — ${result}`;
+      if (phase) return `${phase} — ${result}`;
       return null;
     }
 
@@ -282,12 +326,287 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
       const date = data.date ?? "";
       const time = data.time ?? "";
       const appointmentId = data.appointmentId ?? "";
-      return `${ofc} ${date} ${time}${appointmentId ? ` (ID: ${appointmentId})` : ""}`.trim();
+      const via = data.via ?? "";
+      let text = `${ofc} ${date} ${time}`.trim();
+      if (appointmentId) text += ` (ID: ${appointmentId})`;
+      if (via) text += ` — via ${via}`;
+      return text || null;
     }
 
     case "booking_fail": {
       const msg = data.responseMsg ?? data.errorMessage ?? data.error ?? "raison inconnue";
       return `Échec — ${msg}`;
+    }
+
+    case "booking_attempt": {
+      const ofc = data.ofc ?? "?";
+      const date = data.date ?? "?";
+      const time = data.time ?? "";
+      const slotId = data.slotId ?? "";
+      let text = `${ofc} — ${date}`;
+      if (time) text += ` à ${time}`;
+      if (slotId) text += ` (slot: ${String(slotId).slice(0, 12)}…)`;
+      return text;
+    }
+
+    case "confirmation_letter": {
+      const size = data.pdfSizeBytes;
+      const storageId = data.storageId ?? "";
+      const appointmentId = data.appointmentId ?? "";
+      let text = "PDF généré";
+      if (typeof size === "number") text += ` (${(size / 1024).toFixed(1)} Ko)`;
+      if (appointmentId) text += ` — RDV: ${appointmentId}`;
+      else if (storageId) text += ` — stocké`;
+      return text;
+    }
+
+    case "not_found": {
+      const offices = formatOfficesList(data.offices) || (data.ofc as string) || "";
+      const flow = data.flow ?? "";
+      if (offices) return `${offices} — aucun créneau disponible`;
+      if (flow) return `Aucun créneau disponible (${flow})`;
+      return "Aucun créneau disponible";
+    }
+
+    case "human_behavior": {
+      const type = data.type ?? "";
+      const typeLabelMap: Record<string, string> = {
+        page_refresh_simulated: "Simulation de rafraîchissement page",
+        random_delay: "Délai aléatoire humain",
+        mouse_movement: "Mouvement souris simulé",
+        scroll_simulation: "Simulation de scroll",
+        tab_switch: "Changement d'onglet simulé",
+        burst_rest_phase: "Phase de repos entre rafales",
+        typing_simulation: "Simulation de frappe",
+        idle_behavior: "Comportement d'inactivité",
+      };
+      const label = typeLabelMap[type as string] ?? (type ? String(type).replace(/_/g, " ") : "Comportement simulé");
+      const restMs = data.restDurationMs;
+      if (restMs && typeof restMs === "number") {
+        return `${label} — repos ${restMs >= 1000 ? `${(restMs / 1000).toFixed(1)}s` : `${restMs}ms`}`;
+      }
+      return label;
+    }
+
+    case "session_skip": {
+      const reason = data.reason ?? "";
+      const label = data.label ?? "";
+      const username = data.username ?? "";
+      if (label) return `${label}${username ? ` — ${username}` : ""}`;
+      if (reason) return `Skip — ${reason}${username ? ` (${username})` : ""}`;
+      return "Session ignorée";
+    }
+
+    case "anti_detection": {
+      const type = data.type ?? data.action ?? "";
+      if (type) return `Anti-détection: ${String(type).replace(/_/g, " ")}`;
+      return "Mesure anti-détection appliquée";
+    }
+
+    case "execution_time": {
+      const durationMs = data.durationMs ?? data.elapsed;
+      if (typeof durationMs === "number") {
+        return `Temps d'exécution: ${durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`}`;
+      }
+      return null;
+    }
+
+    case "rate_limit": {
+      const waitSec = data.waitSec ?? data.retryAfterMs;
+      const endpoint = data.endpoint ?? "";
+      let text = "Rate limit détecté";
+      if (endpoint) text += ` sur ${endpoint}`;
+      if (typeof waitSec === "number") text += ` — attente ${waitSec}s`;
+      return text;
+    }
+
+    case "blocked": {
+      const username = data.username ?? "";
+      return `Compte bloqué${username ? ` — ${username}` : ""}`;
+    }
+
+    case "restricted": {
+      const username = data.username ?? "";
+      return `Compte restreint${username ? ` — ${username}` : ""}`;
+    }
+
+    case "token_expired": {
+      return "Token expiré — renouvellement nécessaire";
+    }
+
+    case "keep_alive": {
+      const status = data.status ?? data.httpStatus ?? "";
+      return `Ping keep-alive${status ? ` (${status})` : " envoyé"}`;
+    }
+
+    case "proxy_preflight_abort": {
+      const reason = data.reason ?? data.error ?? "proxy mort";
+      return `Session avortée — ${reason}`;
+    }
+
+    case "409_retry_start": {
+      const ofc = data.ofc ?? data.ofcName ?? "?";
+      const maxRetries = data.maxRetries ?? "";
+      return `Conflit 409 sur ${ofc} — retry${maxRetries ? ` (max ${maxRetries})` : ""}`;
+    }
+
+    case "409_retry_exhausted": {
+      const ofc = data.ofc ?? data.ofcName ?? "?";
+      const retriesDone = data.retriesDone ?? "?";
+      return `${ofc} — ${retriesDone} tentatives épuisées, abandon`;
+    }
+
+    case "409_retry_success": {
+      const ofc = data.ofc ?? data.ofcName ?? "?";
+      const date = data.date ?? "";
+      const time = data.time ?? "";
+      return `${ofc} — retry réussi${date ? ` le ${date}` : ""}${time ? ` à ${time}` : ""} !`;
+    }
+
+    case "appointment_status": {
+      const status = data.status ?? data.appointmentStatus ?? "";
+      const appointmentId = data.appointmentId ?? "";
+      if (status) return `Statut: ${status}${appointmentId ? ` (ID: ${appointmentId})` : ""}`;
+      return null;
+    }
+
+    case "scan_cap_reached": {
+      const count = data.scanCount ?? "?";
+      const cap = data.scanCap ?? "?";
+      const pause = data.pauseMinutes ?? "?";
+      return `${count}/${cap} scans — pause ${pause}min`;
+    }
+
+    // ── CEV events ──
+
+    case "cev_http_setup_start": {
+      return "Initialisation de la session HTTP CEV";
+    }
+
+    case "cev_http_login_ok": {
+      return "Login VOWINT réussi";
+    }
+
+    case "cev_http_login_failed": {
+      const status = data.status ?? "";
+      return `Login VOWINT échoué${status ? ` (HTTP ${status})` : ""}`;
+    }
+
+    case "cev_http_vowint_cache_hit": {
+      const appId = data.appId ?? "";
+      return `Session VOWINT en cache${appId ? ` (appId: ${appId})` : ""}`;
+    }
+
+    case "cev_http_app_id_found": {
+      const appId = data.appId ?? "?";
+      const source = data.source ?? "";
+      return `AppID: ${appId}${source ? ` (source: ${source})` : ""}`;
+    }
+
+    case "cev_http_integration_url": {
+      const url = data.url ?? data.integrationUrl ?? "";
+      if (url && typeof url === "string") return `URL: ${url.slice(0, 60)}${String(url).length > 60 ? "…" : ""}`;
+      return "URL d'intégration récupérée";
+    }
+
+    case "cev_http_cev_cookie_ok": {
+      return "Cookie CEV obtenu";
+    }
+
+    case "cev_http_hcaptcha_start": {
+      return "Résolution hCaptcha en cours…";
+    }
+
+    case "cev_http_hcaptcha_solved": {
+      return "hCaptcha résolu avec succès";
+    }
+
+    case "cev_http_hcaptcha_failed": {
+      const error = data.error ?? "";
+      return `hCaptcha échoué${error ? ` — ${error}` : ""}`;
+    }
+
+    case "cev_http_setup_complete": {
+      return "Setup HTTP CEV terminé avec succès";
+    }
+
+    case "cev_http_setup_error": {
+      const error = data.error ?? "";
+      return `Erreur setup CEV${error ? ` — ${String(error).slice(0, 80)}` : ""}`;
+    }
+
+    case "cev_http_no_integration_url": {
+      return "URL d'intégration introuvable";
+    }
+
+    case "cev_http_no_cev_cookie": {
+      return "Cookie CEV introuvable";
+    }
+
+    case "cev_http_no_app_id": {
+      return "AppID introuvable";
+    }
+
+    case "cev_no_availability": {
+      return "Aucun créneau CEV disponible";
+    }
+
+    case "cev_slots_available": {
+      const count = data.slotCount ?? data.count ?? "";
+      return `Créneaux CEV disponibles${typeof count === "number" ? ` (${count})` : ""} !`;
+    }
+
+    case "cev_session_expired": {
+      return "Session CEV expirée";
+    }
+
+    case "cev_http_booking_start": {
+      return "Début du booking CEV";
+    }
+
+    case "cev_http_booking_confirmed": {
+      const date = data.date ?? data.bookedDate ?? "";
+      const time = data.time ?? data.bookedTime ?? "";
+      let text = "Booking CEV confirmé";
+      if (date) text += ` — ${date}`;
+      if (time) text += ` à ${time}`;
+      return text + " !";
+    }
+
+    case "cev_http_slot_selected": {
+      const date = data.date ?? "";
+      const time = data.time ?? "";
+      let text = "Slot sélectionné";
+      if (date) text += ` — ${date}`;
+      if (time) text += ` ${time}`;
+      return text;
+    }
+
+    case "cev_http_submit_attempt": {
+      const endpoint = data.endpoint ?? "";
+      return `Soumission${endpoint ? ` vers ${endpoint}` : " en cours"}`;
+    }
+
+    case "cev_http_submit_response": {
+      const ok = data.ok ?? data.httpStatus;
+      const status = data.httpStatus ?? "";
+      if (ok === true || (typeof status === "number" && status < 300)) return `Réponse OK (${status || "success"})`;
+      return `Réponse: ${status || "erreur"}`;
+    }
+
+    case "cev_http_booking_crash": {
+      const error = data.error ?? "";
+      return `Crash booking${error ? ` — ${String(error).slice(0, 80)}` : ""}`;
+    }
+
+    case "cev_poll_result": {
+      const hasSlots = data.hasSlots ?? data.slotsAvailable;
+      if (hasSlots) return "Poll: créneaux détectés !";
+      return "Poll: en attente";
+    }
+
+    case "cev_poll_no_slots": {
+      return "Poll: aucun créneau";
     }
 
     case "error": {
@@ -296,12 +615,33 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
     }
 
     case "payment_check": {
-      const status = data.paymentStatus ?? "?";
-      return `Statut MRV: ${status}`;
+      const status = data.paymentStatus ?? data.status ?? "?";
+      const username = data.username ?? "";
+      let text = `Statut MRV: ${status}`;
+      if (username) text += ` — ${username}`;
+      return text;
     }
 
-    default:
-      return null;
+    default: {
+      // Fallback intelligent : tenter de construire un narratif à partir des champs communs
+      const ofc = data.ofc ?? data.ofcName ?? data.officeName ?? "";
+      const date = data.date ?? "";
+      const time = data.time ?? "";
+      const username = data.username ?? data.email ?? "";
+      const reason = data.reason ?? data.error ?? data.message ?? "";
+      const flow = data.flow ?? "";
+      
+      // Si on a au moins un champ connu, construire un texte
+      const parts: string[] = [];
+      if (ofc) parts.push(String(ofc));
+      if (date) parts.push(String(date));
+      if (time) parts.push(`à ${time}`);
+      if (username && !ofc && !date) parts.push(String(username));
+      if (reason && parts.length === 0) parts.push(String(reason).slice(0, 100));
+      if (flow && parts.length === 0) parts.push(String(flow));
+      
+      return parts.length > 0 ? parts.join(" — ") : null;
+    }
   }
 }
 
