@@ -596,16 +596,30 @@ export function rotateIproyalSession(username: string): void {
   console.log(`[usa] 🔄 Rotation proxy iProyal demandée pour ${key.slice(0, 12)}… (rot#${current + 1})`);
 }
 
+/**
+ * Configure le proxy pour le fetcher LEGACY (singleton global).
+ * Le nouveau code devrait utiliser createSessionFetcher() à la place.
+ * Cette fonction est conservée pour backward-compatibility avec le code existant
+ * (impl.ts, continuous-refresh.ts, etc.) qui sera migré progressivement.
+ */
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyUrl = proxyUrl;
     _usaProxyAgent = undefined; // On n'utilise plus ProxyAgent, on utilise impit avec proxyUrl
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[usa] Proxy résidentiel actif (impit): ${masked}`);
+    console.log(`[usa] Proxy résidentiel actif (impit/legacy): ${masked}`);
   } else {
     _usaProxyUrl = undefined;
     _usaProxyAgent = undefined;
   }
+}
+
+/**
+ * Retourne l'URL du proxy global actif (legacy singleton).
+ * Utilisé par le nouveau code pour connaître le proxy du mode legacy.
+ */
+export function getLegacyProxyUrl(): string | undefined {
+  return _usaProxyUrl;
 }
 
 /**
