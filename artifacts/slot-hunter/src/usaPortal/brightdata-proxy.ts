@@ -147,20 +147,30 @@ export function startBrightDataKeepAlive(proxyUrl: string, username: string): vo
       const elapsed = Date.now() - session.lastKeepAliveAt;
       const elapsedSec = Math.round(elapsed / 1000);
 
-      // Requête légère : juste vérifier que le proxy répond avec la même IP
+      // IMPORTANT: On doit passer la requête VIA le proxy BrightData pour maintenir la session.
+      // Sans ProxyAgent, le fetch part en direct → la session BrightData expire après 5-7 min
+      // et l'IP change silencieusement au prochain appel → 401 sur le portail USA.
+      const { ProxyAgent } = await import("undici");
+      const agent = new ProxyAgent(session.proxyUrl);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+
       const res = await fetch("https://geo.brdtest.com/mygeo.json", {
-        signal: AbortSignal.timeout(10_000),
-        // @ts-ignore — on passe le proxy via undici dispatcher ou env
-        // Note: en production, impit gère le proxy automatiquement via _usaProxyUrl
-        // Ce keep-alive utilise le proxy directement via le système de fetch sous-jacent
+        signal: controller.signal,
+        // @ts-expect-error — undici dispatcher pour router via le proxy
+        dispatcher: agent,
       });
+
+      clearTimeout(timeout);
 
       if (res.ok) {
         session.lastKeepAliveAt = Date.now();
-        const geo = await res.json().catch(() => null) as { country?: string; asn?: { org_name?: string } } | null;
+        const geo = await res.json().catch(() => null) as { country?: string; asn?: { org_name?: string }; ip?: string } | null;
         const country = geo?.country ?? "?";
         const asn = geo?.asn?.org_name ?? "?";
-        console.log(`[brightdata] 🏓 Keep-alive OK (${elapsedSec}s) — session=${sessionId} IP: ${country}/${asn}`);
+        const ip = geo?.ip ?? "?";
+        console.log(`[brightdata] 🏓 Keep-alive OK (${elapsedSec}s) — session=${sessionId} IP: ${ip} (${country}/${asn})`);
       } else {
         console.warn(`[brightdata] 🏓 Keep-alive HTTP ${res.status} — session=${sessionId} peut être morte`);
       }
