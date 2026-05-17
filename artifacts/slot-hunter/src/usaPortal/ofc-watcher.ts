@@ -383,10 +383,12 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   }
 
   // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
-  // FIX-19: Scanner par GROUPE de locationType (NEW vs RESCHEDULE séparément).
-  // Un dossier NEW utilise locationType depuis appDetails.locationType (résolu par /appointments/search).
-  // Un dossier RESCHEDULE utilise appointmentLocationType du RDV existant.
-  // Le serveur retourne 404 si le locationType ne correspond pas au statut du dossier.
+  // FIX-20: Chaque groupe doit scanner avec le token ET l'applicationId du MÊME compte.
+  // Le serveur USA lie le Bearer token à l'applicationId du compte connecté.
+  // On ne peut PAS utiliser le token de compte A pour scanner l'applicationId de compte B.
+  // Solution : pour chaque groupe, trouver un subscriber qui a un token valide dans tokenCache,
+  // puis utiliser SON token + SON applicationId pour la requête de scan.
+  // Les autres membres du groupe sont alertés si un slot est trouvé (booking race avec leur propre token).
 
   // Grouper les subscribers valides par locationType effectif
   const validSubs = [...state.subscribers.values()].filter(
@@ -402,36 +404,64 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   const rescheduleGroup = validSubs.filter(s => s.rescheduleYN);
   const newGroup = validSubs.filter(s => !s.rescheduleYN);
 
-  // Scanner chaque groupe qui a au moins 1 subscriber
-  const groups: Array<{ label: string; sub: OfcWatcherSubscriber; locationType: string }> = [];
+  // FIX-20: Helper — trouver le meilleur scanner pour un groupe.
+  // Le scanner doit avoir un token valide dans tokenCache (son token correspond à son applicationId).
+  const findGroupScanner = (groupSubs: OfcWatcherSubscriber[]): OfcWatcherSubscriber | null => {
+    for (const sub of groupSubs) {
+      const subToken = tokenCache.get(sub.username.toLowerCase());
+      if (subToken && Date.now() < subToken.expiresAt) {
+        return sub;
+      }
+    }
+    return null;
+  };
+
+  // Scanner chaque groupe qui a au moins 1 subscriber avec un token valide
+  const groups: Array<{ label: string; scanner: OfcWatcherSubscriber; locationType: string; scannerToken: string }> = [];
 
   if (newGroup.length > 0) {
-    const sub = newGroup[0];
-    // FIX-19: Utiliser appDetails.locationType résolu par /appointments/search
-    // au lieu de ofc.officeType. Le search retourne le locationType correct pour ce dossier.
-    const loc = sub.appDetails.locationType ?? sub.appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC";
-    groups.push({ label: "NEW", sub, locationType: loc });
+    const scanner = findGroupScanner(newGroup);
+    if (scanner) {
+      const loc = scanner.appDetails.locationType ?? scanner.appDetails.appointmentLocationType ?? ofc.officeType ?? "OFC";
+      const scannerToken = tokenCache.get(scanner.username.toLowerCase())!.accessToken;
+      groups.push({ label: "NEW", scanner, locationType: loc, scannerToken });
+    } else {
+      console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Groupe NEW: aucun subscriber avec token valide — skip`);
+    }
   }
   if (rescheduleGroup.length > 0) {
-    const sub = rescheduleGroup[0];
-    const loc = sub.appDetails.appointmentLocationType ?? sub.appDetails.locationType ?? ofc.officeType ?? "POST";
-    groups.push({ label: "RESCHEDULE", sub, locationType: loc });
+    const scanner = findGroupScanner(rescheduleGroup);
+    if (scanner) {
+      const loc = scanner.appDetails.appointmentLocationType ?? scanner.appDetails.locationType ?? ofc.officeType ?? "POST";
+      const scannerToken = tokenCache.get(scanner.username.toLowerCase())!.accessToken;
+      groups.push({ label: "RESCHEDULE", scanner, locationType: loc, scannerToken });
+    } else {
+      console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Groupe RESCHEDULE: aucun subscriber avec token valide — skip`);
+    }
   }
 
-  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (compte: ${watcherUsername.slice(0, 12)}…, groupes: ${groups.map(g => `${g.label}[${g.locationType}]`).join("+")}})`);
+  if (groups.length === 0) {
+    console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Aucun groupe avec scanner valide — skip`);
+    return;
+  }
+
+  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (groupes: ${groups.map(g => `${g.label}[${g.locationType}]→${g.scanner.username.slice(0, 12)}…`).join(" + ")})`);
 
   for (const group of groups) {
-    const { sub: firstSub, locationType, label } = group;
+    const { scanner: groupScanner, locationType, label, scannerToken } = group;
 
-    const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, watcherUsername);
+    // FIX-20: Utiliser le token du scanner du groupe (pas le token du watcher global)
+    // et l'username du scanner pour les headers (correlation, UA sticky, etc.)
+    const hdrs = authHeaders(scannerToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, groupScanner.username);
 
+    // FIX-20: Le payload utilise l'applicationId/applicantId du scanner (même compte que le token)
     const payload: Record<string, unknown> = {
       postUserId: ofc.postUserId,
-      applicantId: firstSub.appDetails.applicantId,
-      visaType: (firstSub.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? firstSub.appDetails.visaType,
-      visaClass: firstSub.appDetails.visaClass,
+      applicantId: groupScanner.appDetails.applicantId,
+      visaType: (groupScanner.appDetails as unknown as Record<string, unknown>).visaTypeKey ?? groupScanner.appDetails.visaType,
+      visaClass: groupScanner.appDetails.visaClass,
       locationType,
-      applicationId: firstSub.appDetails.applicationId,
+      applicationId: groupScanner.appDetails.applicationId,
     };
 
     const reqStart = Date.now();
@@ -444,14 +474,16 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
     state.lastLatencyMs = Date.now() - reqStart;
     state.totalRefreshes++;
-    console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST[${label}] → HTTP ${res.status} (${state.lastLatencyMs}ms) | refresh #${state.totalRefreshes}`);
+    console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST[${label}] → HTTP ${res.status} (${state.lastLatencyMs}ms) | scanner: ${groupScanner.username.slice(0, 12)}… | refresh #${state.totalRefreshes}`);
 
     // Erreurs critiques → throw pour déclencher le error handling + failover
     if (res.status === 429 || res.status === 403) {
       throw new Error(`HTTP_${res.status}`);
     }
     if (res.status === 401) {
-      throw new Error("TOKEN_EXPIRED");
+      // FIX-20: Token du scanner de ce groupe expiré — non-fatal, skip ce groupe
+      console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] POST[${label}] 401 — token scanner ${groupScanner.username.slice(0, 12)}… expiré, skip groupe`);
+      continue;
     }
     if (res.status === 503) {
       throw new Error("PROXY_DEAD");
@@ -468,22 +500,22 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
     const data = await res.json() as { present?: boolean; date?: string };
 
     // Log périodique
-    const pred = getCurrentPredictionScore(watcherUsername);
+    const pred = getCurrentPredictionScore(groupScanner.username);
     if (state.totalRefreshes % 5 === 0 || state.totalRefreshes <= 3) {
       console.log(
-        `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} [${label}] | compte: ${watcherUsername.slice(0, 12)}… | pred=${pred.window} | ` +
+        `[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} [${label}] | scanner: ${groupScanner.username.slice(0, 12)}… | pred=${pred.window} | ` +
         `latency=${state.lastLatencyMs}ms | subscribers=${state.subscribers.size}`,
       );
     }
 
     // botLog pour visibilité dans l'interface admin
     botLog({
-      applicationId: firstSub.jobId,
+      applicationId: groupScanner.jobId,
       step: "ofc_watcher_scan",
       status: data.present ? "ok" : "warn",
       data: {
         ofcName: ofc.postName,
-        scanAccount: watcherUsername,
+        scanAccount: groupScanner.username,
         scanGroup: label,
         locationType,
         refreshNumber: state.totalRefreshes,
@@ -496,10 +528,10 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
     if (data.present && data.date) {
       // 🚨 SLOT DÉTECTÉ!
-      console.log(`[ofc-watcher] 🚨🚨🚨 SLOT DÉTECTÉ sur ${ofc.postName} [${label}]! date=${data.date} (refresh #${state.totalRefreshes})`);
+      console.log(`[ofc-watcher] 🚨🚨🚨 SLOT DÉTECTÉ sur ${ofc.postName} [${label}]! date=${data.date} (scanner: ${groupScanner.username.slice(0, 12)}…, refresh #${state.totalRefreshes})`);
 
       // Enregistrer l'observation (Early Bird + competitive intelligence)
-      recordSlotObservation(watcherUsername, ofc.postName);
+      recordSlotObservation(groupScanner.username, ofc.postName);
       recordSlotAppearance(ofc.postName, data.date);
 
       // FIX-19: Filtrer les subscribers du MÊME GROUPE (NEW ou RESCHEDULE)
@@ -518,17 +550,18 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
           ofcName: ofc.postName,
           firstAvailableMonth: data.date,
           detectedAt: Date.now(),
-          watcherUsername,
+          watcherUsername: groupScanner.username,
         };
 
         botLog({
-          applicationId: eligibleSubscribers[0].jobId,
+          applicationId: groupScanner.jobId,
           step: "ofc_watcher_slot_detected",
           status: "ok",
           data: {
             ofcName: ofc.postName,
             date: data.date,
             group: label,
+            scanner: groupScanner.username,
             refreshNumber: state.totalRefreshes,
             subscriberCount: eligibleSubscribers.length,
             latencyMs: state.lastLatencyMs,
