@@ -115,6 +115,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   try {
     if (!username || !password) {
       console.error("[usa] Identifiants portail manquants dans hunterConfig");
+      botLog({ applicationId: job.id, step: "session_skip", status: "fail", data: { reason: "Identifiants portail manquants dans la configuration Hunter", label: "❌ Config incomplète", username: username || "(vide)" } });
       result = "error";
       return result;
     }
@@ -136,6 +137,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         const remainMs = MIN_COOLDOWN_PROXY_EXPIRED_MS - timeSinceExpiry;
         const remainMin = Math.round(remainMs / 60000);
         console.log(`[usa] 🔒 FIX4: Proxy expiré il y a ${expiredAgoMin}min — skip immédiat (cooldown ${remainMin}min restant)`);
+        botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: "Proxy expiré — cooldown avant re-login", label: "⏳ Proxy expiré", remainMin, expiredAgoMin, username } });
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
@@ -183,6 +185,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         
         // Si l'attente est > 5 min, on skip complètement
         if (preCheck.waitMs > 5 * 60 * 1000) {
+          botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Zero-Risk: ${preCheck.reason}`, label: "🛡️ Protection Zero-Risk", waitMinutes, username } });
           await sendHeartbeat({
             applicationId: job.id,
             result: "not_found",
@@ -196,6 +199,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         await new Promise(r => setTimeout(r, preCheck.waitMs!));
       } else {
         // Pas d'attente spécifiée, on skip
+        botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Zero-Risk: ${preCheck.reason}`, label: "🛡️ Protection Zero-Risk", username } });
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
@@ -220,6 +224,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
           console.log(`[zero-risk] ⏳ Fenêtre de scan: attente ${waitMinutes} min`);
           
           if (orchestratorCheck.waitMs > 10 * 60 * 1000) { // > 10 min
+            botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Fenêtre de scan: ${orchestratorCheck.reason}`, label: "🎯 Hors fenêtre de scan", waitMinutes, username } });
             await sendHeartbeat({
               applicationId: job.id,
               result: "not_found",
@@ -242,7 +247,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       const until = getAccountRestrictionDeadline(username.toLowerCase())!;
       const remainMin = Math.round((until - Date.now()) / 60000);
       console.log(`[usa] 🔒 ${username} en restriction — ${remainMin} min restantes. Cycle SKIP total.`);
-      botLog({ applicationId: job.id, step: "restriction_skip", status: "warn", data: { username, remainMin } });
+      botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Compte restreint par le portail — ${remainMin} min restantes`, label: "🔒 Compte restreint", remainMin, username } });
       await sendHeartbeat({
         applicationId: job.id,
         result: "not_found",
@@ -384,6 +389,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       const currentStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
       
       console.log(`[usa] 🌙 Pause nocturne activée (${currentStr}) — ${nightStartStr} à ${nightEndStr} (durée ${Math.round(nightDurationMin / 60 * 10) / 10}h)`);
+      botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Pause nocturne ${nightStartStr}-${nightEndStr}`, label: "🌙 Pause nocturne", nightStartStr, nightEndStr, username } });
       await sendHeartbeat({
         applicationId: job.id,
         result: "not_found",
@@ -456,6 +462,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         const pauseMinutes = Math.round(pauseDuration / 60000);
         console.log(`[usa] ☕ Pause inter-session: ${pauseMinutes}min (sans logout — JWT expire naturellement)`);
         
+        botLog({ applicationId: job.id, step: "session_skip", status: "warn", data: { reason: `Session trop longue (${sessionMinutes}min ≥ ${targetMinutes}min) — pause ${pauseMinutes}min`, label: "⏰ Session expirée (durée max)", sessionMinutes, targetMinutes, pauseMinutes, username } });
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
