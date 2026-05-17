@@ -19,7 +19,7 @@ import {
   USA_LANDING_PAGE_URL,
   SCAN_CUTOFF_BEFORE_EXPIRY_MS,
 } from "./config.js";
-import { usaFetch, authHeaders, tokenCache, updateSessionActivity } from "./usa-http.js";
+import { usaFetch, authHeaders, tokenCache, updateSessionActivity, resetCorrelationOnAction } from "./usa-http.js";
 import { RateLimitError, AccountBlockedError, TokenExpiredError, AccountRestrictedError } from "./errors.js";
 import { isRestrictedBody } from "./account-restriction.js";
 import { checkProxyLiveness, isSessionFrozen } from "./proxy-session-guard.js";
@@ -199,6 +199,8 @@ interface ServerHealthState {
   lastErrorAt: number;
   /** Score de santé (0-1). */
   healthScore: number;
+  /** FIX 9: Latence proxy connue (from pre-flight). Subtract before scoring server. */
+  knownProxyLatencyMs: number;
 }
 
 const serverHealth: ServerHealthState = {
@@ -206,12 +208,26 @@ const serverHealth: ServerHealthState = {
   recentErrors: 0,
   lastErrorAt: 0,
   healthScore: 1.0,
+  knownProxyLatencyMs: 0,
 };
+
+/**
+ * FIX 9: Met à jour la latence proxy connue (depuis le pre-flight check).
+ * Appelé par le scan flow après le pre-flight pour séparer la latence proxy
+ * de la latence serveur réelle dans le health scoring.
+ */
+export function setKnownProxyLatency(latencyMs: number): void {
+  serverHealth.knownProxyLatencyMs = latencyMs;
+}
 
 /** Met à jour la santé serveur après une requête. */
 function updateServerHealth(latencyMs: number, isError: boolean): void {
-  // Garder les 20 dernières latences
-  serverHealth.latencies.push(latencyMs);
+  // FIX 9: Soustraire la latence proxy connue pour isoler la latence serveur réelle.
+  // Si latence_totale - latence_proxy < 2s → c'est le proxy qui est lent, pas le serveur.
+  const serverLatencyMs = Math.max(0, latencyMs - serverHealth.knownProxyLatencyMs);
+  
+  // Garder les 20 dernières latences (serveur seul, sans proxy)
+  serverHealth.latencies.push(serverLatencyMs);
   if (serverHealth.latencies.length > 20) {
     serverHealth.latencies.shift();
   }
@@ -226,7 +242,7 @@ function updateServerHealth(latencyMs: number, isError: boolean): void {
     }
   }
 
-  // Calculer le score de santé
+  // Calculer le score de santé basé sur la latence SERVEUR (pas totale)
   const avgLatency = serverHealth.latencies.reduce((a, b) => a + b, 0) / serverHealth.latencies.length;
   const latencyScore = avgLatency < SERVER_DEGRADED_LATENCY_MS ? 1.0
     : avgLatency < SERVER_STRESSED_LATENCY_MS ? 0.6
@@ -630,6 +646,9 @@ interface LightRefreshResult {
  */
 async function doLandingPageRefresh(config: ContinuousRefreshConfig): Promise<LightRefreshResult> {
   const { session, referer } = config;
+
+  // FIX 6: Reset correlation key on landing page refresh (simulates page navigation)
+  resetCorrelationOnAction(referer);
 
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${session.accessToken}`,

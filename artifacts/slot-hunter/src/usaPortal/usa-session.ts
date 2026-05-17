@@ -118,7 +118,29 @@ export async function getUsaSession(
         return null;
       }
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Login USA échoué: ${msg}`);
+      
+      // ── FIX 5 : Proxy 504 post-CAPTCHA → 1 retry avec même sticky ──────────
+      // Si le login échoue à cause d'un proxy 504/tunnel error JUSTE après le CAPTCHA,
+      // retry 1x avec le même proxy sticky URL. Le 504 est souvent un glitch temporaire
+      // du tunnel (pas un changement d'IP). Si retry échoue → rotation + reschedule.
+      const isProxy504 = msg.includes("504") || msg.includes("tunnel") || msg.includes("Proxy") || msg.includes("ECONNRESET");
+      if (isProxy504) {
+        console.warn(`[usa] ⚠️ FIX5: Proxy 504/tunnel error au login — 1 retry avec même sticky...`);
+        try {
+          // Petite pause avant retry (500-1500ms) — glitch temporaire
+          await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+          session = await loginUsaPortal(username, password, null);
+          if (session) {
+            console.log(`[usa] ✅ FIX5: Retry login réussi après 504 — session obtenue`);
+          }
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          console.error(`[usa] ❌ FIX5: Retry login aussi échoué: ${retryMsg} — rotation IP au prochain cycle`);
+          throw new Error(`Login USA échoué (retry 504): ${retryMsg}`);
+        }
+      } else {
+        throw new Error(`Login USA échoué: ${msg}`);
+      }
     } finally {
       pendingLogin.delete(cacheKey);
     }

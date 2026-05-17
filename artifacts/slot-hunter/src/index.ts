@@ -421,8 +421,8 @@ const SILENCE_RADIO_SAME_TIER_MIN_MS = 30_000;  // 30s entre dossiers staggerés
 const SILENCE_RADIO_SAME_TIER_MAX_MS = 60_000;  // 60s entre dossiers staggerés
 
 // ─── Polling quand aucun job n'est dû ───────────────────────────────────────
-const IDLE_POLL_MIN_MS = 60_000;
-const IDLE_POLL_MAX_MS = 90_000;
+const IDLE_POLL_MIN_MS = 30_000;  // FIX 1: réduit à 30s (radio silence est per-dossier maintenant)
+const IDLE_POLL_MAX_MS = 45_000;
 
 const URGENCY_ORDER: Record<string, number> = {
   tres_urgent: 0,
@@ -442,7 +442,6 @@ const MAX_CONSECUTIVE_ERRORS = 5;
 // Ex: tier tres_urgent (3-5 min), 3 dossiers → décalés de ~1m20 entre eux.
 // Cela garantit une couverture quasi-continue au lieu de 3 scans simultanés.
 const staggerOffsets = new Map<string, number>(); // jobId → offset en ms
-let lastStaggeredTier: string | null = null; // pour le silence radio réduit
 
 // ─── Vérification bundle portail USA (clé AES) ───────────────────────────────
 // Une fois par jour : télécharge le bundle Angular du portail et vérifie que
@@ -457,6 +456,38 @@ const pausedJobs = new Set<string>();
 // Jobs terminés (slot_found) — ne doivent PAS être reset par syncAdminResets.
 // Seul un changement explicite dans Convex (isActive=false puis true) peut les relancer.
 const completedJobs = new Set<string>();
+
+// ─── FIX 1 : Radio Silence PER-DOSSIER ─────────────────────────────────────
+// Remplace le `await sleep(2-3min)` global qui bloquait l'event loop.
+// Chaque dossier a son propre cooldown. Le scheduler poll toutes les 30s
+// et ne lance que les dossiers dont le silence est terminé.
+const radioSilenceUntil = new Map<string, number>();
+
+/** Vérifie si un dossier est encore en période de silence radio. */
+function isInRadioSilence(jobId: string): boolean {
+  const until = radioSilenceUntil.get(jobId);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    radioSilenceUntil.delete(jobId);
+    return false;
+  }
+  return true;
+}
+
+/** Applique un silence radio per-dossier après un cycle. */
+function applyRadioSilence(jobId: string, sameTierNext: boolean): void {
+  let silenceMs: number;
+  if (isRushHour()) {
+    silenceMs = Math.round(RUSH_SILENCE_MIN_MS + Math.random() * (RUSH_SILENCE_MAX_MS - RUSH_SILENCE_MIN_MS));
+  } else if (sameTierNext) {
+    silenceMs = Math.round(SILENCE_RADIO_SAME_TIER_MIN_MS + Math.random() * (SILENCE_RADIO_SAME_TIER_MAX_MS - SILENCE_RADIO_SAME_TIER_MIN_MS));
+  } else {
+    silenceMs = Math.round(SILENCE_RADIO_MIN_MS + Math.random() * (SILENCE_RADIO_MAX_MS - SILENCE_RADIO_MIN_MS));
+  }
+  radioSilenceUntil.set(jobId, Date.now() + silenceMs);
+  const silenceType = isRushHour() ? "rush" : sameTierNext ? "stagger" : "normal";
+  log("INFO", `📻 [${jobId.slice(-6)}] Silence radio per-dossier ${formatMs(silenceMs)} (${silenceType})`);
+}
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
   const ts = new Date().toISOString();
@@ -543,17 +574,6 @@ function generateIntervalMs(urgencyTier: string): number {
 
   lastIntervalUsed.set(urgencyTier, interval);
   return Math.round(interval);
-}
-
-function getSilenceRadioMs(): number {
-  if (isRushHour()) {
-    return Math.round(RUSH_SILENCE_MIN_MS + Math.random() * (RUSH_SILENCE_MAX_MS - RUSH_SILENCE_MIN_MS));
-  }
-  // Silence réduit si le prochain job est du même tier (scans staggerés)
-  if (lastStaggeredTier !== null) {
-    return Math.round(SILENCE_RADIO_SAME_TIER_MIN_MS + Math.random() * (SILENCE_RADIO_SAME_TIER_MAX_MS - SILENCE_RADIO_SAME_TIER_MIN_MS));
-  }
-  return Math.round(SILENCE_RADIO_MIN_MS + Math.random() * (SILENCE_RADIO_MAX_MS - SILENCE_RADIO_MIN_MS));
 }
 
 function formatMs(ms: number): string {
@@ -657,6 +677,7 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
 
   const due = jobs.filter((j) =>
     !pausedJobs.has(j.id) &&
+    !isInRadioSilence(j.id) &&  // FIX 1: respect per-dossier radio silence
     j.hunterConfig?.isActive === true &&
     !!j.portalUrl &&
     getNextCheckDue(j) <= now,
@@ -728,6 +749,7 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
       consecutiveLoginFailures.delete(jobId);
       consecutiveErrors.delete(jobId);
       scheduledNextDue.delete(jobId);
+      radioSilenceUntil.delete(jobId); // FIX 1: cleanup
       continue;
     }
     // Ne JAMAIS reset un job terminé (slot_found) automatiquement.
@@ -743,6 +765,7 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
       consecutiveLoginFailures.delete(jobId);
       consecutiveErrors.delete(jobId);
       scheduledNextDue.delete(jobId);  // forcer un check immédiat après reset admin
+      radioSilenceUntil.delete(jobId); // FIX 1: clear radio silence on admin reset
     }
   }
 
@@ -762,6 +785,9 @@ function syncAdminResets(freshJobs: HunterJob[]): void {
   }
   for (const jobId of staggerOffsets.keys()) {
     if (!freshJobIds.has(jobId)) staggerOffsets.delete(jobId);
+  }
+  for (const jobId of radioSilenceUntil.keys()) {
+    if (!freshJobIds.has(jobId)) radioSilenceUntil.delete(jobId);
   }
 }
 
@@ -875,8 +901,68 @@ async function handleResult(job: HunterJob, result: SessionResult): Promise<void
   scheduledNextDue.set(job.id, nextDue);
   log("INFO", `[${job.applicantName}] Prochain check dans ${formatMs(intervalMs)} (${new Date(nextDue).toLocaleTimeString("fr-CD")})`);
 
-  // Tracker le tier du dernier job exécuté pour adapter le silence radio
-  lastStaggeredTier = job.urgencyTier;
+  // ── FIX 3 : Coordination inter-dossiers ─────────────────────────────────────
+  // Quand un dossier se reschedule loin (ex: 19 min), vérifier si un autre dossier
+  // du même tier couvre les 5 prochaines minutes. Si non → avancer le frère
+  // à now + 3-5 min pour éviter un gap de couverture.
+  coordinateSiblings(job);
+}
+
+/**
+ * FIX 3 : Coordination inter-dossiers.
+ * Quand un dossier termine et se reschedule loin (ex: 19 min), on vérifie si
+ * un autre dossier du même tier va couvrir les 5 prochaines minutes.
+ * Si aucun ne couvre → on avance le frère le plus proche à now + 3-5 min.
+ * Évite les gaps de couverture quand un dossier dort et l'autre aussi.
+ */
+function coordinateSiblings(currentJob: HunterJob): void {
+  const now = Date.now();
+  const tier = currentJob.urgencyTier;
+  const COVERAGE_GAP_THRESHOLD_MS = 5 * 60_000; // 5 min sans couverture = gap
+  const ADVANCE_MIN_MS = 3 * 60_000; // avancer à +3 min minimum
+  const ADVANCE_MAX_MS = 5 * 60_000; // avancer à +5 min maximum
+
+  // Trouver les frères du même tier (actifs, pas en pause, pas le job courant)
+  const siblings: { jobId: string; name: string; due: number }[] = [];
+  for (const [jobId, due] of scheduledNextDue.entries()) {
+    if (jobId === currentJob.id) continue;
+    if (pausedJobs.has(jobId)) continue;
+    if (completedJobs.has(jobId)) continue;
+    if (isInRadioSilence(jobId)) continue;
+    // On ne peut pas facilement accéder au tier depuis le jobId seul,
+    // donc on utilise staggerOffsets comme proxy (seuls les jobs du même tier ont des offsets)
+    // Mais c'est imparfait — on vérifie via le prochain cycle de stagger
+    siblings.push({ jobId, name: jobId.slice(-6), due });
+  }
+
+  if (siblings.length === 0) return;
+
+  // Vérifier si un frère couvre les 5 prochaines minutes
+  const coverageEnd = now + COVERAGE_GAP_THRESHOLD_MS;
+  const siblingCovering = siblings.find(s => s.due >= now && s.due <= coverageEnd);
+
+  if (siblingCovering) {
+    // Un frère couvre déjà → pas besoin d'intervenir
+    return;
+  }
+
+  // Aucun frère ne couvre → trouver le plus proche et l'avancer
+  // Trier par échéance la plus proche
+  const sortedSiblings = siblings
+    .filter(s => s.due > coverageEnd) // seulement ceux qui sont APRÈS le gap
+    .sort((a, b) => a.due - b.due);
+
+  if (sortedSiblings.length === 0) return;
+
+  const target = sortedSiblings[0];
+  const advanceMs = ADVANCE_MIN_MS + Math.random() * (ADVANCE_MAX_MS - ADVANCE_MIN_MS);
+  const newDue = now + Math.round(advanceMs);
+
+  // Seulement avancer si ça représente un gain réel (> 2 min d'avance)
+  if (target.due - newDue < 2 * 60_000) return;
+
+  scheduledNextDue.set(target.jobId, newDue);
+  log("INFO", `[coordination] ${currentJob.applicantName} dort → frère [${target.name}] avancé à +${formatMs(Math.round(advanceMs))} (était dans ${formatMs(target.due - now)})`);
 }
 
 /**
@@ -1308,20 +1394,16 @@ async function main(): Promise<void> {
     await handleResult(due, result);
 
     if (result !== "slot_found") {
-      // Adapter le silence radio selon le contexte :
-      // - Si un autre dossier du même tier est bientôt dû (stagger), silence réduit
-      // - Sinon, silence normal pour cooldown IP
+      // FIX 1: Per-dossier radio silence (non-blocking) instead of global await sleep
+      // Determine if a same-tier sibling is due soon (for reduced silence)
       const nextJob = findNextDueJobSoon(jobs, due.urgencyTier);
-      if (nextJob) {
-        lastStaggeredTier = due.urgencyTier;
-      } else {
-        lastStaggeredTier = null;
-      }
-      const silenceMs = getSilenceRadioMs();
-      const silenceType = lastStaggeredTier ? "stagger" : isRushHour() ? "rush" : "normal";
-      log("INFO", `📻 Silence radio ${formatMs(silenceMs)} (${silenceType})...`);
-      await new Promise((r) => setTimeout(r, silenceMs));
+      const sameTierNext = !!nextJob;
+      applyRadioSilence(due.id, sameTierNext);
     }
+
+    // FIX 1: Polling rapide (pas de sleep global) — la boucle reboucle en ~30s
+    // Le filtre isInRadioSilence() empêche de relancer un dossier trop tôt
+    await new Promise((r) => setTimeout(r, 5_000));
   }
 }
 

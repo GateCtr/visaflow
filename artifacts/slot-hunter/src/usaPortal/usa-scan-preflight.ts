@@ -9,7 +9,7 @@ import {
   REFERER_DASHBOARD,
   REFERER_CREATE_APT,
 } from "./config.js";
-import { usaFetch, sessionHeaders } from "./usa-http.js";
+import { usaFetch, sessionHeaders, resetCorrelationOnAction } from "./usa-http.js";
 
 /**
  * Warm-up : appelé par le portail Angular dès l'ouverture du tableau de bord.
@@ -18,6 +18,8 @@ import { usaFetch, sessionHeaders } from "./usa-http.js";
  */
 export async function callLandingPage(session: UsaSession): Promise<void> {
   if (!session.applicationId) return;
+  // FIX 6: Reset correlation key on warm-up call (simulates page reload)
+  resetCorrelationOnAction(REFERER_DASHBOARD);
   // GET depuis le dashboard — pas de Content-Type, Referer = dashboard parent
   // Bundle intercepteur : /getLandingPageDeatils reçoit LanguageId:{Ue} en plus des headers standards.
   // Toutes les AUTRES requêtes NE reçoivent PAS LanguageId — c'est une condition explicite dans l'intercepteur.
@@ -40,6 +42,8 @@ export async function callLandingPage(session: UsaSession): Promise<void> {
  */
 export async function callSanityCheck(session: UsaSession): Promise<void> {
   if (!session.applicationId) return;
+  // FIX 6: Reset correlation key on page transition (dashboard → create-appointment)
+  resetCorrelationOnAction(REFERER_CREATE_APT);
   const url = USA_SANITY_CHECK_URL(session.applicationId, "slotBooking");
   // POST sans corps — le portail envoie Content-Type mais pas de body
   const headers = sessionHeaders(session.accessToken, session.applicationId, session.missionId, REFERER_CREATE_APT, true);

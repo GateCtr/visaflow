@@ -377,25 +377,43 @@ function generateCorrelationId(): string {
 }
 
 // ── X-Correlation-key STICKY par "navigation" ────────────────────────────────
+// FIX 6: Rotation sur ACTION (pas timer).
 // Le vrai bundle Angular génère ce header UNE FOIS dans le HttpInterceptor singleton
 // et le réutilise pour TOUTES les requêtes de la même "navigation" (page load).
 // Il ne change qu'au rechargement de page (F5 ou navigation SPA route change).
-// Régénérer à chaque requête = signal que ce n'est pas un vrai navigateur Angular.
 //
-// Stratégie : conserver le même correlationId pendant 3-8 min (simule une "navigation")
-// puis le renouveler (simule un rechargement de page ou changement de route Angular).
+// ANCIEN: Timer 3-8 min = pattern détectable.
+// NOUVEAU: Renouveler le correlation key quand :
+//   - Le referer change (transition entre pages simulée)
+//   - Un warm-up ou landing page est appelé (simule un reload de page)
+//   - Garder le même pour les requêtes séquentielles du même "flow" (scan OFC → dates → times)
 let _stickyCorrelationId: string | undefined;
-let _correlationResetAt: number = 0;
+let _lastCorrelationReferer: string | undefined;
 
 function getStickyCorrelationId(): string {
-  const now = Date.now();
-  if (!_stickyCorrelationId || now > _correlationResetAt) {
+  // FIX 6: On ne reset plus sur timer. Le reset se fait via resetCorrelationOnAction().
+  if (!_stickyCorrelationId) {
     _stickyCorrelationId = generateCorrelationId();
-    // Renouveler dans 3-8 min (simule un rechargement de page)
-    _correlationResetAt = now + (3 * 60_000 + Math.random() * 5 * 60_000);
-    console.log(`[usa] 🔑 Nouveau X-Correlation-key: ${_stickyCorrelationId.slice(0, 6)}… (TTL ${Math.round((_correlationResetAt - now) / 60000)}min)`);
+    console.log(`[usa] 🔑 Nouveau X-Correlation-key (init): ${_stickyCorrelationId.slice(0, 6)}…`);
   }
   return _stickyCorrelationId;
+}
+
+/**
+ * FIX 6: Renouvelle le X-Correlation-key sur un changement d'action/navigation.
+ * Appelé quand :
+ *  - Le referer change (nouvelle "page" Angular)
+ *  - Un warm-up/landing page est appelé (simule un page reload)
+ * NE PAS appeler entre les requêtes séquentielles du même flow.
+ */
+export function resetCorrelationOnAction(newReferer?: string): void {
+  if (newReferer && newReferer === _lastCorrelationReferer) {
+    // Même page → même correlation (flow séquentiel)
+    return;
+  }
+  _stickyCorrelationId = generateCorrelationId();
+  _lastCorrelationReferer = newReferer;
+  console.log(`[usa] 🔑 X-Correlation-key renouvelé (action): ${_stickyCorrelationId.slice(0, 6)}… (referer: ${newReferer?.split('/').pop() ?? 'init'})`);
 }
 
 // ── Headers Accept-* FIXÉS PAR SESSION (pas par requête) ─────────────────────
