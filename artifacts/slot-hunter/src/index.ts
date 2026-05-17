@@ -1469,8 +1469,20 @@ async function main(): Promise<void> {
       let watcherUsername = "";
       let bootstrapResult: Awaited<ReturnType<typeof bootstrapAccountData>> | null = null;
 
+      // FIX-22: Importer isAccountRestricted pour skip les comptes restreints AVANT bootstrap.
+      // Sans ça, le bootstrap tente des comptes fraîchement restreints (restriction découverte
+      // pendant registerAccountForKeepAlive quelques ms plus tôt) et échoue avec TOKEN_EXPIRED.
+      const { isAccountRestricted: isRestricted } = await import("./usaPortal/account-restriction.js");
+
       for (const candidateJob of sortedByTier) {
         const candidateUsername = candidateJob.hunterConfig.embassyUsername;
+
+        // FIX-22: Skip les comptes restreints — inutile de tenter un bootstrap sans token valide
+        if (isRestricted(candidateUsername)) {
+          log("WARN", `[parallel] Skip bootstrap ${candidateUsername.slice(0, 12)}… — compte RESTREINT`);
+          continue;
+        }
+
         log("INFO", `[parallel] Tentative bootstrap: ${candidateUsername.slice(0, 12)}…`);
         const result = await bootstrapAccountData(candidateJob, candidateUsername);
         if (result.success && result.ofcList.length > 0) {
