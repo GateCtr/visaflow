@@ -726,6 +726,35 @@ export function reportSlotDiscoveryBatch(events: SlotDiscoveryEvent[]): void {
   );
 }
 
+// ─── Early Bird Prediction: bootstrap historique ─────────────────────────────
+
+/**
+ * Récupère les timestamps d'observations de slots depuis Convex (7 derniers jours).
+ * Utilisé au démarrage du refresh continu pour bootstrapper le modèle de prédiction.
+ */
+export async function getSlotObservationTimestamps(
+  destination: string,
+  office: string,
+): Promise<number[]> {
+  const params = new URLSearchParams({ destination, office });
+  const url = `${CONVEX_SITE_URL}/hunter/slot-discovery/timestamps?${params.toString()}`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] getSlotObservationTimestamps failed: ${res.status}`);
+      return [];
+    }
+    const data = (await res.json()) as { timestamps: number[]; count: number };
+    return data.timestamps ?? [];
+  } catch (err) {
+    console.warn("[convexClient] getSlotObservationTimestamps error:", err);
+    return [];
+  }
+}
+
 export async function uploadFile(base64: string, contentType: string): Promise<string | null> {
   const url = `${CONVEX_SITE_URL}/hunter/upload-screenshot`;
   try {

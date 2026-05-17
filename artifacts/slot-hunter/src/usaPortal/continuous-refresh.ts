@@ -13,7 +13,7 @@
 
 import type { UsaSession } from "./types.js";
 import type { HunterJob, SlotDiscoveryEvent } from "../convexClient.js";
-import { botLog } from "../convexClient.js";
+import { botLog, getSlotObservationTimestamps } from "../convexClient.js";
 import {
   USA_FIRST_AVAILABLE_MONTH_URL,
   USA_LANDING_PAGE_URL,
@@ -24,7 +24,7 @@ import { RateLimitError, AccountBlockedError, TokenExpiredError, AccountRestrict
 import { isRestrictedBody } from "./account-restriction.js";
 import { checkProxyLiveness, isSessionFrozen } from "./proxy-session-guard.js";
 import type { UsaOfc, UsaAppDetails } from "./usa-scan-types.js";
-import { getRefreshMultiplier, isHotWindow, getCurrentPredictionScore } from "./slot-prediction.js";
+import { getRefreshMultiplier, isHotWindow, getCurrentPredictionScore, injectHistoricalObservations, getObservationCount } from "./slot-prediction.js";
 import {
   getCompetitionRefreshMultiplier,
   recordSlotAppearance,
@@ -382,6 +382,24 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
     if (externalBudget > 0 && externalBudget < effectiveBudgetMs) {
       effectiveBudgetMs = externalBudget;
       console.log(`[refresh] ⏱ Budget réduit par deadline externe: ${Math.round(effectiveBudgetMs / 60000)} min (au lieu de ${Math.round(TOTAL_REFRESH_BUDGET_MS / 60000)} min)`);
+    }
+  }
+
+  // ── Early Bird bootstrap : injecter les observations historiques depuis Convex ──
+  // Ne fait rien si la prédiction est déjà alimentée (évite les requêtes inutiles).
+  if (getObservationCount(username) === 0 && ofcs.length > 0) {
+    try {
+      // Utiliser le premier OFC comme référence (Kinshasa n'a qu'un OFC)
+      const officeName = ofcs[0].postName;
+      const historicalTs = await getSlotObservationTimestamps("usa", officeName);
+      if (historicalTs.length > 0) {
+        injectHistoricalObservations(username, historicalTs, officeName);
+        console.log(`[early-bird] ✅ Bootstrap: ${historicalTs.length} observations historiques chargées depuis Convex pour ${officeName}`);
+      } else {
+        console.log(`[early-bird] ℹ️ Aucune observation historique trouvée pour ${officeName} — prédiction en mode neutre`);
+      }
+    } catch (err) {
+      console.warn(`[early-bird] ⚠️ Échec bootstrap historique (non-bloquant):`, err);
     }
   }
 
