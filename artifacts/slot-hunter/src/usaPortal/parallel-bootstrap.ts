@@ -228,12 +228,36 @@ export async function bootstrapAccountData(
   let visaCategory = "VisitorVisas";
   let applicantId: string = String(cached.userID);
 
-  // On utilise l'applicationId du hunterConfig si disponible
-  const applicationId = job.hunterConfig.portalApplicationId ?? "";
+  // ── 0. Résoudre applicationId via checkUsaAppointmentRequestStatus ────────
+  // L'ancien système (impl.ts) appelle TOUJOURS cette API en premier pour résoudre
+  // l'applicationId du dossier actif (surtout quand portalApplicationId n'est pas renseigné).
+  const { checkUsaAppointmentRequestStatus } = await import("./appointments-api.js");
+  let applicationId = job.hunterConfig.portalApplicationId ?? "";
 
-  if (applicationId) {
+  if (!applicationId) {
+    try {
+      const requestStatus = await checkUsaAppointmentRequestStatus(session, undefined);
+      if (requestStatus.applicationId) {
+        applicationId = requestStatus.applicationId;
+        session.applicationId = applicationId;
+        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via appointmentRequestStatus: ${applicationId}`);
+      }
+    } catch (err) {
+      console.warn(`[bootstrap] checkUsaAppointmentRequestStatus échoué pour ${username.slice(0, 12)}…: ${err}`);
+    }
+  } else {
     session.applicationId = applicationId;
+  }
 
+  if (!applicationId) {
+    console.error(`[bootstrap] ❌ ${username.slice(0, 12)}… applicationId introuvable — bootstrap impossible`);
+    setUsaSessionProxy(undefined);
+    if (proxyUrl) releaseProxyGuard(username);
+    return { success: false, ofcList: [], appDetails: null, visaClass: "", visaType: "", visaCategory: "", error: "NO_APPLICATION_ID" };
+  }
+
+  // ── 1. getTransformData → paymentStatus, visaClass, visaCategory, applicantId GSS
+  if (applicationId) {
     try {
       const transformData = await getUsaTransformData(session, applicationId);
       if (transformData) {
@@ -241,7 +265,10 @@ export async function bootstrapAccountData(
         if (transformData.visaCategoryKey) visaCategory = transformData.visaCategoryKey;
         else if (transformData.visaCategory) visaCategory = transformData.visaCategory;
         if (transformData.visaTypeKey) visaType = transformData.visaTypeKey;
-        if (transformData.applicantId) applicantId = transformData.applicantId;
+        if (transformData.applicantId) {
+          applicantId = transformData.applicantId;
+          session.applicantId = transformData.applicantId;
+        }
 
         if (transformData.paymentStatus === "VERIFIED") {
           console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… paiement MRV vérifié`);
@@ -263,15 +290,75 @@ export async function bootstrapAccountData(
   // ── ÉTAPE 6 : Pause humaine entre les appels API ──────────────────────────
   await humanDelay();
 
-  // ── 2. getApplicationDetails → applicantId, appointmentId ────────────────
+  // ── 2. /appointments/search → applicantId, visaType, visaClass, appointmentId
+  // C'est l'appel CRITIQUE que l'ancien système faisait AVANT getFirstAvailableMonth.
+  // Sans lui, le payload du scan contient des valeurs invalides (applicantId numérique
+  // au lieu du format GSS string, visaType/Class incorrects).
+  const { USA_SEARCH_URL } = await import("./config.js");
+  let searchDetails: {
+    visaType?: string;
+    visaClass?: string;
+    applicantId?: string;
+    appointmentId?: number;
+    appointmentLocationType?: string;
+    visaCategory?: string;
+  } | null = null;
+
+  if (applicationId) {
+    try {
+      const searchPayload = {
+        operation: "AND",
+        searchObjects: [
+          { key: "applicationId", value: applicationId, feildType: "STRING", operation: "EQUAL" },
+        ],
+      };
+      const { authHeaders: getAuthHeaders } = await import("./usa-http.js");
+      const searchHeaders = getAuthHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, username);
+      const { usaFetch } = await import("./usa-http.js");
+      const searchRes = await usaFetch(USA_SEARCH_URL, {
+        method: "POST",
+        headers: searchHeaders,
+        body: JSON.stringify(searchPayload),
+      });
+      console.log(`[bootstrap] /appointments/search → HTTP ${searchRes.status}`);
+      if (searchRes.ok) {
+        const searchRaw = await searchRes.text();
+        let searchRows: Record<string, unknown>[] = [];
+        try { searchRows = JSON.parse(searchRaw) as Record<string, unknown>[]; } catch { /* non-JSON */ }
+        const newEntries = searchRows.filter(r => r.appointmentStatus === "NEW");
+        const target = newEntries[0] ?? searchRows[0];
+        if (target) {
+          searchDetails = {
+            visaType: typeof target.visaType === "string" ? target.visaType : undefined,
+            visaClass: typeof target.visaClass === "string" ? target.visaClass : undefined,
+            applicantId: typeof target.applicantId === "string" ? target.applicantId : undefined,
+            appointmentId: typeof target.appointmentId === "number" ? target.appointmentId : undefined,
+            appointmentLocationType: typeof target.appointmentLocationType === "string" ? target.appointmentLocationType : undefined,
+            visaCategory: typeof target.visaCategory === "string" ? target.visaCategory : undefined,
+          };
+          if (searchDetails.applicantId) applicantId = searchDetails.applicantId;
+          if (searchDetails.visaType) visaType = searchDetails.visaType;
+          if (searchDetails.visaClass) visaClass = searchDetails.visaClass;
+          if (searchDetails.visaCategory) visaCategory = searchDetails.visaCategory;
+          console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… search: applicantId=${searchDetails.applicantId}, visaType=${searchDetails.visaType}, visaClass=${searchDetails.visaClass}, locationType=${searchDetails.appointmentLocationType}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[bootstrap] /appointments/search échoué pour ${username.slice(0, 12)}…: ${err}`);
+    }
+  }
+
+  await humanDelay();
+
+  // ── 3. getApplicationDetails → fallback (enrichissement) ─────────────────
   let appDetails: UsaAppDetails | null = null;
   if (applicationId) {
     try {
       appDetails = await getUsaApplicationDetails(session, applicationId);
       if (appDetails) {
-        if (appDetails.applicantId) applicantId = String(appDetails.applicantId);
-        if (appDetails.visaType && appDetails.visaType !== "NIV") visaType = appDetails.visaType;
-        if (appDetails.visaClass && appDetails.visaClass !== "B1/B2") visaClass = appDetails.visaClass;
+        if (appDetails.applicantId && !searchDetails?.applicantId) applicantId = String(appDetails.applicantId);
+        if (appDetails.visaType && appDetails.visaType !== "NIV" && !searchDetails?.visaType) visaType = appDetails.visaType;
+        if (appDetails.visaClass && appDetails.visaClass !== "B1/B2" && !searchDetails?.visaClass) visaClass = appDetails.visaClass;
         console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… appDetails: applicantId=${applicantId}, visaType=${visaType}, visaClass=${visaClass}`);
       }
     } catch (err) {
