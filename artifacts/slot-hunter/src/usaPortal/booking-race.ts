@@ -24,11 +24,12 @@
 
 import { createSessionFetcher, type UsaFetcher } from "./usa-fetcher.js";
 import { tokenCache, authHeaders, setUsaSessionProxy } from "./usa-http.js";
-import { reportSlotFound, sendHeartbeat, botLog } from "../convexClient.js";
+import { reportSlotFound, sendHeartbeat, botLog, uploadFile } from "../convexClient.js";
 import { findFirstSlotForOfc } from "./usa-scan-find.js";
 import { bookUsaSlot, rescheduleUsaSlot } from "./usa-scan-book.js";
 import type { UsaBookingResult } from "./usa-scan-book.js";
 import { recordSlotObservation } from "./slot-prediction.js";
+import { recordSlotAppearance } from "./competitive-intelligence.js";
 import { downloadUsaConfirmationPdf } from "./usa-scan-confirmation.js";
 import type { SlotDetectedEvent, OfcWatcherSubscriber } from "./ofc-watcher.js";
 import type { UsaOfc, UsaAppDetails, SlotFound } from "./usa-scan-types.js";
@@ -256,21 +257,63 @@ async function participateInRace(
     }
 
     if (booking.success) {
-      console.log(`${logPrefix} ✅ BOOKING RÉUSSI! code=${(booking as any).confirmationCode ?? "N/A"}`);
+      const appointmentId = (booking as any).appointmentId;
+      console.log(`${logPrefix} ✅ BOOKING RÉUSSI! appointmentId=${appointmentId ?? "N/A"}`);
 
-      // Enregistrer l'observation (Early Bird)
+      // ── 1. botLog booking_success (comme l'ancien système) ──
+      botLog({
+        applicationId: job.id,
+        step: "booking_success",
+        status: "ok",
+        data: {
+          flow: "usa",
+          ofc: found.ofcName,
+          date: found.date,
+          time: found.time,
+          slotId: found.slotId,
+          appointmentId,
+          responseMsg: (booking as any).responseMsg,
+          via: "parallel_booking_race",
+        },
+      });
+
+      // ── 2. Télécharger + uploader le PDF de confirmation ──
+      let pdfStorageId: string | undefined;
+      try {
+        const pdf = await downloadUsaConfirmationPdf(session, appDetails.applicationId, appointmentId);
+        if (pdf) {
+          console.log(`${logPrefix} 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
+          const b64 = pdf.toString("base64");
+          pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+          if (pdfStorageId) {
+            console.log(`${logPrefix} ✅ PDF uploadé → storageId: ${pdfStorageId}`);
+            botLog({
+              applicationId: job.id,
+              step: "confirmation_letter",
+              status: "ok",
+              data: { flow: "usa", pdfSizeBytes: pdf.length, storageId: pdfStorageId, appointmentId },
+            });
+          }
+        }
+      } catch (pdfErr) {
+        console.warn(`${logPrefix} PDF confirmation échoué (non-bloquant):`, pdfErr);
+      }
+
+      // ── 3. Enregistrer les observations (Early Bird + Competitive Intelligence) ──
       recordSlotObservation(username, event.ofcName);
+      recordSlotAppearance(event.ofcName, found.date, found.time);
 
-      // Reporter à Convex
+      // ── 4. Reporter à Convex (avec le PDF storageId et location formatée) ──
       await reportSlotFound({
         applicationId: job.id,
         date: found.date,
         time: found.time,
-        location: found.ofcName,
-        confirmationCode: (booking as any).confirmationCode,
-        screenshotStorageId: (booking as any).screenshotStorageId,
+        location: `${found.ofcName} — Ambassade USA (slotId=${found.slotId}, appointmentId=${appointmentId ?? "N/A"})`,
+        confirmationCode: appointmentId?.toString(),
+        screenshotStorageId: pdfStorageId,
       });
 
+      // ── 5. botLog pour le dashboard race ──
       botLog({
         applicationId: job.id,
         step: "booking_race_success",
@@ -282,17 +325,11 @@ async function participateInRace(
           date: found.date,
           time: found.time,
           slotId: found.slotId,
-          confirmationCode: (booking as any).confirmationCode,
+          appointmentId,
+          pdfStorageId,
           raceParticipants: event.watcherUsername ? "multi" : "single",
         },
       });
-
-      // Tenter le téléchargement de la lettre de confirmation (non-bloquant)
-      try {
-        await downloadUsaConfirmationPdf(session, job.id);
-      } catch (pdfErr) {
-        console.warn(`${logPrefix} PDF confirmation échoué (non-bloquant):`, pdfErr);
-      }
 
       return true;
     } else if (booking.statusCode === 409) {
@@ -316,17 +353,46 @@ async function participateInRace(
         : await bookUsaSlot(session, retryFound);
 
       if (retryBooking.success) {
-        console.log(`${logPrefix} ✅ RETRY BOOKING RÉUSSI!`);
+        const retryAppointmentId = (retryBooking as any).appointmentId;
+        console.log(`${logPrefix} ✅ RETRY BOOKING RÉUSSI! appointmentId=${retryAppointmentId ?? "N/A"}`);
+
+        // botLog booking success via retry
+        botLog({
+          applicationId: job.id,
+          step: "booking_success",
+          status: "ok",
+          data: { flow: "usa", ofc: retryFound.ofcName, date: retryFound.date, time: retryFound.time, appointmentId: retryAppointmentId, via: "409_retry" },
+        });
+
+        // Download + upload PDF
+        let retryPdfStorageId: string | undefined;
+        try {
+          const pdf = await downloadUsaConfirmationPdf(session, appDetails.applicationId, retryAppointmentId);
+          if (pdf) {
+            const b64 = pdf.toString("base64");
+            retryPdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+            if (retryPdfStorageId) {
+              botLog({
+                applicationId: job.id,
+                step: "confirmation_letter",
+                status: "ok",
+                data: { flow: "usa", pdfSizeBytes: pdf.length, storageId: retryPdfStorageId, appointmentId: retryAppointmentId },
+              });
+            }
+          }
+        } catch { /* non-bloquant */ }
+
         recordSlotObservation(username, event.ofcName);
+        recordSlotAppearance(event.ofcName, retryFound.date, retryFound.time);
+
         await reportSlotFound({
           applicationId: job.id,
           date: retryFound.date,
           time: retryFound.time,
-          location: retryFound.ofcName,
-          confirmationCode: (retryBooking as any).confirmationCode,
-          screenshotStorageId: (retryBooking as any).screenshotStorageId,
+          location: `${retryFound.ofcName} — Ambassade USA (slotId=${retryFound.slotId}, appointmentId=${retryAppointmentId ?? "N/A"}, via 409-retry)`,
+          confirmationCode: retryAppointmentId?.toString(),
+          screenshotStorageId: retryPdfStorageId,
         });
-        try { await downloadUsaConfirmationPdf(session, job.id); } catch { /* non-bloquant */ }
         return true;
       }
       throw new Error(`409_RETRY_FAILED: ${retryBooking.error}`);
