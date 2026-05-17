@@ -204,7 +204,7 @@ async function participateInRace(
     missionId: USA_MISSION_ID,
     allowedOfcs: cached.allowedOfcs ?? [],
     appointmentId: appDetails.appointmentId,
-    applicantUUID: appDetails.applicantUUID,
+    applicantUUID: typeof appDetails.applicantUUID === "string" ? parseInt(appDetails.applicantUUID, 10) || undefined : appDetails.applicantUUID,
     isReschedule: rescheduleYN,
   };
 
@@ -238,7 +238,7 @@ async function participateInRace(
     // Utiliser le premier OFC connu du subscriber
     if (cached.allowedOfcs && cached.allowedOfcs.length > 0) {
       ofc.postUserId = cached.allowedOfcs[0].postUserId;
-      ofc.officeType = cached.allowedOfcs[0].officeType;
+      ofc.officeType = (cached.allowedOfcs[0] as { postUserId: number; officeType?: string }).officeType ?? ofc.officeType;
     }
 
     console.log(`${logPrefix} 🔍 Recherche slot détaillé (dates+times)...`);
