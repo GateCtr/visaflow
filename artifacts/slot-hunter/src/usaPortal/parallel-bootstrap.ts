@@ -26,7 +26,6 @@ import type { HunterJob } from "../convexClient.js";
 import { botLog } from "../convexClient.js";
 import {
   tokenCache,
-  authHeaders,
   initSessionHeaders,
   resetCorrelationOnAction,
   setAccountFingerprint,
