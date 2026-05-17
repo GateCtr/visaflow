@@ -304,14 +304,20 @@ async function runWatcherLoop(state: OfcWatcherState): Promise<void> {
   }
 
   // Lancer la boucle
+  console.log(`[ofc-watcher] 🔄 Boucle de refresh démarrée pour ${state.ofc.postName} (compte: ${state.watcherUsername.slice(0, 12)}…)`);
   while (!state.stopped) {
     try {
+      console.log(`[ofc-watcher] 📡 Refresh #${state.totalRefreshes + 1} en cours...`);
       await doWatcherRefresh(state);
+      console.log(`[ofc-watcher] ✅ Refresh #${state.totalRefreshes} terminé (${state.lastLatencyMs}ms)`);
     } catch (err) {
-      console.error(`[ofc-watcher] ❌ Erreur refresh ${state.ofc.postName}:`, err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[ofc-watcher] ❌ Erreur refresh #${state.totalRefreshes + 1} ${state.ofc.postName}: ${errMsg}`);
       state.consecutiveErrors++;
+      console.error(`[ofc-watcher]    Erreurs consécutives: ${state.consecutiveErrors}/${MAX_WATCHER_ERRORS}`);
 
       if (state.consecutiveErrors >= MAX_WATCHER_ERRORS) {
+        console.error(`[ofc-watcher] 🔄 Tentative failover...`);
         const didFailover = failoverWatcher(state.ofcKey);
         if (!didFailover) {
           console.error(`[ofc-watcher] 🛑 Watcher ${state.ofc.postName} arrêté — trop d'erreurs + failover impossible`);
@@ -323,6 +329,7 @@ async function runWatcherLoop(state: OfcWatcherState): Promise<void> {
 
     // Intervalle adaptatif
     const interval = computeWatcherInterval(state);
+    console.log(`[ofc-watcher] ⏳ Prochain refresh dans ${Math.round(interval / 1000)}s`);
     await new Promise(r => setTimeout(r, interval));
   }
 }
@@ -333,6 +340,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   // Vérifier que le token du watcher est valide
   const cached = tokenCache.get(watcherUsername.toLowerCase());
   if (!cached || Date.now() >= cached.expiresAt) {
+    console.error(`[ofc-watcher] ⚠️ Token invalide/expiré pour ${watcherUsername.slice(0, 12)}…`);
     throw new Error("TOKEN_EXPIRED");
   }
 
@@ -343,6 +351,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
   if (useLandingPage) {
     // GET getLandingPage — requête légère, simule navigation dashboard
+    console.log(`[ofc-watcher] 📡 [${ofc.postName}] GET getLandingPage (alternation)`);
     resetCorrelationOnAction(REFERER_DASHBOARD, watcherUsername);
     const hdrs = authHeaders(cached.accessToken, REFERER_DASHBOARD, false, watcherUsername);
     // Ajouter LanguageId comme le fait le vrai intercepteur Angular pour cette route
@@ -355,6 +364,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
     });
     state.lastLatencyMs = Date.now() - reqStart;
     state.totalRefreshes++;
+    console.log(`[ofc-watcher] 📡 [${ofc.postName}] GET → HTTP ${res.status} (${state.lastLatencyMs}ms)`);
 
     if (res.status === 401) throw new Error("TOKEN_EXPIRED");
     if (res.status === 429 || res.status === 403) throw new Error(`HTTP_${res.status}`);
@@ -373,6 +383,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   }
 
   // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
+  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (compte: ${watcherUsername.slice(0, 12)}…)`);
   // Construire le payload (identique à doFirstAvailableMonthRefresh)
   // On a besoin d'un appDetails du premier subscriber pour le payload
   const firstSub = state.subscribers.values().next().value;
@@ -401,6 +412,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
   state.lastLatencyMs = Date.now() - reqStart;
   state.totalRefreshes++;
+  console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST → HTTP ${res.status} (${state.lastLatencyMs}ms) | refresh #${state.totalRefreshes}`);
 
   // Erreurs critiques → throw pour déclencher le error handling + failover
   if (res.status === 429 || res.status === 403) {
