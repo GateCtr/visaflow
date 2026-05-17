@@ -448,6 +448,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
 
     const windowStart = Date.now();
     let windowRefreshes = 0;
+    let windowFirstAvailCount = 0;
 
     // ── Boucle de refresh dans la fenêtre ──
     while (Date.now() - windowStart < windowDuration) {
@@ -474,6 +475,7 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
       } else {
         refreshResult = await doFirstAvailableMonthRefresh(config);
         firstAvailableMonthCount++;
+        windowFirstAvailCount++;
       }
 
       const reqLatency = Date.now() - reqStart;
@@ -534,15 +536,13 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
       const jitter = (Math.random() - 0.5) * 4000; // ±2s de jitter humain
       const finalInterval = Math.max(5000, smartInterval + jitter);
 
-      // Log discret (pas à chaque refresh)
-      if (windowRefreshes % 3 === 0 || windowRefreshes === 1) {
-        const predNow = getCurrentPredictionScore(username);
-        console.log(
-          `[refresh] 🔄 #${totalRefreshes} (W${windowIdx + 1}) — ${useLandingPage ? "landing" : "firstAvail"} ` +
-          `| next=${Math.round(finalInterval / 1000)}s | pred=${predNow.window} | health=${serverHealth.healthScore.toFixed(2)} ` +
-          `| latency=${reqLatency}ms`,
-        );
-      }
+      // Log CHAQUE refresh pour traçabilité (plus de numéros sautés)
+      const predNow = getCurrentPredictionScore(username);
+      console.log(
+        `[refresh] 🔄 #${totalRefreshes} (W${windowIdx + 1}) — ${useLandingPage ? "landing" : "firstAvail"} ` +
+        `| next=${Math.round(finalInterval / 1000)}s | pred=${predNow.window} | health=${serverHealth.healthScore.toFixed(2)} ` +
+        `| latency=${reqLatency}ms`,
+      );
 
       await new Promise(r => setTimeout(r, finalInterval));
 
@@ -556,7 +556,8 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
     const windowElapsed = Math.round((Date.now() - windowStart) / 1000);
     console.log(
       `[refresh] ✅ Fenêtre #${windowIdx + 1} terminée — ${windowRefreshes} refreshes en ${windowElapsed}s ` +
-      `(landing=${landingPageCount}, firstAvail=${firstAvailableMonthCount})`,
+      `(window: landing=${windowRefreshes - windowFirstAvailCount}, firstAvail=${windowFirstAvailCount}) ` +
+      `(total: landing=${landingPageCount}, firstAvail=${firstAvailableMonthCount})`,
     );
     botLog({
       applicationId: job.id,

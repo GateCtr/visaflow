@@ -3,7 +3,7 @@
  *
  * - IPRoyal : ajout automatique via REST API (POST /whitelist-entries)
  *   avec configuration résidentielle sticky : country-cd, city-kinshasa,
- *   session sticky (8 chars aléatoires), lifetime 59 minutes.
+ *   session sticky (8 chars aléatoires), lifetime 12h.
  * - 2Captcha Proxy : ajout IMPOSSIBLE via API — log l'URL du dashboard pour ajout manuel
  *
  * Variables d'environnement requises :
@@ -44,16 +44,16 @@ function generateSessionId(length: number = 8): string {
 
 /**
  * Construit la configuration IPRoyal par défaut pour le whitelist :
- * _country-cd_city-kinshasa_session-{random8}_lifetime-59m
+ * _country-cd_city-kinshasa_session-{random8}_lifetime-12h
  *
  * Cette configuration assure :
  * - IP résidentielle depuis Kinshasa, RDC (géolocalisation cohérente avec le consulat)
- * - Session sticky : même IP pendant 59 minutes (évite les changements IP mid-session)
- * - Lifetime 59 minutes (max recommandé pour éviter les expirations silencieuses)
+ * - Session sticky : même IP pendant 12 heures (comportement WiFi résidentiel naturel)
+ * - Lifetime 12h (même IP pour toute la demi-journée de scan)
  */
 function buildDefaultIproyalConfig(): string {
   const sessionId = generateSessionId(8);
-  return `_country-cd_city-kinshasa_session-${sessionId}_lifetime-59m`;
+  return `_country-cd_city-kinshasa_session-${sessionId}_lifetime-12h`;
 }
 
 interface IProyalWhitelistEntry {
@@ -204,11 +204,101 @@ async function addIproyalWhitelistEntry(
   }
 }
 
+// ─── BrightData Whitelist API ────────────────────────────────────────────────
+
+/**
+ * Extraie le nom de zone depuis l'URL du proxy BrightData (BRIGHTDATA_RESIDENTIAL_PROXY_URL).
+ * Format: http://brd-customer-XXX-zone-ZONENAME:password@host:port
+ * Retourne le nom de zone ou undefined si non parsable.
+ */
+function extractBrightDataZone(): string | undefined {
+  const proxyUrl = process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL;
+  if (!proxyUrl) return undefined;
+  try {
+    const parsed = new URL(proxyUrl);
+    const username = decodeURIComponent(parsed.username);
+    const match = username.match(/-zone-([a-zA-Z0-9_]+)/);
+    return match?.[1] ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+interface BrightDataWhitelistResult {
+  ok: boolean;
+  error?: string;
+  alreadyExists?: boolean;
+}
+
+/**
+ * Ajoute l'IP à la whitelist BrightData via l'API REST.
+ * POST https://api.brightdata.com/zone/whitelist
+ * Body: { zone: "zone_name", ip: "x.x.x.x" }
+ * Auth: Bearer API_KEY
+ *
+ * Si zone est undefined/null, on ne passe pas le champ zone → whitelist sur toutes les zones.
+ */
+async function addBrightDataWhitelistEntry(
+  ip: string,
+  apiKey: string,
+  zone?: string | null,
+): Promise<BrightDataWhitelistResult> {
+  const url = "https://api.brightdata.com/zone/whitelist";
+
+  try {
+    const body: Record<string, unknown> = { ip };
+    if (zone) body.zone = zone;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (res.ok || res.status === 201) {
+      console.log(`[ip-whitelist] ✅ BrightData: IP ${ip} ajoutée à la whitelist (zone: ${zone || "toutes"})`);
+      return { ok: true, alreadyExists: false };
+    }
+
+    // Handle "already whitelisted" or "duplicate" responses
+    if (res.status === 409 || res.status === 422) {
+      const errBody = await res.text();
+      // BrightData may return 422 if IP is already in allowlist
+      if (errBody.toLowerCase().includes("already") || errBody.toLowerCase().includes("exist")) {
+        console.log(`[ip-whitelist] ✅ BrightData: IP ${ip} déjà whitelistée (${res.status})`);
+        return { ok: true, alreadyExists: true };
+      }
+      console.warn(`[ip-whitelist] ⚠️ BrightData: HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      return { ok: false, error: `HTTP ${res.status}: ${errBody.slice(0, 200)}` };
+    }
+
+    // Handle 200 response with body (some APIs return 200 even for "already exists")
+    if (res.status === 200) {
+      const respBody = await res.text();
+      console.log(`[ip-whitelist] ✅ BrightData: IP ${ip} whitelist OK (200): ${respBody.slice(0, 100)}`);
+      return { ok: true, alreadyExists: false };
+    }
+
+    const errText = await res.text();
+    console.error(`[ip-whitelist] ❌ BrightData: Erreur HTTP ${res.status}: ${errText.slice(0, 200)}`);
+    return { ok: false, error: `HTTP ${res.status}: ${errText.slice(0, 200)}` };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ip-whitelist] ❌ BrightData: Erreur réseau: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
 // ─── Orchestrateur ──────────────────────────────────────────────────────────
 
 export interface WhitelistResult {
   ip: string;
   iproyal: { ok: boolean; message: string };
+  brightdata: { ok: boolean; message: string };
   twocaptcha: { ok: boolean; message: string };
 }
 
@@ -220,6 +310,7 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
   const result: WhitelistResult = {
     ip: serverIp,
     iproyal: { ok: false, message: "non configuré" },
+    brightdata: { ok: false, message: "non configuré" },
     twocaptcha: { ok: false, message: "non configuré" },
   };
 
@@ -261,6 +352,31 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     if (!iproyalHash) missing.push("IPROYAL_USER_HASH");
     result.iproyal = { ok: false, message: `Variable(s) manquante(s): ${missing.join(", ")}` };
     console.log(`[ip-whitelist] ⚠️ IPRoyal: auto-whitelist désactivée (${missing.join(" + ")} absent)`);
+  }
+
+  // ── BrightData ──────────────────────────────────────────────────────────────
+  // API: POST https://api.brightdata.com/zone/whitelist
+  // Body: { zone: "residential_proxy1", ip: "x.x.x.x" }
+  // Auth: Bearer BRIGHTDATA_API_KEY
+  const brightdataApiKey = process.env.BRIGHTDATA_API_KEY;
+  const brightdataZone = process.env.BRIGHTDATA_ZONE_NAME || extractBrightDataZone();
+
+  if (brightdataApiKey) {
+    console.log(`[ip-whitelist] 🌐 BrightData: Ajout IP ${serverIp} à la whitelist (zone: ${brightdataZone || "toutes"})...`);
+    const bdResult = await addBrightDataWhitelistEntry(serverIp, brightdataApiKey, brightdataZone);
+    if (bdResult.ok) {
+      result.brightdata = {
+        ok: true,
+        message: bdResult.alreadyExists
+          ? `IP déjà whitelistée`
+          : `IP ajoutée à la zone ${brightdataZone || "(toutes)"}`,
+      };
+    } else {
+      result.brightdata = { ok: false, message: bdResult.error || "Erreur inconnue" };
+    }
+  } else {
+    result.brightdata = { ok: false, message: "BRIGHTDATA_API_KEY absent" };
+    console.log(`[ip-whitelist] ⚠️ BrightData: auto-whitelist désactivée (BRIGHTDATA_API_KEY absent)`);
   }
 
   // ── 2Captcha Proxy ─────────────────────────────────────────────────────────
