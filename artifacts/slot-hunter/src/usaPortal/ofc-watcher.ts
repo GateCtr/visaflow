@@ -384,10 +384,20 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
 
   // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
   console.log(`[ofc-watcher] 📡 [${ofc.postName}] POST getFirstAvailableMonth (compte: ${watcherUsername.slice(0, 12)}…)`);
-  // Construire le payload (identique à doFirstAvailableMonthRefresh)
-  // On a besoin d'un appDetails du premier subscriber pour le payload
-  const firstSub = state.subscribers.values().next().value;
-  if (!firstSub) return; // pas de subscribers
+  // Construire le payload — utiliser un subscriber avec des données valides
+  // (skip ceux dont le bootstrap a échoué = applicationId vide)
+  let firstSub: OfcWatcherSubscriber | undefined;
+  for (const sub of state.subscribers.values()) {
+    if (sub.appDetails.applicationId && sub.appDetails.applicationId !== "0") {
+      firstSub = sub;
+      break;
+    }
+  }
+  if (!firstSub) {
+    // Aucun subscriber avec des données valides → skip ce cycle
+    console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Aucun subscriber avec applicationId valide — skip`);
+    return;
+  }
 
   const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, watcherUsername);
 
