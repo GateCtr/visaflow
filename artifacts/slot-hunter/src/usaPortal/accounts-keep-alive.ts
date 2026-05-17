@@ -508,6 +508,40 @@ async function monitorTick(): Promise<void> {
   // Log périodique (pas à chaque tick pour éviter le spam)
   if (managedAccounts.size > 0) {
     console.log(`[accounts-ka] 📊 Status: ${readyCount}/${managedAccounts.size} prêts, ${dormantCount} dormants`);
+
+    // FIX-20: botLog enrichi toutes les 2 min — état de tous les comptes pour le dashboard
+    const accountDetails: Array<Record<string, unknown>> = [];
+    for (const [key, account] of managedAccounts) {
+      const cached = tokenCache.get(key);
+      const restricted = isAccountRestricted(account.username);
+      const restrictionDeadline = getAccountRestrictionDeadline(account.username);
+      accountDetails.push({
+        username: account.username.slice(0, 15),
+        hasToken: cached ? isCachedTokenValid(cached) : false,
+        tokenExpiresInMin: cached ? Math.round((cached.expiresAt - now) / 60_000) : null,
+        tokenRemainingPct: cached ? Math.max(0, Math.min(100, Math.round(((cached.expiresAt - now) / (55 * 60_000)) * 100))) : 0,
+        keepAliveActive: isBackgroundKeepAliveActive(key),
+        restricted,
+        restrictedUntilMin: restrictionDeadline ? Math.round((restrictionDeadline - now) / 60_000) : null,
+        dormantSinceMin: account.tokenDiedAt ? Math.round((now - account.tokenDiedAt) / 60_000) : null,
+        restingMin: getRestTimeRemaining(account.username) > 0 ? Math.round(getRestTimeRemaining(account.username) / 60_000) : null,
+        reloginCount: account.reloginCount,
+        sessionsToday: MAX_SESSIONS_PER_DAY - getSessionsRemainingToday(account.username),
+      });
+    }
+
+    botLog({
+      applicationId: "watcher",
+      step: "accounts_status",
+      status: readyCount > 0 ? "ok" : "warn",
+      data: {
+        readyCount,
+        dormantCount,
+        totalAccounts: managedAccounts.size,
+        accounts: accountDetails,
+        checkedAt: new Date().toISOString(),
+      },
+    });
   }
 }
 

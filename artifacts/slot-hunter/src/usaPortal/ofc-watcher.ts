@@ -175,6 +175,24 @@ export function startOfcWatcher(
   activeWatchers.set(ofcKey, state);
   console.log(`[ofc-watcher] 🚀 Watcher démarré pour ${ofc.postName} (compte: ${watcherUsername.slice(0, 12)}…)`);
 
+  // FIX-20: botLog enrichi — watcher démarré (visible dans le dashboard admin)
+  const cachedToken = tokenCache.get(watcherUsername.toLowerCase());
+  botLog({
+    applicationId: "watcher",
+    step: "ofc_watcher_started",
+    status: "ok",
+    data: {
+      ofcName: ofc.postName,
+      ofcKey,
+      watcherAccount: watcherUsername,
+      subscriberCount: 0, // sera mis à jour après inscription
+      tokenExpiresAt: cachedToken?.expiresAt ? new Date(cachedToken.expiresAt).toISOString() : null,
+      tokenExpiresInMin: cachedToken ? Math.round((cachedToken.expiresAt - Date.now()) / 60_000) : null,
+      proxyUrl: watcherProxyUrl ? "configured" : "direct",
+      startedAt: new Date().toISOString(),
+    },
+  });
+
   // Lancer la boucle
   runWatcherLoop(state);
 }
@@ -191,6 +209,20 @@ export function stopOfcWatcher(ofcKey: string): void {
   state.fetcher.dispose();
   activeWatchers.delete(ofcKey);
   console.log(`[ofc-watcher] 🛑 Watcher arrêté pour ${state.ofc.postName}`);
+
+  // FIX-20: botLog session terminée (visible dans dashboard)
+  botLog({
+    applicationId: "watcher",
+    step: "ofc_watcher_session_end",
+    status: "warn",
+    data: {
+      ofcName: state.ofc.postName,
+      reason: "stopped",
+      totalChecks: state.totalRefreshes,
+      lastLatencyMs: state.lastLatencyMs,
+      stoppedAt: new Date().toISOString(),
+    },
+  });
 }
 
 /**
@@ -330,6 +362,29 @@ async function runWatcherLoop(state: OfcWatcherState): Promise<void> {
     // Intervalle adaptatif
     const interval = computeWatcherInterval(state);
     console.log(`[ofc-watcher] ⏳ Prochain refresh dans ${Math.round(interval / 1000)}s`);
+
+    // FIX-20: Summary botLog toutes les 5 itérations (~5 min) pour le dashboard
+    if (state.totalRefreshes > 0 && state.totalRefreshes % 5 === 0) {
+      const summaryToken = tokenCache.get(state.watcherUsername.toLowerCase());
+      const summaryTokenMin = summaryToken ? Math.round((summaryToken.expiresAt - Date.now()) / 60_000) : null;
+      botLog({
+        applicationId: "watcher",
+        step: "ofc_watcher_summary",
+        status: "ok",
+        data: {
+          ofcName: state.ofc.postName,
+          watcherAccount: state.watcherUsername,
+          totalChecks: state.totalRefreshes,
+          lastLatencyMs: state.lastLatencyMs,
+          subscriberCount: state.subscribers.size,
+          tokenExpiresInMin: summaryTokenMin,
+          nextRefreshInSec: Math.round(interval / 1000),
+          consecutiveErrors: state.consecutiveErrors,
+          uptimeMin: Math.round((Date.now() - (summaryToken?.lastActivityAt ?? Date.now())) / 60_000),
+        },
+      });
+    }
+
     await new Promise(r => setTimeout(r, interval));
   }
 }
@@ -518,7 +573,12 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
       );
     }
 
-    // botLog pour visibilité dans l'interface admin
+    // botLog pour visibilité dans l'interface admin — CHAQUE scan (slot ou pas)
+    const scannerCached = tokenCache.get(groupScanner.username.toLowerCase());
+    const tokenExpiresInMin = scannerCached ? Math.round((scannerCached.expiresAt - Date.now()) / 60_000) : null;
+    const tokenRemainingPct = scannerCached ? Math.max(0, Math.min(100, Math.round(((scannerCached.expiresAt - Date.now()) / (55 * 60_000)) * 100))) : 0;
+    const nextRefreshMs = computeWatcherInterval(state);
+
     botLog({
       applicationId: groupScanner.jobId,
       step: "ofc_watcher_scan",
@@ -533,6 +593,12 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
         latencyMs: state.lastLatencyMs,
         subscriberCount: state.subscribers.size,
         predictionWindow: pred.window,
+        // Enrichi FIX-20: données pour barre de progression dashboard
+        tokenExpiresInMin,
+        tokenRemainingPct,
+        nextRefreshInSec: Math.round(nextRefreshMs / 1000),
+        sessionChecks: state.totalRefreshes,
+        mode: label === "RESCHEDULE" ? "reschedule" : "schedule",
       },
     });
 
