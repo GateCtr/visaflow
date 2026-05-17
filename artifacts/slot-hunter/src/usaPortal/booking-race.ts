@@ -132,21 +132,29 @@ export async function runBookingRace(
     `winner=${result.winnerJobId?.slice(-6) ?? "AUCUN"} | success=${result.successCount} | errors=${Object.keys(result.errors).length}`,
   );
 
-  // Log dans Convex pour le dashboard admin
-  botLog({
-    applicationId: subscribers[0]?.jobId ?? "unknown",
-    step: "booking_race_complete",
-    status: result.successCount > 0 ? "ok" : "warn",
-    data: {
-      ofcName: event.ofcName,
-      firstAvailableMonth: event.firstAvailableMonth,
-      totalParticipants: result.totalParticipants,
-      successCount: result.successCount,
-      winnerJobId: result.winnerJobId,
-      durationMs: result.durationMs,
-      errorCount: Object.keys(result.errors).length,
-    },
-  });
+  // Log dans Convex pour le dashboard admin — émis pour CHAQUE participant
+  const winnerUsername = subscribers.find(s => s.jobId === result.winnerJobId)?.username;
+  for (const sub of subscribers) {
+    const isWinner = sub.jobId === result.winnerJobId;
+    botLog({
+      applicationId: sub.jobId,
+      step: "booking_race_complete",
+      status: result.successCount > 0 ? "ok" : "warn",
+      data: {
+        ofcName: event.ofcName,
+        firstAvailableMonth: event.firstAvailableMonth,
+        totalParticipants: result.totalParticipants,
+        successCount: result.successCount,
+        winnerJobId: result.winnerJobId,
+        winnerUsername: winnerUsername ?? null,
+        discoveredBy: event.watcherUsername,
+        role: isWinner ? "winner" : "participant",
+        ownError: result.errors[sub.jobId] ?? null,
+        durationMs: result.durationMs,
+        errorCount: Object.keys(result.errors).length,
+      },
+    });
+  }
 
   return result;
 }
@@ -333,7 +341,8 @@ async function participateInRace(
           slotId: found.slotId,
           appointmentId,
           pdfStorageId,
-          raceParticipants: event.watcherUsername ? "multi" : "single",
+          discoveredBy: event.watcherUsername,
+          bookedBy: username,
         },
       });
 

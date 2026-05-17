@@ -694,19 +694,39 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
     }
 
     case "booking_race_complete": {
-      const city = data.city ?? data.ofc ?? "?";
-      const participants = data.participantCount ?? data.participants ?? "?";
-      const winner = data.winnerId ?? data.winner ?? "?";
-      return `${city} — ${participants} participants — winner: ${winner}`;
+      const city = data.ofcName ?? data.city ?? data.ofc ?? "?";
+      const participants = data.totalParticipants ?? data.participantCount ?? "?";
+      const discoveredBy = data.discoveredBy ?? "";
+      const winnerUsername = data.winnerUsername ?? "";
+      const role = data.role as string | undefined;
+      const ownError = data.ownError as string | undefined;
+      const durationMs = data.durationMs;
+      const durationStr = typeof durationMs === "number" ? `${(durationMs / 1000).toFixed(1)}s` : "";
+
+      if (role === "winner") {
+        return `${city} — ${participants} participants — vous avez gagné !${discoveredBy ? ` (découvert par ${discoveredBy})` : ""}${durationStr ? ` — ${durationStr}` : ""}`;
+      }
+      if (role === "participant") {
+        let text = `${city} — participant`;
+        if (winnerUsername) text += ` — winner: ${winnerUsername}`;
+        if (discoveredBy) text += ` — découvert par ${discoveredBy}`;
+        if (ownError) text += ` — ${ownError}`;
+        return text;
+      }
+      // Fallback (ancien format sans role)
+      const winner = data.winnerJobId ?? data.winnerId ?? "?";
+      return `${city} — ${participants} participants${discoveredBy ? ` — découvert par ${discoveredBy}` : ""} — winner: ${winner}${durationStr ? ` (${durationStr})` : ""}`;
     }
 
     case "booking_race_success": {
       const ofc = data.ofc ?? data.city ?? "?";
       const date = data.date ?? "?";
       const time = data.time ?? "";
-      const by = data.bookedBy ?? data.winner ?? "";
+      const discoveredBy = data.discoveredBy ?? "";
+      const bookedBy = data.bookedBy ?? "";
       let text = `${ofc} — ${date}${time ? ` à ${time}` : ""}`;
-      if (by) text += ` — par ${by}`;
+      if (discoveredBy) text += ` — découvert par ${discoveredBy}`;
+      if (bookedBy) text += ` — booké par ${bookedBy}`;
       return text;
     }
 
