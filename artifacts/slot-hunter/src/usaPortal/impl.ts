@@ -42,7 +42,7 @@ import {
 } from "./appointments-api.js";
 import { logoutUsaPortal } from "./usa-auth.js";
 import { getUsaSession } from "./usa-session.js";
-import { registerDossierRefresh, unregisterDossierRefresh } from "./continuous-refresh.js";
+import { registerDossierRefresh, unregisterDossierRefresh, setKnownProxyLatency } from "./continuous-refresh.js";
 import { recordSlotObservation, logPredictionSummary } from "./slot-prediction.js";
 import { logCompetitionIntelligence } from "./competitive-intelligence.js";
 
@@ -117,6 +117,36 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       console.error("[usa] Identifiants portail manquants dans hunterConfig");
       result = "error";
       return result;
+    }
+
+    // ── FIX 4 : Proxy expiré → skip immédiat AVANT tout (pré-flight, Zero-Risk, etc.) ──
+    // PROBLÈME : Le bot entre dans le cycle complet (init Zero-Risk, pre-flight proxy, etc.)
+    // pour finalement détecter proxyExpiresAt < now et retourner en 2.5s avec login_failed.
+    // SOLUTION : Vérifier tokenCache AVANT tout. Si proxy expiré → retourner immédiatement
+    // avec "not_found" + reschedule dans 8 min. Économise le CAPTCHA, le pre-flight, et le CPU.
+    const earlyCheckCacheKey = username.toLowerCase();
+    const earlyCheckCached = tokenCache.get(earlyCheckCacheKey);
+    if (earlyCheckCached?.proxyExpiresAt && Date.now() >= earlyCheckCached.proxyExpiresAt) {
+      const expiredAgoMs = Date.now() - earlyCheckCached.proxyExpiresAt;
+      const expiredAgoMin = Math.round(expiredAgoMs / 60000);
+      // Cooldown minimum de 8 min avant re-login avec nouvelle IP
+      const MIN_COOLDOWN_PROXY_EXPIRED_MS = 8 * 60_000;
+      const timeSinceExpiry = expiredAgoMs;
+      if (timeSinceExpiry < MIN_COOLDOWN_PROXY_EXPIRED_MS) {
+        const remainMs = MIN_COOLDOWN_PROXY_EXPIRED_MS - timeSinceExpiry;
+        const remainMin = Math.round(remainMs / 60000);
+        console.log(`[usa] 🔒 FIX4: Proxy expiré il y a ${expiredAgoMin}min — skip immédiat (cooldown ${remainMin}min restant)`);
+        await sendHeartbeat({
+          applicationId: job.id,
+          result: "not_found",
+          errorMessage: `Proxy expiré — cooldown ${remainMin}min avant re-login`,
+        });
+        logHumanBehaviorEnd(job.id, `USA Portal - ${username} (proxy expired skip)`, 0);
+        return "not_found";
+      }
+      // Cooldown terminé → supprimer le cache et laisser continuer (nouveau login)
+      console.log(`[usa] ✅ FIX4: Cooldown proxy terminé (expiré ${expiredAgoMin}min ago) — re-login autorisé`);
+      tokenCache.delete(earlyCheckCacheKey);
     }
 
     // ── Initialisation stratégie Zero-Risk ─────────────────────────────────
@@ -311,29 +341,28 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // Le pattern quotidien était identifiable : toujours ~3.5h de silence à la même heure.
     // Un humain a des horaires de sommeil VARIABLES (parfois 22h, parfois 2h).
     //
+    // FIX 10 : Pause nocturne APRÈS la rush hour 00-02h.
+    // PROBLÈME ORIGINAL: Start range 22h30-01h30 → les dossiers manquaient TOUTE
+    // la rush hour 00:00-02:00 (la plus productive pour les libérations de créneaux).
     // NOUVELLE LOGIQUE :
-    //   - Début de pause : entre 22h30 et 01h30 (variable par jour + compte)
-    //   - Durée de pause : entre 2h et 5h (variable par jour + compte)
-    //   - Total : couverture 19-22h/jour selon les jours
-    //   - Déterministe par (jour + username) = même comportement si le bot redémarre le même jour
+    //   - Début de pause : entre 02h30 et 04h30 (APRÈS la rush 00-02h)
+    //   - Durée de pause : entre 2h et 4h (réduit pour maximiser la couverture)
+    //   - Total : dossiers dorment de ~03:00 à ~06:00 (après la rush 00-02h)
+    //   - Déterministe par (jour + username + jobId) = même comportement si le bot redémarre le même jour
     const todayStr = now.toISOString().slice(0, 10); // "2026-05-15"
     // ── Pause nocturne PER-DOSSIER (pas seulement per-username) ─────────────
-    // PROBLÈME: Si plusieurs dossiers partagent le même embassyUsername,
-    // ils dormaient et se réveillaient au MÊME moment → burst de re-logins au réveil.
-    // FIX: Ajouter le job.id dans le seed pour décaler chaque dossier individuellement.
-    // Résultat: Dossier A dort 23h15-03h45, Dossier B dort 23h30-04h10, etc.
-    const nightSeed = `${todayStr}:${username.toLowerCase()}:${job.id}:night-v3`;
+    const nightSeed = `${todayStr}:${username.toLowerCase()}:${job.id}:night-v4`;
     let nightHash = 0;
     for (const ch of nightSeed) nightHash = (nightHash * 31 + ch.charCodeAt(0)) & 0x7fffffff;
     
-    // Début entre 22h30 et 01h30 (180 min de plage)
-    // 22h30 = 1350 minutes depuis 00h00
-    const nightStartBase = 1350; // 22h30
-    const nightStartVariation = nightHash % 180; // 0-179 minutes
-    const nightStartMinutes = (nightStartBase + nightStartVariation) % 1440;
+    // FIX 10: Début entre 02h30 et 04h30 (120 min de plage) — APRÈS rush 00-02h
+    // 02h30 = 150 minutes depuis 00h00
+    const nightStartBase = 150; // 02h30
+    const nightStartVariation = nightHash % 120; // 0-119 minutes (plage 02h30-04h30)
+    const nightStartMinutes = nightStartBase + nightStartVariation;
     
-    // Durée entre 2h et 5h (120-300 min)
-    const nightDurationMin = 120 + ((nightHash >> 8) % 181); // 120-300 minutes
+    // FIX 10: Durée réduite entre 2h et 4h (120-240 min) au lieu de 2-5h
+    const nightDurationMin = 120 + ((nightHash >> 8) % 121); // 120-240 minutes
     const nightEndMinutes = (nightStartMinutes + nightDurationMin) % 1440;
     
     let isNightTime = false;
@@ -366,8 +395,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     // ── Stagger de réveil post-pause nocturne ────────────────────────────────
     // PROBLÈME: Au réveil, si 3 dossiers du même tier sont "dûs", ils font
     // tous un re-login en burst (30-60s entre eux) = 3 logins en 2 min = restriction.
-    // FIX: Chaque dossier attend un délai UNIQUE (0 à 15 min) après la fin de la pause
-    // nocturne avant son premier scan. Déterministe par job.id pour stabilité.
+    // FIX 2: Au lieu de return "not_found" (qui gaspille un cycle + ajoute l'intervalle normal),
+    // on fait un await sleep() interne du temps restant puis on continue le cycle normalement.
     // Résultat: Dossier A démarre à +0 min, B à +5 min, C à +11 min après le réveil.
     const timeSinceWakeUp = currentTotalMinutes - nightEndMinutes;
     // timeSinceWakeUp peut être négatif si nightEnd traverse minuit — normaliser
@@ -383,13 +412,12 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       
       if (normalizedTimeSinceWakeUp < wakeUpDelayMin) {
         const waitMin = wakeUpDelayMin - normalizedTimeSinceWakeUp;
-        console.log(`[usa] 🌅 Stagger réveil: ${username} attend encore ${waitMin} min (dossier démarre à +${wakeUpDelayMin}min après réveil)`);
-        await sendHeartbeat({
-          applicationId: job.id,
-          result: "not_found",
-          errorMessage: `Stagger réveil — démarrage dans ${waitMin} min`,
-        });
-        return "not_found";
+        const waitMs = waitMin * 60_000;
+        console.log(`[usa] 🌅 Stagger réveil: ${username} attend ${waitMin} min (dossier démarre à +${wakeUpDelayMin}min après réveil) — sleep interne`);
+        // FIX 2: Sleep interne au lieu de return "not_found"
+        // Le cycle continue normalement après l'attente — pas de gaspillage d'intervalle
+        await new Promise(r => setTimeout(r, waitMs));
+        console.log(`[usa] 🌅 Stagger réveil terminé pour ${username} — continuation du cycle`);
       }
     }
     
@@ -477,7 +505,26 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       const hasBrightData = !!process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL;
       const hasIproyal = !!process.env.IPROYAL_PROXY_URL;
 
-      if (hasIproyal) {
+      // ── FIX 8 : Proxy provider alternation inter-comptes ──────────────────
+      // PROBLÈME: Tous les comptes partagent le même provider → si iProyal a un
+      // problème global, tous tombent en même temps.
+      // SOLUTION: Alterner la priorité entre comptes via hunterConfig.preferredProxy
+      //   - "brightdata" → BrightData prioritaire, iProyal fallback
+      //   - "iproyal" (ou absent) → iProyal prioritaire, BrightData fallback
+      const preferredProxy: string = (job.hunterConfig as Record<string, unknown>).preferredProxy as string ?? "iproyal";
+      const preferIproyal = preferredProxy !== "brightdata";
+      
+      if (preferIproyal) {
+        console.log(`[usa] 🎯 FIX8: Proxy préféré = iProyal (compte ${username})`);
+      } else {
+        console.log(`[usa] 🎯 FIX8: Proxy préféré = BrightData (compte ${username})`);
+      }
+
+      // ── Provider primaire selon la préférence du compte ──
+      const primaryIsIproyal = preferIproyal && hasIproyal;
+      const primaryIsBrightData = !preferIproyal && hasBrightData;
+
+      if (primaryIsIproyal || (hasIproyal && !hasBrightData)) {
         // Tenter iProyal en premier (sticky 60min, pas de KYC requis)
         const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 60, username);
         const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);
@@ -486,6 +533,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
           sessionProxy = ipStickyUrl;
           preFlightExitIp = ipHealth.exitIp ?? undefined;
           console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 60min`);
+          setKnownProxyLatency(ipHealth.latencyMs ?? 0); // FIX 9
         } else {
           // iProyal DOWN → fallback BrightData si disponible
           console.warn(`[usa] ⚠️ iProyal pre-flight FAILED: ${ipHealth.error} — tentative fallback...`);
@@ -536,6 +584,72 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
               }
             } else {
               console.error(`[usa] ❌ iProyal DOWN + aucun fallback — ABORT session`);
+              await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Proxy down et pas de fallback — session avortée" });
+              result = "error";
+              return result;
+            }
+          }
+        }
+      } else if (primaryIsBrightData || (hasBrightData && !hasIproyal)) {
+        // FIX 8: BrightData prioritaire pour ce compte, iProyal en fallback
+        const bdStickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
+        const bdHealth = await preFlightProxyCheck(bdStickyUrl, job.id);
+
+        if (bdHealth.healthy) {
+          sessionProxy = bdStickyUrl;
+          preFlightExitIp = bdHealth.exitIp ?? undefined;
+          startBrightDataKeepAlive(bdStickyUrl, username);
+          console.log(`[usa] 🌐 BrightData résidentiel OK (${bdHealth.latencyMs}ms) — sticky + keep-alive`);
+          setKnownProxyLatency(bdHealth.latencyMs ?? 0); // FIX 9
+        } else {
+          // BrightData DOWN → fallback iProyal si disponible
+          console.warn(`[usa] ⚠️ BrightData pre-flight FAILED: ${bdHealth.error} — tentative fallback iProyal...`);
+
+          if (hasIproyal) {
+            const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 60, username);
+            const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);
+
+            if (ipHealth.healthy) {
+              sessionProxy = ipStickyUrl;
+              preFlightExitIp = ipHealth.exitIp ?? undefined;
+              console.log(`[usa] 🌐 FALLBACK iProyal OK (${ipHealth.latencyMs}ms) — sticky 60min`);
+            } else {
+              // BrightData + iProyal DOWN → fallback 2captcha rotatif
+              console.warn(`[usa] ⚠️ iProyal aussi DOWN: ${ipHealth.error} — tentative 2captcha...`);
+              if (proxyPool.isConfigured) {
+                const poolResult = await proxyPool.getProxy();
+                if (poolResult?.proxy) {
+                  sessionProxy = poolResult.proxy;
+                  console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (BrightData + iProyal down)`);
+                } else {
+                  console.error(`[usa] ❌ TOUS LES PROXIES DOWN (BD + iProyal + 2captcha) — ABORT session`);
+                  await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée pour protéger l'IP" });
+                  result = "error";
+                  return result;
+                }
+              } else {
+                console.error(`[usa] ❌ BD + iProyal DOWN + 2captcha non configuré — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
+            }
+          } else {
+            // Pas d'iProyal configuré → fallback 2captcha directement
+            console.warn(`[usa] ⚠️ BrightData DOWN + pas d'iProyal — tentative 2captcha...`);
+            if (proxyPool.isConfigured) {
+              const poolResult = await proxyPool.getProxy();
+              if (poolResult?.proxy) {
+                sessionProxy = poolResult.proxy;
+                console.log(`[usa] 🌐 FALLBACK 2captcha rotatif (BD down, pas d'iProyal)`);
+              } else {
+                console.error(`[usa] ❌ BrightData DOWN + 2captcha pool vide — ABORT session`);
+                await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Tous les proxies down — session avortée" });
+                result = "error";
+                return result;
+              }
+            } else {
+              console.error(`[usa] ❌ BrightData DOWN + aucun fallback — ABORT session`);
               await sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Proxy down et pas de fallback — session avortée" });
               result = "error";
               return result;
@@ -621,12 +735,16 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         return result;
       }
       console.log(`[usa] ✅ Proxy confirmé — latency ${proxyHealth.latencyMs}ms, exit IP: ${proxyHealth.exitIp}`);
+      // FIX 9: Store proxy latency for server health scoring separation
+      setKnownProxyLatency(proxyHealth.latencyMs ?? 0);
       initProxyGuard(username, sessionProxy!, proxyHealth.exitIp ?? undefined);
     } else {
       // Nouveau token → le pre-flight a DÉJÀ été fait dans le failover ci-dessus.
       // On réutilise l'IP connue → économie de ~2-5s par cycle (pas de 2ème HTTP call).
       console.log(`[usa] ✅ Proxy guard initialisé (IP pre-flight: ${preFlightExitIp ?? "inconnue"})`);
       initProxyGuard(username, sessionProxy!, preFlightExitIp);
+      // FIX 9: Pre-flight latency was recorded during the failover — use last known value
+      // (already set during ipHealth/bdHealth checks above if applicable)
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
@@ -896,8 +1014,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
   }
 
   // ── Simulation comportement humain avant scan ──────────────────────────────
-  console.log("[zero-risk] 👤 Préparation scan avec comportement humain...");
-  await simulateFullHumanBehavior();
+  // FIX 7: Removed first simulateFullHumanBehavior() call here.
+  // A human doesn't "think" twice before clicking. Only one call needed (after scan cap check).
   
   // ── Vérifier le cap de scans par session ──────────────────────────────────
   // Un humain ne fait pas 40 F5 en 2h. Il fait 8-15 checks puis part.
@@ -949,6 +1067,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       console.log(`[anti-detect] 📊 Scan #${currentScanCount}/${sessionScanCap} cette session`);
     }
   }
+  // FIX 7: Single simulateFullHumanBehavior() call (was duplicated before)
+  console.log("[zero-risk] 👤 Préparation scan avec comportement humain...");
   await simulateFullHumanBehavior();
   
   // ── Early Bird #1 — Log prédiction courante pour le dashboard ─────────────
