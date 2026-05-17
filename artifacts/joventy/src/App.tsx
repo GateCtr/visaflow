@@ -44,6 +44,7 @@ import AdminBotLogs from "@/pages/admin/BotLogs";
 import AdminCevSessions from "@/pages/admin/CevSessions";
 import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminCalendar from "@/pages/admin/Calendar";
+import AdminBotSettings from "@/pages/admin/BotSettings";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -151,6 +152,9 @@ function Router() {
       </Route>
       <Route path="/admin/bot-logs">
         {() => <ProtectedRoute adminOnly component={AdminBotLogs} />}
+      </Route>
+      <Route path="/admin/bot-settings">
+        {() => <ProtectedRoute adminOnly component={AdminBotSettings} />}
       </Route>
 
       <Route component={NotFound} />

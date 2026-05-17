@@ -814,3 +814,46 @@ export const internalSaveBotConfig = internalMutation({
     }
   },
 });
+
+
+
+// ─── Bot Config: Admin-facing queries/mutations (authenticated) ──────────────
+
+export const getBotConfig = query({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    const row = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    return row ? row.value : null;
+  },
+});
+
+export const setBotConfig = mutation({
+  args: { key: v.string(), value: v.string() },
+  handler: async (ctx, { key, value }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    const existing = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { value, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("botConfig", { key, value, updatedAt: Date.now() });
+    }
+  },
+});
+
+export const listBotConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    return await ctx.db.query("botConfig").collect();
+  },
+});
