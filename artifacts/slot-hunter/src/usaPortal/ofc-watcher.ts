@@ -337,19 +337,19 @@ async function runWatcherLoop(state: OfcWatcherState): Promise<void> {
 async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   const { fetcher, watcherUsername, ofc } = state;
 
-  // Vérifier que le token du watcher est valide
+  // FIX-20: Ne plus bloquer sur le token du watcher global.
+  // Chaque groupe utilise son propre token. On vérifie ici seulement pour le GET getLandingPage.
+  // Si le token watcher est expiré, on skip le landing page mais on continue vers les groupes
+  // (qui ont chacun leur propre findGroupScanner).
   const cached = tokenCache.get(watcherUsername.toLowerCase());
-  if (!cached || Date.now() >= cached.expiresAt) {
-    console.error(`[ofc-watcher] ⚠️ Token invalide/expiré pour ${watcherUsername.slice(0, 12)}…`);
-    throw new Error("TOKEN_EXPIRED");
-  }
+  const watcherTokenValid = cached && Date.now() < cached.expiresAt;
 
   // ── Stealthy Alternation: 1/4 des requêtes = GET getLandingPage ──────────
   // Un humain ne fait pas 100% de POST getFirstAvailableMonth. Il navigue
   // parfois sur le dashboard entre ses vérifications → pattern plus naturel.
   const useLandingPage = Math.random() < WATCHER_LANDING_PAGE_RATIO;
 
-  if (useLandingPage) {
+  if (useLandingPage && watcherTokenValid && cached) {
     // GET getLandingPage — requête légère, simule navigation dashboard
     console.log(`[ofc-watcher] 📡 [${ofc.postName}] GET getLandingPage (alternation)`);
     resetCorrelationOnAction(REFERER_DASHBOARD, watcherUsername);
@@ -366,13 +366,18 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
     state.totalRefreshes++;
     console.log(`[ofc-watcher] 📡 [${ofc.postName}] GET → HTTP ${res.status} (${state.lastLatencyMs}ms)`);
 
-    if (res.status === 401) throw new Error("TOKEN_EXPIRED");
-    if (res.status === 429 || res.status === 403) throw new Error(`HTTP_${res.status}`);
-    if (res.status === 503) throw new Error("PROXY_DEAD");
-
-    // Reset erreurs sur succès
-    if (res.ok || res.status < 500) {
-      state.consecutiveErrors = 0;
+    if (res.status === 401) {
+      // Token watcher expiré — non-fatal, on continue sans throw
+      console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] GET landing 401 — token watcher expiré, skip alternation`);
+    } else if (res.status === 429 || res.status === 403) {
+      throw new Error(`HTTP_${res.status}`);
+    } else if (res.status === 503) {
+      throw new Error("PROXY_DEAD");
+    } else {
+      // Reset erreurs sur succès
+      if (res.ok || res.status < 500) {
+        state.consecutiveErrors = 0;
+      }
     }
 
     // Log périodique
@@ -380,6 +385,9 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
       console.log(`[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} [landing] | latency=${state.lastLatencyMs}ms`);
     }
     return; // Pas de détection de slot via getLandingPage
+  } else if (useLandingPage && !watcherTokenValid) {
+    // Token watcher expiré — skip le landing page, passer directement au scan par groupe
+    console.log(`[ofc-watcher] 📡 [${ofc.postName}] Skip getLandingPage — token watcher expiré, passage au scan`);
   }
 
   // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
@@ -441,7 +449,9 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   }
 
   if (groups.length === 0) {
-    console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Aucun groupe avec scanner valide — skip`);
+    // FIX-20: Aucun subscriber n'a de token valide (tous en re-login/cooldown).
+    // Ne PAS compter comme erreur — le watcher attend que le captcha/login se termine.
+    console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] Aucun groupe avec scanner valide — attente re-login (non-fatal)`);
     return;
   }
 
