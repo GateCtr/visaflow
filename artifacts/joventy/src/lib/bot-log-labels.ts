@@ -88,6 +88,17 @@ export const STEP_LABELS: Record<string, string> = {
   cev_poll_no_slots: "🔍 Poll: aucun slot",
   cev_slots_raw_response: "📦 Réponse brute",
 
+  // ── OFC Watcher — Parallèle ──
+  ofc_watcher_started: "→ Watcher démarré",
+  ofc_watcher_summary: "▪ Watcher actif",
+  ofc_watcher_session_end: "🏁 Watcher arrêté",
+  ofc_watcher_slot_detected: "! SLOT détecté !",
+  ofc_watcher_scan: "🔄 Scan watcher",
+  accounts_status: "👥 Status comptes",
+  booking_race_complete: "🏁 Booking race terminée",
+  booking_race_success: "🏆 Booking réussi !",
+  proxy_failover: "🔄 Failover proxy",
+
   // ── CEV Portal — Booking ──
   cev_http_booking_start: "📝 Booking début",
   cev_http_booking_confirmed: "✅ Booking confirmé !",
@@ -123,6 +134,12 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   cev_http_slot_selected: "work", cev_http_submit_attempt: "work",
   cev_http_submit_response: "work", cev_no_availability: "work",
   cev_poll_result: "work", cev_poll_no_slots: "work",
+  // OFC Watcher
+  ofc_watcher_started: "work", ofc_watcher_summary: "refresh",
+  ofc_watcher_session_end: "work", ofc_watcher_slot_detected: "work",
+  ofc_watcher_scan: "refresh", accounts_status: "network",
+  booking_race_complete: "work", booking_race_success: "work",
+  proxy_failover: "network",
   // Réseau / Proxy
   keep_alive: "network", proxy_preflight_abort: "network", proxy_health_check: "network",
   cev_http_vowint_cache_hit: "network", cev_http_integration_url: "network",
@@ -619,6 +636,86 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
       const username = data.username ?? "";
       let text = `Statut MRV: ${status}`;
       if (username) text += ` — ${username}`;
+      return text;
+    }
+
+    case "ofc_watcher_summary": {
+      const city = data.city ?? data.ofc ?? "?";
+      const checks = data.checksCount ?? data.totalChecks ?? "?";
+      const tokenExpiry = data.tokenExpiryMin ?? data.tokenExpireMin ?? "?";
+      const nextIn = data.nextCheckSec ?? data.nextInSec ?? "?";
+      return `${city} — ${checks} checks, token expire dans ${tokenExpiry}min, prochain dans ${nextIn}s`;
+    }
+
+    case "accounts_status": {
+      const accounts = data.accounts as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(accounts)) {
+        const ready = accounts.filter(a => a.status === "ready" || a.ready === true).length;
+        const dormant = accounts.filter(a => a.status === "dormant" || a.dormant === true);
+        const dormantStr = dormant.map(a => {
+          const email = (a.email ?? a.username ?? "?") as string;
+          const short = email.includes("@") ? email.split("@")[0] + "@" : email;
+          const cooldown = a.cooldownMin ?? a.remainingMin ?? "?";
+          return `${short} 🔒 ${cooldown}min`;
+        }).join(", ");
+        return `${ready}/${accounts.length} prêts${dormant.length > 0 ? `, ${dormant.length} dormants (${dormantStr})` : ""}`;
+      }
+      const ready = data.readyCount ?? "?";
+      const total = data.totalCount ?? "?";
+      return `${ready}/${total} prêts`;
+    }
+
+    case "ofc_watcher_started": {
+      const city = data.city ?? data.ofc ?? "?";
+      const username = data.username ?? data.email ?? "?";
+      const tokenExpiry = data.tokenExpiryMin ?? data.tokenExpireMin ?? "?";
+      return `${city} — ${username} — token expire dans ${tokenExpiry}min`;
+    }
+
+    case "ofc_watcher_session_end": {
+      const city = data.city ?? data.ofc ?? "?";
+      const checks = data.checksCount ?? data.totalChecks ?? "?";
+      const reason = data.reason ?? "stopped";
+      return `${city} — ${checks} checks — raison: ${reason}`;
+    }
+
+    case "ofc_watcher_slot_detected": {
+      const ofc = data.ofc ?? data.city ?? "?";
+      const date = data.date ?? "?";
+      const time = data.time ?? "";
+      return `SLOT à ${ofc} le ${date}${time ? ` à ${time}` : ""} !`;
+    }
+
+    case "ofc_watcher_scan": {
+      const ofc = data.ofc ?? data.city ?? "?";
+      const result = data.slotsAvailable === true || data.hasSlots === true ? "créneau trouvé !" : "aucun créneau";
+      const scanNum = data.scanNumber ?? data.checkNumber ?? "";
+      return `${ofc} — scan${scanNum ? ` #${scanNum}` : ""} — ${result}`;
+    }
+
+    case "booking_race_complete": {
+      const city = data.city ?? data.ofc ?? "?";
+      const participants = data.participantCount ?? data.participants ?? "?";
+      const winner = data.winnerId ?? data.winner ?? "?";
+      return `${city} — ${participants} participants — winner: ${winner}`;
+    }
+
+    case "booking_race_success": {
+      const ofc = data.ofc ?? data.city ?? "?";
+      const date = data.date ?? "?";
+      const time = data.time ?? "";
+      const by = data.bookedBy ?? data.winner ?? "";
+      let text = `${ofc} — ${date}${time ? ` à ${time}` : ""}`;
+      if (by) text += ` — par ${by}`;
+      return text;
+    }
+
+    case "proxy_failover": {
+      const from = data.fromProxy ?? data.oldProxy ?? "?";
+      const to = data.toProxy ?? data.newProxy ?? "?";
+      const reason = data.reason ?? "";
+      let text = `${from} → ${to}`;
+      if (reason) text += ` (${reason})`;
       return text;
     }
 
