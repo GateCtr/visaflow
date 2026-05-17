@@ -446,8 +446,20 @@ async function monitorTick(): Promise<void> {
 
 async function attemptLogin(account: ManagedAccount): Promise<boolean> {
   try {
+    // FIX 14: Activer le proxy AVANT le login pour que le JWT soit lié à l'IP proxy.
+    // Sans ça, le login part via IP Railway → le JWT est lié à Railway →
+    // les requêtes suivantes via proxy iProyal → IP mismatch → 401.
+    const { setUsaSessionProxy } = await import("./usa-http.js");
+    if (account.proxyUrl) {
+      setUsaSessionProxy(account.proxyUrl);
+    }
+
     // getUsaSession vérifie : restriction, cooldown, proxy expiry, pendingLogin lock
     const session = await getUsaSession(account.username, account.password);
+
+    // Reset le proxy global après le login (ne pas polluer les autres flows)
+    setUsaSessionProxy(undefined);
+
     if (!session) return false;
 
     // Injecter le proxy dans le cache (pour que le booking race l'utilise)
@@ -462,6 +474,9 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
 
     return true;
   } catch (err) {
+    // Reset le proxy global même en cas d'erreur
+    const { setUsaSessionProxy } = await import("./usa-http.js");
+    setUsaSessionProxy(undefined);
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[accounts-ka] Login échoué pour ${account.username.slice(0, 12)}…: ${msg.slice(0, 100)}`);
     return false;
