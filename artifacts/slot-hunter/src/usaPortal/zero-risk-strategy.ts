@@ -570,7 +570,12 @@ export async function preScanCheck(
   
   // Bypass orchestrator window for urgent/tres_urgent — le scheduler stagger
   // gère déjà la répartition temporelle, pas besoin d'une double contrainte.
-  const bypassOrchestrator = urgencyTier === "urgent" || urgencyTier === "tres_urgent";
+  // FIX 13: Bypass pour TOUS les tiers. Le ScanOrchestrator assigne des fenêtres
+  // non-overlapping 24h qui empêchent les comptes standard/prioritaire de scanner
+  // pendant 16h/jour. Les autres mécanismes (scan interval, session cap, anomaly
+  // detection, cooldown 8-25min) fournissent déjà une protection suffisante.
+  // En mode parallèle, le watcher gère la fréquence centralement.
+  const bypassOrchestrator = true;
   
   // 1. Heatmap avoidance
   const heatmapCheck = shouldAvoidHeatmap();

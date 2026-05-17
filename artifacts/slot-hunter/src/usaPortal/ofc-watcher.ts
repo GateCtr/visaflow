@@ -24,8 +24,8 @@
  */
 
 import { createSessionFetcher, type UsaFetcher } from "./usa-fetcher.js";
-import { tokenCache, authHeaders } from "./usa-http.js";
-import { USA_FIRST_AVAILABLE_MONTH_URL } from "./config.js";
+import { tokenCache, authHeaders, resetCorrelationOnAction } from "./usa-http.js";
+import { USA_FIRST_AVAILABLE_MONTH_URL, USA_LANDING_PAGE_URL, REFERER_DASHBOARD } from "./config.js";
 import { botLog } from "../convexClient.js";
 import { recordSlotObservation, getCurrentPredictionScore, getRefreshMultiplier, injectHistoricalObservations, getObservationCount } from "./slot-prediction.js";
 import { recordSlotAppearance, recordAllSlotsGone, getCompetitionRefreshMultiplier } from "./competitive-intelligence.js";
@@ -112,6 +112,11 @@ const WATCHER_MAX_INTERVAL_MS = 120_000; // 2 min
 
 /** Nombre d'erreurs consécutives avant failover du watcher. */
 const MAX_WATCHER_ERRORS = 3;
+
+/** Ratio de requêtes getLandingPage pour l'alternance anti-pattern (#6 Stealthy Alternation).
+ * Un humain ne fait pas QUE des POST getFirstAvailableMonth — il navigue aussi sur le dashboard.
+ * 1/4 des requêtes = GET getLandingPage (léger, pattern varié). */
+const WATCHER_LANDING_PAGE_RATIO = 0.25;
 
 // ─── API publique ───────────────────────────────────────────────────────────
 
@@ -331,6 +336,43 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
     throw new Error("TOKEN_EXPIRED");
   }
 
+  // ── Stealthy Alternation: 1/4 des requêtes = GET getLandingPage ──────────
+  // Un humain ne fait pas 100% de POST getFirstAvailableMonth. Il navigue
+  // parfois sur le dashboard entre ses vérifications → pattern plus naturel.
+  const useLandingPage = Math.random() < WATCHER_LANDING_PAGE_RATIO;
+
+  if (useLandingPage) {
+    // GET getLandingPage — requête légère, simule navigation dashboard
+    resetCorrelationOnAction(REFERER_DASHBOARD, watcherUsername);
+    const hdrs = authHeaders(cached.accessToken, REFERER_DASHBOARD, false, watcherUsername);
+    // Ajouter LanguageId comme le fait le vrai intercepteur Angular pour cette route
+    hdrs["LanguageId"] = "1";
+
+    const reqStart = Date.now();
+    const res = await fetcher.fetch(USA_LANDING_PAGE_URL, {
+      method: "GET",
+      headers: hdrs,
+    });
+    state.lastLatencyMs = Date.now() - reqStart;
+    state.totalRefreshes++;
+
+    if (res.status === 401) throw new Error("TOKEN_EXPIRED");
+    if (res.status === 429 || res.status === 403) throw new Error(`HTTP_${res.status}`);
+    if (res.status === 503) throw new Error("PROXY_DEAD");
+
+    // Reset erreurs sur succès
+    if (res.ok || res.status < 500) {
+      state.consecutiveErrors = 0;
+    }
+
+    // Log périodique
+    if (state.totalRefreshes % 5 === 0) {
+      console.log(`[ofc-watcher] 🔄 #${state.totalRefreshes} ${ofc.postName} [landing] | latency=${state.lastLatencyMs}ms`);
+    }
+    return; // Pas de détection de slot via getLandingPage
+  }
+
+  // ── POST getFirstAvailableMonth — le vrai check de disponibilité ──────────
   // Construire le payload (identique à doFirstAvailableMonthRefresh)
   // On a besoin d'un appDetails du premier subscriber pour le payload
   const firstSub = state.subscribers.values().next().value;

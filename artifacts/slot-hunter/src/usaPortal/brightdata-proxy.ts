@@ -17,6 +17,8 @@
  *     Ou format simplifié pour les tests: http://user:pass@host:port
  */
 
+import { tokenCache, isCachedTokenValid } from "./usa-http.js";
+
 // ─── Compteur de rotation par compte (force nouvelle IP après erreur) ────────
 const _brightdataRotationCount = new Map<string, number>();
 
@@ -146,6 +148,20 @@ export function startBrightDataKeepAlive(proxyUrl: string, username: string): vo
 
   session.keepAliveTimer = setInterval(async () => {
     try {
+      // FIX 13E: Vérifier que le token du compte est encore valide avant de ping.
+      // Si le token a expiré et le compte est en cooldown, inutile de maintenir
+      // la session proxy — elle sera recréée au prochain login avec une nouvelle IP.
+      const cachedToken = tokenCache.get(session.username);
+      if (!cachedToken || !isCachedTokenValid(cachedToken)) {
+        console.log(`[brightdata] 🛑 Token expiré/invalide pour ${session.username.slice(0, 12)}… — arrêt keep-alive proxy`);
+        if (session.keepAliveTimer) {
+          clearInterval(session.keepAliveTimer);
+          session.keepAliveTimer = null;
+        }
+        _activeSessions.delete(session.username);
+        return;
+      }
+
       const elapsed = Date.now() - session.lastKeepAliveAt;
       const elapsedSec = Math.round(elapsed / 1000);
 

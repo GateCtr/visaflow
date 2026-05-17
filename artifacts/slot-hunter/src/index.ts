@@ -1590,6 +1590,39 @@ async function main(): Promise<void> {
               const success = await performScheduledRelogin(username);
               if (success) {
                 log("INFO", `[parallel-relogin] ✅ ${username.slice(0, 12)}… re-login réussi`);
+
+                // FIX 13F: Re-bootstrap après re-login pour rafraîchir les données OFC/appDetails.
+                // Sans ça, le watcher utilise les données du 1er bootstrap (potentiellement stale
+                // si le portail a changé les OFCs ou le statut du dossier entre-temps).
+                const ofcKey = makeKey("usa", "Kinshasa", 323);
+                if (hasActiveWatcher(ofcKey)) {
+                  try {
+                    const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
+                    const bootResult = await bootstrapAccountData(job, username);
+                    if (bootResult.success && bootResult.appDetails) {
+                      // Résoudre le proxy pour ce compte
+                      let rebootProxy: string | undefined;
+                      if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+                        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
+                        rebootProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+                      }
+                      // Mettre à jour le subscriber avec les nouvelles données
+                      subscribeLate(ofcKey, {
+                        jobId: job.id,
+                        username,
+                        proxyUrl: rebootProxy,
+                        job,
+                        appDetails: bootResult.appDetails,
+                        rescheduleYN: job.hunterConfig.rescheduleMode,
+                        dateFrom: job.hunterConfig.slotDateFrom,
+                        dateDeadline: job.hunterConfig.slotDateDeadline,
+                      });
+                      log("INFO", `[parallel-relogin] 🔄 ${username.slice(0, 12)}… re-bootstrap OK — subscriber mis à jour`);
+                    }
+                  } catch (bootErr) {
+                    log("WARN", `[parallel-relogin] ⚠️ Re-bootstrap échoué pour ${username.slice(0, 12)}…: ${bootErr}`);
+                  }
+                }
               } else {
                 log("WARN", `[parallel-relogin] ⏳ ${username.slice(0, 12)}… re-login refusé (cooldown/restriction en cours)`);
               }

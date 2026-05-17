@@ -212,8 +212,10 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     console.log("[zero-risk] ✅ Tous les checks passés, continuation...");
     
     // 4. Vérifier la fenêtre de scan via l'orchestrateur
-    // Bypass pour urgent/tres_urgent (déjà géré par le stagger du scheduler)
-    const bypassOrchestratorWindow = job.urgencyTier === "urgent" || job.urgencyTier === "tres_urgent";
+    // FIX 13: Bypass pour TOUS les tiers — le ScanOrchestrator assigne des fenêtres
+    // non-overlapping qui bloquent les dossiers standard/prioritaire 16h/jour.
+    // Les autres mécanismes anti-détection suffisent (interval, session cap, anomaly).
+    const bypassOrchestratorWindow = true;
     if (!bypassOrchestratorWindow) {
       const orchestratorCheck = scanOrchestrator.canScanNow(username);
       if (!orchestratorCheck.canScan) {
