@@ -1471,16 +1471,20 @@ async function main(): Promise<void> {
       log("ERROR", `[parallel] Erreur initialisation watchers: ${err}`);
     });
 
-    // ── Scheduler de re-login pour le mode parallèle ──────────────────────────
-    // Les comptes USA en mode parallèle ne sont plus re-login par le monitor.
-    // Le scheduler ci-dessous vérifie périodiquement si un compte est dormant
-    // (token expiré + cooldown 8-25 min terminé) et le re-login.
-    // Cela respecte les timings anti-détection de config.ts.
-    const { isAccountReadyForRelogin, performScheduledRelogin, getRestTimeRemaining, getSessionsRemainingToday } = await import("./usaPortal/accounts-keep-alive.js");
+    // ── Scheduler de re-login + auto-inscription pour le mode parallèle ───────
+    // Ce loop fait 2 choses :
+    //   1. Inscrit les nouveaux dossiers USA activés APRÈS le démarrage
+    //   2. Re-login les comptes dormants quand le cooldown est terminé
+    // Vérifie toutes les 3-5 min (variable).
+    const { isAccountReadyForRelogin, performScheduledRelogin, getRestTimeRemaining, getSessionsRemainingToday, registerAccountForKeepAlive: registerAccount } = await import("./usaPortal/accounts-keep-alive.js");
+    const { subscribeToOfcWatcher: subscribeLate, makeOfcKey: makeKey, hasActiveWatcher } = await import("./usaPortal/ofc-watcher.js");
 
     const parallelReloginLoop = async () => {
+      // Set pour tracker les comptes déjà inscrits (évite les inscriptions multiples)
+      const registeredUsernames = new Set<string>();
+
       while (true) {
-        // Vérifier toutes les 3-5 min (variable) si un compte doit être re-login
+        // Vérifier toutes les 3-5 min (variable)
         const checkInterval = 3 * 60_000 + Math.random() * 2 * 60_000;
         await new Promise(r => setTimeout(r, checkInterval));
 
@@ -1490,21 +1494,63 @@ async function main(): Promise<void> {
             j.destination === "usa" &&
             j.hunterConfig?.isActive === true &&
             !pausedJobs.has(j.id) &&
-            !completedJobs.has(j.id)
+            !completedJobs.has(j.id) &&
+            !!j.portalUrl
           );
 
           for (const job of usaJobs) {
             const username = job.hunterConfig.embassyUsername;
+            const key = username.toLowerCase();
+
+            // ── Auto-inscription : inscrire les comptes pas encore gérés ──────
+            if (!registeredUsernames.has(key)) {
+              log("INFO", `[parallel-relogin] 🆕 Nouveau dossier détecté: ${username.slice(0, 12)}… — inscription keep-alive + watcher`);
+              const registered = await registerAccount(job);
+              if (registered) {
+                registeredUsernames.add(key);
+                // Inscrire aussi comme subscriber du watcher OFC Kinshasa
+                const ofcKey = makeKey("usa", "Kinshasa", 323);
+                if (hasActiveWatcher(ofcKey)) {
+                  let subProxy: string | undefined;
+                  if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+                    const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
+                    subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+                  }
+                  subscribeLate(ofcKey, {
+                    jobId: job.id,
+                    username,
+                    proxyUrl: subProxy,
+                    job,
+                    appDetails: {
+                      applicantId: 0,
+                      applicationId: job.hunterConfig.portalApplicationId ?? "",
+                      visaType: "NIV",
+                      visaClass: "",
+                    },
+                    rescheduleYN: job.hunterConfig.rescheduleMode,
+                    dateFrom: job.hunterConfig.slotDateFrom,
+                    dateDeadline: job.hunterConfig.slotDateDeadline,
+                  });
+                  log("INFO", `[parallel-relogin] ✅ ${username.slice(0, 12)}… inscrit au watcher OFC Kinshasa`);
+                } else {
+                  // Pas de watcher actif → lancer le watcher avec ce compte
+                  log("INFO", `[parallel-relogin] 🚀 Aucun watcher actif — lancement avec ${username.slice(0, 12)}…`);
+                  await initParallelWatchers();
+                }
+              }
+              continue; // Passer au prochain job (celui-ci vient d'être inscrit)
+            }
+
+            // ── Rotation + re-login pour les comptes déjà inscrits ────────────
             const restTime = getRestTimeRemaining(username);
             const sessionsLeft = getSessionsRemainingToday(username);
             
             if (restTime > 0) {
-              log("INFO", `[parallel-relogin] 💤 ${username.slice(0, 12)}… en repos (${Math.round(restTime / 60_000)}min restantes, ${sessionsLeft} sessions dispo)`);
+              // Log uniquement toutes les ~15 min pour éviter le spam
               continue;
             }
             
             if (sessionsLeft <= 0) {
-              log("INFO", `[parallel-relogin] 🛑 ${username.slice(0, 12)}… cap journalier atteint (max ${8} sessions/24h)`);
               continue;
             }
 
@@ -1517,7 +1563,6 @@ async function main(): Promise<void> {
                 log("WARN", `[parallel-relogin] ⏳ ${username.slice(0, 12)}… re-login refusé (cooldown/restriction en cours)`);
               }
               // Radio silence entre re-logins de comptes différents (2-4 min)
-              // pour éviter un pattern de logins groupés
               const silence = 2 * 60_000 + Math.random() * 2 * 60_000;
               await new Promise(r => setTimeout(r, silence));
             }
