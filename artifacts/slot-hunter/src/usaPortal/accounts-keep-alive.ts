@@ -31,12 +31,12 @@
  *     qui respecte les cooldowns de config.ts (8-25 min post-expiry)
  */
 
-import { tokenCache, isCachedTokenValid, isSessionInCooldown } from "./usa-http.js";
+import { tokenCache, isCachedTokenValid, isSessionInCooldown, makeIproyalStickyUrl, rotateIproyalSession } from "./usa-http.js";
 import { getUsaSession } from "./usa-session.js";
 import { startBackgroundKeepAlive, stopBackgroundKeepAlive, isBackgroundKeepAliveActive } from "./background-keep-alive.js";
 import { initProxyGuard } from "./proxy-session-guard.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
-import { makeIproyalStickyUrl } from "./usa-http.js";
+import { makeBrightDataStickyUrl, startBrightDataKeepAlive, stopBrightDataKeepAlive } from "./brightdata-proxy.js";
 import { proxyPool } from "../browser.js";
 import type { HunterJob } from "../convexClient.js";
 import { botLog } from "../convexClient.js";
@@ -203,15 +203,12 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     return true;
   }
 
-  // Résoudre le proxy pour ce compte
+  // ── Résoudre le proxy avec failover complet (iProyal → BrightData → 2captcha) ──
+  // Même logique que impl.ts : pre-flight check sur chaque provider avant d'adopter.
+  // Si un proxy est dead, on passe au suivant AVANT de créer le JWT.
   let proxyUrl: string | undefined;
   if (job.hunterConfig.useResidentialProxy) {
-    if (process.env.IPROYAL_PROXY_URL) {
-      proxyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
-    } else if (proxyPool.isConfigured) {
-      const poolResult = await proxyPool.getProxy();
-      proxyUrl = poolResult?.proxy;
-    }
+    proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
   }
 
   const account: ManagedAccount = {
@@ -447,11 +444,34 @@ async function monitorTick(): Promise<void> {
 async function attemptLogin(account: ManagedAccount): Promise<boolean> {
   try {
     // FIX 14: Activer le proxy AVANT le login pour que le JWT soit lié à l'IP proxy.
-    // Sans ça, le login part via IP Railway → le JWT est lié à Railway →
-    // les requêtes suivantes via proxy iProyal → IP mismatch → 401.
+    // FIX 16: Failover proxy — si le proxy actuel est dead, re-résoudre avec la chaîne complète.
     const { setUsaSessionProxy } = await import("./usa-http.js");
-    if (account.proxyUrl) {
-      setUsaSessionProxy(account.proxyUrl);
+
+    let proxyToUse = account.proxyUrl;
+
+    // Si on a un proxy assigné, vérifier qu'il est vivant avant de login
+    if (proxyToUse) {
+      const health = await preFlightProxyCheck(proxyToUse, account.jobId);
+      if (!health.healthy) {
+        console.warn(`[accounts-ka] ⚠️ Proxy actuel DEAD pour ${account.username.slice(0, 12)}…: ${health.error}`);
+        console.log(`[accounts-ka] 🔄 FIX16: Failover proxy en cours...`);
+
+        // Re-résoudre avec la chaîne complète
+        const newProxy = await resolveProxyWithFailover(account.username, account.jobId, account.job.hunterConfig);
+        if (newProxy) {
+          proxyToUse = newProxy;
+          account.proxyUrl = newProxy; // Mettre à jour pour les prochains cycles
+          console.log(`[accounts-ka] ✅ FIX16: Nouveau proxy résolu pour ${account.username.slice(0, 12)}…`);
+        } else {
+          console.error(`[accounts-ka] ❌ FIX16: TOUS LES PROXIES DOWN — login avorté pour ${account.username.slice(0, 12)}…`);
+          botLog({ applicationId: account.jobId, step: "proxy_failover", status: "fail", data: { reason: "Tous les proxies down", username: account.username } });
+          return false;
+        }
+      }
+    }
+
+    if (proxyToUse) {
+      setUsaSessionProxy(proxyToUse);
     }
 
     // getUsaSession vérifie : restriction, cooldown, proxy expiry, pendingLogin lock
@@ -465,11 +485,21 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
     // Injecter le proxy dans le cache (pour que le booking race l'utilise)
     const key = account.username.toLowerCase();
     const cached = tokenCache.get(key);
-    if (cached && account.proxyUrl) {
-      cached.proxyUrl = account.proxyUrl;
-      // Calculer l'expiration proxy (iProyal = 12h, 2captcha = 30min)
-      const isIproyal = account.proxyUrl.includes("iproyal") || account.proxyUrl.includes("_session-");
-      cached.proxyExpiresAt = Date.now() + (isIproyal ? 11.5 * 60 * 60 * 1000 : 30 * 60 * 1000);
+    if (cached && proxyToUse) {
+      cached.proxyUrl = proxyToUse;
+      // Calculer l'expiration proxy :
+      //   - iProyal sticky = 12h
+      //   - BrightData = pas d'expiry fixe (keep-alive actif)
+      //   - 2captcha rotatif = 30min
+      const isIproyal = proxyToUse.includes("iproyal") || proxyToUse.includes("_session-");
+      const isBrightData = proxyToUse.includes("brd.superproxy") || proxyToUse.includes("brightdata");
+      if (isIproyal) {
+        cached.proxyExpiresAt = Date.now() + 11.5 * 60 * 60 * 1000; // 11.5h
+      } else if (isBrightData) {
+        cached.proxyExpiresAt = Date.now() + 23 * 60 * 60 * 1000; // 23h (keep-alive maintient)
+      } else {
+        cached.proxyExpiresAt = Date.now() + 30 * 60 * 1000; // 30min (2captcha rotatif)
+      }
     }
 
     return true;
@@ -481,4 +511,98 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
     console.warn(`[accounts-ka] Login échoué pour ${account.username.slice(0, 12)}…: ${msg.slice(0, 100)}`);
     return false;
   }
+}
+
+// ─── Résolution proxy avec failover complet ─────────────────────────────────
+
+/**
+ * Résout un proxy fonctionnel en testant chaque provider dans l'ordre.
+ * Ordre : iProyal (sticky 12h) → BrightData (sticky + keep-alive) → 2captcha (rotatif).
+ * Supporte la préférence par compte via hunterConfig.preferredProxy.
+ *
+ * @returns L'URL du proxy fonctionnel, ou undefined si tous sont down.
+ */
+async function resolveProxyWithFailover(
+  username: string,
+  jobId: string,
+  hunterConfig: HunterJob["hunterConfig"],
+): Promise<string | undefined> {
+  const hasIproyal = !!process.env.IPROYAL_PROXY_URL;
+  const hasBrightData = !!process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL;
+
+  // Respecter la préférence du compte (FIX 8 de impl.ts)
+  const preferredProxy: string = (hunterConfig as Record<string, unknown>).preferredProxy as string ?? "iproyal";
+  const preferIproyal = preferredProxy !== "brightdata";
+
+  // Construire la séquence de providers à tester
+  type ProxyProvider = { name: string; resolve: () => Promise<string | undefined> };
+  const providers: ProxyProvider[] = [];
+
+  const iproyalProvider: ProxyProvider = {
+    name: "iProyal",
+    resolve: async () => {
+      if (!hasIproyal) return undefined;
+      // Rotation de session pour obtenir une nouvelle IP (le précédent était peut-être dead)
+      rotateIproyalSession(username);
+      const url = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 720, username);
+      const health = await preFlightProxyCheck(url, jobId);
+      if (health.healthy) {
+        console.log(`[accounts-ka] 🌐 iProyal OK (${health.latencyMs}ms) — sticky 12h`);
+        return url;
+      }
+      console.warn(`[accounts-ka] ⚠️ iProyal FAILED: ${health.error}`);
+      return undefined;
+    },
+  };
+
+  const brightDataProvider: ProxyProvider = {
+    name: "BrightData",
+    resolve: async () => {
+      if (!hasBrightData) return undefined;
+      const url = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
+      const health = await preFlightProxyCheck(url, jobId);
+      if (health.healthy) {
+        startBrightDataKeepAlive(url, username);
+        console.log(`[accounts-ka] 🌐 BrightData OK (${health.latencyMs}ms) — sticky + keep-alive`);
+        return url;
+      }
+      console.warn(`[accounts-ka] ⚠️ BrightData FAILED: ${health.error}`);
+      return undefined;
+    },
+  };
+
+  const twoCaptchaProvider: ProxyProvider = {
+    name: "2captcha",
+    resolve: async () => {
+      if (!proxyPool.isConfigured) return undefined;
+      const poolResult = await proxyPool.getProxy();
+      if (poolResult?.proxy) {
+        console.log(`[accounts-ka] 🌐 2captcha rotatif OK (fallback final)`);
+        return poolResult.proxy;
+      }
+      console.warn(`[accounts-ka] ⚠️ 2captcha pool vide ou non configuré`);
+      return undefined;
+    },
+  };
+
+  // Ordre selon la préférence du compte
+  if (preferIproyal) {
+    providers.push(iproyalProvider, brightDataProvider, twoCaptchaProvider);
+  } else {
+    providers.push(brightDataProvider, iproyalProvider, twoCaptchaProvider);
+  }
+
+  // Tester chaque provider dans l'ordre
+  for (const provider of providers) {
+    const url = await provider.resolve();
+    if (url) {
+      botLog({ applicationId: jobId, step: "proxy_failover", status: "ok", data: { provider: provider.name, username } });
+      return url;
+    }
+  }
+
+  // Tous les providers sont down
+  console.error(`[accounts-ka] ❌ TOUS LES PROXIES DOWN (${providers.map(p => p.name).join(" + ")}) pour ${username.slice(0, 12)}…`);
+  botLog({ applicationId: jobId, step: "proxy_failover", status: "fail", data: { reason: "Tous les providers down", username } });
+  return undefined;
 }
