@@ -3,7 +3,7 @@
  *
  * - IPRoyal : ajout automatique via REST API (POST /whitelist-entries)
  *   avec configuration résidentielle sticky : country-cd, city-kinshasa,
- *   session sticky (8 chars aléatoires), lifetime 59 minutes.
+ *   session sticky (8 chars aléatoires), lifetime 12h, streaming-1.
  * - 2Captcha Proxy : ajout IMPOSSIBLE via API — log l'URL du dashboard pour ajout manuel
  *
  * Variables d'environnement requises :
@@ -44,16 +44,17 @@ function generateSessionId(length: number = 8): string {
 
 /**
  * Construit la configuration IPRoyal par défaut pour le whitelist :
- * _country-cd_city-kinshasa_session-{random8}_lifetime-59m
+ * _country-cd_city-kinshasa_session-{random8}_lifetime-12h_streaming-1
  *
  * Cette configuration assure :
  * - IP résidentielle depuis Kinshasa, RDC (géolocalisation cohérente avec le consulat)
- * - Session sticky : même IP pendant 59 minutes (évite les changements IP mid-session)
- * - Lifetime 59 minutes (max recommandé pour éviter les expirations silencieuses)
+ * - Session sticky : même IP pendant 12 heures (comportement WiFi résidentiel naturel)
+ * - Streaming-1 : pool haute qualité (meilleure stabilité)
+ * - Lifetime 12h (même IP pour toute la demi-journée de scan)
  */
 function buildDefaultIproyalConfig(): string {
   const sessionId = generateSessionId(8);
-  return `_country-cd_city-kinshasa_session-${sessionId}_lifetime-59m`;
+  return `_country-cd_city-kinshasa_session-${sessionId}_lifetime-12h_streaming-1`;
 }
 
 interface IProyalWhitelistEntry {
