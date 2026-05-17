@@ -256,7 +256,7 @@ async function participateInRace(
     }
 
     if (booking.success) {
-      console.log(`${logPrefix} ✅ BOOKING RÉUSSI! code=${booking.confirmationCode ?? "N/A"}`);
+      console.log(`${logPrefix} ✅ BOOKING RÉUSSI! code=${(booking as any).confirmationCode ?? "N/A"}`);
 
       // Enregistrer l'observation (Early Bird)
       recordSlotObservation(username, event.ofcName);
@@ -267,8 +267,8 @@ async function participateInRace(
         date: found.date,
         time: found.time,
         location: found.ofcName,
-        confirmationCode: booking.confirmationCode,
-        screenshotStorageId: booking.screenshotStorageId,
+        confirmationCode: (booking as any).confirmationCode,
+        screenshotStorageId: (booking as any).screenshotStorageId,
       });
 
       botLog({
@@ -282,21 +282,56 @@ async function participateInRace(
           date: found.date,
           time: found.time,
           slotId: found.slotId,
-          confirmationCode: booking.confirmationCode,
+          confirmationCode: (booking as any).confirmationCode,
           raceParticipants: event.watcherUsername ? "multi" : "single",
         },
       });
 
       // Tenter le téléchargement de la lettre de confirmation (non-bloquant)
       try {
-        await downloadUsaConfirmationPdf(session, job);
+        await downloadUsaConfirmationPdf(session, job.id);
       } catch (pdfErr) {
         console.warn(`${logPrefix} PDF confirmation échoué (non-bloquant):`, pdfErr);
       }
 
       return true;
+    } else if (booking.statusCode === 409) {
+      // FIX-20: 409 = slot pris par quelqu'un d'autre → retenter avec un autre slot
+      // L'ancien système avait retry-409-logic pour retenter avec le prochain créneau.
+      // En booking race, on tente UNE FOIS de plus avec un re-scan (le slot peut avoir changé de time).
+      console.log(`${logPrefix} ⚠️ Booking 409 (slot pris) — retry avec re-scan...`);
+      if (isRaceWon()) return false;
+
+      const retryFound = await findFirstSlotForOfc(
+        session, ofc, appDetails, dateFrom, dateDeadline, rescheduleYN,
+      );
+      if (!retryFound) {
+        console.log(`${logPrefix} ❌ Retry 409: plus aucun slot disponible`);
+        throw new Error("409_RETRY_NO_SLOT");
+      }
+
+      console.log(`${logPrefix} 📝 Retry booking: ${retryFound.date} ${retryFound.time}`);
+      const retryBooking = useReschedule
+        ? await rescheduleUsaSlot(session, retryFound)
+        : await bookUsaSlot(session, retryFound);
+
+      if (retryBooking.success) {
+        console.log(`${logPrefix} ✅ RETRY BOOKING RÉUSSI!`);
+        recordSlotObservation(username, event.ofcName);
+        await reportSlotFound({
+          applicationId: job.id,
+          date: retryFound.date,
+          time: retryFound.time,
+          location: retryFound.ofcName,
+          confirmationCode: (retryBooking as any).confirmationCode,
+          screenshotStorageId: (retryBooking as any).screenshotStorageId,
+        });
+        try { await downloadUsaConfirmationPdf(session, job.id); } catch { /* non-bloquant */ }
+        return true;
+      }
+      throw new Error(`409_RETRY_FAILED: ${retryBooking.error}`);
     } else {
-      // Booking échoué (409, slot pris par un autre, etc.)
+      // Booking échoué (autre raison)
       const errMsg = booking.error ?? "Booking échoué (raison inconnue)";
       console.log(`${logPrefix} ❌ Booking échoué: ${errMsg}`);
       throw new Error(errMsg);
