@@ -14,7 +14,7 @@ export interface CachedToken {
   jitterMs: number;
   lastActivityAt: number;
   lastScanTime?: number; // Dernier scan pour délai minimum entre les scans
-  allowedOfcs?: Array<{ postUserId: number }>;
+  allowedOfcs?: Array<{ postUserId: number; officeType?: string }>;
   targetSessionDuration?: number; // Durée cible aléatoire pour cette session (30-120 min)
   keepAliveInterval?: number; // Intervalle de keep-alive variable pour cette session (5-12 min)
   cooldownDurationMs?: number; // Durée du cooldown après expiration du token (5-8 min)
@@ -62,8 +62,7 @@ export interface UsaSession {
   appointmentId?: number;
   applicantUUID?: number;
   appointmentUUID?: string;
-  allowedOfcs?: Array<{ postUserId: number }>;
-  stateCode?: string;
+  allowedOfcs?: Array<{ postUserId: number; officeType?: string }>;  stateCode?: string;
   appointmentPriority?: string;
   isReschedule?: boolean;
 }
