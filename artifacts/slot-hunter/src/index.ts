@@ -1425,10 +1425,25 @@ async function main(): Promise<void> {
         }
       };
 
-      // Démarrer le watcher avec l'OFC Kinshasa
+      // ── Bootstrap : résoudre les données OFC AVANT de démarrer le watcher ────
+      // Sans bootstrap, le watcher reçoit postUserId:0 et ne peut pas scanner.
+      const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
+      const bootstrapResult = await bootstrapAccountData(watcherJob, watcherUsername);
+
+      if (!bootstrapResult.success || bootstrapResult.ofcList.length === 0) {
+        log("ERROR", `[parallel] Bootstrap échoué pour ${watcherUsername.slice(0, 12)}… — ${bootstrapResult.error ?? "aucun OFC"}`);
+        log("ERROR", `[parallel] Le watcher ne peut pas démarrer sans données OFC valides`);
+        return;
+      }
+
+      // Utiliser le premier OFC résolu (Kinshasa)
+      const resolvedOfc = bootstrapResult.ofcList[0];
+      log("INFO", `[parallel] Bootstrap OK — OFC: ${resolvedOfc.postName} (postUserId: ${resolvedOfc.postUserId})`);
+
+      // Démarrer le watcher avec les VRAIES données OFC
       startOfcWatcher(
         ofcKey,
-        { postUserId: 0, postName: "Kinshasa", officeType: "OFC" }, // postUserId sera résolu au premier scan
+        resolvedOfc,
         323, // missionId USA
         watcherUsername,
         watcherProxy,
@@ -1436,6 +1451,7 @@ async function main(): Promise<void> {
       );
 
       // 3. Inscrire TOUS les dossiers comme subscribers du watcher
+      // Bootstrap chaque compte pour résoudre ses appDetails
       for (const job of usaJobs) {
         const username = job.hunterConfig.embassyUsername;
         let subProxy: string | undefined;
@@ -1444,16 +1460,26 @@ async function main(): Promise<void> {
           subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
         }
 
+        // Bootstrap les données de chaque subscriber
+        let subAppDetails = bootstrapResult.appDetails;
+        if (username.toLowerCase() !== watcherUsername.toLowerCase()) {
+          // Bootstrap séparé pour les autres comptes (ils ont leur propre applicantId)
+          const subBootstrap = await bootstrapAccountData(job, username);
+          if (subBootstrap.appDetails) {
+            subAppDetails = subBootstrap.appDetails;
+          }
+        }
+
         subscribeToOfcWatcher(ofcKey, {
           jobId: job.id,
           username,
           proxyUrl: subProxy,
           job,
-          appDetails: {
-            applicantId: 0, // Sera résolu au premier scan
+          appDetails: subAppDetails ?? {
+            applicantId: bootstrapResult.appDetails?.applicantId ?? "0",
             applicationId: job.hunterConfig.portalApplicationId ?? "",
-            visaType: "NIV",
-            visaClass: "",
+            visaType: bootstrapResult.visaType,
+            visaClass: bootstrapResult.visaClass,
           },
           rescheduleYN: job.hunterConfig.rescheduleMode,
           dateFrom: job.hunterConfig.slotDateFrom,
@@ -1516,16 +1542,21 @@ async function main(): Promise<void> {
                     const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
                     subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
                   }
+
+                  // Bootstrap les données du nouveau compte
+                  const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
+                  const bootResult = await bootstrapAccountData(job, username);
+
                   subscribeLate(ofcKey, {
                     jobId: job.id,
                     username,
                     proxyUrl: subProxy,
                     job,
-                    appDetails: {
-                      applicantId: 0,
+                    appDetails: bootResult.appDetails ?? {
+                      applicantId: "0",
                       applicationId: job.hunterConfig.portalApplicationId ?? "",
-                      visaType: "NIV",
-                      visaClass: "",
+                      visaType: bootResult.visaType || "NIV",
+                      visaClass: bootResult.visaClass || "",
                     },
                     rescheduleYN: job.hunterConfig.rescheduleMode,
                     dateFrom: job.hunterConfig.slotDateFrom,
