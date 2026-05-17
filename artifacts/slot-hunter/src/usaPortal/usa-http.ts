@@ -519,18 +519,21 @@ let _usaProxyUrl: string | undefined;
 
 /**
  * Génère une URL iProyal avec session sticky.
- * iProyal fournit des URLs avec format: host:port:user:password_session-xxx_lifetime-30m
+ * iProyal fournit des URLs avec format: host:port:user:password_session-xxx_lifetime-60m
  * Si l'URL de base ne contient pas déjà _session-, on en ajoute un.
  * Si elle en contient déjà, on la retourne telle quelle.
  * 
- * ROTATION IP (anti-Fraud Control) :
- * Le session ID est dérivé de la demi-journée actuelle (AM/PM) + username.
- * → Même IP pendant 12h (stable pour le JWT), nouvelle IP à chaque changement de demi-journée.
- * Changements à ~00h00 UTC et ~12h00 UTC. SAFE car :
- *   - Les sessions durent 30-120min max (puis logout force un releaseStickyProxy)
- *   - Le changement de sessionId ne prend effet qu'au prochain login (après release)
- *   - Le JWT en cache garde l'ancien proxyUrl → pas de 401 mid-session
- * Cela évite qu'une même IP résidentielle soit utilisée 20h/jour pendant des semaines.
+ * ROTATION IP :
+ * Le session ID est déterministe par (date + demi-journée + username + rotationCount).
+ * Cela permet :
+ *   - Même session ID si le bot redémarre dans la même période → reprise déterministe
+ *   - Changement automatique à 00h/12h UTC → nouvelle IP pour le prochain login
+ *   - Rotation forcée via rotateIproyalSession() après 401/504
+ * 
+ * IMPORTANT: La lifetime iProyal est de 60 min. Après 60 min, la session proxy
+ * expire côté serveur iProyal et l'IP est relâchée. Le prochain appel avec le même
+ * session ID obtiendra potentiellement une IP DIFFÉRENTE (pas de garantie de même IP).
+ * Le JWT du portail USA est lui aussi lié à 60 min → login frais = nouvelle IP = OK.
  */
 export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 60, username?: string): string {
   try {
@@ -544,9 +547,12 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
       password = password.replace(/_session-[^_]+_lifetime-\d+m/, "");
     }
     
-    // ── Générer un session ID stable par demi-journée + compte (rotation IP toutes les 12h) ──
-    // Hash déterministe : même demi-journée + même username → même session ID → même IP.
-    // Changement à ~00h00 UTC et ~12h00 UTC → nouvelle IP résidentielle.
+    // ── Générer un session ID stable par période + compte ──────────────────────
+    // Hash déterministe : même demi-journée + même username → même session ID.
+    // Le session ID change à 00h/12h UTC → nouveau login = nouvelle IP.
+    // NOTE: iProyal lifetime=60m → l'IP expire après 60 min quoi qu'il arrive.
+    // Le halfDay sert uniquement à la reprise déterministe si le bot redémarre,
+    // PAS à garder la même IP pendant 12h (c'est impossible avec lifetime=60m).
     // On ajoute un compteur de rotation pour forcer une nouvelle IP après un 401/504.
     const now = new Date();
     const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
@@ -565,7 +571,7 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
     
     password += `_session-${sessionId}_lifetime-${lifetimeMinutes}m`;
     parsed.password = encodeURIComponent(password);
-    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation toutes les 12h — ${halfDay}, rot#${rotationCount})`);
+    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeMinutes}m (rotation: ${halfDay}, rot#${rotationCount})`);
     return parsed.toString();
   } catch {
     // Si le parsing d'URL échoue, retourner l'URL d'origine

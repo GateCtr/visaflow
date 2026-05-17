@@ -61,7 +61,9 @@ export function makeBrightDataStickyUrl(
       .replace(/-session-[a-zA-Z0-9]+/g, "")
       .replace(/-country-[a-z]{2}/g, "");
 
-    // Générer session ID déterministe (rotation toutes les 12h + compteur de rotation)
+    // Générer session ID déterministe (stable par période + compteur de rotation)
+    // NOTE: Ceci ne garantit PAS la même IP pendant 12h. La session iProyal expire
+    // après 60 min (lifetime). Le halfDay sert uniquement à la reprise déterministe.
     const now = new Date();
     const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
     const rotationCount = _brightdataRotationCount.get((username ?? "default").toLowerCase()) ?? 0;
