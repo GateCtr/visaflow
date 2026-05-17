@@ -495,7 +495,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
     setActiveSessionUaFromPoolIndex(sessionUaIdx);
     // ── SÉLECTION PROXY RÉSIDENTIEL AVEC FAILOVER (iProyal > BrightData > 2captcha) ──
     // Le JWT est lié à l'IP → le proxy doit rester le même pendant toute la session.
-    // Priorité : iProyal (sticky 60min) > BrightData (sticky + keep-alive, KYC requis) > 2captcha rotatif.
+    // Priorité : iProyal (sticky 12h) > BrightData (sticky + keep-alive, KYC requis) > 2captcha rotatif.
     // FAILOVER : Si le proxy prioritaire échoue au pre-flight, on essaie le suivant
     // AVANT de créer le JWT (donc pas de changement d'IP mid-session).
     // NOTE: BrightData requiert une vérification KYC pour les POST sur les sites .gov.
@@ -525,14 +525,14 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       const primaryIsBrightData = !preferIproyal && hasBrightData;
 
       if (primaryIsIproyal || (hasIproyal && !hasBrightData)) {
-        // Tenter iProyal en premier (sticky 60min, pas de KYC requis)
-        const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 60, username);
+        // Tenter iProyal en premier (sticky 12h, pas de KYC requis)
+        const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 720, username);
         const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);
 
         if (ipHealth.healthy) {
           sessionProxy = ipStickyUrl;
           preFlightExitIp = ipHealth.exitIp ?? undefined;
-          console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 60min`);
+          console.log(`[usa] 🌐 iProyal résidentiel OK (${ipHealth.latencyMs}ms) — sticky 12h`);
           setKnownProxyLatency(ipHealth.latencyMs ?? 0); // FIX 9
         } else {
           // iProyal DOWN → fallback BrightData si disponible
@@ -606,13 +606,13 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
           console.warn(`[usa] ⚠️ BrightData pre-flight FAILED: ${bdHealth.error} — tentative fallback iProyal...`);
 
           if (hasIproyal) {
-            const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 60, username);
+            const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 720, username);
             const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);
 
             if (ipHealth.healthy) {
               sessionProxy = ipStickyUrl;
               preFlightExitIp = ipHealth.exitIp ?? undefined;
-              console.log(`[usa] 🌐 FALLBACK iProyal OK (${ipHealth.latencyMs}ms) — sticky 60min`);
+              console.log(`[usa] 🌐 FALLBACK iProyal OK (${ipHealth.latencyMs}ms) — sticky 12h`);
             } else {
               // BrightData + iProyal DOWN → fallback 2captcha rotatif
               console.warn(`[usa] ⚠️ iProyal aussi DOWN: ${ipHealth.error} — tentative 2captcha...`);
@@ -820,8 +820,8 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       } else if (sessionProxy) {
         // ── iProyal sticky direct (pas via proxyPool) : calculer l'expiration manuellement ──
         // Le lifetime iProyal est de 60 min depuis la création de la session sticky.
-        // On utilise 55 min comme expiration effective (marge de sécurité de 5 min).
-        const IPROYAL_EFFECTIVE_LIFETIME_MS = 55 * 60 * 1000;
+        // On utilise 11h30 comme expiration effective (marge de sécurité de 30 min sur 12h).
+        const IPROYAL_EFFECTIVE_LIFETIME_MS = 11.5 * 60 * 60 * 1000;
         freshEntry.proxyExpiresAt = Date.now() + IPROYAL_EFFECTIVE_LIFETIME_MS;
         const proxyExpMin = Math.round(IPROYAL_EFFECTIVE_LIFETIME_MS / 60000);
         const jwtExpMin = Math.round((freshEntry.expiresAt - Date.now()) / 60000);
