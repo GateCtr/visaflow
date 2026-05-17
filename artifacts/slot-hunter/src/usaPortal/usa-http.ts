@@ -22,7 +22,42 @@ import {
   MAX_COOLDOWN_AFTER_EXPIRY_MS,
 } from "./config.js";
 
-export const tokenCache = new Map<string, CachedToken>();
+/**
+ * Token cache avec synchronisation Redis automatique.
+ * Les méthodes set() et delete() sont instrumentées pour sync vers Redis
+ * en arrière-plan (fire-and-forget). Aucun changement nécessaire dans le code appelant.
+ */
+class PersistentTokenCache extends Map<string, CachedToken> {
+  private _redisSyncToken: ((key: string, token: CachedToken) => void) | null = null;
+  private _redisRemoveToken: ((key: string) => void) | null = null;
+
+  /** Appelé par initTokenCacheRedis() pour brancher les hooks Redis. */
+  _setRedisHooks(
+    syncFn: (key: string, token: CachedToken) => void,
+    removeFn: (key: string) => void,
+  ): void {
+    this._redisSyncToken = syncFn;
+    this._redisRemoveToken = removeFn;
+  }
+
+  override set(key: string, value: CachedToken): this {
+    super.set(key, value);
+    if (this._redisSyncToken) {
+      this._redisSyncToken(key, value);
+    }
+    return this;
+  }
+
+  override delete(key: string): boolean {
+    const result = super.delete(key);
+    if (result && this._redisRemoveToken) {
+      this._redisRemoveToken(key);
+    }
+    return result;
+  }
+}
+
+export const tokenCache = new PersistentTokenCache();
 
 /**
  * Verrou de login concurrent : si deux jobs pour le même compte tentent un login simultané,

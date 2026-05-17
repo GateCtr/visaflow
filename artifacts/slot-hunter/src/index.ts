@@ -1321,6 +1321,25 @@ async function main(): Promise<void> {
   // Valeur "1" = activé, tout autre chose ou absent = désactivé.
   // Fallback sur la variable d'environnement si Convex est inaccessible.
   let parallelMode = false;
+
+  // ── Redis: restaurer les sessions persistées (évite les re-logins au restart) ──
+  // Initialisé AVANT la décision de mode pour que les deux paths (parallèle/séquentiel)
+  // bénéficient de la persistance des sessions.
+  const { initTokenCacheRedis, disconnectRedis } = await import("./usaPortal/token-cache-redis.js");
+  const restoredSessions = await initTokenCacheRedis();
+  if (restoredSessions > 0) {
+    log("INFO", `[redis-cache] 🔑 ${restoredSessions} session(s) restaurée(s) — re-login évité`);
+  }
+
+  // Graceful shutdown: flush les sessions vers Redis avant de quitter
+  const gracefulShutdown = async (signal: string) => {
+    log("INFO", `[shutdown] Signal ${signal} reçu — flush Redis...`);
+    await disconnectRedis();
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => { gracefulShutdown("SIGTERM"); });
+  process.on("SIGINT", () => { gracefulShutdown("SIGINT"); });
+
   try {
     const convexValue = await getBotConfigValue("parallel_watcher_mode");
     parallelMode = convexValue === "1";
