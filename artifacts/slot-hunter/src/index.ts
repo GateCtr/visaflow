@@ -1331,6 +1331,13 @@ async function main(): Promise<void> {
     log("INFO", `[redis-cache] 🔑 ${restoredSessions} session(s) restaurée(s) — re-login évité`);
   }
 
+  // FIX-20: Restaurer les restrictions depuis Redis (survit aux redéploiements)
+  const { initRestrictionRedis } = await import("./usaPortal/account-restriction.js");
+  const restoredRestrictions = await initRestrictionRedis();
+  if (restoredRestrictions > 0) {
+    log("INFO", `[redis-cache] 🔒 ${restoredRestrictions} restriction(s) restaurée(s) — re-login évité pour comptes restreints`);
+  }
+
   // Graceful shutdown: flush les sessions vers Redis avant de quitter
   const gracefulShutdown = async (signal: string) => {
     log("INFO", `[shutdown] Signal ${signal} reçu — flush Redis...`);
