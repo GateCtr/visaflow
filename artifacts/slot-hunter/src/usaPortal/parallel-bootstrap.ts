@@ -30,6 +30,7 @@ import {
   resetCorrelationOnAction,
   setAccountFingerprint,
   updateSessionActivity,
+  setUsaSessionProxy,
 } from "./usa-http.js";
 import { getUsaTransformData, getUsaOfcList, getUsaApplicationDetails } from "./usa-scan-details.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
@@ -181,6 +182,11 @@ export async function bootstrapAccountData(
     allowedOfcs: cached.allowedOfcs ?? [],
   };
 
+  // ── Activer le proxy du compte pour usaFetch() (legacy global singleton) ──
+  // Les appels API (getUsaTransformData, etc.) utilisent usaFetch() qui route
+  // via _usaProxyUrl. Sans ça, les requêtes partent sans proxy ou avec un proxy stale.
+  setUsaSessionProxy(proxyUrl);
+
   // ── Activer ce compte comme session courante pour getBrowserHeaders() ────
   // Sans ça, getSessionAcceptHeaders() et getStickyCorrelationId() utilisent
   // le fallback global au lieu des valeurs per-account qu'on vient d'initialiser.
@@ -325,11 +331,13 @@ export async function bootstrapAccountData(
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ÉTAPE 7 : Libérer le proxy guard
+  // ÉTAPE 7 : Libérer le proxy guard + reset proxy global
   // ══════════════════════════════════════════════════════════════════════════
   if (proxyUrl) {
     releaseProxyGuard(username);
   }
+  // Reset le proxy global pour ne pas polluer d'autres flows (mode séquentiel coexistant)
+  setUsaSessionProxy(undefined);
 
   return {
     success: ofcList.length > 0,

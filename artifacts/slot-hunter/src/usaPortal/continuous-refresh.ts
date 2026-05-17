@@ -484,6 +484,10 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
       const useLandingPage = Math.random() < LANDING_PAGE_RATIO;
 
       // ── Exécuter le refresh ──
+      // Positionner le compte actif AVANT l'appel API pour que getBrowserHeaders()
+      // utilise les bons headers per-account (UA, Accept, Correlation).
+      updateSessionActivity(username);
+
       const reqStart = Date.now();
       let refreshResult: LightRefreshResult;
 
@@ -501,9 +505,6 @@ export async function runContinuousRefresh(config: ContinuousRefreshConfig): Pro
 
       totalRefreshes++;
       windowRefreshes++;
-
-      // Mettre à jour l'activité de session
-      updateSessionActivity(username);
 
       if (refreshResult.slotDetected) {
         const totalElapsed = Date.now() - startTime;

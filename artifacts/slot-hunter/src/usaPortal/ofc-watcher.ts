@@ -336,7 +336,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   const firstSub = state.subscribers.values().next().value;
   if (!firstSub) return; // pas de subscribers
 
-  const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true);
+  const hdrs = authHeaders(cached.accessToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, watcherUsername);
 
   const payload: Record<string, unknown> = {
     postUserId: ofc.postUserId,

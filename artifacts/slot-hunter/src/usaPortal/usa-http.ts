@@ -251,11 +251,12 @@ export async function refreshUsaToken(cached: CachedToken, username: string): Pr
 export function authHeaders(
   accessToken: string,
   referer: string = REFERER_DASHBOARD,
-  withBody = true
+  withBody = true,
+  username?: string,
 ): Record<string, string> {
   const token = accessToken.trim().replace(/^Bearer\s+/i, "").trim();
   const h: Record<string, string> = {
-    ...getBrowserHeaders(),
+    ...getBrowserHeaders(undefined, username),
     "Authorization": `Bearer ${token}`,
     "Referer": referer,
   };
@@ -267,11 +268,12 @@ export function authHeaders(
 export function authHeadersNoBearer(
   accessToken: string,
   referer: string = REFERER_DASHBOARD,
-  withBody = true
+  withBody = true,
+  username?: string,
 ): Record<string, string> {
   const token = accessToken.trim().replace(/^Bearer\s+/i, "").trim();
   const h: Record<string, string> = {
-    ...getBrowserHeaders(),
+    ...getBrowserHeaders(undefined, username),
     "Authorization": token, // Pas de "Bearer " prefix
     "Referer": referer,
   };
@@ -400,17 +402,8 @@ let _stickyCorrelationId: string | undefined;
 let _lastCorrelationReferer: string | undefined;
 
 function getStickyCorrelationId(): string {
-  // FIX 11: Utiliser le correlation du compte actif si disponible
-  if (_activeSessionUsername) {
-    const accountCorr = accountCorrelationMap.get(_activeSessionUsername);
-    if (accountCorr) return accountCorr.id;
-  }
-  // Fallback global (mode séquentiel ou pas de session active)
-  if (!_stickyCorrelationId) {
-    _stickyCorrelationId = generateCorrelationId();
-    console.log(`[usa] 🔑 Nouveau X-Correlation-key (init): ${_stickyCorrelationId.slice(0, 6)}…`);
-  }
-  return _stickyCorrelationId;
+  // FIX 12: Delegated to getCorrelationForAccount() — kept for backward compat with rare direct callers
+  return getCorrelationForAccount();
 }
 
 /**
@@ -494,18 +487,67 @@ export function initSessionHeaders(username: string): void {
   sessionHeadersMap.set(key, { encoding, language });
 }
 
-/** Retourne les headers Accept-* fixés pour la session active. */
-function getSessionAcceptHeaders(): { encoding: string; language: string } {
-  if (_activeSessionUsername && sessionHeadersMap.has(_activeSessionUsername)) {
-    return sessionHeadersMap.get(_activeSessionUsername)!;
+/** Retourne les headers Accept-* fixés pour un compte donné (ou la session active). */
+function getSessionAcceptHeaders(forUsername?: string): { encoding: string; language: string } {
+  const key = forUsername?.toLowerCase() ?? _activeSessionUsername;
+  if (key && sessionHeadersMap.has(key)) {
+    return sessionHeadersMap.get(key)!;
   }
   // Fallback si pas de session active (pre-login) : valeurs par défaut Chrome
   return { encoding: "gzip, deflate, br, zstd", language: "fr-CD,fr;q=0.9,en-US;q=0.8,en;q=0.7" };
 }
 
-export function getBrowserHeaders(jobId?: string): Record<string, string> {
-  // Headers Accept-* FIXÉS pour la durée de la session (pas randomisés par requête)
-  const { encoding, language } = getSessionAcceptHeaders();
+/**
+ * Retourne le fingerprint UA pour un compte donné (ou le global _sessionUa).
+ * FIX 12: Ne plus dépendre du singleton _sessionUa en mode parallèle.
+ */
+function getUaForAccount(forUsername?: string): { ua: string; chUa: string; platform: string } {
+  const key = forUsername?.toLowerCase() ?? _activeSessionUsername;
+  if (key && accountFingerprintMap.has(key)) {
+    return accountFingerprintMap.get(key)!;
+  }
+  if (key && accountUaMap.has(key)) {
+    return USA_UA_POOL[accountUaMap.get(key)!];
+  }
+  // Fallback : singleton global (mode séquentiel, pre-login)
+  return _sessionUa;
+}
+
+/**
+ * Retourne le X-Correlation-key pour un compte donné (ou le global).
+ * FIX 12: Per-account lookup sans dépendre de _activeSessionUsername.
+ */
+function getCorrelationForAccount(forUsername?: string): string {
+  const key = forUsername?.toLowerCase() ?? _activeSessionUsername;
+  if (key) {
+    const accountCorr = accountCorrelationMap.get(key);
+    if (accountCorr) return accountCorr.id;
+  }
+  // Fallback global
+  if (!_stickyCorrelationId) {
+    _stickyCorrelationId = generateCorrelationId();
+    console.log(`[usa] 🔑 Nouveau X-Correlation-key (init): ${_stickyCorrelationId.slice(0, 6)}…`);
+  }
+  return _stickyCorrelationId;
+}
+
+/**
+ * Génère les headers navigateur pour une requête API.
+ * 
+ * FIX 12: Accepte un `username` optionnel pour résoudre TOUS les headers
+ * (UA, Accept, Correlation, Device) depuis les Maps per-account au lieu
+ * des singletons globaux. Critique pour le mode parallèle.
+ *
+ * @param jobId    — (legacy) ID job pour variabilité humaine
+ * @param username — (parallèle) compte pour lequel générer les headers
+ */
+export function getBrowserHeaders(jobId?: string, username?: string): Record<string, string> {
+  // Headers Accept-* résolus depuis la Map per-account (ou fallback global)
+  const { encoding, language } = getSessionAcceptHeaders(username);
+  // UA résolu depuis accountFingerprintMap/accountUaMap (ou fallback _sessionUa)
+  const ua = getUaForAccount(username);
+  // Correlation résolu depuis accountCorrelationMap (ou fallback global)
+  const correlationId = getCorrelationForAccount(username);
   
   const baseHeaders = {
     "Accept":             "application/json, text/plain, */*",
@@ -519,28 +561,25 @@ export function getBrowserHeaders(jobId?: string): Record<string, string> {
     "Pragma":             "no-cache",
     "Origin":             "https://www.usvisaappt.com",
     "Referer":            REFERER_LOGIN,
-    "Sec-CH-UA":          _sessionUa.chUa,
+    "Sec-CH-UA":          ua.chUa,
     "Sec-CH-UA-Mobile":   "?0",
-    "Sec-CH-UA-Platform": _sessionUa.platform,
+    "Sec-CH-UA-Platform": ua.platform,
     "Sec-Fetch-Dest":     "empty",
     "Sec-Fetch-Mode":     "cors",
     "Sec-Fetch-Site":     "same-origin",
-    "User-Agent":         _sessionUa.ua,
+    "User-Agent":         ua.ua,
     // Bundle Angular : X-Correlation-key présent sur toutes les requêtes authentifiées
-    // STICKY par navigation (3-8 min) — le vrai Angular ne régénère pas à chaque requête.
-    "X-Correlation-key":  getStickyCorrelationId(),
+    // STICKY par navigation — le vrai Angular ne régénère pas à chaque requête.
+    "X-Correlation-key":  correlationId,
   };
   
   // Ajouter de la variabilité humaine aux headers
   const withVariability = getVariableBrowserHeaders(baseHeaders, jobId);
 
   // ── Device fingerprint headers — cohérence anti-WAF préventive ──────────────
-  // Si un username de session est actif, enrichir avec des headers stables par compte.
-  // Ces headers imitent les Client Hints étendus que Chrome envoie quand le serveur
-  // les demande (Accept-CH). Même si le portail ne les requiert pas encore, leur
-  // présence renforce la cohérence du "navigateur" simulé face à un futur WAF.
-  if (_activeSessionUsername) {
-    const deviceHeaders = getDeviceConsistencyHeaders(_activeSessionUsername);
+  const deviceKey = username?.toLowerCase() ?? _activeSessionUsername;
+  if (deviceKey) {
+    const deviceHeaders = getDeviceConsistencyHeaders(deviceKey);
     Object.assign(withVariability, deviceHeaders);
   }
 

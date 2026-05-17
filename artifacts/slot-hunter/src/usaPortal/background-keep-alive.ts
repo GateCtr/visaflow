@@ -189,7 +189,7 @@ async function bgKeepAliveTick(key: string): Promise<void> {
   try {
     const res = await usaFetch(USA_LANDING_PAGE_URL, {
       method: "GET",
-      headers: authHeaders(cached.accessToken, REFERER_DASHBOARD, false),
+      headers: authHeaders(cached.accessToken, REFERER_DASHBOARD, false, key),
     });
 
     state.pingCount++;
