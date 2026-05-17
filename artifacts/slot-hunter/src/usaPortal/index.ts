@@ -23,6 +23,7 @@ export {
   type SlotDetectedEvent,
   type SlotDetectedCallback,
 } from "./ofc-watcher.js";
+export { runBookingRace, type BookingRaceResult } from "./booking-race.js";
 export { makeBrightDataStickyUrl, rotateBrightDataSession, startBrightDataKeepAlive, stopBrightDataKeepAlive, stopAllBrightDataKeepAlives } from "./brightdata-proxy.js";
 export { startBackgroundKeepAlive, stopBackgroundKeepAlive, stopAllBackgroundKeepAlives } from "./background-keep-alive.js";
 export { downloadUsaConfirmationPdf } from "./scan-slot-booking.js";
