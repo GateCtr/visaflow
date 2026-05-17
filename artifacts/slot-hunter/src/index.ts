@@ -384,7 +384,13 @@ async function startCevPollingLoop(): Promise<void> {
 //   - La vérification du bundle portail USA (clé AES)
 //   - Les bot tests manuels
 //   - syncAdminResets (détection pause/reprise admin)
+//   - Le SCAN INITIAL des jobs USA (résout appDetails) avant de déléguer au watcher
 const isParallelMode = process.env.PARALLEL_WATCHER_MODE === "1" || process.env.PARALLEL_WATCHER_MODE === "true";
+
+// ─── Parallel mode : tracking des scans initiaux complétés ──────────────────
+// Un job USA doit faire UN scan initial via le scheduler séquentiel (runHunterSession)
+// pour résoudre applicantId + postUserId. Après ça, le watcher prend le relais.
+const parallelInitialScanDone = new Set<string>();
 
 // ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
 // tres_urgent : 3-5 min hors rush, 1-2 min pendant les rush hours.
@@ -694,8 +700,9 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
     !!j.portalUrl &&
     getNextCheckDue(j) <= now &&
     // Mode parallèle : le OFC Watcher gère le polling USA → exclure les jobs USA
-    // du scheduler séquentiel. Seuls CEV (schengen) et Espagne restent gérés ici.
-    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
+    // du scheduler séquentiel SAUF ceux qui n'ont pas fait leur scan initial.
+    // Le scan initial résout appDetails (applicantId, postUserId) nécessaires au watcher.
+    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")) && parallelInitialScanDone.has(j.id)),
   );
 
   if (due.length === 0) return null;
@@ -743,8 +750,8 @@ function getTimeUntilNextDue(jobs: HunterJob[]): number {
     !pausedJobs.has(j.id) &&
     j.hunterConfig?.isActive === true &&
     !!j.portalUrl &&
-    // Mode parallèle : ignorer les jobs USA (gérés par le OFC Watcher)
-    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
+    // Mode parallèle : ignorer les jobs USA qui ont déjà fait leur scan initial (gérés par le OFC Watcher)
+    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")) && parallelInitialScanDone.has(j.id)),
   );
 
   if (active.length === 0) return IDLE_POLL_MAX_MS;
@@ -1513,9 +1520,10 @@ async function main(): Promise<void> {
     await checkPortalBundleKey(jobs);
 
     // En mode parallèle, exclure les dossiers USA de la boucle legacy
-    // (ils sont gérés par le watcher OFC + booking race)
+    // SAUF ceux qui n'ont pas encore fait leur scan initial (appDetails non résolus).
+    // Le premier scan résout applicantId + postUserId → ensuite le watcher prend le relais.
     const legacyJobs = parallelMode
-      ? jobs.filter(j => j.destination !== "usa")
+      ? jobs.filter(j => j.destination !== "usa" || !parallelInitialScanDone.has(j.id))
       : jobs;
 
     const due = findNextDueJob(legacyJobs);
@@ -1524,7 +1532,7 @@ async function main(): Promise<void> {
       const waitMs = getTimeUntilNextDue(jobs);
       const activeCount = jobs.filter((j) =>
         !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-        !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+        !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")) && parallelInitialScanDone.has(j.id))
       ).length;
 
       if (activeCount === 0) {
@@ -1537,7 +1545,7 @@ async function main(): Promise<void> {
         const tierCounts = jobs
           .filter((j) =>
             !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-            !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+            !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")) && parallelInitialScanDone.has(j.id))
           )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
@@ -1589,6 +1597,30 @@ async function main(): Promise<void> {
         }
       } else {
         result = await runHunterSession(due);
+        // Mode parallèle : si c'est un job USA et que le scan initial a réussi,
+        // marquer comme "scan initial fait" et mettre à jour le watcher avec les appDetails résolus.
+        if (isParallelMode && (due.destination === "usa" || (!due.destination || due.destination === "")) && result === "not_found") {
+          parallelInitialScanDone.add(due.id);
+          log("INFO", `[parallel] ✅ Scan initial complété pour [${due.applicantName}] — handoff au OFC Watcher`);
+          // Note: Les appDetails résolus pendant runHunterSession sont maintenant dans le cache
+          // du module impl.ts. On les transmet au watcher via updateSubscriberAppDetails.
+          // Le watcher commencera à poll dès qu'il détecte appDetails != 0.
+          try {
+            const { updateSubscriberAppDetails, updateWatcherOfc, makeOfcKey } = await import("./usaPortal/ofc-watcher.js");
+            const { getLastResolvedAppDetails, getLastResolvedOfc } = await import("./usaPortal/scan-result-cache.js");
+            const ofcKey = makeOfcKey("usa", "Kinshasa", 323);
+            const resolvedApp = getLastResolvedAppDetails(due.hunterConfig.embassyUsername);
+            const resolvedOfc = getLastResolvedOfc(due.hunterConfig.embassyUsername);
+            if (resolvedApp) {
+              updateSubscriberAppDetails(ofcKey, due.id, resolvedApp);
+            }
+            if (resolvedOfc) {
+              updateWatcherOfc(ofcKey, resolvedOfc);
+            }
+          } catch (err) {
+            log("WARN", `[parallel] Erreur mise à jour watcher appDetails: ${err}`);
+          }
+        }
       }
     } catch (err) {
       result = "error";
