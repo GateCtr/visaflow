@@ -726,6 +726,29 @@ export function reportSlotDiscoveryBatch(events: SlotDiscoveryEvent[]): void {
   );
 }
 
+// ─── Bot Config: lecture de configuration admin depuis Convex ─────────────────
+
+/**
+ * Lit une valeur de configuration bot depuis Convex (table botConfigs).
+ * Utilisé pour piloter des flags depuis le panneau admin sans redéployer.
+ * Retourne null si la clé n'existe pas ou si Convex est inaccessible.
+ */
+export async function getBotConfigValue(key: string): Promise<string | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/bot-config?key=${encodeURIComponent(key)}`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { value: string | null };
+    return data.value ?? null;
+  } catch (err) {
+    console.warn(`[convexClient] getBotConfigValue(${key}) error:`, err);
+    return null;
+  }
+}
+
 // ─── Early Bird Prediction: bootstrap historique ─────────────────────────────
 
 /**

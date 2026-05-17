@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "./convexClient.js";
+import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, getActiveCevSessions, recordCevSessionCheck, getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound, loadCevBookingConfig, getSpainWatcherConfig, uploadFile, reportSpainWatcherScan, getBotConfigValue } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck, runCevDirectSessionSetup, bookWithExistingSession } from "./cevBooking.js";
 import { bookCevViaHttp, setCevDiscoveredConfig } from "./cevHttpBooking.js";
@@ -1290,10 +1290,28 @@ async function main(): Promise<void> {
   }
 
   // ─── PARALLEL MODE : OFC Watcher + Booking Race (Kinshasa) ────────────────
-  // Si PARALLEL_WATCHER_MODE=1, les dossiers USA Kinshasa sont gérés par le
-  // nouveau système (watcher partagé + booking race) au lieu du mode séquentiel.
-  // Les dossiers non-USA (CEV, Spain) et les bot tests restent dans la boucle legacy.
-  const parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+  // Pilotable depuis l'admin via bot-config Convex (clé: parallel_watcher_mode).
+  // Valeur "1" = activé, tout autre chose ou absent = désactivé.
+  // Fallback sur la variable d'environnement si Convex est inaccessible.
+  let parallelMode = false;
+  try {
+    const convexValue = await getBotConfigValue("parallel_watcher_mode");
+    parallelMode = convexValue === "1";
+    if (parallelMode) {
+      log("INFO", "[parallel] Mode parallèle activé via bot-config Convex (parallel_watcher_mode=1)");
+    } else {
+      // Fallback env var (pour les tests locaux ou si Convex n'a pas encore la clé)
+      parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+      if (parallelMode) {
+        log("INFO", "[parallel] Mode parallèle activé via env PARALLEL_WATCHER_MODE=1 (fallback)");
+      }
+    }
+  } catch {
+    parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+    if (parallelMode) {
+      log("WARN", "[parallel] Convex inaccessible — fallback sur env PARALLEL_WATCHER_MODE=1");
+    }
+  }
 
   if (parallelMode) {
     log("INFO", "═══════════════════════════════════════════════════════════════");
