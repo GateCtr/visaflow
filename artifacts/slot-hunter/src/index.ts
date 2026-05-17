@@ -374,6 +374,18 @@ async function startCevPollingLoop(): Promise<void> {
   }
 }
 
+// ─── Mode Parallèle (OFC Watcher partagé) ──────────────────────────────────
+// Quand PARALLEL_WATCHER_MODE=1, le polling USA est géré par un OFC Watcher
+// partagé + keep-alive per-account. Le scheduler séquentiel n'a plus besoin de :
+//   - Stagger (le watcher poll pour tout le monde)
+//   - Lancer les sessions de scan USA (runHunterSession) — le watcher s'en charge
+// Le scheduler reste actif UNIQUEMENT pour :
+//   - Les jobs CEV (schengen) et Espagne (spain/espagne/es)
+//   - La vérification du bundle portail USA (clé AES)
+//   - Les bot tests manuels
+//   - syncAdminResets (détection pause/reprise admin)
+const isParallelMode = process.env.PARALLEL_WATCHER_MODE === "1" || process.env.PARALLEL_WATCHER_MODE === "true";
+
 // ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
 // tres_urgent : 3-5 min hors rush, 1-2 min pendant les rush hours.
 // Safe car le token JWT USA est en cache 55 min → aucun re-login supplémentaire.
@@ -680,7 +692,10 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
     !isInRadioSilence(j.id) &&  // FIX 1: respect per-dossier radio silence
     j.hunterConfig?.isActive === true &&
     !!j.portalUrl &&
-    getNextCheckDue(j) <= now,
+    getNextCheckDue(j) <= now &&
+    // Mode parallèle : le OFC Watcher gère le polling USA → exclure les jobs USA
+    // du scheduler séquentiel. Seuls CEV (schengen) et Espagne restent gérés ici.
+    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
   );
 
   if (due.length === 0) return null;
@@ -727,7 +742,9 @@ function getTimeUntilNextDue(jobs: HunterJob[]): number {
   const active = jobs.filter((j) =>
     !pausedJobs.has(j.id) &&
     j.hunterConfig?.isActive === true &&
-    !!j.portalUrl,
+    !!j.portalUrl &&
+    // Mode parallèle : ignorer les jobs USA (gérés par le OFC Watcher)
+    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
   );
 
   if (active.length === 0) return IDLE_POLL_MAX_MS;
@@ -1271,6 +1288,16 @@ async function main(): Promise<void> {
   log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
+  // ─── Mode parallèle : log d'information ────────────────────────────────────
+  if (isParallelMode) {
+    log("INFO", `═══════════════════════════════════════════════════════════════`);
+    log("INFO", `🔀 MODE PARALLÈLE DÉTECTÉ (PARALLEL_WATCHER_MODE=1)`);
+    log("INFO", `   → Scheduler séquentiel: CEV + Espagne + bundle check UNIQUEMENT`);
+    log("INFO", `   → Jobs USA: polling délégué au OFC Watcher partagé`);
+    log("INFO", `   → Stagger désactivé (inutile avec watcher centralisé)`);
+    log("INFO", `═══════════════════════════════════════════════════════════════`);
+  }
+
   // ─── Statut solveurs hCaptcha CEV ────────────────────────────────────────
   const antiCaptchaKey = process.env.ANTICAPTCHA_API_KEY;
   const capsolverKey   = process.env.CAPSOLVER_API_KEY;
@@ -1319,7 +1346,12 @@ async function main(): Promise<void> {
 
     // Stagger : répartir les dossiers du même tier dans l'intervalle
     // (recalcule si de nouveaux dossiers apparaissent ou si le tier change)
-    staggerInitialSchedules(jobs);
+    // En mode parallèle, le stagger est inutile pour les jobs USA car le OFC Watcher
+    // gère le polling de manière centralisée. On skip pour éviter de planifier des
+    // scheduledNextDue qui empêchent les jobs d'être "dûs" (bug: jobs jamais lancés).
+    if (!isParallelMode) {
+      staggerInitialSchedules(jobs);
+    }
 
     // Vérification quotidienne du bundle portail USA (non bloquante)
     await checkPortalBundleKey(jobs);
@@ -1328,13 +1360,23 @@ async function main(): Promise<void> {
 
     if (!due) {
       const waitMs = getTimeUntilNextDue(jobs);
-      const activeCount = jobs.filter((j) => !pausedJobs.has(j.id) && j.hunterConfig?.isActive).length;
+      const activeCount = jobs.filter((j) =>
+        !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
+        !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+      ).length;
 
       if (activeCount === 0) {
-        log("INFO", "Aucun dossier actif — polling dans 90s");
+        if (isParallelMode) {
+          log("INFO", "Scheduler séquentiel idle — jobs USA gérés par OFC Watcher — polling dans 90s");
+        } else {
+          log("INFO", "Aucun dossier actif — polling dans 90s");
+        }
       } else {
         const tierCounts = jobs
-          .filter((j) => !pausedJobs.has(j.id) && j.hunterConfig?.isActive)
+          .filter((j) =>
+            !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
+            !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+          )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
             return acc;
