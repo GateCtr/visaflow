@@ -249,45 +249,52 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     return true;
   }
 
+  // Vérifier si un token existe déjà en cache
+  const cached = tokenCache.get(key);
+  if (cached && isCachedTokenValid(cached)) {
+    // Token déjà valide → inscrire le compte et activer le keep-alive directement
+    // Résoudre le proxy uniquement si le token est valide (le proxy sera utile pour le scan)
+    let proxyUrl: string | undefined;
+    if (job.hunterConfig.useResidentialProxy) {
+      proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
+    }
+    const account: ManagedAccount = {
+      username, password, proxyUrl, jobId: job.id, job,
+      lastLoginAt: 0, reloginCount: 0, tokenDiedAt: null,
+    };
+    managedAccounts.set(key, account);
+    startBackgroundKeepAlive(username, job.id);
+    console.log(`[accounts-ka] ✅ ${username.slice(0, 12)}… inscrit (token en cache valide) — keep-alive actif`);
+    return true;
+  }
+
+  // FIX-20: Vérifier la restriction AVANT de résoudre le proxy et de tenter le login.
+  // Un compte restreint ne doit JAMAIS tenter un login ni gaspiller un pre-flight proxy.
+  if (isAccountRestricted(username)) {
+    const deadline = getAccountRestrictionDeadline(username);
+    const remainingMin = deadline ? Math.round((deadline - Date.now()) / 60_000) : "?";
+    console.warn(`[accounts-ka] 🔒 ${username.slice(0, 12)}… — compte RESTREINT (encore ${remainingMin}min) — skip login + proxy`);
+    // Inscrire quand même dans managedAccounts pour que le relogin loop le gère plus tard
+    const account: ManagedAccount = {
+      username, password, proxyUrl: undefined, jobId: job.id, job,
+      lastLoginAt: 0, reloginCount: 0, tokenDiedAt: Date.now(),
+    };
+    managedAccounts.set(key, account);
+    return false;
+  }
+
   // ── Résoudre le proxy avec failover complet (iProyal → BrightData → 2captcha) ──
-  // Même logique que impl.ts : pre-flight check sur chaque provider avant d'adopter.
-  // Si un proxy est dead, on passe au suivant AVANT de créer le JWT.
+  // Seulement si le compte N'EST PAS restreint et n'a pas de token valide (besoin de login)
   let proxyUrl: string | undefined;
   if (job.hunterConfig.useResidentialProxy) {
     proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
   }
 
   const account: ManagedAccount = {
-    username,
-    password,
-    proxyUrl,
-    jobId: job.id,
-    job,
-    lastLoginAt: 0,
-    reloginCount: 0,
-    tokenDiedAt: null,
+    username, password, proxyUrl, jobId: job.id, job,
+    lastLoginAt: 0, reloginCount: 0, tokenDiedAt: null,
   };
-
   managedAccounts.set(key, account);
-
-  // Vérifier si un token existe déjà en cache
-  const cached = tokenCache.get(key);
-  if (cached && isCachedTokenValid(cached)) {
-    // Token déjà valide → activer le keep-alive directement
-    startBackgroundKeepAlive(username, job.id);
-    console.log(`[accounts-ka] ✅ ${username.slice(0, 12)}… inscrit (token en cache valide) — keep-alive actif`);
-    return true;
-  }
-
-  // FIX-20: Vérifier la restriction AVANT de tenter le login initial.
-  // Un compte restreint (401 "Access temporarily restricted") ne doit JAMAIS tenter un login
-  // jusqu'à la fin de la restriction. Sinon on gaspille un captcha + on aggrave la restriction.
-  if (isAccountRestricted(username)) {
-    const deadline = getAccountRestrictionDeadline(username);
-    const remainingMin = deadline ? Math.round((deadline - Date.now()) / 60_000) : "?";
-    console.warn(`[accounts-ka] 🔒 ${username.slice(0, 12)}… — compte RESTREINT (encore ${remainingMin}min) — skip login initial`);
-    return false;
-  }
 
   // Pas de token valide → login initial (le SEUL login que ce module fait)
   console.log(`[accounts-ka] 🔑 ${username.slice(0, 12)}… — login initial pour keep-alive...`);

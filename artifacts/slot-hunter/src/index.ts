@@ -1513,20 +1513,30 @@ async function main(): Promise<void> {
       // Bootstrap chaque compte pour résoudre ses appDetails
       for (const job of usaJobs) {
         const username = job.hunterConfig.embassyUsername;
+
+        // FIX-20: Ne pas résoudre proxy/bootstrap pour les comptes sans token valide.
+        // Ils ne peuvent pas scanner ni booker — le proxy sera résolu au re-login.
+        const { tokenCache: tc } = await import("./usaPortal/usa-http.js");
+        const subCached = tc.get(username.toLowerCase());
+        const subHasToken = subCached && Date.now() < subCached.expiresAt;
+
         let subProxy: string | undefined;
-        if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+        if (subHasToken && job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
           const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
           subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
         }
 
-        // Bootstrap les données de chaque subscriber
+        // Bootstrap les données de chaque subscriber (seulement si token valide)
         let subAppDetails = bootstrapResult.appDetails;
-        if (username.toLowerCase() !== watcherUsername.toLowerCase()) {
+        if (subHasToken && username.toLowerCase() !== watcherUsername.toLowerCase()) {
           // Bootstrap séparé pour les autres comptes (ils ont leur propre applicantId)
           const subBootstrap = await bootstrapAccountData(job, username);
           if (subBootstrap.appDetails) {
             subAppDetails = subBootstrap.appDetails;
           }
+        } else if (!subHasToken && username.toLowerCase() !== watcherUsername.toLowerCase()) {
+          // Pas de token → utiliser les données de base du job (seront mises à jour au re-login/re-bootstrap)
+          subAppDetails = null;
         }
 
         subscribeToOfcWatcher(ofcKey, {
