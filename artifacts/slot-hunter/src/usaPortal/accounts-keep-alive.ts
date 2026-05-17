@@ -65,6 +65,127 @@ let monitorTimer: ReturnType<typeof setInterval> | null = null;
 /** Intervalle du monitor qui vérifie l'état de tous les comptes (ms). */
 const MONITOR_INTERVAL_MS = 2 * 60_000; // Toutes les 2 min
 
+// ─── Rotation entre comptes ─────────────────────────────────────────────────
+// Chaque compte a un "budget" de sessions par jour et une durée max d'activité
+// continue. Quand un compte atteint sa limite, il dort et l'autre prend le relais.
+// Objectif : max 6-8 logins/jour/compte = ~2-3h actif puis 2-3h de repos.
+
+/** Durée max d'activité continue avant repos forcé (ms). */
+const MAX_ACTIVE_DURATION_MIN_MS = 2 * 60 * 60_000; // 2h min
+const MAX_ACTIVE_DURATION_MAX_MS = 3.5 * 60 * 60_000; // 3.5h max
+
+/** Durée de repos entre les périodes d'activité (ms). */
+const REST_DURATION_MIN_MS = 2 * 60 * 60_000; // 2h min
+const REST_DURATION_MAX_MS = 3.5 * 60 * 60_000; // 3.5h max
+
+/** Max sessions (logins) par compte par jour (24h glissant). */
+const MAX_SESSIONS_PER_DAY = 8;
+
+interface AccountRotationState {
+  /** Timestamp du début de la période d'activité actuelle. */
+  activeSessionStartedAt: number | null;
+  /** Durée max d'activité pour cette période (randomisée). */
+  currentActiveDurationMs: number;
+  /** Timestamp de début du repos (null si pas en repos). */
+  restingUntil: number | null;
+  /** Historique des logins (timestamps) pour le cap journalier. */
+  loginTimestamps: number[];
+}
+
+const rotationState = new Map<string, AccountRotationState>();
+
+function getRotationState(username: string): AccountRotationState {
+  const key = username.toLowerCase();
+  if (!rotationState.has(key)) {
+    rotationState.set(key, {
+      activeSessionStartedAt: null,
+      currentActiveDurationMs: randomBetween(MAX_ACTIVE_DURATION_MIN_MS, MAX_ACTIVE_DURATION_MAX_MS),
+      restingUntil: null,
+      loginTimestamps: [],
+    });
+  }
+  return rotationState.get(key)!;
+}
+
+function randomBetween(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+/**
+ * Vérifie si un compte est autorisé à être actif (pas en repos, pas au-dessus du cap).
+ */
+export function isAccountAllowedToBeActive(username: string): boolean {
+  const state = getRotationState(username);
+  const now = Date.now();
+
+  // Si en repos forcé → pas autorisé
+  if (state.restingUntil && now < state.restingUntil) {
+    return false;
+  }
+
+  // Si repos terminé → reset
+  if (state.restingUntil && now >= state.restingUntil) {
+    state.restingUntil = null;
+    state.activeSessionStartedAt = null;
+    state.currentActiveDurationMs = randomBetween(MAX_ACTIVE_DURATION_MIN_MS, MAX_ACTIVE_DURATION_MAX_MS);
+  }
+
+  // Vérifier le cap journalier (24h glissant)
+  const dayAgo = now - 24 * 60 * 60_000;
+  state.loginTimestamps = state.loginTimestamps.filter(ts => ts > dayAgo);
+  if (state.loginTimestamps.length >= MAX_SESSIONS_PER_DAY) {
+    return false;
+  }
+
+  // Vérifier la durée max d'activité continue
+  if (state.activeSessionStartedAt) {
+    const activeDuration = now - state.activeSessionStartedAt;
+    if (activeDuration >= state.currentActiveDurationMs) {
+      // Temps d'activité expiré → forcer le repos
+      const restDuration = randomBetween(REST_DURATION_MIN_MS, REST_DURATION_MAX_MS);
+      state.restingUntil = now + restDuration;
+      state.activeSessionStartedAt = null;
+      const restMin = Math.round(restDuration / 60_000);
+      console.log(`[rotation] 💤 ${username.slice(0, 12)}… — repos forcé ${restMin}min (actif depuis ${Math.round(activeDuration / 60_000)}min)`);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Enregistre un login réussi dans le tracking de rotation.
+ */
+export function recordLoginForRotation(username: string): void {
+  const state = getRotationState(username);
+  const now = Date.now();
+  state.loginTimestamps.push(now);
+  if (!state.activeSessionStartedAt) {
+    state.activeSessionStartedAt = now;
+  }
+}
+
+/**
+ * Retourne le temps restant de repos pour un compte (0 si pas en repos).
+ */
+export function getRestTimeRemaining(username: string): number {
+  const state = getRotationState(username);
+  if (!state.restingUntil) return 0;
+  const remaining = state.restingUntil - Date.now();
+  return Math.max(0, remaining);
+}
+
+/**
+ * Retourne le nombre de sessions restantes pour aujourd'hui.
+ */
+export function getSessionsRemainingToday(username: string): number {
+  const state = getRotationState(username);
+  const dayAgo = Date.now() - 24 * 60 * 60_000;
+  const todayLogins = state.loginTimestamps.filter(ts => ts > dayAgo).length;
+  return Math.max(0, MAX_SESSIONS_PER_DAY - todayLogins);
+}
+
 // ─── API publique ───────────────────────────────────────────────────────────
 
 /**
@@ -120,6 +241,7 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
   const session = await attemptLogin(account);
   if (session) {
     account.lastLoginAt = Date.now();
+    recordLoginForRotation(username);
     startBackgroundKeepAlive(username, job.id);
     console.log(`[accounts-ka] ✅ ${username.slice(0, 12)}… inscrit — login OK, keep-alive actif`);
     return true;
@@ -194,6 +316,8 @@ export function getAccountsStatus(): Array<{
   expiresInMin: number | null;
   reloginCount: number;
   dormantSinceMin: number | null;
+  restingMin: number | null;
+  sessionsToday: number;
 }> {
   const statuses: ReturnType<typeof getAccountsStatus> = [];
   const now = Date.now();
@@ -202,6 +326,8 @@ export function getAccountsStatus(): Array<{
     const valid = cached ? isCachedTokenValid(cached) : false;
     const expiresIn = cached ? Math.round((cached.expiresAt - now) / 60_000) : null;
     const dormant = account.tokenDiedAt ? Math.round((now - account.tokenDiedAt) / 60_000) : null;
+    const restRemaining = getRestTimeRemaining(account.username);
+    const sessionsLeft = getSessionsRemainingToday(account.username);
     statuses.push({
       username: account.username.slice(0, 15) + "…",
       hasValidToken: valid,
@@ -209,13 +335,15 @@ export function getAccountsStatus(): Array<{
       expiresInMin: expiresIn,
       reloginCount: account.reloginCount,
       dormantSinceMin: dormant,
+      restingMin: restRemaining > 0 ? Math.round(restRemaining / 60_000) : null,
+      sessionsToday: MAX_SESSIONS_PER_DAY - sessionsLeft,
     });
   }
   return statuses;
 }
 
 /**
- * Vérifie si un compte est prêt pour un re-login (token mort + cooldown terminé).
+ * Vérifie si un compte est prêt pour un re-login (token mort + cooldown terminé + rotation OK).
  * Appelé par le scheduler pour savoir s'il peut déclencher un login.
  */
 export function isAccountReadyForRelogin(username: string): boolean {
@@ -223,7 +351,7 @@ export function isAccountReadyForRelogin(username: string): boolean {
   const cached = tokenCache.get(key);
   
   // Si pas de token → prêt (premier login)
-  if (!cached) return true;
+  if (!cached) return isAccountAllowedToBeActive(username);
   
   // Si token valide → pas besoin de re-login
   if (isCachedTokenValid(cached)) return false;
@@ -231,7 +359,10 @@ export function isAccountReadyForRelogin(username: string): boolean {
   // Si en cooldown (8-25 min post-expiry de config.ts) → pas prêt
   if (isSessionInCooldown(cached)) return false;
   
-  // Token expiré + cooldown terminé → prêt pour re-login
+  // Vérifier que la rotation autorise ce compte à être actif
+  if (!isAccountAllowedToBeActive(username)) return false;
+  
+  // Token expiré + cooldown terminé + rotation OK → prêt pour re-login
   return true;
 }
 
@@ -250,6 +381,8 @@ export async function performScheduledRelogin(username: string): Promise<boolean
     account.lastLoginAt = Date.now();
     account.reloginCount++;
     account.tokenDiedAt = null;
+    // Enregistrer le login dans le tracking de rotation
+    recordLoginForRotation(account.username);
     startBackgroundKeepAlive(account.username, account.jobId);
     console.log(`[accounts-ka] ✅ ${key.slice(0, 12)}… re-login planifié #${account.reloginCount} réussi — keep-alive réactivé`);
     return true;

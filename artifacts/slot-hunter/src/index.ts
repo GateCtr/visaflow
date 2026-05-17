@@ -1476,7 +1476,7 @@ async function main(): Promise<void> {
     // Le scheduler ci-dessous vérifie périodiquement si un compte est dormant
     // (token expiré + cooldown 8-25 min terminé) et le re-login.
     // Cela respecte les timings anti-détection de config.ts.
-    const { isAccountReadyForRelogin, performScheduledRelogin } = await import("./usaPortal/accounts-keep-alive.js");
+    const { isAccountReadyForRelogin, performScheduledRelogin, getRestTimeRemaining, getSessionsRemainingToday } = await import("./usaPortal/accounts-keep-alive.js");
 
     const parallelReloginLoop = async () => {
       while (true) {
@@ -1495,8 +1495,21 @@ async function main(): Promise<void> {
 
           for (const job of usaJobs) {
             const username = job.hunterConfig.embassyUsername;
+            const restTime = getRestTimeRemaining(username);
+            const sessionsLeft = getSessionsRemainingToday(username);
+            
+            if (restTime > 0) {
+              log("INFO", `[parallel-relogin] 💤 ${username.slice(0, 12)}… en repos (${Math.round(restTime / 60_000)}min restantes, ${sessionsLeft} sessions dispo)`);
+              continue;
+            }
+            
+            if (sessionsLeft <= 0) {
+              log("INFO", `[parallel-relogin] 🛑 ${username.slice(0, 12)}… cap journalier atteint (max ${8} sessions/24h)`);
+              continue;
+            }
+
             if (isAccountReadyForRelogin(username)) {
-              log("INFO", `[parallel-relogin] 🔑 ${username.slice(0, 12)}… prêt pour re-login (cooldown terminé)`);
+              log("INFO", `[parallel-relogin] 🔑 ${username.slice(0, 12)}… prêt pour re-login (cooldown terminé, ${sessionsLeft} sessions restantes)`);
               const success = await performScheduledRelogin(username);
               if (success) {
                 log("INFO", `[parallel-relogin] ✅ ${username.slice(0, 12)}… re-login réussi`);
