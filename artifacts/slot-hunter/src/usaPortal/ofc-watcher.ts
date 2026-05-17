@@ -573,34 +573,7 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
       );
     }
 
-    // botLog pour visibilité dans l'interface admin — CHAQUE scan (slot ou pas)
-    const scannerCached = tokenCache.get(groupScanner.username.toLowerCase());
-    const tokenExpiresInMin = scannerCached ? Math.round((scannerCached.expiresAt - Date.now()) / 60_000) : null;
-    const tokenRemainingPct = scannerCached ? Math.max(0, Math.min(100, Math.round(((scannerCached.expiresAt - Date.now()) / (55 * 60_000)) * 100))) : 0;
-    const nextRefreshMs = computeWatcherInterval(state);
-
-    botLog({
-      applicationId: groupScanner.jobId,
-      step: "ofc_watcher_scan",
-      status: data.present ? "ok" : "warn",
-      data: {
-        ofcName: ofc.postName,
-        scanAccount: groupScanner.username,
-        scanGroup: label,
-        locationType,
-        refreshNumber: state.totalRefreshes,
-        result: data.present ? `SLOT ${data.date}` : "Pas de créneau",
-        latencyMs: state.lastLatencyMs,
-        subscriberCount: state.subscribers.size,
-        predictionWindow: pred.window,
-        // Enrichi FIX-20: données pour barre de progression dashboard
-        tokenExpiresInMin,
-        tokenRemainingPct,
-        nextRefreshInSec: Math.round(nextRefreshMs / 1000),
-        sessionChecks: state.totalRefreshes,
-        mode: label === "RESCHEDULE" ? "reschedule" : "schedule",
-      },
-    });
+    // botLog uniquement quand slot détecté (pas à chaque scan — le summary toutes les 5 min suffit)
 
     if (data.present && data.date) {
       // 🚨 SLOT DÉTECTÉ!
