@@ -25,8 +25,9 @@
 import { createSessionFetcher, type UsaFetcher } from "./usa-fetcher.js";
 import { tokenCache, authHeaders, setUsaSessionProxy } from "./usa-http.js";
 import { reportSlotFound, sendHeartbeat, botLog, uploadFile } from "../convexClient.js";
+import type { SlotDiscoveryEvent } from "../convexClient.js";
 import { findFirstSlotForOfc } from "./usa-scan-find.js";
-import { bookUsaSlot, rescheduleUsaSlot } from "./usa-scan-book.js";
+import { bookUsaSlot, rescheduleUsaSlot, reportSlotDiscovery_batch } from "./usa-scan-book.js";
 import type { UsaBookingResult } from "./usa-scan-book.js";
 import { recordSlotObservation } from "./slot-prediction.js";
 import { recordSlotAppearance } from "./competitive-intelligence.js";
@@ -199,6 +200,9 @@ async function participateInRace(
     isReschedule: rescheduleYN,
   };
 
+  // FIX-20: Collecteur de découvertes — déclaré ici pour être accessible dans finally
+  const discoveryEvents: SlotDiscoveryEvent[] = [];
+
   // 3. Créer un fetcher dédié pour ce participant
   const fetcher = createSessionFetcher({
     proxyUrl,
@@ -232,6 +236,8 @@ async function participateInRace(
     console.log(`${logPrefix} 🔍 Recherche slot détaillé (dates+times)...`);
     const found = await findFirstSlotForOfc(
       session, ofc, appDetails, dateFrom, dateDeadline, rescheduleYN,
+      undefined, // referer (défaut)
+      discoveryEvents,
     );
 
     if (!found) {
@@ -331,6 +337,11 @@ async function participateInRace(
         },
       });
 
+      // ── 6. Envoyer les événements de découverte vers Convex (stats/analytics) ──
+      if (discoveryEvents.length > 0) {
+        reportSlotDiscovery_batch(discoveryEvents, job.id);
+      }
+
       return true;
     } else if (booking.statusCode === 409) {
       // FIX-20: 409 = slot pris par quelqu'un d'autre → retenter avec un autre slot
@@ -403,6 +414,11 @@ async function participateInRace(
       throw new Error(errMsg);
     }
   } finally {
+    // Envoyer les événements de découverte même si le booking a échoué
+    // (slot vu mais pas booké = discovery avec outcome "captured" ou "ignored")
+    if (discoveryEvents.length > 0) {
+      reportSlotDiscovery_batch(discoveryEvents, job.id);
+    }
     fetcher.dispose();
     setUsaSessionProxy(undefined);
   }
