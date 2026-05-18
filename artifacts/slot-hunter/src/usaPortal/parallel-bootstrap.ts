@@ -116,17 +116,11 @@ export async function bootstrapAccountData(
     platform: `"${fingerprint.platform === "Windows" ? "Windows" : "macOS"}"`,
   };
   setAccountFingerprint(username, adaptedFingerprint);
-  console.log(`[bootstrap] 🆔 Fingerprint: ${fingerprint.platform}, Chrome/${fingerprint.ua.match(/Chrome\/(\d+)/)?.[1] ?? "?"}`);
 
   // ══════════════════════════════════════════════════════════════════════════
   // ÉTAPE 3 : X-Correlation-key — Simuler une navigation Angular
   // ══════════════════════════════════════════════════════════════════════════
-  // L'intercepteur Angular génère un X-Correlation-key au chargement de page
-  // et le réutilise pour TOUTES les requêtes de la même navigation.
-  // Sans ce header, le portail voit des requêtes "orphelines" = bot.
-  // FIX 11: Passer le username pour un correlation per-account (mode parallèle safe).
   resetCorrelationOnAction("schedule-appointment/appointment", username);
-  console.log(`[bootstrap] 🔑 X-Correlation-key initialisé`);
 
   // ══════════════════════════════════════════════════════════════════════════
   // ÉTAPE 4 : Pre-flight proxy health check
@@ -159,13 +153,7 @@ export async function bootstrapAccountData(
         error: `PROXY_DEAD: ${healthResult.error}`,
       };
     }
-    console.log(`[bootstrap] ✅ Proxy OK (${healthResult.latencyMs}ms, IP: ${healthResult.exitIp})`);
-
-    // ════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 5 : Proxy guard mid-bootstrap — Surveillance pendant les appels
-    // ════════════════════════════════════════════════════════════════════════
-    // Si le proxy tombe PENDANT le bootstrap (entre getTransformData et getOfcList),
-    // les requêtes suivantes risquent de passer en direct → IP Railway exposée.
+    console.log(`[bootstrap] ✅ Proxy OK (${healthResult.latencyMs}ms)`);
     initProxyGuard(username, proxyUrl, healthResult.exitIp ?? undefined);
   }
 
@@ -320,7 +308,6 @@ export async function bootstrapAccountData(
         headers: searchHeaders,
         body: JSON.stringify(searchPayload),
       });
-      console.log(`[bootstrap] /appointments/search → HTTP ${searchRes.status}`);
       if (searchRes.ok) {
         const searchRaw = await searchRes.text();
         let searchRows: Record<string, unknown>[] = [];
@@ -340,7 +327,7 @@ export async function bootstrapAccountData(
           if (searchDetails.visaType) visaType = searchDetails.visaType;
           if (searchDetails.visaClass) visaClass = searchDetails.visaClass;
           if (searchDetails.visaCategory) visaCategory = searchDetails.visaCategory;
-          console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… search: applicantId=${searchDetails.applicantId}, visaType=${searchDetails.visaType}, visaClass=${searchDetails.visaClass}, locationType=${searchDetails.appointmentLocationType}`);
+          console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… search: ${searchDetails.applicantId} ${searchDetails.visaClass} ${searchDetails.appointmentLocationType ?? "OFC"}`);
         }
       }
     } catch (err) {
@@ -365,9 +352,7 @@ export async function bootstrapAccountData(
           if (appDetailsRaw.applicantId && !searchDetails?.applicantId) applicantId = String(appDetailsRaw.applicantId);
           if (appDetailsRaw.visaType && appDetailsRaw.visaType !== "NIV" && !searchDetails?.visaType) visaType = appDetailsRaw.visaType;
           if (appDetailsRaw.visaClass && appDetailsRaw.visaClass !== "B1/B2" && !searchDetails?.visaClass) visaClass = appDetailsRaw.visaClass;
-          console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… appDetails: applicantId=${applicantId}, visaType=${visaType}, visaClass=${visaClass}`);
         } else {
-          console.log(`[bootstrap] ⚠️ ${username.slice(0, 12)}… getApplicationDetails retourne undefined — search utilisé comme source`);
           appDetailsRaw = null; // Forcer le fallback search
         }
       }
