@@ -1,7 +1,7 @@
 /**
  * Pillar 1 — Pre-Flight Proxy Health Check
  *
- * Avant chaque tentative de login, on vérifie que le proxy iProyal est réactif
+ * Avant chaque tentative de login, on vérifie que le proxy est réactif
  * en effectuant un GET rapide vers https://api.ipify.org.
  *
  * Seuil : 5000ms. Si le proxy ne répond pas dans ce délai ou échoue,
@@ -12,6 +12,7 @@
  * interprétés comme des tentatives suspectes et comptent vers le lockout).
  */
 
+import { Impit } from "impit";
 import { botLog } from "../convexClient.js";
 
 /** Seuil de latence max (ms) au-delà duquel le proxy est considéré instable. */
@@ -34,8 +35,9 @@ export interface ProxyHealthResult {
 /**
  * Effectue un GET rapide vers ipify.org via le proxy donné.
  *
- * Utilise fetch natif avec un AbortSignal timeout (pas impit, car on veut
- * tester la CONNECTIVITÉ brute du tunnel proxy, pas le fingerprint TLS).
+ * Utilise Impit (fingerprint TLS Chrome) pour router via le proxy.
+ * Impit gère nativement les certificats SSL des proxies (comme un vrai Chrome)
+ * sans avoir besoin de rejectUnauthorized:false — compatible BrightData, iProyal, etc.
  *
  * @param proxyUrl — URL complète du proxy (http://user:pass@host:port)
  * @param jobId   — ID du job Convex pour le logging (optionnel)
@@ -52,28 +54,25 @@ export async function preFlightProxyCheck(
   const t0 = Date.now();
 
   try {
-    // Utiliser undici ProxyAgent pour router via le proxy (fetch natif ne supporte pas les proxies)
-    const { ProxyAgent } = await import("undici");
-    const agent = new ProxyAgent(proxyUrl);
+    const impit = new Impit({ browser: "chrome", proxyUrl });
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROXY_LATENCY_THRESHOLD_MS);
 
-    const res = await fetch(HEALTH_CHECK_URL, {
+    const res = await impit.fetch(HEALTH_CHECK_URL, {
       signal: controller.signal,
-      // @ts-expect-error — undici dispatcher pour le proxy
-      dispatcher: agent,
-    });
+    }) as unknown as Response;
 
     clearTimeout(timeout);
     const latencyMs = Date.now() - t0;
 
     if (!res.ok) {
+      const body = await res.text().catch(() => "");
       const result: ProxyHealthResult = {
         healthy: false,
         latencyMs,
         exitIp: null,
-        error: `HTTP ${res.status} from ipify`,
+        error: `HTTP ${res.status}${body ? ` — ${body.slice(0, 100)}` : ""}`,
       };
       logHealthCheck(result, proxyUrl, jobId);
       return result;
@@ -115,8 +114,8 @@ function logHealthCheck(result: ProxyHealthResult, proxyUrl: string, jobId?: str
   const status = result.healthy ? "✅" : "❌";
 
   console.log(
-    `[proxy-health] ${status} Pre-flight check: ${result.latencyMs}ms` +
-    `${result.exitIp ? ` (IP: ${result.exitIp})` : ""}` +
+    `[proxy-health] ${status} ${result.latencyMs}ms` +
+    `${result.exitIp ? ` IP:${result.exitIp}` : ""}` +
     `${result.error ? ` — ${result.error}` : ""}` +
     ` [${masked.slice(0, 40)}…]`
   );
