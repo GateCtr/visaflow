@@ -15,6 +15,7 @@ import {
   markAccountRestricted,
   getAccountRestrictionDeadline,
 } from "./account-restriction.js";
+import { canLogin, recordLogin } from "../v3/core/session-pool.js";
 
 export async function getUsaSession(
   username: string,
@@ -95,6 +96,16 @@ export async function getUsaSession(
     tokenCache.delete(cacheKey);
   }
 
+  // ── Guard budget V3 — vérifier le quota AVANT tout login ────────────────────
+  // Le session-pool compte TOUS les logins (ici + accounts-keep-alive).
+  // Si le budget est épuisé → retourner null (comme un cooldown).
+  const loginDecision = canLogin(username);
+  if (!loginDecision.allowed) {
+    const waitMin = Math.round(loginDecision.waitMs / 60_000);
+    console.warn(`[usa] 🚫 Budget login REFUSÉ pour ${username}: ${loginDecision.reason} — attente ${waitMin} min`);
+    return null;
+  }
+
   // ── Verrou anti-race-condition ──────────────────────────────────────────────
   // Si un login est déjà en cours pour ce compte (job concurrent), on attend sa
   // résolution plutôt que d'envoyer une 2e requête qui pourrait déclencher un lockout.
@@ -167,6 +178,9 @@ export async function getUsaSession(
       sessionStartedAt: Date.now(),
       lastActivityAt: Date.now(),
     });
+
+    // ── V3 : Enregistrer le login réussi dans le budget global ────────────────
+    recordLogin(username, loginDecision.phase);
 
     return session;
   })();
