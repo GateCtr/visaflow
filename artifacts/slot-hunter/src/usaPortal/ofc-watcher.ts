@@ -599,8 +599,18 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
     if (res.status === 503) {
       throw new Error("PROXY_DEAD");
     }
+    if (res.status === 402) {
+      // 402 = proxy rejeté par le site (BrightData "no KYC" ou proxy mort)
+      // Le token est inutilisable car lié à cette IP cassée.
+      // Invalider le token pour forcer un re-login avec le bon proxy (cooldown normal).
+      console.error(`[ofc-watcher] ❌ [${ofc.postName}] POST[${label}] HTTP 402 — proxy rejeté, invalidation token ${groupScanner.username.slice(0, 12)}…`);
+      tokenCache.delete(groupScanner.username.toLowerCase());
+      // Le compte passera en "dormant" au prochain monitorTick, cooldown normal s'applique,
+      // puis re-login via resolveProxyWithFailover avec le bon proxy (2captcha Congo).
+      continue;
+    }
     if (!res.ok) {
-      // 404 non-fatal pour ce groupe — l'autre groupe peut réussir
+      // 404 et autres — non-fatal pour ce groupe, l'autre groupe peut réussir
       console.warn(`[ofc-watcher] ⚠️ [${ofc.postName}] POST[${label}] HTTP ${res.status} — non-fatal, groupe skip`);
       continue;
     }
