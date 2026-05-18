@@ -1,5 +1,9 @@
 /**
  * Recherche du premier créneau disponible pour un OFC (mois → dates → heures).
+ *
+ * V3 : Intégration scan multi-mois via scanMultipleMonths().
+ * Après getFirstAvailableMonth, la navigation multi-mois prend le relais
+ * (itère getSlotDates + getSlotTime sur max N mois consécutifs).
  */
 import type { UsaSession } from "./types.js";
 import type { SlotDiscoveryEvent } from "../convexClient.js";
@@ -21,6 +25,7 @@ import {
 import { RateLimitError, AccountBlockedError, TokenExpiredError, AccountRestrictedError } from "./errors.js";
 import { isRestrictedBody } from "./account-restriction.js";
 import { usaFetch, authHeaders, sessionHeaders } from "./usa-http.js";
+import { scanMultipleMonths } from "../v3/scan/scan-months.js";
 
 export async function findFirstSlotForOfc(
   session: UsaSession,
@@ -154,185 +159,19 @@ export async function findFirstSlotForOfc(
     return null;
   }
 
-  // 2. Dates disponibles dans ce mois
-  const monthStart = new Date(firstMonth.date);
-  monthStart.setHours(0, 0, 0, 0);
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-
-  // fromDate = max(demain, début du mois, date minimum admin si définie)
-  let fromDate = monthStart > tomorrow ? toYMD(monthStart) : toYMD(tomorrow);
-  if (dateFrom && dateFrom > fromDate) {
-    console.log(`[usa] 📅 Date minimum admin appliquée : ${dateFrom} (remplace ${fromDate})`);
-    fromDate = dateFrom;
-  }
-
-  // toDate = fin du mois (plafonné à dateDeadline si définie)
-  let toDate = lastDayOfMonth(monthStart);
-  if (dateDeadline && dateDeadline < toDate) {
-    toDate = dateDeadline;
-    console.log(`[usa] 📅 Date limite admin appliquée : toDate → ${toDate}`);
-  }
-
-  // Si fromDate dépasse toDate après application des filtres, aucun créneau possible ce mois
-  if (fromDate > toDate) {
-    console.log(`[usa] Aucune date dans la fenêtre autorisée pour ${ofc.postName} (${fromDate} → ${toDate})`);
-    return null;
-  }
-
-  let slotDates: UsaSlotDate[];
-  try {
-    const res = await usaFetch(USA_SLOT_DATES_URL, {
-      method: "POST",
-      headers: hdrs,
-      body: JSON.stringify({ ...basePayload, fromDate, toDate }),
-    });
-    if (!await checkSlotResponse(res, "getSlotDates")) return null;
-    const raw = await res.json();
-    // Parsing adaptatif : le portail peut retourner deux formats selon le mode :
-    //   A) Tableau d'objets : [{date: "...", slotsAvailable: N}] (nouveau booking)
-    //   B) Tableau de strings ISO : ["2026-09-04T00:00:00.000+00:00", ...] (reschedule)
-    // Capture réseau 13/05/2026 : format B confirmé en mode reschedule.
-    if (Array.isArray(raw) && raw.length > 0) {
-      if (typeof raw[0] === "string") {
-        // Format B : tableau de strings ISO → convertir en UsaSlotDate[]
-        slotDates = (raw as string[]).map(dateStr => ({
-          date: dateStr.split("T")[0],  // "2026-09-04T00:00:00.000+00:00" → "2026-09-04"
-          slotsAvailable: 1,            // au moins 1 créneau disponible (le serveur ne donne pas le compte)
-        }));
-        console.log(`[usa] getSlotDates: format string[] détecté (${slotDates.length} dates) — parsing adaptatif`);
-      } else {
-        // Format A : tableau d'objets (format historique)
-        slotDates = raw as UsaSlotDate[];
-      }
-    } else {
-      slotDates = [];
-    }
-  } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
-    console.warn(`[usa] getSlotDates erreur: ${err}`);
-    return null;
-  }
-
-  // Filtrer les dates hors fenêtre (dateFrom et dateDeadline)
-  if (dateFrom || dateDeadline) {
-    const before = slotDates.length;
-    const ignoredDates: string[] = [];
-    slotDates = slotDates.filter(d => {
-      if (dateFrom && d.date < dateFrom) {
-        ignoredDates.push(d.date);
-        return false;
-      }
-      if (dateDeadline && d.date > dateDeadline) {
-        ignoredDates.push(d.date);
-        return false;
-      }
-      return true;
-    });
-    if (slotDates.length < before) {
-      console.log(`[usa] 📊 Filtre fenêtre : ${before - slotDates.length} date(s) hors plage ignorée(s) → ${ignoredDates.join(", ")}`);
-      // Enregistrer chaque date ignorée par le filtre de fenêtre
-      for (const ignoredDate of ignoredDates) {
-        const reason = (dateFrom && ignoredDate < dateFrom) ? "before_from_date" : "after_deadline";
-        discoveryEvents?.push({
-          applicationId: appDetails.applicationId,
-          destination: "usa",
-          office: ofc.postName,
-          dateFound: ignoredDate.split("T")[0],
-          outcome: "ignored",
-          reason,
-          context: { dateFrom, dateDeadline, window: `${fromDate} → ${toDate}` },
-          mode: rescheduleYN ? "reschedule" : "schedule",
-        });
-      }
-    }
-  }
-
-  if (slotDates.length === 0) {
-    console.log(`[usa] Aucune date disponible pour ${ofc.postName} dans la fenêtre ${fromDate} → ${toDate}`);
-    return null;
-  }
-
-  console.log(`[usa] 📆 ${slotDates.length} date(s) avec créneaux pour ${ofc.postName}: ${slotDates.slice(0, 3).map(d => d.date).join(", ")}`);
-  console.log(`[usa] 📊 [DISCOVERY] ${slotDates.length} date(s) dans la fenêtre pour ${ofc.postName} — vérification horaires...`);
-  // 3. Horaires pour la première date disponible
-  const targetDate = slotDates[0].date;
-  let timeSlots: UsaTimeSlot[];
-  try {
-    // Bundle Angular (filterSlots) — payload getSlotTime : 8 champs.
-    // Source : Oe = {fromDate, toDate, postUserId, applicantId, slotDate, visaType, visaClass, applicationId}
-    //
-    // DIFFÉRENCES CLÉS vs getSlotDates :
-    //   ✅ getSlotTime inclut "slotDate" (la date précise pour laquelle on veut les horaires)
-    //   ✅ getSlotTime inclut fromDate et toDate (même fenêtre que getSlotDates)
-    //   ❌ getSlotTime N'inclut PAS "locationType" (uniquement dans getSlotDates)
-    //
-    // Le champ "locationType" est dans getSlotDates via basePayload.locationType = "OFC".
-    // Il n'est PAS envoyé dans getSlotTime — différence subtile mais vérifiable côté serveur.
-    const slotTimePayload = {
-      fromDate,
-      toDate,
-      postUserId: basePayload.postUserId,
-      applicantId: basePayload.applicantId,
-      slotDate: targetDate,
-      visaType: basePayload.visaType,
-      visaClass: basePayload.visaClass,
-      applicationId: basePayload.applicationId,
-      // NB : pas de "locationType" ici (uniquement dans getSlotDates/getFirstAvailableMonth)
-    };
-    const res = await usaFetch(USA_SLOT_TIMES_URL, {
-      method: "POST",
-      headers: hdrs,
-      body: JSON.stringify(slotTimePayload),
-    });
-    if (!await checkSlotResponse(res, "getSlotTime")) return null;
-    const raw = await res.json();
-    timeSlots = Array.isArray(raw) ? raw as UsaTimeSlot[] : [];
-  } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError || err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
-    console.warn(`[usa] getSlotTime erreur: ${err}`);
-    return null;
-  }
-
-  if (timeSlots.length === 0) {
-    console.log(`[usa] 📊 [DISCOVERY] Date captée: ${targetDate} | Statut: IGNORÉE | Raison: aucun horaire disponible`);
-    console.log(`[usa] Aucun horaire disponible pour ${ofc.postName} le ${targetDate}`);
-    discoveryEvents?.push({
-      applicationId: appDetails.applicationId,
-      destination: "usa",
-      office: ofc.postName,
-      dateFound: targetDate.split("T")[0],
-      outcome: "ignored",
-      reason: "no_time_slots",
-      context: { dateFrom, dateDeadline },
-      mode: rescheduleYN ? "reschedule" : "schedule",
-    });
-    return null;
-  }
-
-  const slot = timeSlots[0];
-  const rawTime = slot.startTime ?? "";
-  const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
-
-  console.log(`[usa] 🎯 CRÉNEAU TROUVÉ — ${ofc.postName} le ${targetDate} à ${time} (slotId=${slot.slotId})`);
-  console.log(`[usa] 📊 [DISCOVERY] Date captée: ${targetDate} à ${time} | Statut: RETENUE pour booking | OFC: ${ofc.postName}`);
-  discoveryEvents?.push({
-    applicationId: appDetails.applicationId,
-    destination: "usa",
-    office: ofc.postName,
-    dateFound: targetDate.split("T")[0],
-    timeFound: time,
-    outcome: "captured",
-    context: { slotId: slot.slotId, totalTimeSlotsAvailable: timeSlots.length },
-    mode: rescheduleYN ? "reschedule" : "schedule",
-  });
-  return {
-    date: targetDate,
-    time,
-    slotId: slot.slotId,
+  // ── V3 : Scan multi-mois (remplace la logique mono-mois V2) ────────────────
+  // Itère getSlotDates + getSlotTime sur max 3 mois consécutifs avec pause humaine.
+  // Toutes les dates découvertes sont reportées dans discoveryEvents.
+  return scanMultipleMonths({
+    basePayload: basePayload as Record<string, unknown>,
+    headers: hdrs,
+    firstMonthDate: firstMonth.date,
+    dateFrom,
+    dateDeadline,
     ofcName: ofc.postName,
-    slot,           // objet complet UsaTimeSlot pour le booking
-    bookingBase: basePayload as Record<string, unknown>,  // champs communs au booking
-  };
+    rescheduleMode: rescheduleYN,
+    applicationId: appDetails.applicationId,
+    maxMonths: 3, // TODO: lire depuis hunterConfig.maxMonthsToScan
+    discoveryEvents,
+  });
 }
