@@ -216,13 +216,17 @@ export async function bootstrapAccountData(
   let visaCategory = "VisitorVisas";
   let applicantId: string = String(cached.userID);
 
-  // ── 0. Résoudre applicationId via checkUsaAppointmentRequestStatus ────────
-  // L'ancien système (impl.ts) appelle TOUJOURS cette API en premier pour résoudre
-  // l'applicationId du dossier actif (surtout quand portalApplicationId n'est pas renseigné).
-  const { checkUsaAppointmentRequestStatus } = await import("./appointments-api.js");
+  // ── 0. Résoudre applicationId ─────────────────────────────────────────────
+  // Stratégie en 3 étapes :
+  //   1. portalApplicationId (config admin explicite)
+  //   2. checkUsaAppointmentRequestStatus (dossiers en attente, pendingAppoStatus!=0)
+  //   3. fetchCancellableSessionIds/showRescheduleButton (dossiers avec RDV existant, pendingAppoStatus=0)
+  // L'étape 3 est CRITIQUE pour les comptes en mode reschedule (cancellable=true).
+  const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./appointments-api.js");
   let applicationId = job.hunterConfig.portalApplicationId ?? "";
 
   if (!applicationId) {
+    // Étape 2 : appointmentRequestStatus (marche si pendingAppoStatus != 0)
     try {
       const requestStatus = await checkUsaAppointmentRequestStatus(session, undefined);
       if (requestStatus.applicationId) {
@@ -237,8 +241,29 @@ export async function bootstrapAccountData(
     session.applicationId = applicationId;
   }
 
+  // Étape 3 : fetchCancellableSessionIds (marche si pendingAppoStatus=0, cancellable=true)
+  // Appelle showRescheduleButton + scheduledappointmentInfo + /appointments/search
   if (!applicationId) {
-    console.error(`[bootstrap] ❌ ${username.slice(0, 12)}… applicationId introuvable — bootstrap impossible`);
+    console.log(`[bootstrap] 🔄 ${username.slice(0, 12)}… applicationId non trouvé via appointmentRequestStatus — tentative showRescheduleButton/search...`);
+    try {
+      const result = await fetchCancellableSessionIds(session, job);
+      if (result === "proceed" && session.applicationId) {
+        applicationId = session.applicationId;
+        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via fetchCancellableSessionIds: ${applicationId}`);
+      } else {
+        console.warn(`[bootstrap] fetchCancellableSessionIds retourné: ${result} (applicationId=${session.applicationId ?? "null"})`);
+        // Dernière tentative : si session.applicationId a été peuplé même avec result != "proceed"
+        if (session.applicationId) {
+          applicationId = session.applicationId;
+        }
+      }
+    } catch (err) {
+      console.warn(`[bootstrap] fetchCancellableSessionIds échoué pour ${username.slice(0, 12)}…: ${err}`);
+    }
+  }
+
+  if (!applicationId) {
+    console.error(`[bootstrap] ❌ ${username.slice(0, 12)}… applicationId introuvable (3 stratégies épuisées) — bootstrap impossible`);
     setUsaSessionProxy(undefined);
     if (proxyUrl) releaseProxyGuard(username);
     return { success: false, ofcList: [], appDetails: null, visaClass: "", visaType: "", visaCategory: "", error: "NO_APPLICATION_ID" };
