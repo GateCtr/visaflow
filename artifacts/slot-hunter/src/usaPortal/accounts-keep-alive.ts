@@ -339,7 +339,14 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     // NE PAS résoudre un nouveau proxy — ça ferait une rotation IP inutile.
     let proxyUrl: string | undefined = cached.proxyUrl;
     if (!proxyUrl && job.hunterConfig.useResidentialProxy) {
-      proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
+      // Pas de proxy en cache (premier boot ou Redis ne l'avait pas) → résoudre SANS rotation
+      // Utiliser makeIproyalStickyUrl directement (sans rotateIproyalSession) pour garder la même session
+      if (process.env.IPROYAL_PROXY_URL) {
+        proxyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+        // Injecter dans le cache pour que Redis le persiste au prochain flush
+        cached.proxyUrl = proxyUrl;
+        console.log(`[accounts-ka] 🔒 ${username.slice(0, 12)}… proxy sticky réutilisé (pas de rotation)`);
+      }
     }
     const account: ManagedAccount = {
       username, password, proxyUrl, jobId: job.id, job,
