@@ -103,16 +103,14 @@ export class ProxyPool {
     const proxy = this.pool.shift()!;
     this.pool.push(proxy);
 
-    // Construire l'URL avec credentials (apiKey:apiKey) pour garantir l'auth même si
-    // l'IP whitelist est stale (ex: redémarrage Railway = nouvelle IP pas encore whitelistée).
-    // 2captcha accepte apiKey comme username:password en plus de l'IP whitelist.
+    // Format proxy : http://host:port (sans credentials).
+    // L'authentification se fait UNIQUEMENT par IP whitelist chez 2captcha.
+    // Les credentials apiKey:apiKey dans l'URL causent "Proxy authentication required"
+    // car les proxys résidentiels 2captcha ne supportent PAS l'auth par username:password.
     let proxyUrl = proxy;
     if (!proxyUrl.startsWith('http://') && !proxyUrl.startsWith('https://')) {
-      // Format brut "host:port" → ajouter le schème ET les credentials
-      proxyUrl = `http://${this.apiKey}:${this.apiKey}@${proxyUrl}`;
-    } else if (!proxyUrl.includes('@')) {
-      // Format "http://host:port" sans credentials → injecter username:password
-      proxyUrl = proxyUrl.replace('http://', `http://${this.apiKey}:${this.apiKey}@`);
+      // Format brut "host:port" → ajouter le schème seulement
+      proxyUrl = `http://${proxyUrl}`;
     }
 
     const expiresAt = new Date(this.lastRefresh + IP_LIFETIME_MS).toISOString();
