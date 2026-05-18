@@ -470,6 +470,16 @@ export default function AdminApplicationDetail() {
   const [hunterRescheduleExistingDate, setHunterRescheduleExistingDate] = useState("");
   const [hunterUseProxy, setHunterUseProxy] = useState(false);
   const [hunterSaving, setHunterSaving] = useState(false);
+  // V3 Strategy fields
+  const [hunterAccountRole, setHunterAccountRole] = useState<"eclaireur" | "confine" | "hybride">("hybride");
+  const [hunterCurrentAppointmentDate, setHunterCurrentAppointmentDate] = useState("");
+  const [hunterMaxLoginsPerDay, setHunterMaxLoginsPerDay] = useState("9");
+  const [hunterRushWindows, setHunterRushWindows] = useState("");
+  const [hunterBlindBooking, setHunterBlindBooking] = useState(false);
+  const [hunterSlotPriorityDates, setHunterSlotPriorityDates] = useState("");
+  const [hunterMaxMonthsToScan, setHunterMaxMonthsToScan] = useState("3");
+  const [hunterNightMode, setHunterNightMode] = useState(true);
+  const [hunterPreferredProxy, setHunterPreferredProxy] = useState("");
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaBalanceChecking, setCaptchaBalanceChecking] = useState(false);
   const [captchaBalanceError, setCaptchaBalanceError] = useState<string | null>(null);
@@ -520,6 +530,17 @@ export default function AdminApplicationDetail() {
         setHunterRescheduleMode(hc.rescheduleMode ?? false);
         setHunterRescheduleExistingDate(hc.rescheduleExistingDate ?? "");
         setHunterUseProxy((hc as { useResidentialProxy?: boolean }).useResidentialProxy ?? false);
+        // V3 fields
+        const hcV3 = hc as Record<string, unknown>;
+        setHunterAccountRole((hcV3.accountRole as "eclaireur" | "confine" | "hybride") ?? "hybride");
+        setHunterCurrentAppointmentDate((hcV3.currentAppointmentDate as string) ?? "");
+        setHunterMaxLoginsPerDay(String((hcV3.maxLoginsPerDay as number) ?? 9));
+        setHunterRushWindows((hcV3.rushWindows as string) ?? "");
+        setHunterBlindBooking((hcV3.blindBookingEnabled as boolean) ?? false);
+        setHunterSlotPriorityDates((hcV3.slotPriorityDates as string) ?? "");
+        setHunterMaxMonthsToScan(String((hcV3.maxMonthsToScan as number) ?? 3));
+        setHunterNightMode((hcV3.nightModeEnabled as boolean) ?? true);
+        setHunterPreferredProxy((hcV3.preferredProxy as string) ?? "");
       } else {
         setHunterUsername("");
         setHunterPassword("");
@@ -1422,7 +1443,7 @@ export default function AdminApplicationDetail() {
             }
             setHunterSaving(true);
             try {
-              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined, rescheduleMode: hunterRescheduleMode || undefined, rescheduleExistingDate: hunterRescheduleExistingDate || undefined, useResidentialProxy: hunterUseProxy || undefined });
+              await setHunterConfig({ applicationId: appId, embassyUsername: hunterUsername, embassyPassword: hunterPassword, isActive: hunterActive, twoCaptchaApiKey: hunterTwoCaptchaKey || undefined, slotDateFrom: hunterSlotDateFrom || undefined, slotDateDeadline: hunterSlotDateDeadline || undefined, vowintAppId: hunterVowintAppId || undefined, cevCountry: hunterCevCountry || undefined, scheduleUrl: hunterScheduleUrl || undefined, rescheduleMode: hunterRescheduleMode || undefined, rescheduleExistingDate: hunterRescheduleExistingDate || undefined, useResidentialProxy: hunterUseProxy || undefined, accountRole: hunterAccountRole || undefined, currentAppointmentDate: hunterCurrentAppointmentDate || undefined, maxLoginsPerDay: hunterMaxLoginsPerDay ? Number(hunterMaxLoginsPerDay) : undefined, rushWindows: hunterRushWindows || undefined, blindBookingEnabled: hunterBlindBooking || undefined, slotPriorityDates: hunterSlotPriorityDates || undefined, maxMonthsToScan: hunterMaxMonthsToScan ? Number(hunterMaxMonthsToScan) : undefined, nightModeEnabled: hunterNightMode, preferredProxy: hunterPreferredProxy || undefined });
               toast({ title: "Joventy Hunter mis à jour", description: hunterActive ? "Le robot est maintenant actif." : "Robot en pause." });
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : "Erreur";
@@ -1756,6 +1777,122 @@ export default function AdminApplicationDetail() {
                     )}
                   </div>
                 )}
+
+                {/* ═══ V3 Stratégie Multi-Compte ═══ */}
+                <div className="space-y-3 border border-indigo-200 bg-indigo-50 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-indigo-800 uppercase tracking-wide flex items-center gap-1.5">
+                    🎯 V3 Stratégie Multi-Compte
+                  </p>
+                  <p className="text-[11px] text-indigo-600">
+                    Paramètres avancés V3 : rôle du compte, budget logins, blind booking, dates prioritaires, mode nuit.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Rôle du compte</label>
+                      <select
+                        value={hunterAccountRole}
+                        onChange={(e) => setHunterAccountRole(e.target.value as "eclaireur" | "confine" | "hybride")}
+                        className="w-full h-9 px-2 text-sm border rounded-md bg-white"
+                      >
+                        <option value="hybride">Hybride (scan + reçoit)</option>
+                        <option value="eclaireur">Éclaireur (scan + broadcast)</option>
+                        <option value="confine">Confiné (reçoit blind bookings)</option>
+                      </select>
+                      <p className="text-[10px] text-indigo-400">Éclaireur = RDV proche, Confiné = RDV lointain</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Date RDV actuel (portail)</label>
+                      <Input
+                        type="date"
+                        value={hunterCurrentAppointmentDate}
+                        onChange={(e) => setHunterCurrentAppointmentDate(e.target.value)}
+                        className="h-9 bg-white text-sm"
+                      />
+                      <p className="text-[10px] text-indigo-400">Auto-détection rôle : &lt;6 mois = éclaireur</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Budget logins / jour</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={hunterMaxLoginsPerDay}
+                        onChange={(e) => setHunterMaxLoginsPerDay(e.target.value)}
+                        className="h-9 bg-white text-sm font-mono"
+                      />
+                      <p className="text-[10px] text-indigo-400">Défaut : 9, max absolu : 10</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Mois à scanner</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={hunterMaxMonthsToScan}
+                        onChange={(e) => setHunterMaxMonthsToScan(e.target.value)}
+                        className="h-9 bg-white text-sm font-mono"
+                      />
+                      <p className="text-[10px] text-indigo-400">Mois de calendrier à naviguer (défaut : 3)</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Dates prioritaires (patterns)</label>
+                      <Input
+                        type="text"
+                        value={hunterSlotPriorityDates}
+                        onChange={(e) => setHunterSlotPriorityDates(e.target.value)}
+                        placeholder="2026-09-*,2026-10-15"
+                        className="h-9 bg-white text-sm font-mono"
+                      />
+                      <p className="text-[10px] text-indigo-400">Séparer par virgule. Wildcard * supporté.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Proxy préféré</label>
+                      <select
+                        value={hunterPreferredProxy}
+                        onChange={(e) => setHunterPreferredProxy(e.target.value)}
+                        className="w-full h-9 px-2 text-sm border rounded-md bg-white"
+                      >
+                        <option value="">Défaut (priorité globale)</option>
+                        <option value="iproyal">iProyal</option>
+                        <option value="brightdata">BrightData</option>
+                        <option value="2captcha">2captcha</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="text-xs font-medium text-indigo-700 uppercase">Fenêtres rush (JSON)</label>
+                      <Input
+                        type="text"
+                        value={hunterRushWindows}
+                        onChange={(e) => setHunterRushWindows(e.target.value)}
+                        placeholder='[{"start":0,"end":2,"days":[1,2,3,4,5]}]'
+                        className="h-9 bg-white text-sm font-mono"
+                      />
+                      <p className="text-[10px] text-indigo-400">Laisser vide = fenêtres par défaut</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-4 pt-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHunterBlindBooking((v) => !v)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hunterBlindBooking ? "bg-indigo-500" : "bg-slate-300"}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${hunterBlindBooking ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                      <span className="text-xs text-slate-700">Blind Booking</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHunterNightMode((v) => !v)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hunterNightMode ? "bg-indigo-500" : "bg-slate-300"}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${hunterNightMode ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                      <span className="text-xs text-slate-700">Mode Nuit (02h UTC)</span>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-3">
                   <button

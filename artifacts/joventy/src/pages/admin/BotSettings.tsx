@@ -25,7 +25,7 @@ interface ConfigItem {
   label: string;
   description: string;
   type: "toggle" | "number" | "text" | "select";
-  category: "mode" | "timing" | "protection" | "proxy" | "prediction";
+  category: "mode" | "timing" | "protection" | "proxy" | "prediction" | "v3strategy";
   defaultValue: string;
   options?: { value: string; label: string }[];
   unit?: string;

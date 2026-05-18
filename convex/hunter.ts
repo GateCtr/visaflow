@@ -43,6 +43,16 @@ export const setHunterConfig = mutation({
     rescheduleExistingDate: v.optional(v.string()),
     // Proxy résidentiel USA (sticky 60 min — désactivé par défaut car IP binding JWT)
     useResidentialProxy: v.optional(v.boolean()),
+    // ═══ V3 Chasseur — champs par dossier ═══
+    accountRole: v.optional(v.union(v.literal("eclaireur"), v.literal("confine"), v.literal("hybride"))),
+    currentAppointmentDate: v.optional(v.string()),
+    maxLoginsPerDay: v.optional(v.number()),
+    rushWindows: v.optional(v.string()),
+    blindBookingEnabled: v.optional(v.boolean()),
+    slotPriorityDates: v.optional(v.string()),
+    maxMonthsToScan: v.optional(v.number()),
+    nightModeEnabled: v.optional(v.boolean()),
+    preferredProxy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -85,6 +95,16 @@ export const setHunterConfig = mutation({
         rescheduleExistingDate: args.rescheduleExistingDate || undefined,
         // Proxy résidentiel USA
         useResidentialProxy: args.useResidentialProxy ?? undefined,
+        // ═══ V3 Chasseur — champs par dossier ═══
+        accountRole: args.accountRole ?? (existing as Record<string, unknown> | undefined)?.accountRole ?? undefined,
+        currentAppointmentDate: args.currentAppointmentDate || (existing as Record<string, unknown> | undefined)?.currentAppointmentDate || undefined,
+        maxLoginsPerDay: args.maxLoginsPerDay ?? (existing as Record<string, unknown> | undefined)?.maxLoginsPerDay ?? undefined,
+        rushWindows: args.rushWindows || (existing as Record<string, unknown> | undefined)?.rushWindows || undefined,
+        blindBookingEnabled: args.blindBookingEnabled ?? (existing as Record<string, unknown> | undefined)?.blindBookingEnabled ?? undefined,
+        slotPriorityDates: args.slotPriorityDates || (existing as Record<string, unknown> | undefined)?.slotPriorityDates || undefined,
+        maxMonthsToScan: args.maxMonthsToScan ?? (existing as Record<string, unknown> | undefined)?.maxMonthsToScan ?? undefined,
+        nightModeEnabled: args.nightModeEnabled ?? (existing as Record<string, unknown> | undefined)?.nightModeEnabled ?? undefined,
+        preferredProxy: args.preferredProxy || (existing as Record<string, unknown> | undefined)?.preferredProxy || undefined,
       },
       updatedAt: Date.now(),
     });
