@@ -44,6 +44,20 @@ const DEFAULT_CONFIG: SessionPoolConfig = {
   nightModeEnabled: true,
 };
 
+// ─── Redis persistence ──────────────────────────────────────────────────────
+// Persiste les compteurs de login dans Redis pour survivre aux redéploiements.
+// Sans ça : redéploiement mid-day → compteur à 0 → logins en trop → restriction.
+// Format clé : "visaflow:login-budget:{username}" → JSON LoginBudgetState
+// TTL : 25h (couvre le reset à 00:00 UTC + marge)
+
+import { createClient, type RedisClientType } from "redis";
+
+const REDIS_BUDGET_PREFIX = "visaflow:login-budget:";
+const REDIS_BUDGET_TTL_SEC = 25 * 60 * 60; // 25h
+
+let redisClient: RedisClientType | null = null;
+let redisReady = false;
+
 /** Fenêtres rush par défaut — Kinshasa WAT (UTC+1). */
 const DEFAULT_RUSH_WINDOWS: RushWindow[] = [
   { start: 7, end: 9.5, days: [1, 2, 3, 4, 5] },     // Lun-Ven 07:00-09:30
@@ -158,6 +172,97 @@ function getOrCreateBudget(username: string): LoginBudgetState {
 function emit(event: LoginConsumedEvent | LoginDeniedEvent): void {
   for (const listener of listeners) {
     try { listener(event); } catch { /* non-bloquant */ }
+  }
+}
+
+/** Sync un budget vers Redis (fire-and-forget). */
+function syncBudgetToRedis(username: string): void {
+  if (!redisReady || !redisClient) return;
+  const key = username.toLowerCase();
+  const state = budgets.get(key);
+  if (!state) return;
+
+  const data = JSON.stringify(state);
+  redisClient.set(`${REDIS_BUDGET_PREFIX}${key}`, data, { EX: REDIS_BUDGET_TTL_SEC }).catch((err) => {
+    console.warn(`[session-pool-redis] Erreur sync: ${err}`);
+  });
+}
+
+/**
+ * Initialise la persistence Redis pour les budgets login.
+ * Restaure les compteurs existants depuis Redis (survie aux redéploiements).
+ * Si Redis est indisponible → fonctionnement en mémoire seule (graceful).
+ *
+ * Appeler au démarrage du bot (après initTokenCacheRedis).
+ */
+export async function initSessionPoolRedis(): Promise<number> {
+  const redisUrl = process.env.REDIS_URL;
+  const redisHost = process.env.REDIS_HOST;
+  const redisPort = process.env.REDIS_PORT;
+  const redisPassword = process.env.REDIS_PASSWORD;
+  const redisUsername = process.env.REDIS_USERNAME || "default";
+
+  if (!redisUrl && !redisHost) {
+    console.log("[session-pool-redis] Pas de Redis configuré — budgets en mémoire seule");
+    return 0;
+  }
+
+  try {
+    if (redisUrl) {
+      redisClient = createClient({ url: redisUrl }) as RedisClientType;
+    } else {
+      redisClient = createClient({
+        socket: { host: redisHost, port: parseInt(redisPort || "6379") },
+        username: redisUsername,
+        password: redisPassword,
+      }) as RedisClientType;
+    }
+
+    redisClient.on("error", (err) => {
+      console.warn(`[session-pool-redis] Redis error: ${err.message}`);
+    });
+
+    await redisClient.connect();
+    redisReady = true;
+
+    // Restaurer les budgets existants
+    const keys = await redisClient.keys(`${REDIS_BUDGET_PREFIX}*`);
+    let restored = 0;
+
+    for (const redisKey of keys) {
+      try {
+        const data = await redisClient.get(redisKey);
+        if (!data) continue;
+
+        const state = JSON.parse(data) as LoginBudgetState;
+        const username = redisKey.replace(REDIS_BUDGET_PREFIX, "");
+
+        // Nettoyer les vieux logins avant de restaurer
+        const resetTs = getTodayResetTimestamp();
+        const effectiveReset = resetTs <= Date.now() ? resetTs : resetTs - 24 * 60 * 60_000;
+        state.loginTimestamps = state.loginTimestamps.filter(ts => ts >= effectiveReset);
+        state.totalUsed = state.loginTimestamps.length;
+
+        if (state.totalUsed > 0) {
+          budgets.set(username, state);
+          restored++;
+          console.log(
+            `[session-pool-redis] 🔑 Restauré: ${username.slice(0, 12)}… ` +
+            `(${state.totalUsed} logins aujourd'hui, ${activeConfig.defaultBudget.maxPerDay - state.totalUsed} restants)`
+          );
+        }
+      } catch { /* skip corrupted entries */ }
+    }
+
+    if (restored > 0) {
+      console.log(`[session-pool-redis] ✅ ${restored} budget(s) restauré(s) depuis Redis`);
+    } else {
+      console.log(`[session-pool-redis] ✅ Redis connecté — aucun budget à restaurer`);
+    }
+    return restored;
+  } catch (err) {
+    console.warn(`[session-pool-redis] ⚠️ Redis indisponible — budgets en mémoire seule: ${err}`);
+    return 0;
   }
 }
 
@@ -303,6 +408,9 @@ export function recordLogin(username: string, phase?: LoginPhase): void {
     `(phase=${effectivePhase}, restant=${remaining}/${budget.maxPerDay})`
   );
 
+  // Persister dans Redis (fire-and-forget)
+  syncBudgetToRedis(username);
+
   emit({
     username: username.toLowerCase(),
     phase: effectivePhase,
@@ -323,6 +431,7 @@ export function recordProxyDeath(username: string): void {
     `[session-pool] 💀 Proxy mort pour ${username.slice(0, 12)}… ` +
     `(total morts aujourd'hui: ${state.proxyDeathCount})`
   );
+  syncBudgetToRedis(username);
 }
 
 // ─── Getters / Stats ────────────────────────────────────────────────────────
@@ -429,4 +538,5 @@ export function _resetForTesting(): void {
   activeConfig = { ...DEFAULT_CONFIG };
   rushWindows = [...DEFAULT_RUSH_WINDOWS];
   listeners.length = 0;
+  // Ne PAS reset Redis (les tests unitaires n'ont pas Redis)
 }
