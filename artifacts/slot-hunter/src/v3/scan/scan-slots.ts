@@ -24,6 +24,25 @@ import type { SlotDiscoveryEvent } from "../../convexClient.js";
 import type { UsaSession } from "../../usaPortal/types.js";
 import { USA_FIRST_AVAILABLE_MONTH_URL, REFERER_CREATE_APT } from "../../usaPortal/config.js";
 import { usaFetch, authHeaders } from "../../usaPortal/usa-http.js";
+
+/**
+ * Construit le Referer dynamique pour le mode reschedule.
+ * Capture réseau réelle : /home/appointment/slot?type=POST&appUUID=xxx&applicantId=RQUP3HHVQHOD&ofcAppointmentDate=
+ * En mode schedule : utilise REFERER_CREATE_APT (/home/dashboard/create-appointment)
+ */
+function buildSlotReferer(
+  rescheduleMode: boolean | undefined,
+  appDetails: UsaAppDetails,
+  session: UsaSession,
+): string {
+  if (rescheduleMode) {
+    const locType = appDetails.appointmentLocationType ?? "POST";
+    const appUUID = (session as { appointmentUUID?: string }).appointmentUUID ?? "";
+    const applId = typeof appDetails.applicantId === "string" ? appDetails.applicantId : String(appDetails.applicantId);
+    return `https://www.usvisaappt.com/visaapplicantui/home/appointment/slot?type=${locType}&appUUID=${appUUID}&applicantId=${applId}&ofcAppointmentDate=`;
+  }
+  return REFERER_CREATE_APT;
+}
 import { RateLimitError, AccountBlockedError, TokenExpiredError, AccountRestrictedError } from "../../usaPortal/errors.js";
 import { isRestrictedBody } from "../../usaPortal/account-restriction.js";
 import { scanMultipleMonths, type MultiMonthScanConfig } from "./scan-months.js";
@@ -101,7 +120,8 @@ async function getFirstAvailableMonth(
     applicationId: appDetails.applicationId,
   };
 
-  const hdrs = authHeaders(session.accessToken, REFERER_CREATE_APT, true);
+  const slotReferer = buildSlotReferer(rescheduleMode, appDetails, session);
+  const hdrs = authHeaders(session.accessToken, slotReferer, true);
 
   try {
     const res = await usaFetch(USA_FIRST_AVAILABLE_MONTH_URL, {
@@ -193,6 +213,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
     ofcsScanned++;
 
     // ── Scan multi-mois ──
+    const slotReferer = buildSlotReferer(rescheduleMode, appDetails, session);
     const scanConfig: MultiMonthScanConfig = {
       basePayload: {
         postUserId: ofc.postUserId,
@@ -204,7 +225,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
           : (ofc.officeType ?? "OFC"),
         applicationId: appDetails.applicationId,
       },
-      headers: authHeaders(session.accessToken, REFERER_CREATE_APT, true),
+      headers: authHeaders(session.accessToken, slotReferer, true),
       firstMonthDate: firstMonth.date,
       dateFrom,
       dateDeadline,
