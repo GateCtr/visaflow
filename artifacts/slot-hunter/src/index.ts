@@ -1154,7 +1154,7 @@ async function sendBundleReport(
           lastCheckAt: j.hunterConfig.lastCheckAt ?? null,
         })),
       checkedAt: Date.now(),
-      proxyPoolStatus: proxyPool.isConfigured ? `Configured (${proxyPool.getState().size} IPs)` : "Unconfigured (direct)",
+      proxyPoolStatus: proxyPool.isConfigured ? `Gateway mode (eu.proxy.2captcha.com:2334)` : "Unconfigured (direct)",
       serverIp: proxyPool.getState().serverIp,
     };
     await sendAdminBundleCheckReport(report);
@@ -1249,7 +1249,7 @@ async function main(): Promise<void> {
     log("WARN", `CEV auto-config: chargement échoué (non bloquant) — ${err}`);
   }
 
-  // Détection IP + initialisation ProxyPool (refresh whitelist 2captcha immédiat + boucle auto 25 min)
+  // Détection IP + initialisation ProxyPool (mode gateway — auth user:pass, pas de whitelist)
   const serverIp = await detectPublicIp();
   if (serverIp) {
     log("INFO", `IP serveur (Railway): ${serverIp}`);
@@ -1277,7 +1277,7 @@ async function main(): Promise<void> {
   const brightdataStatus = process.env.BRIGHTDATA_PROXY_URL ? "BrightData ✅ (CEV belge)" : null;
   const iproyalStatus    = process.env.IPROYAL_PROXY_URL    ? "iProyal ✅ (Espagne)"      : null;
   const fallbackStatus   = proxyPool.isConfigured
-    ? `2captcha résidentiel rotatif ✅ (IP: ${serverIp ?? "?"})`
+    ? `2captcha gateway ✅ (eu.proxy.2captcha.com:2334 — auth user:pass, region=cd)`
     : process.env.PROXY_URL
       ? "statique (PROXY_URL)"
       : "aucun ⚠️ — IP fixe Railway exposée";

@@ -824,25 +824,32 @@ export async function resolveProxyWithFailover(
   const twoCaptchaProvider: ProxyProvider = {
     name: "2captcha",
     resolve: async () => {
-      // Si le pool n'est pas encore initialisé mais la clé API existe,
-      // attendre jusqu'à 10s qu'il se charge (timing de boot Railway).
-      if (!proxyPool.isConfigured && process.env.TWOCAPTCHA_API_KEY) {
-        console.log(`[accounts-ka] ⏳ 2captcha pool pas encore prêt — attente initialisation (max 10s)...`);
-        for (let i = 0; i < 10; i++) {
-          await new Promise(r => setTimeout(r, 1000));
-          if (proxyPool.isConfigured) break;
-        }
-      }
+      // Mode gateway : auth user:pass via eu.proxy.2captcha.com:2334 (iProyal backend).
+      // Plus besoin de whitelist IP ni d'attendre un pool local.
       if (!proxyPool.isConfigured) {
-        console.warn(`[accounts-ka] ⚠️ 2captcha pool non configuré (serverIp manquant ou API key absente)`);
+        console.warn(`[accounts-ka] ⚠️ 2captcha non configuré (TWOCAPTCHA_API_KEY absente)`);
         return undefined;
       }
-      const poolResult = await proxyPool.getProxy();
-      if (poolResult?.proxy) {
-        console.log(`[accounts-ka] 🌐 2captcha rotatif OK`);
-        return poolResult.proxy;
+      // getStickyProxy génère une URL gateway avec session sticky pour ce compte.
+      const stickyUrl = await proxyPool.getStickyProxy(username);
+      if (stickyUrl) {
+        const health = await preFlightProxyCheck(stickyUrl, jobId);
+        if (health.healthy) {
+          console.log(`[accounts-ka] 🌐 2captcha gateway OK (${health.latencyMs}ms) — sticky session`);
+          return stickyUrl;
+        }
+        // Proxy dead → rotation et retry
+        console.warn(`[accounts-ka] ⚠️ 2captcha sticky FAILED (${health.error}) — rotation...`);
+        const rotatedUrl = await proxyPool.rotateStickyProxy(username);
+        if (rotatedUrl) {
+          const retryHealth = await preFlightProxyCheck(rotatedUrl, jobId);
+          if (retryHealth.healthy) {
+            console.log(`[accounts-ka] 🌐 2captcha gateway OK après rotation (${retryHealth.latencyMs}ms)`);
+            return rotatedUrl;
+          }
+        }
       }
-      console.warn(`[accounts-ka] ⚠️ 2captcha pool vide (0 IPs chargées)`);
+      console.warn(`[accounts-ka] ⚠️ 2captcha gateway indisponible`);
       return undefined;
     },
   };

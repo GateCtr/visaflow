@@ -380,49 +380,16 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
   }
 
   // ── 2Captcha Proxy ─────────────────────────────────────────────────────────
-  // L'API 2Captcha NE PERMET PAS d'ajouter une IP à la whitelist programmatiquement.
-  // On peut seulement UTILISER une IP déjà whitelistée via generate_white_list_connections.
-  // → On vérifie si l'IP actuelle est déjà whitelistée en tentant un appel.
+  // Mode gateway (eu.proxy.2captcha.com:2334) : auth par user:pass, PAS de whitelist IP.
+  // On vérifie simplement que la clé API est présente.
   const twoCaptchaKey = process.env.TWOCAPTCHA_API_KEY;
 
   if (twoCaptchaKey) {
-    console.log(`[ip-whitelist] 🔑 2Captcha: Vérification IP ${serverIp} dans la whitelist...`);
-    const checkUrl =
-      `https://api.2captcha.com/proxy/generate_white_list_connections` +
-      `?key=${twoCaptchaKey}&protocol=http&connection_count=1&ip=${encodeURIComponent(serverIp)}`;
-
-    try {
-      const res = await fetch(checkUrl, { signal: AbortSignal.timeout(15_000) });
-      const json = (await res.json()) as {
-        status: string;
-        request?: string;
-        data?: string[];
-      };
-
-      if (json.status === "OK" && Array.isArray(json.data) && json.data.length > 0) {
-        result.twocaptcha = { ok: true, message: `IP whitelistée ✅ (${json.data.length} connexion(s) dispo)` };
-        console.log(`[ip-whitelist] ✅ 2Captcha: IP ${serverIp} est whitelistée`);
-      } else if (
-        json.request?.includes("IP_NOT_WHITELISTED") ||
-        json.request?.includes("NOT_WHITELISTED") ||
-        json.status === "ERROR_IP_NOT_WHITELISTED" ||
-        json.status === "ERROR_MISSING_IP"
-      ) {
-        result.twocaptcha = {
-          ok: false,
-          message: `IP ${serverIp} NON whitelistée — ajout MANUEL requis: https://2captcha.com/proxy → "IP whitelist" → ajouter ${serverIp}`,
-        };
-        console.error(`[ip-whitelist] ❌ 2Captcha: IP ${serverIp} PAS dans la whitelist`);
-        console.error(`[ip-whitelist] → Action requise: https://2captcha.com/proxy → "IP whitelist" → Ajouter: ${serverIp}`);
-      } else {
-        result.twocaptcha = { ok: false, message: `Réponse inattendue: ${JSON.stringify(json).slice(0, 200)}` };
-        console.warn(`[ip-whitelist] ⚠️ 2Captcha: Réponse inattendue:`, json);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      result.twocaptcha = { ok: false, message: `Erreur réseau: ${msg}` };
-      console.error(`[ip-whitelist] ❌ 2Captcha: Erreur vérification whitelist:`, msg);
-    }
+    result.twocaptcha = {
+      ok: true,
+      message: `Gateway mode ✅ — auth user:pass via eu.proxy.2captcha.com:2334 (whitelist IP NON requise)`,
+    };
+    console.log(`[ip-whitelist] ✅ 2Captcha: Mode gateway — whitelist IP non requise (auth credentials)`);
   } else {
     result.twocaptcha = { ok: false, message: "TWOCAPTCHA_API_KEY absent" };
   }
