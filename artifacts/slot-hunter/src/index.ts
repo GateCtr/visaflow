@@ -1694,11 +1694,15 @@ async function main(): Promise<void> {
               if (success) {
                 log("INFO", `[parallel-relogin] ✅ ${username.slice(0, 12)}… re-login réussi`);
 
-                // FIX 13F: Re-bootstrap après re-login pour rafraîchir les données OFC/appDetails.
-                // Sans ça, le watcher utilise les données du 1er bootstrap (potentiellement stale
-                // si le portail a changé les OFCs ou le statut du dossier entre-temps).
+                // FIX-22: Si aucun watcher n'est actif (bootstrap initial échoué car tous
+                // les comptes étaient restreints), RELANCER initParallelWatchers maintenant
+                // qu'un compte est connecté. C'est la promesse du message d'erreur initial :
+                // "Attente re-login — le relogin loop relancera le watcher"
                 const ofcKey = makeKey("usa", "Kinshasa", 323);
-                if (hasActiveWatcher(ofcKey)) {
+                if (!hasActiveWatcher(ofcKey)) {
+                  log("INFO", `[parallel-relogin] 🚀 Aucun watcher actif — lancement avec ${username.slice(0, 12)}… (post re-login)`);
+                  await initParallelWatchers();
+                } else if (hasActiveWatcher(ofcKey)) {
                   try {
                     const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
                     const bootResult = await bootstrapAccountData(job, username);

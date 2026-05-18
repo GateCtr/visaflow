@@ -62,7 +62,8 @@ export interface UsaSession {
   appointmentId?: number;
   applicantUUID?: number;
   appointmentUUID?: string;
-  allowedOfcs?: Array<{ postUserId: number; officeType?: string }>;  stateCode?: string;
+  allowedOfcs?: Array<{ postUserId: number; officeType?: string }>;
+  stateCode?: string;
   appointmentPriority?: string;
   isReschedule?: boolean;
 }
