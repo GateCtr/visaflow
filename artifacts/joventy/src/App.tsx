@@ -35,7 +35,7 @@ import ClientMessages from "@/pages/client/Messages";
 
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
-import AdminApplicationDetail from "@/pages/admin/ApplicationDetail";
+import AdminApplicationDetail from "@/pages/admin/application-detail/index";
 import AdminClients from "@/pages/admin/Clients";
 import AdminMessages from "@/pages/admin/Messages";
 import AdminReviews from "@/pages/admin/Reviews";
