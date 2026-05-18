@@ -101,7 +101,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
       setMaxLogins(String(hc.maxLoginsPerDay ?? 9));
       setRushWindows(hc.rushWindows ?? "");
       setBlindBooking(hc.blindBookingEnabled ?? false);
-      setPriorityDates(hc.slotPriorityDates ?? "");
+      setPriorityDates(Array.isArray(hc.slotPriorityDates) ? hc.slotPriorityDates.join(", ") : (hc.slotPriorityDates ?? ""));
       setMaxMonths(String(hc.maxMonthsToScan ?? 3));
       setNightMode(hc.nightModeEnabled ?? true);
       setPreferredProxy(hc.preferredProxy ?? "");

@@ -537,7 +537,7 @@ export default function AdminApplicationDetail() {
         setHunterMaxLoginsPerDay(String((hcV3.maxLoginsPerDay as number) ?? 9));
         setHunterRushWindows((hcV3.rushWindows as string) ?? "");
         setHunterBlindBooking((hcV3.blindBookingEnabled as boolean) ?? false);
-        setHunterSlotPriorityDates((hcV3.slotPriorityDates as string) ?? "");
+        setHunterSlotPriorityDates(Array.isArray(hcV3.slotPriorityDates) ? (hcV3.slotPriorityDates as string[]).join(", ") : ((hcV3.slotPriorityDates as string) ?? ""));
         setHunterMaxMonthsToScan(String((hcV3.maxMonthsToScan as number) ?? 3));
         setHunterNightMode((hcV3.nightModeEnabled as boolean) ?? true);
         setHunterPreferredProxy((hcV3.preferredProxy as string) ?? "");
