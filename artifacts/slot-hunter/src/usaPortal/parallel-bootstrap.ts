@@ -350,16 +350,26 @@ export async function bootstrapAccountData(
 
   await humanDelay();
 
-  // ── 3. getApplicationDetails → fallback (enrichissement) ─────────────────
-  let appDetails: UsaAppDetails | null = null;
+  // ── 3. getApplicationDetails → enrichissement (mais search reste la source de vérité)
+  let appDetailsRaw: UsaAppDetails | null = null;
   if (applicationId) {
     try {
-      appDetails = await getUsaApplicationDetails(session, applicationId);
-      if (appDetails) {
-        if (appDetails.applicantId && !searchDetails?.applicantId) applicantId = String(appDetails.applicantId);
-        if (appDetails.visaType && appDetails.visaType !== "NIV" && !searchDetails?.visaType) visaType = appDetails.visaType;
-        if (appDetails.visaClass && appDetails.visaClass !== "B1/B2" && !searchDetails?.visaClass) visaClass = appDetails.visaClass;
-        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… appDetails: applicantId=${applicantId}, visaType=${visaType}, visaClass=${visaClass}`);
+      appDetailsRaw = await getUsaApplicationDetails(session, applicationId);
+      if (appDetailsRaw) {
+        // FIX-22: Si getApplicationDetails retourne des undefined partout (dossier NEW sans RDV),
+        // NE PAS l'utiliser — le search est la source fiable.
+        // Le 404 sur getFirstAvailableMonth vient du fait qu'on utilisait un objet avec
+        // applicantId=undefined au lieu des vraies valeurs du search.
+        const hasUsableData = appDetailsRaw.applicantId && appDetailsRaw.visaType;
+        if (hasUsableData) {
+          if (appDetailsRaw.applicantId && !searchDetails?.applicantId) applicantId = String(appDetailsRaw.applicantId);
+          if (appDetailsRaw.visaType && appDetailsRaw.visaType !== "NIV" && !searchDetails?.visaType) visaType = appDetailsRaw.visaType;
+          if (appDetailsRaw.visaClass && appDetailsRaw.visaClass !== "B1/B2" && !searchDetails?.visaClass) visaClass = appDetailsRaw.visaClass;
+          console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… appDetails: applicantId=${applicantId}, visaType=${visaType}, visaClass=${visaClass}`);
+        } else {
+          console.log(`[bootstrap] ⚠️ ${username.slice(0, 12)}… getApplicationDetails retourne undefined — search utilisé comme source`);
+          appDetailsRaw = null; // Forcer le fallback search
+        }
       }
     } catch (err) {
       console.warn(`[bootstrap] getApplicationDetails échoué pour ${username.slice(0, 12)}…: ${err}`);
@@ -369,8 +379,20 @@ export async function bootstrapAccountData(
   // Pause humaine avant le prochain appel
   await humanDelay();
 
-  // Construire les appDetails finales
-  if (!appDetails) {
+  // Construire les appDetails finales — TOUJOURS depuis le search + enrichissement getApplicationDetails
+  let appDetails: UsaAppDetails;
+  if (appDetailsRaw && appDetailsRaw.applicantId) {
+    // getApplicationDetails a retourné des données exploitables — les utiliser comme base
+    appDetails = appDetailsRaw;
+    // Propager les valeurs du search si manquantes dans appDetails
+    if (searchDetails?.appointmentLocationType && !appDetails.locationType) {
+      appDetails.locationType = searchDetails.appointmentLocationType;
+    }
+    if (searchDetails?.appointmentLocationType && !appDetails.appointmentLocationType) {
+      appDetails.appointmentLocationType = searchDetails.appointmentLocationType;
+    }
+  } else {
+    // getApplicationDetails absent ou inutilisable → construire depuis le search
     appDetails = {
       applicantId,
       applicationId,
@@ -378,19 +400,9 @@ export async function bootstrapAccountData(
       visaClass,
       visaCategory,
       locationType: searchDetails?.appointmentLocationType ?? "OFC",
+      appointmentLocationType: searchDetails?.appointmentLocationType,
+      appointmentId: searchDetails?.appointmentId,
     };
-  }
-
-  // FIX-22: Propager le locationType du search dans appDetails.
-  // Pour un dossier NEW, getApplicationDetails ne retourne PAS de locationType/appointmentLocationType
-  // (car il n'y a pas encore de RDV). Seul /appointments/search retourne le bon locationType ("OFC").
-  // Sans ça, le watcher utilise ofc.officeType ("POST" pour Kinshasa) au lieu de "OFC" → 404.
-  if (searchDetails?.appointmentLocationType && !appDetails.locationType) {
-    appDetails.locationType = searchDetails.appointmentLocationType;
-  }
-  // Aussi copier dans appointmentLocationType pour que les deux chemins dans le watcher fonctionnent
-  if (searchDetails?.appointmentLocationType && !appDetails.appointmentLocationType) {
-    appDetails.appointmentLocationType = searchDetails.appointmentLocationType;
   }
 
   // ── 3. getUsaOfcList → postUserId ────────────────────────────────────────
