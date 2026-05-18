@@ -70,6 +70,25 @@ const hunterConfig = v.object({
   rescheduleExistingDate: v.optional(v.string()),      // "YYYY-MM-DD" — date du RDV actuel (deadline = veille)
   // Proxy résidentiel USA (sticky 60 min — désactivé par défaut)
   useResidentialProxy: v.optional(v.boolean()),
+  // ═══ V3 Chasseur — nouveaux champs admin ═══
+  // Rôle du compte dans la stratégie multi-compte
+  accountRole: v.optional(v.union(v.literal("eclaireur"), v.literal("confine"), v.literal("hybride"))),
+  // Date du RDV actuel (auto-détection rôle : < 6 mois = éclaireur, > 6 mois = confiné)
+  currentAppointmentDate: v.optional(v.string()),
+  // Override budget login journalier (défaut: 9, max: 10)
+  maxLoginsPerDay: v.optional(v.number()),
+  // Fenêtres rush personnalisées par dossier (JSON string parsé au runtime)
+  rushWindows: v.optional(v.string()),
+  // Activer le blind booking cross-account (éclaireur broadcast aux confinés)
+  blindBookingEnabled: v.optional(v.boolean()),
+  // Dates préférées pour le booking (patterns wildcard ex: "2026-09-*")
+  slotPriorityDates: v.optional(v.array(v.string())),
+  // Nombre max de mois à scanner dans le calendrier (défaut: 3)
+  maxMonthsToScan: v.optional(v.number()),
+  // Activer le mode nuit (1 login nocturne à 02:00 UTC)
+  nightModeEnabled: v.optional(v.boolean()),
+  // Proxy préféré pour ce dossier ("iproyal" | "brightdata" | "2captcha")
+  preferredProxy: v.optional(v.string()),
 });
 
 export default defineSchema({
