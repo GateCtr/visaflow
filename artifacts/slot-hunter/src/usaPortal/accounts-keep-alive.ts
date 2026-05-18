@@ -336,16 +336,28 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
   if (cached && isCachedTokenValid(cached)) {
     // Token déjà valide → inscrire le compte et activer le keep-alive directement
     // FIX-22: Réutiliser le proxy déjà associé au token (restauré depuis Redis).
-    // NE PAS résoudre un nouveau proxy — ça ferait une rotation IP inutile.
+    // NE PAS faire de rotation IP — ça créerait une incohérence JWT↔IP.
     let proxyUrl: string | undefined = cached.proxyUrl;
     if (!proxyUrl && job.hunterConfig.useResidentialProxy) {
-      // Pas de proxy en cache (premier boot ou Redis ne l'avait pas) → résoudre SANS rotation
-      // Utiliser makeIproyalStickyUrl directement (sans rotateIproyalSession) pour garder la même session
+      // Pas de proxy en cache → construire l'URL sticky SANS rotation (même session ID)
+      // et vérifier qu'il fonctionne. Si non, fallback sur resolveProxyWithFailover
+      // (qui essaiera BrightData, 2captcha, etc.)
       if (process.env.IPROYAL_PROXY_URL) {
-        proxyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
-        // Injecter dans le cache pour que Redis le persiste au prochain flush
-        cached.proxyUrl = proxyUrl;
-        console.log(`[accounts-ka] 🔒 ${username.slice(0, 12)}… proxy sticky réutilisé (pas de rotation)`);
+        const candidateUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+        const health = await preFlightProxyCheck(candidateUrl, job.id);
+        if (health.healthy) {
+          proxyUrl = candidateUrl;
+          cached.proxyUrl = proxyUrl;
+          console.log(`[accounts-ka] 🔒 ${username.slice(0, 12)}… proxy iProyal sticky OK (pas de rotation)`);
+        } else {
+          // iProyal mort (402/timeout) → fallback complet (BrightData, 2captcha)
+          console.warn(`[accounts-ka] ⚠️ ${username.slice(0, 12)}… iProyal dead — fallback BrightData/2captcha`);
+          proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
+          if (proxyUrl) cached.proxyUrl = proxyUrl;
+        }
+      } else {
+        proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
+        if (proxyUrl) cached.proxyUrl = proxyUrl;
       }
     }
     const account: ManagedAccount = {
