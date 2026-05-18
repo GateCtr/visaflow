@@ -377,8 +377,20 @@ export async function bootstrapAccountData(
       visaType,
       visaClass,
       visaCategory,
-      locationType: "OFC",
+      locationType: searchDetails?.appointmentLocationType ?? "OFC",
     };
+  }
+
+  // FIX-22: Propager le locationType du search dans appDetails.
+  // Pour un dossier NEW, getApplicationDetails ne retourne PAS de locationType/appointmentLocationType
+  // (car il n'y a pas encore de RDV). Seul /appointments/search retourne le bon locationType ("OFC").
+  // Sans ça, le watcher utilise ofc.officeType ("POST" pour Kinshasa) au lieu de "OFC" → 404.
+  if (searchDetails?.appointmentLocationType && !appDetails.locationType) {
+    appDetails.locationType = searchDetails.appointmentLocationType;
+  }
+  // Aussi copier dans appointmentLocationType pour que les deux chemins dans le watcher fonctionnent
+  if (searchDetails?.appointmentLocationType && !appDetails.appointmentLocationType) {
+    appDetails.appointmentLocationType = searchDetails.appointmentLocationType;
   }
 
   // ── 3. getUsaOfcList → postUserId ────────────────────────────────────────
