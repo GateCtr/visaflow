@@ -738,7 +738,7 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
       } else if (isBrightData) {
         cached.proxyExpiresAt = Date.now() + 23 * 60 * 60 * 1000; // 23h (keep-alive maintient)
       } else {
-        cached.proxyExpiresAt = Date.now() + 30 * 60 * 1000; // 30min (2captcha rotatif)
+        cached.proxyExpiresAt = Date.now() + 11.5 * 60 * 60 * 1000; // 11.5h (2captcha utilise iProyal en backend)
       }
     }
 
