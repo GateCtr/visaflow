@@ -1,4 +1,3 @@
-import { ProxyAgent } from "undici";
 import { Impit } from "impit";
 import { proxyPool } from "../browser.js";
 import { getVariableBrowserHeaders } from "../humanBehavior.js";
@@ -622,9 +621,8 @@ export function getBrowserHeaders(jobId?: string, username?: string): Record<str
 }
 
 // ─── Proxy résidentiel pour les appels API USA ────────────────────────────────
-// Utilise undici ProxyAgent pour router les requêtes via un proxy résidentiel.
+// Le proxy est passé directement à Impit via l'option proxyUrl.
 // setUsaSessionProxy() est appelé au début de runUsaApiSession() et réinitialisé à la fin.
-let _usaProxyAgent: ProxyAgent | undefined;
 let _usaProxyUrl: string | undefined;
 
 /**
@@ -715,12 +713,10 @@ export function rotateIproyalSession(username: string): void {
 export function setUsaSessionProxy(proxyUrl: string | undefined): void {
   if (proxyUrl) {
     _usaProxyUrl = proxyUrl;
-    _usaProxyAgent = undefined; // On n'utilise plus ProxyAgent, on utilise impit avec proxyUrl
     const masked = proxyUrl.replace(/:([^:@]+)@/, ":***@");
     console.log(`[usa] Proxy résidentiel actif (impit/legacy): ${masked}`);
   } else {
     _usaProxyUrl = undefined;
-    _usaProxyAgent = undefined;
   }
 }
 

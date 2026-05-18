@@ -165,19 +165,16 @@ export function startBrightDataKeepAlive(proxyUrl: string, username: string): vo
       const elapsedSec = Math.round(elapsed / 1000);
 
       // IMPORTANT: On doit passer la requête VIA le proxy BrightData pour maintenir la session.
-      // Sans ProxyAgent, le fetch part en direct → la session BrightData expire après 5-7 min
-      // et l'IP change silencieusement au prochain appel → 401 sur le portail USA.
-      const { ProxyAgent } = await import("undici");
-      const agent = new ProxyAgent(session.proxyUrl);
+      // Utilise Impit (comme le reste du code) pour gérer le SSL des proxies nativement.
+      const { Impit } = await import("impit");
+      const impit = new Impit({ browser: "chrome", proxyUrl: session.proxyUrl } as any);
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
 
-      const res = await fetch("https://geo.brdtest.com/mygeo.json", {
+      const res = await impit.fetch("https://geo.brdtest.com/mygeo.json", {
         signal: controller.signal,
-        // @ts-expect-error — undici dispatcher pour router via le proxy
-        dispatcher: agent,
-      });
+      }) as unknown as Response;
 
       clearTimeout(timeout);
 
