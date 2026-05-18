@@ -766,7 +766,7 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
  *
  * @returns L'URL du proxy fonctionnel, ou undefined si tous sont down.
  */
-async function resolveProxyWithFailover(
+export async function resolveProxyWithFailover(
   username: string,
   jobId: string,
   hunterConfig: HunterJob["hunterConfig"],

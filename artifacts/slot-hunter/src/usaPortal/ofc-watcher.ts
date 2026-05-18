@@ -303,39 +303,10 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
     const cached = tokenCache.get(sub.username.toLowerCase());
     if (!cached || Date.now() >= cached.expiresAt) continue; // token expiré
 
-    // Résoudre un proxy fonctionnel pour ce subscriber
+    // Résoudre un proxy fonctionnel pour ce subscriber (respecte proxy_priority)
     let newProxy: string | undefined;
-
-    // Tenter iProyal
-    if (process.env.IPROYAL_PROXY_URL) {
-      const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, sub.username);
-      const ipHealth = await preFlightProxyCheck(ipUrl, sub.job.id);
-      if (ipHealth.healthy) {
-        newProxy = ipUrl;
-      }
-    }
-
-    // Fallback BrightData (avec multi-pays)
-    if (!newProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-      const bdResult = await makeBrightDataStickyUrlWithFallback(
-        process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, sub.username, preFlightProxyCheck, sub.job.id
-      );
-      if (bdResult) {
-        newProxy = bdResult.url;
-        startBrightDataKeepAlive(bdResult.url, sub.username);
-      }
-    }
-
-    // Fallback 2captcha rotatif
-    if (!newProxy) {
-      const { proxyPool } = await import("../browser.js");
-      if (proxyPool.isConfigured) {
-        const poolResult = await proxyPool.getProxy();
-        if (poolResult?.proxy) {
-          newProxy = poolResult.proxy;
-        }
-      }
-    }
+    const { resolveProxyWithFailover } = await import("./accounts-keep-alive.js");
+    newProxy = await resolveProxyWithFailover(sub.username, sub.job.id, sub.job.hunterConfig);
 
     // Si aucun proxy ne marche, skip ce subscriber et essayer le suivant
     if (!newProxy) {
@@ -363,39 +334,24 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
   }
 
   // Aucun subscriber avec token valide — tenter de re-résoudre le proxy du watcher actuel
-  // (peut-être que le proxy était iProyal et maintenant BrightData/2captcha marche)
-  if (process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-    const bdResult = await makeBrightDataStickyUrlWithFallback(
-      process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, state.watcherUsername, preFlightProxyCheck
-    );
-    if (bdResult) {
-      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → BrightData (country=${bdResult.country})`);
-      state.fetcher.dispose();
-      startBrightDataKeepAlive(bdResult.url, state.watcherUsername);
-      state.fetcher = createSessionFetcher({
-        proxyUrl: bdResult.url,
-        username: state.watcherUsername,
-        label: `watcher:${state.ofc.postName}`,
-      });
-      state.consecutiveErrors = 0;
-      return true;
-    }
-  }
-
-  // Dernier recours : 2captcha rotatif
-  const { proxyPool } = await import("../browser.js");
-  if (proxyPool.isConfigured) {
-    const poolResult = await proxyPool.getProxy();
-    if (poolResult?.proxy) {
-      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → 2captcha rotatif`);
-      state.fetcher.dispose();
-      state.fetcher = createSessionFetcher({
-        proxyUrl: poolResult.proxy,
-        username: state.watcherUsername,
-        label: `watcher:${state.ofc.postName}`,
-      });
-      state.consecutiveErrors = 0;
-      return true;
+  // via resolveProxyWithFailover (respecte proxy_priority)
+  {
+    const { resolveProxyWithFailover } = await import("./accounts-keep-alive.js");
+    // On a besoin du job du watcher — on le cherche dans les subscribers
+    const watcherSub = [...state.subscribers.values()].find(s => s.username === state.watcherUsername);
+    if (watcherSub) {
+      const newProxy = await resolveProxyWithFailover(state.watcherUsername, watcherSub.job.id, watcherSub.job.hunterConfig);
+      if (newProxy) {
+        console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… — proxy re-résolu via failover`);
+        state.fetcher.dispose();
+        state.fetcher = createSessionFetcher({
+          proxyUrl: newProxy,
+          username: state.watcherUsername,
+          label: `watcher:${state.ofc.postName}`,
+        });
+        state.consecutiveErrors = 0;
+        return true;
+      }
     }
   }
 

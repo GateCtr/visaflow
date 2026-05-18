@@ -1500,55 +1500,18 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Résoudre le proxy du watcher élu — avec failover (iProyal → BrightData → 2captcha)
+      // Résoudre le proxy du watcher élu — respecte proxy_priority de botConfig
       // JAMAIS de mode direct — si aucun proxy ne fonctionne, ABORT le watcher.
       let watcherProxy: string | undefined;
       if (watcherJob.hunterConfig.useResidentialProxy) {
-        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-        const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
-        const { makeBrightDataStickyUrl, makeBrightDataStickyUrlWithFallback, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
-
-        // Tenter iProyal en premier
-        if (process.env.IPROYAL_PROXY_URL) {
-          const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
-          const ipHealth = await preFlightProxyCheck(ipUrl, watcherJob.id);
-          if (ipHealth.healthy) {
-            watcherProxy = ipUrl;
-            log("INFO", `[parallel] Watcher proxy: iProyal OK (${ipHealth.latencyMs}ms)`);
-          } else {
-            log("WARN", `[parallel] Watcher proxy: iProyal DEAD (${ipHealth.error}) — failover BrightData...`);
-          }
-        }
-
-        // Fallback BrightData si iProyal mort ou absent (avec multi-pays)
-        if (!watcherProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-          const bdResult = await makeBrightDataStickyUrlWithFallback(
-            process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, watcherUsername, preFlightProxyCheck, watcherJob.id
-          );
-          if (bdResult) {
-            watcherProxy = bdResult.url;
-            startBrightDataKeepAlive(bdResult.url, watcherUsername);
-            log("INFO", `[parallel] Watcher proxy: BrightData OK (${bdResult.latencyMs}ms, country=${bdResult.country})`);
-          } else {
-            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (tous pays) — failover 2captcha...`);
-          }
-        }
-
-        // Fallback 2captcha rotatif (dernier recours)
-        if (!watcherProxy && proxyPool.isConfigured) {
-          const poolResult = await proxyPool.getProxy();
-          if (poolResult?.proxy) {
-            watcherProxy = poolResult.proxy;
-            log("INFO", `[parallel] Watcher proxy: 2captcha rotatif OK (fallback final)`);
-          } else {
-            log("WARN", `[parallel] Watcher proxy: 2captcha pool vide`);
-          }
-        }
+        const { resolveProxyWithFailover } = await import("./usaPortal/accounts-keep-alive.js");
+        watcherProxy = await resolveProxyWithFailover(watcherUsername, watcherJob.id, watcherJob.hunterConfig);
 
         if (!watcherProxy) {
           log("ERROR", `[parallel] ❌ TOUS LES PROXIES DOWN — watcher NON démarré (pas de mode direct)`);
           return;
         }
+        log("INFO", `[parallel] Watcher proxy résolu via resolveProxyWithFailover`);
       }
 
       // Utiliser le premier OFC résolu (Kinshasa)
@@ -1578,37 +1541,8 @@ async function main(): Promise<void> {
 
         let subProxy: string | undefined;
         if (subHasToken && job.hunterConfig.useResidentialProxy) {
-          const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-          const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
-          const { makeBrightDataStickyUrl, makeBrightDataStickyUrlWithFallback, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
-
-          // Tenter iProyal
-          if (process.env.IPROYAL_PROXY_URL) {
-            const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
-            const ipHealth = await preFlightProxyCheck(ipUrl, job.id);
-            if (ipHealth.healthy) {
-              subProxy = ipUrl;
-            }
-          }
-
-          // Fallback BrightData (avec multi-pays)
-          if (!subProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-            const bdResult = await makeBrightDataStickyUrlWithFallback(
-              process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username, preFlightProxyCheck, job.id
-            );
-            if (bdResult) {
-              subProxy = bdResult.url;
-              startBrightDataKeepAlive(bdResult.url, username);
-            }
-          }
-
-          // Fallback 2captcha rotatif
-          if (!subProxy && proxyPool.isConfigured) {
-            const poolResult = await proxyPool.getProxy();
-            if (poolResult?.proxy) {
-              subProxy = poolResult.proxy;
-            }
-          }
+          const { resolveProxyWithFailover } = await import("./usaPortal/accounts-keep-alive.js");
+          subProxy = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
         }
 
         // Bootstrap les données de chaque subscriber (seulement si token valide)
