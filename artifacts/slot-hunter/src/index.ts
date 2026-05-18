@@ -1675,6 +1675,19 @@ async function main(): Promise<void> {
         await new Promise(r => setTimeout(r, checkInterval));
 
         try {
+          // ── FIX: Auto-retry watcher si pas actif ──────────────────────────────
+          // Si initParallelWatchers a échoué au démarrage (proxies down, bootstrap KO),
+          // retenter à chaque tick tant qu'il n'y a pas de watcher actif.
+          // Évite le deadlock : tokens valides + pas de watcher = rien ne se passe.
+          const watcherOfcKey = makeKey("usa", "Kinshasa", 323);
+          if (!hasActiveWatcher(watcherOfcKey)) {
+            log("INFO", `[parallel-relogin] 🔄 Pas de watcher actif — retenter initParallelWatchers...`);
+            await initParallelWatchers();
+            if (hasActiveWatcher(watcherOfcKey)) {
+              log("INFO", `[parallel-relogin] ✅ Watcher démarré avec succès au retry`);
+            }
+          }
+
           const jobs = await getActiveJobs();
           const usaJobs = jobs.filter(j =>
             j.destination === "usa" &&
