@@ -738,7 +738,7 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
       } else if (isBrightData) {
         cached.proxyExpiresAt = Date.now() + 23 * 60 * 60 * 1000; // 23h (keep-alive maintient)
       } else {
-        cached.proxyExpiresAt = Date.now() + 30 * 60 * 1000; // 30min (2captcha rotatif)
+        cached.proxyExpiresAt = Date.now() + 11.5 * 60 * 60 * 1000; // 11.5h (2captcha utilise iProyal en backend)
       }
     }
 
@@ -757,8 +757,12 @@ async function attemptLogin(account: ManagedAccount): Promise<boolean> {
 
 /**
  * Résout un proxy fonctionnel en testant chaque provider dans l'ordre.
- * Ordre : iProyal (sticky 12h) → BrightData (sticky + keep-alive) → 2captcha (rotatif).
- * Supporte la préférence par compte via hunterConfig.preferredProxy.
+ * 
+ * PRIORITÉ (du plus prioritaire au moins) :
+ *   1. bot-config Convex clé "proxy_priority" (ex: "2captcha,iproyal,brightdata")
+ *      → Changeable depuis l'admin sans redéploiement, s'applique au prochain cycle.
+ *   2. hunterConfig.preferredProxy par dossier (ex: "brightdata" ou "iproyal")
+ *   3. Défaut : iproyal → brightdata → 2captcha
  *
  * @returns L'URL du proxy fonctionnel, ou undefined si tous sont down.
  */
@@ -770,7 +774,22 @@ async function resolveProxyWithFailover(
   const hasIproyal = !!process.env.IPROYAL_PROXY_URL;
   const hasBrightData = !!process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL;
 
-  // Respecter la préférence du compte (FIX 8 de impl.ts)
+  // ── PRIORITÉ 1 : bot-config Convex "proxy_priority" (global, admin-pilotable) ──
+  // Format: "2captcha,iproyal,brightdata" ou "2captcha" ou "iproyal,2captcha"
+  // Lu à chaque appel → changement immédiat sans redéploiement.
+  const { getBotConfigValue } = await import("../convexClient.js");
+  let proxyOrder: string[] | null = null;
+  try {
+    const configValue = await getBotConfigValue("proxy_priority");
+    if (configValue && configValue.trim()) {
+      proxyOrder = configValue.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      console.log(`[proxy-failover] 🎯 Ordre proxy via bot-config: ${proxyOrder.join(" → ")}`);
+    }
+  } catch {
+    // Convex inaccessible → fallback sur hunterConfig
+  }
+
+  // ── PRIORITÉ 2 : hunterConfig.preferredProxy par dossier ──
   const preferredProxy: string = (hunterConfig as Record<string, unknown>).preferredProxy as string ?? "iproyal";
   const preferIproyal = preferredProxy !== "brightdata";
 
@@ -832,8 +851,23 @@ async function resolveProxyWithFailover(
     },
   };
 
-  // Ordre selon la préférence du compte
-  if (preferIproyal) {
+  // Ordre selon la config admin (bot-config) ou la préférence du compte
+  if (proxyOrder && proxyOrder.length > 0) {
+    // bot-config "proxy_priority" défini → utiliser cet ordre exact
+    const providerMap: Record<string, ProxyProvider> = {
+      iproyal: iproyalProvider,
+      brightdata: brightDataProvider,
+      "2captcha": twoCaptchaProvider,
+    };
+    for (const name of proxyOrder) {
+      const provider = providerMap[name];
+      if (provider) providers.push(provider);
+    }
+    // Ajouter les providers manquants à la fin (sécurité)
+    if (!proxyOrder.includes("iproyal")) providers.push(iproyalProvider);
+    if (!proxyOrder.includes("brightdata")) providers.push(brightDataProvider);
+    if (!proxyOrder.includes("2captcha")) providers.push(twoCaptchaProvider);
+  } else if (preferIproyal) {
     providers.push(iproyalProvider, brightDataProvider, twoCaptchaProvider);
   } else {
     providers.push(brightDataProvider, iproyalProvider, twoCaptchaProvider);

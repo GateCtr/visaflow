@@ -523,6 +523,19 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       //   - "iproyal" (ou absent) → iProyal prioritaire, BrightData fallback
       const preferredProxy: string = (job.hunterConfig as Record<string, unknown>).preferredProxy as string ?? "iproyal";
       const preferIproyal = preferredProxy !== "brightdata";
+
+      // ── bot-config "proxy_priority" : override global depuis l'admin ──────
+      // Format: "2captcha,iproyal,brightdata" — lu à chaque cycle.
+      let adminProxyPriority: string[] | null = null;
+      try {
+        const { getBotConfigValue } = await import("../convexClient.js");
+        const configValue = await getBotConfigValue("proxy_priority");
+        if (configValue && configValue.trim()) {
+          adminProxyPriority = configValue.split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+          console.log(`[usa] 🎯 Proxy priority via bot-config: ${adminProxyPriority.join(" → ")}`);
+        }
+      } catch { /* Convex inaccessible → fallback hunterConfig */ }
+
       
       if (preferIproyal) {
         console.log(`[usa] 🎯 FIX8: Proxy préféré = iProyal (compte ${username})`);
@@ -530,11 +543,31 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         console.log(`[usa] 🎯 FIX8: Proxy préféré = BrightData (compte ${username})`);
       }
 
+      // ── Si admin a défini proxy_priority avec "2captcha" en premier ────────
+      // → Tenter le pool 2captcha AVANT iProyal/BrightData
+      if (adminProxyPriority && adminProxyPriority[0] === "2captcha" && proxyPool.isConfigured) {
+        const poolResult = await proxyPool.getProxy();
+        if (poolResult?.proxy) {
+          const health = await preFlightProxyCheck(poolResult.proxy, job.id);
+          if (health.healthy) {
+            sessionProxy = poolResult.proxy;
+            preFlightExitIp = health.exitIp ?? undefined;
+            console.log(`[usa] 🌐 2captcha PRIORITAIRE (bot-config) OK (${health.latencyMs}ms) — sticky 12h`);
+            setKnownProxyLatency(health.latencyMs ?? 0);
+          } else {
+            console.warn(`[usa] ⚠️ 2captcha PRIORITAIRE FAILED: ${health.error} — tentative suivante...`);
+          }
+        }
+      }
+
       // ── Provider primaire selon la préférence du compte ──
       const primaryIsIproyal = preferIproyal && hasIproyal;
       const primaryIsBrightData = !preferIproyal && hasBrightData;
 
-      if (primaryIsIproyal || (hasIproyal && !hasBrightData)) {
+      // Si le proxy a déjà été résolu via bot-config priority → skip la sélection normale
+      if (sessionProxy) {
+        // Déjà résolu (2captcha prioritaire ci-dessus)
+      } else if (primaryIsIproyal || (hasIproyal && !hasBrightData)) {
         // Tenter iProyal en premier (sticky 12h, pas de KYC requis)
         const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 720, username);
         const ipHealth = await preFlightProxyCheck(ipStickyUrl, job.id);

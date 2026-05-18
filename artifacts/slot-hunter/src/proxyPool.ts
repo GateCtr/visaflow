@@ -1,7 +1,7 @@
 const REFRESH_MS        = 15 * 60_000;
 const WHITELIST_RETRY_MS = 30 * 60_000;
 const POOL_SIZE          = 100;
-const IP_LIFETIME_MS     = 30 * 60_000;
+const IP_LIFETIME_MS     = 12 * 60 * 60_000; // 12h — 2captcha utilise iProyal en backend (même lifetime)
 
 export interface PoolState {
   size: number;
@@ -16,7 +16,7 @@ export interface PoolState {
 /** Proxy assigné de manière sticky à un compte — même IP pendant toute la durée du JWT. */
 export interface StickyProxy {
   proxy: string;
-  /** Timestamp d'expiration de l'IP résidentielle (lifetime 2captcha = 30 min). */
+  /** Timestamp d'expiration de l'IP résidentielle (lifetime 2captcha/iProyal = 12h). */
   expiresAt: number;
 }
 
