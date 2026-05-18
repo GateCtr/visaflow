@@ -217,45 +217,36 @@ export async function bootstrapAccountData(
   let applicantId: string = String(cached.userID);
 
   // ── 0. Résoudre applicationId ─────────────────────────────────────────────
-  // Stratégie en 3 étapes :
-  //   1. portalApplicationId (config admin explicite)
-  //   2. checkUsaAppointmentRequestStatus (dossiers en attente, pendingAppoStatus!=0)
-  //   3. fetchCancellableSessionIds/showRescheduleButton (dossiers avec RDV existant, pendingAppoStatus=0)
-  // L'étape 3 est CRITIQUE pour les comptes en mode reschedule (cancellable=true).
+  // Stratégie identique au mode séquentiel (impl.ts) :
+  //   1. checkUsaAppointmentRequestStatus (dossiers avec pendingAppoStatus!=0)
+  //   2. fetchCancellableSessionIds (dossiers avec RDV existant : showRescheduleButton + search)
+  // L'applicationId est TOUJOURS résolu dynamiquement via les APIs du portail.
   const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./appointments-api.js");
-  let applicationId = job.hunterConfig.portalApplicationId ?? "";
+  let applicationId = "";
 
-  if (!applicationId) {
-    // Étape 2 : appointmentRequestStatus (marche si pendingAppoStatus != 0)
-    try {
-      const requestStatus = await checkUsaAppointmentRequestStatus(session, undefined);
-      if (requestStatus.applicationId) {
-        applicationId = requestStatus.applicationId;
-        session.applicationId = applicationId;
-        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via appointmentRequestStatus: ${applicationId}`);
-      }
-    } catch (err) {
-      console.warn(`[bootstrap] checkUsaAppointmentRequestStatus échoué pour ${username.slice(0, 12)}…: ${err}`);
+  // Étape 1 : appointmentRequestStatus (dossiers en attente de workflow)
+  try {
+    const requestStatus = await checkUsaAppointmentRequestStatus(session, undefined);
+    if (requestStatus.applicationId) {
+      applicationId = requestStatus.applicationId;
+      session.applicationId = applicationId;
+      console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via appointmentRequestStatus: ${applicationId}`);
     }
-  } else {
-    session.applicationId = applicationId;
+  } catch (err) {
+    console.warn(`[bootstrap] checkUsaAppointmentRequestStatus échoué pour ${username.slice(0, 12)}…: ${err}`);
   }
 
-  // Étape 3 : fetchCancellableSessionIds (marche si pendingAppoStatus=0, cancellable=true)
+  // Étape 2 : fetchCancellableSessionIds (comptes avec RDV existant, pendingAppoStatus=0, cancellable=true)
   // Appelle showRescheduleButton + scheduledappointmentInfo + /appointments/search
   if (!applicationId) {
-    console.log(`[bootstrap] 🔄 ${username.slice(0, 12)}… applicationId non trouvé via appointmentRequestStatus — tentative showRescheduleButton/search...`);
+    console.log(`[bootstrap] 🔄 ${username.slice(0, 12)}… tentative showRescheduleButton/search...`);
     try {
       const result = await fetchCancellableSessionIds(session, job);
-      if (result === "proceed" && session.applicationId) {
+      if (session.applicationId) {
         applicationId = session.applicationId;
-        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via fetchCancellableSessionIds: ${applicationId}`);
+        console.log(`[bootstrap] ✅ ${username.slice(0, 12)}… applicationId résolu via fetchCancellableSessionIds: ${applicationId} (result=${result})`);
       } else {
-        console.warn(`[bootstrap] fetchCancellableSessionIds retourné: ${result} (applicationId=${session.applicationId ?? "null"})`);
-        // Dernière tentative : si session.applicationId a été peuplé même avec result != "proceed"
-        if (session.applicationId) {
-          applicationId = session.applicationId;
-        }
+        console.warn(`[bootstrap] fetchCancellableSessionIds retourné: ${result} — applicationId toujours null`);
       }
     } catch (err) {
       console.warn(`[bootstrap] fetchCancellableSessionIds échoué pour ${username.slice(0, 12)}…: ${err}`);
@@ -263,7 +254,7 @@ export async function bootstrapAccountData(
   }
 
   if (!applicationId) {
-    console.error(`[bootstrap] ❌ ${username.slice(0, 12)}… applicationId introuvable (3 stratégies épuisées) — bootstrap impossible`);
+    console.error(`[bootstrap] ❌ ${username.slice(0, 12)}… applicationId introuvable (2 stratégies épuisées) — bootstrap impossible`);
     setUsaSessionProxy(undefined);
     if (proxyUrl) releaseProxyGuard(username);
     return { success: false, ofcList: [], appDetails: null, visaClass: "", visaType: "", visaCategory: "", error: "NO_APPLICATION_ID" };

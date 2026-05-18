@@ -132,7 +132,7 @@ export async function checkUsaAppointmentRequestStatus(
     // ── Sélection de l'application active parmi un tableau potentiel ──────────
     // Le serveur peut retourner un tableau quand le compte a plusieurs dossiers.
     // Priorité de sélection :
-    //   1. portalApplicationId renseigné par l'admin → chercher cet ID exactement
+    //   1. portalApplicationId fourni → chercher cet ID exactement (cas multi-dossiers)
     //   2. Premier dossier avec pendingAppoStatus > 0 (paiement confirmé, actif)
     //   3. Fallback : raw[0] (comportement original)
     if (Array.isArray(raw)) {

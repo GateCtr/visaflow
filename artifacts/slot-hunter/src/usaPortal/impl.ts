@@ -692,7 +692,7 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
 
   // ── Résolution du dossier actif ────────────────────────────────────────────
   // Le portail peut retourner plusieurs dossiers si le compte en gère plusieurs.
-  // portalApplicationId (admin) → sélection exacte ; sinon → premier avec paiement confirmé.
+  // La sélection se fait automatiquement : premier dossier avec paiement confirmé.
   const requestStatus = await checkUsaAppointmentRequestStatus(session, job.hunterConfig.portalApplicationId);
   session.applicationId = requestStatus.applicationId;
   session.pendingAppoStatus = requestStatus.pendingAppoStatus;

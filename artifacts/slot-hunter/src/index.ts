@@ -1569,7 +1569,7 @@ async function main(): Promise<void> {
           job,
           appDetails: subAppDetails ?? {
             applicantId: bootstrapResult.appDetails?.applicantId ?? "0",
-            applicationId: job.hunterConfig.portalApplicationId ?? "",
+            applicationId: "",
             visaType: bootstrapResult.visaType,
             visaClass: bootstrapResult.visaClass,
           },
@@ -1683,7 +1683,7 @@ async function main(): Promise<void> {
                     job,
                     appDetails: bootResult.appDetails ?? {
                       applicantId: "0",
-                      applicationId: job.hunterConfig.portalApplicationId ?? "",
+                      applicationId: "",
                       visaType: bootResult.visaType || "NIV",
                       visaClass: bootResult.visaClass || "",
                     },

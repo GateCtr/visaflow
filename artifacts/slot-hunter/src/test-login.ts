@@ -11,7 +11,7 @@ import { usaFetch } from "./usaPortal/usa-http.js";
 const EMAIL    = process.env.USA_EMAIL || "cbampasa@gmail.com";
 const PASSWORD = process.env.USA_PASSWORD || "Akollad@2026";
 
-// portalApplicationId facultatif — undefined = sélection automatique
+// portalApplicationId facultatif — undefined = sélection automatique (premier dossier actif)
 const PORTAL_APP_ID: string | undefined = undefined;
 
 async function getPublicIp(): Promise<string> {
