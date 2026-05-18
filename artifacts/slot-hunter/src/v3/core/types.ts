@@ -105,6 +105,63 @@ export interface LoginDecision {
   remaining: number;
 }
 
+// ─── HunterConfig V3 (Admin) ────────────────────────────────────────────────
+
+/** Config V3 étendue — champs ajoutés au hunterConfig existant de Convex. */
+export interface HunterConfigV3 {
+  // === Existants (conservés de V2) ===
+  embassyUsername: string;
+  embassyPassword: string;
+  isActive: boolean;
+  portalApplicationId?: string;
+  slotDateFrom?: string;
+  slotDateDeadline?: string;
+  rescheduleMode?: boolean;
+  rescheduleExistingDate?: string;
+  useResidentialProxy?: boolean;
+  twoCaptchaApiKey?: string;
+  capsolverApiKey?: string;
+  preferredProxy?: string;         // "iproyal" | "brightdata" | "2captcha"
+
+  // === NOUVEAUX V3 ===
+
+  /** Rôle du compte dans la stratégie multi-compte.
+   *  - "eclaireur" : RDV proche → calendrier ouvert 12 mois → scanne pour tous
+   *  - "confine"   : RDV lointain → calendrier vide → reçoit les slots via blind booking
+   *  - "hybride"   : scanne pour lui-même ET peut recevoir des blind bookings */
+  accountRole?: AccountRole;
+
+  /** Date du RDV actuel sur le portail (YYYY-MM-DD).
+   *  Sert à déterminer automatiquement éclaireur vs confiné.
+   *  Ex: "2026-06-15" → éclaireur, "2027-05-01" → confiné. */
+  currentAppointmentDate?: string;
+
+  /** Override du budget login journalier (défaut: 9). */
+  maxLoginsPerDay?: number;
+
+  /** Fenêtres rush personnalisées pour ce compte (override global).
+   *  Si absent → utilise les rush windows globales (bot-config Convex). */
+  rushWindows?: RushWindow[];
+
+  /** Activer le blind booking cross-account pour ce dossier.
+   *  Si true et role="confine" → reçoit les slots détectés par les éclaireurs.
+   *  Si true et role="eclaireur" → publie ses découvertes aux confinés. */
+  blindBookingEnabled?: boolean;
+
+  /** Dates préférées pour le booking (pattern matching).
+   *  Ex: ["2026-09-*", "2026-10-01", "2026-10-02"]
+   *  Si un slot match une de ces dates → priorité maximale au booking.
+   *  Les dates hors de cette liste sont quand même bookées si dans la fenêtre admin. */
+  slotPriorityDates?: string[];
+
+  /** Nombre max de mois à scanner dans le calendrier (défaut: 3).
+   *  Un humain navigue rarement plus de 3 mois en avant. */
+  maxMonthsToScan?: number;
+
+  /** Activer le mode nuit pour ce compte (1 login nocturne 02:00 UTC). */
+  nightModeEnabled?: boolean;
+}
+
 // ─── Events (pour le logging/stats) ─────────────────────────────────────────
 
 /** Événement émis quand un login est consommé. */
