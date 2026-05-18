@@ -36,9 +36,17 @@ interface ConfigItem {
 const CONFIG_ITEMS: ConfigItem[] = [
   // ─── Mode d'execution ──────────────────────────────────────────────────
   {
+    key: "v3_mode",
+    label: "Mode V3 Chasseur",
+    description: "Active la boucle V3 (runScanSession + getNextScanDecision). Prioritaire sur le mode parallele et sequentiel. 1 = actif, 0 = inactif.",
+    type: "toggle",
+    category: "mode",
+    defaultValue: "0",
+  },
+  {
     key: "parallel_watcher_mode",
     label: "Mode Parallele (Watcher OFC)",
-    description: "Active le watcher partage + booking race. 1 refresh/45s pour tous les dossiers Kinshasa au lieu du mode sequentiel (1 dossier/42min).",
+    description: "Active le watcher partage + booking race. 1 refresh/45s pour tous les dossiers Kinshasa au lieu du mode sequentiel (1 dossier/42min). Ignore si v3_mode = 1.",
     type: "toggle",
     category: "mode",
     defaultValue: "0",
