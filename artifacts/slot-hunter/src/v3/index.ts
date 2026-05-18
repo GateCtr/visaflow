@@ -140,3 +140,23 @@ export { humanPause, networkJitter, interStepPause, monthNavigationPause, preBoo
 export type { PauseType } from "./anti-detection/human-timing.js";
 export { pickNextEndpoint, resetAlternation, getAlternationStats } from "./anti-detection/stealth-alternation.js";
 export type { ScanEndpoint } from "./anti-detection/stealth-alternation.js";
+export { startKeepAlive } from "./anti-detection/keep-alive.js";
+export type { KeepAliveHandle, KeepAliveConfig } from "./anti-detection/keep-alive.js";
+
+// Scan (extended)
+export { runPreflight, PreflightError } from "./scan/scan-preflight.js";
+export type { PreflightResult } from "./scan/scan-preflight.js";
+export { scanAllOfcs } from "./scan/scan-slots.js";
+export type { ScanSlotsConfig, ScanSlotsResult } from "./scan/scan-slots.js";
+export { runScanSession } from "./scan/scan-session.js";
+export type { SessionOutcome, ScanSessionConfig } from "./scan/scan-session.js";
+
+// Booking (extended)
+export { bookSlotDirect } from "./booking/booking-direct.js";
+export type { BookingOutcome, DirectBookingConfig } from "./booking/booking-direct.js";
+export { createRetryTracker, isRetryableError } from "./booking/booking-retry.js";
+export type { RetryTracker, RetryConfig } from "./booking/booking-retry.js";
+
+// Admin (extended)
+export { startStatsReporter } from "./admin/stats-reporter.js";
+export type { StatsReporterHandle, StatsReporterConfig } from "./admin/stats-reporter.js";
