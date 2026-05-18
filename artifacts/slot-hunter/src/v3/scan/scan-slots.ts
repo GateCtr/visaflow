@@ -30,6 +30,8 @@ import { scanMultipleMonths, type MultiMonthScanConfig } from "./scan-months.js"
 import { interStepPause, maybeDistraction } from "../anti-detection/human-timing.js";
 import { pickNextEndpoint, resetAlternation } from "../anti-detection/stealth-alternation.js";
 import { isRushHour } from "../core/session-pool.js";
+import { broadcastSlotDiscovery, type SlotBroadcastEvent } from "../booking/booking-blind.js";
+import { formatUItime } from "../booking/booking-payload.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,14 @@ export interface ScanSlotsConfig {
   maxMonthsToScan?: number;
   /** Username (pour l'alternance anti-détection). */
   username: string;
+  /** Rôle du compte (pour décider du broadcast). */
+  accountRole?: "eclaireur" | "confine" | "hybride";
+  /** Blind booking activé (éclaireur → broadcast). */
+  blindBookingEnabled?: boolean;
+  /** Convex URL (pour le broadcast). */
+  convexSiteUrl?: string;
+  /** Hunter API key (pour le broadcast). */
+  hunterApiKey?: string;
 }
 
 /** Résultat du scan de slots. */
@@ -210,6 +220,24 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
 
     if (slotFound) {
       console.log(`[scan-slots] 🎯 SLOT TROUVÉ — ${ofc.postName} ${slotFound.date} ${slotFound.time}`);
+
+      // Si éclaireur + blind booking → broadcast aux confinés
+      if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
+        const broadcastEvent: SlotBroadcastEvent = {
+          sourceUsername: username,
+          office: ofc.postName,
+          postUserId: ofc.postUserId,
+          date: slotFound.date,
+          time: slotFound.time,
+          slotId: String(slotFound.slotId),
+          startTime: slotFound.slot.startTime ?? "",
+          discoveredAt: Date.now(),
+          sourceBooked: false,
+        };
+        broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+        console.log(`[scan-slots] 📡 Slot broadcasté aux confinés`);
+      }
+
       return { slotFound, discoveryEvents, ofcsScanned, totalMonthsScanned };
     }
 

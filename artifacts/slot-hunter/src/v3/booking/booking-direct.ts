@@ -17,7 +17,7 @@
  *
  * USAGE :
  *   const outcome = await bookSlotDirect(config);
- *   if (outcome.success) { /* slot capturé */ }
+ *   if (outcome.success) { // slot capturé }
  */
 
 import { buildBookingRequest, type BookingPayloadConfig, type BookingRequest } from "./booking-payload.js";

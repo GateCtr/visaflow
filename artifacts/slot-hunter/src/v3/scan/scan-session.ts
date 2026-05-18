@@ -80,7 +80,7 @@ export interface ScanSessionConfig {
 export async function runScanSession(config: ScanSessionConfig): Promise<SessionOutcome> {
   const { jobId, hunterConfig, convexSiteUrl, hunterApiKey } = config;
   const username = hunterConfig.embassyUsername ?? "unknown";
-  const applicationId = hunterConfig.portalApplicationId ?? hunterConfig.applicationId as string ?? "";
+  const applicationId = hunterConfig.portalApplicationId ?? "";
 
   // ── Déterminer le rôle et le budget ──
   const role: AccountRole = resolveAccountRole(hunterConfig);
@@ -187,6 +187,10 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
         rescheduleMode: hunterConfig.rescheduleMode,
         maxMonthsToScan: hunterConfig.maxMonthsToScan ?? 3,
         username,
+        accountRole: role,
+        blindBookingEnabled: hunterConfig.blindBookingEnabled,
+        convexSiteUrl,
+        hunterApiKey,
       });
 
       // Reporter discovery
@@ -206,7 +210,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
         return "no_slot";
       }
 
-      // ── 7. Slot trouvé → Booking direct ──
+      // ── 7. Slot trouvé → Booking direct (sauf éclaireur pur) ──
       const slot = scanResult.slotFound;
       recordSlotDetected(username, slot.ofcName, slot.date);
       logSlotDetected(jobId, {
@@ -218,6 +222,15 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
           ? `${hunterConfig.slotDateFrom} → ${hunterConfig.slotDateDeadline}`
           : "open",
       });
+
+      // Éclaireur pur : scanne + broadcast MAIS ne book PAS pour lui-même
+      // Le slot est broadcasté aux confinés via discovery-enrichment (déjà fait dans scanAllOfcs)
+      if (role === "eclaireur" && hunterConfig.blindBookingEnabled) {
+        console.log(
+          `[scan-session] 📡 Éclaireur pur — slot ${slot.date} ${slot.time} broadcasté aux confinés (pas de booking pour soi)`
+        );
+        return "no_slot"; // Du point de vue de CE compte, pas de booking
+      }
 
       const bookingOutcome: BookingOutcome = await bookSlotDirect({
         slotFound: slot,
