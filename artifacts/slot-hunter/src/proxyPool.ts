@@ -1,4 +1,4 @@
-const REFRESH_MS        = 15 * 60_000;
+const REFRESH_MS        = 3 * 60_000;
 const WHITELIST_RETRY_MS = 30 * 60_000;
 const POOL_SIZE          = 100;
 const IP_LIFETIME_MS     = 12 * 60 * 60_000; // 12h — 2captcha utilise iProyal en backend (même lifetime)
@@ -52,13 +52,13 @@ export class ProxyPool {
 
   private startAutoRefresh(): void {
     const timer = setInterval(() => {
-      console.log('[ProxyPool] ⏱ Auto-refresh triggered (15 min interval)');
+      console.log('[ProxyPool] ⏱ Auto-refresh triggered (3 min interval)');
       this.refresh().catch(err => {
         console.error('[ProxyPool] Auto-refresh error:', err);
       });
     }, REFRESH_MS);
     timer.unref();
-    console.log('[ProxyPool] 🔄 Auto-refresh loop started (every 15 min)');
+    console.log('[ProxyPool] 🔄 Auto-refresh loop started (every 3 min)');
   }
 
   getState(): PoolState {
