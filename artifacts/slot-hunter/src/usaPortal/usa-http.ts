@@ -753,6 +753,7 @@ function getImpitInstance(proxyUrl?: string): InstanceType<typeof Impit> {
   if (!_impitInstance || (proxyUrl && proxyUrl !== _impitProxyUrl) || (!proxyUrl && _impitProxyUrl)) {
     const options: any = {
       browser: "chrome",
+      ignoreTlsErrors: true,
     };
     
     if (proxyUrl) {

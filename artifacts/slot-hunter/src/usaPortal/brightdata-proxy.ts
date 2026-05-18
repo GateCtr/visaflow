@@ -167,7 +167,7 @@ export function startBrightDataKeepAlive(proxyUrl: string, username: string): vo
       // IMPORTANT: On doit passer la requête VIA le proxy BrightData pour maintenir la session.
       // Utilise Impit (comme le reste du code) pour gérer le SSL des proxies nativement.
       const { Impit } = await import("impit");
-      const impit = new Impit({ browser: "chrome", proxyUrl: session.proxyUrl } as any);
+      const impit = new Impit({ browser: "chrome", proxyUrl: session.proxyUrl, ignoreTlsErrors: true } as any);
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);

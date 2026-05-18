@@ -65,7 +65,7 @@ export function createSessionFetcher(config: UsaFetcherConfig): UsaFetcher {
   const logPrefix = label ? `[usa:${label}]` : `[usa:${username.slice(0, 8)}]`;
 
   // Créer une instance impit dédiée à cette session
-  const impitOptions: Record<string, unknown> = { browser: "chrome" };
+  const impitOptions: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
   if (proxyUrl) {
     impitOptions.proxyUrl = proxyUrl;
   }

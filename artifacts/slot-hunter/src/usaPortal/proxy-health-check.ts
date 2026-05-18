@@ -54,7 +54,7 @@ export async function preFlightProxyCheck(
   const t0 = Date.now();
 
   try {
-    const impit = new Impit({ browser: "chrome", proxyUrl });
+    const impit = new Impit({ browser: "chrome", proxyUrl, ignoreTlsErrors: true });
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROXY_LATENCY_THRESHOLD_MS);
