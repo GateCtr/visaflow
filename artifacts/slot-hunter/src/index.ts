@@ -1316,11 +1316,25 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // ─── PARALLEL MODE : OFC Watcher + Booking Race (Kinshasa) ────────────────
-  // Pilotable depuis l'admin via bot-config Convex (clé: parallel_watcher_mode).
-  // Valeur "1" = activé, tout autre chose ou absent = désactivé.
-  // Fallback sur la variable d'environnement si Convex est inaccessible.
+  // ─── MODE SELECTION : V3 > Parallèle > Séquentiel ──────────────────────────
+  // Source de vérité : bot-config Convex (clé: v3_mode, parallel_watcher_mode)
+  // Priorité :
+  //   1. v3_mode=1       → V3 Chasseur (scan-session complet : login → multi-mois → booking → discovery)
+  //   2. parallel_watcher_mode=1 → OFC Watcher partagé (détection rapide, pas de scan complet)
+  //   3. Aucun           → Mode séquentiel legacy (impl.ts)
+  let v3Mode = false;
   let parallelMode = false;
+
+  // ── Vérifier v3_mode AVANT parallel_watcher_mode ──
+  try {
+    const v3Value = await getBotConfigValue("v3_mode");
+    v3Mode = v3Value === "1";
+    if (v3Mode) {
+      log("INFO", "[v3] ✅ Mode V3 Chasseur activé via bot-config Convex (v3_mode=1)");
+    }
+  } catch {
+    // Convex inaccessible — v3_mode reste false, on essaie parallel ensuite
+  }
 
   // ── Redis: restaurer les sessions persistées (évite les re-logins au restart) ──
   // Initialisé AVANT la décision de mode pour que les deux paths (parallèle/séquentiel)
@@ -1351,26 +1365,173 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => { gracefulShutdown("SIGTERM"); });
   process.on("SIGINT", () => { gracefulShutdown("SIGINT"); });
 
-  try {
-    const convexValue = await getBotConfigValue("parallel_watcher_mode");
-    parallelMode = convexValue === "1";
-    if (parallelMode) {
-      log("INFO", "[parallel] Mode parallèle activé via bot-config Convex (parallel_watcher_mode=1)");
-    } else {
-      // Fallback env var (pour les tests locaux ou si Convex n'a pas encore la clé)
+  if (!v3Mode) {
+    try {
+      const convexValue = await getBotConfigValue("parallel_watcher_mode");
+      parallelMode = convexValue === "1";
+      if (parallelMode) {
+        log("INFO", "[parallel] Mode parallèle activé via bot-config Convex (parallel_watcher_mode=1)");
+      } else {
+        // Fallback env var (pour les tests locaux ou si Convex n'a pas encore la clé)
+        parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
+        if (parallelMode) {
+          log("INFO", "[parallel] Mode parallèle activé via env PARALLEL_WATCHER_MODE=1 (fallback)");
+        }
+      }
+    } catch {
       parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
       if (parallelMode) {
-        log("INFO", "[parallel] Mode parallèle activé via env PARALLEL_WATCHER_MODE=1 (fallback)");
+        log("WARN", "[parallel] Convex inaccessible — fallback sur env PARALLEL_WATCHER_MODE=1");
       }
-    }
-  } catch {
-    parallelMode = process.env.PARALLEL_WATCHER_MODE === "1";
-    if (parallelMode) {
-      log("WARN", "[parallel] Convex inaccessible — fallback sur env PARALLEL_WATCHER_MODE=1");
     }
   }
 
-  if (parallelMode) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MODE V3 CHASSEUR — Boucle principale autonome
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (v3Mode) {
+    log("INFO", "═══════════════════════════════════════════════════════════════");
+    log("INFO", "🎯 MODE V3 CHASSEUR ACTIVÉ (v3_mode=1)");
+    log("INFO", "   → runScanSession complet : login → preflight → multi-mois → booking → discovery");
+    log("INFO", "   → Intervalles pilotés par scan-orchestrator (rush/standard/night/burst)");
+    log("INFO", "═══════════════════════════════════════════════════════════════");
+
+    const { runScanSession } = await import("./v3/scan/scan-session.js");
+    const { getNextScanDecision } = await import("./v3/scan/scan-orchestrator.js");
+    const { getCurrentPredictionScore, getCompetitionMedianMs } = await import("./v3/intelligence/prediction-engine.js");
+    const { resolveAccountRole, extractBudgetFromConfig } = await import("./v3/admin/config-schema.js");
+    const { getRemainingLogins } = await import("./v3/core/session-pool.js");
+    const { tokenCache, setUsaSessionProxy } = await import("./usaPortal/usa-http.js");
+    const { getUsaSession } = await import("./usaPortal/usa-session.js");
+
+    // Boucle V3 — tourne en continu pour les dossiers USA actifs
+    const v3Loop = async () => {
+      while (true) {
+        // Re-check v3_mode à chaque cycle (admin peut désactiver à chaud)
+        const currentV3Setting = await getBotConfigValue("v3_mode").catch(() => null);
+        if (currentV3Setting !== "1") {
+          log("INFO", "[v3-loop] ⛔ v3_mode désactivé via bot-config — arrêt de la boucle V3.");
+          break;
+        }
+
+        let jobs: HunterJob[];
+        try {
+          jobs = await getActiveJobs();
+        } catch (err) {
+          log("ERROR", `[v3-loop] Échec récupération jobs: ${err} — retry dans 30s`);
+          await new Promise(r => setTimeout(r, 30_000));
+          continue;
+        }
+
+        const usaJobs = jobs.filter(j =>
+          j.destination === "usa" &&
+          j.hunterConfig?.isActive === true &&
+          !pausedJobs.has(j.id) &&
+          !completedJobs.has(j.id) &&
+          !!j.portalUrl
+        );
+
+        if (usaJobs.length === 0) {
+          log("INFO", "[v3-loop] Aucun dossier USA actif — polling dans 60s");
+          await new Promise(r => setTimeout(r, 60_000));
+          continue;
+        }
+
+        // Trier par urgence
+        const sortedJobs = [...usaJobs].sort((a, b) => {
+          const tiers: Record<string, number> = { tres_urgent: 0, urgent: 1, prioritaire: 2, standard: 3 };
+          return (tiers[a.urgencyTier] ?? 3) - (tiers[b.urgencyTier] ?? 3);
+        });
+
+        let scannedOne = false;
+        for (const job of sortedJobs) {
+          const username = job.hunterConfig.embassyUsername;
+          const role = resolveAccountRole(job.hunterConfig as any);
+
+          // Demander à l'orchestrateur si on doit scanner maintenant
+          const cachedEntry = tokenCache.get(username.toLowerCase());
+          const hasValidToken = !!(cachedEntry && Date.now() < cachedEntry.expiresAt);
+          const remaining = getRemainingLogins(username);
+
+          const decision = getNextScanDecision({
+            accountRole: role,
+            predictionScore: getCurrentPredictionScore(username),
+            competitionMedianMs: getCompetitionMedianMs(username),
+            loginsRemaining: remaining,
+            hasValidToken,
+            scanIntensity: "normal",
+            nightMode: job.hunterConfig.nightModeEnabled ? "minimal" : "off",
+          });
+
+          if (!decision.shouldScan) {
+            continue;
+          }
+
+          log("INFO", `[v3-loop] ▶ ${job.applicantName} — ${decision.reason} (phase: ${decision.phase}, interval: ${Math.round(decision.intervalMs / 1000)}s)`);
+
+          // Lancer la session V3 complète
+          const outcome = await runScanSession({
+            jobId: job.id,
+            hunterConfig: job.hunterConfig as any,
+            existingSession: hasValidToken ? {
+              accessToken: cachedEntry!.accessToken,
+              refreshToken: cachedEntry!.refreshToken,
+              csrfToken: cachedEntry!.csrfToken,
+              userID: cachedEntry!.userID,
+              fullName: cachedEntry!.fullName,
+              applicationId: null,
+              pendingAppoStatus: null,
+              missionId: 323,
+              allowedOfcs: cachedEntry!.allowedOfcs ?? [],
+            } : undefined,
+            getSession: async (proxyUrl) => {
+              setUsaSessionProxy(proxyUrl ?? undefined);
+              const session = await getUsaSession(
+                job.hunterConfig.embassyUsername,
+                job.hunterConfig.embassyPassword,
+                job.hunterConfig.twoCaptchaApiKey,
+              );
+              setUsaSessionProxy(undefined);
+              return session;
+            },
+            convexSiteUrl: convexUrl!,
+            hunterApiKey: hunterKey!,
+          });
+
+          log("INFO", `[v3-loop] ✅ ${job.applicantName} — résultat: ${outcome}`);
+
+          if (outcome === "slot_captured") {
+            completedJobs.add(job.id);
+            pausedJobs.add(job.id);
+            await sendHeartbeat({ applicationId: job.id, result: "slot_found" });
+          } else if (outcome === "restricted") {
+            pausedJobs.add(job.id);
+          } else if (outcome === "payment_required") {
+            pausedJobs.add(job.id);
+            await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
+          }
+
+          // Attendre l'intervalle de l'orchestrateur avant le prochain dossier
+          const waitMs = Math.max(decision.intervalMs, 30_000);
+          await new Promise(r => setTimeout(r, waitMs));
+          scannedOne = true;
+          break; // Un seul job par tick (radio silence entre les dossiers)
+        }
+
+        // Si aucun job n'était éligible ce tick
+        if (!scannedOne) {
+          await new Promise(r => setTimeout(r, 30_000));
+        }
+      }
+    };
+
+    // Lancer la boucle V3 en background (non-bloquant — le scheduler séquentiel continue pour CEV/Espagne)
+    v3Loop().catch(err => {
+      log("ERROR", `[v3-loop] Fatal: ${err}`);
+    });
+  }
+
+  if (parallelMode && !v3Mode) {
     log("INFO", "═══════════════════════════════════════════════════════════════");
     log("INFO", "🚀 MODE PARALLÈLE ACTIVÉ (PARALLEL_WATCHER_MODE=1)");
     log("INFO", "   → OFC Watcher partagé + Booking Race + Keep-Alive per-account");
