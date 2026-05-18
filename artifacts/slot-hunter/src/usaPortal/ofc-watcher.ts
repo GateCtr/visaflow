@@ -294,7 +294,7 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
   if (!state) return false;
 
   const { preFlightProxyCheck } = await import("./proxy-health-check.js");
-  const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./brightdata-proxy.js");
+  const { makeBrightDataStickyUrl, makeBrightDataStickyUrlWithFallback, startBrightDataKeepAlive } = await import("./brightdata-proxy.js");
   const { makeIproyalStickyUrl } = await import("./usa-http.js");
 
   // Trouver un subscriber avec un token valide et un proxy fonctionnel
@@ -315,13 +315,14 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
       }
     }
 
-    // Fallback BrightData
+    // Fallback BrightData (avec multi-pays)
     if (!newProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-      const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, sub.username);
-      const bdHealth = await preFlightProxyCheck(bdUrl, sub.job.id);
-      if (bdHealth.healthy) {
-        newProxy = bdUrl;
-        startBrightDataKeepAlive(bdUrl, sub.username);
+      const bdResult = await makeBrightDataStickyUrlWithFallback(
+        process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, sub.username, preFlightProxyCheck, sub.job.id
+      );
+      if (bdResult) {
+        newProxy = bdResult.url;
+        startBrightDataKeepAlive(bdResult.url, sub.username);
       }
     }
 
@@ -364,14 +365,15 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
   // Aucun subscriber avec token valide — tenter de re-résoudre le proxy du watcher actuel
   // (peut-être que le proxy était iProyal et maintenant BrightData/2captcha marche)
   if (process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-    const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, state.watcherUsername);
-    const bdHealth = await preFlightProxyCheck(bdUrl);
-    if (bdHealth.healthy) {
-      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → BrightData`);
+    const bdResult = await makeBrightDataStickyUrlWithFallback(
+      process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, state.watcherUsername, preFlightProxyCheck
+    );
+    if (bdResult) {
+      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → BrightData (country=${bdResult.country})`);
       state.fetcher.dispose();
-      startBrightDataKeepAlive(bdUrl, state.watcherUsername);
+      startBrightDataKeepAlive(bdResult.url, state.watcherUsername);
       state.fetcher = createSessionFetcher({
-        proxyUrl: bdUrl,
+        proxyUrl: bdResult.url,
         username: state.watcherUsername,
         label: `watcher:${state.ofc.postName}`,
       });

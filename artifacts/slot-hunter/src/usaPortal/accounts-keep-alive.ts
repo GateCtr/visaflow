@@ -37,6 +37,7 @@ import { startBackgroundKeepAlive, stopBackgroundKeepAlive, isBackgroundKeepAliv
 import { initProxyGuard } from "./proxy-session-guard.js";
 import { preFlightProxyCheck } from "./proxy-health-check.js";
 import { makeBrightDataStickyUrl, startBrightDataKeepAlive, stopBrightDataKeepAlive } from "./brightdata-proxy.js";
+import { makeBrightDataStickyUrlWithFallback } from "./brightdata-proxy.js";
 import { isAccountRestricted, getAccountRestrictionDeadline } from "./account-restriction.js";
 import { proxyPool } from "../browser.js";
 import type { HunterJob } from "../convexClient.js";
@@ -798,14 +799,21 @@ async function resolveProxyWithFailover(
     name: "BrightData",
     resolve: async () => {
       if (!hasBrightData) return undefined;
-      const url = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
-      const health = await preFlightProxyCheck(url, jobId);
-      if (health.healthy) {
-        startBrightDataKeepAlive(url, username);
-        console.log(`[accounts-ka] 🌐 BrightData OK (${health.latencyMs}ms) — sticky + keep-alive`);
-        return url;
+      // FIX: Utiliser le fallback multi-pays au lieu d'un seul pays.
+      // Le pool Congo (cd) est minuscule et timeout souvent — on essaie
+      // Afrique du Sud (za), Kenya (ke), Nigeria (ng) en cascade.
+      const result = await makeBrightDataStickyUrlWithFallback(
+        process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!,
+        username,
+        preFlightProxyCheck,
+        jobId,
+      );
+      if (result) {
+        startBrightDataKeepAlive(result.url, username);
+        console.log(`[accounts-ka] 🌐 BrightData OK (${result.latencyMs}ms, country=${result.country}) — sticky + keep-alive`);
+        return result.url;
       }
-      console.warn(`[accounts-ka] ⚠️ BrightData FAILED: ${health.error}`);
+      console.warn(`[accounts-ka] ⚠️ BrightData FAILED: tous les pays épuisés`);
       return undefined;
     },
   };
