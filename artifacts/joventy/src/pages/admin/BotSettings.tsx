@@ -15,6 +15,7 @@ import {
   Loader2,
   ToggleLeft,
   ToggleRight,
+  Target,
 } from "lucide-react";
 
 // ─── Configuration keys et leurs descriptions ────────────────────────────────
@@ -184,11 +185,100 @@ const CONFIG_ITEMS: ConfigItem[] = [
     min: 1,
     max: 24,
   },
+  // ─── V3 Strategie Multi-Compte ─────────────────────────────────────────
+  {
+    key: "accountRole",
+    label: "Role du Compte",
+    description: "Role strategique: eclaireur (scan rapide, broadcast slots), confine (RDV lointain, recoit blind bookings), hybride (les deux).",
+    type: "select",
+    category: "v3strategy",
+    defaultValue: "hybride",
+    options: [
+      { value: "eclaireur", label: "Eclaireur (scan + broadcast)" },
+      { value: "confine", label: "Confine (recoit blind bookings)" },
+      { value: "hybride", label: "Hybride (scan + recoit)" },
+    ],
+  },
+  {
+    key: "currentAppointmentDate",
+    label: "Date RDV Actuel (YYYY-MM-DD)",
+    description: "Date du rendez-vous actuel sur le portail. Utilise pour auto-detection du role (< 6 mois = eclaireur, > 6 mois = confine).",
+    type: "text",
+    category: "v3strategy",
+    defaultValue: "",
+  },
+  {
+    key: "maxLoginsPerDay",
+    label: "Budget Logins / Jour",
+    description: "Nombre maximum de logins autorises par jour pour ce compte (defaut: 9, max absolu: 10).",
+    type: "number",
+    category: "v3strategy",
+    defaultValue: "9",
+    min: 1,
+    max: 10,
+  },
+  {
+    key: "rushWindows",
+    label: "Fenetres Rush (JSON)",
+    description: "Fenetres rush personnalisees pour ce dossier. Format JSON: [{\"start\":0,\"end\":2,\"days\":[1,2,3,4,5]}]. Vide = fenetres par defaut.",
+    type: "text",
+    category: "v3strategy",
+    defaultValue: "",
+  },
+  {
+    key: "blindBookingEnabled",
+    label: "Blind Booking",
+    description: "Active le blind booking cross-account: l'eclaireur broadcast les slots detectes aux comptes confines pour reservation automatique.",
+    type: "toggle",
+    category: "v3strategy",
+    defaultValue: "0",
+  },
+  {
+    key: "slotPriorityDates",
+    label: "Dates Prioritaires (patterns)",
+    description: "Patterns wildcard pour les dates preferees. Separer par virgule. Ex: 2026-09-*,2026-10-15. Le bot priorise ces creneaux.",
+    type: "text",
+    category: "v3strategy",
+    defaultValue: "",
+  },
+  {
+    key: "maxMonthsToScan",
+    label: "Mois a Scanner",
+    description: "Nombre maximum de mois a naviguer dans le calendrier OFC (defaut: 3). Augmenter = plus de chances mais plus de risque detection.",
+    type: "number",
+    category: "v3strategy",
+    defaultValue: "3",
+    min: 1,
+    max: 12,
+  },
+  {
+    key: "nightModeEnabled",
+    label: "Mode Nuit (1 login 02h UTC)",
+    description: "Active un login nocturne a 02:00 UTC pour capturer les slots liberes pendant la nuit. Budget: 1 login dedie.",
+    type: "toggle",
+    category: "v3strategy",
+    defaultValue: "1",
+  },
+  {
+    key: "preferredProxy",
+    label: "Proxy Prefere (dossier)",
+    description: "Provider proxy prefere pour ce dossier specifique. Override la priorite globale.",
+    type: "select",
+    category: "v3strategy",
+    defaultValue: "",
+    options: [
+      { value: "", label: "Defaut (priorite globale)" },
+      { value: "iproyal", label: "iProyal" },
+      { value: "brightdata", label: "BrightData" },
+      { value: "2captcha", label: "2captcha" },
+    ],
+  },
 ];
 
 // ─── Regroupement par categorie ──────────────────────────────────────────────
 
 const CATEGORIES = [
+  { id: "v3strategy", label: "V3 Strategie Multi-Compte", icon: Target, color: "text-indigo-600" },
   { id: "mode", label: "Mode d'Execution", icon: Zap, color: "text-amber-600" },
   { id: "timing", label: "Intervalles & Timing", icon: Clock, color: "text-blue-600" },
   { id: "protection", label: "Anti-Detection & Securite", icon: Shield, color: "text-red-600" },
