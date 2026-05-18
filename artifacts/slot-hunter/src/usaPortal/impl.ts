@@ -519,10 +519,6 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
       // Pre-flight déjà validé par resolveProxyWithFailover — extraire l'IP pour les logs
       const maskedProxy = sessionProxy.replace(/:([^:@]+)@/, ":***@");
       console.log(`[usa] 🌐 Proxy résolu via resolveProxyWithFailover: ${maskedProxy}`);
-    }
-  }
-
-  // ── Suite du flow (après résolution proxy) ──
     } else {
       // useResidentialProxy = false → connexion directe autorisée par l'admin
       sessionProxy = undefined;
