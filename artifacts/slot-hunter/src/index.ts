@@ -1647,9 +1647,9 @@ async function main(): Promise<void> {
                 const ofcKey = makeKey("usa", "Kinshasa", 323);
                 if (hasActiveWatcher(ofcKey)) {
                   let subProxy: string | undefined;
-                  if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
-                    const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-                    subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+                  if (job.hunterConfig.useResidentialProxy) {
+                    const { resolveProxyWithFailover } = await import("./usaPortal/accounts-keep-alive.js");
+                    subProxy = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
                   }
 
                   // Bootstrap les données du nouveau compte
@@ -1727,11 +1727,11 @@ async function main(): Promise<void> {
                     const { bootstrapAccountData } = await import("./usaPortal/parallel-bootstrap.js");
                     const bootResult = await bootstrapAccountData(job, username);
                     if (bootResult.success && bootResult.appDetails) {
-                      // Résoudre le proxy pour ce compte
+                      // Résoudre le proxy pour ce compte (respecte proxy_priority)
                       let rebootProxy: string | undefined;
-                      if (job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
-                        const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-                        rebootProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+                      if (job.hunterConfig.useResidentialProxy) {
+                        const { resolveProxyWithFailover } = await import("./usaPortal/accounts-keep-alive.js");
+                        rebootProxy = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
                       }
                       // Mettre à jour le subscriber avec les nouvelles données
                       subscribeLate(ofcKey, {
