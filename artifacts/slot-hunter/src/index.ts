@@ -1615,6 +1615,22 @@ async function main(): Promise<void> {
         await new Promise(r => setTimeout(r, checkInterval));
 
         try {
+          // ── FIX-22: Re-check parallel_watcher_mode à chaque tick ────────────
+          // Si l'admin a désactivé le mode parallèle, arrêter cette boucle proprement.
+          // La boucle ne se relancera qu'au prochain redémarrage Railway.
+          const currentParallelSetting = await getBotConfigValue("parallel_watcher_mode");
+          if (currentParallelSetting !== "1") {
+            log("INFO", `[parallel-relogin] ⛔ Mode parallèle désactivé via bot-config (parallel_watcher_mode=${currentParallelSetting ?? "null"}) — arrêt de la boucle.`);
+            // Stopper le watcher OFC s'il est actif
+            const stopOfcKey = makeKey("usa", "Kinshasa", 323);
+            if (hasActiveWatcher(stopOfcKey)) {
+              const { stopOfcWatcher } = await import("./usaPortal/ofc-watcher.js");
+              stopOfcWatcher(stopOfcKey);
+              log("INFO", `[parallel-relogin] 🛑 OFC Watcher arrêté.`);
+            }
+            break; // Sortir du while(true)
+          }
+
           // ── FIX: Auto-retry watcher si pas actif ──────────────────────────────
           // Si initParallelWatchers a échoué au démarrage (proxies down, bootstrap KO),
           // retenter à chaque tick tant qu'il n'y a pas de watcher actif.
