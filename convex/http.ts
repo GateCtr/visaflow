@@ -1219,4 +1219,120 @@ http.route({
   }),
 });
 
+// ─── Slot Broadcast (V3 Blind Booking) ──────────────────────────────────────
+
+// POST /hunter/slot-broadcast — éclaireur publie un slot détecté
+http.route({
+  path: "/hunter/slot-broadcast",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      sourceUsername: string;
+      office: string;
+      postUserId: number;
+      date: string;
+      time: string;
+      slotId: string;
+      startTime: string;
+      discoveredAt: number;
+      sourceBooked: boolean;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.sourceUsername || !body.slotId || !body.date) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    const eventId = await ctx.runMutation(internal.slotBroadcast.internalCreate, {
+      sourceUsername: body.sourceUsername,
+      office: body.office ?? "",
+      postUserId: body.postUserId ?? 0,
+      date: body.date,
+      time: body.time ?? "",
+      slotId: String(body.slotId),
+      startTime: body.startTime ?? "",
+      discoveredAt: body.discoveredAt ?? Date.now(),
+      sourceBooked: body.sourceBooked ?? false,
+    });
+
+    return new Response(JSON.stringify({ ok: true, eventId }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// GET /hunter/slot-broadcast/pending — confiné récupère les slots non traités
+http.route({
+  path: "/hunter/slot-broadcast/pending",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const username = url.searchParams.get("username");
+    if (!username) {
+      return new Response(JSON.stringify({ events: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const events = await ctx.runQuery(internal.slotBroadcast.internalGetPending, {
+      username,
+    });
+
+    return new Response(JSON.stringify({ events }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// POST /hunter/slot-broadcast/ack — confiné marque un événement comme traité
+http.route({
+  path: "/hunter/slot-broadcast/ack",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      eventId: string;
+      username: string;
+      result: "booked" | "failed" | "expired";
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.eventId || !body.username || !body.result) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    await ctx.runMutation(internal.slotBroadcast.internalAck, {
+      eventId: body.eventId as Id<"slotBroadcasts">,
+      username: body.username,
+      result: body.result,
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 export default http;

@@ -393,3 +393,38 @@ export default defineSchema({
     .index("by_destination_office", ["destination", "office"])
     .index("by_date_found", ["dateFound"]),
 });
+
+
+  // ─── Slot Broadcast (V3 Blind Booking) ──────────────────────────────────────
+  // Événements de slots détectés par un éclaireur et partagés aux confinés.
+  // TTL court (5 min) — les confinés doivent réagir rapidement.
+  slotBroadcasts: defineTable({
+    /** Compte éclaireur qui a détecté le slot. */
+    sourceUsername: v.string(),
+    /** Bureau (OFC/POST). */
+    office: v.string(),
+    /** postUserId du bureau. */
+    postUserId: v.number(),
+    /** Date du slot (YYYY-MM-DD). */
+    date: v.string(),
+    /** Heure formatée (ex: "9:00 AM"). */
+    time: v.string(),
+    /** slotId brut (alphanumérique). */
+    slotId: v.string(),
+    /** startTime brut du slot. */
+    startTime: v.string(),
+    /** Timestamp de la découverte par l'éclaireur. */
+    discoveredAt: v.number(),
+    /** L'éclaireur a-t-il déjà booké ce slot ? */
+    sourceBooked: v.boolean(),
+    /** Comptes qui ont déjà traité cet événement (ACK). */
+    processedBy: v.optional(v.array(v.string())),
+    /** Résultat par compte (pour stats). */
+    results: v.optional(v.array(v.object({
+      username: v.string(),
+      result: v.union(v.literal("booked"), v.literal("failed"), v.literal("expired")),
+      processedAt: v.number(),
+    }))),
+  })
+    .index("by_discovered", ["discoveredAt"])
+    .index("by_source", ["sourceUsername"]),
