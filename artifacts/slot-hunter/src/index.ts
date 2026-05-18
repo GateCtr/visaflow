@@ -1338,6 +1338,10 @@ async function main(): Promise<void> {
     log("INFO", `[redis-cache] 🔒 ${restoredRestrictions} restriction(s) restaurée(s) — re-login évité pour comptes restreints`);
   }
 
+  // ── V3 Chasseur : initialisation budget login + rush windows + prediction ──
+  const { initV3 } = await import("./v3/index.js");
+  await initV3(convexUrl, hunterKey);
+
   // Graceful shutdown: flush les sessions vers Redis avant de quitter
   const gracefulShutdown = async (signal: string) => {
     log("INFO", `[shutdown] Signal ${signal} reçu — flush Redis...`);
