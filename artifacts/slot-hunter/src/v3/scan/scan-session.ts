@@ -41,6 +41,7 @@ import {
   logSessionStart, logSessionExpire, logSlotDetected,
   logBookingResult, logDiscoveryBatch, logCriticalError,
 } from "../admin/bot-log.js";
+import { reportSlotDiscoveryBatch } from "../../convexClient.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,10 @@ export interface ScanSessionConfig {
 export async function runScanSession(config: ScanSessionConfig): Promise<SessionOutcome> {
   const { jobId, hunterConfig, convexSiteUrl, hunterApiKey } = config;
   const username = hunterConfig.embassyUsername ?? "unknown";
-  const applicationId = hunterConfig.portalApplicationId ?? "";
+
+  // applicationId est TOUJOURS résolu dynamiquement via les APIs du portail.
+  // Ne JAMAIS le prendre depuis hunterConfig — il n'y est pas renseigné.
+  let applicationId = "";
 
   // ── Déterminer le rôle et le budget ──
   const role: AccountRole = resolveAccountRole(hunterConfig);
@@ -155,6 +159,35 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
     });
     statsReporter = startStatsReporter(jobId, username);
 
+    // ── 4b. Résoudre applicationId dynamiquement ──
+    // Identique au mode séquentiel : appointmentRequestStatus → fetchCancellableSessionIds
+    const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("../../usaPortal/appointments-api.js");
+
+    const requestStatus = await checkUsaAppointmentRequestStatus(session, undefined);
+    if (requestStatus.applicationId) {
+      applicationId = requestStatus.applicationId;
+      session.applicationId = applicationId;
+    }
+
+    // Fallback : comptes reschedule (pendingAppoStatus=0, cancellable=true)
+    if (!applicationId && requestStatus.status === "cancellable") {
+      const result = await fetchCancellableSessionIds(session, { id: jobId, hunterConfig } as any);
+      if (session.applicationId) {
+        applicationId = session.applicationId;
+      }
+    }
+
+    if (!applicationId) {
+      console.error(`[scan-session] ❌ applicationId introuvable — scan impossible`);
+      logCriticalError(jobId, {
+        type: "budget_exhausted",
+        username,
+        details: "applicationId introuvable via APIs portail",
+        recoveryAction: "Vérifier le compte sur le portail",
+      });
+      return "error";
+    }
+
     // ── 5. Preflight ──
     let preflight: PreflightResult;
     try {
@@ -203,6 +236,8 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
           monthsScanned: scanResult.totalMonthsScanned,
           blindShared: 0,
         });
+        // Envoyer les discoveries à Convex (enrichit le calendrier admin)
+        reportSlotDiscoveryBatch(scanResult.discoveryEvents);
       }
 
       // Pas de slot → fin normale
