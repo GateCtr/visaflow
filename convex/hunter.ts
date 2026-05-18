@@ -101,7 +101,9 @@ export const setHunterConfig = mutation({
         maxLoginsPerDay: args.maxLoginsPerDay ?? (existing as Record<string, unknown> | undefined)?.maxLoginsPerDay ?? undefined,
         rushWindows: args.rushWindows || (existing as Record<string, unknown> | undefined)?.rushWindows || undefined,
         blindBookingEnabled: args.blindBookingEnabled ?? (existing as Record<string, unknown> | undefined)?.blindBookingEnabled ?? undefined,
-        slotPriorityDates: args.slotPriorityDates || (existing as Record<string, unknown> | undefined)?.slotPriorityDates || undefined,
+        slotPriorityDates: args.slotPriorityDates
+          ? args.slotPriorityDates.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : (existing as Record<string, unknown> | undefined)?.slotPriorityDates ?? undefined,
         maxMonthsToScan: args.maxMonthsToScan ?? (existing as Record<string, unknown> | undefined)?.maxMonthsToScan ?? undefined,
         nightModeEnabled: args.nightModeEnabled ?? (existing as Record<string, unknown> | undefined)?.nightModeEnabled ?? undefined,
         preferredProxy: args.preferredProxy || (existing as Record<string, unknown> | undefined)?.preferredProxy || undefined,
