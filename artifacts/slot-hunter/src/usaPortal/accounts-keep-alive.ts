@@ -340,26 +340,10 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
     // NE PAS faire de rotation IP — ça créerait une incohérence JWT↔IP.
     let proxyUrl: string | undefined = cached.proxyUrl;
     if (!proxyUrl && job.hunterConfig.useResidentialProxy) {
-      // Pas de proxy en cache → construire l'URL sticky SANS rotation (même session ID)
-      // et vérifier qu'il fonctionne. Si non, fallback sur resolveProxyWithFailover
-      // (qui essaiera BrightData, 2captcha, etc.)
-      if (process.env.IPROYAL_PROXY_URL) {
-        const candidateUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
-        const health = await preFlightProxyCheck(candidateUrl, job.id);
-        if (health.healthy) {
-          proxyUrl = candidateUrl;
-          cached.proxyUrl = proxyUrl;
-          console.log(`[accounts-ka] 🔒 ${username.slice(0, 12)}… proxy iProyal sticky OK (pas de rotation)`);
-        } else {
-          // iProyal mort (402/timeout) → fallback complet (BrightData, 2captcha)
-          console.warn(`[accounts-ka] ⚠️ ${username.slice(0, 12)}… iProyal dead — fallback BrightData/2captcha`);
-          proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
-          if (proxyUrl) cached.proxyUrl = proxyUrl;
-        }
-      } else {
-        proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
-        if (proxyUrl) cached.proxyUrl = proxyUrl;
-      }
+      // Pas de proxy en cache → résoudre dynamiquement via resolveProxyWithFailover
+      // qui respecte proxy_priority de botConfig (2captcha → iproyal → brightdata).
+      proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
+      if (proxyUrl) cached.proxyUrl = proxyUrl;
     }
     const account: ManagedAccount = {
       username, password, proxyUrl, jobId: job.id, job,
