@@ -1500,11 +1500,41 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Résoudre le proxy du watcher élu
+      // Résoudre le proxy du watcher élu — avec failover (iProyal → BrightData → direct)
       let watcherProxy: string | undefined;
-      if (watcherJob.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+      if (watcherJob.hunterConfig.useResidentialProxy) {
         const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-        watcherProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
+        const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
+        const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
+
+        // Tenter iProyal en premier
+        if (process.env.IPROYAL_PROXY_URL) {
+          const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, watcherUsername);
+          const ipHealth = await preFlightProxyCheck(ipUrl, watcherJob.id);
+          if (ipHealth.healthy) {
+            watcherProxy = ipUrl;
+            log("INFO", `[parallel] Watcher proxy: iProyal OK (${ipHealth.latencyMs}ms)`);
+          } else {
+            log("WARN", `[parallel] Watcher proxy: iProyal DEAD (${ipHealth.error}) — failover BrightData...`);
+          }
+        }
+
+        // Fallback BrightData si iProyal mort ou absent
+        if (!watcherProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
+          const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, watcherUsername);
+          const bdHealth = await preFlightProxyCheck(bdUrl, watcherJob.id);
+          if (bdHealth.healthy) {
+            watcherProxy = bdUrl;
+            startBrightDataKeepAlive(bdUrl, watcherUsername);
+            log("INFO", `[parallel] Watcher proxy: BrightData OK (${bdHealth.latencyMs}ms)`);
+          } else {
+            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (${bdHealth.error}) — pas de proxy pour watcher`);
+          }
+        }
+
+        if (!watcherProxy) {
+          log("WARN", `[parallel] ⚠️ Aucun proxy résidentiel disponible pour le watcher — mode direct (risqué)`);
+        }
       }
 
       // Utiliser le premier OFC résolu (Kinshasa)
@@ -1533,9 +1563,29 @@ async function main(): Promise<void> {
         const subHasToken = subCached && Date.now() < subCached.expiresAt;
 
         let subProxy: string | undefined;
-        if (subHasToken && job.hunterConfig.useResidentialProxy && process.env.IPROYAL_PROXY_URL) {
+        if (subHasToken && job.hunterConfig.useResidentialProxy) {
           const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
-          subProxy = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+          const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
+          const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
+
+          // Tenter iProyal
+          if (process.env.IPROYAL_PROXY_URL) {
+            const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, username);
+            const ipHealth = await preFlightProxyCheck(ipUrl, job.id);
+            if (ipHealth.healthy) {
+              subProxy = ipUrl;
+            }
+          }
+
+          // Fallback BrightData
+          if (!subProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
+            const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username);
+            const bdHealth = await preFlightProxyCheck(bdUrl, job.id);
+            if (bdHealth.healthy) {
+              subProxy = bdUrl;
+              startBrightDataKeepAlive(bdUrl, username);
+            }
+          }
         }
 
         // Bootstrap les données de chaque subscriber (seulement si token valide)

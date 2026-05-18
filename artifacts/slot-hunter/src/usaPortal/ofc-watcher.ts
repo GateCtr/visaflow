@@ -286,27 +286,57 @@ export function getWatcherStatus(ofcKey: string): {
 /**
  * Effectue un failover : remplace le watcher par un autre subscriber.
  * Appelé quand le watcher actuel a trop d'erreurs (proxy mort, token expiré).
+ * FIX: Valide le proxy du nouveau watcher avant de l'utiliser. Si le proxy du
+ * subscriber est aussi mort, tente BrightData comme fallback.
  */
-export function failoverWatcher(ofcKey: string): boolean {
+export async function failoverWatcher(ofcKey: string): Promise<boolean> {
   const state = activeWatchers.get(ofcKey);
   if (!state) return false;
 
-  // Trouver un subscriber avec un token valide et un proxy
+  const { preFlightProxyCheck } = await import("./proxy-health-check.js");
+  const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./brightdata-proxy.js");
+  const { makeIproyalStickyUrl } = await import("./usa-http.js");
+
+  // Trouver un subscriber avec un token valide et un proxy fonctionnel
   for (const [jobId, sub] of state.subscribers) {
     if (sub.username === state.watcherUsername) continue; // skip le watcher actuel
     const cached = tokenCache.get(sub.username.toLowerCase());
     if (!cached || Date.now() >= cached.expiresAt) continue; // token expiré
 
+    // Résoudre un proxy fonctionnel pour ce subscriber
+    let newProxy: string | undefined;
+
+    // Tenter iProyal
+    if (process.env.IPROYAL_PROXY_URL) {
+      const ipUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL, 720, sub.username);
+      const ipHealth = await preFlightProxyCheck(ipUrl, sub.job.id);
+      if (ipHealth.healthy) {
+        newProxy = ipUrl;
+      }
+    }
+
+    // Fallback BrightData
+    if (!newProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
+      const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, sub.username);
+      const bdHealth = await preFlightProxyCheck(bdUrl, sub.job.id);
+      if (bdHealth.healthy) {
+        newProxy = bdUrl;
+        startBrightDataKeepAlive(bdUrl, sub.username);
+      }
+    }
+
+    // Si aucun proxy ne marche, on utilise direct (mieux que rien — le watcher continue)
     // Nouveau watcher trouvé!
-    console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: ${state.watcherUsername.slice(0, 12)}… → ${sub.username.slice(0, 12)}…`);
+    console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: ${state.watcherUsername.slice(0, 12)}… → ${sub.username.slice(0, 12)}… (proxy: ${newProxy ? "OK" : "direct"})`);
 
     // Disposer l'ancien fetcher
     state.fetcher.dispose();
 
-    // Créer un nouveau fetcher avec le nouveau compte
+    // Créer un nouveau fetcher avec le nouveau compte + proxy validé
     state.watcherUsername = sub.username;
+    sub.proxyUrl = newProxy; // mettre à jour le subscriber aussi
     state.fetcher = createSessionFetcher({
-      proxyUrl: sub.proxyUrl,
+      proxyUrl: newProxy,
       username: sub.username,
       label: `watcher:${state.ofc.postName}`,
     });
@@ -315,7 +345,26 @@ export function failoverWatcher(ofcKey: string): boolean {
     return true;
   }
 
-  console.warn(`[ofc-watcher] ⚠️ FAILOVER impossible pour ${state.ofc.postName} — aucun subscriber éligible`);
+  // Aucun subscriber avec token valide — tenter de re-résoudre le proxy du watcher actuel
+  // (peut-être que le proxy était iProyal et maintenant BrightData marche)
+  if (process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
+    const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, state.watcherUsername);
+    const bdHealth = await preFlightProxyCheck(bdUrl);
+    if (bdHealth.healthy) {
+      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → BrightData`);
+      state.fetcher.dispose();
+      startBrightDataKeepAlive(bdUrl, state.watcherUsername);
+      state.fetcher = createSessionFetcher({
+        proxyUrl: bdUrl,
+        username: state.watcherUsername,
+        label: `watcher:${state.ofc.postName}`,
+      });
+      state.consecutiveErrors = 0;
+      return true;
+    }
+  }
+
+  console.warn(`[ofc-watcher] ⚠️ FAILOVER impossible pour ${state.ofc.postName} — aucun subscriber éligible + BrightData dead`);
   return false;
 }
 
@@ -350,7 +399,7 @@ async function runWatcherLoop(state: OfcWatcherState): Promise<void> {
 
       if (state.consecutiveErrors >= MAX_WATCHER_ERRORS) {
         console.error(`[ofc-watcher] 🔄 Tentative failover...`);
-        const didFailover = failoverWatcher(state.ofcKey);
+        const didFailover = await failoverWatcher(state.ofcKey);
         if (!didFailover) {
           console.error(`[ofc-watcher] 🛑 Watcher ${state.ofc.postName} arrêté — trop d'erreurs + failover impossible`);
           stopOfcWatcher(state.ofcKey);
