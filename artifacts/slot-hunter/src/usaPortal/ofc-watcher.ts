@@ -515,6 +515,12 @@ async function doWatcherRefresh(state: OfcWatcherState): Promise<void> {
   for (const group of groups) {
     const { scanner: groupScanner, locationType, label, scannerToken } = group;
 
+    // FIX-22: Renouveler le X-Correlation-key du scanner AVANT le POST.
+    // Sans ça, le scanner peut avoir un correlation key stale (ex: "dashboard" du GET alternation)
+    // et le serveur retourne 404. Le mode séquentiel faisait resetCorrelationOnAction("ofc-selection")
+    // avant chaque getFirstAvailableMonth. Le watcher doit faire pareil PER-SCANNER.
+    resetCorrelationOnAction("schedule-appointment/ofc-selection", groupScanner.username);
+
     // FIX-20: Utiliser le token du scanner du groupe (pas le token du watcher global)
     // et l'username du scanner pour les headers (correlation, UA sticky, etc.)
     const hdrs = authHeaders(scannerToken, "https://www.usvisaappt.com/visaapplicantui/home/dashboard/create-appointment", true, groupScanner.username);
