@@ -392,8 +392,6 @@ export default defineSchema({
     .index("by_discovered", ["discoveredAt"])
     .index("by_destination_office", ["destination", "office"])
     .index("by_date_found", ["dateFound"]),
-});
-
 
   // ─── Slot Broadcast (V3 Blind Booking) ──────────────────────────────────────
   // Événements de slots détectés par un éclaireur et partagés aux confinés.
@@ -428,3 +426,4 @@ export default defineSchema({
   })
     .index("by_discovered", ["discoveredAt"])
     .index("by_source", ["sourceUsername"]),
+});
