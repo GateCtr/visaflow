@@ -335,9 +335,10 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
   const cached = tokenCache.get(key);
   if (cached && isCachedTokenValid(cached)) {
     // Token déjà valide → inscrire le compte et activer le keep-alive directement
-    // Résoudre le proxy uniquement si le token est valide (le proxy sera utile pour le scan)
-    let proxyUrl: string | undefined;
-    if (job.hunterConfig.useResidentialProxy) {
+    // FIX-22: Réutiliser le proxy déjà associé au token (restauré depuis Redis).
+    // NE PAS résoudre un nouveau proxy — ça ferait une rotation IP inutile.
+    let proxyUrl: string | undefined = cached.proxyUrl;
+    if (!proxyUrl && job.hunterConfig.useResidentialProxy) {
       proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
     }
     const account: ManagedAccount = {
@@ -367,8 +368,13 @@ export async function registerAccountForKeepAlive(job: HunterJob): Promise<boole
 
   // ── Résoudre le proxy avec failover complet (iProyal → BrightData → 2captcha) ──
   // Seulement si le compte N'EST PAS restreint et n'a pas de token valide (besoin de login)
-  let proxyUrl: string | undefined;
-  if (job.hunterConfig.useResidentialProxy) {
+  // FIX-22: Si un token expiré existe encore en cache avec un proxyUrl (restauré depuis Redis),
+  // réutiliser ce proxy au lieu d'en résoudre un nouveau. La rotation ne doit se faire
+  // qu'au re-login (nouvelle session = nouvelle IP acceptable). Sinon, on gaspille des IPs
+  // et on crée des incohérences JWT↔IP au redémarrage.
+  const staleCache = tokenCache.get(key);
+  let proxyUrl: string | undefined = staleCache?.proxyUrl;
+  if (!proxyUrl && job.hunterConfig.useResidentialProxy) {
     proxyUrl = await resolveProxyWithFailover(username, job.id, job.hunterConfig);
   }
 
