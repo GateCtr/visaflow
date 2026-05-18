@@ -683,7 +683,7 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
     const lifetimeStr = lifetimeMinutes >= 60 ? `${Math.round(lifetimeMinutes / 60)}h` : `${lifetimeMinutes}m`;
     password += `_session-${sessionId}_lifetime-${lifetimeStr}`;
     parsed.password = encodeURIComponent(password);
-    console.log(`[usa] 🔒 Proxy sticky activé: session=${sessionId}, lifetime=${lifetimeStr} (${halfDay}, rot#${rotationCount})`);
+    console.log(`[usa] 🔒 iProyal sticky session=${sessionId} lifetime=${lifetimeStr} rot#${rotationCount}`);
     return parsed.toString();
   } catch {
     // Si le parsing d'URL échoue, retourner l'URL d'origine

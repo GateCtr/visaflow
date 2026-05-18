@@ -89,8 +89,7 @@ export function makeBrightDataStickyUrl(
 
     const finalUrl = parsed.toString();
     const masked = finalUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[brightdata] 🔒 Proxy sticky: session=${sessionId}, country=${country}, rot#${rotationCount} (${halfDay})`);
-    console.log(`[brightdata]    URL: ${masked}`);
+    console.log(`[brightdata] 🔒 Sticky session=${sessionId} country=${country} rot#${rotationCount}`);
 
     return finalUrl;
   } catch (err) {
