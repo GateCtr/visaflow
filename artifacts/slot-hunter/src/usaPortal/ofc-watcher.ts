@@ -325,9 +325,25 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
       }
     }
 
-    // Si aucun proxy ne marche, on utilise direct (mieux que rien — le watcher continue)
-    // Nouveau watcher trouvé!
-    console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: ${state.watcherUsername.slice(0, 12)}… → ${sub.username.slice(0, 12)}… (proxy: ${newProxy ? "OK" : "direct"})`);
+    // Fallback 2captcha rotatif
+    if (!newProxy) {
+      const { proxyPool } = await import("../browser.js");
+      if (proxyPool.isConfigured) {
+        const poolResult = await proxyPool.getProxy();
+        if (poolResult?.proxy) {
+          newProxy = poolResult.proxy;
+        }
+      }
+    }
+
+    // Si aucun proxy ne marche, skip ce subscriber et essayer le suivant
+    if (!newProxy) {
+      console.warn(`[ofc-watcher] ⚠️ Aucun proxy fonctionnel pour ${sub.username.slice(0, 12)}… — skip`);
+      continue;
+    }
+
+    // Nouveau watcher trouvé avec proxy validé!
+    console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: ${state.watcherUsername.slice(0, 12)}… → ${sub.username.slice(0, 12)}… (proxy: OK)`);
 
     // Disposer l'ancien fetcher
     state.fetcher.dispose();
@@ -346,7 +362,7 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
   }
 
   // Aucun subscriber avec token valide — tenter de re-résoudre le proxy du watcher actuel
-  // (peut-être que le proxy était iProyal et maintenant BrightData marche)
+  // (peut-être que le proxy était iProyal et maintenant BrightData/2captcha marche)
   if (process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
     const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, state.watcherUsername);
     const bdHealth = await preFlightProxyCheck(bdUrl);
@@ -364,7 +380,24 @@ export async function failoverWatcher(ofcKey: string): Promise<boolean> {
     }
   }
 
-  console.warn(`[ofc-watcher] ⚠️ FAILOVER impossible pour ${state.ofc.postName} — aucun subscriber éligible + BrightData dead`);
+  // Dernier recours : 2captcha rotatif
+  const { proxyPool } = await import("../browser.js");
+  if (proxyPool.isConfigured) {
+    const poolResult = await proxyPool.getProxy();
+    if (poolResult?.proxy) {
+      console.log(`[ofc-watcher] 🔄 FAILOVER ${state.ofc.postName}: même compte ${state.watcherUsername.slice(0, 12)}… mais proxy → 2captcha rotatif`);
+      state.fetcher.dispose();
+      state.fetcher = createSessionFetcher({
+        proxyUrl: poolResult.proxy,
+        username: state.watcherUsername,
+        label: `watcher:${state.ofc.postName}`,
+      });
+      state.consecutiveErrors = 0;
+      return true;
+    }
+  }
+
+  console.warn(`[ofc-watcher] ⚠️ FAILOVER impossible pour ${state.ofc.postName} — aucun subscriber éligible + tous proxies dead`);
   return false;
 }
 

@@ -1500,7 +1500,8 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Résoudre le proxy du watcher élu — avec failover (iProyal → BrightData → direct)
+      // Résoudre le proxy du watcher élu — avec failover (iProyal → BrightData → 2captcha)
+      // JAMAIS de mode direct — si aucun proxy ne fonctionne, ABORT le watcher.
       let watcherProxy: string | undefined;
       if (watcherJob.hunterConfig.useResidentialProxy) {
         const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
@@ -1528,12 +1529,24 @@ async function main(): Promise<void> {
             startBrightDataKeepAlive(bdUrl, watcherUsername);
             log("INFO", `[parallel] Watcher proxy: BrightData OK (${bdHealth.latencyMs}ms)`);
           } else {
-            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (${bdHealth.error}) — pas de proxy pour watcher`);
+            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (${bdHealth.error}) — failover 2captcha...`);
+          }
+        }
+
+        // Fallback 2captcha rotatif (dernier recours)
+        if (!watcherProxy && proxyPool.isConfigured) {
+          const poolResult = await proxyPool.getProxy();
+          if (poolResult?.proxy) {
+            watcherProxy = poolResult.proxy;
+            log("INFO", `[parallel] Watcher proxy: 2captcha rotatif OK (fallback final)`);
+          } else {
+            log("WARN", `[parallel] Watcher proxy: 2captcha pool vide`);
           }
         }
 
         if (!watcherProxy) {
-          log("WARN", `[parallel] ⚠️ Aucun proxy résidentiel disponible pour le watcher — mode direct (risqué)`);
+          log("ERROR", `[parallel] ❌ TOUS LES PROXIES DOWN — watcher NON démarré (pas de mode direct)`);
+          return;
         }
       }
 
@@ -1584,6 +1597,14 @@ async function main(): Promise<void> {
             if (bdHealth.healthy) {
               subProxy = bdUrl;
               startBrightDataKeepAlive(bdUrl, username);
+            }
+          }
+
+          // Fallback 2captcha rotatif
+          if (!subProxy && proxyPool.isConfigured) {
+            const poolResult = await proxyPool.getProxy();
+            if (poolResult?.proxy) {
+              subProxy = poolResult.proxy;
             }
           }
         }
