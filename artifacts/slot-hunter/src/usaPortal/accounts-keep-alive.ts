@@ -824,13 +824,25 @@ export async function resolveProxyWithFailover(
   const twoCaptchaProvider: ProxyProvider = {
     name: "2captcha",
     resolve: async () => {
-      if (!proxyPool.isConfigured) return undefined;
+      // Si le pool n'est pas encore initialisé mais la clé API existe,
+      // attendre jusqu'à 10s qu'il se charge (timing de boot Railway).
+      if (!proxyPool.isConfigured && process.env.TWOCAPTCHA_API_KEY) {
+        console.log(`[accounts-ka] ⏳ 2captcha pool pas encore prêt — attente initialisation (max 10s)...`);
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+          if (proxyPool.isConfigured) break;
+        }
+      }
+      if (!proxyPool.isConfigured) {
+        console.warn(`[accounts-ka] ⚠️ 2captcha pool non configuré (serverIp manquant ou API key absente)`);
+        return undefined;
+      }
       const poolResult = await proxyPool.getProxy();
       if (poolResult?.proxy) {
-        console.log(`[accounts-ka] 🌐 2captcha rotatif OK (fallback final)`);
+        console.log(`[accounts-ka] 🌐 2captcha rotatif OK`);
         return poolResult.proxy;
       }
-      console.warn(`[accounts-ka] ⚠️ 2captcha pool vide ou non configuré`);
+      console.warn(`[accounts-ka] ⚠️ 2captcha pool vide (0 IPs chargées)`);
       return undefined;
     },
   };
