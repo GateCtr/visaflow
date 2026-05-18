@@ -27,6 +27,7 @@ import {
 } from "./usa-http.js";
 import {
   makeBrightDataStickyUrl,
+  makeBrightDataStickyUrlWithFallback,
   rotateBrightDataSession,
   startBrightDataKeepAlive,
   stopBrightDataKeepAlive,
@@ -548,17 +549,18 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
           console.warn(`[usa] ⚠️ iProyal pre-flight FAILED: ${ipHealth.error} — tentative fallback...`);
 
           if (hasBrightData) {
-            const bdStickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
-            const bdHealth = await preFlightProxyCheck(bdStickyUrl, job.id);
+            const bdResult = await makeBrightDataStickyUrlWithFallback(
+              process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username, preFlightProxyCheck, job.id
+            );
 
-            if (bdHealth.healthy) {
-              sessionProxy = bdStickyUrl;
-              preFlightExitIp = bdHealth.exitIp ?? undefined;
-              startBrightDataKeepAlive(bdStickyUrl, username);
-              console.log(`[usa] 🌐 FALLBACK BrightData OK (${bdHealth.latencyMs}ms) — sticky + keep-alive`);
+            if (bdResult) {
+              sessionProxy = bdResult.url;
+              preFlightExitIp = undefined; // exitIp from fallback check
+              startBrightDataKeepAlive(bdResult.url, username);
+              console.log(`[usa] 🌐 FALLBACK BrightData OK (${bdResult.latencyMs}ms, country=${bdResult.country}) — sticky + keep-alive`);
             } else {
-              // iProyal + BrightData DOWN → fallback 2captcha rotatif
-              console.warn(`[usa] ⚠️ BrightData aussi DOWN: ${bdHealth.error} — tentative 2captcha...`);
+              // iProyal + BrightData (tous pays) DOWN → fallback 2captcha rotatif
+              console.warn(`[usa] ⚠️ BrightData aussi DOWN (tous pays testés) — tentative 2captcha...`);
               if (proxyPool.isConfigured) {
                 const poolResult = await proxyPool.getProxy();
                 if (poolResult?.proxy) {
@@ -601,18 +603,20 @@ export async function runUsaApiSession(job: HunterJob): Promise<SessionResult> {
         }
       } else if (primaryIsBrightData || (hasBrightData && !hasIproyal)) {
         // FIX 8: BrightData prioritaire pour ce compte, iProyal en fallback
-        const bdStickyUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username);
-        const bdHealth = await preFlightProxyCheck(bdStickyUrl, job.id);
+        // FIX: Utiliser fallback multi-pays pour éviter les timeouts country=cd
+        const bdResult = await makeBrightDataStickyUrlWithFallback(
+          process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL!, username, preFlightProxyCheck, job.id
+        );
 
-        if (bdHealth.healthy) {
-          sessionProxy = bdStickyUrl;
-          preFlightExitIp = bdHealth.exitIp ?? undefined;
-          startBrightDataKeepAlive(bdStickyUrl, username);
-          console.log(`[usa] 🌐 BrightData résidentiel OK (${bdHealth.latencyMs}ms) — sticky + keep-alive`);
-          setKnownProxyLatency(bdHealth.latencyMs ?? 0); // FIX 9
+        if (bdResult) {
+          sessionProxy = bdResult.url;
+          preFlightExitIp = undefined;
+          startBrightDataKeepAlive(bdResult.url, username);
+          console.log(`[usa] 🌐 BrightData résidentiel OK (${bdResult.latencyMs}ms, country=${bdResult.country}) — sticky + keep-alive`);
+          setKnownProxyLatency(bdResult.latencyMs ?? 0); // FIX 9
         } else {
-          // BrightData DOWN → fallback iProyal si disponible
-          console.warn(`[usa] ⚠️ BrightData pre-flight FAILED: ${bdHealth.error} — tentative fallback iProyal...`);
+          // BrightData DOWN (tous pays) → fallback iProyal si disponible
+          console.warn(`[usa] ⚠️ BrightData pre-flight FAILED (tous pays) — tentative fallback iProyal...`);
 
           if (hasIproyal) {
             const ipStickyUrl = makeIproyalStickyUrl(process.env.IPROYAL_PROXY_URL!, 720, username);

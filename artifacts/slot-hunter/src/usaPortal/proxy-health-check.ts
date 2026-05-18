@@ -18,6 +18,13 @@ import { botLog } from "../convexClient.js";
 /** Seuil de latence max (ms) au-delà duquel le proxy est considéré instable. */
 const PROXY_LATENCY_THRESHOLD_MS = 5000;
 
+/**
+ * Seuil étendu pour BrightData residential (Congo/Afrique) — les IPs africaines
+ * sont souvent plus lentes (4000-6000ms) mais fonctionnelles. On accepte jusqu'à 8s
+ * pour éviter les faux négatifs qui cascadent vers "TOUS LES PROXIES DOWN".
+ */
+const BRIGHTDATA_LATENCY_THRESHOLD_MS = 8000;
+
 /** URL légère pour tester la connectivité proxy (retourne l'IP de sortie en texte brut). */
 const HEALTH_CHECK_URL = "https://api.ipify.org?format=text";
 
@@ -51,13 +58,18 @@ export async function preFlightProxyCheck(
     return { healthy: true, latencyMs: 0, exitIp: null };
   }
 
+  // Déterminer le seuil de latence adapté au provider :
+  // BrightData avec IPs africaines est structurellement plus lent (4-6s normal).
+  const isBrightData = proxyUrl.includes("brd.superproxy") || proxyUrl.includes("brightdata");
+  const thresholdMs = isBrightData ? BRIGHTDATA_LATENCY_THRESHOLD_MS : PROXY_LATENCY_THRESHOLD_MS;
+
   const t0 = Date.now();
 
   try {
     const impit = new Impit({ browser: "chrome", proxyUrl, ignoreTlsErrors: true });
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), PROXY_LATENCY_THRESHOLD_MS);
+    const timeout = setTimeout(() => controller.abort(), thresholdMs);
 
     const res = await impit.fetch(HEALTH_CHECK_URL, {
       signal: controller.signal,
@@ -79,13 +91,13 @@ export async function preFlightProxyCheck(
     }
 
     const exitIp = (await res.text()).trim();
-    const healthy = latencyMs <= PROXY_LATENCY_THRESHOLD_MS;
+    const healthy = latencyMs <= thresholdMs;
 
     const result: ProxyHealthResult = {
       healthy,
       latencyMs,
       exitIp,
-      error: healthy ? undefined : `Latency ${latencyMs}ms exceeds ${PROXY_LATENCY_THRESHOLD_MS}ms threshold`,
+      error: healthy ? undefined : `Latency ${latencyMs}ms exceeds ${thresholdMs}ms threshold`,
     };
 
     logHealthCheck(result, proxyUrl, jobId);
@@ -97,10 +109,10 @@ export async function preFlightProxyCheck(
 
     const result: ProxyHealthResult = {
       healthy: false,
-      latencyMs: isTimeout ? PROXY_LATENCY_THRESHOLD_MS : latencyMs,
+      latencyMs: isTimeout ? thresholdMs : latencyMs,
       exitIp: null,
       error: isTimeout
-        ? `Proxy timeout (>${PROXY_LATENCY_THRESHOLD_MS}ms)`
+        ? `Proxy timeout (>${thresholdMs}ms)`
         : `Proxy error: ${errorMsg.slice(0, 200)}`,
     };
 

@@ -1506,7 +1506,7 @@ async function main(): Promise<void> {
       if (watcherJob.hunterConfig.useResidentialProxy) {
         const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
         const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
-        const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
+        const { makeBrightDataStickyUrl, makeBrightDataStickyUrlWithFallback, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
 
         // Tenter iProyal en premier
         if (process.env.IPROYAL_PROXY_URL) {
@@ -1520,16 +1520,17 @@ async function main(): Promise<void> {
           }
         }
 
-        // Fallback BrightData si iProyal mort ou absent
+        // Fallback BrightData si iProyal mort ou absent (avec multi-pays)
         if (!watcherProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-          const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, watcherUsername);
-          const bdHealth = await preFlightProxyCheck(bdUrl, watcherJob.id);
-          if (bdHealth.healthy) {
-            watcherProxy = bdUrl;
-            startBrightDataKeepAlive(bdUrl, watcherUsername);
-            log("INFO", `[parallel] Watcher proxy: BrightData OK (${bdHealth.latencyMs}ms)`);
+          const bdResult = await makeBrightDataStickyUrlWithFallback(
+            process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, watcherUsername, preFlightProxyCheck, watcherJob.id
+          );
+          if (bdResult) {
+            watcherProxy = bdResult.url;
+            startBrightDataKeepAlive(bdResult.url, watcherUsername);
+            log("INFO", `[parallel] Watcher proxy: BrightData OK (${bdResult.latencyMs}ms, country=${bdResult.country})`);
           } else {
-            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (${bdHealth.error}) — failover 2captcha...`);
+            log("WARN", `[parallel] Watcher proxy: BrightData DEAD (tous pays) — failover 2captcha...`);
           }
         }
 
@@ -1579,7 +1580,7 @@ async function main(): Promise<void> {
         if (subHasToken && job.hunterConfig.useResidentialProxy) {
           const { makeIproyalStickyUrl } = await import("./usaPortal/usa-http.js");
           const { preFlightProxyCheck } = await import("./usaPortal/proxy-health-check.js");
-          const { makeBrightDataStickyUrl, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
+          const { makeBrightDataStickyUrl, makeBrightDataStickyUrlWithFallback, startBrightDataKeepAlive } = await import("./usaPortal/brightdata-proxy.js");
 
           // Tenter iProyal
           if (process.env.IPROYAL_PROXY_URL) {
@@ -1590,13 +1591,14 @@ async function main(): Promise<void> {
             }
           }
 
-          // Fallback BrightData
+          // Fallback BrightData (avec multi-pays)
           if (!subProxy && process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL) {
-            const bdUrl = makeBrightDataStickyUrl(process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username);
-            const bdHealth = await preFlightProxyCheck(bdUrl, job.id);
-            if (bdHealth.healthy) {
-              subProxy = bdUrl;
-              startBrightDataKeepAlive(bdUrl, username);
+            const bdResult = await makeBrightDataStickyUrlWithFallback(
+              process.env.BRIGHTDATA_RESIDENTIAL_PROXY_URL, username, preFlightProxyCheck, job.id
+            );
+            if (bdResult) {
+              subProxy = bdResult.url;
+              startBrightDataKeepAlive(bdResult.url, username);
             }
           }
 

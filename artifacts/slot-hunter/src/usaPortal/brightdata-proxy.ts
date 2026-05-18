@@ -15,12 +15,31 @@
  *   BRIGHTDATA_PROXY_URL — URL complète du proxy résidentiel (avec credentials)
  *     Format attendu: http://brd-customer-XXX-zone-YYY:PASSWORD@brd.superproxy.io:33335
  *     Ou format simplifié pour les tests: http://user:pass@host:port
+ *   BRIGHTDATA_COUNTRY — Code pays de sortie pour BrightData (défaut: "cd")
+ *     Options recommandées : "cd" (Congo/RDC), "za" (Afrique du Sud, pool large & fiable),
+ *     "ke" (Kenya), "ng" (Nigeria). Utiliser "za" si country=cd timeout fréquemment.
+ *   BRIGHTDATA_FALLBACK_COUNTRIES — Liste de pays de fallback séparés par virgule
+ *     Défaut: "za,ke,ng" — essayés dans l'ordre si le pays principal timeout.
  */
 
 import { tokenCache, isCachedTokenValid } from "./usa-http.js";
 
 // ─── Compteur de rotation par compte (force nouvelle IP après erreur) ────────
 const _brightdataRotationCount = new Map<string, number>();
+
+// ─── Country configuration ───────────────────────────────────────────────────
+
+/** Pays principal pour BrightData (env: BRIGHTDATA_COUNTRY, défaut: "cd") */
+const BRIGHTDATA_PRIMARY_COUNTRY = process.env.BRIGHTDATA_COUNTRY ?? "cd";
+
+/**
+ * Liste de pays de fallback à essayer si le pays principal timeout.
+ * "za" (Afrique du Sud) a un pool résidentiel massif et fiable.
+ * "ke" (Kenya) et "ng" (Nigeria) sont des alternatives africaines raisonnables.
+ */
+const BRIGHTDATA_FALLBACK_COUNTRIES: string[] = (
+  process.env.BRIGHTDATA_FALLBACK_COUNTRIES ?? "za,ke,ng"
+).split(",").map(c => c.trim()).filter(Boolean);
 
 // ─── Keep-alive state ─────────────────────────────────────────────────────────
 interface BrightDataSession {
@@ -46,13 +65,13 @@ const KEEP_ALIVE_JITTER_MS = 30_000; // ±30s de jitter
  *
  * @param baseUrl - URL du proxy BrightData (BRIGHTDATA_PROXY_URL)
  * @param username - Compte USA (pour la seed du session ID)
- * @param country - Code pays cible (défaut: "cd" pour Congo/RDC)
+ * @param country - Code pays cible (défaut: BRIGHTDATA_COUNTRY env ou "cd")
  * @returns URL proxy avec session sticky intégrée
  */
 export function makeBrightDataStickyUrl(
   baseUrl: string,
   username?: string,
-  country: string = "cd",
+  country: string = BRIGHTDATA_PRIMARY_COUNTRY,
 ): string {
   try {
     const parsed = new URL(baseUrl);
@@ -96,6 +115,58 @@ export function makeBrightDataStickyUrl(
     console.warn(`[brightdata] ⚠️ Impossible de parser l'URL proxy — fallback sur URL brute`);
     return baseUrl;
   }
+}
+
+/**
+ * Essaie le pays principal puis les pays de fallback pour BrightData.
+ *
+ * Le pool résidentiel du Congo (country=cd) est très petit et instable —
+ * latence 4000-5000ms, timeouts fréquents. Les pays de fallback (za, ke, ng)
+ * ont des pools beaucoup plus larges et fiables.
+ *
+ * Le portail USA (ais.usvisa-info.com) est hébergé aux US et ne géo-bloque PAS
+ * par pays source — il vérifie uniquement que l'IP est résidentielle (pas datacenter).
+ * Utiliser un pays africain voisin (Afrique du Sud, Kenya, Nigeria) est parfaitement
+ * acceptable et beaucoup plus fiable que de forcer le Congo.
+ *
+ * @param baseUrl - URL du proxy BrightData (BRIGHTDATA_RESIDENTIAL_PROXY_URL)
+ * @param username - Compte USA
+ * @param preFlightCheck - Fonction de health check (injectée pour éviter import circulaire)
+ * @param jobId - ID du job pour logging
+ * @returns { url, country } ou null si tous les pays échouent
+ */
+export async function makeBrightDataStickyUrlWithFallback(
+  baseUrl: string,
+  username: string,
+  preFlightCheck: (proxyUrl: string, jobId?: string) => Promise<{ healthy: boolean; latencyMs: number; exitIp: string | null; error?: string }>,
+  jobId?: string,
+): Promise<{ url: string; country: string; latencyMs: number } | null> {
+  // Construire la liste de pays à essayer: primaire + fallbacks
+  const countries = [BRIGHTDATA_PRIMARY_COUNTRY, ...BRIGHTDATA_FALLBACK_COUNTRIES.filter(c => c !== BRIGHTDATA_PRIMARY_COUNTRY)];
+
+  for (const country of countries) {
+    const url = makeBrightDataStickyUrl(baseUrl, username, country);
+    const health = await preFlightCheck(url, jobId);
+
+    if (health.healthy) {
+      if (country !== BRIGHTDATA_PRIMARY_COUNTRY) {
+        console.log(`[brightdata] 🌍 Fallback country=${country} OK (${health.latencyMs}ms) — pays principal "${BRIGHTDATA_PRIMARY_COUNTRY}" indisponible`);
+      }
+      return { url, country, latencyMs: health.latencyMs };
+    }
+
+    console.warn(`[brightdata] ⚠️ country=${country} FAILED (${health.error}) — essai suivant...`);
+  }
+
+  console.error(`[brightdata] ❌ TOUS les pays épuisés (${countries.join(", ")}) — BrightData inaccessible`);
+  return null;
+}
+
+/**
+ * Retourne la configuration country actuelle (pour les logs de diagnostic).
+ */
+export function getBrightDataCountryConfig(): { primary: string; fallbacks: string[] } {
+  return { primary: BRIGHTDATA_PRIMARY_COUNTRY, fallbacks: BRIGHTDATA_FALLBACK_COUNTRIES };
 }
 
 /**
