@@ -160,15 +160,16 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   // ─── Proxy ─────────────────────────────────────────────────────────────
   {
-    key: "proxy_provider_priority",
+    key: "proxy_priority",
     label: "Priorite Proxy",
-    description: "Ordre de preference des providers proxy pour les nouveaux comptes.",
+    description: "Ordre de preference des providers proxy (format: provider1,provider2,provider3).",
     type: "select",
     category: "proxy",
-    defaultValue: "iproyal",
+    defaultValue: "iproyal,brightdata,2captcha",
     options: [
-      { value: "iproyal", label: "iProyal > BrightData > 2captcha" },
-      { value: "brightdata", label: "BrightData > iProyal > 2captcha" },
+      { value: "iproyal,brightdata,2captcha", label: "iProyal > BrightData > 2captcha" },
+      { value: "brightdata,iproyal,2captcha", label: "BrightData > iProyal > 2captcha" },
+      { value: "2captcha,iproyal,brightdata", label: "2captcha > iProyal > BrightData" },
       { value: "2captcha", label: "2captcha uniquement" },
     ],
   },
