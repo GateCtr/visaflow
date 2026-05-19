@@ -136,13 +136,13 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
       }
 
       // ── 3. Login ──
+      // NOTE: getUsaSession() appelle recordLogin() en interne après un login réussi.
+      // Ne PAS appeler recordLogin() ici aussi — sinon double comptage du budget.
       session = await config.getSession(proxy.url);
       if (!session) {
         return "error";
       }
 
-      // Enregistrer le login
-      recordLogin(username, decision.phase);
       logSessionStart(jobId, {
         username,
         loginNumber: budget.maxPerDay - decision.remaining,

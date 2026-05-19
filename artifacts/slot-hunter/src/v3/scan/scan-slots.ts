@@ -215,6 +215,41 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
     console.log(`[scan-slots] ${ofc.postName}: premier mois dispo = ${firstMonth.date}`);
     ofcsScanned++;
 
+    // ── Discovery + Broadcast : le premier mois disponible est une info précieuse ──
+    // Même si c'est après la deadline de l'éclaireur, un confiné peut avoir une deadline
+    // différente et vouloir cette date. On reporte ET broadcast.
+    const firstMonthDate = firstMonth.date.split("T")[0]; // "2026-10-16" from ISO
+    if (dateDeadline && firstMonthDate > dateDeadline) {
+      // Hors fenêtre de l'éclaireur — reporter en discovery ET broadcaster aux confinés
+      discoveryEvents.push({
+        applicationId,
+        destination: "usa",
+        office: ofc.postName,
+        dateFound: firstMonthDate,
+        outcome: "ignored",
+        reason: "after_deadline",
+        context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date },
+        mode: rescheduleMode ? "reschedule" : "schedule",
+      });
+
+      // Broadcast aux confinés — ils ont peut-être une deadline plus large
+      if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
+        const broadcastEvent: SlotBroadcastEvent = {
+          sourceUsername: username,
+          office: ofc.postName,
+          postUserId: ofc.postUserId,
+          date: firstMonthDate,
+          time: "", // Pas encore de getSlotTime — juste la date
+          slotId: "", // Pas de slotId encore (getSlotTime non appelé)
+          startTime: "",
+          discoveredAt: Date.now(),
+          sourceBooked: false,
+        };
+        broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+        console.log(`[scan-slots] 📡 Date ${firstMonthDate} hors fenêtre éclaireur mais broadcastée aux confinés (deadline éclaireur: ${dateDeadline})`);
+      }
+    }
+
     // ── Scan multi-mois ──
     const slotReferer = buildSlotReferer(rescheduleMode, appDetails, session);
     const scanConfig: MultiMonthScanConfig = {
