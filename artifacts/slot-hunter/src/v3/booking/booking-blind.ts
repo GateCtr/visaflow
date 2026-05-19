@@ -114,29 +114,48 @@ export async function broadcastSlotDiscovery(
   hunterApiKey: string,
 ): Promise<boolean> {
   const url = `${convexSiteUrl}/hunter/slot-broadcast`;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "X-Hunter-Key": hunterApiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(event),
-      signal: AbortSignal.timeout(15_000),
-    });
+  const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+  const MAX_RETRIES = 3;
 
-    if (res.ok) {
-      console.log(`[blind-booking] ✅ Broadcast OK → Convex (${event.date} ${event.time} slotId=${String(event.slotId).slice(0,10)}…)`);
-      return true;
-    } else {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-Hunter-Key": hunterApiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(event),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (res.ok) {
+        console.log(`[blind-booking] ✅ Broadcast OK → Convex (${event.date} ${event.time} slotId=${String(event.slotId).slice(0,10)}…)`);
+        return true;
+      }
+
+      if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES - 1) {
+        const delay = 1000 * (attempt + 1);
+        console.warn(`[blind-booking] ⚠️ Broadcast HTTP ${res.status} — retry ${attempt + 1}/${MAX_RETRIES} dans ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
       const body = await res.text().catch(() => "(body illisible)");
       console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status}: ${body.slice(0, 200)}`);
       return false;
+    } catch (err) {
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = 1000 * (attempt + 1);
+        console.warn(`[blind-booking] ⚠️ Broadcast réseau error — retry ${attempt + 1}/${MAX_RETRIES} dans ${delay}ms: ${err}`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      console.error(`[blind-booking] ❌ Broadcast ÉCHOUÉ après ${MAX_RETRIES} tentatives: ${err}`);
+      return false;
     }
-  } catch (err) {
-    console.error(`[blind-booking] ❌ Broadcast ÉCHOUÉ (réseau/timeout): ${err}`);
-    return false;
   }
+  return false;
 }
 
 // ─── Réception (côté confiné) ───────────────────────────────────────────────
