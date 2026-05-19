@@ -114,8 +114,19 @@ async function checkResponse(res: Response, endpoint: string, ofcName: string): 
   return true;
 }
 
-/** Parse adaptatif de getSlotDates (format objet ou string ISO). */
-function parseSlotDatesResponse(raw: unknown): UsaSlotDate[] {
+/** Parse adaptatif de getSlotDates (format objet ou string ISO).
+ * FIX #3: Also validates response structure to detect soft-ban honeypots. */
+function parseSlotDatesResponse(raw: unknown, ofcName?: string): UsaSlotDate[] {
+  // FIX #3: Detect honeypot responses (non-array payloads that shouldn't happen)
+  if (raw === null || raw === undefined) {
+    console.warn(`[scan-months] ⚠️ SOFT-BAN? getSlotDates retourné null/undefined pour ${ofcName ?? "?"}`);
+    return [];
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    // Object instead of array = probable Akamai challenge page parsed as JSON
+    console.warn(`[scan-months] ⚠️ SOFT-BAN? getSlotDates retourné un objet au lieu d'un array pour ${ofcName ?? "?"}: ${JSON.stringify(raw).slice(0, 100)}`);
+    return [];
+  }
   if (!Array.isArray(raw) || raw.length === 0) return [];
 
   if (typeof raw[0] === "string") {
@@ -165,7 +176,7 @@ async function scanSingleMonth(
     if (!await checkResponse(res, "getSlotDates", ofcName)) {
       return { slotFound: null, datesDiscovered: [], datesNoTimeSlots: [] };
     }
-    slotDates = parseSlotDatesResponse(await res.json());
+    slotDates = parseSlotDatesResponse(await res.json(), ofcName);
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
         err instanceof TokenExpiredError || err instanceof AccountRestrictedError) {
