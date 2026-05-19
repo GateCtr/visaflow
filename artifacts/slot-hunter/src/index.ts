@@ -1470,112 +1470,28 @@ async function main(): Promise<void> {
         const rolesStr = sortedJobs.map(j => `${j.applicantName}(${resolveAccountRole(j.hunterConfig as any)})`).join(", ");
         log("INFO", `[v3-loop] ${sortedJobs.length} job(s) USA actifs: ${rolesStr}`);
 
+        // ═══════════════════════════════════════════════════════════════════
+        // FIX: DEUX PASSES — éclaireurs d'abord, confinés ensuite.
+        //
+        // Problème résolu :
+        //   Avant ce fix, la boucle unique triée par urgence traitait les confinés
+        //   AVANT l'éclaireur (si plus urgents). Les confinés faisaient pollBlindBookingEvents
+        //   → 0 events (le broadcast n'avait pas eu lieu car l'éclaireur n'avait pas scanné).
+        //   Au tick suivant (5-10 min plus tard), les events Convex avaient expiré (TTL < 5 min).
+        //
+        // Solution :
+        //   PASSE 1 : Éclaireurs scannent → broadcastSlotDiscovery() émet les events
+        //   PASSE 2 : Confinés poll → reçoivent les events fraîchement broadcastés
+        // ═══════════════════════════════════════════════════════════════════
+
+        const eclaireurJobs = sortedJobs.filter(j => resolveAccountRole(j.hunterConfig as any) !== "confine");
+        const confineJobs = sortedJobs.filter(j => resolveAccountRole(j.hunterConfig as any) === "confine");
+
+        // ── PASSE 1 : ÉCLAIREURS (scan + broadcast) ──────────────────────
         let scannedOne = false;
-        for (const job of sortedJobs) {
+        for (const job of eclaireurJobs) {
           const username = job.hunterConfig.embassyUsername;
           const role = resolveAccountRole(job.hunterConfig as any);
-
-          // ── CONFINÉ : polling blind booking au lieu de scan ──
-          if (role === "confine") {
-            try {
-              const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
-              if (events.length > 0) {
-                log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
-                for (const event of events) {
-                  // Le confiné a besoin d'un token valide pour tenter le booking
-                  let cachedConf = tokenCache.get(username.toLowerCase());
-                  let hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
-
-                  // ── RÉVEIL D'URGENCE : slot détecté mais confiné endormi ──
-                  // Override TOTAL : pas de cooldown, pas de minInterLoginMs.
-                  // Un slot broadcast est un événement RARE et ÉPHÉMÈRE (< 30s de vie).
-                  // Perdre le slot pour respecter un cooldown de 10 min = perdre le client.
-                  // Seul le budget quotidien (9 max) reste comme garde-fou.
-                  if (!hasToken) {
-                    const budgetRemaining = getRemainingLogins(username);
-                    if (budgetRemaining <= 0) {
-                      log("WARN", `[v3-loop] ${job.applicantName} (confiné) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
-                      break;
-                    }
-                    log("INFO", `[v3-loop] ⚡ ${job.applicantName} (confiné) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
-                    try {
-                      setUsaSessionProxy(undefined); // Direct ou proxy par défaut
-                      const freshSession = await getUsaSession(
-                        job.hunterConfig.embassyUsername,
-                        job.hunterConfig.embassyPassword,
-                        job.hunterConfig.twoCaptchaApiKey,
-                      );
-                      setUsaSessionProxy(undefined);
-                      if (freshSession) {
-                        // Enregistrer le login dans le budget (phase emergency)
-                        const { recordLogin } = await import("./v3/core/session-pool.js");
-                        recordLogin(username, "emergency");
-                        // Rafraîchir le cache
-                        cachedConf = tokenCache.get(username.toLowerCase());
-                        hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
-                        log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — réveil réussi en urgence, token valide`);
-                      } else {
-                        log("WARN", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué (login null) — slot perdu`);
-                        break;
-                      }
-                    } catch (loginErr) {
-                      log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué: ${loginErr} — slot perdu`);
-                      break;
-                    }
-                  }
-
-                  if (!hasToken || !cachedConf) {
-                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — token toujours invalide après réveil — skip`);
-                    break;
-                  }
-
-                  const blindResult = await attemptBlindBooking(event, {
-                    accessToken: cachedConf!.accessToken,
-                    applicationId: job.id,
-                    applicantId: cachedConf!.userID ?? "0",
-                    missionId: 323,
-                    mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
-                    csrfToken: cachedConf!.csrfToken ?? "",
-                    existingLocationType: job.hunterConfig.rescheduleMode ? "POST" : undefined,
-                  });
-                  if (blindResult.success) {
-                    log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
-
-                    // Post-booking complet (identique au direct)
-                    try {
-                      const session = { accessToken: cachedConf!.accessToken, applicationId: job.id, missionId: 323, applicantId: cachedConf!.userID } as any;
-                      const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, job.id, blindResult.appointmentId);
-                      let pdfStorageId: string | undefined;
-                      if (pdf) {
-                        pdfStorageId = (await uploadFile(pdf.toString("base64"), "application/pdf")) ?? undefined;
-                      }
-                      await reportSlotFound({
-                        applicationId: job.id,
-                        date: event.date,
-                        time: event.time,
-                        location: `${event.office} — Ambassade USA (blind booking via ${event.sourceUsername.slice(0, 8)}…)`,
-                        confirmationCode: blindResult.appointmentId?.toString(),
-                        screenshotStorageId: pdfStorageId,
-                      });
-                    } catch (postErr) {
-                      log("WARN", `[v3-loop] ⚠️ Post-booking confiné échoué (non-bloquant): ${postErr}`);
-                    }
-                    completedJobs.add(job.id);
-                    pausedJobs.add(job.id);
-                    await sendHeartbeat({ applicationId: job.id, result: "slot_found" });
-                    break;
-                  }
-                  // Slot pris (409) ou autre échec → tenter le prochain slotId broadcasté
-                  if (blindResult.statusCode === 409) {
-                    log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
-                  }
-                }
-              }
-            } catch (pollErr) {
-              log("WARN", `[v3-loop] Erreur polling confiné ${username.slice(0,8)}…: ${pollErr}`);
-            }
-            continue; // Pas de scan pour les confinés
-          }
 
           // Demander à l'orchestrateur si on doit scanner maintenant
           const cachedEntry = tokenCache.get(username.toLowerCase());
@@ -1676,12 +1592,124 @@ async function main(): Promise<void> {
           }
 
           scannedOne = true;
-          break; // Un seul job par tick (radio silence entre les dossiers)
+          break; // Un seul éclaireur par tick (radio silence entre les dossiers)
+        }
+
+        // ── PASSE 2 : CONFINÉS (poll blind booking events) ───────────────
+        // Exécutée APRÈS la passe éclaireur, donc les events broadcastés sont disponibles.
+        if (scannedOne && confineJobs.length > 0) {
+          // Petit délai pour laisser le broadcast Convex se propager (fire-and-forget)
+          await new Promise(r => setTimeout(r, 2_000));
+          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${confineJobs.length} confiné(s) après scan éclaireur`);
+        }
+
+        for (const job of confineJobs) {
+          const username = job.hunterConfig.embassyUsername;
+          try {
+            const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
+            if (events.length > 0) {
+              log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
+              for (const event of events) {
+                // Le confiné a besoin d'un token valide pour tenter le booking
+                let cachedConf = tokenCache.get(username.toLowerCase());
+                let hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
+
+                // ── RÉVEIL D'URGENCE : slot détecté mais confiné endormi ──
+                // Override TOTAL : pas de cooldown, pas de minInterLoginMs.
+                // Un slot broadcast est un événement RARE et ÉPHÉMÈRE (< 30s de vie).
+                // Perdre le slot pour respecter un cooldown de 10 min = perdre le client.
+                // Seul le budget quotidien (9 max) reste comme garde-fou.
+                if (!hasToken) {
+                  const budgetRemaining = getRemainingLogins(username);
+                  if (budgetRemaining <= 0) {
+                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
+                    break;
+                  }
+                  log("INFO", `[v3-loop] ⚡ ${job.applicantName} (confiné) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
+                  try {
+                    setUsaSessionProxy(undefined); // Direct ou proxy par défaut
+                    const freshSession = await getUsaSession(
+                      job.hunterConfig.embassyUsername,
+                      job.hunterConfig.embassyPassword,
+                      job.hunterConfig.twoCaptchaApiKey,
+                    );
+                    setUsaSessionProxy(undefined);
+                    if (freshSession) {
+                      // Enregistrer le login dans le budget (phase emergency)
+                      const { recordLogin } = await import("./v3/core/session-pool.js");
+                      recordLogin(username, "emergency");
+                      // Rafraîchir le cache
+                      cachedConf = tokenCache.get(username.toLowerCase());
+                      hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
+                      log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — réveil réussi en urgence, token valide`);
+                    } else {
+                      log("WARN", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué (login null) — slot perdu`);
+                      break;
+                    }
+                  } catch (loginErr) {
+                    log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué: ${loginErr} — slot perdu`);
+                    break;
+                  }
+                }
+
+                if (!hasToken || !cachedConf) {
+                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — token toujours invalide après réveil — skip`);
+                  break;
+                }
+
+                const blindResult = await attemptBlindBooking(event, {
+                  accessToken: cachedConf!.accessToken,
+                  applicationId: job.id,
+                  applicantId: cachedConf!.userID ?? "0",
+                  missionId: 323,
+                  mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
+                  csrfToken: cachedConf!.csrfToken ?? "",
+                  existingLocationType: job.hunterConfig.rescheduleMode ? "POST" : undefined,
+                });
+                if (blindResult.success) {
+                  log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
+
+                  // Post-booking complet (identique au direct)
+                  try {
+                    const session = { accessToken: cachedConf!.accessToken, applicationId: job.id, missionId: 323, applicantId: cachedConf!.userID } as any;
+                    const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, job.id, blindResult.appointmentId);
+                    let pdfStorageId: string | undefined;
+                    if (pdf) {
+                      pdfStorageId = (await uploadFile(pdf.toString("base64"), "application/pdf")) ?? undefined;
+                    }
+                    await reportSlotFound({
+                      applicationId: job.id,
+                      date: event.date,
+                      time: event.time,
+                      location: `${event.office} — Ambassade USA (blind booking via ${event.sourceUsername.slice(0, 8)}…)`,
+                      confirmationCode: blindResult.appointmentId?.toString(),
+                      screenshotStorageId: pdfStorageId,
+                    });
+                  } catch (postErr) {
+                    log("WARN", `[v3-loop] ⚠️ Post-booking confiné échoué (non-bloquant): ${postErr}`);
+                  }
+                  completedJobs.add(job.id);
+                  pausedJobs.add(job.id);
+                  await sendHeartbeat({ applicationId: job.id, result: "slot_found" });
+                  break;
+                }
+                // Slot pris (409) ou autre échec → tenter le prochain slotId broadcasté
+                if (blindResult.statusCode === 409) {
+                  log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
+                }
+              }
+            }
+          } catch (pollErr) {
+            log("WARN", `[v3-loop] Erreur polling confiné ${username.slice(0,8)}…: ${pollErr}`);
+          }
         }
 
         // Si aucun job n'était éligible ce tick
-        if (!scannedOne) {
+        if (!scannedOne && confineJobs.length === 0) {
           await new Promise(r => setTimeout(r, 30_000));
+        } else if (!scannedOne) {
+          // Éclaireur pas éligible mais confinés ont été traités — attente courte
+          await new Promise(r => setTimeout(r, 15_000));
         }
       }
     };
