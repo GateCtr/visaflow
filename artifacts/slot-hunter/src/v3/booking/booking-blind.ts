@@ -99,41 +99,44 @@ export interface BlindBookingResult {
 /**
  * Broadcast un slot détecté vers Convex pour les confinés.
  *
- * CHANGEMENT 19/05/2026 : rendu async + log du résultat HTTP.
- * Avant : fire-and-forget (fetch sans await) → échecs SILENCIEUX.
- * Après : await + log du status → diagnostic possible.
+ * FIX 19/05/2026 : rendu AWAIT (sync) au lieu de fire-and-forget.
+ * Avant : fire-and-forget (fetch sans await) → broadcast non garanti quand les
+ *         confinés polled — race condition où le fetch n'avait pas encore complété.
+ * Après : await explicite — le scan-slots ATTEND la confirmation Convex avant de
+ *         retourner. Les confinés sont GARANTIS de trouver l'event au prochain poll.
  *
- * L'éclaireur appelle cette fonction après avoir détecté un slot.
- * L'appelant (scan-slots.ts) n'attend PAS le résultat car il boucle
- * sur les timeSlots — mais le broadcast est maintenant observable dans les logs.
+ * Impact perf : +50-200ms par broadcast (1 requête HTTP vers Convex).
+ * Acceptable car le scan prend déjà 3-8s au total.
  */
-export function broadcastSlotDiscovery(
+export async function broadcastSlotDiscovery(
   event: SlotBroadcastEvent,
   convexSiteUrl: string,
   hunterApiKey: string,
-): void {
+): Promise<boolean> {
   const url = `${convexSiteUrl}/hunter/slot-broadcast`;
-  fetch(url, {
-    method: "POST",
-    headers: {
-      "X-Hunter-Key": hunterApiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(event),
-    signal: AbortSignal.timeout(15_000), // timeout 15s pour ne pas bloquer indéfiniment
-  }).then((res) => {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": hunterApiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(event),
+      signal: AbortSignal.timeout(15_000),
+    });
+
     if (res.ok) {
       console.log(`[blind-booking] ✅ Broadcast OK → Convex (${event.date} ${event.time} slotId=${String(event.slotId).slice(0,10)}…)`);
+      return true;
     } else {
-      res.text().then(body => {
-        console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status}: ${body.slice(0, 200)}`);
-      }).catch(() => {
-        console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status} (body illisible)`);
-      });
+      const body = await res.text().catch(() => "(body illisible)");
+      console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status}: ${body.slice(0, 200)}`);
+      return false;
     }
-  }).catch((err) => {
+  } catch (err) {
     console.error(`[blind-booking] ❌ Broadcast ÉCHOUÉ (réseau/timeout): ${err}`);
-  });
+    return false;
+  }
 }
 
 // ─── Réception (côté confiné) ───────────────────────────────────────────────

@@ -320,7 +320,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
                       discoveredAt: Date.now(),
                       sourceBooked: false,
                     };
-                    broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+                    await broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
                   }
                 }
                 console.log(`[scan-slots] 📡 ${timeSlots.length} broadcast(s) envoyé(s) aux confinés pour ${targetDate}`);
@@ -411,7 +411,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
           discoveredAt: Date.now(),
           sourceBooked: false,
         };
-        broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+        await broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
         console.log(`[scan-slots] 📡 Slot broadcasté aux confinés`);
       }
 
