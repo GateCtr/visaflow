@@ -298,7 +298,97 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
         const microWaitFactor = 0.3 + Math.random() * 0.2; // 30-50% de l'intervalle original
         const microWaitMs = Math.max(15_000, Math.round(waitMs * microWaitFactor));
         log("INFO", `[v3-loop] ⏳ Micro-wait ${Math.round(microWaitMs / 1000)}s (${Math.round(microWaitFactor * 100)}% de ${Math.round(waitMs / 1000)}s) — ${blindBookingJobs.length} confiné(s)/hybride(s) en attente`);
-        await new Promise(r => setTimeout(r, microWaitMs));
+
+        // ── PRIORITY 2 (19/05/2026): WARM STANDBY — Proactive preflight during micro-wait ──
+        // PROBLEM: First blind booking event for a confiné takes 5-10s (full preflight).
+        //          Slots disappear in <3s → confinés NEVER catch the first event of a session.
+        // FIX: During the micro-wait (dead time anyway), run a lightweight
+        //      checkUsaAppointmentRequestStatus + runPreflight for confinés that have a
+        //      valid token but NO cache entry. This pre-fills the cache BEFORE any event.
+        //      Next event → cache HIT → blind booking in <200ms.
+        //
+        // CONSTRAINTS:
+        //   - Only warm up confinés with valid tokens (don't waste logins)
+        //   - Only if no cache exists yet (don't re-preflight needlessly)
+        //   - Run in background (don't block the micro-wait timer)
+        //   - Max 1 confiné per tick (avoid burst of preflight requests)
+        //   - Non-blocking: if preflight fails, just log and move on
+        const warmStandbyPromise = (async () => {
+          // Find the first confiné/hybride with a valid token but no preflight cache
+          for (const confJob of blindBookingJobs) {
+            const confUsername = confJob.hunterConfig.embassyUsername;
+            if (!confUsername) continue;
+
+            // Skip if already cached
+            const existing = getConfinedPreflight(confUsername);
+            if (existing) continue;
+
+            // Check token validity
+            const confCached = tokenCache.get(confUsername.toLowerCase());
+            const confHasToken = !!(confCached && Date.now() < confCached.expiresAt);
+            if (!confHasToken) continue;
+
+            // Found a candidate → run lightweight preflight in background
+            const confRole = resolveAccountRole(confJob.hunterConfig as any);
+            log("INFO", `[v3-loop] 🔥 Warm standby: pré-chauffage ${confJob.applicantName} (${confRole}) pendant micro-wait`);
+
+            try {
+              const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("../usaPortal/appointments-api.js");
+              const { runPreflight: runPreflightWarm } = await import("../v3/scan/scan-preflight.js");
+
+              const warmSession = {
+                accessToken: confCached!.accessToken,
+                refreshToken: confCached!.refreshToken,
+                csrfToken: confCached!.csrfToken ?? "",
+                userID: confCached!.userID,
+                fullName: confCached!.fullName,
+                applicationId: null as string | null,
+                pendingAppoStatus: null,
+                missionId: 323,
+                allowedOfcs: confCached!.allowedOfcs ?? [],
+              } as any;
+
+              const reqStatus = await checkUsaAppointmentRequestStatus(warmSession, undefined);
+              let warmApplicationId = reqStatus.applicationId ?? "";
+              let warmMode: "schedule" | "reschedule" = "schedule";
+
+              if (reqStatus.status === "cancellable") {
+                warmMode = "reschedule";
+                await fetchCancellableSessionIds(warmSession, { id: confJob.id, hunterConfig: confJob.hunterConfig } as any);
+                warmApplicationId = warmSession.applicationId ?? warmApplicationId;
+              }
+
+              if (!warmApplicationId) {
+                log("WARN", `[v3-loop] 🔥 Warm standby: ${confJob.applicantName} — applicationId introuvable, skip`);
+                break; // Don't try other confinés this tick
+              }
+
+              const preflight = await runPreflightWarm(warmSession, warmApplicationId, 323);
+
+              // Store in cache (same format as Fix #2)
+              setConfinedPreflight(confUsername, {
+                applicantId: preflight.appDetails.applicantId,
+                applicationId: warmApplicationId,
+                appointmentId: preflight.appDetails.appointmentId,
+                applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
+                mode: warmMode,
+              });
+
+              log("INFO", `[v3-loop] 🔥 ✅ Warm standby OK: ${confJob.applicantName} — cache rempli (mode=${warmMode}, appId=${warmApplicationId.slice(-8)}…)`);
+            } catch (warmErr) {
+              // Non-blocking — just log and move on
+              log("WARN", `[v3-loop] 🔥 Warm standby échoué pour ${confJob.applicantName}: ${warmErr}`);
+            }
+            break; // Max 1 confiné par tick (avoid burst)
+          }
+        })();
+
+        // Run warm standby IN PARALLEL with the micro-wait timer
+        // The micro-wait is the constraint — if warm standby takes longer, it's abandoned
+        await Promise.all([
+          new Promise(r => setTimeout(r, microWaitMs)),
+          warmStandbyPromise.catch(() => {}), // Never let warm standby failure block the loop
+        ]);
       } else if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
         const { startKeepAlive: startInterScanKA } = await import("../v3/anti-detection/keep-alive.js");
         // FIX #4: Pass resolved applicationId to keep-alive (not null from cachedEntry).
