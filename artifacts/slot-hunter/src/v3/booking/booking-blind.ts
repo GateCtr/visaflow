@@ -98,11 +98,14 @@ export interface BlindBookingResult {
 
 /**
  * Broadcast un slot détecté vers Convex pour les confinés.
- * Fire-and-forget — ne bloque pas le booking de l'éclaireur.
  *
- * L'éclaireur appelle cette fonction IMMÉDIATEMENT après avoir détecté un slot
- * (avant même de tenter son propre booking), pour maximiser le temps de réaction
- * des confinés en cas de concurrence extrême.
+ * CHANGEMENT 19/05/2026 : rendu async + log du résultat HTTP.
+ * Avant : fire-and-forget (fetch sans await) → échecs SILENCIEUX.
+ * Après : await + log du status → diagnostic possible.
+ *
+ * L'éclaireur appelle cette fonction après avoir détecté un slot.
+ * L'appelant (scan-slots.ts) n'attend PAS le résultat car il boucle
+ * sur les timeSlots — mais le broadcast est maintenant observable dans les logs.
  */
 export function broadcastSlotDiscovery(
   event: SlotBroadcastEvent,
@@ -117,8 +120,19 @@ export function broadcastSlotDiscovery(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(event),
+    signal: AbortSignal.timeout(15_000), // timeout 15s pour ne pas bloquer indéfiniment
+  }).then((res) => {
+    if (res.ok) {
+      console.log(`[blind-booking] ✅ Broadcast OK → Convex (${event.date} ${event.time} slotId=${String(event.slotId).slice(0,10)}…)`);
+    } else {
+      res.text().then(body => {
+        console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status}: ${body.slice(0, 200)}`);
+      }).catch(() => {
+        console.error(`[blind-booking] ❌ Broadcast REJETÉ par Convex — HTTP ${res.status} (body illisible)`);
+      });
+    }
   }).catch((err) => {
-    console.warn(`[blind-booking] Broadcast échoué (non-bloquant): ${err}`);
+    console.error(`[blind-booking] ❌ Broadcast ÉCHOUÉ (réseau/timeout): ${err}`);
   });
 }
 
