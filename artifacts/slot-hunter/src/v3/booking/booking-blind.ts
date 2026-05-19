@@ -273,9 +273,15 @@ export async function attemptBlindBooking(
 
     // 409 = slot déjà pris (l'éclaireur ou un autre confiné l'a eu)
     if (res.status === 409) {
-      const respBody = await res.json().catch(() => ({})) as { responseMsg?: string };
-      const msg = respBody.responseMsg ?? "Créneau déjà pris (409)";
-      console.log(`[blind-booking] ⚠️ Slot déjà pris (409) — ${msg} (réaction: ${reactionTimeMs}ms)`);
+      const rawBody = await res.text().catch(() => "");
+      let msg = "Créneau déjà pris (409)";
+      try {
+        const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+        msg = (parsed.responseMsg ?? parsed.responseMessage ?? parsed.message ?? rawBody.slice(0, 200)) as string;
+      } catch {
+        msg = rawBody.slice(0, 200) || "Créneau déjà pris (409)";
+      }
+      console.log(`[blind-booking] ⚠️ 409 — ${msg} (réaction: ${reactionTimeMs}ms)`);
       return { success: false, error: msg, statusCode: 409, reactionTimeMs };
     }
 
