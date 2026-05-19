@@ -118,9 +118,13 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setMaxMonths(String(hc.maxMonthsToScan ?? 3));
       setNightMode(hc.nightModeEnabled ?? true);
       setPreferredProxy(hc.preferredProxy ?? "");
-      setVisaClassInput(broadcastVisaClass ?? "");
     }
   }, [hc]);
+
+  // Sync visa class from prop (updated by Convex reactivity after assignVisaClass mutation)
+  useEffect(() => {
+    setVisaClassInput(broadcastVisaClass ?? "");
+  }, [broadcastVisaClass]);
 
   const handleSave = async () => {
     if (!username.trim() || !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
