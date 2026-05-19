@@ -1,7 +1,7 @@
 // ─── V3 Loop — Boucle principale du mode V3 Chasseur ────────────────────────
 // Extracted from index.ts
 
-import { getActiveJobs, sendHeartbeat, getBotConfigValue, reportSlotFound, uploadFile, type HunterJob } from "../convexClient.js";
+import { getActiveJobs, sendHeartbeat, getBotConfigValue, reportSlotFound, uploadFile, botLog, type HunterJob } from "../convexClient.js";
 import { log, URGENCY_ORDER } from "../scheduler-utils.js";
 import { pausedJobs, completedJobs } from "../scheduler-state.js";
 
@@ -37,6 +37,10 @@ function getConfinedPreflight(username: string): ConfinedPreflightEntry | null {
 function setConfinedPreflight(username: string, entry: Omit<ConfinedPreflightEntry, "cachedAt">): void {
   confinedPreflightCache.set(username.toLowerCase(), { ...entry, cachedAt: Date.now() });
 }
+
+// ── Throttle pour les logs pack_status (1x / 10 min par dossier) ─────────────
+const packStatusTimestamps = new Map<string, number>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -110,6 +114,32 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
 
     const rolesStr = sortedJobs.map(j => `${j.applicantName}(${resolveAccountRole(j.hunterConfig as any)})`).join(", ");
     log("INFO", `[v3-loop] ${sortedJobs.length} job(s) USA actifs: ${rolesStr}`);
+
+    // ── PACK STATUS LOG — informer chaque dossier de son rôle dans la meute ──
+    // Throttle: 1x toutes les 10 min par dossier (évite la pollution de la timeline admin)
+    const PACK_STATUS_INTERVAL_MS = 10 * 60_000;
+    for (const job of sortedJobs) {
+      const jobUsername = job.hunterConfig.embassyUsername;
+      if (!jobUsername) continue;
+      const lastPackLog = (packStatusTimestamps.get(jobUsername.toLowerCase()) ?? 0);
+      if (Date.now() - lastPackLog < PACK_STATUS_INTERVAL_MS) continue;
+      packStatusTimestamps.set(jobUsername.toLowerCase(), Date.now());
+
+      const jobRole = resolveAccountRole(job.hunterConfig as any);
+      const packMembers = sortedJobs.filter(j => j.broadcastVisaClass === job.broadcastVisaClass).length;
+      botLog({
+        applicationId: job.id,
+        step: "pack_status",
+        status: "ok",
+        data: {
+          role: jobRole,
+          visaClass: job.broadcastVisaClass ?? "B1/B2",
+          packSize: packMembers,
+          members: sortedJobs.filter(j => j.broadcastVisaClass === job.broadcastVisaClass).map(j => j.applicantName),
+          phase: "scanning",
+        },
+      });
+    }
 
     // ── RESET BUDGET ADMIN ──────────────────────────────────────────────
     for (const job of sortedJobs) {
@@ -256,12 +286,19 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
         }
       }
 
+      // ── HEARTBEAT pour l'éclaireur — alimente lastCheckAt + checkCount dans le panneau admin ──
+      // Sans ça, le panneau affiche "Dernier: 17 mai" et "Tentatives: 85" figés.
+      if (outcome === "no_slot" || outcome === "token_expired" || outcome === "error" || outcome === "proxy_down") {
+        sendHeartbeat({ applicationId: job.id, result: "not_found" }).catch(() => {});
+      }
+
       if (outcome === "slot_captured") {
         completedJobs.add(job.id);
         pausedJobs.add(job.id);
         await sendHeartbeat({ applicationId: job.id, result: "slot_found" as any });
       } else if (outcome === "restricted") {
         pausedJobs.add(job.id);
+        sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Compte restreint par le portail" }).catch(() => {});
       } else if (outcome === "payment_required") {
         pausedJobs.add(job.id);
         await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
@@ -424,6 +461,11 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
       try {
         const events = await pollBlindBookingEvents(username, convexUrl, hunterKey, job.broadcastVisaClass ?? "B1/B2");
         log("INFO", `[v3-loop] 🔍 ${job.applicantName} (${jobRole}) poll → ${events.length} event(s) pending`);
+
+        // ── HEARTBEAT confiné — prouve à l'admin que ce dossier est en veille active ──
+        // Sans ça, lastCheckAt reste figé et l'admin croit que le bot est mort pour ce dossier.
+        sendHeartbeat({ applicationId: job.id, result: "not_found" }).catch(() => {});
+
         if (events.length > 0) {
           log("INFO", `[v3-loop] 📡 ${job.applicantName} (${jobRole}) — ${events.length} blind booking(s) reçu(s)`);
 
