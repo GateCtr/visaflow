@@ -9,7 +9,7 @@ import { Id } from "@convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, Play, Pause, Trash2, Eye, Loader2, Link } from "lucide-react";
+import { Bot, Play, Pause, Trash2, Eye, Loader2, Link, RotateCcw } from "lucide-react";
 import { formatDate } from "@/lib/format";
 
 interface HunterConfigData {
@@ -50,6 +50,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
   const { toast } = useToast();
   const setHunterConfig = useMutation(api.hunter.setHunterConfig);
   const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
+  const setBotConfig = useMutation(api.hunter.setBotConfig);
   const checkCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
 
   // ── State ──
@@ -80,6 +81,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
   const [showPw, setShowPw] = useState(false);
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaChecking, setCaptchaChecking] = useState(false);
+  const [resettingBudget, setResettingBudget] = useState(false);
 
   // Hydrate from config
   useEffect(() => {
@@ -132,6 +134,16 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
     try { await resetHunterConfig({ applicationId: appId }); toast({ title: "Config effacée" }); }
     catch (err: unknown) { toast({ variant: "destructive", title: err instanceof Error ? err.message : "Erreur" }); }
     finally { setSaving(false); }
+  };
+
+  const handleResetBudget = async () => {
+    if (!username.trim()) { toast({ variant: "destructive", title: "Identifiant requis pour reset budget" }); return; }
+    setResettingBudget(true);
+    try {
+      await setBotConfig({ key: `reset_budget:${username.trim()}`, value: "7" });
+      toast({ title: "Reset budget demandé", description: `Le bot remettra le budget à 7 pour ${username.trim()} au prochain tick.` });
+    } catch (err: unknown) { toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Échec" }); }
+    finally { setResettingBudget(false); }
   };
 
   const lastResultLabel: Record<string, string> = { not_found: "Aucun créneau", captcha: "CAPTCHA", error: "Erreur", slot_captured: "Capturé!", payment_required: "Paiement requis" };
@@ -252,6 +264,11 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
           {hc && (
             <Button variant="outline" onClick={handleReset} disabled={saving} className="h-9 gap-2 text-sm border-red-200 text-red-600 hover:bg-red-50">
               <Trash2 className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
+          {destination === "usa" && hc && (
+            <Button variant="outline" onClick={handleResetBudget} disabled={resettingBudget || !username.trim()} className="h-9 gap-2 text-sm border-amber-200 text-amber-700 hover:bg-amber-50">
+              {resettingBudget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />} Reset budget login
             </Button>
           )}
         </div>

@@ -1472,6 +1472,32 @@ async function main(): Promise<void> {
         const rolesStr = sortedJobs.map(j => `${j.applicantName}(${resolveAccountRole(j.hunterConfig as any)})`).join(", ");
         log("INFO", `[v3-loop] ${sortedJobs.length} job(s) USA actifs: ${rolesStr}`);
 
+        // ── RESET BUDGET ADMIN ──────────────────────────────────────────────
+        // Vérifie si l'admin a demandé un reset de budget pour un des comptes actifs.
+        // Clé bot-config : "reset_budget:<username>" = "7" (valeur = nouveau budget max)
+        // Après reset : écrase la clé avec "done" pour signaler la consommation.
+        for (const job of sortedJobs) {
+          const uname = job.hunterConfig.embassyUsername;
+          if (!uname) continue;
+          try {
+            const resetVal = await getBotConfigValue(`reset_budget:${uname}`).catch(() => null);
+            if (resetVal && resetVal !== "done") {
+              const newMax = parseInt(resetVal, 10) || 7;
+              const { resetBudget } = await import("./v3/core/session-pool.js");
+              resetBudget(uname, newMax);
+              log("INFO", `[v3-loop] 🔄 Budget reset à ${newMax} pour ${uname} (demande admin)`);
+              // Marquer comme consommé via POST bot-config
+              try {
+                await fetch(`${convexUrl}/hunter/bot-config`, {
+                  method: "POST",
+                  headers: { "X-Hunter-Key": hunterKey!, "Content-Type": "application/json" },
+                  body: JSON.stringify({ key: `reset_budget:${uname}`, value: "done" }),
+                });
+              } catch { /* non-bloquant */ }
+            }
+          } catch { /* non-bloquant */ }
+        }
+
         // ═══════════════════════════════════════════════════════════════════
         // FIX: DEUX PASSES — éclaireurs d'abord, confinés ensuite.
         //

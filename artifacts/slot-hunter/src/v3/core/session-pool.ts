@@ -540,3 +540,30 @@ export function _resetForTesting(): void {
   listeners.length = 0;
   // Ne PAS reset Redis (les tests unitaires n'ont pas Redis)
 }
+
+// ─── Reset budget admin ─────────────────────────────────────────────────────
+
+/**
+ * Remet le budget login d'un compte à une valeur donnée (demande admin).
+ * Efface l'état en mémoire ET dans Redis.
+ * Le compte pourra immédiatement refaire des logins.
+ *
+ * @param username - Identifiant du compte (email portail)
+ * @param newMax - Nouveau budget max (défaut: 7, laisse 2 de marge sur la limite portail de 10)
+ */
+export function resetBudget(username: string, newMax?: number): void {
+  const key = username.toLowerCase();
+  const max = newMax ?? activeConfig.defaultBudget.maxPerDay;
+
+  // Effacer l'état en mémoire
+  budgets.delete(key);
+
+  // Effacer dans Redis (fire-and-forget)
+  if (redisReady && redisClient) {
+    redisClient.del(`${REDIS_BUDGET_PREFIX}${key}`).catch((err) => {
+      console.warn(`[session-pool] resetBudget Redis del error: ${err}`);
+    });
+  }
+
+  console.log(`[session-pool] 🔄 Budget reset à ${max} pour ${key} (demande admin)`);
+}
