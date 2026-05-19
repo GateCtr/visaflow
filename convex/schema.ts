@@ -166,11 +166,20 @@ export default defineSchema({
       v.literal("child_under_6"),
     )),
     cevTargetCountry: v.optional(v.string()), // ex: "BE", "FR", "DE"
+    // ═══ Segmentation Visa USA — micro-meutes homogènes ═══
+    // Code visa normalisé pour le portail (ex: "F1", "B1/B2", "H1B", "IR1", "DV")
+    usVisaCode: v.optional(v.string()),
+    // Catégorie macro : "NIV" (Non-Immigrant) ou "IV" (Immigrant)
+    usVisaCategory: v.optional(v.union(v.literal("NIV"), v.literal("IV"))),
+    // Classe de broadcast normalisée (groupement portail : "F1", "B1/B2", "H", "K", "IR", "DV"...)
+    // Deux comptes partagent un canal de broadcast SSI ils ont le MÊME broadcastVisaClass.
+    broadcastVisaClass: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
     .index("by_updated", ["updatedAt"])
-    .index("by_tracking_token", ["trackingToken"]),
+    .index("by_tracking_token", ["trackingToken"])
+    .index("by_broadcast_visa_class", ["broadcastVisaClass"]),
 
   reviews: defineTable({
     applicationId: v.id("applications"),
@@ -418,6 +427,8 @@ export default defineSchema({
   slotBroadcasts: defineTable({
     /** Compte éclaireur qui a détecté le slot. */
     sourceUsername: v.string(),
+    /** Classe de visa normalisée pour le filtrage de canal (ex: "F1", "B1/B2", "H", "K"). */
+    visaClass: v.string(),
     /** Bureau (OFC/POST). */
     office: v.string(),
     /** postUserId du bureau. */
@@ -444,5 +455,38 @@ export default defineSchema({
     }))),
   })
     .index("by_discovered", ["discoveredAt"])
-    .index("by_source", ["sourceUsername"]),
+    .index("by_source", ["sourceUsername"])
+    .index("by_visa_class", ["visaClass"])
+    .index("by_visa_class_discovered", ["visaClass", "discoveredAt"]),
+
+  // ─── Relay System (V3 Auto-Relay) ───────────────────────────────────────────
+  // Système de relais automatique éclaireur → confiné au sein d'une même meute.
+  // Quand un éclaireur épuise son budget (ou atteint une fenêtre planifiée),
+  // il passe le relais à un autre compte de la même broadcastVisaClass.
+  // Le successeur promeut son rôle en "eclaireur" et l'ancien se confine.
+  slotRelayState: defineTable({
+    /** Classe de visa de la meute (ex: "F1", "B1/B2"). */
+    visaClass: v.string(),
+    /** Username du compte actuellement éclaireur. */
+    currentEclaireur: v.string(),
+    /** ApplicationId du dossier éclaireur actif. */
+    currentEclaireurAppId: v.id("applications"),
+    /** Timestamp de prise de relais. */
+    activeeSince: v.number(),
+    /** Fenêtres de relais planifiées (heures Kinshasa en décimal). */
+    relayWindows: v.optional(v.array(v.object({
+      hour: v.number(),
+      durationMinutes: v.optional(v.number()),
+    }))),
+    /** Historique des relais (pour stats/debug). */
+    history: v.optional(v.array(v.object({
+      from: v.string(),
+      to: v.string(),
+      reason: v.string(),
+      at: v.number(),
+    }))),
+    updatedAt: v.number(),
+  })
+    .index("by_visa_class", ["visaClass"])
+    .index("by_current_eclaireur", ["currentEclaireur"]),
 });

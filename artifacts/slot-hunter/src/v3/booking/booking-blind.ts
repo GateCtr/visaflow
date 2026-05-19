@@ -43,6 +43,8 @@ export interface SlotBroadcastEvent {
   eventId?: string;
   /** Compte éclaireur qui a détecté le slot. */
   sourceUsername: string;
+  /** Classe de visa normalisée du canal (ex: "F1", "B1/B2", "H", "K"). Obligatoire pour le filtrage. */
+  visaClass: string;
   /** Bureau (OFC/POST). */
   office: string;
   /** postUserId du bureau. */
@@ -164,14 +166,21 @@ export async function broadcastSlotDiscovery(
  * Récupère les événements de blind booking non traités depuis Convex.
  * Appelé périodiquement par le confiné (toutes les 5-10s).
  *
+ * FILTRE VISA CLASS : seuls les broadcasts du même visaClass sont retournés.
+ * Un confiné B1/B2 ne reçoit JAMAIS un broadcast F1 (et vice-versa).
+ *
  * Retourne les événements récents (< 5 min) non encore traités par ce compte.
  */
 export async function pollBlindBookingEvents(
   username: string,
   convexSiteUrl: string,
   hunterApiKey: string,
+  visaClass?: string,
 ): Promise<SlotBroadcastEvent[]> {
-  const url = `${convexSiteUrl}/hunter/slot-broadcast/pending?username=${encodeURIComponent(username)}`;
+  let url = `${convexSiteUrl}/hunter/slot-broadcast/pending?username=${encodeURIComponent(username)}`;
+  if (visaClass) {
+    url += `&visaClass=${encodeURIComponent(visaClass)}`;
+  }
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -273,9 +282,15 @@ export async function attemptBlindBooking(
 
     // 409 = slot déjà pris (l'éclaireur ou un autre confiné l'a eu)
     if (res.status === 409) {
-      const respBody = await res.json().catch(() => ({})) as { responseMsg?: string };
-      const msg = respBody.responseMsg ?? "Créneau déjà pris (409)";
-      console.log(`[blind-booking] ⚠️ Slot déjà pris (409) — ${msg} (réaction: ${reactionTimeMs}ms)`);
+      const rawBody = await res.text().catch(() => "");
+      let msg = "Créneau déjà pris (409)";
+      try {
+        const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+        msg = (parsed.responseMsg ?? parsed.responseMessage ?? parsed.message ?? rawBody.slice(0, 200)) as string;
+      } catch {
+        msg = rawBody.slice(0, 200) || "Créneau déjà pris (409)";
+      }
+      console.log(`[blind-booking] ⚠️ 409 — ${msg} (réaction: ${reactionTimeMs}ms)`);
       return { success: false, error: msg, statusCode: 409, reactionTimeMs };
     }
 

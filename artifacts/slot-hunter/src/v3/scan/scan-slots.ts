@@ -84,6 +84,8 @@ export interface ScanSlotsConfig {
   convexSiteUrl?: string;
   /** Hunter API key (pour le broadcast). */
   hunterApiKey?: string;
+  /** Classe de visa normalisée pour le canal de broadcast (ex: "F1", "B1/B2", "H"). */
+  visaClass?: string;
 }
 
 /** Résultat du scan de slots. */
@@ -318,6 +320,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
                     if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
                       const broadcastEvent: SlotBroadcastEvent = {
                         sourceUsername: username,
+                        visaClass: config.visaClass ?? "B1/B2",
                         office: ofc.postName,
                         postUserId: ofc.postUserId,
                         date: targetDate,
@@ -417,6 +420,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
       if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
         const broadcastEvent: SlotBroadcastEvent = {
           sourceUsername: username,
+          visaClass: config.visaClass ?? "B1/B2",
           office: ofc.postName,
           postUserId: ofc.postUserId,
           date: slotFound.date,
@@ -427,7 +431,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
           sourceBooked: false,
         };
         await broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
-        console.log(`[scan-slots] 📡 Slot broadcasté aux confinés`);
+        console.log(`[scan-slots] 📡 Slot broadcasté aux confinés (canal visaClass=${config.visaClass ?? "B1/B2"})`);
       }
 
       return { slotFound, discoveryEvents, ofcsScanned, totalMonthsScanned };

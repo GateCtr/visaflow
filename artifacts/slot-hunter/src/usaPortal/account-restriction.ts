@@ -57,7 +57,7 @@ export async function initRestrictionRedis(): Promise<number> {
       }) as RedisClientType;
     }
 
-    redisClient.on("error", (err) => {
+    redisClient.on("error", (err: Error) => {
       console.warn(`[restriction-redis] Redis error: ${err.message}`);
     });
 

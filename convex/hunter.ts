@@ -196,6 +196,8 @@ export const getActiveJobs = internalQuery({
           urgencyTier: (app as { slotUrgencyTier?: string }).slotUrgencyTier ?? "standard",
           slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
           hunterConfig: (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string } }).hunterConfig,
+          // Segmentation visa class pour micro-meutes homogènes
+          broadcastVisaClass: (app as { broadcastVisaClass?: string }).broadcastVisaClass ?? null,
           portalUrl: (pricing as { portalUrl?: string } | undefined)?.portalUrl ?? null,
           portalName: (pricing as { portalName?: string } | undefined)?.portalName ?? null,
           portalDashboardUrl: (pricing as { portalDashboardUrl?: string } | undefined)?.portalDashboardUrl ?? null,

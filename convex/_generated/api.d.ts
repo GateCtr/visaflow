@@ -20,6 +20,7 @@ import type * as http from "../http.js";
 import type * as hunter from "../hunter.js";
 import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
+import type * as relay from "../relay.js";
 import type * as reviews from "../reviews.js";
 import type * as slotBroadcast from "../slotBroadcast.js";
 import type * as slotDiscoveries from "../slotDiscoveries.js";
@@ -27,6 +28,7 @@ import type * as slotFoundHelper from "../slotFoundHelper.js";
 import type * as spainOtp from "../spainOtp.js";
 import type * as spainWatcher from "../spainWatcher.js";
 import type * as users from "../users.js";
+import type * as visaClassifications from "../visaClassifications.js";
 import type * as visaDocuments from "../visaDocuments.js";
 import type * as whatsapp from "../whatsapp.js";
 
@@ -49,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   hunter: typeof hunter;
   messages: typeof messages;
   notifications: typeof notifications;
+  relay: typeof relay;
   reviews: typeof reviews;
   slotBroadcast: typeof slotBroadcast;
   slotDiscoveries: typeof slotDiscoveries;
@@ -56,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   spainOtp: typeof spainOtp;
   spainWatcher: typeof spainWatcher;
   users: typeof users;
+  visaClassifications: typeof visaClassifications;
   visaDocuments: typeof visaDocuments;
   whatsapp: typeof whatsapp;
 }>;

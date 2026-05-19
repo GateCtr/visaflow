@@ -70,6 +70,8 @@ export interface ScanSessionConfig {
   /** Convex URL + API key (pour blind booking + discovery). */
   convexSiteUrl: string;
   hunterApiKey: string;
+  /** Classe de visa normalisée pour le canal de broadcast (ex: "F1", "B1/B2"). */
+  visaClass?: string;
 }
 
 // ─── API publique ───────────────────────────────────────────────────────────
@@ -225,6 +227,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
         blindBookingEnabled: hunterConfig.blindBookingEnabled,
         convexSiteUrl,
         hunterApiKey,
+        visaClass: config.visaClass,
       });
 
       // Reporter discovery
@@ -238,7 +241,8 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
           blindShared: 0,
         });
         // Envoyer les discoveries à Convex (enrichit le calendrier admin)
-        reportSlotDiscoveryBatch(scanResult.discoveryEvents);
+        // Override applicationId avec le jobId Convex (les events contiennent le portalApplicationId)
+        reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
       }
 
       // Pas de slot → fin normale
@@ -327,7 +331,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
 
         // 3. Envoyer les événements de découverte collectés pendant ce scan
         if (scanResult.discoveryEvents.length > 0) {
-          reportSlotDiscoveryBatch(scanResult.discoveryEvents);
+          reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
         }
 
         return "slot_captured";

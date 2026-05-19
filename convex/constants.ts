@@ -6,7 +6,7 @@ export const VISA_PRICING = {
     successFee: 750,
     total: 1000,
     successModel: "appointment" as const,
-    visaTypes: ["B1/B2 (Tourisme/Affaires)", "F1 (Étudiant)", "K1 (Fiancé(e))", "H1B (Travail)", "J1 (Échange)"],
+    visaTypes: ["B1/B2 (Tourisme/Affaires)", "F1 (Étudiant)", "F2 (Conjoint/Enfant F1)", "K1 (Fiancé(e))", "H1B (Travail)", "H4 (Conjoint H1B)", "J1 (Échange)", "L1A (Transfert cadre)", "L1B (Transfert spécialisé)", "O1 (Aptitudes extraordinaires)", "IR1 (Conjoint citoyen US)", "CR1 (Conjoint récent citoyen US)", "IR2 (Enfant citoyen US)", "DV (Visa Diversité/Loterie)", "E2 (Investisseur)"],
     requiredDocuments: [
       { key: "passport_scan", label: "Passeport (scan HD)", required: true },
       { key: "photo_id", label: "Photo d'identité 5x5 fond blanc", required: true },

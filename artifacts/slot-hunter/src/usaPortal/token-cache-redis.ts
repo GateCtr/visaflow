@@ -89,7 +89,7 @@ export async function initTokenCacheRedis(): Promise<number> {
       }) as RedisClientType;
     }
 
-    redisClient.on("error", (err) => {
+    redisClient.on("error", (err: Error) => {
       if (isConnected) {
         console.warn(`[redis-cache] ⚠️ Erreur Redis (non-fatal):`, err.message);
       }
