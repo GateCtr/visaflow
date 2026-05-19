@@ -1701,7 +1701,13 @@ async function main(): Promise<void> {
               }
 
               // 2. Preflight UNE SEULE FOIS (résoudre applicantId GSS, applicationId, appointmentId)
+              // FIX 19/05/2026: Déterminer le mode (schedule vs reschedule) dynamiquement
+              // depuis le statut réel du dossier, PAS depuis hunterConfig.rescheduleMode.
+              // Logique identique à impl.ts :
+              //   pendingAppoStatus ≠ 0 (status="pending") → schedule (nouveau RDV)
+              //   pendingAppoStatus = 0 + cancellable (status="cancellable") → reschedule (RDV existant)
               let confAppDetails: { applicantId: string | number; applicationId: string; appointmentId?: number; applicantUUID?: number | string } | null = null;
+              let useReschedule = false; // déterminé par le statut réel du dossier
               try {
                 const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./usaPortal/appointments-api.js");
                 const { runPreflight } = await import("./v3/scan/scan-preflight.js");
@@ -1721,9 +1727,21 @@ async function main(): Promise<void> {
                 const reqStatus = await checkUsaAppointmentRequestStatus(confSession, undefined);
                 let confApplicationId = reqStatus.applicationId ?? "";
 
-                if (!confApplicationId && reqStatus.status === "cancellable") {
+                // Déterminer le mode booking depuis le statut RÉEL du dossier
+                if (reqStatus.status === "cancellable") {
+                  // Dossier avec RDV existant (pendingAppoStatus=0 + cancellable) → reschedule
+                  useReschedule = true;
                   await fetchCancellableSessionIds(confSession, { id: job.id, hunterConfig: job.hunterConfig } as any);
-                  confApplicationId = confSession.applicationId ?? "";
+                  confApplicationId = confSession.applicationId ?? confApplicationId;
+                  log("INFO", `[v3-loop] ${job.applicantName} (confiné) — status=cancellable → mode RESCHEDULE`);
+                } else if (reqStatus.status === "pending") {
+                  // Dossier en cours (pendingAppoStatus≠0) → schedule (nouveau RDV)
+                  useReschedule = false;
+                  log("INFO", `[v3-loop] ${job.applicantName} (confiné) — status=pending (pendingAppoStatus=${reqStatus.pendingAppoStatus}) → mode SCHEDULE`);
+                } else {
+                  // Fallback : utiliser la config admin si le statut est ambigu
+                  useReschedule = !!job.hunterConfig.rescheduleMode;
+                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — status=${reqStatus.status} — fallback hunterConfig.rescheduleMode=${useReschedule}`);
                 }
 
                 if (!confApplicationId) {
@@ -1738,7 +1756,7 @@ async function main(): Promise<void> {
                   appointmentId: preflight.appDetails.appointmentId,
                   applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
                 };
-                log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId}`);
+                log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId} mode=${useReschedule ? "reschedule" : "schedule"}`);
               } catch (preflightErr) {
                 log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — preflight échoué: ${preflightErr} — blind booking impossible`);
                 continue;
@@ -1753,9 +1771,9 @@ async function main(): Promise<void> {
                   appointmentId: confAppDetails.appointmentId,
                   applicantUUID: confAppDetails.applicantUUID as number | undefined,
                   missionId: 323,
-                  mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
+                  mode: useReschedule ? "reschedule" : "schedule",
                   csrfToken: cachedConf!.csrfToken ?? "",
-                  existingLocationType: job.hunterConfig.rescheduleMode ? "POST" : undefined,
+                  existingLocationType: useReschedule ? "POST" : undefined,
                 });
                 if (blindResult.success) {
                   log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
