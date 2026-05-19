@@ -1692,10 +1692,61 @@ async function main(): Promise<void> {
                   break;
                 }
 
+                // ── MINI-PREFLIGHT : résoudre les vrais IDs du confiné ──────────
+                // Le portail exige applicantId GSS (ex: "RQUP3HHVQHOD"), pas le userID numérique.
+                // Flow identique à l'éclaireur : resolveApplicationId → runPreflight → appDetails
+                let confAppDetails: { applicantId: string | number; applicationId: string; appointmentId?: number; applicantUUID?: number | string } | null = null;
+                try {
+                  const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./usaPortal/appointments-api.js");
+                  const { runPreflight } = await import("./v3/scan/scan-preflight.js");
+
+                  // Construire une session minimale pour les appels API
+                  const confSession = {
+                    accessToken: cachedConf!.accessToken,
+                    refreshToken: cachedConf!.refreshToken,
+                    csrfToken: cachedConf!.csrfToken ?? "",
+                    userID: cachedConf!.userID,
+                    fullName: cachedConf!.fullName,
+                    applicationId: null as string | null,
+                    pendingAppoStatus: null,
+                    missionId: 323,
+                    allowedOfcs: cachedConf!.allowedOfcs ?? [],
+                  } as any;
+
+                  // 1. Résoudre applicationId
+                  const reqStatus = await checkUsaAppointmentRequestStatus(confSession, undefined);
+                  let confApplicationId = reqStatus.applicationId ?? "";
+
+                  if (!confApplicationId && reqStatus.status === "cancellable") {
+                    await fetchCancellableSessionIds(confSession, { id: job.id, hunterConfig: job.hunterConfig } as any);
+                    confApplicationId = confSession.applicationId ?? "";
+                  }
+
+                  if (!confApplicationId) {
+                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — applicationId introuvable — blind booking impossible`);
+                    break;
+                  }
+
+                  // 2. runPreflight → appDetails avec applicantId GSS
+                  const preflight = await runPreflight(confSession, confApplicationId, 323);
+                  confAppDetails = {
+                    applicantId: preflight.appDetails.applicantId,
+                    applicationId: confApplicationId,
+                    appointmentId: preflight.appDetails.appointmentId,
+                    applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
+                  };
+                  log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId}`);
+                } catch (preflightErr) {
+                  log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — preflight échoué: ${preflightErr} — blind booking impossible`);
+                  break;
+                }
+
                 const blindResult = await attemptBlindBooking(event, {
                   accessToken: cachedConf!.accessToken,
-                  applicationId: job.id,
-                  applicantId: cachedConf!.userID ?? "0",
+                  applicationId: confAppDetails.applicationId,
+                  applicantId: confAppDetails.applicantId,
+                  appointmentId: confAppDetails.appointmentId,
+                  applicantUUID: confAppDetails.applicantUUID as number | undefined,
                   missionId: 323,
                   mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
                   csrfToken: cachedConf!.csrfToken ?? "",
@@ -1718,8 +1769,8 @@ async function main(): Promise<void> {
 
                   // Post-booking complet (identique au direct)
                   try {
-                    const session = { accessToken: cachedConf!.accessToken, applicationId: job.id, missionId: 323, applicantId: cachedConf!.userID } as any;
-                    const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, job.id, blindResult.appointmentId);
+                    const session = { accessToken: cachedConf!.accessToken, applicationId: confAppDetails.applicationId, missionId: 323, applicantId: confAppDetails.applicantId } as any;
+                    const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, confAppDetails.applicationId, blindResult.appointmentId);
                     let pdfStorageId: string | undefined;
                     if (pdf) {
                       pdfStorageId = (await uploadFile(pdf.toString("base64"), "application/pdf")) ?? undefined;
