@@ -286,41 +286,44 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
             if (timeRes.ok) {
               const timeSlots = await timeRes.json() as UsaTimeSlot[];
               if (Array.isArray(timeSlots) && timeSlots.length > 0) {
-                const slot = timeSlots[0];
-                const rawTime = slot.startTime ?? "";
-                const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
+                console.log(`[scan-slots] 📡 ✅ ${timeSlots.length} créneau(x) trouvé(s) pour confinés — ${targetDate}`);
 
-                console.log(`[scan-slots] 📡 ✅ Slot complet pour confinés — ${targetDate} ${time} slotId=${slot.slotId}`);
+                // Broadcaster TOUS les timeSlots (pas juste le premier)
+                // Si le confiné reçoit un 409 sur le premier, il tente les suivants
+                for (const slot of timeSlots) {
+                  const rawTime = slot.startTime ?? "";
+                  const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
 
-                // Discovery event (captured pour les confinés, ignored pour l'éclaireur)
-                discoveryEvents.push({
-                  applicationId,
-                  destination: "usa",
-                  office: ofc.postName,
-                  dateFound: targetDate,
-                  timeFound: time,
-                  outcome: "ignored", // Ignoré par l'éclaireur (hors SA fenêtre)
-                  reason: "after_deadline_broadcast_to_confines",
-                  context: { deadline: dateDeadline, slotId: slot.slotId, forConfinés: true },
-                  mode: rescheduleMode ? "reschedule" : "schedule",
-                });
-
-                // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
-                if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
-                  const broadcastEvent: SlotBroadcastEvent = {
-                    sourceUsername: username,
+                  // Discovery event pour chaque horaire
+                  discoveryEvents.push({
+                    applicationId,
+                    destination: "usa",
                     office: ofc.postName,
-                    postUserId: ofc.postUserId,
-                    date: targetDate,
-                    time,
-                    slotId: String(slot.slotId),
-                    startTime: slot.startTime ?? "",
-                    discoveredAt: Date.now(),
-                    sourceBooked: false,
-                  };
-                  broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
-                  console.log(`[scan-slots] 📡 Broadcast COMPLET envoyé aux confinés (slotId=${String(slot.slotId).slice(0, 10)}…)`);
+                    dateFound: targetDate,
+                    timeFound: time,
+                    outcome: "ignored", // Ignoré par l'éclaireur (hors SA fenêtre)
+                    reason: "after_deadline_broadcast_to_confines",
+                    context: { deadline: dateDeadline, slotId: slot.slotId, forConfinés: true, totalSlots: timeSlots.length },
+                    mode: rescheduleMode ? "reschedule" : "schedule",
+                  });
+
+                  // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
+                  if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
+                    const broadcastEvent: SlotBroadcastEvent = {
+                      sourceUsername: username,
+                      office: ofc.postName,
+                      postUserId: ofc.postUserId,
+                      date: targetDate,
+                      time,
+                      slotId: String(slot.slotId),
+                      startTime: slot.startTime ?? "",
+                      discoveredAt: Date.now(),
+                      sourceBooked: false,
+                    };
+                    broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+                  }
                 }
+                console.log(`[scan-slots] 📡 ${timeSlots.length} broadcast(s) envoyé(s) aux confinés pour ${targetDate}`);
               } else {
                 console.log(`[scan-slots] 📡 getSlotTime retourné 0 horaires pour ${targetDate} — pas de broadcast`);
                 discoveryEvents.push({

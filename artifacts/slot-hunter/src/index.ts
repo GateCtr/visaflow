@@ -1527,6 +1527,7 @@ async function main(): Promise<void> {
                   });
                   if (blindResult.success) {
                     log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
+
                     // Post-booking complet (identique au direct)
                     try {
                       const session = { accessToken: cachedConf!.accessToken, applicationId: job.id, missionId: 323, applicantId: cachedConf!.userID } as any;
@@ -1550,6 +1551,10 @@ async function main(): Promise<void> {
                     pausedJobs.add(job.id);
                     await sendHeartbeat({ applicationId: job.id, result: "slot_found" });
                     break;
+                  }
+                  // Slot pris (409) ou autre échec → tenter le prochain slotId broadcasté
+                  if (blindResult.statusCode === 409) {
+                    log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
                   }
                 }
               }
