@@ -1629,9 +1629,34 @@ async function main(): Promise<void> {
             await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
           }
 
-          // Attendre l'intervalle de l'orchestrateur avant le prochain dossier
+          // ── KEEP-ALIVE ENTRE LES SCANS ──────────────────────────────────────
+          // Le portail déconnecte après 15 min d'inactivité. L'intervalle entre scans
+          // est de 5-10 min (standard) — 2 cycles consécutifs sans activité = 10-20 min = disconnect.
+          // Solution : pendant l'attente, pinger getLandingPageDeatils toutes les 8-12 min.
           const waitMs = Math.max(decision.intervalMs, 30_000);
-          await new Promise(r => setTimeout(r, waitMs));
+          const waitEnd = Date.now() + waitMs;
+          const INTER_SCAN_PING_INTERVAL_MS = 8 * 60_000 + Math.random() * 4 * 60_000; // 8-12 min
+
+          // Vérifier si le token est encore valide — si oui, lancer un keep-alive temporaire
+          const postScanCache = tokenCache.get(username.toLowerCase());
+          const postScanTokenValid = !!(postScanCache && Date.now() < postScanCache.expiresAt);
+
+          if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
+            // L'attente est assez longue pour risquer un timeout portail — pinger
+            const { startKeepAlive: startInterScanKA } = await import("./v3/anti-detection/keep-alive.js");
+            const interScanKA = startInterScanKA(
+              { accessToken: postScanCache!.accessToken, applicationId: cachedEntry?.applicationId ?? null, missionId: 323 } as any,
+              job.id,
+              { minIntervalMs: 8 * 60_000, maxIntervalMs: 12 * 60_000 },
+            );
+            // Attendre l'intervalle puis arrêter le keep-alive
+            await new Promise(r => setTimeout(r, waitMs));
+            interScanKA.stop();
+          } else {
+            // Attente courte ou pas de token → simple sleep
+            await new Promise(r => setTimeout(r, waitMs));
+          }
+
           scannedOne = true;
           break; // Un seul job par tick (radio silence entre les dossiers)
         }
