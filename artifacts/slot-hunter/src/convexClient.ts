@@ -55,6 +55,8 @@ export interface HunterJob {
     rescheduleExistingDate?: string;
     // Proxy résidentiel USA
     useResidentialProxy?: boolean;
+    // Mode nuit
+    nightModeEnabled?: boolean;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";
@@ -156,7 +158,7 @@ export async function reportSlotFound(payload: {
 
 export async function sendHeartbeat(payload: {
   applicationId: string;
-  result: "not_found" | "captcha" | "error" | "payment_required";
+  result: "not_found" | "captcha" | "error" | "payment_required" | "slot_found";
   errorMessage?: string;
   shouldPause?: boolean;
 }): Promise<void> {

@@ -21,6 +21,7 @@ import type * as hunter from "../hunter.js";
 import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as reviews from "../reviews.js";
+import type * as slotBroadcast from "../slotBroadcast.js";
 import type * as slotDiscoveries from "../slotDiscoveries.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
 import type * as spainOtp from "../spainOtp.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   notifications: typeof notifications;
   reviews: typeof reviews;
+  slotBroadcast: typeof slotBroadcast;
   slotDiscoveries: typeof slotDiscoveries;
   slotFoundHelper: typeof slotFoundHelper;
   spainOtp: typeof spainOtp;

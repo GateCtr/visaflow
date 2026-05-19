@@ -1565,7 +1565,7 @@ async function main(): Promise<void> {
               missionId: 323,
               allowedOfcs: cachedEntry!.allowedOfcs ?? [],
             } : undefined,
-            getSession: async (proxyUrl) => {
+            getSession: async (proxyUrl: string | null) => {
               setUsaSessionProxy(proxyUrl ?? undefined);
               const session = await getUsaSession(
                 job.hunterConfig.embassyUsername,
