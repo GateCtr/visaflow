@@ -1410,6 +1410,8 @@ async function main(): Promise<void> {
       ({ tokenCache, setUsaSessionProxy } = await import("./usaPortal/usa-http.js"));
       ({ getUsaSession } = await import("./usaPortal/usa-session.js"));
       ({ pollBlindBookingEvents, attemptBlindBooking } = await import("./v3/booking/booking-blind.js"));
+      // Import reportSlotDiscovery for confiné blind booking discoveries
+      var { reportSlotDiscovery } = await import("./convexClient.js");
     } catch (importErr) {
       log("ERROR", `[v3] ❌ CRASH à l'import des modules V3: ${importErr}`);
       log("ERROR", `[v3] Stack: ${importErr instanceof Error ? importErr.stack : String(importErr)}`);
@@ -1597,16 +1599,23 @@ async function main(): Promise<void> {
 
         // ── PASSE 2 : CONFINÉS (poll blind booking events) ───────────────
         // Exécutée APRÈS la passe éclaireur, donc les events broadcastés sont disponibles.
+        // IMPORTANT: On poll TOUJOURS les confinés, même si l'éclaireur n'a pas scanné ce tick.
+        // Un broadcast d'un tick précédent peut encore être pending (TTL 5 min dans Convex).
         if (scannedOne && confineJobs.length > 0) {
-          // Petit délai pour laisser le broadcast Convex se propager (fire-and-forget)
-          await new Promise(r => setTimeout(r, 2_000));
+          // Délai pour laisser le broadcast Convex se propager (fire-and-forget → mutation → commit)
+          // 5s pour couvrir la latence réseau + exécution mutation Convex
+          await new Promise(r => setTimeout(r, 5_000));
           log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${confineJobs.length} confiné(s) après scan éclaireur`);
+        } else if (confineJobs.length > 0) {
+          // Pas de scan éclaireur ce tick, mais on poll quand même (events d'un tick précédent)
+          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${confineJobs.length} confiné(s) (éclaireur non éligible ce tick)`);
         }
 
         for (const job of confineJobs) {
           const username = job.hunterConfig.embassyUsername;
           try {
             const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
+            log("INFO", `[v3-loop] 🔍 ${job.applicantName} (confiné) poll → ${events.length} event(s) pending`);
             if (events.length > 0) {
               log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
               for (const event of events) {
@@ -1668,6 +1677,18 @@ async function main(): Promise<void> {
                 });
                 if (blindResult.success) {
                   log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
+
+                  // Reporter la discovery "captured" pour ce confiné (alimente la page calendrier admin)
+                  reportSlotDiscovery({
+                    applicationId: job.id,
+                    destination: "usa",
+                    office: event.office,
+                    dateFound: event.date,
+                    timeFound: event.time,
+                    outcome: "captured",
+                    context: { slotId: event.slotId, via: "blind_booking", sourceUsername: event.sourceUsername },
+                    mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
+                  });
 
                   // Post-booking complet (identique au direct)
                   try {
