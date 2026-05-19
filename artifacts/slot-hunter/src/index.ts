@@ -386,6 +386,9 @@ async function startCevPollingLoop(): Promise<void> {
 //   - syncAdminResets (détection pause/reprise admin)
 const isParallelMode = process.env.PARALLEL_WATCHER_MODE === "1" || process.env.PARALLEL_WATCHER_MODE === "true";
 
+// V3 mode flag — mis à jour au démarrage via bot-config Convex
+let isV3Mode = false;
+
 // ─── Tier intervals : temps MINIMUM entre deux checks du MÊME dossier ──────
 // tres_urgent : 3-5 min hors rush, 1-2 min pendant les rush hours.
 // Safe car le token JWT USA est en cache 55 min → aucun re-login supplémentaire.
@@ -693,9 +696,9 @@ function findNextDueJob(jobs: HunterJob[]): HunterJob | null {
     j.hunterConfig?.isActive === true &&
     !!j.portalUrl &&
     getNextCheckDue(j) <= now &&
-    // Mode parallèle : le OFC Watcher gère le polling USA → exclure les jobs USA
+    // Mode parallèle / V3 : le OFC Watcher ou V3 gère le polling USA → exclure les jobs USA
     // du scheduler séquentiel. Seuls CEV (schengen) et Espagne restent gérés ici.
-    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
+    !((isParallelMode || isV3Mode) && (j.destination === "usa" || (!j.destination || j.destination === ""))),
   );
 
   if (due.length === 0) return null;
@@ -743,8 +746,8 @@ function getTimeUntilNextDue(jobs: HunterJob[]): number {
     !pausedJobs.has(j.id) &&
     j.hunterConfig?.isActive === true &&
     !!j.portalUrl &&
-    // Mode parallèle : ignorer les jobs USA (gérés par le OFC Watcher)
-    !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === ""))),
+    // Mode parallèle / V3 : ignorer les jobs USA (gérés par OFC Watcher ou V3)
+    !((isParallelMode || isV3Mode) && (j.destination === "usa" || (!j.destination || j.destination === ""))),
   );
 
   if (active.length === 0) return IDLE_POLL_MAX_MS;
@@ -1329,6 +1332,7 @@ async function main(): Promise<void> {
   try {
     const v3Value = await getBotConfigValue("v3_mode");
     v3Mode = v3Value === "1";
+    isV3Mode = v3Mode; // Update module-level flag for top-level functions
     if (v3Mode) {
       log("INFO", "[v3] ✅ Mode V3 Chasseur activé via bot-config Convex (v3_mode=1)");
     }
@@ -1984,7 +1988,8 @@ async function main(): Promise<void> {
     // En mode parallèle, le stagger est inutile pour les jobs USA car le OFC Watcher
     // gère le polling de manière centralisée. On skip pour éviter de planifier des
     // scheduledNextDue qui empêchent les jobs d'être "dûs" (bug: jobs jamais lancés).
-    if (!isParallelMode) {
+    // En mode V3, les jobs USA sont gérés par la boucle V3 autonome — pas de stagger.
+    if (!isParallelMode && !v3Mode) {
       staggerInitialSchedules(jobs);
     }
 
@@ -1993,7 +1998,8 @@ async function main(): Promise<void> {
 
     // En mode parallèle, exclure les dossiers USA de la boucle legacy
     // (ils sont gérés par le watcher OFC + booking race)
-    const legacyJobs = parallelMode
+    // En mode V3, exclure les dossiers USA (gérés par la boucle V3 autonome)
+    const legacyJobs = (parallelMode || v3Mode)
       ? jobs.filter(j => j.destination !== "usa")
       : jobs;
 
@@ -2001,13 +2007,16 @@ async function main(): Promise<void> {
 
     if (!due) {
       const waitMs = getTimeUntilNextDue(jobs);
+      const usaExcluded = isParallelMode || v3Mode;
       const activeCount = jobs.filter((j) =>
         !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-        !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+        !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === "")))
       ).length;
 
       if (activeCount === 0) {
-        if (isParallelMode) {
+        if (v3Mode) {
+          log("INFO", "Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s");
+        } else if (isParallelMode) {
           log("INFO", "Scheduler séquentiel idle — jobs USA gérés par OFC Watcher — polling dans 90s");
         } else {
           log("INFO", "Aucun dossier actif — polling dans 90s");
@@ -2016,7 +2025,7 @@ async function main(): Promise<void> {
         const tierCounts = jobs
           .filter((j) =>
             !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-            !(isParallelMode && (j.destination === "usa" || (!j.destination || j.destination === "")))
+            !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === "")))
           )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
