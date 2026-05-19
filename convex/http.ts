@@ -849,8 +849,20 @@ http.route({
     }
 
     try {
+      // Skip system-level logs that don't have a valid Convex applicationId.
+      // These are legitimate events (admin reports, system health) that don't belong
+      // to a specific dossier. They're logged to Railway console but not to Convex DB.
+      const appId = body.applicationId;
+      if (!appId || appId === "system" || appId.length < 10) {
+        // Not a valid Convex ID — silently accept (don't crash the bot's fire-and-forget)
+        return new Response(JSON.stringify({ ok: true, skipped: "invalid_application_id" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
       await ctx.runMutation(internal.botLogs.add, {
-        applicationId: body.applicationId as Id<"applications">,
+        applicationId: appId as Id<"applications">,
         step: body.step,
         status: body.status,
         data: body.data ? JSON.stringify(body.data) : undefined,

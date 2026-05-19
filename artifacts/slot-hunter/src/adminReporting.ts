@@ -118,9 +118,20 @@ export async function sendAdminBundleCheckReport(report: BundleCheckReport): Pro
     const result = (await res.json()) as { id?: string };
     console.log(`[admin-report] ✅ Rapport envoyé à ${adminEmail} (id: ${result.id ?? "?"})`);
 
-    // NOTE: botLog requires a valid Convex v.id("applications") — "system" is not valid.
-    // System-level events are logged to console only (no per-dossier association).
-    console.log(`[admin-report] 📊 botLog: admin_report_sent to=${adminEmail} activeJobs=${report.activeJobsCount}`);
+    // Log system-level event — the HTTP handler will gracefully skip it
+    // if "system" is not a valid Convex ID (returns 200 with skipped flag)
+    botLog({
+      applicationId: "system",
+      step: "admin_report_sent",
+      status: "ok",
+      data: {
+        to: adminEmail,
+        subject,
+        resendId: result.id,
+        aesKeyValid: report.aesKeyValid,
+        activeJobs: report.activeJobsCount,
+      },
+    });
 
     return true;
   } catch (err) {
