@@ -1514,7 +1514,13 @@ async function main(): Promise<void> {
         // ═══════════════════════════════════════════════════════════════════
 
         const eclaireurJobs = sortedJobs.filter(j => resolveAccountRole(j.hunterConfig as any) !== "confine");
-        const confineJobs = sortedJobs.filter(j => resolveAccountRole(j.hunterConfig as any) === "confine");
+        // PASSE 2 : confinés + hybrides reçoivent les broadcasts d'AUTRES éclaireurs.
+        // Un hybride scanne en PASSE 1 ET poll en PASSE 2 (il ne recevra pas son propre
+        // broadcast grâce au filtre sourceUsername dans internalGetPending).
+        const blindBookingJobs = sortedJobs.filter(j => {
+          const role = resolveAccountRole(j.hunterConfig as any);
+          return role === "confine" || role === "hybride";
+        });
 
         // ── PASSE 1 : ÉCLAIREURS (scan + broadcast) ──────────────────────
         let scannedOne = false;
@@ -1577,6 +1583,7 @@ async function main(): Promise<void> {
             },
             convexSiteUrl: convexUrl!,
             hunterApiKey: hunterKey!,
+            visaClass: job.broadcastVisaClass ?? undefined,
           });
 
           log("INFO", `[v3-loop] ✅ ${job.applicantName} — résultat: ${outcome}`);
@@ -1608,11 +1615,11 @@ async function main(): Promise<void> {
           const postScanCache = tokenCache.get(username.toLowerCase());
           const postScanTokenValid = !!(postScanCache && Date.now() < postScanCache.expiresAt);
 
-          // Si des confinés attendent des broadcasts → skip le wait long (PASSE 2 immédiate)
-          if (confineJobs.length > 0) {
-            // Pas de wait — les confinés doivent tenter le blind booking ASAP
+          // Si des confinés/hybrides attendent des broadcasts → skip le wait long (PASSE 2 immédiate)
+          if (blindBookingJobs.length > 0) {
+            // Pas de wait — les confinés/hybrides doivent tenter le blind booking ASAP
             // Le keep-alive n'est pas nécessaire car le prochain scan sera dans ~30s après PASSE 2
-            log("INFO", `[v3-loop] ⚡ Skip waitMs (${Math.round(waitMs / 1000)}s) — ${confineJobs.length} confiné(s) en attente, PASSE 2 immédiate`);
+            log("INFO", `[v3-loop] ⚡ Skip waitMs (${Math.round(waitMs / 1000)}s) — ${blindBookingJobs.length} confiné(s)/hybride(s) en attente, PASSE 2 immédiate`);
           } else if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
             // L'attente est assez longue pour risquer un timeout portail — pinger
             const { startKeepAlive: startInterScanKA } = await import("./v3/anti-detection/keep-alive.js");
@@ -1633,27 +1640,32 @@ async function main(): Promise<void> {
           break; // Un seul éclaireur par tick (radio silence entre les dossiers)
         }
 
-        // ── PASSE 2 : CONFINÉS (poll blind booking events) ───────────────
+        // ── PASSE 2 : CONFINÉS + HYBRIDES (poll blind booking events) ─────
         // Exécutée APRÈS la passe éclaireur, donc les events broadcastés sont disponibles.
-        // IMPORTANT: On poll TOUJOURS les confinés, même si l'éclaireur n'a pas scanné ce tick.
+        // Les HYBRIDES sont ici aussi : ils scannent en PASSE 1 et reçoivent les broadcasts
+        // d'AUTRES éclaireurs en PASSE 2 (ils ne recevront jamais leur propre broadcast car
+        // internalGetPending filtre par sourceUsername). Cela permet à un hybride de bénéficier
+        // des détections d'un autre éclaireur de sa meute (même visaClass).
+        // IMPORTANT: On poll TOUJOURS les confinés/hybrides, même si l'éclaireur n'a pas scanné ce tick.
         // Un broadcast d'un tick précédent peut encore être pending (TTL 5 min dans Convex).
-        if (scannedOne && confineJobs.length > 0) {
+        if (scannedOne && blindBookingJobs.length > 0) {
           // Délai pour laisser le broadcast Convex se propager (fire-and-forget → mutation → commit)
           // 5s pour couvrir la latence réseau + exécution mutation Convex
           await new Promise(r => setTimeout(r, 5_000));
-          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${confineJobs.length} confiné(s) après scan éclaireur`);
-        } else if (confineJobs.length > 0) {
+          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${blindBookingJobs.length} confiné(s)/hybride(s) après scan éclaireur`);
+        } else if (blindBookingJobs.length > 0) {
           // Pas de scan éclaireur ce tick, mais on poll quand même (events d'un tick précédent)
-          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${confineJobs.length} confiné(s) (éclaireur non éligible ce tick)`);
+          log("INFO", `[v3-loop] 📡 PASSE 2 — polling ${blindBookingJobs.length} confiné(s)/hybride(s) (éclaireur non éligible ce tick)`);
         }
 
-        for (const job of confineJobs) {
+        for (const job of blindBookingJobs) {
           const username = job.hunterConfig.embassyUsername;
+          const jobRole = resolveAccountRole(job.hunterConfig as any);
           try {
-            const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
-            log("INFO", `[v3-loop] 🔍 ${job.applicantName} (confiné) poll → ${events.length} event(s) pending`);
+            const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!, job.broadcastVisaClass ?? "B1/B2");
+            log("INFO", `[v3-loop] 🔍 ${job.applicantName} (${jobRole}) poll → ${events.length} event(s) pending`);
             if (events.length > 0) {
-              log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
+              log("INFO", `[v3-loop] 📡 ${job.applicantName} (${jobRole}) — ${events.length} blind booking(s) reçu(s)`);
 
               // ── FIX 19/05/2026: PREFLIGHT UNE SEULE FOIS avant la boucle des events ──
               // Avant : le preflight (resolveApplicationId + runPreflight) était fait pour CHAQUE
@@ -1667,10 +1679,10 @@ async function main(): Promise<void> {
               if (!hasToken) {
                 const budgetRemaining = getRemainingLogins(username);
                 if (budgetRemaining <= 0) {
-                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
+                  log("WARN", `[v3-loop] ${job.applicantName} (${jobRole}) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
                   continue;
                 }
-                log("INFO", `[v3-loop] ⚡ ${job.applicantName} (confiné) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
+                log("INFO", `[v3-loop] ⚡ ${job.applicantName} (${jobRole}) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
                 try {
                   setUsaSessionProxy(undefined);
                   const freshSession = await getUsaSession(
@@ -1684,19 +1696,19 @@ async function main(): Promise<void> {
                     recordLogin(username, "emergency");
                     cachedConf = tokenCache.get(username.toLowerCase());
                     hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
-                    log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — réveil réussi en urgence, token valide`);
+                    log("INFO", `[v3-loop] ✅ ${job.applicantName} (${jobRole}) — réveil réussi en urgence, token valide`);
                   } else {
-                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué (login null) — slot perdu`);
+                    log("WARN", `[v3-loop] ${job.applicantName} (${jobRole}) — réveil échoué (login null) — slot perdu`);
                     continue;
                   }
                 } catch (loginErr) {
-                  log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué: ${loginErr} — slot perdu`);
+                  log("ERROR", `[v3-loop] ${job.applicantName} (${jobRole}) — réveil échoué: ${loginErr} — slot perdu`);
                   continue;
                 }
               }
 
               if (!hasToken || !cachedConf) {
-                log("WARN", `[v3-loop] ${job.applicantName} (confiné) — token toujours invalide après réveil — skip`);
+                log("WARN", `[v3-loop] ${job.applicantName} (${jobRole}) — token toujours invalide après réveil — skip`);
                 continue;
               }
 
@@ -1733,19 +1745,19 @@ async function main(): Promise<void> {
                   useReschedule = true;
                   await fetchCancellableSessionIds(confSession, { id: job.id, hunterConfig: job.hunterConfig } as any);
                   confApplicationId = confSession.applicationId ?? confApplicationId;
-                  log("INFO", `[v3-loop] ${job.applicantName} (confiné) — status=cancellable → mode RESCHEDULE`);
+                  log("INFO", `[v3-loop] ${job.applicantName} (${jobRole}) — status=cancellable → mode RESCHEDULE`);
                 } else if (reqStatus.status === "pending") {
                   // Dossier en cours (pendingAppoStatus≠0) → schedule (nouveau RDV)
                   useReschedule = false;
-                  log("INFO", `[v3-loop] ${job.applicantName} (confiné) — status=pending (pendingAppoStatus=${reqStatus.pendingAppoStatus}) → mode SCHEDULE`);
+                  log("INFO", `[v3-loop] ${job.applicantName} (${jobRole}) — status=pending (pendingAppoStatus=${reqStatus.pendingAppoStatus}) → mode SCHEDULE`);
                 } else {
                   // Fallback : utiliser la config admin si le statut est ambigu
                   useReschedule = !!job.hunterConfig.rescheduleMode;
-                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — status=${reqStatus.status} — fallback hunterConfig.rescheduleMode=${useReschedule}`);
+                  log("WARN", `[v3-loop] ${job.applicantName} (${jobRole}) — status=${reqStatus.status} — fallback hunterConfig.rescheduleMode=${useReschedule}`);
                 }
 
                 if (!confApplicationId) {
-                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — applicationId introuvable — blind booking impossible`);
+                  log("WARN", `[v3-loop] ${job.applicantName} (${jobRole}) — applicationId introuvable — blind booking impossible`);
                   continue;
                 }
 
@@ -1756,9 +1768,9 @@ async function main(): Promise<void> {
                   appointmentId: preflight.appDetails.appointmentId,
                   applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
                 };
-                log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId} mode=${useReschedule ? "reschedule" : "schedule"}`);
+                log("INFO", `[v3-loop] ✅ ${job.applicantName} (${jobRole}) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId} mode=${useReschedule ? "reschedule" : "schedule"}`);
               } catch (preflightErr) {
-                log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — preflight échoué: ${preflightErr} — blind booking impossible`);
+                log("ERROR", `[v3-loop] ${job.applicantName} (${jobRole}) — preflight échoué: ${preflightErr} — blind booking impossible`);
                 continue;
               }
 
@@ -1769,10 +1781,10 @@ async function main(): Promise<void> {
               const freshEvents = events.filter(e => (Date.now() - (e.discoveredAt ?? 0)) <= MAX_EVENT_AGE_MS);
               const staleCount = events.length - freshEvents.length;
               if (staleCount > 0) {
-                log("INFO", `[v3-loop] 🗑️ ${job.applicantName} (confiné) — ${staleCount} event(s) ignoré(s) (> 60s) — ${freshEvents.length} frais`);
+                log("INFO", `[v3-loop] 🗑️ ${job.applicantName} (${jobRole}) — ${staleCount} event(s) ignoré(s) (> 60s) — ${freshEvents.length} frais`);
               }
               if (freshEvents.length === 0) {
-                log("INFO", `[v3-loop] ${job.applicantName} (confiné) — aucun event frais (tous > 60s) — skip`);
+                log("INFO", `[v3-loop] ${job.applicantName} (${jobRole}) — aucun event frais (tous > 60s) — skip`);
                 continue;
               }
 
@@ -1797,20 +1809,20 @@ async function main(): Promise<void> {
                   // thrown by attemptBlindBooking (429/403/401) — stop gracefully instead of
                   // crashing the entire confiné polling loop.
                   if (bookingErr?.name === "RateLimitError" || bookingErr?.constructor?.name === "RateLimitError") {
-                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — 429 rate-limit (thrown) — arrêt tentatives`);
+                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — 429 rate-limit (thrown) — arrêt tentatives`);
                     rateLimited = true;
                     break;
                   }
                   if (bookingErr?.name === "TokenExpiredError" || bookingErr?.constructor?.name === "TokenExpiredError") {
-                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — token expiré — arrêt tentatives`);
+                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — token expiré — arrêt tentatives`);
                     break;
                   }
                   // Autres erreurs (réseau, etc.) — log et continuer au prochain slot
-                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — erreur booking: ${bookingErr?.message ?? bookingErr} — tentative suivante`);
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — erreur booking: ${bookingErr?.message ?? bookingErr} — tentative suivante`);
                   continue;
                 }
                 if (blindResult.success) {
-                  log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
+                  log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (${jobRole}) — ${event.date} ${event.time}`);
 
                   reportSlotDiscovery({
                     applicationId: job.id,
@@ -1848,17 +1860,17 @@ async function main(): Promise<void> {
                 }
                 // Slot pris (409) ou autre échec → tenter le prochain slotId broadcasté
                 if (blindResult.statusCode === 409) {
-                  log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
+                  log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
                 } else if (blindResult.statusCode === 429) {
                   // FIX 19/05/2026: 429 = rate-limité par le portail → STOP immédiat pour ce confiné.
                   // Ne pas tenter les slots suivants (chaque requête aggrave le rate-limit).
                   // Le prochain tick (5-10 min) permettra une nouvelle tentative.
-                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — 429 rate-limit — arrêt tentatives (${freshEvents.indexOf(event) + 1}/${freshEvents.length} tentés)`);
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — 429 rate-limit — arrêt tentatives (${freshEvents.indexOf(event) + 1}/${freshEvents.length} tentés)`);
                   break;
                 } else if (blindResult.statusCode === 500) {
                   // 500 = erreur serveur (ex: "Can't reschedule an In-progress application")
                   // Pas la peine de retenter les autres slots — même erreur attendue.
-                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — HTTP 500: ${blindResult.error?.slice(0, 100)} — arrêt tentatives`);
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (${jobRole}) — HTTP 500: ${blindResult.error?.slice(0, 100)} — arrêt tentatives`);
                   break;
                 }
               }
@@ -1869,7 +1881,7 @@ async function main(): Promise<void> {
         }
 
         // Si aucun job n'était éligible ce tick
-        if (!scannedOne && confineJobs.length === 0) {
+        if (!scannedOne && blindBookingJobs.length === 0) {
           await new Promise(r => setTimeout(r, 30_000));
         } else if (!scannedOne) {
           // Éclaireur pas éligible mais confinés ont été traités — attente courte

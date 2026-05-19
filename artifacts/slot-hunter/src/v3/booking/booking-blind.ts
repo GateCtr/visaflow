@@ -43,6 +43,8 @@ export interface SlotBroadcastEvent {
   eventId?: string;
   /** Compte éclaireur qui a détecté le slot. */
   sourceUsername: string;
+  /** Classe de visa normalisée du canal (ex: "F1", "B1/B2", "H", "K"). Obligatoire pour le filtrage. */
+  visaClass: string;
   /** Bureau (OFC/POST). */
   office: string;
   /** postUserId du bureau. */
@@ -164,14 +166,21 @@ export async function broadcastSlotDiscovery(
  * Récupère les événements de blind booking non traités depuis Convex.
  * Appelé périodiquement par le confiné (toutes les 5-10s).
  *
+ * FILTRE VISA CLASS : seuls les broadcasts du même visaClass sont retournés.
+ * Un confiné B1/B2 ne reçoit JAMAIS un broadcast F1 (et vice-versa).
+ *
  * Retourne les événements récents (< 5 min) non encore traités par ce compte.
  */
 export async function pollBlindBookingEvents(
   username: string,
   convexSiteUrl: string,
   hunterApiKey: string,
+  visaClass?: string,
 ): Promise<SlotBroadcastEvent[]> {
-  const url = `${convexSiteUrl}/hunter/slot-broadcast/pending?username=${encodeURIComponent(username)}`;
+  let url = `${convexSiteUrl}/hunter/slot-broadcast/pending?username=${encodeURIComponent(username)}`;
+  if (visaClass) {
+    url += `&visaClass=${encodeURIComponent(visaClass)}`;
+  }
   try {
     const res = await fetch(url, {
       method: "GET",

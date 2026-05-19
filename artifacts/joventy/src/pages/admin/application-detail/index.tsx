@@ -130,7 +130,14 @@ export default function ApplicationDetailPage() {
 
         {/* Hunter Config */}
         {isSlotOnly && isSlotHunting && (
-          <HunterConfig appId={appId!} hunterConfig={hunterConfig} destination={app.destination} />
+          <HunterConfig
+            appId={appId!}
+            hunterConfig={hunterConfig}
+            destination={app.destination}
+            broadcastVisaClass={(app as { broadcastVisaClass?: string }).broadcastVisaClass ?? null}
+            usVisaCode={(app as { usVisaCode?: string }).usVisaCode ?? null}
+            usVisaCategory={(app as { usVisaCategory?: string }).usVisaCategory ?? null}
+          />
         )}
 
         {/* Documents */}

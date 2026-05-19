@@ -44,14 +44,21 @@ interface Props {
   appId: Id<"applications">;
   hunterConfig: HunterConfigData | null;
   destination: string;
+  /** Classe de visa normalisée actuelle (depuis l'application). */
+  broadcastVisaClass?: string | null;
+  /** Code visa US (ex: "F1", "B1/B2"). */
+  usVisaCode?: string | null;
+  /** Catégorie macro (NIV ou IV). */
+  usVisaCategory?: string | null;
 }
 
-export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
+export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVisaClass, usVisaCode, usVisaCategory }: Props) {
   const { toast } = useToast();
   const setHunterConfig = useMutation(api.hunter.setHunterConfig);
   const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
   const setBotConfig = useMutation(api.hunter.setBotConfig);
   const checkCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
+  const assignVisaClass = useMutation(api.applications.assignVisaClass);
 
   // ── State ──
   const [username, setUsername] = useState("");
@@ -76,6 +83,9 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
   const [maxMonths, setMaxMonths] = useState("3");
   const [nightMode, setNightMode] = useState(true);
   const [preferredProxy, setPreferredProxy] = useState("");
+  // Visa Class (meute)
+  const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
+  const [savingVisaClass, setSavingVisaClass] = useState(false);
   // UI
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -108,6 +118,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
       setMaxMonths(String(hc.maxMonthsToScan ?? 3));
       setNightMode(hc.nightModeEnabled ?? true);
       setPreferredProxy(hc.preferredProxy ?? "");
+      setVisaClassInput(broadcastVisaClass ?? "");
     }
   }, [hc]);
 
@@ -249,6 +260,90 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
             <Toggle label="Mode Nuit" checked={nightMode} onChange={setNightMode} compact />
           </div>
         </div>
+
+        {/* Canal Visa — assignation meute homogène (USA uniquement) */}
+        {destination === "usa" && (
+          <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200/60 space-y-3">
+            <p className="text-[11px] text-amber-800 uppercase font-bold tracking-wide">Canal Visa — Meute Homogène</p>
+            <p className="text-[10px] text-amber-700/80">
+              Les slots sont liés au type de visa. Un éclaireur F1 ne peut broadcaster qu'aux confinés F1. Assignez le canal correct pour ce dossier.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Canal Broadcast">
+                <select
+                  value={visaClassInput}
+                  onChange={(e) => setVisaClassInput(e.target.value)}
+                  className="w-full h-9 px-2 text-sm border rounded-md bg-white border-amber-200 font-mono"
+                >
+                  <option value="">— Non assigné —</option>
+                  <optgroup label="NIV — Non-Immigrant (les plus courants)">
+                    <option value="B1/B2">B1/B2 — Tourisme / Affaires</option>
+                    <option value="F1">F1 — Étudiant</option>
+                    <option value="J1">J1 — Échange</option>
+                    <option value="H">H — Travail (H1B/H2/H3/H4)</option>
+                    <option value="K">K — Fiancé(e) (K1/K2/K3/K4)</option>
+                    <option value="L">L — Transfert intra-entreprise</option>
+                    <option value="O">O — Aptitudes extraordinaires</option>
+                    <option value="E">E — Commerçant/Investisseur</option>
+                    <option value="R">R — Religieux</option>
+                    <option value="M1">M1 — Étudiant technique</option>
+                    <option value="P">P — Athlète/Artiste</option>
+                  </optgroup>
+                  <optgroup label="IV — Immigrant (résidence permanente)">
+                    <option value="IR">IR — Famille immédiate citoyen US</option>
+                    <option value="CR">CR — Conjoint récent citoyen US</option>
+                    <option value="DV">DV — Visa Diversité (Loterie)</option>
+                    <option value="EB">EB — Employment-Based</option>
+                    <option value="F2A">F2A — Conjoint/Enfant résident permanent</option>
+                    <option value="F2B">F2B — Enfant 21+ résident permanent</option>
+                  </optgroup>
+                </select>
+              </Field>
+              <Field label="Catégorie">
+                <div className="h-9 flex items-center">
+                  {usVisaCategory ? (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${usVisaCategory === "NIV" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                      {usVisaCategory}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">Auto-détecté</span>
+                  )}
+                </div>
+              </Field>
+              <Field label="Code Visa">
+                <div className="h-9 flex items-center">
+                  <span className="text-xs font-mono text-slate-600">{usVisaCode ?? "—"}</span>
+                </div>
+              </Field>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-amber-300 text-amber-800 hover:bg-amber-100"
+              disabled={!visaClassInput || savingVisaClass}
+              onClick={async () => {
+                setSavingVisaClass(true);
+                try {
+                  const category = ["IR", "CR", "DV", "EB", "F2A", "F2B", "F1-IV", "F3-IV", "F4-IV", "SB1", "SE", "SQ"].includes(visaClassInput) ? "IV" : "NIV";
+                  await assignVisaClass({
+                    applicationId: appId,
+                    broadcastVisaClass: visaClassInput,
+                    usVisaCategory: category as "NIV" | "IV",
+                    usVisaCode: visaClassInput,
+                  });
+                  toast({ title: "Canal visa assigné", description: `Meute : ${visaClassInput} (${category})` });
+                } catch (err: unknown) {
+                  toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Échec" });
+                } finally {
+                  setSavingVisaClass(false);
+                }
+              }}
+            >
+              {savingVisaClass ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Assigner le canal
+            </Button>
+          </div>
+        )}
 
         {/* Active toggle + actions */}
         <div className="flex items-center gap-3 pt-2">

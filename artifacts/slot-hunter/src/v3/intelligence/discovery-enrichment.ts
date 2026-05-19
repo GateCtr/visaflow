@@ -36,6 +36,8 @@ export interface DiscoveryCollectorConfig {
   /** Convex URL + API key (pour le broadcast). */
   convexSiteUrl: string;
   hunterApiKey: string;
+  /** Classe de visa normalisée pour le canal de broadcast (ex: "F1", "B1/B2"). */
+  visaClass?: string;
 }
 
 export interface EnrichedDiscoveryEvent extends SlotDiscoveryEvent {
@@ -106,6 +108,7 @@ export function createDiscoveryCollector(config: DiscoveryCollectorConfig): Disc
       if (config.accountRole === "eclaireur" && config.blindBookingEnabled) {
         const broadcastEvent: SlotBroadcastEvent = {
           sourceUsername: config.username,
+          visaClass: config.visaClass ?? "B1/B2",
           office: config.office,
           postUserId: params.postUserId,
           date: params.date,

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
+import { getVisaCategory, getVisaClassForBroadcast } from "./visaClassifications";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -228,6 +229,22 @@ export const create = mutation({
       "abcdefghjkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 31)]
     ).join("");
 
+    // ═══ Segmentation Visa USA — dérivation automatique du canal de broadcast ═══
+    // Extrait le code visa depuis le label textuel (ex: "B1/B2 (Tourisme/Affaires)" → "B1/B2")
+    let usVisaCode: string | undefined;
+    let usVisaCategory: "NIV" | "IV" | undefined;
+    let broadcastVisaClass: string | undefined;
+
+    if (destKey === "usa") {
+      // Pattern: "CODE (Description)" — le code est avant la première parenthèse
+      const codeMatch = args.visaType.match(/^([A-Z0-9/]+)/i);
+      if (codeMatch) {
+        usVisaCode = codeMatch[1].toUpperCase();
+        usVisaCategory = getVisaCategory(usVisaCode) ?? undefined;
+        broadcastVisaClass = getVisaClassForBroadcast(usVisaCode);
+      }
+    }
+
     const id = await ctx.db.insert("applications", {
       ...appArgs,
       userId: identity.subject,
@@ -246,6 +263,10 @@ export const create = mutation({
       cevVisaClass: cevVisaClass ?? undefined,
       cevApplicantAgeCategory: cevApplicantAgeCategory ?? undefined,
       cevTargetCountry: cevTargetCountry ?? undefined,
+      // Segmentation visa USA (micro-meutes homogènes)
+      usVisaCode: usVisaCode ?? undefined,
+      usVisaCategory: usVisaCategory ?? undefined,
+      broadcastVisaClass: broadcastVisaClass ?? undefined,
       logs: [
         makeLog(
           `Dossier créé pour ${pricing.label} — ${args.visaType}. Package : ${pkg}.${tierLabel}`,
@@ -392,5 +413,51 @@ export const update = mutation({
 
     await ctx.db.patch(id, patch);
     return id;
+  },
+});
+
+
+/**
+ * Admin : assigner/modifier la classe de visa pour la meute (broadcast channel).
+ *
+ * Permet à l'admin de définir explicitement le canal de broadcast d'un dossier.
+ * C'est le champ clé qui détermine dans quelle micro-meute homogène le dossier
+ * sera placé pour le blind booking.
+ *
+ * Exemples :
+ *   - broadcastVisaClass = "F1"   → éclaireurs F1 → confinés F1
+ *   - broadcastVisaClass = "B1/B2" → éclaireurs B1/B2 → confinés B1/B2
+ *   - broadcastVisaClass = "H"    → éclaireurs H1B/H2A/H2B → confinés H
+ */
+export const assignVisaClass = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    usVisaCode: v.optional(v.string()),
+    usVisaCategory: v.optional(v.union(v.literal("NIV"), v.literal("IV"))),
+    broadcastVisaClass: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    if (getRole(identity as Record<string, unknown>) !== "admin")
+      throw new Error("Unauthorized — réservé aux administrateurs");
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const logs = app.logs ?? [];
+
+    await ctx.db.patch(args.applicationId, {
+      usVisaCode: args.usVisaCode ?? undefined,
+      usVisaCategory: args.usVisaCategory ?? undefined,
+      broadcastVisaClass: args.broadcastVisaClass,
+      updatedAt: Date.now(),
+      logs: [...logs, makeLog(
+        `Canal visa assigné : ${args.broadcastVisaClass} (${args.usVisaCategory ?? "?"}) — code: ${args.usVisaCode ?? "auto"}`,
+        "admin"
+      )],
+    });
+
+    return args.applicationId;
   },
 });
