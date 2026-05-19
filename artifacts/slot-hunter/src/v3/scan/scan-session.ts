@@ -242,7 +242,15 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
         });
         // Envoyer les discoveries à Convex (enrichit le calendrier admin)
         // Override applicationId avec le jobId Convex (les events contiennent le portalApplicationId)
-        reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
+        // FIX 19/05/2026: Filter out events with empty dateFound (no_month_available)
+        // They pollute the discoveries table without providing useful data for the calendar.
+        const validDiscoveries = scanResult.discoveryEvents
+          .filter(e => e.dateFound && e.dateFound.length >= 8) // Only real dates (YYYY-MM-DD)
+          .map(e => ({ ...e, applicationId: jobId }));
+        if (validDiscoveries.length > 0) {
+          reportSlotDiscoveryBatch(validDiscoveries);
+          console.log(`[scan-session] 📊 ${validDiscoveries.length} discovery event(s) envoyé(s) à Convex (${validDiscoveries.filter(e => e.outcome === "captured").length} captured, ${validDiscoveries.filter(e => e.outcome === "ignored").length} ignored)`);
+        }
       }
 
       // Pas de slot → fin normale
@@ -331,7 +339,12 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
 
         // 3. Envoyer les événements de découverte collectés pendant ce scan
         if (scanResult.discoveryEvents.length > 0) {
-          reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
+          const validDisc = scanResult.discoveryEvents
+            .filter(e => e.dateFound && e.dateFound.length >= 8)
+            .map(e => ({ ...e, applicationId: jobId }));
+          if (validDisc.length > 0) {
+            reportSlotDiscoveryBatch(validDisc);
+          }
         }
 
         return "slot_captured";

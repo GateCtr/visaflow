@@ -1,3 +1,13 @@
+/**
+ * BotSettings — Configuration Hunter Bot.
+ *
+ * Layout moderne pro inspiré Linear/Notion :
+ * - Header compact avec status indicator
+ * - Navigation latérale par catégorie (tabs sur mobile)
+ * - Config items denses en grid 2-col
+ * - Toggles inline, saves immédiats
+ * - Raw config collapsible en bas
+ */
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -7,15 +17,15 @@ import {
   Clock,
   Shield,
   Server,
-  Moon,
   RefreshCw,
   Save,
   CheckCircle2,
   AlertTriangle,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   Target,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
 } from "lucide-react";
 
 // ─── Configuration keys et leurs descriptions ────────────────────────────────
@@ -34,28 +44,28 @@ interface ConfigItem {
 }
 
 const CONFIG_ITEMS: ConfigItem[] = [
-  // ─── Mode d'execution ──────────────────────────────────────────────────
+  // ─── Mode d'execution
   {
     key: "v3_mode",
     label: "Mode V3 Chasseur",
-    description: "Active la boucle V3 (runScanSession + getNextScanDecision). Prioritaire sur le mode parallele et sequentiel. 1 = actif, 0 = inactif.",
+    description: "Boucle V3 (runScanSession + getNextScanDecision). Prioritaire sur parallèle/séquentiel.",
     type: "toggle",
     category: "mode",
     defaultValue: "0",
   },
   {
     key: "parallel_watcher_mode",
-    label: "Mode Parallele (Watcher OFC)",
-    description: "Active le watcher partage + booking race. 1 refresh/45s pour tous les dossiers Kinshasa au lieu du mode sequentiel (1 dossier/42min). Ignore si v3_mode = 1.",
+    label: "Mode Parallèle (Watcher OFC)",
+    description: "Watcher partagé + booking race. 1 refresh/45s pour tous les dossiers Kinshasa.",
     type: "toggle",
     category: "mode",
     defaultValue: "0",
   },
-  // ─── Timing / Intervalles ──────────────────────────────────────────────
+  // ─── Timing / Intervalles
   {
     key: "watcher_base_interval_ms",
-    label: "Intervalle Watcher (ms)",
-    description: "Intervalle de base entre deux refreshes du watcher OFC. Adapte automatiquement selon prediction + latence.",
+    label: "Intervalle Watcher",
+    description: "Base entre deux refreshes. Adapté auto selon prediction + latence.",
     type: "number",
     category: "timing",
     defaultValue: "45000",
@@ -65,8 +75,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "rush_interval_min_ms",
-    label: "Intervalle Rush Min (ms)",
-    description: "Intervalle minimum pendant les rush hours (00-02h, 07-09h, 12-14h Kinshasa).",
+    label: "Rush Min",
+    description: "Intervalle minimum pendant les rush hours (00-02h, 07-09h, 12-14h).",
     type: "number",
     category: "timing",
     defaultValue: "300000",
@@ -76,7 +86,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "rush_interval_max_ms",
-    label: "Intervalle Rush Max (ms)",
+    label: "Rush Max",
     description: "Intervalle maximum pendant les rush hours.",
     type: "number",
     category: "timing",
@@ -85,11 +95,11 @@ const CONFIG_ITEMS: ConfigItem[] = [
     min: 120000,
     max: 900000,
   },
-  // ─── Protection / Anti-detection ───────────────────────────────────────
+  // ─── Protection / Anti-detection
   {
     key: "scan_cap_min",
-    label: "Cap Scans Min / Session",
-    description: "Nombre minimum de scans avant arret force de session (simule un humain fatigue).",
+    label: "Cap Scans Min",
+    description: "Minimum scans avant arrêt forcé de session.",
     type: "number",
     category: "protection",
     defaultValue: "6",
@@ -98,8 +108,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "scan_cap_max",
-    label: "Cap Scans Max / Session",
-    description: "Nombre maximum de scans par session avant pause forcee.",
+    label: "Cap Scans Max",
+    description: "Maximum scans par session avant pause forcée.",
     type: "number",
     category: "protection",
     defaultValue: "10",
@@ -108,8 +118,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "cooldown_min_ms",
-    label: "Cooldown Min apres expiry (ms)",
-    description: "Temps minimum d'attente apres expiration du JWT avant re-login.",
+    label: "Cooldown Min",
+    description: "Attente min après expiration JWT avant re-login.",
     type: "number",
     category: "protection",
     defaultValue: "480000",
@@ -119,8 +129,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "cooldown_max_ms",
-    label: "Cooldown Max apres expiry (ms)",
-    description: "Temps maximum d'attente apres expiration du JWT avant re-login.",
+    label: "Cooldown Max",
+    description: "Attente max après expiration JWT.",
     type: "number",
     category: "protection",
     defaultValue: "1500000",
@@ -131,16 +141,16 @@ const CONFIG_ITEMS: ConfigItem[] = [
   {
     key: "night_pause_enabled",
     label: "Pause Nocturne",
-    description: "Active la pause nocturne (02h30-06h30 variable par compte). Desactiver pour scanner 24/24.",
+    description: "Pause 02h30-06h30 variable par compte. Désactiver pour scanner 24/24.",
     type: "toggle",
     category: "protection",
     defaultValue: "1",
   },
-  // ─── Prediction Early Bird ─────────────────────────────────────────────
+  // ─── Prediction Early Bird
   {
     key: "prediction_min_observations",
-    label: "Observations Min (Prediction)",
-    description: "Nombre minimum de slots detectes avant que la prediction Early Bird s'active.",
+    label: "Observations Min",
+    description: "Slots détectés minimum avant activation prediction.",
     type: "number",
     category: "prediction",
     defaultValue: "1",
@@ -150,7 +160,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
   {
     key: "prediction_hot_threshold",
     label: "Seuil Hot Window",
-    description: "Score minimum (0-1) pour considerer une tranche horaire comme 'chaude' (refresh accelere).",
+    description: "Score min (0-1) pour tranche 'chaude' (refresh accéléré).",
     type: "number",
     category: "prediction",
     defaultValue: "0.4",
@@ -159,19 +169,19 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "prediction_history_days",
-    label: "Historique Prediction (jours)",
-    description: "Nombre de jours d'historique utilises pour la prediction des fenetres de liberation.",
+    label: "Historique (jours)",
+    description: "Jours d'historique pour prédiction des fenêtres.",
     type: "number",
     category: "prediction",
     defaultValue: "7",
     min: 1,
     max: 30,
   },
-  // ─── Proxy ─────────────────────────────────────────────────────────────
+  // ─── Proxy
   {
     key: "proxy_priority",
-    label: "Priorite Proxy",
-    description: "Ordre de preference des providers proxy (format: provider1,provider2,provider3).",
+    label: "Priorité Proxy",
+    description: "Ordre de préférence des providers.",
     type: "select",
     category: "proxy",
     defaultValue: "iproyal,brightdata,2captcha",
@@ -184,8 +194,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "proxy_sticky_lifetime_h",
-    label: "Duree Sticky Proxy (heures)",
-    description: "Duree de vie du proxy sticky iProyal. Apres expiration, nouvelle IP au prochain login.",
+    label: "Sticky Proxy (h)",
+    description: "Durée de vie proxy sticky iProyal. Nouvelle IP après expiration.",
     type: "number",
     category: "proxy",
     defaultValue: "12",
@@ -193,32 +203,32 @@ const CONFIG_ITEMS: ConfigItem[] = [
     min: 1,
     max: 24,
   },
-  // ─── V3 Strategie Multi-Compte ─────────────────────────────────────────
+  // ─── V3 Stratégie Multi-Compte
   {
     key: "accountRole",
-    label: "Role du Compte",
-    description: "Role strategique: eclaireur (scan rapide, broadcast slots), confine (RDV lointain, recoit blind bookings), hybride (les deux).",
+    label: "Rôle Compte",
+    description: "Éclaireur (scan + broadcast), Confiné (reçoit bookings), Hybride.",
     type: "select",
     category: "v3strategy",
     defaultValue: "hybride",
     options: [
-      { value: "eclaireur", label: "Eclaireur (scan + broadcast)" },
-      { value: "confine", label: "Confine (recoit blind bookings)" },
-      { value: "hybride", label: "Hybride (scan + recoit)" },
+      { value: "eclaireur", label: "Éclaireur" },
+      { value: "confine", label: "Confiné" },
+      { value: "hybride", label: "Hybride" },
     ],
   },
   {
     key: "currentAppointmentDate",
-    label: "Date RDV Actuel (YYYY-MM-DD)",
-    description: "Date du rendez-vous actuel sur le portail. Utilise pour auto-detection du role (< 6 mois = eclaireur, > 6 mois = confine).",
+    label: "Date RDV Actuel",
+    description: "YYYY-MM-DD. Auto-détection du rôle selon proximité.",
     type: "text",
     category: "v3strategy",
     defaultValue: "",
   },
   {
     key: "maxLoginsPerDay",
-    label: "Budget Logins / Jour",
-    description: "Nombre maximum de logins autorises par jour pour ce compte (defaut: 9, max absolu: 10).",
+    label: "Logins/Jour",
+    description: "Budget logins quotidien (max absolu: 10).",
     type: "number",
     category: "v3strategy",
     defaultValue: "9",
@@ -227,8 +237,8 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "rushWindows",
-    label: "Fenetres Rush (JSON)",
-    description: "Fenetres rush personnalisees pour ce dossier. Format JSON: [{\"start\":0,\"end\":2,\"days\":[1,2,3,4,5]}]. Vide = fenetres par defaut.",
+    label: "Rush Windows (JSON)",
+    description: 'Fenêtres personnalisées. Ex: [{"start":0,"end":2}]',
     type: "text",
     category: "v3strategy",
     defaultValue: "",
@@ -236,23 +246,23 @@ const CONFIG_ITEMS: ConfigItem[] = [
   {
     key: "blindBookingEnabled",
     label: "Blind Booking",
-    description: "Active le blind booking cross-account: l'eclaireur broadcast les slots detectes aux comptes confines pour reservation automatique.",
+    description: "Éclaireur broadcast → confinés réservent auto.",
     type: "toggle",
     category: "v3strategy",
     defaultValue: "0",
   },
   {
     key: "slotPriorityDates",
-    label: "Dates Prioritaires (patterns)",
-    description: "Patterns wildcard pour les dates preferees. Separer par virgule. Ex: 2026-09-*,2026-10-15. Le bot priorise ces creneaux.",
+    label: "Dates Prioritaires",
+    description: "Patterns wildcard. Ex: 2026-09-*,2026-10-15",
     type: "text",
     category: "v3strategy",
     defaultValue: "",
   },
   {
     key: "maxMonthsToScan",
-    label: "Mois a Scanner",
-    description: "Nombre maximum de mois a naviguer dans le calendrier OFC (defaut: 3). Augmenter = plus de chances mais plus de risque detection.",
+    label: "Mois à Scanner",
+    description: "Mois max à naviguer dans le calendrier OFC.",
     type: "number",
     category: "v3strategy",
     defaultValue: "3",
@@ -261,21 +271,21 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "nightModeEnabled",
-    label: "Mode Nuit (1 login 02h UTC)",
-    description: "Active un login nocturne a 02:00 UTC pour capturer les slots liberes pendant la nuit. Budget: 1 login dedie.",
+    label: "Mode Nuit (02h UTC)",
+    description: "Login nocturne dédié pour slots libérés la nuit.",
     type: "toggle",
     category: "v3strategy",
     defaultValue: "1",
   },
   {
     key: "preferredProxy",
-    label: "Proxy Prefere (dossier)",
-    description: "Provider proxy prefere pour ce dossier specifique. Override la priorite globale.",
+    label: "Proxy Préféré",
+    description: "Override la priorité globale pour ce dossier.",
     type: "select",
     category: "v3strategy",
     defaultValue: "",
     options: [
-      { value: "", label: "Defaut (priorite globale)" },
+      { value: "", label: "Défaut" },
       { value: "iproyal", label: "iProyal" },
       { value: "brightdata", label: "BrightData" },
       { value: "2captcha", label: "2captcha" },
@@ -283,16 +293,18 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
 ];
 
-// ─── Regroupement par categorie ──────────────────────────────────────────────
+// ─── Catégories ──────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { id: "v3strategy", label: "V3 Strategie Multi-Compte", icon: Target, color: "text-indigo-600" },
-  { id: "mode", label: "Mode d'Execution", icon: Zap, color: "text-amber-600" },
-  { id: "timing", label: "Intervalles & Timing", icon: Clock, color: "text-blue-600" },
-  { id: "protection", label: "Anti-Detection & Securite", icon: Shield, color: "text-red-600" },
-  { id: "prediction", label: "Prediction Early Bird", icon: RefreshCw, color: "text-purple-600" },
-  { id: "proxy", label: "Proxy & Reseau", icon: Server, color: "text-green-600" },
+  { id: "v3strategy", label: "V3 Stratégie", shortLabel: "V3", icon: Target, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+  { id: "mode", label: "Exécution", shortLabel: "Mode", icon: Zap, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+  { id: "timing", label: "Timing", shortLabel: "Time", icon: Clock, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+  { id: "protection", label: "Protection", shortLabel: "Sécu", icon: Shield, color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
+  { id: "prediction", label: "Prédiction", shortLabel: "Pred", icon: RefreshCw, color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
+  { id: "proxy", label: "Proxy", shortLabel: "Proxy", icon: Server, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
 ] as const;
+
+type CategoryId = (typeof CATEGORIES)[number]["id"];
 
 // ─── Composant Principal ─────────────────────────────────────────────────────
 
@@ -302,8 +314,10 @@ export default function BotSettings() {
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<CategoryId>("v3strategy");
+  const [showRaw, setShowRaw] = useState(false);
 
-  // Initialiser les valeurs locales depuis Convex
+  // Hydrate
   useEffect(() => {
     if (!allConfigs) return;
     const vals: Record<string, string> = {};
@@ -340,189 +354,232 @@ export default function BotSettings() {
 
   if (!allConfigs) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Chargement configuration...</span>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+        <span className="ml-2 text-sm text-slate-500">Chargement configuration...</span>
       </div>
     );
   }
 
+  const activeItems = CONFIG_ITEMS.filter((i) => i.category === activeCategory);
+  const activeCat = CATEGORIES.find((c) => c.id === activeCategory)!;
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-slate-100 rounded-lg">
-          <Settings className="w-6 h-6 text-slate-700" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Configuration Hunter Bot</h1>
-          <p className="text-sm text-muted-foreground">
-            Parametres du bot de recherche de creneaux. Les changements prennent effet au prochain redemarrage.
-          </p>
-        </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-        <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-        <div className="text-sm text-amber-800">
-          <p className="font-medium">Note importante</p>
-          <p className="mt-1">
-            Les modifications sont sauvegardees immediatement dans Convex. Le bot les appliquera
-            au prochain cycle de demarrage (redemarrage Railway ou cycle naturel).
-            Le mode parallele s'active au boot uniquement.
-          </p>
-        </div>
-      </div>
-
-      {/* Categories */}
-      {CATEGORIES.map((cat) => {
-        const items = CONFIG_ITEMS.filter((i) => i.category === cat.id);
-        if (items.length === 0) return null;
-
-        const Icon = cat.icon;
-
-        return (
-          <div key={cat.id} className="border rounded-lg overflow-hidden">
-            {/* Category header */}
-            <div className="flex items-center gap-2 px-5 py-3 bg-slate-50 border-b">
-              <Icon className={`w-4 h-4 ${cat.color}`} />
-              <h2 className="font-semibold text-slate-800">{cat.label}</h2>
-            </div>
-
-            {/* Items */}
-            <div className="divide-y">
-              {items.map((item) => (
-                <div key={item.key} className="flex items-center justify-between px-5 py-4 gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-slate-900">{item.label}</span>
-                      {saving === item.key && (
-                        <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
-                      )}
-                      {saved === item.key && (
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {item.description}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                      key: {item.key}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0">
-                    {item.type === "toggle" && (
-                      <button
-                        onClick={() => handleToggle(item)}
-                        className="focus:outline-none"
-                        disabled={saving === item.key}
-                      >
-                        {getValue(item.key, item.defaultValue) === "1" ? (
-                          <ToggleRight className="w-10 h-10 text-emerald-500" />
-                        ) : (
-                          <ToggleLeft className="w-10 h-10 text-slate-300" />
-                        )}
-                      </button>
-                    )}
-
-                    {item.type === "number" && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={getValue(item.key, item.defaultValue)}
-                          min={item.min}
-                          max={item.max}
-                          step={item.defaultValue.includes(".") ? "0.1" : "1"}
-                          onChange={(e) =>
-                            setLocalValues((prev) => ({ ...prev, [item.key]: e.target.value }))
-                          }
-                          className="w-28 px-2 py-1.5 text-sm border rounded-md text-right font-mono focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
-                        />
-                        {item.unit && (
-                          <span className="text-xs text-muted-foreground w-6">{item.unit}</span>
-                        )}
-                        <button
-                          onClick={() => handleSave(item.key, getValue(item.key, item.defaultValue))}
-                          disabled={saving === item.key}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Sauvegarder"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-
-                    {item.type === "select" && (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={getValue(item.key, item.defaultValue)}
-                          onChange={(e) => {
-                            setLocalValues((prev) => ({ ...prev, [item.key]: e.target.value }));
-                            handleSave(item.key, e.target.value);
-                          }}
-                          className="px-2 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
-                        >
-                          {item.options?.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {item.type === "text" && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={getValue(item.key, item.defaultValue)}
-                          onChange={(e) =>
-                            setLocalValues((prev) => ({ ...prev, [item.key]: e.target.value }))
-                          }
-                          className="w-40 px-2 py-1.5 text-sm border rounded-md font-mono focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
-                        />
-                        <button
-                          onClick={() => handleSave(item.key, getValue(item.key, item.defaultValue))}
-                          disabled={saving === item.key}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Sauvegarder"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+    <div className="space-y-4 animate-in fade-in duration-300">
+      {/* ═══ HEADER COMPACT ═══ */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
+            <Settings className="w-4 h-4 text-white" />
           </div>
-        );
-      })}
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Hunter Bot Config</h1>
+            <p className="text-[11px] text-slate-500">
+              {allConfigs.length} clé{allConfigs.length > 1 ? "s" : ""} enregistrée{allConfigs.length > 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
 
-      {/* Raw config viewer */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-3 bg-slate-50 border-b">
-          <Moon className="w-4 h-4 text-slate-500" />
-          <h2 className="font-semibold text-slate-800">Toutes les cles (raw)</h2>
+        {/* Warning badge */}
+        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200/60 text-amber-700 text-[10px] font-medium">
+          <AlertTriangle className="w-3 h-3" />
+          Appliqué au prochain cycle
         </div>
-        <div className="p-4 bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto">
-          {allConfigs.length === 0 ? (
-            <p className="text-slate-400">Aucune configuration enregistree</p>
-          ) : (
-            allConfigs.map((row) => (
-              <div key={row._id} className="py-0.5">
-                <span className="text-emerald-400">{row.key}</span>
-                <span className="text-slate-500"> = </span>
-                <span className="text-amber-300">{row.value.length > 60 ? row.value.slice(0, 60) + "..." : row.value}</span>
-                <span className="text-slate-600 ml-2">
-                  ({new Date(row.updatedAt).toLocaleString("fr-CD")})
-                </span>
-              </div>
-            ))
-          )}
+      </div>
+
+      {/* ═══ CATEGORY TABS (horizontal, scrollable) ═══ */}
+      <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-0.5 border-b border-slate-200">
+        {CATEGORIES.map((cat) => {
+          const Icon = cat.icon;
+          const count = CONFIG_ITEMS.filter((i) => i.category === cat.id).length;
+          const isActive = activeCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-all ${
+                isActive
+                  ? `border-current ${cat.color} ${cat.bg}`
+                  : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              } rounded-t-md`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{cat.label}</span>
+              <span className="sm:hidden">{cat.shortLabel}</span>
+              <span className={`text-[10px] font-bold ${isActive ? "opacity-70" : "text-slate-400"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ═══ CONFIG ITEMS GRID ═══ */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {/* Category sub-header */}
+        <div className={`px-4 py-2.5 border-b ${activeCat.border} ${activeCat.bg} flex items-center gap-2`}>
+          <activeCat.icon className={`w-3.5 h-3.5 ${activeCat.color}`} />
+          <span className={`text-xs font-semibold ${activeCat.color}`}>{activeCat.label}</span>
+          <span className="text-[10px] text-slate-400 ml-auto">{activeItems.length} paramètre{activeItems.length > 1 ? "s" : ""}</span>
         </div>
+
+        {/* Items */}
+        <div className="divide-y divide-slate-50">
+          {activeItems.map((item) => (
+            <ConfigRow
+              key={item.key}
+              item={item}
+              value={getValue(item.key, item.defaultValue)}
+              saving={saving === item.key}
+              saved={saved === item.key}
+              onToggle={() => handleToggle(item)}
+              onChange={(val) => setLocalValues((prev) => ({ ...prev, [item.key]: val }))}
+              onSave={(val) => handleSave(item.key, val)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ RAW CONFIG (collapsible) ═══ */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowRaw((v) => !v)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
+        >
+          <Terminal className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs font-semibold text-slate-600">Raw Config</span>
+          <span className="text-[10px] text-slate-400">{allConfigs.length} clés</span>
+          <div className="ml-auto">
+            {showRaw ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+          </div>
+        </button>
+        {showRaw && (
+          <div className="px-4 pb-3 bg-slate-900 text-[11px] font-mono overflow-x-auto max-h-40 overflow-y-auto">
+            {allConfigs.length === 0 ? (
+              <p className="text-slate-500 py-2">Aucune configuration enregistrée</p>
+            ) : (
+              allConfigs.map((row: any) => (
+                <div key={row._id} className="py-0.5 flex gap-2">
+                  <span className="text-emerald-400 shrink-0">{row.key}</span>
+                  <span className="text-slate-600">=</span>
+                  <span className="text-amber-300 truncate">{row.value}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ConfigRow — Single config item (responsive)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function ConfigRow({
+  item,
+  value,
+  saving,
+  saved,
+  onToggle,
+  onChange,
+  onSave,
+}: {
+  item: ConfigItem;
+  value: string;
+  saving: boolean;
+  saved: boolean;
+  onToggle: () => void;
+  onChange: (val: string) => void;
+  onSave: (val: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 gap-3 hover:bg-slate-50/50 transition-colors">
+      {/* Left: label + description */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-800 truncate">{item.label}</span>
+          {saving && <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />}
+          {saved && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{item.description}</p>
+      </div>
+
+      {/* Right: control */}
+      <div className="shrink-0 flex items-center gap-1.5">
+        {item.type === "toggle" && (
+          <button
+            onClick={onToggle}
+            disabled={saving}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              value === "1" ? "bg-emerald-500" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                value === "1" ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        )}
+
+        {item.type === "number" && (
+          <>
+            <input
+              type="number"
+              value={value}
+              min={item.min}
+              max={item.max}
+              step={item.defaultValue.includes(".") ? "0.1" : "1"}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-md text-right font-mono bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-200 focus:border-blue-300 outline-none"
+            />
+            {item.unit && <span className="text-[10px] text-slate-400 w-5">{item.unit}</span>}
+            <button
+              onClick={() => onSave(value)}
+              disabled={saving}
+              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+
+        {item.type === "select" && (
+          <select
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              onSave(e.target.value);
+            }}
+            className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-200 outline-none max-w-[160px]"
+          >
+            {item.options?.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {item.type === "text" && (
+          <>
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="—"
+              className="w-32 lg:w-40 px-2 py-1 text-xs border border-slate-200 rounded-md font-mono bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-200 outline-none"
+            />
+            <button
+              onClick={() => onSave(value)}
+              disabled={saving}
+              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

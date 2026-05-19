@@ -58,7 +58,7 @@ export function ChatPanel({ appId, messages, firstName, lastName }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-[600px] xl:h-[calc(100vh-100px)] xl:sticky xl:top-20 overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
