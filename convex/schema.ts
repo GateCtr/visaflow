@@ -428,7 +428,7 @@ export default defineSchema({
     /** Compte éclaireur qui a détecté le slot. */
     sourceUsername: v.string(),
     /** Classe de visa normalisée pour le filtrage de canal (ex: "F1", "B1/B2", "H", "K"). */
-    visaClass: v.string(),
+    visaClass: v.optional(v.string()),
     /** Bureau (OFC/POST). */
     office: v.string(),
     /** postUserId du bureau. */
