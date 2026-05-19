@@ -1400,13 +1400,23 @@ async function main(): Promise<void> {
     log("INFO", "   → Intervalles pilotés par scan-orchestrator (rush/standard/night/burst)");
     log("INFO", "═══════════════════════════════════════════════════════════════");
 
-    const { runScanSession } = await import("./v3/scan/scan-session.js");
-    const { getNextScanDecision } = await import("./v3/scan/scan-orchestrator.js");
-    const { getCurrentPredictionScore, getCompetitionMedianMs } = await import("./v3/intelligence/prediction-engine.js");
-    const { resolveAccountRole, extractBudgetFromConfig } = await import("./v3/admin/config-schema.js");
-    const { getRemainingLogins } = await import("./v3/core/session-pool.js");
-    const { tokenCache, setUsaSessionProxy } = await import("./usaPortal/usa-http.js");
-    const { getUsaSession } = await import("./usaPortal/usa-session.js");
+    let runScanSession: any, getNextScanDecision: any, getCurrentPredictionScore: any, getCompetitionMedianMs: any, resolveAccountRole: any, extractBudgetFromConfig: any, getRemainingLogins: any, tokenCache: any, setUsaSessionProxy: any, getUsaSession: any, pollBlindBookingEvents: any, attemptBlindBooking: any;
+    try {
+      ({ runScanSession } = await import("./v3/scan/scan-session.js"));
+      ({ getNextScanDecision } = await import("./v3/scan/scan-orchestrator.js"));
+      ({ getCurrentPredictionScore, getCompetitionMedianMs } = await import("./v3/intelligence/prediction-engine.js"));
+      ({ resolveAccountRole, extractBudgetFromConfig } = await import("./v3/admin/config-schema.js"));
+      ({ getRemainingLogins } = await import("./v3/core/session-pool.js"));
+      ({ tokenCache, setUsaSessionProxy } = await import("./usaPortal/usa-http.js"));
+      ({ getUsaSession } = await import("./usaPortal/usa-session.js"));
+      ({ pollBlindBookingEvents, attemptBlindBooking } = await import("./v3/booking/booking-blind.js"));
+    } catch (importErr) {
+      log("ERROR", `[v3] ❌ CRASH à l'import des modules V3: ${importErr}`);
+      log("ERROR", `[v3] Stack: ${importErr instanceof Error ? importErr.stack : String(importErr)}`);
+      log("ERROR", `[v3] V3 mode désactivé — fallback mode séquentiel`);
+      v3Mode = false;
+      isV3Mode = false;
+    }
 
     // Boucle V3 — tourne en continu pour les dossiers USA actifs
     const v3Loop = async () => {
@@ -1451,6 +1461,63 @@ async function main(): Promise<void> {
         for (const job of sortedJobs) {
           const username = job.hunterConfig.embassyUsername;
           const role = resolveAccountRole(job.hunterConfig as any);
+
+          // ── CONFINÉ : polling blind booking au lieu de scan ──
+          if (role === "confine") {
+            try {
+              const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
+              if (events.length > 0) {
+                log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
+                for (const event of events) {
+                  // Le confiné a besoin d'un token valide pour tenter le booking
+                  const cachedConf = tokenCache.get(username.toLowerCase());
+                  const hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
+                  if (!hasToken) {
+                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — pas de token valide, skip blind booking`);
+                    break;
+                  }
+                  const blindResult = await attemptBlindBooking(event, {
+                    accessToken: cachedConf!.accessToken,
+                    applicationId: job.id,
+                    applicantId: cachedConf!.userID ?? "0",
+                    missionId: 323,
+                    mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
+                    csrfToken: cachedConf!.csrfToken ?? "",
+                    existingLocationType: job.hunterConfig.rescheduleMode ? "POST" : undefined,
+                  });
+                  if (blindResult.success) {
+                    log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
+                    // Post-booking complet (identique au direct)
+                    try {
+                      const session = { accessToken: cachedConf!.accessToken, applicationId: job.id, missionId: 323, applicantId: cachedConf!.userID } as any;
+                      const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, job.id, blindResult.appointmentId);
+                      let pdfStorageId: string | undefined;
+                      if (pdf) {
+                        pdfStorageId = (await uploadFile(pdf.toString("base64"), "application/pdf")) ?? undefined;
+                      }
+                      await reportSlotFound({
+                        applicationId: job.id,
+                        date: event.date,
+                        time: event.time,
+                        location: `${event.office} — Ambassade USA (blind booking via ${event.sourceUsername.slice(0, 8)}…)`,
+                        confirmationCode: blindResult.appointmentId?.toString(),
+                        screenshotStorageId: pdfStorageId,
+                      });
+                    } catch (postErr) {
+                      log("WARN", `[v3-loop] ⚠️ Post-booking confiné échoué (non-bloquant): ${postErr}`);
+                    }
+                    completedJobs.add(job.id);
+                    pausedJobs.add(job.id);
+                    await sendHeartbeat({ applicationId: job.id, result: "slot_found" });
+                    break;
+                  }
+                }
+              }
+            } catch (pollErr) {
+              log("WARN", `[v3-loop] Erreur polling confiné ${username.slice(0,8)}…: ${pollErr}`);
+            }
+            continue; // Pas de scan pour les confinés
+          }
 
           // Demander à l'orchestrateur si on doit scanner maintenant
           const cachedEntry = tokenCache.get(username.toLowerCase());
@@ -1530,9 +1597,11 @@ async function main(): Promise<void> {
     };
 
     // Lancer la boucle V3 en background (non-bloquant — le scheduler séquentiel continue pour CEV/Espagne)
-    v3Loop().catch(err => {
-      log("ERROR", `[v3-loop] Fatal: ${err}`);
-    });
+    if (v3Mode) {
+      v3Loop().catch(err => {
+        log("ERROR", `[v3-loop] Fatal: ${err}`);
+      });
+    }
   }
 
   if (parallelMode && !v3Mode) {
