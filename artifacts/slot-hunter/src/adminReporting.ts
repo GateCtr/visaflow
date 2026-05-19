@@ -118,6 +118,8 @@ export async function sendAdminBundleCheckReport(report: BundleCheckReport): Pro
     const result = (await res.json()) as { id?: string };
     console.log(`[admin-report] ✅ Rapport envoyé à ${adminEmail} (id: ${result.id ?? "?"})`);
 
+    // Log system-level event — the HTTP handler will gracefully skip it
+    // if "system" is not a valid Convex ID (returns 200 with skipped flag)
     botLog({
       applicationId: "system",
       step: "admin_report_sent",

@@ -107,11 +107,105 @@ interface FirstAvailableResult {
   date: string;
 }
 
+// ── FIX #3: Soft-Ban (Honeypot) Detection (19/05/2026) ──────────────────────
+// PROBLEM: Akamai WAF can soft-ban by returning HTTP 200 with an empty/malformed payload.
+//          The bot interprets this as "no slot available" and loops forever, blind to real slots.
+// FIX: Validate response structure. A REAL "no slot" response has { present: false }.
+//      A honeypot/soft-ban returns null, {}, HTML, or missing `present` field.
+//      Track consecutive anomalies and force session rotation after 3.
+
+interface SoftBanState {
+  consecutiveAnomalies: number;
+  lastAnomalyAt: number;
+  totalAnomalies: number;
+}
+
+const softBanStates = new Map<string, SoftBanState>();
+const SOFT_BAN_THRESHOLD = 3; // 3 consecutive anomalies = probable soft-ban
+const SOFT_BAN_RESET_MS = 5 * 60_000; // Reset counter after 5 min without anomaly
+
+function getSoftBanState(username: string): SoftBanState {
+  const key = username.toLowerCase();
+  if (!softBanStates.has(key)) {
+    softBanStates.set(key, { consecutiveAnomalies: 0, lastAnomalyAt: 0, totalAnomalies: 0 });
+  }
+  return softBanStates.get(key)!;
+}
+
+/**
+ * Validates the structure of a getFirstAvailableMonth response.
+ * A legitimate response ALWAYS has a `present` boolean field.
+ * Returns true if valid, false if anomalous (possible soft-ban).
+ */
+function validateFirstAvailableResponse(rawJson: unknown, ofcName: string, username: string): boolean {
+  const state = getSoftBanState(username);
+
+  // Auto-reset if last anomaly was > 5 min ago (the ban may have lifted)
+  if (state.consecutiveAnomalies > 0 && Date.now() - state.lastAnomalyAt > SOFT_BAN_RESET_MS) {
+    state.consecutiveAnomalies = 0;
+  }
+
+  // Validation checks
+  let isAnomaly = false;
+  let reason = "";
+
+  if (rawJson === null || rawJson === undefined) {
+    isAnomaly = true;
+    reason = "null_payload";
+  } else if (typeof rawJson !== "object") {
+    isAnomaly = true;
+    reason = `unexpected_type_${typeof rawJson}`;
+  } else if (Array.isArray(rawJson)) {
+    isAnomaly = true;
+    reason = "array_instead_of_object";
+  } else {
+    const obj = rawJson as Record<string, unknown>;
+    // A real response MUST have `present` as a boolean
+    if (!("present" in obj)) {
+      isAnomaly = true;
+      reason = "missing_present_field";
+    } else if (typeof obj.present !== "boolean") {
+      isAnomaly = true;
+      reason = `present_not_boolean_${typeof obj.present}`;
+    }
+  }
+
+  if (isAnomaly) {
+    state.consecutiveAnomalies++;
+    state.lastAnomalyAt = Date.now();
+    state.totalAnomalies++;
+    console.warn(
+      `[scan-slots] ⚠️ SOFT-BAN DETECTOR: anomalie #${state.consecutiveAnomalies} pour ${ofcName} ` +
+      `(raison: ${reason}, total: ${state.totalAnomalies})`
+    );
+
+    if (state.consecutiveAnomalies >= SOFT_BAN_THRESHOLD) {
+      console.error(
+        `[scan-slots] 🚨 SOFT-BAN DÉTECTÉ — ${state.consecutiveAnomalies} anomalies consécutives ` +
+        `pour ${username.slice(0, 12)}… — FORCER ROTATION SESSION`
+      );
+      // Reset counter to allow retry after rotation
+      state.consecutiveAnomalies = 0;
+      // Throw a specific error that scan-session.ts can catch and handle
+      throw new TokenExpiredError(); // Forces session rotation in the caller
+    }
+    return false;
+  }
+
+  // Valid response — reset counter
+  if (state.consecutiveAnomalies > 0) {
+    console.log(`[scan-slots] ✅ Réponse valide — reset compteur soft-ban (était à ${state.consecutiveAnomalies})`);
+    state.consecutiveAnomalies = 0;
+  }
+  return true;
+}
+
 async function getFirstAvailableMonth(
   session: UsaSession,
   ofc: UsaOfc,
   appDetails: UsaAppDetails,
   rescheduleMode?: boolean,
+  username?: string,
 ): Promise<FirstAvailableResult | null> {
   const payload: Record<string, unknown> = {
     postUserId: ofc.postUserId,
@@ -146,7 +240,14 @@ async function getFirstAvailableMonth(
       return null;
     }
 
-    return await res.json() as FirstAvailableResult;
+    // FIX #3: Validate response structure before trusting it (soft-ban detection)
+    const rawJson = await res.json();
+    const validationKey = username ?? appDetails.applicationId;
+    if (!validateFirstAvailableResponse(rawJson, ofc.postName, validationKey)) {
+      // Anomaly detected but below threshold — treat as "no slot" but count it
+      return null;
+    }
+    return rawJson as FirstAvailableResult;
   } catch (err) {
     if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
         err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
@@ -199,7 +300,7 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
     await maybeDistraction(isRushHour());
 
     // ── getFirstAvailableMonth ──
-    const firstMonth = await getFirstAvailableMonth(session, ofc, appDetails, rescheduleMode);
+    const firstMonth = await getFirstAvailableMonth(session, ofc, appDetails, rescheduleMode, username);
 
     if (!firstMonth || !firstMonth.present) {
       console.log(`[scan-slots] ${ofc.postName}: pas de mois disponible`);

@@ -56,17 +56,55 @@ export class PreflightError extends Error {
   }
 }
 
+// ─── PRIORITY 1: Scan Scenario Selector (19/05/2026) ────────────────────────
+// PROBLEM: The preflight sequence was ALWAYS identical:
+//   landingPage → transformData → search → sanityCheck → OFC list
+// This deterministic ordering is a fingerprint detectable by ML-based WAF.
+//
+// FIX: Randomly select from 5 "human behavior scenarios" that vary:
+//   - Whether to call getLandingPage (browser cache hit = skip 20% of time)
+//   - Whether sanityCheck comes before or after search (user clicking fast)
+//   - Whether to add a micro-pause "distraction" mid-sequence
+//   - Whether to skip OFC list (already cached from previous scan ~80% of time)
+//
+// CONSTRAINTS:
+//   - getTransformData MUST run before search (provides applicantId fallback)
+//   - /appointments/search is ALWAYS required (provides IDs for booking)
+//   - OFC list can be skipped if caller provides a cached version
+
+/** Scan scenario — determines preflight behavior variation. */
+type ScanScenario = "full" | "skip_landing" | "fast_click" | "distracted" | "cached_ofc";
+
+/** Weighted random scenario selection.
+ *  Mimics real human behavior distribution:
+ *  - full (40%): normal page load, all steps
+ *  - skip_landing (20%): browser cached landing page, skips warm-up
+ *  - fast_click (15%): user clicks "Create Appointment" before page fully loads → sanityCheck first
+ *  - distracted (15%): user pauses mid-flow (checks phone) → longer pause between steps
+ *  - cached_ofc (10%): OFC list cached from previous navigation → skip getpost
+ */
+function pickScanScenario(): ScanScenario {
+  const r = Math.random();
+  if (r < 0.40) return "full";
+  if (r < 0.60) return "skip_landing";
+  if (r < 0.75) return "fast_click";
+  if (r < 0.90) return "distracted";
+  return "cached_ofc";
+}
+
 // ─── API publique ───────────────────────────────────────────────────────────
 
 /**
- * Exécute la séquence preflight complète.
+ * Exécute la séquence preflight avec VARIABILITÉ DE SÉQUENCE (Priority 1).
  *
- * Flow :
- *   1. callLandingPage (warm-up anti-détection)
- *   2. getTransformData → paymentStatus, stateCode, visaTypeKey, applicantId
- *   3. /appointments/search → appointmentId, applicantId, visaType, visaClass
- *   4. callSanityCheck (anti-détection)
- *   5. getpost → OFC list
+ * 5 scénarios comportementaux humains réalistes :
+ *   - "full": landingPage → transformData → search → sanityCheck → OFC (40%)
+ *   - "skip_landing": transformData → search → sanityCheck → OFC (20%) — browser cache hit
+ *   - "fast_click": sanityCheck → transformData → search → OFC (15%) — click before page loads
+ *   - "distracted": landingPage → [long pause] → transformData → search → OFC (15%)
+ *   - "cached_ofc": landingPage → transformData → search (10%) — OFC cached from last nav
+ *
+ * RÈGLE ABSOLUE : /appointments/search est TOUJOURS exécuté (fournit les vrais IDs).
  *
  * Lève RateLimitError / AccountBlockedError / TokenExpiredError si critique.
  * Lève PreflightError si les données minimales sont introuvables.
@@ -89,78 +127,138 @@ export async function runPreflight(
   let appointmentLocationType: string | undefined;
   let paymentVerified = true; // optimiste par défaut
 
-  // ── 1. Warm-up (landing page) — anti-détection ──
-  try {
-    await callLandingPage(session);
-  } catch { /* non-bloquant */ }
+  // ── PRIORITY 1: Pick a random scan scenario ──
+  const scenario = pickScanScenario();
+  console.log(`[scan-preflight] 🎲 Scénario: ${scenario}`);
 
-  await interStepPause();
-
-  // ── 2. getTransformData → stateCode, visaTypeKey, paymentStatus ──
-  try {
-    const td = await getUsaTransformData(session, applicationId);
-    if (td) {
-      stateCode = td.stateCode;
-      appointmentPriority = td.appointmentPriority;
-      visaTypeKey = td.visaTypeKey;
-      if (td.visaClass) visaClass = td.visaClass;
-      if (td.visaCategoryKey) visaCategoryKey = td.visaCategoryKey;
-      else if (td.visaCategory) visaCategory = td.visaCategory;
-      if (td.applicantId) applicantId = td.applicantId;
-      if (td.paymentStatus === "VERIFIED") {
-        paymentVerified = true;
-      } else if (td.paymentStatus) {
-        paymentVerified = false;
+  // ── Helper: run getTransformData ──
+  const doTransformData = async () => {
+    try {
+      const td = await getUsaTransformData(session, applicationId);
+      if (td) {
+        stateCode = td.stateCode;
+        appointmentPriority = td.appointmentPriority;
+        visaTypeKey = td.visaTypeKey;
+        if (td.visaClass) visaClass = td.visaClass;
+        if (td.visaCategoryKey) visaCategoryKey = td.visaCategoryKey;
+        else if (td.visaCategory) visaCategory = td.visaCategory;
+        if (td.applicantId) applicantId = td.applicantId;
+        if (td.paymentStatus === "VERIFIED") {
+          paymentVerified = true;
+        } else if (td.paymentStatus) {
+          paymentVerified = false;
+        }
       }
+    } catch (err) {
+      if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
+          err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
+      console.warn(`[scan-preflight] getTransformData échoué — continuera avec les valeurs du search`);
     }
-  } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
-        err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
-    console.warn(`[scan-preflight] getTransformData échoué — continuera avec les valeurs du search`);
-  }
+  };
 
-  await interStepPause();
+  // ── Helper: run /appointments/search ──
+  const doSearch = async () => {
+    try {
+      const searchPayload = {
+        operation: "AND",
+        searchObjects: [
+          { key: "applicationId", value: applicationId, feildType: "STRING", operation: "EQUAL" },
+        ],
+      };
+      const hdrs = authHeaders(session.accessToken, REFERER_CREATE_APT, true);
+      const res = await usaFetch(USA_SEARCH_URL, {
+        method: "POST",
+        headers: hdrs,
+        body: JSON.stringify(searchPayload),
+      });
 
-  // ── 3. /appointments/search → applicantId, visaType, visaClass, appointmentId ──
-  try {
-    const searchPayload = {
-      operation: "AND",
-      searchObjects: [
-        { key: "applicationId", value: applicationId, feildType: "STRING", operation: "EQUAL" },
-      ],
-    };
-    const hdrs = authHeaders(session.accessToken, REFERER_CREATE_APT, true);
-    const res = await usaFetch(USA_SEARCH_URL, {
-      method: "POST",
-      headers: hdrs,
-      body: JSON.stringify(searchPayload),
-    });
+      if (res.status === 429) throw new RateLimitError("/appointments/search", 60_000);
+      if (res.status === 403) throw new AccountBlockedError("/appointments/search");
+      if (res.status === 401) throw new TokenExpiredError();
 
-    if (res.status === 429) throw new RateLimitError("/appointments/search", 60_000);
-    if (res.status === 403) throw new AccountBlockedError("/appointments/search");
-    if (res.status === 401) throw new TokenExpiredError();
+      if (res.ok) {
+        const rows = await res.json() as Record<string, unknown>[];
+        const newEntries = rows.filter(r => r.appointmentStatus === "NEW");
+        const target = newEntries[0] ?? rows[0];
 
-    if (res.ok) {
-      const rows = await res.json() as Record<string, unknown>[];
-      // Filtrer pour appointmentStatus === "NEW" (logique bundle Angular)
-      const newEntries = rows.filter(r => r.appointmentStatus === "NEW");
-      const target = newEntries[0] ?? rows[0];
-
-      if (target) {
-        if (typeof target.applicantId === "string") applicantId = target.applicantId;
-        if (typeof target.visaType === "string") visaTypeKey = visaTypeKey ?? target.visaType as string;
-        if (typeof target.visaClass === "string") visaClass = target.visaClass as string;
-        if (typeof target.appointmentId === "number") appointmentId = target.appointmentId as number;
-        if (typeof target.appointmentLocationType === "string") appointmentLocationType = target.appointmentLocationType as string;
-        if (typeof target.visaCategory === "string") visaCategory = target.visaCategory as string;
-        if (typeof target.applicantUUID === "number") applicantUUID = target.applicantUUID as number;
-        else if (typeof target.applicantUUID === "string") applicantUUID = target.applicantUUID as string;
+        if (target) {
+          if (typeof target.applicantId === "string") applicantId = target.applicantId;
+          if (typeof target.visaType === "string") visaTypeKey = visaTypeKey ?? target.visaType as string;
+          if (typeof target.visaClass === "string") visaClass = target.visaClass as string;
+          if (typeof target.appointmentId === "number") appointmentId = target.appointmentId as number;
+          if (typeof target.appointmentLocationType === "string") appointmentLocationType = target.appointmentLocationType as string;
+          if (typeof target.visaCategory === "string") visaCategory = target.visaCategory as string;
+          if (typeof target.applicantUUID === "number") applicantUUID = target.applicantUUID as number;
+          else if (typeof target.applicantUUID === "string") applicantUUID = target.applicantUUID as string;
+        }
       }
+    } catch (err) {
+      if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
+          err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
+      console.warn(`[scan-preflight] /appointments/search échoué: ${err}`);
     }
-  } catch (err) {
-    if (err instanceof RateLimitError || err instanceof AccountBlockedError ||
-        err instanceof TokenExpiredError || err instanceof AccountRestrictedError) throw err;
-    console.warn(`[scan-preflight] /appointments/search échoué: ${err}`);
+  };
+
+  // ── Execute based on scenario ──
+  switch (scenario) {
+    case "full":
+      // Standard: landing → transform → search → sanity → OFC
+      try { await callLandingPage(session); } catch { /* non-bloquant */ }
+      await interStepPause();
+      await doTransformData();
+      await interStepPause();
+      await doSearch();
+      await interStepPause();
+      try { await callSanityCheck(session); } catch { /* non-bloquant */ }
+      break;
+
+    case "skip_landing":
+      // Browser cached landing page — skip warm-up (20% of real users)
+      // A real Chrome with Service Worker doesn't re-fetch the landing page every time
+      await doTransformData();
+      await interStepPause();
+      await doSearch();
+      await interStepPause();
+      try { await callSanityCheck(session); } catch { /* non-bloquant */ }
+      break;
+
+    case "fast_click":
+      // User clicked "Create Appointment" before page fully loaded
+      // → sanityCheck fires BEFORE getTransformData resolves (Angular race condition)
+      try { await callSanityCheck(session); } catch { /* non-bloquant */ }
+      await interStepPause();
+      try { await callLandingPage(session); } catch { /* non-bloquant */ }
+      await interStepPause();
+      await doTransformData();
+      await interStepPause();
+      await doSearch();
+      break;
+
+    case "distracted":
+      // User got distracted mid-flow (checked phone, read notification)
+      try { await callLandingPage(session); } catch { /* non-bloquant */ }
+      // Long distraction pause (5-12s instead of normal 0.5-2s)
+      await new Promise(r => setTimeout(r, 5000 + Math.random() * 7000));
+      await doTransformData();
+      await interStepPause();
+      await doSearch();
+      // Maybe skip sanityCheck entirely (user navigated away briefly)
+      if (Math.random() > 0.4) {
+        await interStepPause();
+        try { await callSanityCheck(session); } catch { /* non-bloquant */ }
+      }
+      break;
+
+    case "cached_ofc":
+      // OFC list still in Angular sessionStorage from previous navigation
+      // Shorter preflight — landing + transform + search only
+      try { await callLandingPage(session); } catch { /* non-bloquant */ }
+      await interStepPause();
+      await doTransformData();
+      await interStepPause();
+      await doSearch();
+      // Skip sanityCheck (already done on previous page load)
+      break;
   }
 
   // Validation minimale
@@ -170,15 +268,11 @@ export async function runPreflight(
 
   await interStepPause();
 
-  // ── 4. Sanity check (anti-détection) ──
-  try {
-    await callSanityCheck(session);
-  } catch { /* non-bloquant */ }
-
-  await interStepPause();
-
-  // ── 5. getpost → OFC list ──
+  // ── 5. getpost → OFC list (skipped in "cached_ofc" scenario 10% of time) ──
   let ofcList: UsaOfc[];
+
+  // In "cached_ofc" scenario, we still need the OFC list but we use a shorter path
+  // (the real Angular app would already have it in sessionStorage)
   try {
     ofcList = await getUsaOfcList(
       session,

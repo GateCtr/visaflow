@@ -1,11 +1,47 @@
 // ─── V3 Loop — Boucle principale du mode V3 Chasseur ────────────────────────
 // Extracted from index.ts
 
-import { getActiveJobs, sendHeartbeat, getBotConfigValue, reportSlotFound, uploadFile, type HunterJob } from "../convexClient.js";
+import { getActiveJobs, sendHeartbeat, getBotConfigValue, reportSlotFound, uploadFile, botLog, type HunterJob } from "../convexClient.js";
 import { log, URGENCY_ORDER } from "../scheduler-utils.js";
 import { pausedJobs, completedJobs } from "../scheduler-state.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// ── FIX #2: Preflight Cache for Confinés (19/05/2026) ───────────────────────
+// PROBLEM: Each blind booking event triggered a FULL preflight (6 requests + 5 pauses = 10-13s).
+//          Slots at Kinshasa disappear in <3s. The confiné NEVER caught them.
+// FIX: Cache preflight results per account (TTL 15 min). IDs rarely change mid-session.
+//      When an event arrives → use cached data → PUT direct in <2s.
+interface ConfinedPreflightEntry {
+  applicantId: string | number;
+  applicationId: string;
+  appointmentId?: number;
+  applicantUUID?: number | string;
+  mode: "schedule" | "reschedule";
+  cachedAt: number;
+}
+const confinedPreflightCache = new Map<string, ConfinedPreflightEntry>();
+const PREFLIGHT_CACHE_TTL_MS = 15 * 60_000; // 15 min
+
+function getConfinedPreflight(username: string): ConfinedPreflightEntry | null {
+  const key = username.toLowerCase();
+  const entry = confinedPreflightCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > PREFLIGHT_CACHE_TTL_MS) {
+    confinedPreflightCache.delete(key);
+    return null;
+  }
+  return entry;
+}
+
+function setConfinedPreflight(username: string, entry: Omit<ConfinedPreflightEntry, "cachedAt">): void {
+  confinedPreflightCache.set(username.toLowerCase(), { ...entry, cachedAt: Date.now() });
+}
+
+// ── Throttle pour les logs pack_status (1x / 10 min par dossier) ─────────────
+const packStatusTimestamps = new Map<string, number>();
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Start the V3 Chasseur loop.
@@ -78,6 +114,32 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
 
     const rolesStr = sortedJobs.map(j => `${j.applicantName}(${resolveAccountRole(j.hunterConfig as any)})`).join(", ");
     log("INFO", `[v3-loop] ${sortedJobs.length} job(s) USA actifs: ${rolesStr}`);
+
+    // ── PACK STATUS LOG — informer chaque dossier de son rôle dans la meute ──
+    // Throttle: 1x toutes les 10 min par dossier (évite la pollution de la timeline admin)
+    const PACK_STATUS_INTERVAL_MS = 10 * 60_000;
+    for (const job of sortedJobs) {
+      const jobUsername = job.hunterConfig.embassyUsername;
+      if (!jobUsername) continue;
+      const lastPackLog = (packStatusTimestamps.get(jobUsername.toLowerCase()) ?? 0);
+      if (Date.now() - lastPackLog < PACK_STATUS_INTERVAL_MS) continue;
+      packStatusTimestamps.set(jobUsername.toLowerCase(), Date.now());
+
+      const jobRole = resolveAccountRole(job.hunterConfig as any);
+      const packMembers = sortedJobs.filter(j => j.broadcastVisaClass === job.broadcastVisaClass).length;
+      botLog({
+        applicationId: job.id,
+        step: "pack_status",
+        status: "ok",
+        data: {
+          role: jobRole,
+          visaClass: job.broadcastVisaClass ?? "B1/B2",
+          packSize: packMembers,
+          members: sortedJobs.filter(j => j.broadcastVisaClass === job.broadcastVisaClass).map(j => j.applicantName),
+          phase: "scanning",
+        },
+      });
+    }
 
     // ── RESET BUDGET ADMIN ──────────────────────────────────────────────
     for (const job of sortedJobs) {
@@ -224,15 +286,37 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
         }
       }
 
+      // ── HEARTBEAT pour l'éclaireur — alimente lastCheckAt + checkCount dans le panneau admin ──
+      // Sans ça, le panneau affiche "Dernier: 17 mai" et "Tentatives: 85" figés.
+      if (outcome === "no_slot" || outcome === "token_expired" || outcome === "error" || outcome === "proxy_down") {
+        sendHeartbeat({ applicationId: job.id, result: "not_found" }).catch(() => {});
+      }
+
       if (outcome === "slot_captured") {
         completedJobs.add(job.id);
         pausedJobs.add(job.id);
         await sendHeartbeat({ applicationId: job.id, result: "slot_found" as any });
       } else if (outcome === "restricted") {
         pausedJobs.add(job.id);
+        sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Compte restreint par le portail" }).catch(() => {});
       } else if (outcome === "payment_required") {
         pausedJobs.add(job.id);
         await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
+      } else if (outcome === "budget_exhausted") {
+        // ── FIX: Attendre au lieu de spammer des critical errors ──
+        // Le budget ne se reset qu'à minuit UTC. Sans backoff, le bot re-teste
+        // toutes les quelques secondes et spam des critical errors inutilement.
+        const { canLogin } = await import("../v3/core/session-pool.js");
+        const budgetDecision = canLogin(username);
+        const budgetWaitMs = budgetDecision.waitMs ?? 0;
+        // Cap le wait à 30 min max par tick — on re-vérifiera après
+        // (permet de réagir si admin fait un reset_budget entretemps)
+        const cappedWaitMs = Math.min(budgetWaitMs, 30 * 60_000);
+        const effectiveWait = Math.max(cappedWaitMs, 5 * 60_000); // minimum 5 min
+        log("INFO", `[v3-loop] 💤 ${job.applicantName} — budget épuisé, attente ${Math.round(effectiveWait / 60_000)} min (reset dans ${Math.round(budgetWaitMs / 60_000)} min)`);
+        await new Promise(r => setTimeout(r, effectiveWait));
+        scannedOne = true;
+        break; // Pas besoin de tester les autres jobs du même compte
       }
 
       // ── KEEP-ALIVE ENTRE LES SCANS ──
@@ -243,11 +327,113 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
       const postScanTokenValid = !!(postScanCache && Date.now() < postScanCache.expiresAt);
 
       if (blindBookingJobs.length > 0) {
-        log("INFO", `[v3-loop] ⚡ Skip waitMs (${Math.round(waitMs / 1000)}s) — ${blindBookingJobs.length} confiné(s)/hybride(s) en attente, PASSE 2 immédiate`);
+        // ── FIX #1 (19/05/2026): MICRO-WAIT ADAPTATIF au lieu de skip total ──
+        // AVANT : skip complet du waitMs → 5 scans/min → burst détectable par Akamai.
+        // APRÈS : appliquer 30-50% de l'intervalle calculé par l'orchestrator.
+        // Casse le pattern "burst 5 scans/60s" tout en restant réactif pour les confinés.
+        // En mode rush/burst (intervalle < 30s), on applique un minimum de 15s.
+        const microWaitFactor = 0.3 + Math.random() * 0.2; // 30-50% de l'intervalle original
+        const microWaitMs = Math.max(15_000, Math.round(waitMs * microWaitFactor));
+        log("INFO", `[v3-loop] ⏳ Micro-wait ${Math.round(microWaitMs / 1000)}s (${Math.round(microWaitFactor * 100)}% de ${Math.round(waitMs / 1000)}s) — ${blindBookingJobs.length} confiné(s)/hybride(s) en attente`);
+
+        // ── PRIORITY 2 (19/05/2026): WARM STANDBY — Proactive preflight during micro-wait ──
+        // PROBLEM: First blind booking event for a confiné takes 5-10s (full preflight).
+        //          Slots disappear in <3s → confinés NEVER catch the first event of a session.
+        // FIX: During the micro-wait (dead time anyway), run a lightweight
+        //      checkUsaAppointmentRequestStatus + runPreflight for confinés that have a
+        //      valid token but NO cache entry. This pre-fills the cache BEFORE any event.
+        //      Next event → cache HIT → blind booking in <200ms.
+        //
+        // CONSTRAINTS:
+        //   - Only warm up confinés with valid tokens (don't waste logins)
+        //   - Only if no cache exists yet (don't re-preflight needlessly)
+        //   - Run in background (don't block the micro-wait timer)
+        //   - Max 1 confiné per tick (avoid burst of preflight requests)
+        //   - Non-blocking: if preflight fails, just log and move on
+        const warmStandbyPromise = (async () => {
+          // Find the first confiné/hybride with a valid token but no preflight cache
+          for (const confJob of blindBookingJobs) {
+            const confUsername = confJob.hunterConfig.embassyUsername;
+            if (!confUsername) continue;
+
+            // Skip if already cached
+            const existing = getConfinedPreflight(confUsername);
+            if (existing) continue;
+
+            // Check token validity
+            const confCached = tokenCache.get(confUsername.toLowerCase());
+            const confHasToken = !!(confCached && Date.now() < confCached.expiresAt);
+            if (!confHasToken) continue;
+
+            // Found a candidate → run lightweight preflight in background
+            const confRole = resolveAccountRole(confJob.hunterConfig as any);
+            log("INFO", `[v3-loop] 🔥 Warm standby: pré-chauffage ${confJob.applicantName} (${confRole}) pendant micro-wait`);
+
+            try {
+              const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("../usaPortal/appointments-api.js");
+              const { runPreflight: runPreflightWarm } = await import("../v3/scan/scan-preflight.js");
+
+              const warmSession = {
+                accessToken: confCached!.accessToken,
+                refreshToken: confCached!.refreshToken,
+                csrfToken: confCached!.csrfToken ?? "",
+                userID: confCached!.userID,
+                fullName: confCached!.fullName,
+                applicationId: null as string | null,
+                pendingAppoStatus: null,
+                missionId: 323,
+                allowedOfcs: confCached!.allowedOfcs ?? [],
+              } as any;
+
+              const reqStatus = await checkUsaAppointmentRequestStatus(warmSession, undefined);
+              let warmApplicationId = reqStatus.applicationId ?? "";
+              let warmMode: "schedule" | "reschedule" = "schedule";
+
+              if (reqStatus.status === "cancellable") {
+                warmMode = "reschedule";
+                await fetchCancellableSessionIds(warmSession, { id: confJob.id, hunterConfig: confJob.hunterConfig } as any);
+                warmApplicationId = warmSession.applicationId ?? warmApplicationId;
+              }
+
+              if (!warmApplicationId) {
+                log("WARN", `[v3-loop] 🔥 Warm standby: ${confJob.applicantName} — applicationId introuvable, skip`);
+                break; // Don't try other confinés this tick
+              }
+
+              const preflight = await runPreflightWarm(warmSession, warmApplicationId, 323);
+
+              // Store in cache (same format as Fix #2)
+              setConfinedPreflight(confUsername, {
+                applicantId: preflight.appDetails.applicantId,
+                applicationId: warmApplicationId,
+                appointmentId: preflight.appDetails.appointmentId,
+                applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
+                mode: warmMode,
+              });
+
+              log("INFO", `[v3-loop] 🔥 ✅ Warm standby OK: ${confJob.applicantName} — cache rempli (mode=${warmMode}, appId=${warmApplicationId.slice(-8)}…)`);
+            } catch (warmErr) {
+              // Non-blocking — just log and move on
+              log("WARN", `[v3-loop] 🔥 Warm standby échoué pour ${confJob.applicantName}: ${warmErr}`);
+            }
+            break; // Max 1 confiné par tick (avoid burst)
+          }
+        })();
+
+        // Run warm standby IN PARALLEL with the micro-wait timer
+        // The micro-wait is the constraint — if warm standby takes longer, it's abandoned
+        await Promise.all([
+          new Promise(r => setTimeout(r, microWaitMs)),
+          warmStandbyPromise.catch(() => {}), // Never let warm standby failure block the loop
+        ]);
       } else if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
         const { startKeepAlive: startInterScanKA } = await import("../v3/anti-detection/keep-alive.js");
+        // FIX #4: Pass resolved applicationId to keep-alive (not null from cachedEntry).
+        // The scan-session resolves applicationId dynamically — store it for inter-scan pings.
+        // Without this, keep-alive never pings (guard: if (!session.applicationId) return false).
+        const resolvedAppId = postScanCache!.applicationId ?? cachedEntry?.applicationId ?? null;
         const interScanKA = startInterScanKA(
-          { accessToken: postScanCache!.accessToken, applicationId: cachedEntry?.applicationId ?? null, missionId: 323 } as any,
+          { accessToken: postScanCache!.accessToken, applicationId: resolvedAppId, missionId: 323 } as any,
           job.id,
           { minIntervalMs: 8 * 60_000, maxIntervalMs: 12 * 60_000 },
         );
@@ -275,6 +461,11 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
       try {
         const events = await pollBlindBookingEvents(username, convexUrl, hunterKey, job.broadcastVisaClass ?? "B1/B2");
         log("INFO", `[v3-loop] 🔍 ${job.applicantName} (${jobRole}) poll → ${events.length} event(s) pending`);
+
+        // ── HEARTBEAT confiné — prouve à l'admin que ce dossier est en veille active ──
+        // Sans ça, lastCheckAt reste figé et l'admin croit que le bot est mort pour ce dossier.
+        sendHeartbeat({ applicationId: job.id, result: "not_found" }).catch(() => {});
+
         if (events.length > 0) {
           log("INFO", `[v3-loop] 📡 ${job.applicantName} (${jobRole}) — ${events.length} blind booking(s) reçu(s)`);
 
@@ -318,10 +509,25 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
             continue;
           }
 
-          // 2. Preflight UNE SEULE FOIS
+          // 2. Preflight — USE CACHE if available (FIX #2: 13s → 1-2s)
           let confAppDetails: { applicantId: string | number; applicationId: string; appointmentId?: number; applicantUUID?: number | string } | null = null;
           let useReschedule = false;
-          try {
+
+          // ── FIX #2: Check preflight cache first ──
+          const cachedPreflight = getConfinedPreflight(username);
+          if (cachedPreflight) {
+            confAppDetails = {
+              applicantId: cachedPreflight.applicantId,
+              applicationId: cachedPreflight.applicationId,
+              appointmentId: cachedPreflight.appointmentId,
+              applicantUUID: cachedPreflight.applicantUUID,
+            };
+            useReschedule = cachedPreflight.mode === "reschedule";
+            const cacheAgeS = Math.round((Date.now() - cachedPreflight.cachedAt) / 1000);
+            log("INFO", `[v3-loop] ⚡ ${job.applicantName} (${jobRole}) — preflight CACHE HIT (age: ${cacheAgeS}s) → skip 6 requêtes, booking DIRECT`);
+          } else {
+            // Cache miss → full preflight (slow path)
+            try {
             const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("../usaPortal/appointments-api.js");
             const { runPreflight } = await import("../v3/scan/scan-preflight.js");
 
@@ -366,10 +572,20 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
               applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
             };
             log("INFO", `[v3-loop] ✅ ${job.applicantName} (${jobRole}) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId} mode=${useReschedule ? "reschedule" : "schedule"}`);
+
+            // ── FIX #2: Store in cache for next events (TTL 15 min) ──
+            setConfinedPreflight(username, {
+              applicantId: confAppDetails.applicantId,
+              applicationId: confAppDetails.applicationId,
+              appointmentId: confAppDetails.appointmentId,
+              applicantUUID: confAppDetails.applicantUUID,
+              mode: useReschedule ? "reschedule" : "schedule",
+            });
           } catch (preflightErr) {
             log("ERROR", `[v3-loop] ${job.applicantName} (${jobRole}) — preflight échoué: ${preflightErr} — blind booking impossible`);
             continue;
           }
+          } // end cache miss
 
           // 3. Filtrer les events trop vieux (> 60s)
           const MAX_EVENT_AGE_MS = 60_000;
