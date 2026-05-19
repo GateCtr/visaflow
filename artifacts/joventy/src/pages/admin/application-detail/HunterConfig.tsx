@@ -118,9 +118,15 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setMaxMonths(String(hc.maxMonthsToScan ?? 3));
       setNightMode(hc.nightModeEnabled ?? true);
       setPreferredProxy(hc.preferredProxy ?? "");
-      setVisaClassInput(broadcastVisaClass ?? "");
     }
   }, [hc]);
+
+  // Sync visa class from prop separately — broadcastVisaClass lives on the
+  // application document (NOT inside hunterConfig), so it must not be driven
+  // by [hc] which would use a stale closure value after setHunterConfig saves.
+  useEffect(() => {
+    setVisaClassInput(broadcastVisaClass ?? "");
+  }, [broadcastVisaClass]);
 
   const handleSave = async () => {
     if (!username.trim() || !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
