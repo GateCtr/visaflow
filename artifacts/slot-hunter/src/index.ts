@@ -1762,19 +1762,53 @@ async function main(): Promise<void> {
                 continue;
               }
 
-              // 3. Boucle sur les events — tenter chaque slotId sans refaire le preflight
-              for (const event of events) {
-                const blindResult = await attemptBlindBooking(event, {
-                  accessToken: cachedConf!.accessToken,
-                  applicationId: confAppDetails.applicationId,
-                  applicantId: confAppDetails.applicantId,
-                  appointmentId: confAppDetails.appointmentId,
-                  applicantUUID: confAppDetails.applicantUUID as number | undefined,
-                  missionId: 323,
-                  mode: useReschedule ? "reschedule" : "schedule",
-                  csrfToken: cachedConf!.csrfToken ?? "",
-                  existingLocationType: useReschedule ? "POST" : undefined,
-                });
+              // 3. Filtrer les events trop vieux (> 60s depuis détection = slot certainement pris)
+              // FIX 19/05/2026: Les events Convex s'accumulent (TTL 5 min) entre les ticks.
+              // Tenter des slots détectés il y a 3-5 min = gaspillage de requêtes + risque 429.
+              const MAX_EVENT_AGE_MS = 60_000; // 60s max depuis la détection par l'éclaireur
+              const freshEvents = events.filter(e => (Date.now() - (e.discoveredAt ?? 0)) <= MAX_EVENT_AGE_MS);
+              const staleCount = events.length - freshEvents.length;
+              if (staleCount > 0) {
+                log("INFO", `[v3-loop] 🗑️ ${job.applicantName} (confiné) — ${staleCount} event(s) ignoré(s) (> 60s) — ${freshEvents.length} frais`);
+              }
+              if (freshEvents.length === 0) {
+                log("INFO", `[v3-loop] ${job.applicantName} (confiné) — aucun event frais (tous > 60s) — skip`);
+                continue;
+              }
+
+              // 4. Boucle sur les events FRAIS — tenter chaque slotId sans refaire le preflight
+              let rateLimited = false;
+              for (const event of freshEvents) {
+                let blindResult: Awaited<ReturnType<typeof attemptBlindBooking>>;
+                try {
+                  blindResult = await attemptBlindBooking(event, {
+                    accessToken: cachedConf!.accessToken,
+                    applicationId: confAppDetails.applicationId,
+                    applicantId: confAppDetails.applicantId,
+                    appointmentId: confAppDetails.appointmentId,
+                    applicantUUID: confAppDetails.applicantUUID as number | undefined,
+                    missionId: 323,
+                    mode: useReschedule ? "reschedule" : "schedule",
+                    csrfToken: cachedConf!.csrfToken ?? "",
+                    existingLocationType: useReschedule ? "POST" : undefined,
+                  });
+                } catch (bookingErr: any) {
+                  // FIX 19/05/2026: Catch RateLimitError/AccountBlockedError/TokenExpiredError
+                  // thrown by attemptBlindBooking (429/403/401) — stop gracefully instead of
+                  // crashing the entire confiné polling loop.
+                  if (bookingErr?.name === "RateLimitError" || bookingErr?.constructor?.name === "RateLimitError") {
+                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — 429 rate-limit (thrown) — arrêt tentatives`);
+                    rateLimited = true;
+                    break;
+                  }
+                  if (bookingErr?.name === "TokenExpiredError" || bookingErr?.constructor?.name === "TokenExpiredError") {
+                    log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — token expiré — arrêt tentatives`);
+                    break;
+                  }
+                  // Autres erreurs (réseau, etc.) — log et continuer au prochain slot
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — erreur booking: ${bookingErr?.message ?? bookingErr} — tentative suivante`);
+                  continue;
+                }
                 if (blindResult.success) {
                   log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
 
@@ -1815,6 +1849,17 @@ async function main(): Promise<void> {
                 // Slot pris (409) ou autre échec → tenter le prochain slotId broadcasté
                 if (blindResult.statusCode === 409) {
                   log("INFO", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — slot ${event.slotId?.toString().slice(0, 10)}… pris (409) — tentative suivante...`);
+                } else if (blindResult.statusCode === 429) {
+                  // FIX 19/05/2026: 429 = rate-limité par le portail → STOP immédiat pour ce confiné.
+                  // Ne pas tenter les slots suivants (chaque requête aggrave le rate-limit).
+                  // Le prochain tick (5-10 min) permettra une nouvelle tentative.
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — 429 rate-limit — arrêt tentatives (${freshEvents.indexOf(event) + 1}/${freshEvents.length} tentés)`);
+                  break;
+                } else if (blindResult.statusCode === 500) {
+                  // 500 = erreur serveur (ex: "Can't reschedule an In-progress application")
+                  // Pas la peine de retenter les autres slots — même erreur attendue.
+                  log("WARN", `[v3-loop] ⚠️ ${job.applicantName} (confiné) — HTTP 500: ${blindResult.error?.slice(0, 100)} — arrêt tentatives`);
+                  break;
                 }
               }
             }
