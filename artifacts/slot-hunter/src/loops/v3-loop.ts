@@ -233,6 +233,21 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
       } else if (outcome === "payment_required") {
         pausedJobs.add(job.id);
         await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
+      } else if (outcome === "budget_exhausted") {
+        // ── FIX: Attendre au lieu de spammer des critical errors ──
+        // Le budget ne se reset qu'à minuit UTC. Sans backoff, le bot re-teste
+        // toutes les quelques secondes et spam des critical errors inutilement.
+        const { canLogin } = await import("../v3/core/session-pool.js");
+        const budgetDecision = canLogin(username);
+        const budgetWaitMs = budgetDecision.waitMs ?? 0;
+        // Cap le wait à 30 min max par tick — on re-vérifiera après
+        // (permet de réagir si admin fait un reset_budget entretemps)
+        const cappedWaitMs = Math.min(budgetWaitMs, 30 * 60_000);
+        const effectiveWait = Math.max(cappedWaitMs, 5 * 60_000); // minimum 5 min
+        log("INFO", `[v3-loop] 💤 ${job.applicantName} — budget épuisé, attente ${Math.round(effectiveWait / 60_000)} min (reset dans ${Math.round(budgetWaitMs / 60_000)} min)`);
+        await new Promise(r => setTimeout(r, effectiveWait));
+        scannedOne = true;
+        break; // Pas besoin de tester les autres jobs du même compte
       }
 
       // ── KEEP-ALIVE ENTRE LES SCANS ──
