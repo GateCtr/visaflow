@@ -53,8 +53,8 @@ export interface RelayDecision {
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-/** Seuil de budget sous lequel on déclenche le relais (garder 2 pour emergency blind booking). */
-const RELAY_BUDGET_THRESHOLD = 2;
+/** Seuil de budget sous lequel on déclenche le relais (garder 3 pour emergency blind booking). */
+const RELAY_BUDGET_THRESHOLD = 3;
 
 /** Durée max d'un shift éclaireur avant relais forcé (3h = 180 min). */
 const MAX_SHIFT_DURATION_MS = 3 * 60 * 60_000;
