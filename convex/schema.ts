@@ -458,4 +458,35 @@ export default defineSchema({
     .index("by_source", ["sourceUsername"])
     .index("by_visa_class", ["visaClass"])
     .index("by_visa_class_discovered", ["visaClass", "discoveredAt"]),
+
+  // ─── Relay System (V3 Auto-Relay) ───────────────────────────────────────────
+  // Système de relais automatique éclaireur → confiné au sein d'une même meute.
+  // Quand un éclaireur épuise son budget (ou atteint une fenêtre planifiée),
+  // il passe le relais à un autre compte de la même broadcastVisaClass.
+  // Le successeur promeut son rôle en "eclaireur" et l'ancien se confine.
+  slotRelayState: defineTable({
+    /** Classe de visa de la meute (ex: "F1", "B1/B2"). */
+    visaClass: v.string(),
+    /** Username du compte actuellement éclaireur. */
+    currentEclaireur: v.string(),
+    /** ApplicationId du dossier éclaireur actif. */
+    currentEclaireurAppId: v.id("applications"),
+    /** Timestamp de prise de relais. */
+    activeeSince: v.number(),
+    /** Fenêtres de relais planifiées (heures Kinshasa en décimal). */
+    relayWindows: v.optional(v.array(v.object({
+      hour: v.number(),
+      durationMinutes: v.optional(v.number()),
+    }))),
+    /** Historique des relais (pour stats/debug). */
+    history: v.optional(v.array(v.object({
+      from: v.string(),
+      to: v.string(),
+      reason: v.string(),
+      at: v.number(),
+    }))),
+    updatedAt: v.number(),
+  })
+    .index("by_visa_class", ["visaClass"])
+    .index("by_current_eclaireur", ["currentEclaireur"]),
 });

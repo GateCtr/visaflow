@@ -1522,6 +1522,51 @@ async function main(): Promise<void> {
           return role === "confine" || role === "hybride";
         });
 
+        // ── RELAY SYSTEM : vérifier si l'éclaireur doit passer le relais ──
+        // Pour chaque meute (broadcastVisaClass) qui a un éclaireur actif,
+        // vérifier s'il doit handoff. Si oui, Convex promeut le successeur.
+        // Au tick suivant les rôles seront mis à jour (resolveAccountRole lit le hunterConfig).
+        {
+          const { shouldHandoff, requestHandoff } = await import("./v3/relay/relay-client.js");
+          const meuteEclaireurs = new Map<string, typeof eclaireurJobs[0]>();
+          for (const job of eclaireurJobs) {
+            const vc = job.broadcastVisaClass;
+            if (!vc) continue;
+            const role = resolveAccountRole(job.hunterConfig as any);
+            if (role === "eclaireur") {
+              meuteEclaireurs.set(vc, job);
+            }
+          }
+
+          for (const [visaClass, job] of meuteEclaireurs) {
+            const username = job.hunterConfig.embassyUsername;
+            const cachedEntry = tokenCache.get(username.toLowerCase());
+            const hasValidToken = !!(cachedEntry && Date.now() < cachedEntry.expiresAt);
+            const isRestricted = pausedJobs.has(job.id);
+
+            // Nombre de membres dans la meute (pour savoir si un relais est possible)
+            const packSize = sortedJobs.filter(j => j.broadcastVisaClass === visaClass).length;
+
+            // Lire le shift start depuis le relay state (ou utiliser le début du tick)
+            const relayState = await import("./v3/relay/relay-client.js").then(m =>
+              m.getRelayState(convexUrl!, hunterKey!, visaClass)
+            );
+            const shiftStartedAt = relayState?.activeeSince ?? Date.now() - 30 * 60_000;
+
+            const decision = shouldHandoff(username, shiftStartedAt, isRestricted, hasValidToken, packSize);
+
+            if (decision.shouldRelay) {
+              log("INFO", `[relay] 🔄 ${job.applicantName} (${visaClass}) → relais demandé : ${decision.reason}`);
+              const result = await requestHandoff(convexUrl!, hunterKey!, visaClass, username, decision.reason);
+              if (result.ok) {
+                log("INFO", `[relay] ✅ Relais accepté : ${result.applicantName} (${result.newEclaireur}) prend le relais`);
+              } else {
+                log("WARN", `[relay] ⚠️ Relais impossible pour ${visaClass} : ${result.reason ?? "aucun successeur"}`);
+              }
+            }
+          }
+        }
+
         // ── PASSE 1 : ÉCLAIREURS (scan + broadcast) ──────────────────────
         let scannedOne = false;
         for (const job of eclaireurJobs) {
@@ -1587,6 +1632,19 @@ async function main(): Promise<void> {
           });
 
           log("INFO", `[v3-loop] ✅ ${job.applicantName} — résultat: ${outcome}`);
+
+          // ── RELAY CONFIRM : si ce compte vient d'être promu éclaireur par le relay,
+          // confirmer à Convex qu'il est opérationnel (token actif).
+          if (outcome !== "restricted" && outcome !== "payment_required" && job.broadcastVisaClass) {
+            const postScanCached = tokenCache.get(username.toLowerCase());
+            const postScanValid = !!(postScanCached && Date.now() < postScanCached.expiresAt);
+            if (postScanValid && role === "eclaireur") {
+              try {
+                const { confirmRelay } = await import("./v3/relay/relay-client.js");
+                await confirmRelay(convexUrl!, hunterKey!, job.broadcastVisaClass, username);
+              } catch { /* non-bloquant */ }
+            }
+          }
 
           if (outcome === "slot_captured") {
             completedJobs.add(job.id);

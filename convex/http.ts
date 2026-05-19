@@ -1343,4 +1343,122 @@ http.route({
   }),
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Relay System (V3 Auto-Relay) ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /hunter/relay/state?visaClass=B1/B2 — état du relais pour une meute
+http.route({
+  path: "/hunter/relay/state",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const visaClass = url.searchParams.get("visaClass");
+    if (!visaClass) {
+      return new Response(JSON.stringify({ error: "Missing visaClass param" }), { status: 400 });
+    }
+
+    const state = await ctx.runQuery(internal.relay.internalGetRelayState, { visaClass });
+    return new Response(JSON.stringify({ state }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// GET /hunter/relay/pack?visaClass=B1/B2 — liste les membres éligibles d'une meute
+http.route({
+  path: "/hunter/relay/pack",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const url = new URL(request.url);
+    const visaClass = url.searchParams.get("visaClass");
+    if (!visaClass) {
+      return new Response(JSON.stringify({ error: "Missing visaClass param" }), { status: 400 });
+    }
+
+    const members = await ctx.runQuery(internal.relay.internalGetPackMembers, { visaClass });
+    return new Response(JSON.stringify({ members }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// POST /hunter/relay/handoff — demande un passage de relais
+http.route({
+  path: "/hunter/relay/handoff",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { visaClass: string; currentUsername: string; reason: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.visaClass || !body.currentUsername || !body.reason) {
+      return new Response("Missing required fields: visaClass, currentUsername, reason", { status: 400 });
+    }
+
+    const result = await ctx.runMutation(internal.relay.internalRequestHandoff, {
+      visaClass: body.visaClass,
+      currentUsername: body.currentUsername,
+      reason: body.reason,
+    });
+
+    if (!result) {
+      return new Response(JSON.stringify({ ok: false, reason: "no_successor_available" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true, ...result }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// POST /hunter/relay/confirm — successeur confirme qu'il est prêt
+http.route({
+  path: "/hunter/relay/confirm",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { visaClass: string; username: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.visaClass || !body.username) {
+      return new Response("Missing required fields: visaClass, username", { status: 400 });
+    }
+
+    const confirmed = await ctx.runMutation(internal.relay.internalConfirmRelay, {
+      visaClass: body.visaClass,
+      username: body.username,
+    });
+
+    return new Response(JSON.stringify({ ok: confirmed }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 export default http;
