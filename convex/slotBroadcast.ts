@@ -3,6 +3,12 @@
  *
  * Table : slotBroadcasts
  * TTL logique : 5 min (les confinés ne réagissent pas après 5 min)
+ *
+ * ═══ SEGMENTATION VISA CLASS ═══
+ * Le serveur USA retourne les slots par visaClass. Un slotId détecté par un
+ * compte F1 n'est PAS valide pour un compte B1/B2 (409 "No free slots").
+ * → Chaque broadcast porte un tag visaClass.
+ * → Les confinés ne reçoivent QUE les broadcasts de leur propre visaClass.
  */
 
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -12,6 +18,8 @@ import { v } from "convex/values";
 export const internalCreate = internalMutation({
   args: {
     sourceUsername: v.string(),
+    /** Classe de visa normalisée de l'éclaireur (ex: "F1", "B1/B2", "H", "K"). */
+    visaClass: v.string(),
     office: v.string(),
     postUserId: v.number(),
     date: v.string(),
@@ -31,19 +39,26 @@ export const internalCreate = internalMutation({
   },
 });
 
-/** Récupère les événements non traités par un compte donné (< 5 min). */
+/**
+ * Récupère les événements non traités par un compte donné (< 5 min).
+ * FILTRE STRICT par visaClass : un confiné B1/B2 ne voit QUE les broadcasts B1/B2.
+ */
 export const internalGetPending = internalQuery({
   args: {
     username: v.string(),
+    /** Classe de visa du confiné qui demande — filtrage obligatoire. */
+    visaClass: v.string(),
   },
   handler: async (ctx, args) => {
     const fiveMinAgo = Date.now() - 5 * 60 * 1000;
     const username = args.username.toLowerCase();
 
-    // Récupérer les événements récents
+    // Utiliser l'index composé (visaClass, discoveredAt) pour un scan ciblé
     const events = await ctx.db
       .query("slotBroadcasts")
-      .withIndex("by_discovered", (q) => q.gte("discoveredAt", fiveMinAgo))
+      .withIndex("by_visa_class_discovered", (q) =>
+        q.eq("visaClass", args.visaClass).gte("discoveredAt", fiveMinAgo)
+      )
       .collect();
 
     // Filtrer : pas encore traité par ce compte + pas émis par ce compte
@@ -56,6 +71,7 @@ export const internalGetPending = internalQuery({
     return pending.map((e) => ({
       eventId: e._id,
       sourceUsername: e.sourceUsername,
+      visaClass: e.visaClass,
       office: e.office,
       postUserId: e.postUserId,
       date: e.date,

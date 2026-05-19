@@ -25,6 +25,8 @@ export interface HunterJob {
   applicantName: string;
   travelDate: string;
   urgencyTier: string;
+  /** Classe de visa normalisée pour le canal de broadcast (ex: "F1", "B1/B2", "H"). */
+  broadcastVisaClass: string | null;
   slotBookingRefs: {
     ds160Confirmation?: string;
     mrvReceiptNumber?: string;

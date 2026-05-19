@@ -70,6 +70,8 @@ export interface ScanSessionConfig {
   /** Convex URL + API key (pour blind booking + discovery). */
   convexSiteUrl: string;
   hunterApiKey: string;
+  /** Classe de visa normalisée pour le canal de broadcast (ex: "F1", "B1/B2"). */
+  visaClass?: string;
 }
 
 // ─── API publique ───────────────────────────────────────────────────────────
@@ -225,6 +227,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
         blindBookingEnabled: hunterConfig.blindBookingEnabled,
         convexSiteUrl,
         hunterApiKey,
+        visaClass: config.visaClass,
       });
 
       // Reporter discovery

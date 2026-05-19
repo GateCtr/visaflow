@@ -1577,6 +1577,7 @@ async function main(): Promise<void> {
             },
             convexSiteUrl: convexUrl!,
             hunterApiKey: hunterKey!,
+            visaClass: job.broadcastVisaClass ?? undefined,
           });
 
           log("INFO", `[v3-loop] ✅ ${job.applicantName} — résultat: ${outcome}`);
@@ -1650,7 +1651,7 @@ async function main(): Promise<void> {
         for (const job of confineJobs) {
           const username = job.hunterConfig.embassyUsername;
           try {
-            const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!);
+            const events = await pollBlindBookingEvents(username, convexUrl!, hunterKey!, job.broadcastVisaClass ?? "B1/B2");
             log("INFO", `[v3-loop] 🔍 ${job.applicantName} (confiné) poll → ${events.length} event(s) pending`);
             if (events.length > 0) {
               log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);

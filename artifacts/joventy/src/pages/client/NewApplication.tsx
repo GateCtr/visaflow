@@ -472,6 +472,25 @@ export default function NewApplication() {
                 />
               )}
 
+              {/* USA — Classification visa (NIV/IV) — informatif */}
+              {selectedDest === "usa" && selectedVisaType && (
+                <div className="animate-in fade-in slide-in-from-top-4 flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-700 px-2 py-0.5 bg-indigo-100 rounded-full">
+                      {/^(IR|CR|F[1-4]-IV|EB|DV|SB|SE|SQ|F2[AB])/.test(selectedVisaType) ? "IV" : "NIV"}
+                    </span>
+                    <span className="text-xs text-indigo-700 font-medium">
+                      {/^(IR|CR|F[1-4]-IV|EB|DV|SB|SE|SQ|F2[AB])/.test(selectedVisaType)
+                        ? "Immigrant Visa — résidence permanente"
+                        : "Non-Immigrant Visa — séjour temporaire"}
+                    </span>
+                  </div>
+                  <span className="ml-auto text-[10px] text-indigo-500">
+                    Canal de recherche assigné automatiquement
+                  </span>
+                </div>
+              )}
+
               {/* CEV / Schengen — Visa C court séjour */}
               {isSchengen && selectedVisaType && !isSchengenVisaD && (
                 <div className="animate-in fade-in slide-in-from-top-4 space-y-4 bg-blue-50 border border-blue-200 rounded-xl p-5">

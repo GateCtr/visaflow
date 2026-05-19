@@ -1231,6 +1231,7 @@ http.route({
 
     let body: {
       sourceUsername: string;
+      visaClass?: string;
       office: string;
       postUserId: number;
       date: string;
@@ -1251,8 +1252,12 @@ http.route({
       return new Response("Missing required fields", { status: 400 });
     }
 
+    // visaClass obligatoire pour la segmentation — fallback "B1/B2" pour rétro-compatibilité
+    const visaClass = body.visaClass || "B1/B2";
+
     const eventId = await ctx.runMutation(internal.slotBroadcast.internalCreate, {
       sourceUsername: body.sourceUsername,
+      visaClass,
       office: body.office ?? "",
       postUserId: body.postUserId ?? 0,
       date: body.date,
@@ -1263,7 +1268,7 @@ http.route({
       sourceBooked: body.sourceBooked ?? false,
     });
 
-    return new Response(JSON.stringify({ ok: true, eventId }), {
+    return new Response(JSON.stringify({ ok: true, eventId, visaClass }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -1271,6 +1276,7 @@ http.route({
 });
 
 // GET /hunter/slot-broadcast/pending — confiné récupère les slots non traités
+// FILTRE VISA CLASS : ?visaClass=F1 → seuls les broadcasts F1 sont retournés
 http.route({
   path: "/hunter/slot-broadcast/pending",
   method: "GET",
@@ -1280,6 +1286,7 @@ http.route({
 
     const url = new URL(request.url);
     const username = url.searchParams.get("username");
+    const visaClass = url.searchParams.get("visaClass") || "B1/B2";
     if (!username) {
       return new Response(JSON.stringify({ events: [] }), {
         status: 200,
@@ -1289,6 +1296,7 @@ http.route({
 
     const events = await ctx.runQuery(internal.slotBroadcast.internalGetPending, {
       username,
+      visaClass,
     });
 
     return new Response(JSON.stringify({ events }), {
