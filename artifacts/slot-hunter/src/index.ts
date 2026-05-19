@@ -1446,7 +1446,16 @@ async function main(): Promise<void> {
         );
 
         if (usaJobs.length === 0) {
-          log("INFO", "[v3-loop] Aucun dossier USA actif — polling dans 60s");
+          // DEBUG: Loguer pourquoi aucun job n'est trouvé
+          const allUsaRaw = jobs.filter(j => j.destination === "usa");
+          const reasons = allUsaRaw.map(j => {
+            if (!j.hunterConfig?.isActive) return `${j.applicantName}: inactive`;
+            if (pausedJobs.has(j.id)) return `${j.applicantName}: paused`;
+            if (completedJobs.has(j.id)) return `${j.applicantName}: completed`;
+            if (!j.hunterConfig.embassyUsername) return `${j.applicantName}: no embassyUsername`;
+            return `${j.applicantName}: SHOULD BE ACTIVE (?)`;
+          });
+          log("INFO", `[v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: ${allUsaRaw.length}, raisons: ${reasons.join(" | ")})`);
           await new Promise(r => setTimeout(r, 60_000));
           continue;
         }
@@ -1456,6 +1465,10 @@ async function main(): Promise<void> {
           const tiers: Record<string, number> = { tres_urgent: 0, urgent: 1, prioritaire: 2, standard: 3 };
           return (tiers[a.urgencyTier] ?? 3) - (tiers[b.urgencyTier] ?? 3);
         });
+
+        // Log les jobs trouvés et leurs rôles à chaque tick
+        const rolesStr = sortedJobs.map(j => `${j.applicantName}(${resolveAccountRole(j.hunterConfig as any)})`).join(", ");
+        log("INFO", `[v3-loop] ${sortedJobs.length} job(s) USA actifs: ${rolesStr}`);
 
         let scannedOne = false;
         for (const job of sortedJobs) {
