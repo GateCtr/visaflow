@@ -22,8 +22,10 @@
 import type { UsaOfc, UsaAppDetails, SlotFound } from "../../usaPortal/usa-scan-types.js";
 import type { SlotDiscoveryEvent } from "../../convexClient.js";
 import type { UsaSession } from "../../usaPortal/types.js";
-import { USA_FIRST_AVAILABLE_MONTH_URL, REFERER_CREATE_APT } from "../../usaPortal/config.js";
+import { USA_FIRST_AVAILABLE_MONTH_URL, USA_SLOT_DATES_URL, USA_SLOT_TIMES_URL, REFERER_CREATE_APT } from "../../usaPortal/config.js";
 import { usaFetch, authHeaders } from "../../usaPortal/usa-http.js";
+import type { UsaTimeSlot } from "../../usaPortal/usa-scan-types.js";
+import { toYMD, lastDayOfMonth } from "../../usaPortal/usa-scan-types.js";
 
 /**
  * Construit le Referer dynamique pour le mode reschedule.
@@ -217,36 +219,152 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
 
     // ── Discovery + Broadcast : le premier mois disponible est une info précieuse ──
     // Même si c'est après la deadline de l'éclaireur, un confiné peut avoir une deadline
-    // différente et vouloir cette date. On reporte ET broadcast.
+    // différente et vouloir cette date. L'éclaireur va jusqu'à getSlotTime pour obtenir
+    // un vrai slotId utilisable par les confinés pour le blind booking.
     const firstMonthDate = firstMonth.date.split("T")[0]; // "2026-10-16" from ISO
     if (dateDeadline && firstMonthDate > dateDeadline) {
-      // Hors fenêtre de l'éclaireur — reporter en discovery ET broadcaster aux confinés
-      discoveryEvents.push({
-        applicationId,
-        destination: "usa",
-        office: ofc.postName,
-        dateFound: firstMonthDate,
-        outcome: "ignored",
-        reason: "after_deadline",
-        context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date },
-        mode: rescheduleMode ? "reschedule" : "schedule",
-      });
+      // Hors fenêtre de l'éclaireur — mais on scanne quand même pour les confinés
+      console.log(`[scan-slots] 📡 ${ofc.postName}: date ${firstMonthDate} hors fenêtre éclaireur (deadline: ${dateDeadline}) — scan étendu pour confinés...`);
 
-      // Broadcast aux confinés — ils ont peut-être une deadline plus large
-      if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
-        const broadcastEvent: SlotBroadcastEvent = {
-          sourceUsername: username,
+      // Appeler getSlotDates pour obtenir les dates exactes du premier mois
+      const slotRefererExt = buildSlotReferer(rescheduleMode, appDetails, session);
+      const hdrsExt = authHeaders(session.accessToken, slotRefererExt, true);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const monthStart = new Date(firstMonth.date);
+      monthStart.setDate(1);
+      const fromDateExt = toYMD(monthStart > tomorrow ? monthStart : tomorrow);
+      const toDateExt = lastDayOfMonth(monthStart);
+
+      try {
+        const datesRes = await usaFetch(USA_SLOT_DATES_URL, {
+          method: "POST",
+          headers: hdrsExt,
+          body: JSON.stringify({
+            ...{
+              postUserId: ofc.postUserId,
+              applicantId: appDetails.applicantId,
+              visaType: appDetails.visaTypeKey ?? appDetails.visaType,
+              visaClass: appDetails.visaClass,
+              locationType: rescheduleMode
+                ? (appDetails.appointmentLocationType ?? ofc.officeType ?? "POST")
+                : (ofc.officeType ?? "OFC"),
+              applicationId: appDetails.applicationId,
+            },
+            fromDate: fromDateExt,
+            toDate: toDateExt,
+          }),
+        });
+
+        if (datesRes.ok) {
+          const rawDates = await datesRes.json() as unknown[];
+          // Parse dates (format objet ou string ISO)
+          const parsedDates: string[] = Array.isArray(rawDates)
+            ? rawDates.map(d => typeof d === "string" ? d.split("T")[0] : (d as { date: string }).date)
+            : [];
+
+          if (parsedDates.length > 0) {
+            const targetDate = parsedDates[0];
+            console.log(`[scan-slots] 📡 getSlotDates OK — ${parsedDates.length} date(s) trouvée(s), getSlotTime sur ${targetDate}...`);
+
+            // Appeler getSlotTime pour obtenir le slotId
+            const timeRes = await usaFetch(USA_SLOT_TIMES_URL, {
+              method: "POST",
+              headers: hdrsExt,
+              body: JSON.stringify({
+                postUserId: ofc.postUserId,
+                applicantId: appDetails.applicantId,
+                slotDate: targetDate,
+                visaType: appDetails.visaTypeKey ?? appDetails.visaType,
+                visaClass: appDetails.visaClass,
+                applicationId: appDetails.applicationId,
+                fromDate: fromDateExt,
+                toDate: toDateExt,
+              }),
+            });
+
+            if (timeRes.ok) {
+              const timeSlots = await timeRes.json() as UsaTimeSlot[];
+              if (Array.isArray(timeSlots) && timeSlots.length > 0) {
+                console.log(`[scan-slots] 📡 ✅ ${timeSlots.length} créneau(x) trouvé(s) pour confinés — ${targetDate}`);
+
+                // Broadcaster TOUS les timeSlots (pas juste le premier)
+                // Si le confiné reçoit un 409 sur le premier, il tente les suivants
+                for (const slot of timeSlots) {
+                  const rawTime = slot.startTime ?? "";
+                  const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
+
+                  // Discovery event pour chaque horaire
+                  discoveryEvents.push({
+                    applicationId,
+                    destination: "usa",
+                    office: ofc.postName,
+                    dateFound: targetDate,
+                    timeFound: time,
+                    outcome: "ignored", // Ignoré par l'éclaireur (hors SA fenêtre)
+                    reason: "after_deadline_broadcast_to_confines",
+                    context: { deadline: dateDeadline, slotId: slot.slotId, forConfinés: true, totalSlots: timeSlots.length },
+                    mode: rescheduleMode ? "reschedule" : "schedule",
+                  });
+
+                  // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
+                  if (config.accountRole === "eclaireur" && config.blindBookingEnabled && config.convexSiteUrl && config.hunterApiKey) {
+                    const broadcastEvent: SlotBroadcastEvent = {
+                      sourceUsername: username,
+                      office: ofc.postName,
+                      postUserId: ofc.postUserId,
+                      date: targetDate,
+                      time,
+                      slotId: String(slot.slotId),
+                      startTime: slot.startTime ?? "",
+                      discoveredAt: Date.now(),
+                      sourceBooked: false,
+                    };
+                    broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+                  }
+                }
+                console.log(`[scan-slots] 📡 ${timeSlots.length} broadcast(s) envoyé(s) aux confinés pour ${targetDate}`);
+              } else {
+                console.log(`[scan-slots] 📡 getSlotTime retourné 0 horaires pour ${targetDate} — pas de broadcast`);
+                discoveryEvents.push({
+                  applicationId,
+                  destination: "usa",
+                  office: ofc.postName,
+                  dateFound: targetDate,
+                  outcome: "ignored",
+                  reason: "after_deadline_no_time_slots",
+                  context: { deadline: dateDeadline },
+                  mode: rescheduleMode ? "reschedule" : "schedule",
+                });
+              }
+            }
+          } else {
+            console.log(`[scan-slots] 📡 getSlotDates retourné 0 dates — pas de broadcast`);
+            discoveryEvents.push({
+              applicationId,
+              destination: "usa",
+              office: ofc.postName,
+              dateFound: firstMonthDate,
+              outcome: "ignored",
+              reason: "after_deadline",
+              context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date },
+              mode: rescheduleMode ? "reschedule" : "schedule",
+            });
+          }
+        }
+      } catch (extErr) {
+        // Erreur lors du scan étendu — non bloquant, on continue
+        console.warn(`[scan-slots] 📡 Scan étendu pour confinés échoué: ${extErr} — skip broadcast`);
+        discoveryEvents.push({
+          applicationId,
+          destination: "usa",
           office: ofc.postName,
-          postUserId: ofc.postUserId,
-          date: firstMonthDate,
-          time: "", // Pas encore de getSlotTime — juste la date
-          slotId: "", // Pas de slotId encore (getSlotTime non appelé)
-          startTime: "",
-          discoveredAt: Date.now(),
-          sourceBooked: false,
-        };
-        broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
-        console.log(`[scan-slots] 📡 Date ${firstMonthDate} hors fenêtre éclaireur mais broadcastée aux confinés (deadline éclaireur: ${dateDeadline})`);
+          dateFound: firstMonthDate,
+          outcome: "ignored",
+          reason: "after_deadline",
+          context: { deadline: dateDeadline, firstAvailableMonth: firstMonth.date, error: String(extErr) },
+          mode: rescheduleMode ? "reschedule" : "schedule",
+        });
       }
     }
 
