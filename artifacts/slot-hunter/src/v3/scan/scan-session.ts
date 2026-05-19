@@ -241,7 +241,8 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
           blindShared: 0,
         });
         // Envoyer les discoveries à Convex (enrichit le calendrier admin)
-        reportSlotDiscoveryBatch(scanResult.discoveryEvents);
+        // Override applicationId avec le jobId Convex (les events contiennent le portalApplicationId)
+        reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
       }
 
       // Pas de slot → fin normale
@@ -330,7 +331,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
 
         // 3. Envoyer les événements de découverte collectés pendant ce scan
         if (scanResult.discoveryEvents.length > 0) {
-          reportSlotDiscoveryBatch(scanResult.discoveryEvents);
+          reportSlotDiscoveryBatch(scanResult.discoveryEvents.map(e => ({ ...e, applicationId: jobId })));
         }
 
         return "slot_captured";

@@ -439,7 +439,11 @@ export const assignVisaClass = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
-    if (getRole(identity as Record<string, unknown>) !== "admin")
+
+    const role = getRole(identity as Record<string, unknown>);
+    console.log("[assignVisaClass] identity.subject:", identity.subject, "role:", role, "broadcastVisaClass:", args.broadcastVisaClass);
+
+    if (role !== "admin")
       throw new Error("Unauthorized — réservé aux administrateurs");
 
     const app = await ctx.db.get(args.applicationId);
@@ -458,6 +462,7 @@ export const assignVisaClass = mutation({
       )],
     });
 
+    console.log("[assignVisaClass] ✅ Patch applied successfully for app:", args.applicationId, "→ broadcastVisaClass:", args.broadcastVisaClass);
     return args.applicationId;
   },
 });
