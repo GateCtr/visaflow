@@ -1,3 +1,4 @@
+// Build trigger 19/05/2026 09:47
 import * as dotenv from "dotenv";
 dotenv.config();
 
