@@ -41,7 +41,8 @@ import {
   logSessionStart, logSessionExpire, logSlotDetected,
   logBookingResult, logDiscoveryBatch, logCriticalError,
 } from "../admin/bot-log.js";
-import { reportSlotDiscoveryBatch } from "../../convexClient.js";
+import { reportSlotDiscoveryBatch, reportSlotFound, uploadFile } from "../../convexClient.js";
+import { downloadUsaConfirmationPdf } from "../../usaPortal/usa-scan-confirmation.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -290,6 +291,45 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
 
       if (bookingOutcome.success) {
         console.log(`[scan-session] 🎉 BOOKING RÉUSSI — ${slot.ofcName} ${slot.date} ${slot.time}`);
+
+        // ── Post-booking : identique au mode séquentiel ──────────────────────
+
+        // 1. Télécharger la lettre de confirmation PDF
+        let pdfStorageId: string | undefined;
+        try {
+          const pdf = await downloadUsaConfirmationPdf(session!, session!.applicationId ?? applicationId, bookingOutcome.appointmentId);
+          if (pdf) {
+            console.log(`[scan-session] 📄 Confirmation PDF (${pdf.length} bytes) — upload vers Convex...`);
+            const b64 = pdf.toString("base64");
+            pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+            if (pdfStorageId) {
+              console.log(`[scan-session] ✅ PDF uploadé → storageId: ${pdfStorageId}`);
+            }
+          }
+        } catch (pdfErr) {
+          console.warn(`[scan-session] ⚠️ PDF téléchargement échoué (non-bloquant): ${pdfErr}`);
+        }
+
+        // 2. Reporter le slot trouvé vers Convex (déclenche email + WhatsApp + notification + timer 48h)
+        try {
+          await reportSlotFound({
+            applicationId: jobId,
+            date: slot.date,
+            time: slot.time,
+            location: `${slot.ofcName} — Ambassade USA (slotId=${slot.slotId}, appointmentId=${bookingOutcome.appointmentId}, via=v3_scan_session)`,
+            confirmationCode: bookingOutcome.appointmentId?.toString(),
+            screenshotStorageId: pdfStorageId,
+          });
+          console.log(`[scan-session] ✅ reportSlotFound envoyé → Convex (email + WhatsApp + notif déclenché)`);
+        } catch (reportErr) {
+          console.error(`[scan-session] ❌ reportSlotFound ÉCHOUÉ: ${reportErr}`);
+        }
+
+        // 3. Envoyer les événements de découverte collectés pendant ce scan
+        if (scanResult.discoveryEvents.length > 0) {
+          reportSlotDiscoveryBatch(scanResult.discoveryEvents);
+        }
+
         return "slot_captured";
       }
 
