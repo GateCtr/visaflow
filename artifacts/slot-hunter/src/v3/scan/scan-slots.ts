@@ -308,8 +308,8 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
                   });
 
                   // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
-                  // FIX: Un éclaireur broadcast TOUJOURS — blindBookingEnabled est un flag du CONFINÉ (réception), pas de l'éclaireur (émission)
-                  if (config.accountRole === "eclaireur" && config.convexSiteUrl && config.hunterApiKey) {
+                  // FIX: Tout compte qui SCANNE (éclaireur ou hybride) broadcast — seul le confiné ne scanne pas
+                  if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
                     const broadcastEvent: SlotBroadcastEvent = {
                       sourceUsername: username,
                       office: ofc.postName,
@@ -399,9 +399,9 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
     if (slotFound) {
       console.log(`[scan-slots] 🎯 SLOT TROUVÉ — ${ofc.postName} ${slotFound.date} ${slotFound.time}`);
 
-      // Si éclaireur + blind booking → broadcast aux confinés
-      // FIX: Un éclaireur broadcast TOUJOURS — pas besoin de blindBookingEnabled pour émettre
-      if (config.accountRole === "eclaireur" && config.convexSiteUrl && config.hunterApiKey) {
+      // Si éclaireur ou hybride → broadcast aux confinés
+      // FIX: Tout compte qui scanne broadcast — pas besoin de blindBookingEnabled pour émettre
+      if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
         const broadcastEvent: SlotBroadcastEvent = {
           sourceUsername: username,
           office: ofc.postName,
