@@ -82,6 +82,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
   const [captchaBalance, setCaptchaBalance] = useState<number | null>(null);
   const [captchaChecking, setCaptchaChecking] = useState(false);
   const [resettingBudget, setResettingBudget] = useState(false);
+  const [resetBudgetValue, setResetBudgetValue] = useState("7");
 
   // Hydrate from config
   useEffect(() => {
@@ -138,10 +139,12 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
 
   const handleResetBudget = async () => {
     if (!username.trim()) { toast({ variant: "destructive", title: "Identifiant requis pour reset budget" }); return; }
+    const val = parseInt(resetBudgetValue, 10);
+    if (!val || val < 1 || val > 10) { toast({ variant: "destructive", title: "Valeur entre 1 et 10 requise" }); return; }
     setResettingBudget(true);
     try {
-      await setBotConfig({ key: `reset_budget:${username.trim()}`, value: "7" });
-      toast({ title: "Reset budget demandé", description: `Le bot remettra le budget à 7 pour ${username.trim()} au prochain tick.` });
+      await setBotConfig({ key: `reset_budget:${username.trim()}`, value: String(val) });
+      toast({ title: "Reset budget demandé", description: `Le bot remettra le budget à ${val} pour ${username.trim()} au prochain tick.` });
     } catch (err: unknown) { toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Échec" }); }
     finally { setResettingBudget(false); }
   };
@@ -267,9 +270,12 @@ export function HunterConfig({ appId, hunterConfig: hc, destination }: Props) {
             </Button>
           )}
           {destination === "usa" && hc && (
-            <Button variant="outline" onClick={handleResetBudget} disabled={resettingBudget || !username.trim()} className="h-9 gap-2 text-sm border-amber-200 text-amber-700 hover:bg-amber-50">
-              {resettingBudget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />} Reset budget login
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Input type="number" min={1} max={10} value={resetBudgetValue} onChange={(e) => setResetBudgetValue(e.target.value)} className="h-9 w-14 text-sm text-center font-mono bg-amber-50 border-amber-200" />
+              <Button variant="outline" onClick={handleResetBudget} disabled={resettingBudget || !username.trim()} className="h-9 gap-2 text-sm border-amber-200 text-amber-700 hover:bg-amber-50">
+                {resettingBudget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />} Reset budget
+              </Button>
+            </div>
           )}
         </div>
 
