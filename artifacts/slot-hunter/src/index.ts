@@ -1535,7 +1535,14 @@ async function main(): Promise<void> {
           });
 
           if (!decision.shouldScan) {
-            continue;
+            // FIX: Deadlock — si pas de token MAIS budget login disponible,
+            // forcer le scan pour que runScanSession puisse faire le login.
+            // Sans ça: pas de token → shouldScan=false → pas de login → pas de token → ∞
+            if (!hasValidToken && remaining > 0) {
+              log("INFO", `[v3-loop] 🔑 ${job.applicantName} — pas de token mais budget disponible (${remaining} logins restants) → forcer login`);
+            } else {
+              continue;
+            }
           }
 
           log("INFO", `[v3-loop] ▶ ${job.applicantName} — ${decision.reason} (phase: ${decision.phase}, interval: ${Math.round(decision.intervalMs / 1000)}s)`);
