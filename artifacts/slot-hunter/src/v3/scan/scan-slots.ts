@@ -180,8 +180,11 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
 
   for (const ofc of ofcList) {
     // ── Stealth alternation : 1/3 du temps → skip (simule navigation dashboard) ──
+    // FIX: Ne JAMAIS skip quand il n'y a qu'un seul OFC — sinon le scan entier
+    // retourne 0 résultat ~33% du temps (Kinshasa = seul OFC au Congo).
+    // L'alternation n'a de sens que quand il y a plusieurs OFCs à parcourir.
     const endpoint = pickNextEndpoint(username);
-    if (endpoint === "landingPage") {
+    if (endpoint === "landingPage" && ofcList.length > 1) {
       // Simuler un appel landing page (déjà fait dans le keep-alive, on skip juste)
       console.log(`[scan-slots] 🔀 Alternation: skip ${ofc.postName} (landing page cycle)`);
       await interStepPause();
