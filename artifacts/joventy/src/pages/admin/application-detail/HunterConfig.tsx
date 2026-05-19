@@ -142,6 +142,16 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         blindBookingEnabled: blindBooking || undefined, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
       });
+      // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
+      if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
+        const category = ["IR", "CR", "DV", "EB", "F2A", "F2B", "F1-IV", "F3-IV", "F4-IV", "SB1", "SE", "SQ"].includes(visaClassInput) ? "IV" : "NIV";
+        await assignVisaClass({
+          applicationId: appId,
+          broadcastVisaClass: visaClassInput,
+          usVisaCategory: category as "NIV" | "IV",
+          usVisaCode: visaClassInput,
+        });
+      }
       toast({ title: "Hunter sauvegardé", description: active ? "Robot actif." : "Robot en pause." });
     } catch (err: unknown) { toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Échec" }); }
     finally { setSaving(false); }
