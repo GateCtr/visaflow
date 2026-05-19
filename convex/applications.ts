@@ -447,22 +447,16 @@ export const assignVisaClass = mutation({
 
     const logs = app.logs ?? [];
 
-    const patch: Record<string, unknown> = {
+    await ctx.db.patch(args.applicationId, {
       broadcastVisaClass: args.broadcastVisaClass,
+      usVisaCode: args.usVisaCode ?? app.usVisaCode,
+      usVisaCategory: args.usVisaCategory ?? app.usVisaCategory,
       updatedAt: Date.now(),
       logs: [...logs, makeLog(
         `Canal visa assigné : ${args.broadcastVisaClass} (${args.usVisaCategory ?? "?"}) — code: ${args.usVisaCode ?? "auto"}`,
         "admin"
       )],
-    };
-    if (args.usVisaCode !== undefined) {
-      patch.usVisaCode = args.usVisaCode;
-    }
-    if (args.usVisaCategory !== undefined) {
-      patch.usVisaCategory = args.usVisaCategory;
-    }
-
-    await ctx.db.patch(args.applicationId, patch as any);
+    });
 
     return args.applicationId;
   },
