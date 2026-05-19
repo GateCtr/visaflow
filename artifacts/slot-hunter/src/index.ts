@@ -1595,15 +1595,24 @@ async function main(): Promise<void> {
           // Le portail déconnecte après 15 min d'inactivité. L'intervalle entre scans
           // est de 5-10 min (standard) — 2 cycles consécutifs sans activité = 10-20 min = disconnect.
           // Solution : pendant l'attente, pinger getLandingPageDeatils toutes les 8-12 min.
+          //
+          // FIX 19/05/2026: Si des confinés sont en attente, SKIP le long waitMs pour que
+          // PASSE 2 démarre immédiatement après le scan. Le délai de 219s entre détection
+          // et tentative venait de ce waitMs (144s) + 5s propagation. Maintenant: 5s seulement.
+          // Le keep-alive est maintenu uniquement si PAS de confinés (ou scan sans broadcast).
           const waitMs = Math.max(decision.intervalMs, 30_000);
-          const waitEnd = Date.now() + waitMs;
           const INTER_SCAN_PING_INTERVAL_MS = 8 * 60_000 + Math.random() * 4 * 60_000; // 8-12 min
 
           // Vérifier si le token est encore valide — si oui, lancer un keep-alive temporaire
           const postScanCache = tokenCache.get(username.toLowerCase());
           const postScanTokenValid = !!(postScanCache && Date.now() < postScanCache.expiresAt);
 
-          if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
+          // Si des confinés attendent des broadcasts → skip le wait long (PASSE 2 immédiate)
+          if (confineJobs.length > 0) {
+            // Pas de wait — les confinés doivent tenter le blind booking ASAP
+            // Le keep-alive n'est pas nécessaire car le prochain scan sera dans ~30s après PASSE 2
+            log("INFO", `[v3-loop] ⚡ Skip waitMs (${Math.round(waitMs / 1000)}s) — ${confineJobs.length} confiné(s) en attente, PASSE 2 immédiate`);
+          } else if (postScanTokenValid && waitMs > INTER_SCAN_PING_INTERVAL_MS * 0.8) {
             // L'attente est assez longue pour risquer un timeout portail — pinger
             const { startKeepAlive: startInterScanKA } = await import("./v3/anti-detection/keep-alive.js");
             const interScanKA = startInterScanKA(
@@ -1644,103 +1653,98 @@ async function main(): Promise<void> {
             log("INFO", `[v3-loop] 🔍 ${job.applicantName} (confiné) poll → ${events.length} event(s) pending`);
             if (events.length > 0) {
               log("INFO", `[v3-loop] 📡 ${job.applicantName} (confiné) — ${events.length} blind booking(s) reçu(s)`);
-              for (const event of events) {
-                // Le confiné a besoin d'un token valide pour tenter le booking
-                let cachedConf = tokenCache.get(username.toLowerCase());
-                let hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
 
-                // ── RÉVEIL D'URGENCE : slot détecté mais confiné endormi ──
-                // Override TOTAL : pas de cooldown, pas de minInterLoginMs.
-                // Un slot broadcast est un événement RARE et ÉPHÉMÈRE (< 30s de vie).
-                // Perdre le slot pour respecter un cooldown de 10 min = perdre le client.
-                // Seul le budget quotidien (9 max) reste comme garde-fou.
-                if (!hasToken) {
-                  const budgetRemaining = getRemainingLogins(username);
-                  if (budgetRemaining <= 0) {
-                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
-                    break;
-                  }
-                  log("INFO", `[v3-loop] ⚡ ${job.applicantName} (confiné) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
-                  try {
-                    setUsaSessionProxy(undefined); // Direct ou proxy par défaut
-                    const freshSession = await getUsaSession(
-                      job.hunterConfig.embassyUsername,
-                      job.hunterConfig.embassyPassword,
-                      job.hunterConfig.twoCaptchaApiKey,
-                    );
-                    setUsaSessionProxy(undefined);
-                    if (freshSession) {
-                      // Enregistrer le login dans le budget (phase emergency)
-                      const { recordLogin } = await import("./v3/core/session-pool.js");
-                      recordLogin(username, "emergency");
-                      // Rafraîchir le cache
-                      cachedConf = tokenCache.get(username.toLowerCase());
-                      hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
-                      log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — réveil réussi en urgence, token valide`);
-                    } else {
-                      log("WARN", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué (login null) — slot perdu`);
-                      break;
-                    }
-                  } catch (loginErr) {
-                    log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué: ${loginErr} — slot perdu`);
-                    break;
-                  }
+              // ── FIX 19/05/2026: PREFLIGHT UNE SEULE FOIS avant la boucle des events ──
+              // Avant : le preflight (resolveApplicationId + runPreflight) était fait pour CHAQUE
+              // slotId dans la boucle → 6-12 appels API inutiles, +30s de latence.
+              // Après : fait UNE FOIS avant la boucle, réutilisé pour tous les events.
+
+              // 1. Token check + réveil d'urgence (une seule fois)
+              let cachedConf = tokenCache.get(username.toLowerCase());
+              let hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
+
+              if (!hasToken) {
+                const budgetRemaining = getRemainingLogins(username);
+                if (budgetRemaining <= 0) {
+                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — SLOT DÉTECTÉ mais budget épuisé (0 logins restants) — impossible de réveiller`);
+                  continue;
                 }
-
-                if (!hasToken || !cachedConf) {
-                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — token toujours invalide après réveil — skip`);
-                  break;
-                }
-
-                // ── MINI-PREFLIGHT : résoudre les vrais IDs du confiné ──────────
-                // Le portail exige applicantId GSS (ex: "RQUP3HHVQHOD"), pas le userID numérique.
-                // Flow identique à l'éclaireur : resolveApplicationId → runPreflight → appDetails
-                let confAppDetails: { applicantId: string | number; applicationId: string; appointmentId?: number; applicantUUID?: number | string } | null = null;
+                log("INFO", `[v3-loop] ⚡ ${job.applicantName} (confiné) — RÉVEIL D'URGENCE ! Slot détecté, login immédiat (budget: ${budgetRemaining} restants)`);
                 try {
-                  const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./usaPortal/appointments-api.js");
-                  const { runPreflight } = await import("./v3/scan/scan-preflight.js");
-
-                  // Construire une session minimale pour les appels API
-                  const confSession = {
-                    accessToken: cachedConf!.accessToken,
-                    refreshToken: cachedConf!.refreshToken,
-                    csrfToken: cachedConf!.csrfToken ?? "",
-                    userID: cachedConf!.userID,
-                    fullName: cachedConf!.fullName,
-                    applicationId: null as string | null,
-                    pendingAppoStatus: null,
-                    missionId: 323,
-                    allowedOfcs: cachedConf!.allowedOfcs ?? [],
-                  } as any;
-
-                  // 1. Résoudre applicationId
-                  const reqStatus = await checkUsaAppointmentRequestStatus(confSession, undefined);
-                  let confApplicationId = reqStatus.applicationId ?? "";
-
-                  if (!confApplicationId && reqStatus.status === "cancellable") {
-                    await fetchCancellableSessionIds(confSession, { id: job.id, hunterConfig: job.hunterConfig } as any);
-                    confApplicationId = confSession.applicationId ?? "";
+                  setUsaSessionProxy(undefined);
+                  const freshSession = await getUsaSession(
+                    job.hunterConfig.embassyUsername,
+                    job.hunterConfig.embassyPassword,
+                    job.hunterConfig.twoCaptchaApiKey,
+                  );
+                  setUsaSessionProxy(undefined);
+                  if (freshSession) {
+                    const { recordLogin } = await import("./v3/core/session-pool.js");
+                    recordLogin(username, "emergency");
+                    cachedConf = tokenCache.get(username.toLowerCase());
+                    hasToken = !!(cachedConf && Date.now() < cachedConf.expiresAt);
+                    log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — réveil réussi en urgence, token valide`);
+                  } else {
+                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué (login null) — slot perdu`);
+                    continue;
                   }
+                } catch (loginErr) {
+                  log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — réveil échoué: ${loginErr} — slot perdu`);
+                  continue;
+                }
+              }
 
-                  if (!confApplicationId) {
-                    log("WARN", `[v3-loop] ${job.applicantName} (confiné) — applicationId introuvable — blind booking impossible`);
-                    break;
-                  }
+              if (!hasToken || !cachedConf) {
+                log("WARN", `[v3-loop] ${job.applicantName} (confiné) — token toujours invalide après réveil — skip`);
+                continue;
+              }
 
-                  // 2. runPreflight → appDetails avec applicantId GSS
-                  const preflight = await runPreflight(confSession, confApplicationId, 323);
-                  confAppDetails = {
-                    applicantId: preflight.appDetails.applicantId,
-                    applicationId: confApplicationId,
-                    appointmentId: preflight.appDetails.appointmentId,
-                    applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
-                  };
-                  log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId}`);
-                } catch (preflightErr) {
-                  log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — preflight échoué: ${preflightErr} — blind booking impossible`);
-                  break;
+              // 2. Preflight UNE SEULE FOIS (résoudre applicantId GSS, applicationId, appointmentId)
+              let confAppDetails: { applicantId: string | number; applicationId: string; appointmentId?: number; applicantUUID?: number | string } | null = null;
+              try {
+                const { checkUsaAppointmentRequestStatus, fetchCancellableSessionIds } = await import("./usaPortal/appointments-api.js");
+                const { runPreflight } = await import("./v3/scan/scan-preflight.js");
+
+                const confSession = {
+                  accessToken: cachedConf!.accessToken,
+                  refreshToken: cachedConf!.refreshToken,
+                  csrfToken: cachedConf!.csrfToken ?? "",
+                  userID: cachedConf!.userID,
+                  fullName: cachedConf!.fullName,
+                  applicationId: null as string | null,
+                  pendingAppoStatus: null,
+                  missionId: 323,
+                  allowedOfcs: cachedConf!.allowedOfcs ?? [],
+                } as any;
+
+                const reqStatus = await checkUsaAppointmentRequestStatus(confSession, undefined);
+                let confApplicationId = reqStatus.applicationId ?? "";
+
+                if (!confApplicationId && reqStatus.status === "cancellable") {
+                  await fetchCancellableSessionIds(confSession, { id: job.id, hunterConfig: job.hunterConfig } as any);
+                  confApplicationId = confSession.applicationId ?? "";
                 }
 
+                if (!confApplicationId) {
+                  log("WARN", `[v3-loop] ${job.applicantName} (confiné) — applicationId introuvable — blind booking impossible`);
+                  continue;
+                }
+
+                const preflight = await runPreflight(confSession, confApplicationId, 323);
+                confAppDetails = {
+                  applicantId: preflight.appDetails.applicantId,
+                  applicationId: confApplicationId,
+                  appointmentId: preflight.appDetails.appointmentId,
+                  applicantUUID: preflight.appDetails.applicantUUID as number | undefined,
+                };
+                log("INFO", `[v3-loop] ✅ ${job.applicantName} (confiné) — preflight OK: applicantId=${confAppDetails.applicantId} appId=${confApplicationId}`);
+              } catch (preflightErr) {
+                log("ERROR", `[v3-loop] ${job.applicantName} (confiné) — preflight échoué: ${preflightErr} — blind booking impossible`);
+                continue;
+              }
+
+              // 3. Boucle sur les events — tenter chaque slotId sans refaire le preflight
+              for (const event of events) {
                 const blindResult = await attemptBlindBooking(event, {
                   accessToken: cachedConf!.accessToken,
                   applicationId: confAppDetails.applicationId,
@@ -1755,7 +1759,6 @@ async function main(): Promise<void> {
                 if (blindResult.success) {
                   log("INFO", `[v3-loop] 🎉 BLIND BOOKING RÉUSSI — ${job.applicantName} (confiné) — ${event.date} ${event.time}`);
 
-                  // Reporter la discovery "captured" pour ce confiné (alimente la page calendrier admin)
                   reportSlotDiscovery({
                     applicationId: job.id,
                     destination: "usa",
@@ -1767,7 +1770,6 @@ async function main(): Promise<void> {
                     mode: job.hunterConfig.rescheduleMode ? "reschedule" : "schedule",
                   });
 
-                  // Post-booking complet (identique au direct)
                   try {
                     const session = { accessToken: cachedConf!.accessToken, applicationId: confAppDetails.applicationId, missionId: 323, applicantId: confAppDetails.applicantId } as any;
                     const pdf = await (await import("./usaPortal/usa-scan-confirmation.js")).downloadUsaConfirmationPdf(session, confAppDetails.applicationId, blindResult.appointmentId);

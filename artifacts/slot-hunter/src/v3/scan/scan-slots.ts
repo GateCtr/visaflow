@@ -264,81 +264,94 @@ export async function scanAllOfcs(config: ScanSlotsConfig): Promise<ScanSlotsRes
             : [];
 
           if (parsedDates.length > 0) {
-            const targetDate = parsedDates[0];
-            console.log(`[scan-slots] 📡 getSlotDates OK — ${parsedDates.length} date(s) trouvée(s), getSlotTime sur ${targetDate}...`);
+            // FIX 19/05/2026: Scanner TOUTES les dates retournées (max 3) au lieu de seulement parsedDates[0].
+            // Avant : seule la première date était scannée → si ses 6 slots à 08:00 étaient pris,
+            // les confinés n'avaient aucune alternative (les dates 2 et 3 avaient peut-être 08:15, 08:30, 09:00).
+            // Après : on boucle sur les 3 premières dates pour maximiser les chances des confinés.
+            const MAX_DATES_TO_SCAN = 3;
+            const datesToScan = parsedDates.slice(0, MAX_DATES_TO_SCAN);
+            console.log(`[scan-slots] 📡 getSlotDates OK — ${parsedDates.length} date(s) trouvée(s), getSlotTime sur ${datesToScan.length} date(s): ${datesToScan.join(", ")}...`);
 
-            // Appeler getSlotTime pour obtenir le slotId
-            const timeRes = await usaFetch(USA_SLOT_TIMES_URL, {
-              method: "POST",
-              headers: hdrsExt,
-              body: JSON.stringify({
-                postUserId: ofc.postUserId,
-                applicantId: appDetails.applicantId,
-                slotDate: targetDate,
-                visaType: appDetails.visaTypeKey ?? appDetails.visaType,
-                visaClass: appDetails.visaClass,
-                applicationId: appDetails.applicationId,
-                fromDate: fromDateExt,
-                toDate: toDateExt,
-              }),
-            });
+            let totalBroadcasts = 0;
+            for (const targetDate of datesToScan) {
+              // Appeler getSlotTime pour obtenir le slotId de chaque date
+              const timeRes = await usaFetch(USA_SLOT_TIMES_URL, {
+                method: "POST",
+                headers: hdrsExt,
+                body: JSON.stringify({
+                  postUserId: ofc.postUserId,
+                  applicantId: appDetails.applicantId,
+                  slotDate: targetDate,
+                  visaType: appDetails.visaTypeKey ?? appDetails.visaType,
+                  visaClass: appDetails.visaClass,
+                  applicationId: appDetails.applicationId,
+                  fromDate: fromDateExt,
+                  toDate: toDateExt,
+                }),
+              });
 
-            if (timeRes.ok) {
-              const timeSlots = await timeRes.json() as UsaTimeSlot[];
-              if (Array.isArray(timeSlots) && timeSlots.length > 0) {
-                console.log(`[scan-slots] 📡 ✅ ${timeSlots.length} créneau(x) trouvé(s) pour confinés — ${targetDate}`);
+              if (timeRes.ok) {
+                const timeSlots = await timeRes.json() as UsaTimeSlot[];
+                if (Array.isArray(timeSlots) && timeSlots.length > 0) {
+                  console.log(`[scan-slots] 📡 ✅ ${timeSlots.length} créneau(x) trouvé(s) pour confinés — ${targetDate}`);
 
-                // Broadcaster TOUS les timeSlots (pas juste le premier)
-                // Si le confiné reçoit un 409 sur le premier, il tente les suivants
-                for (const slot of timeSlots) {
-                  const rawTime = slot.startTime ?? "";
-                  const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
+                  // Broadcaster TOUS les timeSlots (pas juste le premier)
+                  // Si le confiné reçoit un 409 sur le premier, il tente les suivants
+                  for (const slot of timeSlots) {
+                    const rawTime = slot.startTime ?? "";
+                    const time = rawTime.includes("T") ? rawTime.split("T")[1].slice(0, 5) : rawTime.slice(0, 5);
 
-                  // Discovery event pour chaque horaire
+                    // Discovery event pour chaque horaire
+                    discoveryEvents.push({
+                      applicationId,
+                      destination: "usa",
+                      office: ofc.postName,
+                      dateFound: targetDate,
+                      timeFound: time,
+                      outcome: "ignored", // Ignoré par l'éclaireur (hors SA fenêtre)
+                      reason: "after_deadline_broadcast_to_confines",
+                      context: { deadline: dateDeadline, slotId: slot.slotId, forConfinés: true, totalSlots: timeSlots.length },
+                      mode: rescheduleMode ? "reschedule" : "schedule",
+                    });
+
+                    // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
+                    if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
+                      const broadcastEvent: SlotBroadcastEvent = {
+                        sourceUsername: username,
+                        office: ofc.postName,
+                        postUserId: ofc.postUserId,
+                        date: targetDate,
+                        time,
+                        slotId: String(slot.slotId),
+                        startTime: slot.startTime ?? "",
+                        discoveredAt: Date.now(),
+                        sourceBooked: false,
+                      };
+                      await broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
+                      totalBroadcasts++;
+                    }
+                  }
+                } else {
+                  console.log(`[scan-slots] 📡 getSlotTime retourné 0 horaires pour ${targetDate} — skip`);
                   discoveryEvents.push({
                     applicationId,
                     destination: "usa",
                     office: ofc.postName,
                     dateFound: targetDate,
-                    timeFound: time,
-                    outcome: "ignored", // Ignoré par l'éclaireur (hors SA fenêtre)
-                    reason: "after_deadline_broadcast_to_confines",
-                    context: { deadline: dateDeadline, slotId: slot.slotId, forConfinés: true, totalSlots: timeSlots.length },
+                    outcome: "ignored",
+                    reason: "after_deadline_no_time_slots",
+                    context: { deadline: dateDeadline },
                     mode: rescheduleMode ? "reschedule" : "schedule",
                   });
-
-                  // Broadcast COMPLET aux confinés (avec slotId = utilisable pour blind booking)
-                  // FIX: Tout compte qui SCANNE (éclaireur ou hybride) broadcast — seul le confiné ne scanne pas
-                  if (config.accountRole !== "confine" && config.convexSiteUrl && config.hunterApiKey) {
-                    const broadcastEvent: SlotBroadcastEvent = {
-                      sourceUsername: username,
-                      office: ofc.postName,
-                      postUserId: ofc.postUserId,
-                      date: targetDate,
-                      time,
-                      slotId: String(slot.slotId),
-                      startTime: slot.startTime ?? "",
-                      discoveredAt: Date.now(),
-                      sourceBooked: false,
-                    };
-                    await broadcastSlotDiscovery(broadcastEvent, config.convexSiteUrl, config.hunterApiKey);
-                  }
                 }
-                console.log(`[scan-slots] 📡 ${timeSlots.length} broadcast(s) envoyé(s) aux confinés pour ${targetDate}`);
-              } else {
-                console.log(`[scan-slots] 📡 getSlotTime retourné 0 horaires pour ${targetDate} — pas de broadcast`);
-                discoveryEvents.push({
-                  applicationId,
-                  destination: "usa",
-                  office: ofc.postName,
-                  dateFound: targetDate,
-                  outcome: "ignored",
-                  reason: "after_deadline_no_time_slots",
-                  context: { deadline: dateDeadline },
-                  mode: rescheduleMode ? "reschedule" : "schedule",
-                });
+              }
+
+              // Pause inter-requête pour stealth (éviter burst de getSlotTime)
+              if (datesToScan.indexOf(targetDate) < datesToScan.length - 1) {
+                await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
               }
             }
+            console.log(`[scan-slots] 📡 ${totalBroadcasts} broadcast(s) envoyé(s) aux confinés sur ${datesToScan.length} date(s)`);
           } else {
             console.log(`[scan-slots] 📡 getSlotDates retourné 0 dates — pas de broadcast`);
             discoveryEvents.push({
