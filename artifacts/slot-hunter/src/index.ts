@@ -1442,7 +1442,7 @@ async function main(): Promise<void> {
           j.hunterConfig?.isActive === true &&
           !pausedJobs.has(j.id) &&
           !completedJobs.has(j.id) &&
-          !!j.portalUrl
+          !!j.hunterConfig.embassyUsername  // USA n'a pas de portalUrl (URL fixe usvisaappt.com)
         );
 
         if (usaJobs.length === 0) {
