@@ -17,8 +17,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
         continue;
       }
 
-      const intervalMs = (config.intervalMin ?? 15) * 60_000;
-      log("INFO", `[SPAIN-WATCHER] Probe → ${config.portalUrl} (intervalle: ${config.intervalMin ?? 15} min)`);
+      const intervalMs = (config.intervalMin ?? 3) * 60_000;
+      log("INFO", `[SPAIN-WATCHER] Probe → ${config.portalUrl} (intervalle: ${config.intervalMin ?? 3} min)`);
 
       const result = await runSpainWatcherProbe(config.portalUrl);
       log(
