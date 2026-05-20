@@ -8,6 +8,30 @@ import { setupCevSessionHttp } from "../cevHttpSetup.js";
 // Timeout global par setup : 4 min (le lock Convex dure 13 min)
 const CEV_SETUP_TIMEOUT_MS = 4 * 60_000;
 
+// ─── Compteur local de clics GetEAppointmentUrl (limite 4/heure, marge de sécurité) ──
+// Empêche de déclencher le rate-limit VOWINT avant que le serveur ne nous bloque.
+const MAX_CLICKS_PER_HOUR = 4; // 5 max côté serveur, on garde 1 de marge
+const CLICK_WINDOW_MS = 60 * 60_000; // 1 heure
+let clickTimestamps: number[] = [];
+
+function canClick(): boolean {
+  const now = Date.now();
+  // Purger les clics > 1h
+  clickTimestamps = clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
+  return clickTimestamps.length < MAX_CLICKS_PER_HOUR;
+}
+
+function recordClick(): void {
+  clickTimestamps.push(Date.now());
+}
+
+function getNextClickAvailableIn(): number {
+  if (clickTimestamps.length === 0) return 0;
+  const oldest = clickTimestamps[0];
+  const availableAt = oldest + CLICK_WINDOW_MS;
+  return Math.max(0, availableAt - Date.now());
+}
+
 export async function startCevSetupLoop(): Promise<void> {
   console.log("[CEV-SETUP] Boucle de setup sessions CEV démarrée");
   let heartbeatCounter = 0;
@@ -35,7 +59,17 @@ export async function startCevSetupLoop(): Promise<void> {
         let r: { success: boolean; error?: string; sessionCookie?: string; validUntilMs?: number; integrationUrl?: string };
 
         if (isCredMode) {
-          console.log(`[CEV-SETUP] 🌐 Tentative HTTP pur session=${s.sessionId}...`);
+          // Vérifier la limite de clics AVANT de lancer le setup
+          if (!canClick()) {
+            const waitMs = getNextClickAvailableIn();
+            const waitMin = Math.ceil(waitMs / 60_000);
+            console.log(`[CEV-SETUP] ⏳ Limite ${MAX_CLICKS_PER_HOUR} clics/h atteinte — prochain clic disponible dans ${waitMin} min (session=${s.sessionId})`);
+            r = { success: false, error: "LOCAL_RATE_LIMIT_WAIT" };
+            // Ne pas fallback Playwright — juste attendre
+            continue;
+          }
+
+          console.log(`[CEV-SETUP] 🌐 Tentative HTTP pur session=${s.sessionId} (clics: ${clickTimestamps.length}/${MAX_CLICKS_PER_HOUR})...`);
           const httpResult = await setupCevSessionHttp(
             s.vowintEmail!,
             s.vowintPassword!,
@@ -45,7 +79,9 @@ export async function startCevSetupLoop(): Promise<void> {
           );
 
           if (httpResult.success) {
-            console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — verdict: slotsAvailable=${httpResult.slotsAvailable}`);
+            // Enregistrer le clic (GetEAppointmentUrl a été appelé avec succès)
+            recordClick();
+            console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — verdict: slotsAvailable=${httpResult.slotsAvailable} (clics: ${clickTimestamps.length}/${MAX_CLICKS_PER_HOUR})`);
 
             if (httpResult.slotsAvailable) {
               // Slots dispo → activer la session pour polling immédiat + booking
