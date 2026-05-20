@@ -42,16 +42,26 @@ function getSetupImpit(): InstanceType<typeof Impit> {
   return _setupImpit;
 }
 
+/** Instance impit directe (sans proxy) — singleton réutilisé pour garder les cookies cohérents */
+let _directImpit: InstanceType<typeof Impit> | undefined;
+function getDirectImpit(): InstanceType<typeof Impit> {
+  if (!_directImpit) {
+    _directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+  }
+  return _directImpit;
+}
+
 /** Fetch CEV avec fingerprint TLS Chrome via impit.
- *  Fallback sans proxy si le proxy échoue (proxy down). */
+ *  Fallback sans proxy si le proxy échoue (proxy down).
+ *  IMPORTANT : le fallback réutilise le même singleton impit direct pour garder
+ *  les cookies/session cohérents entre les appels d'un même setup. */
 async function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
   try {
     return await getSetupImpit().fetch(url, options as any) as unknown as Response;
   } catch (err) {
     if (IPROYAL_PROXY_URL) {
       console.log(`[CEV-SETUP] ⚠️ impit+proxy failed → fallback impit direct pour ${url.slice(0, 80)}`);
-      const directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
-      return directImpit.fetch(url, options as any) as unknown as Response;
+      return getDirectImpit().fetch(url, options as any) as unknown as Response;
     }
     throw err;
   }

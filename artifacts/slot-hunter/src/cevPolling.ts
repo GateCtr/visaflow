@@ -32,17 +32,25 @@ function getPollImpit(): InstanceType<typeof Impit> {
   return _pollImpit;
 }
 
+/** Singleton impit direct (sans proxy) — réutilisé pour garder les cookies cohérents */
+let _directPollImpit: InstanceType<typeof Impit> | undefined;
+function getDirectPollImpit(): InstanceType<typeof Impit> {
+  if (!_directPollImpit) {
+    _directPollImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+  }
+  return _directPollImpit;
+}
+
 /** Fetch CEV avec fingerprint TLS Chrome via impit.
- *  Fallback sans proxy si le proxy échoue. */
+ *  Fallback sans proxy si le proxy échoue. Réutilise un singleton direct. */
 async function cevFetch(url: string, options: RequestInit): Promise<Response> {
   try {
     return await getPollImpit().fetch(url, options as any) as unknown as Response;
   } catch (err) {
-    // Si proxy configuré et échec → retry sans proxy (impit direct)
+    // Si proxy configuré et échec → retry sans proxy (impit direct singleton)
     if (IPROYAL_PROXY_URL) {
       console.log(`[CEV-POLL] ⚠️ impit+proxy failed → fallback impit direct`);
-      const directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
-      return directImpit.fetch(url, options as any) as unknown as Response;
+      return getDirectPollImpit().fetch(url, options as any) as unknown as Response;
     }
     throw err;
   }
