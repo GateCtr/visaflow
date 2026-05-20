@@ -20,12 +20,29 @@
 
 import { botLog } from "./convexClient.js";
 import { randomUserAgent } from "./browser.js";
+import { ProxyAgent } from "undici";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
 const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
+
+// ─── Proxy partagé avec cevPolling — garantit que la session CEV est liée à la même IP ───
+const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
+let _setupProxyAgent: ProxyAgent | undefined;
+if (IPROYAL_PROXY_URL) {
+  _setupProxyAgent = new ProxyAgent(IPROYAL_PROXY_URL);
+}
+
+/** Fetch via le proxy iProyal (si configuré) — même IP que le polling */
+function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
+  if (_setupProxyAgent) {
+    // @ts-expect-error — dispatcher est une option undici
+    return fetch(url, { ...options, dispatcher: _setupProxyAgent });
+  }
+  return fetch(url, options);
+}
 
 // ─── Cache session VOWINT (persisté en mémoire entre les checks) ─────────────
 // Clé = vowintEmail, Valeur = { cookies, appId, ua, lastUsedAt }
@@ -337,7 +354,7 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 4 : GET integrationUrl → cookie ASP.NET_SessionId CEV
     // ══════════════════════════════════════════════════════════════════════════
-    const cevRes = await fetch(integrationUrl, {
+    const cevRes = await cevSetupFetch(integrationUrl, {
       method: "GET",
       headers: {
         "User-Agent": ua,
@@ -382,7 +399,7 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 6 : POST /Captcha/SetCaptchaToken → validUntil
     // ══════════════════════════════════════════════════════════════════════════
-    const captchaRes = await fetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
+    const captchaRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -456,7 +473,7 @@ export async function setupCevSessionHttp(
     let probeHttpStatus = 0;
 
     try {
-      const probe = await fetch(fullRedirectUrl, {
+      const probe = await cevSetupFetch(fullRedirectUrl, {
         method: "GET",
         redirect: "follow",
         headers: {
