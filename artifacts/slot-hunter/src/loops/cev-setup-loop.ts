@@ -46,16 +46,18 @@ export async function startCevSetupLoop(): Promise<void> {
 
           if (httpResult.success) {
             console.log(`[CEV-SETUP] 🔑 Session HTTP réussie session=${s.sessionId} — verdict: slotsAvailable=${httpResult.slotsAvailable}`);
-            const { activateCevSession } = await import("../convexClient.js");
-            const activated = await activateCevSession(
-              s.sessionId,
-              httpResult.sessionCookie!,
-              httpResult.validUntilMs,
-              httpResult.integrationUrl,
-            );
-            if (activated) {
-              r = { success: true };
-              if (httpResult.slotsAvailable) {
+
+            if (httpResult.slotsAvailable) {
+              // Slots dispo → activer la session pour polling immédiat + booking
+              const { activateCevSession } = await import("../convexClient.js");
+              const activated = await activateCevSession(
+                s.sessionId,
+                httpResult.sessionCookie!,
+                httpResult.validUntilMs,
+                httpResult.integrationUrl,
+              );
+              if (activated) {
+                r = { success: true };
                 console.log(`[CEV-SETUP] 🚨 SLOTS DISPONIBLES session=${s.sessionId} — booking prioritaire`);
                 await reportSlotFound({
                   applicationId: s.applicationId,
@@ -64,11 +66,17 @@ export async function startCevSetupLoop(): Promise<void> {
                   location: "CEV - Ambassade de Belgique (HTTP pur)",
                 });
               } else {
-                console.log(`[CEV-SETUP] 📡 Pas de créneaux — session activée pour polling session=${s.sessionId}`);
+                r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
               }
             } else {
-              r = { success: false, error: "CONVEX_ACTIVATE_FAILED" };
+              // NoAvailability → session déjà consommée côté serveur, inutile de l'activer pour polling.
+              // On enregistre directement "no_slot" pour éviter un poll qui retournerait session_expired.
+              r = { success: true };
+              const { recordCevSessionCheck } = await import("../convexClient.js");
+              await recordCevSessionCheck(s.sessionId, "no_slot");
+              console.log(`[CEV-SETUP] 📡 Pas de créneaux — session consommée (NoAvailability) — skip polling session=${s.sessionId}`);
             }
+
           } else {
             console.log(`[CEV-SETUP] 🌐 HTTP échoué (${httpResult.error}) — fallback Playwright...`);
             r = { success: false, error: httpResult.error };
