@@ -1268,7 +1268,15 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
 
     try {
       // ── Dialog natif (alert/confirm) — apparaît sur certaines URLs citaconsular.es
-      // Doit être enregistré AVANT goto() pour capturer le dialog au chargement.
+      // PROBLÈME: page.on("dialog") a une race condition — si le dialog arrive pendant
+      // le Cloudflare challenge ou très tôt, Playwright peut le rater et la page reste bloquée.
+      // SOLUTION: supprimer window.alert AVANT que le JS s'exécute (addInitScript).
+      await page.addInitScript(() => {
+        window.alert = () => {};
+        window.confirm = () => true;
+        window.prompt = () => "";
+      });
+      // Backup: handler Playwright classique (double sécurité)
       page.on("dialog", async (dialog) => {
         console.log(`[spain] Dialog natif détecté (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
@@ -1609,7 +1617,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
     try {
       // Dismiss dialogs natifs (window.alert / window.confirm / window.prompt)
       // citaconsular.es déclenche window.alert("Welcome / Bienvenido") au chargement.
-      // Doit être enregistré AVANT page.goto() pour être actif dès le premier rendu.
+      // PROBLÈME: page.on("dialog") a une race condition — si le dialog arrive pendant
+      // le Cloudflare challenge ou très tôt au chargement, Playwright peut le rater.
+      // SOLUTION: supprimer window.alert AVANT que le JS de la page s'exécute.
+      // addInitScript() injecte du code dans CHAQUE frame/navigation, AVANT tout script.
+      await page.addInitScript(() => {
+        window.alert = () => {};
+        window.confirm = () => true;
+        window.prompt = () => "";
+      });
+      // Garder aussi le handler Playwright comme backup (double sécurité)
       page.on("dialog", async (dialog) => {
         console.log(`[spain-watcher] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
