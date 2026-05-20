@@ -66,7 +66,7 @@ async function fetchFollowRedirects(
   sessionCookie: string,
   ua: string,
   maxHops = 6,
-): Promise<{ ok: boolean; url: string; html: string; status: number; error?: string }> {
+): Promise<{ ok: boolean; url: string; html: string; status: number; responseHeaders?: Record<string, string>; error?: string }> {
   let url = startUrl;
   for (let hop = 0; hop < maxHops; hop++) {
     const res = await fetch(url, {
@@ -91,10 +91,14 @@ async function fetchFollowRedirects(
 
     if (res.status === 200) {
       const html = await res.text().catch(() => '');
-      return { ok: true, url, html, status: 200 };
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => { responseHeaders[k] = v; });
+      return { ok: true, url, html, status: 200, responseHeaders };
     }
 
-    return { ok: false, url, html: '', status: res.status, error: `HTTP ${res.status}` };
+    const responseHeaders: Record<string, string> = {};
+    res.headers.forEach((v, k) => { responseHeaders[k] = v; });
+    return { ok: false, url, html: '', status: res.status, error: `HTTP ${res.status}`, responseHeaders };
   }
 
   return { ok: false, url, html: '', status: 0, error: 'Trop de redirections' };
@@ -263,9 +267,11 @@ async function fetchAvailableTimeSlots(
     }
 
     const rawJson = await res.json().catch(() => null);
+    const responseHeaders: Record<string, string> = {};
+    res.headers.forEach((v, k) => { responseHeaders[k] = v; });
     const slots = parseAvailableSlots(rawJson);
     const available = slots.filter(s => s.available);
-    return { ok: true, slots: available, rawJson };
+    return { ok: true, slots: available, rawJson, responseHeaders };
   } catch (err) {
     return { ok: false, slots: [], rawJson: null, error: String(err) };
   }
@@ -367,6 +373,8 @@ async function submitSlotSelection(
 
       const html = await res.text().catch(() => '');
       const finalUrl = res.url;
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => { responseHeaders[k] = v; });
 
       botLog({
         applicationId: clientId,
@@ -377,6 +385,7 @@ async function submitSlotSelection(
           httpStatus: res.status,
           finalUrl,
           htmlPreview: html.slice(0, 2000),
+          responseHeaders,
           isError: html.toLowerCase().includes('error') || html.toLowerCase().includes('erreur'),
           hasConfirmation: /confirm|référence|reference|booking.*id|rdv.*confirm/i.test(html),
         },
@@ -466,6 +475,7 @@ export async function bookCevViaHttp(
         finalUrl:    pageResult.url,
         httpStatus:  pageResult.status,
         htmlLen:     pageResult.html.length,
+        responseHeaders: pageResult.responseHeaders ?? null,
         error:       pageResult.error ?? null,
         isNoSlot:    pageResult.url.includes('NoAvailability') || pageResult.html.toLowerCase().includes('noavailability'),
         isExpired:   pageResult.url.includes('SessionExpired') || pageResult.html.toLowerCase().includes('session expired'),
@@ -537,6 +547,7 @@ export async function bookCevViaHttp(
         httpOk:       slotsResult.ok,
         slotCount:    slotsResult.slots.length,
         error:        slotsResult.error ?? null,
+        responseHeaders: slotsResult.responseHeaders ?? null,
         rawJsonType:  Array.isArray(slotsResult.rawJson) ? 'array' : (slotsResult.rawJson === null ? 'null' : typeof slotsResult.rawJson),
         rawJsonKeys:  slotsResult.rawJson && typeof slotsResult.rawJson === 'object' && !Array.isArray(slotsResult.rawJson)
                         ? Object.keys(slotsResult.rawJson as object)
