@@ -14,6 +14,7 @@ import { runSpainSession } from "./spainPortal.js";
 // ─── Extracted modules ──────────────────────────────────────────────────────
 import { startCevSetupLoop } from "./loops/cev-setup-loop.js";
 import { startCevPollingLoop } from "./loops/cev-polling-loop.js";
+import { startCevStealthLoop } from "./loops/cev-stealth-loop.js";
 import { startSpainWatcherLoop } from "./loops/spain-watcher-loop.js";
 import { startV3Loop } from "./loops/v3-loop.js";
 import { initParallelWatchers, startParallelReloginLoop } from "./loops/parallel-loop.js";
@@ -64,13 +65,30 @@ async function main(): Promise<void> {
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
 
   // Lancer les boucles background
-  startCevSetupLoop().catch((err) => {
-    console.error("[CEV-SETUP] Boucle crashée:", err);
-  });
+  // ─── Mode CEV Stealth : si activé, remplace les loops setup+polling classiques ───
+  let cevStealthMode = false;
+  try {
+    const stealthValue = await getBotConfigValue("cev_stealth_mode");
+    cevStealthMode = stealthValue === "1";
+  } catch { /* Convex inaccessible — fallback normal */ }
 
-  startCevPollingLoop().catch((err) => {
-    console.error("[CEV-POLL] Boucle crashée:", err);
-  });
+  if (cevStealthMode) {
+    log("INFO", "═══ CEV STEALTH MODE ACTIF ═══");
+    log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
+    log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
+    log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
+    startCevStealthLoop().catch((err) => {
+      console.error("[CEV-STEALTH] Boucle crashée:", err);
+    });
+  } else {
+    startCevSetupLoop().catch((err) => {
+      console.error("[CEV-SETUP] Boucle crashée:", err);
+    });
+
+    startCevPollingLoop().catch((err) => {
+      console.error("[CEV-POLL] Boucle crashée:", err);
+    });
+  }
 
   startSpainWatcherLoop().catch((err) => {
     console.error("[SPAIN-WATCHER] Boucle crashée:", err);
