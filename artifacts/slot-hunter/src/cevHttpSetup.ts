@@ -21,6 +21,7 @@
 import { botLog } from "./convexClient.js";
 import { randomUserAgent } from "./browser.js";
 import { Impit } from "impit";
+import { setSharedDirectImpit } from "./cevPolling.js";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
@@ -42,11 +43,15 @@ function getSetupImpit(): InstanceType<typeof Impit> {
   return _setupImpit;
 }
 
-/** Instance impit directe (sans proxy) — singleton réutilisé pour garder les cookies cohérents */
+/** Instance impit directe (sans proxy) — singleton réutilisé pour garder les cookies cohérents.
+ *  PARTAGÉ avec cevPolling via setSharedDirectImpit() pour que le polling
+ *  réutilise exactement la même connexion TLS que le setup. */
 let _directImpit: InstanceType<typeof Impit> | undefined;
 function getDirectImpit(): InstanceType<typeof Impit> {
   if (!_directImpit) {
     _directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+    // Partager avec le polling pour cohérence TLS/session
+    setSharedDirectImpit(_directImpit);
   }
   return _directImpit;
 }

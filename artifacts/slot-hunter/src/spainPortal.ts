@@ -1589,14 +1589,16 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
     }
 
     // ── Flow Playwright complet (premier passage ou session expirée) ──────
-    const spainNoProxy = process.env.SPAIN_WATCHER_NO_PROXY === "1";
+    // Par défaut : sans proxy (IP Railway directe) — le stealth plugin résout CF en ~30-90s.
+    // Si SPAIN_WATCHER_USE_PROXY=1, utiliser le proxy 2captcha (quand il est stable).
+    const useProxy = process.env.SPAIN_WATCHER_USE_PROXY === "1";
     const { browser, page } = await launchBrowser({
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
       acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
-      ...(spainNoProxy
-        ? { forceNoProxy: true }
-        : { proxySource: "2captcha" as const }),  // IP résidentielle → bypass Cloudflare naturellement
+      ...(useProxy
+        ? { proxySource: "2captcha" as const }
+        : { forceNoProxy: true }),
     });
 
     const payloadHits: unknown[] = [];

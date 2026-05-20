@@ -32,13 +32,20 @@ function getPollImpit(): InstanceType<typeof Impit> {
   return _pollImpit;
 }
 
-/** Singleton impit direct (sans proxy) — réutilisé pour garder les cookies cohérents */
+/** Singleton impit direct (sans proxy) — réutilisé pour garder les cookies cohérents.
+ *  IMPORTANT: Partagé avec cevHttpSetup.ts via getSharedDirectImpit() pour que la session
+ *  créée pendant le setup soit pollable depuis la même instance TLS. */
 let _directPollImpit: InstanceType<typeof Impit> | undefined;
 function getDirectPollImpit(): InstanceType<typeof Impit> {
   if (!_directPollImpit) {
     _directPollImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
   }
   return _directPollImpit;
+}
+
+/** Permet au setup d'injecter son singleton pour que le polling réutilise la même connexion TLS */
+export function setSharedDirectImpit(instance: InstanceType<typeof Impit>): void {
+  _directPollImpit = instance;
 }
 
 /** Fetch CEV avec fingerprint TLS Chrome via impit.
