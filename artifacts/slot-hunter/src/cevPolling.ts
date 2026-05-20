@@ -13,28 +13,39 @@
 // Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
 import { randomUserAgent } from "./browser.js";
-import { ProxyAgent } from "undici";
+import { Impit } from "impit";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 
 // Proxy pour le polling API — évite que l'IP Railway soit flaggée
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
-let _pollProxyAgent: ProxyAgent | undefined;
-if (IPROYAL_PROXY_URL) {
-  _pollProxyAgent = new ProxyAgent(IPROYAL_PROXY_URL);
+
+/** Singleton impit avec proxy (fingerprint TLS Chrome — même pattern que le bot USA) */
+let _pollImpit: InstanceType<typeof Impit> | undefined;
+function getPollImpit(): InstanceType<typeof Impit> {
+  if (!_pollImpit) {
+    const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
+    if (IPROYAL_PROXY_URL) opts.proxyUrl = IPROYAL_PROXY_URL;
+    _pollImpit = new Impit(opts as any);
+  }
+  return _pollImpit;
 }
 
-function cevFetch(url: string, options: RequestInit): Promise<Response> {
-  if (_pollProxyAgent) {
-    // @ts-expect-error — dispatcher est une option undici
-    return fetch(url, { ...options, dispatcher: _pollProxyAgent }).catch((proxyErr) => {
-      // Proxy down → fallback direct (sans proxy)
-      console.log(`[CEV-POLL] ⚠️ Proxy fetch failed → fallback direct`);
-      return fetch(url, options);
-    });
+/** Fetch CEV avec fingerprint TLS Chrome via impit.
+ *  Fallback sans proxy si le proxy échoue. */
+async function cevFetch(url: string, options: RequestInit): Promise<Response> {
+  try {
+    return await getPollImpit().fetch(url, options as any) as unknown as Response;
+  } catch (err) {
+    // Si proxy configuré et échec → retry sans proxy (impit direct)
+    if (IPROYAL_PROXY_URL) {
+      console.log(`[CEV-POLL] ⚠️ impit+proxy failed → fallback impit direct`);
+      const directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+      return directImpit.fetch(url, options as any) as unknown as Response;
+    }
+    throw err;
   }
-  return fetch(url, options);
 }
 
 export type CevPollResult =

@@ -20,7 +20,7 @@
 
 import { botLog } from "./convexClient.js";
 import { randomUserAgent } from "./browser.js";
-import { ProxyAgent } from "undici";
+import { Impit } from "impit";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
@@ -28,27 +28,33 @@ const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
 
-// ─── Proxy partagé avec cevPolling — garantit que la session CEV est liée à la même IP ───
+// ─── Impit avec fingerprint TLS Chrome (même pattern que le bot USA) ───────────
+// Garantit que les requêtes HTTP sont indistinguables d'un vrai Chrome (JA3/JA4).
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
-let _setupProxyAgent: ProxyAgent | undefined;
-if (IPROYAL_PROXY_URL) {
-  _setupProxyAgent = new ProxyAgent(IPROYAL_PROXY_URL);
+
+let _setupImpit: InstanceType<typeof Impit> | undefined;
+function getSetupImpit(): InstanceType<typeof Impit> {
+  if (!_setupImpit) {
+    const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
+    if (IPROYAL_PROXY_URL) opts.proxyUrl = IPROYAL_PROXY_URL;
+    _setupImpit = new Impit(opts as any);
+  }
+  return _setupImpit;
 }
 
-/** Fetch via le proxy iProyal (si configuré) — même IP que le polling.
- *  Fallback automatique sans proxy si le proxy échoue (fetch failed / timeout). */
+/** Fetch CEV avec fingerprint TLS Chrome via impit.
+ *  Fallback sans proxy si le proxy échoue (proxy down). */
 async function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
-  if (_setupProxyAgent) {
-    try {
-      // @ts-expect-error — dispatcher est une option undici
-      return await fetch(url, { ...options, dispatcher: _setupProxyAgent });
-    } catch (proxyErr) {
-      // Proxy down → fallback direct (sans proxy)
-      console.log(`[CEV-SETUP] ⚠️ Proxy fetch failed → fallback direct pour ${url.slice(0, 80)}`);
-      return fetch(url, options);
+  try {
+    return await getSetupImpit().fetch(url, options as any) as unknown as Response;
+  } catch (err) {
+    if (IPROYAL_PROXY_URL) {
+      console.log(`[CEV-SETUP] ⚠️ impit+proxy failed → fallback impit direct pour ${url.slice(0, 80)}`);
+      const directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+      return directImpit.fetch(url, options as any) as unknown as Response;
     }
+    throw err;
   }
-  return fetch(url, options);
 }
 
 // ─── Cache session VOWINT (persisté en mémoire entre les checks) ─────────────
