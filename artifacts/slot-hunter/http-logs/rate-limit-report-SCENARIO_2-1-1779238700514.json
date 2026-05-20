@@ -1,0 +1,41 @@
+{
+  "scenario": "SCENARIO_2",
+  "attempt": 1,
+  "timestamp": "2026-05-20T00:58:20.521Z",
+  "totalRateLimitErrors": 2,
+  "errors": [
+    {
+      "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06",
+      "method": "GET",
+      "status": 200,
+      "timestamp": "2026-05-20T00:58:20.510Z",
+      "patterns": [
+        "/too\\s*many\\s*attempts/i",
+        "/ErrorTooManyAttempts/i"
+      ],
+      "responsePreview": "{\n  \"url\": \"http://visaonweb.diplomatie.be/Error/ErrorTooManyAttempts\"\n}",
+      "headers": {
+        "cache-control": "private, s-maxage=0",
+        "content-length": "67",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Wed, 20 May 2026 00:58:23 GMT",
+        "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-xss-protection": "1; mode=block"
+      }
+    },
+    {
+      "url": "setupCevSessionHttp",
+      "method": "SETUP_CEV_SESSION",
+      "status": 429,
+      "timestamp": "2026-05-20T00:58:20.513Z",
+      "patterns": [
+        "/rate.?limit/i"
+      ],
+      "responsePreview": null
+    }
+  ],
+  "summary": "Scénario SCENARIO_2, tentative 1: 2 erreur(s) de rate limit détectée(s)"
+}

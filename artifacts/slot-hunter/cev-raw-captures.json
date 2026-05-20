@@ -1,0 +1,150 @@
+{
+  "testDate": "2026-05-20T00:33:22.751Z",
+  "email": "screentapinc@gmail.com",
+  "results": [
+    {
+      "testNumber": 1,
+      "success": false,
+      "error": "LOGIN_FAILED_UNKNOWN",
+      "rateLimitDetected": false,
+      "rateLimitStep": "vowint_login_submit",
+      "rateLimitUrl": "https://visaonweb.diplomatie.be/fr/Account/Login",
+      "rateLimitResponse": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Conten...",
+      "captureCount": 2
+    },
+    {
+      "testNumber": 2,
+      "success": false,
+      "error": "LOGIN_FAILED_UNKNOWN",
+      "rateLimitDetected": false,
+      "rateLimitStep": "vowint_login_submit",
+      "rateLimitUrl": "https://visaonweb.diplomatie.be/fr/Account/Login",
+      "rateLimitResponse": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Conten...",
+      "captureCount": 2
+    }
+  ],
+  "detailedCaptures": [
+    {
+      "testNumber": 1,
+      "timestamp": "2026-05-20T00:32:50.866Z",
+      "step": "vowint_login_page",
+      "url": "https://visaonweb.diplomatie.be/",
+      "method": "GET",
+      "requestHeaders": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7"
+      },
+      "responseStatus": 200,
+      "responseHeaders": {
+        "cache-control": "private",
+        "content-encoding": "gzip",
+        "content-length": "2351",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Wed, 20 May 2026 00:32:54 GMT",
+        "set-cookie": "TS0110ceb4=01f258f401addd25aec3e3a6bbee368217dbdf08beec51735b7eeb1374647f6b8c603a8dffb0250b76af1945bf6a9892c500ef36ec; Path=/; Domain=.visaonweb.diplomatie.be",
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-xss-protection": "1; mode=block"
+      },
+      "durationMs": 764,
+      "responseBody": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Connexion</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1\" rel=\"stylesheet\"/>\r\n\r\n    <script src=https://js.hcaptcha.com/1/api.js?hl=fr  async defer></script>\r\n    \r\n</head>\r\n<body class=\"texture login-body\">\r\n    <div id=\"head-nav\" class=\"navbar navbar-default navbar-fixed-top\">\r\n        <div class=\"container-fluid padding_10\">\r\n            <div class=\"navbar-header\">\r\n                <button type=\"button\" class=\"navbar-toggle\" data-toggle=\"collapse\" data-target=\".navbar-collapse\">\r\n                    <span class=\"fa fa-gear\"></span>\r\n                </button>\r\n                <a class=\"navbar-brand\" href=\"#\"><span>Visa application pour Belgique</span></a>\r\n            </div>\r\n            <div class=\"navbar-collapse collapse\">\r\n                <img src=\"/Content/Images/Punt-BE-logo_50.png\" class=\"float-fight\" />\r\n                <ul class=\"nav navbar-nav navbar-right user-nav\">\r\n                    <li class=\"button dropdown\">\r\n                        <a href=\"javascript:;\" class=\"dropdown-toggle\" data-toggle=\"dropdown\">FR</a>\r\n                        <ul class=\"dropdown-menu languages\">\r\n                            <li class=\"lang\">\r\n                                <div class=\"nanoLanguage nscroller\">\r\n                                    <div class=\"content\">\r\n                                        <ul class=\"noListStyleType\">\r\n                                                <li><a href=\"/en/Account/Login\">EN</a></li>\r\n                                                <li><a href=\"/nl/Account/Login\">NL</a></li>\r\n                                                <li><a href=\"/fr/Account/Login\">FR</a></li>\r\n                                        </ul>\r\n                                    </div>\r\n                                </div>\r\n                            </li>\r\n                        </ul>\r\n                    </li>\r\n                </ul>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div id=\"cl-wrapper\" class=\"login-container\">\r\n        <div class=\"middle-login\">\r\n            <div class=\"block-flat\">\r\n                <div class=\"header headerHeight\">\r\n                    <div class=\"login-header-text\">\r\n                        <p class=\"text-center loginTitle\">Se connecter</p>\r\n                    </div>\r\n                </div>\r\n                <div>\r\n                    \r\n\r\n<form action=\"/fr/Account/Login\" class=\"form-horizontal\" method=\"post\" role=\"form\" style=\"margin-bottom: 0px !important;\"><input name=\"__RequestVerificationToken\" type=\"hidden\" value=\"IhVbzLFGrCSI0oCqMW3NotRyE0YgSkdHjOMX5eqBwlnWC5YBnu_LTd4WZTUu8oMpjjSmVgzKZMOSn-b_PhtlWUeTlbxRu5NW-r3_ynmMJKg1\" />    <div class=\"content\">\r\n        \r\n        <div class=\"form-group\">\r\n            <div class=\"col-sm-12\">\r\n                <div class=\"input-group\">\r\n                    <span class=\"input-group-addon\"><i class=\"fa fa-user\"></i></span>\r\n                    <input class=\"form-control\" data-val=\"true\" data-val-required=\"&quot;Nom d&#39;utilisateur&quot; est un champ obligatoire.\" id=\"UserName\" name=\"UserName\" placeholder=\"Nom d&#39;utilisateur ou adresse e-mail\" tabindex=\"1\" type=\"text\" value=\"\" />\r\n                </div>\r\n                <span class=\"field-validation-valid\" data-valmsg-for=\"UserName\" data-valmsg-replace=\"true\"></span>\r\n                <div class=\"pull-right login-input-group-addon-control\"><a href=\"/fr/Account/Register\" tabindex=\"0\">Cr&#233;er un utilisateur</a></div>\r\n            </div>\r\n        </div>\r\n        <div class=\"form-group\">\r\n            <div class=\"col-sm-12\">\r\n                <div class=\"input-group\">\r\n                    <span class=\"input-group-addon\"><i class=\"fa fa-lock\"></i></span>\r\n                    <input class=\"form-control\" data-val=\"true\" data-val-required=\"&quot;Mot de passe&quot; est un champ obligatoire.\" id=\"Password\" name=\"Password\" placeholder=\"Mot de passe\" tabindex=\"1\" type=\"password\" />\r\n                </div>\r\n                <span class=\"field-validation-valid\" data-valmsg-for=\"Password\" data-valmsg-replace=\"true\"></span>\r\n                <div class=\"pull-right login-input-group-addon-control\"><a href=\"/fr/Account/ForgotPassword\" tabindex=\"0\">Mot de passe oubli&#233;?</a></div>\r\n            </div>\r\n        </div>\r\n        \r\n    </div>\r\n    <div class=\"foot\">\r\n        <button class=\"btn btn-primary\" data-dismiss=\"modal\" type=\"submit\" tabindex=\"1\">Se connecter</button>\r\n    </div>\r\n</form>\r\n\r\n                </div>\r\n            </div>\r\n\r\n           \r\n            <br/>\r\n            \r\n            <div class=\"text-center out-links\">\r\n                <a href=\"/fr/Account/Disclaimer\" tabindex=\"0\">Disclaimer | </a>\r\n                <a href=\"https://diplomatie.belgium.be/fr/venir-en-belgique/visa-pour-la-belgique/privacy-statement-visa\">Privacy statement |</a>|\r\n                <a href=\"https://diplomatie.belgium.be/fr/venir-en-belgique/visa-pour-la-belgique/reglement-general-sur-la-protection-des-donnees-rgpd\">RGPD </a><br />\r\n                <a href=\"#\">&copy; 2014 Federal Public Service Foreign Affairs</a>\r\n            </div>\r\n        </div>\r\n\r\n        </div>\r\n\r\n    <script src=\"/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1\"></script>\r\n\r\n    <script src=\"/Scripts/jqueryval?v=mugRfWFK4wgnGqQ2-RcIJ-5hy5mROPq-xXnW6Doymsk1\"></script>\r\n\r\n    <script src=\"/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1\"></script>\r\n\r\n    \r\n</body>\r\n</html>",
+      "responseBodyPreview": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Connexion</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_..."
+    },
+    {
+      "testNumber": 1,
+      "timestamp": "2026-05-20T00:32:51.631Z",
+      "step": "vowint_login_submit",
+      "url": "https://visaonweb.diplomatie.be/fr/Account/Login",
+      "method": "POST",
+      "requestHeaders": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "TS0110ceb4=01f258f401addd25aec3e3a6bbee368217dbdf08beec51735b7eeb1374647f6b8c603a8dffb0250b76af1945bf6a9892c500ef36ec",
+        "Referer": "https://visaonweb.diplomatie.be/",
+        "Origin": "https://visaonweb.diplomatie.be",
+        "Accept": "text/html,application/xhtml+xml,*/*"
+      },
+      "requestBody": "__RequestVerificationToken=IhVbzLFGrCSI0oCqMW3NotRyE0YgSkdHjOMX5eqBwlnWC5YBnu_LTd4WZTUu8oMpjjSmVgzKZMOSn-b_PhtlWUeTlbxRu5NW-r3_ynmMJKg1&UserName=screentapinc%40gmail.com&Password=Akollad%402026",
+      "responseStatus": 500,
+      "responseHeaders": {
+        "cache-control": "private",
+        "content-length": "1143",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Wed, 20 May 2026 00:32:54 GMT",
+        "set-cookie": "TS0110ceb4=01f258f401addd25aec3e3a6bbee368217dbdf08beec51735b7eeb1374647f6b8c603a8dffb0250b76af1945bf6a9892c500ef36ec; Path=/; Domain=.visaonweb.diplomatie.be",
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-xss-protection": "1; mode=block"
+      },
+      "durationMs": 194,
+      "responseBody": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1\" rel=\"stylesheet\"/>\r\n\r\n\r\n</head>\r\n<body class=\"texture\">\r\n    <div id=\"cl-wrapper\">\r\n        <div class=\"page-error\">\r\n            <h1 class=\"number text-center\">Error</h1>\r\n            <h2 class=\"description text-center\">An error occurred!</h2>\r\n            <h3 class=\"text-center\">Would you like to go <a href=\"/fr\">Accueil</a>?</h3>\r\n        </div>\r\n    </div>\r\n    <script src=\"/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1\"></script>\r\n\r\n    <script src=\"/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1\"></script>\r\n\r\n</body>\r\n</html>\r\n\r\n",
+      "responseBodyPreview": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Conten..."
+    },
+    {
+      "testNumber": 2,
+      "timestamp": "2026-05-20T00:33:21.840Z",
+      "step": "vowint_login_page",
+      "url": "https://visaonweb.diplomatie.be/",
+      "method": "GET",
+      "requestHeaders": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7"
+      },
+      "responseStatus": 200,
+      "responseHeaders": {
+        "cache-control": "private",
+        "content-encoding": "gzip",
+        "content-length": "2350",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Wed, 20 May 2026 00:33:25 GMT",
+        "set-cookie": "TS0110ceb4=01f258f4011e34d3179c30bc1317d0286c39922b5db564b7690706c22c67fb40b31648191733b4e0a34d0ec7ff1d0c84c635927301; Path=/; Domain=.visaonweb.diplomatie.be",
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-xss-protection": "1; mode=block"
+      },
+      "durationMs": 721,
+      "responseBody": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Connexion</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1\" rel=\"stylesheet\"/>\r\n\r\n    <script src=https://js.hcaptcha.com/1/api.js?hl=fr  async defer></script>\r\n    \r\n</head>\r\n<body class=\"texture login-body\">\r\n    <div id=\"head-nav\" class=\"navbar navbar-default navbar-fixed-top\">\r\n        <div class=\"container-fluid padding_10\">\r\n            <div class=\"navbar-header\">\r\n                <button type=\"button\" class=\"navbar-toggle\" data-toggle=\"collapse\" data-target=\".navbar-collapse\">\r\n                    <span class=\"fa fa-gear\"></span>\r\n                </button>\r\n                <a class=\"navbar-brand\" href=\"#\"><span>Visa application pour Belgique</span></a>\r\n            </div>\r\n            <div class=\"navbar-collapse collapse\">\r\n                <img src=\"/Content/Images/Punt-BE-logo_50.png\" class=\"float-fight\" />\r\n                <ul class=\"nav navbar-nav navbar-right user-nav\">\r\n                    <li class=\"button dropdown\">\r\n                        <a href=\"javascript:;\" class=\"dropdown-toggle\" data-toggle=\"dropdown\">FR</a>\r\n                        <ul class=\"dropdown-menu languages\">\r\n                            <li class=\"lang\">\r\n                                <div class=\"nanoLanguage nscroller\">\r\n                                    <div class=\"content\">\r\n                                        <ul class=\"noListStyleType\">\r\n                                                <li><a href=\"/en/Account/Login\">EN</a></li>\r\n                                                <li><a href=\"/nl/Account/Login\">NL</a></li>\r\n                                                <li><a href=\"/fr/Account/Login\">FR</a></li>\r\n                                        </ul>\r\n                                    </div>\r\n                                </div>\r\n                            </li>\r\n                        </ul>\r\n                    </li>\r\n                </ul>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div id=\"cl-wrapper\" class=\"login-container\">\r\n        <div class=\"middle-login\">\r\n            <div class=\"block-flat\">\r\n                <div class=\"header headerHeight\">\r\n                    <div class=\"login-header-text\">\r\n                        <p class=\"text-center loginTitle\">Se connecter</p>\r\n                    </div>\r\n                </div>\r\n                <div>\r\n                    \r\n\r\n<form action=\"/fr/Account/Login\" class=\"form-horizontal\" method=\"post\" role=\"form\" style=\"margin-bottom: 0px !important;\"><input name=\"__RequestVerificationToken\" type=\"hidden\" value=\"vuUvFcBGPaRKNA55fWq1nvu0tASw7-QVpN3XC8RFxSFJm_bKk4XIcHzRz9aR00LPiXbQ4uOyBPHOD4Fsz50x9GIS1iOIBwXc81u5iPMfh7c1\" />    <div class=\"content\">\r\n        \r\n        <div class=\"form-group\">\r\n            <div class=\"col-sm-12\">\r\n                <div class=\"input-group\">\r\n                    <span class=\"input-group-addon\"><i class=\"fa fa-user\"></i></span>\r\n                    <input class=\"form-control\" data-val=\"true\" data-val-required=\"&quot;Nom d&#39;utilisateur&quot; est un champ obligatoire.\" id=\"UserName\" name=\"UserName\" placeholder=\"Nom d&#39;utilisateur ou adresse e-mail\" tabindex=\"1\" type=\"text\" value=\"\" />\r\n                </div>\r\n                <span class=\"field-validation-valid\" data-valmsg-for=\"UserName\" data-valmsg-replace=\"true\"></span>\r\n                <div class=\"pull-right login-input-group-addon-control\"><a href=\"/fr/Account/Register\" tabindex=\"0\">Cr&#233;er un utilisateur</a></div>\r\n            </div>\r\n        </div>\r\n        <div class=\"form-group\">\r\n            <div class=\"col-sm-12\">\r\n                <div class=\"input-group\">\r\n                    <span class=\"input-group-addon\"><i class=\"fa fa-lock\"></i></span>\r\n                    <input class=\"form-control\" data-val=\"true\" data-val-required=\"&quot;Mot de passe&quot; est un champ obligatoire.\" id=\"Password\" name=\"Password\" placeholder=\"Mot de passe\" tabindex=\"1\" type=\"password\" />\r\n                </div>\r\n                <span class=\"field-validation-valid\" data-valmsg-for=\"Password\" data-valmsg-replace=\"true\"></span>\r\n                <div class=\"pull-right login-input-group-addon-control\"><a href=\"/fr/Account/ForgotPassword\" tabindex=\"0\">Mot de passe oubli&#233;?</a></div>\r\n            </div>\r\n        </div>\r\n        \r\n    </div>\r\n    <div class=\"foot\">\r\n        <button class=\"btn btn-primary\" data-dismiss=\"modal\" type=\"submit\" tabindex=\"1\">Se connecter</button>\r\n    </div>\r\n</form>\r\n\r\n                </div>\r\n            </div>\r\n\r\n           \r\n            <br/>\r\n            \r\n            <div class=\"text-center out-links\">\r\n                <a href=\"/fr/Account/Disclaimer\" tabindex=\"0\">Disclaimer | </a>\r\n                <a href=\"https://diplomatie.belgium.be/fr/venir-en-belgique/visa-pour-la-belgique/privacy-statement-visa\">Privacy statement |</a>|\r\n                <a href=\"https://diplomatie.belgium.be/fr/venir-en-belgique/visa-pour-la-belgique/reglement-general-sur-la-protection-des-donnees-rgpd\">RGPD </a><br />\r\n                <a href=\"#\">&copy; 2014 Federal Public Service Foreign Affairs</a>\r\n            </div>\r\n        </div>\r\n\r\n        </div>\r\n\r\n    <script src=\"/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1\"></script>\r\n\r\n    <script src=\"/Scripts/jqueryval?v=mugRfWFK4wgnGqQ2-RcIJ-5hy5mROPq-xXnW6Doymsk1\"></script>\r\n\r\n    <script src=\"/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1\"></script>\r\n\r\n    \r\n</body>\r\n</html>",
+      "responseBodyPreview": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Connexion</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_..."
+    },
+    {
+      "testNumber": 2,
+      "timestamp": "2026-05-20T00:33:22.562Z",
+      "step": "vowint_login_submit",
+      "url": "https://visaonweb.diplomatie.be/fr/Account/Login",
+      "method": "POST",
+      "requestHeaders": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "TS0110ceb4=01f258f4011e34d3179c30bc1317d0286c39922b5db564b7690706c22c67fb40b31648191733b4e0a34d0ec7ff1d0c84c635927301",
+        "Referer": "https://visaonweb.diplomatie.be/",
+        "Origin": "https://visaonweb.diplomatie.be",
+        "Accept": "text/html,application/xhtml+xml,*/*"
+      },
+      "requestBody": "__RequestVerificationToken=vuUvFcBGPaRKNA55fWq1nvu0tASw7-QVpN3XC8RFxSFJm_bKk4XIcHzRz9aR00LPiXbQ4uOyBPHOD4Fsz50x9GIS1iOIBwXc81u5iPMfh7c1&UserName=screentapinc%40gmail.com&Password=Akollad%402026",
+      "responseStatus": 500,
+      "responseHeaders": {
+        "cache-control": "private",
+        "content-length": "1143",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Wed, 20 May 2026 00:33:25 GMT",
+        "set-cookie": "TS0110ceb4=01f258f4011e34d3179c30bc1317d0286c39922b5db564b7690706c22c67fb40b31648191733b4e0a34d0ec7ff1d0c84c635927301; Path=/; Domain=.visaonweb.diplomatie.be",
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-xss-protection": "1; mode=block"
+      },
+      "durationMs": 188,
+      "responseBody": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1\" rel=\"stylesheet\"/>\r\n\r\n\r\n</head>\r\n<body class=\"texture\">\r\n    <div id=\"cl-wrapper\">\r\n        <div class=\"page-error\">\r\n            <h1 class=\"number text-center\">Error</h1>\r\n            <h2 class=\"description text-center\">An error occurred!</h2>\r\n            <h3 class=\"text-center\">Would you like to go <a href=\"/fr\">Accueil</a>?</h3>\r\n        </div>\r\n    </div>\r\n    <script src=\"/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1\"></script>\r\n\r\n    <script src=\"/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1\"></script>\r\n\r\n</body>\r\n</html>\r\n\r\n",
+      "responseBodyPreview": "\r\n<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Error404</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Conten..."
+    }
+  ]
+}

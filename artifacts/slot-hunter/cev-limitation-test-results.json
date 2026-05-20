@@ -1,0 +1,150 @@
+{
+  "testDate": "2026-05-19T23:30:25.926Z",
+  "email": "screentapinc@gmail.com",
+  "results": [
+    {
+      "phase": 1,
+      "attempt": 1,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "iproyal-cd",
+      "sessionReset": false,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/d32085f7-c5ee-495a-97bb-f10f3c91ed70/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    },
+    {
+      "phase": 1,
+      "attempt": 2,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "iproyal-cd",
+      "sessionReset": false,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/ebd115b4-cdc3-4cc8-9146-c213cf233e2a/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    },
+    {
+      "phase": 1,
+      "attempt": 3,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "iproyal-cd",
+      "sessionReset": false,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/78833ff7-5de4-49fa-a453-0d65e951e722/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    },
+    {
+      "phase": 2,
+      "attempt": 1,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "brightdata-fr",
+      "sessionReset": true,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/58faac38-993a-45a2-980b-21bfea05ee21/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    },
+    {
+      "phase": 2,
+      "attempt": 2,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "brightdata-fr",
+      "sessionReset": false,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/73b91a00-3cd2-45fe-bc7e-470ec0dc1e04/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    },
+    {
+      "phase": 2,
+      "attempt": 3,
+      "success": false,
+      "error": "RATE_LIMIT_VOWINT_5_CLICKS",
+      "proxy": "brightdata-fr",
+      "sessionReset": true,
+      "details": {
+        "loginSuccess": false,
+        "getEAppointmentUrlSuccess": false,
+        "cevCookieObtained": false,
+        "hcaptchaSolved": false,
+        "captchaSubmitted": false,
+        "redirectFollowed": false,
+        "finalStatus": "ERREUR",
+        "finalUrl": "Error page"
+      }
+    },
+    {
+      "phase": 2,
+      "attempt": 4,
+      "success": true,
+      "slotsAvailable": false,
+      "proxy": "brightdata-fr",
+      "sessionReset": false,
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/bd0830ec-763d-42fb-b292-2dd8a312483d/en-US",
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "captchaSubmitted": true,
+        "redirectFollowed": true,
+        "finalStatus": "NO_AVAILABILITY",
+        "finalUrl": "NoAvailability page"
+      }
+    }
+  ],
+  "summary": {
+    "phase1": {
+      "attempts": 3,
+      "successes": 3
+    },
+    "phase2": {
+      "attempts": 4,
+      "successes": 3
+    },
+    "theory": "Limite basée sur session cookie + adresse IP",
+    "conclusion": "THÉORIE CONFIRMÉE - La limite peut être contournée en changeant de session ET d'adresse IP"
+  }
+}

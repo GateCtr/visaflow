@@ -1,0 +1,105 @@
+{
+  "testDate": "2026-05-20T00:58:20.529Z",
+  "email": "screentapinc@gmail.com",
+  "proxy": "iProyal Congo (Kinshasa)",
+  "scenarios": [
+    {
+      "name": "SCENARIO_1",
+      "description": "Même session + même IP (persistance optimale)",
+      "config": {
+        "sessionReset": false,
+        "ipChange": false,
+        "attempts": 2,
+        "delayBetweenAttemptsMs": 2000
+      }
+    },
+    {
+      "name": "SCENARIO_2",
+      "description": "Nouvelle session + même IP (reset agressif - à éviter)",
+      "config": {
+        "sessionReset": true,
+        "ipChange": false,
+        "attempts": 1,
+        "delayBetweenAttemptsMs": 2000
+      }
+    }
+  ],
+  "results": [
+    {
+      "scenario": "SCENARIO_1",
+      "attempt": 1,
+      "success": true,
+      "slotsAvailable": false,
+      "sessionReset": false,
+      "ipChanged": false,
+      "proxySessionId": "default",
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "responseTimeMs": 36932,
+        "finalStatus": "NO_AVAILABILITY"
+      }
+    },
+    {
+      "scenario": "SCENARIO_1",
+      "attempt": 2,
+      "success": true,
+      "slotsAvailable": false,
+      "sessionReset": false,
+      "ipChanged": false,
+      "proxySessionId": "default",
+      "details": {
+        "loginSuccess": true,
+        "getEAppointmentUrlSuccess": true,
+        "cevCookieObtained": true,
+        "hcaptchaSolved": true,
+        "responseTimeMs": 45735,
+        "finalStatus": "NO_AVAILABILITY"
+      }
+    },
+    {
+      "scenario": "SCENARIO_2",
+      "attempt": 1,
+      "success": false,
+      "error": "RATE_LIMIT_VOWINT_5_CLICKS",
+      "sessionReset": true,
+      "ipChanged": false,
+      "proxySessionId": "default",
+      "details": {
+        "loginSuccess": false,
+        "getEAppointmentUrlSuccess": false,
+        "cevCookieObtained": false,
+        "hcaptchaSolved": false,
+        "responseTimeMs": 2604,
+        "finalStatus": "ERREUR"
+      }
+    }
+  ],
+  "analysis": {
+    "SCENARIO_1": {
+      "attempts": 2,
+      "successes": 2,
+      "successRate": 100,
+      "avgResponseTime": 41333.5,
+      "errors": []
+    },
+    "SCENARIO_2": {
+      "attempts": 1,
+      "successes": 0,
+      "successRate": 0,
+      "avgResponseTime": 2604,
+      "errors": [
+        "RATE_LIMIT_VOWINT_5_CLICKS"
+      ]
+    }
+  },
+  "recommendations": [
+    "Réutiliser les sessions existantes autant que possible",
+    "Éviter les resets de session inutiles",
+    "Rotation IP possible mais pas obligatoire",
+    "Espacer les actions agressives (>30s)",
+    "Monitorer les erreurs RATE_LIMIT_VOWINT_5_CLICKS"
+  ]
+}

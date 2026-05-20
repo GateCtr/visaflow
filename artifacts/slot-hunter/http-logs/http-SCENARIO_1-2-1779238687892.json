@@ -1,0 +1,685 @@
+[
+  {
+    "timestamp": "2026-05-20T00:57:20.480Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe762fd6dba09d6-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:20 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 334,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:20.607Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe762fe48a44807-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:20 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 461,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.160Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_setup_start\",\"status\":\"ok\"}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.160Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_vowint_cache_hit\",\"status\":\"ok\",\"data\":{\"appId\":\"e978b2fd-472f-f111-a3ae-00505691de06\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.160Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=ElGL-PmZ3tMYLg4kUFqxckinxCU0xBumC8m_nmZBL-iNBuVd81fifPLvcuwdaV0B86P4GzOYac60js03Vzlw3YB_p6OkG-pT3uTOn-G_Zjo1; ServerId=39eb1a7b9c1b9b6e; TS0110ceb4=01f258f40107445662803b96c808ce8a70eb707c4cbc09ec91931a209583ed20d3acc4b4ee781952b402252b2a6d8a74f02755aaaa; OSOnline=WifU_vnUS6kYY9O4lWqEf9rN-amh7BNvezVra6g8aMbecnx3nrW3PTxuFAdJxt-zG3h609303DDG5eMirjvoY2_Fw1a7YPZ1X8WHK30NFrzbVIhGBL_QZQbrrt0ooJxgobUYBSwp5QKbmDTgw0EzmxhkytFJxE8GErkXgY5Ps4pQ-807IwmAqFOi98YqwDGGxX--TlFtQcj5xwH9g0xSP3RceUsM7UkyHtRbr7g_IZcYScfdLlJQHi3MfhSdapjt5LSPP1qYkSf4czOKfpcWh6wPi_Poqd7ksC6a71o-5GcJbT1vyDkd5vIUo060H7L1RqPODmx_-AVslL5JyRFGXg0bPhK0EYy89M3sBH0HuNtFXAUHf9Eqa6cKc5601FNfNDohvQMgOupBfHU6AZRkUY0GU3PfnbB1u8qq4yEXvXe5gCYjZ2G9ZYIQA6nbAlq3ITR0Gjs8LSSokGaHJboJ9wP3G5Uasl0KOb95UySX5zdJFkWQIZiTYrisTdcUiOiT1ufvRcieAHNd3CyofVQMe7AwZEKlIaHTjOp8jGvJuW78jdDBi6T__0CECq7x8YbIXGFmQGgImJGzIdQzBpmkzgdbkiZHAnysmhh8YPHaGlRhzl3fCqUwnWUJnVDlOeqIKUjLPCSfBi48_7u2jvLtfscGHuSLA9zdwACWq08NPhd7VFnwQYPrhjQrMjrrFQR7r8z3pG4QBFqJiP0UKrbVNBWNinL-n8mAZYuLAddYbJfJjSJn-3_olPa0ntbAroKVSCVVZmFEiI4fxVLRuC7XN9FSpsROMbTAvUPY_uEv6wg",
+      "Accept": "application/json, text/html, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "If-Modified-Since": "0",
+      "Referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.467Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe76309e90009d6-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:22 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 308,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.500Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe76309ea2c4807-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:22 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 340,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.886Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-length": "219",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:26 GMT",
+      "set-cookie": "TS0110ceb4=01f258f40107445662803b96c808ce8a70eb707c4cbc09ec91931a209583ed20d3acc4b4ee781952b402252b2a6d8a74f02755aaaa; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 726,
+    "responseBody": {
+      "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US"
+    },
+    "responseText": "{\n  \"url\": \"https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.887Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_integration_url\",\"status\":\"ok\",\"data\":{\"url\":\"https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2f\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:22.888Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,*/*",
+      "Referer": "https://visaonweb.diplomatie.be/"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.088Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US",
+    "status": 302,
+    "statusText": "Found",
+    "headers": {
+      "access-control-expose-headers": "Request-Context",
+      "cache-control": "no-cache, no-store, must-revalidate",
+      "connection": "keep-alive",
+      "content-length": "125",
+      "content-security-policy": "default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:23 GMT",
+      "expires": "-1",
+      "location": "/Captcha",
+      "pragma": "no-cache",
+      "referrer-policy": "no-referrer",
+      "request-context": "appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f",
+      "set-cookie": "PreferredCulture=en-US; expires=Fri, 19-Jun-2026 00:57:23 GMT; path=/",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "Deny",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 200,
+    "responseText": "<html><head><title>Object moved</title></head><body>\r\n<h2>Object moved to <a href=\"/Captcha\">here</a>.</h2>\r\n</body></html>\r\n"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.089Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_cev_cookie_ok\",\"status\":\"ok\",\"data\":{\"cookieLen\":24}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.090Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_hcaptcha_start\",\"status\":\"ok\",\"data\":{\"service\":\"anticaptcha\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.091Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/createTask",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"clientKey\":\"979f89a9c444082156df0cfd8174e805\",\"task\":{\"type\":\"HCaptchaTaskProxyless\",\"websiteURL\":\"https://appointment.cloud.diplomatie.be/Captcha\",\"websiteKey\":\"5f64399c-14a8-415e-ad1a-7ebccdc4943a\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.199Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe7630e883009d6-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:23 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 312,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.401Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe7630fca594807-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:23 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 312,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:23.545Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe763108b834807-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:57:23 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 455,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:24.359Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/createTask",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-allow-headers": "Overwrite, Destination, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control",
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:24 GMT",
+      "server": "nginx/1.18.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "durationMs": 1268,
+    "responseBody": {
+      "errorId": 0,
+      "taskId": 268665465
+    },
+    "responseText": "{\n  \"errorId\": 0,\n  \"taskId\": 268665465\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:29.365Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"clientKey\":\"979f89a9c444082156df0cfd8174e805\",\"taskId\":268665465}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:35.631Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-allow-headers": "Overwrite, Destination, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control",
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:35 GMT",
+      "server": "nginx/1.18.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "durationMs": 6266,
+    "responseBody": {
+      "errorId": 0,
+      "status": "processing"
+    },
+    "responseText": "{\n  \"errorId\": 0,\n  \"status\": \"processing\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:40.641Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"clientKey\":\"979f89a9c444082156df0cfd8174e805\",\"taskId\":268665465}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:46.902Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-allow-headers": "Overwrite, Destination, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control",
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:46 GMT",
+      "server": "nginx/1.18.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "durationMs": 6261,
+    "responseBody": {
+      "errorId": 0,
+      "status": "processing"
+    },
+    "responseText": "{\n  \"errorId\": 0,\n  \"status\": \"processing\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:51.916Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"clientKey\":\"979f89a9c444082156df0cfd8174e805\",\"taskId\":268665465}"
+  },
+  {
+    "timestamp": "2026-05-20T00:57:58.183Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-allow-headers": "Overwrite, Destination, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control",
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:57:58 GMT",
+      "server": "nginx/1.18.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "durationMs": 6267,
+    "responseBody": {
+      "errorId": 0,
+      "status": "processing"
+    },
+    "responseText": "{\n  \"errorId\": 0,\n  \"status\": \"processing\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:03.189Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"clientKey\":\"979f89a9c444082156df0cfd8174e805\",\"taskId\":268665465}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:04.451Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://api.anti-captcha.com/getTaskResult",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-allow-headers": "Overwrite, Destination, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control",
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:04 GMT",
+      "server": "nginx/1.18.0 (Ubuntu)",
+      "transfer-encoding": "chunked"
+    },
+    "durationMs": 1262,
+    "responseBody": {
+      "errorId": 0,
+      "status": "ready",
+      "solution": {
+        "gRecaptchaResponse": "P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.haJwZACjZXhwzmoNB4yncGFzc2tlecUFuOjwVfOHf_P41quDyub71f0YhRFUORPBs0EOrDNIR_hLDX1JI76oQWFA4qnqFEMAY3PnhxnhUT2LttMnXQtdHBkokvOFY7dBwP4Z5zEmo_A9vzsACB0J8OIoAPPc4VXII64qI8Lb8xw-EXQ5GbGD0AvZUyfCkyMN3xwPBzdW2Ao7iUbTal07flUzkGhjtbCGBGpINVG-Y73VwaxtZwQcj4wc1Eyi7i0Gm6vJFF3vbT1dQARRAoT-22lGVjcSO0cVi6EHINkymDP9HD9Vp6a8MAU-aZqdEpC7X245VJrfh4Ibf0mscTi_qt7ZnaUfELuOCv2J9PYuIxUAgw8x01NHuJIqWX-0GMrqKSqhCOzrQ_zWxS8cuULob2ttStowtrj-326hJUJBbS5uAtXCGFIGBJiola5UWyES_cVkcXFSTi8ELsqKZadfTb7xkLyDQyiIQr4eYsQyYyhLNA7A6Xz4sNu1_-f9LGHaVAXiaF9HX2tQK8-8P2Z54UnsE52tWYsuCQzOdZhsyCQdY5J1TCzsrxd0bB9V0Ep24-BSMDAyuz3jgiYIDcDZUJ0H7a9kCIwgrgbNkE7eremqNuMoqFMEtjvmux9_dew9SZbh9u8uUnFwSqu2BVgf36LorzzYccUjIQNGjrwy7xebRGCmKEWfkZiXZApRdEMvX9tS1akZpEg3egtach3Qf3RyAjjKmvnO8WJMgoMdwylJkkveS_coUvCIa2KD2WYTmXJ9d1Ja8MeH1SAZspj-w4hs96V7eeNrMU4b2y8y4DDTyHV98YVXmhJv6ou9nqeEbUMBnvpi0yP3VT_kI2f_OAZA7TelUkKYYPxyAxMFuEZJfJj2ryEaVadjCXNg2f78IDGrP8YQQfOLCs-fYH9XtJMo7lTIrL6LaZBEBcPa_19clc2YKdXmtM3pcChR0XpJ8x_55B3zLZh4LDsSUm0fu8fl1MvC2_FuseF-z29Eq5YlV28BUuxFcmWfjiZ_C72HEVFb75ztSXLkuill8RWep0RvxIGHNxg05t6zJRZshS5_qJQxFsW2x1vXu9UDdlMH9WcILyooyidJyjmO4c5lE2uLdVpc1T3iRXPBHWq4CiYX94pdFtMhfVzXIUU3Hw9QiskxArkoH6Q51Q_9SafwPXoqowyENJ_8lwiH_79lX-rI6F-jMcVX_o-78f2KJxGuWEL3xMz-_iC360IjiX8_6BWYo8bKQXrT21sMG-9rKH3Kvy5ENhjgK3Dld3VZysVegRHAJZvBajSuiNJTk8D_OCslqVhLoensPw42YtVAEMJT8VtJevBIeYIBeJ90DGBMuN4j-tbxk4v3jKKb0QIla9-nGEFTXLuVZCjSxRCFtnjeMDrwQ6UcdnSnR42XF75RHAiSRVKC5na0SEJJE5c-zJgDQFb6WNeSCiwplZQ3O5xluUO-ow6Q8iM9QePNE8nH4N5_eMAXpr6tY-b_TWIOux3J7M8-kAwvEZChBqHu5XuF2ROArxElGYB5yVMe8iFpZhGr8qF9nO_j7NBY2t1ike-rtaC-Wq5ILNvZegNbtYPTF4ZWlBNLAx3-QRgGCXFF0urG7lagWhNp0tB9Wdk_qOxXC3-nFmGdekg-gs1yiqbC2Vo86TjwDYRb4CnfjAmVNF28DYs6XpdaYAKHPvvOXN8T-tlKGxJEaaUBy8p-H2RVMPj99ivkNxKnm6dwBSR73pfKlNLumc5v4bR1tzW5xXnsDp_wPThw5Crr88PgrcB31JTRzB-bPon0TGBaFJsxpMyyvJTDDHfyVTMVSkOkxzfjuVSMlNFRoWiGF1HSPi2lg6_p1xrAHHcBLvkQ-VPicNVnGI2zT2njfHoNG_3lpWxTC-3x2WEvMiYZTgixaopZ6IuohN8edXhzwJ7Cs_SEfj7dC8ULGMHQQ1AVnxFb11y0-TiMxV1Y-4M7SVMOtcSIFI0HOHhS4m4BYm9C6FwBwKJrcqgzNjhhYzMwOahzaGFyZF9pZM4NO2Qp.MbXgog-BhvpKG_tinOci70lDm-NoKK6xyd6qGE_aHnI",
+        "respKey": "E1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.hKNleHDOag0HdaRkYXRhxHNOnHD_2yCGEjSLlBAHpZtYm_nos9JlKUMp8gDjvnmZQxYZEOkCplxbTU820oi3O87pFQozTY-xuGx84m85hSqvcWat4jVQnxTq4e-IZDgAe7c3cvjcJwWDw6uEUTxPzTXz6VB2caYJtomBeaSb2EE-lDmKomtyqDFkZmU2ODI0qHNoYXJkX2lkzg07ZCk.UePpVUN0-OQ3Tn5HeqtIgG0fhaXQmL-bkmbRUeCpe-Y",
+        "pr": true,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+      },
+      "cost": "0.00200",
+      "ip": "102.206.241.131",
+      "createTime": 1779238644,
+      "endTime": 1779238677,
+      "solveCount": 0
+    },
+    "responseText": "{\n  \"errorId\": 0,\n  \"status\": \"ready\",\n  \"solution\": {\n    \"gRecaptchaResponse\": \"P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.haJwZACjZXhwzmoNB4yncGFzc2tlecUFuOjwVfOHf_P41quDyub71f0YhRFUORPBs0EOrDNIR_hLDX1JI76oQWFA4qnqFEMAY3PnhxnhUT2LttMnXQtdHBkokvOFY7dBwP4Z5zEmo_A9vzsACB0J8OIoAPPc4VXII64qI8Lb8xw-EXQ5GbGD0AvZUyfCkyMN3xwPBzdW2Ao7iUbTal07flUzkGhjtbCGBGpINVG-Y73VwaxtZwQcj4wc1Eyi7i0Gm6vJFF3vbT1dQARRAoT-22lGVjcSO0cVi6EHINkymDP9HD9Vp6a8MAU-aZqdEpC7X245VJrfh4Ibf0mscTi_qt7ZnaUfELuOCv2J9PYuIxUAgw8x01NHuJIqWX-0GMrqKSqhCOzrQ_zWxS8cuULob2ttStowtrj-326hJUJBbS5uAtXCGFIGBJiola5UWyES_cVkcXFSTi8ELsqKZadfTb7xkLyDQyiIQr4eYsQyYyhLNA7A6Xz4sNu1_-f9LGHaVAXiaF9HX2tQK8-8P2Z54UnsE52tWYsuCQzOdZhsyCQdY5J1TCzsrxd0bB9V0Ep24-BSMDAyuz3jgiYIDcDZUJ0H7a9kCIwgrgbNkE7eremqNuMoqFMEtjvmux9_dew9SZbh9u8uUnFwSqu2BVgf36LorzzYccUjIQNGjrwy7xebRGCmKEWfkZiXZApRdEMvX9tS1akZpEg3egtach3Qf3RyAjjKmvnO8WJMgoMdwylJkkveS_coUvCIa2KD2WYTmXJ9d1Ja8MeH1SAZspj-w4hs96V7eeNrMU4b2y8y4DDTyHV98YVXmhJv6ou9nqeEbUMBnvpi0yP3VT_kI2f_OAZA7TelUkKYYPxyAxMFuEZJfJj2ryEaVadjCXNg2f78IDGrP8YQQfOLCs-fYH9XtJMo7lTIrL6LaZBEBcPa_19clc2YKdXmtM3pcChR0XpJ8x_55B3zLZh4LDsSUm0fu8fl1MvC2_FuseF-z29Eq5YlV28BUuxFcmWfjiZ_C72HEVFb75ztSXLkuill8RWep0RvxIGHNxg05t6zJRZshS5_qJQxFsW2x1vXu9UDdlMH9WcILyooyidJyjmO4c5lE2uLdVpc1T3iRXPBHWq4CiYX94pdFtMhfVzXIUU3Hw9QiskxArkoH6Q51Q_9SafwPXoqowyENJ_8lwiH_79lX-rI6F-jMcVX_o-78f2KJxGuWEL3xMz-_iC360IjiX8_6BWYo8bKQXrT21sMG-9rKH3Kvy5ENhjgK3Dld3VZysVegRHAJZvBajSuiNJTk8D_OCslqVhLoensPw42YtVAEMJT8VtJevBIeYIBeJ90DGBMuN4j-tbxk4v3jKKb0QIla9-nGEFTXLuVZCjSxRCFtnjeMDrwQ6UcdnSnR42XF75RHAiSRVKC5na0SEJJE5c-zJgDQFb6WNeSCiwplZQ3O5xluUO-ow6Q8iM9QePNE8nH4N5_eMAXpr6tY-b_TWIOux3J7M8-kAwvEZChBqHu5XuF2ROArxElGYB5yVMe8iFpZhGr8qF9nO_j7NBY2t1ike-rtaC-Wq5ILNvZegNbtYPTF4ZWlBNLAx3-QRgGCXFF0urG7lagWhNp0tB9Wdk_qOxXC3-nFmGdekg-gs1yiqbC2Vo86TjwDYRb4CnfjAmVNF28DYs6XpdaYAKHPvvOXN8T-tlKGxJEaaUBy8p-H2RVMPj99ivkNxKnm6dwBSR73pfKlNLumc5v4bR1tzW5xXnsDp_wPThw5Crr88PgrcB31JTRzB-bPon0TGBaFJsxpMyyvJTDDHfyVTMVSkOkxzfjuVSMlNFRoWiGF1HSPi2lg6_p1xrAHHcBLvkQ-VPicNVnGI2zT2njfHoNG_3lpWxTC-3x2WEvMiYZTgixaopZ6IuohN8edXhzwJ7Cs_SEfj7dC8ULGMHQQ1AVnxFb11y0-TiMxV1Y-4M7SVMOtcSIFI0HOHhS4m4BYm9C6FwBwKJrcqgzNjhhYzMwOahzaGFyZF9pZM4NO2Qp.MbXgog-BhvpKG_tinOci70lDm-NoKK6xyd6qGE_aHnI\",\n    \"respKey\": \"E1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.hKNleHDOag0HdaRkYXRhxHNOnHD_2yCGEjSLlBAHpZtYm_nos9JlKUMp8gDjvnmZQxYZEOkCplxbTU820oi3O87pFQozTY-xuGx84m85hSqvcWat4jVQnxTq4e-IZDgAe7c3cvjcJwWDw6uEUTxPzTXz6VB2caYJtomBeaSb2EE-lDmKomtyqDFkZmU2ODI0qHNoYXJkX2lkzg07ZCk.UePpVUN0-OQ3Tn5HeqtIgG0fhaXQmL-bkmbRUeCpe-Y\",\n    \"pr\": true,\n    \"userAgent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36\"\n  },\n  \"cost\": \"0.00200\",\n  \"ip\": \"102.206.241.131\",\n  \"createTime\": 1779238644,\n  \"endTime\": 1779238677,\n  \"solveCount\": 0\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:04.453Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_hcaptcha_solved\",\"status\":\"ok\",\"data\":{\"service\":\"anticaptcha\",\"seconds\":20}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:04.455Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken",
+    "headers": {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cookie": "ASP.NET_SessionId=03ykruofmnelaskun4fyrlme; PreferredCulture=en-US",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "X-Requested-With": "XMLHttpRequest",
+      "Referer": "https://appointment.cloud.diplomatie.be/Captcha",
+      "Origin": "https://appointment.cloud.diplomatie.be",
+      "Accept": "application/json, text/javascript, */*; q=0.01"
+    },
+    "requestBody": "captcha=P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.haJwZACjZXhwzmoNB4yncGFzc2tlecUFuOjwVfOHf_P41quDyub71f0YhRFUORPBs0EOrDNIR_hLDX1JI76oQWFA4qnqFEMAY3PnhxnhUT2LttMnXQtdHBkokvOFY7dBwP4Z5zEmo_A9vzsACB0J8OIoAPPc4VXII64qI8Lb8xw-EXQ5GbGD0AvZUyfCkyMN3xwPBzdW2Ao7iUbTal07flUzkGhjtbCGBGpINVG-Y73VwaxtZwQcj4wc1Eyi7i0Gm6vJFF3vbT1dQARRAoT-22lGVjcSO0cVi6EHINkymDP9HD9Vp6a8MAU-aZqdEpC7X245VJrfh4Ibf0mscTi_qt7ZnaUfELuOCv2J9PYuIxUAgw8x01NHuJIqWX-0GMrqKSqhCOzrQ_zWxS8cuULob2ttStowtrj-326hJUJBbS5uAtXCGFIGBJiola5UWyES_cVkcXFSTi8ELsqKZadfTb7xkLyDQyiIQr4eYsQyYyhLNA7A6Xz4sNu1_-f9LGHaVAXiaF9HX2tQK8-8P2Z54UnsE52tWYsuCQzOdZhsyCQdY5J1TCzsrxd0bB9V0Ep24-BSMDAyuz3jgiYIDcDZUJ0H7a9kCIwgrgbNkE7eremqNuMoqFMEtjvmux9_dew9SZbh9u8uUnFwSqu2BVgf36LorzzYccUjIQNGjrwy7xebRGCmKEWfkZiXZApRdEMvX9tS1akZpEg3egtach3Qf3RyAjjKmvnO8WJMgoMdwylJkkveS_coUvCIa2KD2WYTmXJ9d1Ja8MeH1SAZspj-w4hs96V7eeNrMU4b2y8y4DDTyHV98YVXmhJv6ou9nqeEbUMBnvpi0yP3VT_kI2f_OAZA7TelUkKYYPxyAxMFuEZJfJj2ryEaVadjCXNg2f78IDGrP8YQQfOLCs-fYH9XtJMo7lTIrL6LaZBEBcPa_19clc2YKdXmtM3pcChR0XpJ8x_55B3zLZh4LDsSUm0fu8fl1MvC2_FuseF-z29Eq5YlV28BUuxFcmWfjiZ_C72HEVFb75ztSXLkuill8RWep0RvxIGHNxg05t6zJRZshS5_qJQxFsW2x1vXu9UDdlMH9WcILyooyidJyjmO4c5lE2uLdVpc1T3iRXPBHWq4CiYX94pdFtMhfVzXIUU3Hw9QiskxArkoH6Q51Q_9SafwPXoqowyENJ_8lwiH_79lX-rI6F-jMcVX_o-78f2KJxGuWEL3xMz-_iC360IjiX8_6BWYo8bKQXrT21sMG-9rKH3Kvy5ENhjgK3Dld3VZysVegRHAJZvBajSuiNJTk8D_OCslqVhLoensPw42YtVAEMJT8VtJevBIeYIBeJ90DGBMuN4j-tbxk4v3jKKb0QIla9-nGEFTXLuVZCjSxRCFtnjeMDrwQ6UcdnSnR42XF75RHAiSRVKC5na0SEJJE5c-zJgDQFb6WNeSCiwplZQ3O5xluUO-ow6Q8iM9QePNE8nH4N5_eMAXpr6tY-b_TWIOux3J7M8-kAwvEZChBqHu5XuF2ROArxElGYB5yVMe8iFpZhGr8qF9nO_j7NBY2t1ike-rtaC-Wq5ILNvZegNbtYPTF4ZWlBNLAx3-QRgGCXFF0urG7lagWhNp0tB9Wdk_qOxXC3-nFmGdekg-gs1yiqbC2Vo86TjwDYRb4CnfjAmVNF28DYs6XpdaYAKHPvvOXN8T-tlKGxJEaaUBy8p-H2RVMPj99ivkNxKnm6dwBSR73pfKlNLumc5v4bR1tzW5xXnsDp_wPThw5Crr88PgrcB31JTRzB-bPon0TGBaFJsxpMyyvJTDDHfyVTMVSkOkxzfjuVSMlNFRoWiGF1HSPi2lg6_p1xrAHHcBLvkQ-VPicNVnGI2zT2njfHoNG_3lpWxTC-3x2WEvMiYZTgixaopZ6IuohN8edXhzwJ7Cs_SEfj7dC8ULGMHQQ1AVnxFb11y0-TiMxV1Y-4M7SVMOtcSIFI0HOHhS4m4BYm9C6FwBwKJrcqgzNjhhYzMwOahzaGFyZF9pZM4NO2Qp.MbXgog-BhvpKG_tinOci70lDm-NoKK6xyd6qGE_aHnI"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:04.956Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe764135f4158f4-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:04 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 503,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:06.339Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-expose-headers": "Request-Context",
+      "cache-control": "no-cache, no-store, must-revalidate",
+      "connection": "keep-alive",
+      "content-encoding": "gzip",
+      "content-length": "411",
+      "content-security-policy": "default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:06 GMT",
+      "expires": "-1",
+      "pragma": "no-cache",
+      "referrer-policy": "no-referrer",
+      "request-context": "appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "Deny",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 1884,
+    "responseBody": {
+      "defaultTimeout": 15,
+      "captchaSolved": true,
+      "validUntil": "2026-05-20T01:13:06.2762799",
+      "redirectUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US"
+    },
+    "responseText": "{\n  \"defaultTimeout\": 15,\n  \"captchaSolved\": true,\n  \"validUntil\": \"2026-05-20T01:13:06.2762799\",\n  \"redirectUrl\": \"https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:06.339Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_captcha_response\",\"status\":\"ok\",\"data\":{\"validUntilRaw\":\"2026-05-20T01:13:06.2762799\",\"redirectUrlRaw\":\"https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US\",\"now\":\"2026-05-20T00:58:06.339Z\",\"nowLocal\":\"Wed May 20 2026 01:58:06 GMT+0100 (heure normale d’Afrique de l’Ouest)\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:06.340Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/df171b6f-871b-48d2-b6ac-7352d37cd13b/e978b2fd-472f-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/8bca80fd-6924-4753-9d9d-35dc719d2a58/en-US",
+    "headers": {
+      "Cookie": "ASP.NET_SessionId=03ykruofmnelaskun4fyrlme; PreferredCulture=en-US",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,*/*",
+      "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Referer": "https://appointment.cloud.diplomatie.be/Captcha"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:06.644Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe7641e0f1a58f4-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:06 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 305,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:07.889Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://appointment.cloud.diplomatie.be/Integration/Error/NoAvailability",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "access-control-expose-headers": "Request-Context",
+      "cache-control": "no-cache, no-store, must-revalidate",
+      "connection": "keep-alive",
+      "content-encoding": "gzip",
+      "content-length": "2007",
+      "content-security-policy": "default-src 'self';script-src 'self' 'nonce-tAf5dR4y1JKqC6eOZLxSJOz7' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:07 GMT",
+      "expires": "-1",
+      "pragma": "no-cache",
+      "referrer-policy": "no-referrer",
+      "request-context": "appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "Deny",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 1549,
+    "responseText": "\r\n<!DOCTYPE html>\r\n<html lang=\"en-US\">\r\n<head>\r\n    <title>e-Appointment</title>\r\n    <link href=\"/favicon.ico?v1\" rel=\"shortcut icon\" type=\"image/x-icon\"/>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EDGE\"/>\r\n    <meta charset=\"utf-8\"/>\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <script src=\"https://js.hcaptcha.com/1/api.js?hl=en-US\" nonce=\"tAf5dR4y1JKqC6eOZLxSJOz7\" async defer></script>\r\n    <link href=\"/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1\" rel=\"stylesheet\"/>\r\n\r\n\r\n    \r\n</head>\r\n<body>\r\n\r\n\r\n<header class=\"container-fluid containerpaddding\">\r\n    <nav class=\"navbar row navbarcontent\" role=\"navigation\">\r\n        <div id=\"ofed-federal-header-logo\" class=\"pull-right\">\r\n            <img src=\"/Content/Images/logos/federalheader_logo.png\" width=\"32\" height=\"23\" alt=\"Logo of the Belgian Federal Authorities\">\r\n        </div>\r\n        <div id=\"federalmobileheader-left\">\r\n            <ul class=\"navphone nav navbar-nav\">\r\n                <li class=\"dropdown\" id=\"dropdownheader\">\r\n                    <a href=\"#\" class=\"dropdown-toggle\"\r\n                       data-toggle=\"dropdown\" role=\"button\" aria-haspopup=\"true\" aria-expanded=\"false\" style=\"width: 40px\">\r\n                        en&nbsp;&nbsp;<span class=\"caret\"></span>\r\n                    </a>\r\n                    <ul class=\"dropdown-menu\" role=\"menu\">\r\n                        \r\n\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"active\"><a href=\"/Culture/SetCulture/en-US\">EN</a></li>\r\n\r\n                    </ul>\r\n                </li>\r\n            </ul>\r\n        </div>\r\n        <div id=\"federalheader-left\" style=\"min-height: 24px;\">\r\n            <ul class=\"navweb nav\">\r\n                \r\n\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"active\"><a"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:07.890Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_redirect_probe\",\"status\":\"ok\",\"data\":{\"httpStatus\":200,\"finalUrl\":\"https://appointment.cloud.diplomatie.be/Integration/Error/NoAvailability\",\"bodyPreview\":\"e-Appointment en&nbsp;&nbsp; FR NL EN FR NL EN Other official information and services:&nbsp; www.belgium.be Online Appointment system Diplomacy Belgium EVC - European Visa center in Kinshasa Warning This application requires JavaScript to be enabled Make an appointment There are no free time slots available. Try again later. Privacy | Disclaimer | Cookies | © FPS Foreign Affairs, Foreign Trade and Development Cooperation Version: 1.0.249.0\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:07.890Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_verdict_no_availability\",\"status\":\"ok\",\"data\":{\"finalUrl\":\"https://appointment.cloud.diplomatie.be/Integration/Error/NoAvailability\",\"bodyPreview\":\"e-Appointment en&nbsp;&nbsp; FR NL EN FR NL EN Other official information and services:&nbsp; www.belgium.be Online Appointment system Diplomacy Belgium EVC - European Visa center in Kinshasa Warning This application requires JavaScript to be enabled Make an appointment There are no free time slots \"}}"
+  }
+]

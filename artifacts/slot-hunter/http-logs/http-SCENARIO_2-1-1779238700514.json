@@ -1,0 +1,513 @@
+[
+  {
+    "timestamp": "2026-05-20T00:58:08.198Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe76427cd2458f4-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:08 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 308,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:08.349Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe764288c14300f-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:08 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 459,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:17.909Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_setup_start\",\"status\":\"ok\"}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:17.909Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Accept": "text/html"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:18.349Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe764672f031640-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:18 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 440,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:18.630Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private",
+      "content-encoding": "gzip",
+      "content-length": "2288",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:21 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 721,
+    "responseText": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" href=\"/Content/Images/favicon.png\">\r\n    <title>Login</title>\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1\" rel=\"stylesheet\"/>\r\n\r\n    <script src=https://js.hcaptcha.com/1/api.js?hl=en  async defer></script>\r\n    \r\n</head>\r\n<body class=\"texture login-body\">\r\n    <div id=\"head-nav\" class=\"navbar navbar-default navbar-fixed-top\">\r\n        <div class=\"container-fluid padding_10\">\r\n            <div class=\"navbar-header\">\r\n                <button type=\"button\" class=\"navbar-toggle\" data-toggle=\"collapse\" data-target=\".navbar-collapse\">\r\n                    <span class=\"fa fa-gear\"></span>\r\n                </button>\r\n                <a class=\"navbar-brand\" href=\"#\"><span>Visa application for Belgium</span></a>\r\n            </div>\r\n            <div class=\"navbar-collapse collapse\">\r\n                <img src=\"/Content/Images/Punt-BE-logo_50.png\" class=\"float-fight\" />\r\n                <ul class=\"nav navbar-nav navbar-right user-nav\">\r\n                    <li class=\"button dropdown\">\r\n                        <a href=\"javascript:;\" class=\"dropdown-toggle\" data-toggle=\"dropdown\">EN</a>\r\n                        <ul class=\"dropdown-menu languages\">\r\n                            <li class=\"lang\">\r\n                                <div class=\"nanoLanguage nscroller\">\r\n                                    <div class=\"content\">\r\n                                        <ul class=\"noListStyleType\">\r\n                                                <li><a href=\"/en/Account/Login\">EN</a></li"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:18.632Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://visaonweb.diplomatie.be/en/Account/Login",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b",
+      "Referer": "https://visaonweb.diplomatie.be/",
+      "Origin": "https://visaonweb.diplomatie.be",
+      "Accept": "text/html,application/xhtml+xml,*/*"
+    },
+    "requestBody": "__RequestVerificationToken=Zd3wQ46XF2aNL9HM3UL8njTQ10hQGyeVyvuciQ0OtbCV46_PjJWNesj24TlQMT6V_LQDHxnGBPKed8TFPr9FsXMeiPHnAiGZSEx0pHQsWOc1&UserName=screentapinc%40gmail.com&Password=Akollad%402026"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:18.835Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://visaonweb.diplomatie.be/en/Account/Login",
+    "status": 302,
+    "statusText": "Found",
+    "headers": {
+      "cache-control": "private",
+      "content-length": "118",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:22 GMT",
+      "expires": "-1",
+      "location": "/",
+      "pragma": "no-cache",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 203,
+    "responseText": "<html><head><title>Object moved</title></head><body>\r\n<h2>Object moved to <a href=\"/\">here</a>.</h2>\r\n</body></html>\r\n"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:18.836Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "text/html,application/xhtml+xml,*/*",
+      "Referer": "https://visaonweb.diplomatie.be/"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.542Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/",
+    "status": 302,
+    "statusText": "Found",
+    "headers": {
+      "cache-control": "private",
+      "content-length": "120",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:22 GMT",
+      "location": "/en",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 706,
+    "responseText": "<html><head><title>Object moved</title></head><body>\r\n<h2>Object moved to <a href=\"/en\">here</a>.</h2>\r\n</body></html>\r\n"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.542Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/en",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "text/html,application/xhtml+xml,*/*",
+      "Referer": "https://visaonweb.diplomatie.be/"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.726Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/en",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-encoding": "gzip",
+      "content-length": "6198",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:22 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 184,
+    "responseText": "<!DOCTYPE html>\r\n<html lang=\"en\" >\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"/Content/Images/favicon.png?v=2\">\r\n\r\n    <title>Visa online</title>\r\n\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Scripts/ng-table/ng-table.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/ng-multi-select/angular-multi-select.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.datetimepicker/css/bootstrap-datetimepicker.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.multiselect/css/bootstrap-multiselect.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/jquery.multiselect/css/multi-select.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.daterangepicker/daterangepicker-bs3.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Fonts/flaticon/flaticon.css\" rel=\"stylesheet\" />\r\n    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->\r\n    <!--[if lt IE 9]>\r\n        <script src=\"~/Scripts/html5shiv.js\"></script>\r\n        <script src=\"~/Scripts/respond.min.js\"></script>\r\n    <![endif]-->\r\n    <link href=\"/Content/css?v=oL0KqSHZC9-FRMl_bhR8FJ8roMwZ_TV4H0VK5rdBTQA1\" rel=\"stylesheet\"/>\r\n\r\n    <script src=\"/Scripts/jquery?v=M6dmVkrHVhoZ1gfOtvVDZbgBcQTsbWxoLsRizcGkbPk1\"></script>\r\n\r\n    <script src=\"/bundles/angularjs?v=QawmBhgrm2Z8MjEe7uSCRuCty5pj00x0094nlk-PNOY1\"></script>\r\n\r\n    <script src=\"/Scripts/CleanZone/jquery.upload/js/jquery.fileupload-angular.js\"></script>\r\n\r\n\r\n    <script src=\"/Scripts/ng-multi-select/angular-multi-select.js\"></script>\r\n    <script src=\"/Scripts/angular-reso"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.727Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_login_ok\",\"status\":\"ok\"}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.728Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "text/html,application/xhtml+xml,*/*",
+      "Referer": "https://visaonweb.diplomatie.be/en",
+      "Upgrade-Insecure-Requests": "1"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.930Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-encoding": "gzip",
+      "content-length": "4129",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:23 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 202,
+    "responseText": "<!DOCTYPE html>\r\n<html lang=\"en\" >\r\n<head>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\" />\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\">\r\n    <meta name=\"description\" content=\"Outsourcing Online\">\r\n    <meta name=\"author\" content=\"Federal Public Service Foreign Affairs\">\r\n    <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"/Content/Images/favicon.png?v=2\">\r\n\r\n    <title>Visa online</title>\r\n\r\n    <link href=\"/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1\" rel=\"stylesheet\"/>\r\n\r\n    <link href=\"/Scripts/ng-table/ng-table.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/ng-multi-select/angular-multi-select.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.datetimepicker/css/bootstrap-datetimepicker.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.multiselect/css/bootstrap-multiselect.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/jquery.multiselect/css/multi-select.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Scripts/CleanZone/bootstrap.daterangepicker/daterangepicker-bs3.css\" rel=\"stylesheet\" />\r\n    <link href=\"/Fonts/flaticon/flaticon.css\" rel=\"stylesheet\" />\r\n    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->\r\n    <!--[if lt IE 9]>\r\n        <script src=\"~/Scripts/html5shiv.js\"></script>\r\n        <script src=\"~/Scripts/respond.min.js\"></script>\r\n    <![endif]-->\r\n    <link href=\"/Content/css?v=oL0KqSHZC9-FRMl_bhR8FJ8roMwZ_TV4H0VK5rdBTQA1\" rel=\"stylesheet\"/>\r\n\r\n    <script src=\"/Scripts/jquery?v=M6dmVkrHVhoZ1gfOtvVDZbgBcQTsbWxoLsRizcGkbPk1\"></script>\r\n\r\n    <script src=\"/bundles/angularjs?v=QawmBhgrm2Z8MjEe7uSCRuCty5pj00x0094nlk-PNOY1\"></script>\r\n\r\n    <script src=\"/Scripts/CleanZone/jquery.upload/js/jquery.fileupload-angular.js\"></script>\r\n\r\n\r\n    <script src=\"/Scripts/ng-multi-select/angular-multi-select.js\"></script>\r\n    <script src=\"/Scripts/angular-reso"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:19.931Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/VisaApplication/DataTables",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "application/json, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "Referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.035Z",
+    "direction": "IN",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "status": 422,
+    "statusText": "Unprocessable Entity",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "9fe76471b8801640-CPT",
+      "connection": "keep-alive",
+      "content-length": "180",
+      "content-type": "application/json",
+      "convex-usher": "usher",
+      "date": "Wed, 20 May 2026 00:58:20 GMT",
+      "server": "cloudflare",
+      "via": "1.1 Caddy"
+    },
+    "durationMs": 308,
+    "responseBody": {
+      "ok": false,
+      "error": "ArgumentValidationError: Value does not match validator.\nPath: .applicationId\nValue: \"test-cev-comp-1779238603212\"\nValidator: v.id(\"applications\")\n\n"
+    },
+    "responseText": "{\n  \"ok\": false,\n  \"error\": \"ArgumentValidationError: Value does not match validator.\\nPath: .applicationId\\nValue: \\\"test-cev-comp-1779238603212\\\"\\nValidator: v.id(\\\"applications\\\")\\n\\n\"\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.111Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/VisaApplication/DataTables",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-length": "746",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:23 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 180,
+    "responseBody": {
+      "sEmptyTable": "No data available in table",
+      "sInfo": "Showing _START_ to _END_ of _TOTAL_ entries",
+      "sInfoEmpty": "Showing 0 to 0 of 0 entries",
+      "sInfoFiltered": "(filtered from _MAX_ total entries)",
+      "sInfoPostFix": "",
+      "sInfoThousands": ",",
+      "sLengthMenu": "Show _MENU_ entries",
+      "sLoadingRecords": "Loading...",
+      "sProcessing": "Processing...",
+      "sSearch": "Search:",
+      "sZeroRecords": "No matching records found",
+      "oPaginate": {
+        "sFirst": "First",
+        "sLast": "Last",
+        "sNext": "Next",
+        "sPrevious": "Previous"
+      },
+      "oAria": {
+        "sSortAscending": ": activate to sort column ascending",
+        "sSortDescending": ": activate to sort column descending"
+      }
+    },
+    "responseText": "{\n  \"sEmptyTable\": \"No data available in table\",\n  \"sInfo\": \"Showing _START_ to _END_ of _TOTAL_ entries\",\n  \"sInfoEmpty\": \"Showing 0 to 0 of 0 entries\",\n  \"sInfoFiltered\": \"(filtered from _MAX_ total entries)\",\n  \"sInfoPostFix\": \"\",\n  \"sInfoThousands\": \",\",\n  \"sLengthMenu\": \"Show _MENU_ entries\",\n  \"sLoadingRecords\": \"Loading...\",\n  \"sProcessing\": \"Processing...\",\n  \"sSearch\": \"Search:\",\n  \"sZeroRecords\": \"No matching records found\",\n  \"oPaginate\": {\n    \"sFirst\": \"First\",\n    \"sLast\": \"Last\",\n    \"sNext\": \"Next\",\n    \"sPrevious\": \"Previous\"\n  },\n  \"oAria\": {\n    \"sSortAscending\": \": activate to sort column ascending\",\n    \"sSortDescending\": \": activate to sort column descending\"\n  }\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.112Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "application/json, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "Referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.321Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-length": "496",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:23 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 209,
+    "responseBody": {
+      "draw": 1,
+      "data": [
+        {
+          "Id": "e978b2fd-472f-f111-a3ae-00505691de06",
+          "AppNum": null,
+          "VOWId": "VOWINT5903406",
+          "OSId": "MSHKIN005903406",
+          "FName": "ESTHER",
+          "LName": "NGOBI",
+          "St": "Submitted",
+          "StId": 2,
+          "Hb": false,
+          "Vac": "CEV Kinshasa",
+          "GroupId": "NA",
+          "SubGroupId": "df171b6f-871b-48d2-b6ac-7352d37cd13b",
+          "EAppointmentReady": true,
+          "EappointmentUrl": "ExistEappointmentUrl",
+          "ShowAppointementSystemOutsourcerUrl": true,
+          "AppointementSystemOutsourcerUrl": "cloud",
+          "CompanyPrefix": "MSH"
+        }
+      ],
+      "recordsTotal": 1,
+      "recordsFiltered": 1
+    },
+    "responseText": "{\n  \"draw\": 1,\n  \"data\": [\n    {\n      \"Id\": \"e978b2fd-472f-f111-a3ae-00505691de06\",\n      \"AppNum\": null,\n      \"VOWId\": \"VOWINT5903406\",\n      \"OSId\": \"MSHKIN005903406\",\n      \"FName\": \"ESTHER\",\n      \"LName\": \"NGOBI\",\n      \"St\": \"Submitted\",\n      \"StId\": 2,\n      \"Hb\": false,\n      \"Vac\": \"CEV Kinshasa\",\n      \"GroupId\": \"NA\",\n      \"SubGroupId\": \"df171b6f-871b-48d2-b6ac-7352d37cd13b\",\n      \"EAppointmentReady\": true,\n      \"EappointmentUrl\": \"ExistEappointmentUrl\",\n      \"ShowAppointementSystemOutsourcerUrl\": true,\n      \"AppointementSystemOutsourcerUrl\": \"cloud\",\n      \"CompanyPrefix\": \"MSH\"\n    }\n  ],\n  \"recordsTotal\": 1,\n  \"recordsFiltered\": 1\n}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.322Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_app_id_found\",\"status\":\"ok\",\"data\":{\"appId\":\"e978b2fd-472f-f111-a3ae-00505691de06\",\"source\":\"login\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.323Z",
+    "direction": "OUT",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "Cookie": "_culture=en-US; __RequestVerificationToken=rTVuvElqqnX5eDRjhNwrLANaGsBY-oaUhxW-5kBhCWWe5ktqDijA-NekRnDJPniDyJ7fl5VaylF87oHXL2Kwam4QqQ0mVigujjSqamdsyBk1; ServerId=54bf955a35ea7944; TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; OSOnline=-0YOOl0FmNw7V8zZknZphthJBh9vfoTA4MjUP-OhDXeMBvTHWicbE-KyAVc1ZyGHzrQDpSPblxlZx-4tzOCiuKtMz9JJoq6fn75EgDQ68hx9cuTefZhRaZ22JDp_CNyYCuLy_uQHudasvQcvTB6VGQFWw4WRbggm0RNHC-kCeHd55oXXru-c7YSClfzoFzP66SP1_ttiBQt4LLDDKtN9NQnKQbFUreXUBcaHLLF1ufozJc5zjjkKut892qFTlRl7bdzr2K6KAnheG-e8W7Y9wimZDTrcLrgoZcHFK6VjHiI5sMha3QcvndGYjsT6qTk8QqogEzVarUIChcPAz-IhwqZHLFE8TnRFBSYZRbctTP0JXy36EI1aQNOOhdPH_PenMh1uxENhYQEoS226PmK2r28B73bTQzgw5d_CA4ZKs-W-XWVzoRQV4U9WA0zc6ykXuaZZF8BBSZi677cYOuxYNt6_zlT2FLPRfGUDKEiaNyMKIQ_8JCzV43AK6rQyk15hxUWhW53LNKjqydNVVshRGTn3vtxtbPWZJuIi3SZF4HlToAt5BQqZ96Dknl0BM0Oit-glSo2dwb868hJ65NkelGGFH5_zZmHrYG-KvLnbcdcIb03ra4czJ6_2bm53NxG3zxHD1v-g8tFgXJGL-Mls7QZWSxHkdIolxghRKV-g2nbGZZtGYAo3cHHzmoKFdxZ9l1yROL5AvXMo6_wojrm73ZuIAbDCqz0DA-N7acRWguLhfbFfoFUXe8wvlnZhBF2KPwd-oDICqovV-Cx4mmYYcohhqdhenXXiuv3MCCKlXtY",
+      "Accept": "application/json, text/html, */*",
+      "X-Requested-With": "XMLHttpRequest",
+      "If-Modified-Since": "0",
+      "Referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.510Z",
+    "direction": "IN",
+    "method": "GET",
+    "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06",
+    "status": 200,
+    "statusText": "OK",
+    "headers": {
+      "cache-control": "private, s-maxage=0",
+      "content-length": "67",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Wed, 20 May 2026 00:58:23 GMT",
+      "set-cookie": "TS0110ceb4=01f258f4015426b01aff9534c6c0359beb43a87914a40749a8d1a36ee3d8d64a48afa5a2d97975866b3caa56aad875409f320a626b; Path=/; Domain=.visaonweb.diplomatie.be",
+      "strict-transport-security": "max-age=16070400; includeSubDomains",
+      "x-content-type-options": "nosniff",
+      "x-permitted-cross-domain-policies": "master-only",
+      "x-xss-protection": "1; mode=block"
+    },
+    "durationMs": 187,
+    "responseBody": {
+      "url": "http://visaonweb.diplomatie.be/Error/ErrorTooManyAttempts"
+    },
+    "responseText": "{\n  \"url\": \"http://visaonweb.diplomatie.be/Error/ErrorTooManyAttempts\"\n}",
+    "isRateLimitError": true,
+    "rateLimitDetails": {
+      "detected": true,
+      "patterns": [
+        "/too\\s*many\\s*attempts/i",
+        "/ErrorTooManyAttempts/i"
+      ],
+      "responseContains": "{\"url\":\"http://visaonweb.diplomatie.be/error/errortoomanyattempts\"}",
+      "urlContains": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=e978b2fd-472f-f111-a3ae-00505691de06"
+    }
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.511Z",
+    "direction": "OUT",
+    "method": "POST",
+    "url": "https://famous-albatross-420.convex.site/hunter/log",
+    "headers": {
+      "X-Hunter-Key": "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384",
+      "Content-Type": "application/json"
+    },
+    "requestBody": "{\"applicationId\":\"test-cev-comp-1779238603212\",\"step\":\"cev_http_rate_limit_detected\",\"status\":\"warn\",\"data\":{\"responsePreview\":\"{\\\"url\\\":\\\"http://visaonweb.diplomatie.be/Error/ErrorTooManyAttempts\\\"}\"}}"
+  },
+  {
+    "timestamp": "2026-05-20T00:58:20.513Z",
+    "direction": "IN",
+    "method": "SETUP_CEV_SESSION",
+    "url": "setupCevSessionHttp",
+    "status": 429,
+    "statusText": "Rate Limit",
+    "error": "RATE_LIMIT_VOWINT_5_CLICKS",
+    "isRateLimitError": true,
+    "rateLimitDetails": {
+      "detected": true,
+      "patterns": [
+        "/rate.?limit/i"
+      ],
+      "responseContains": "rate_limit_vowint_5_clicks",
+      "urlContains": "setupCevSessionHttp"
+    }
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "testDate": "2026-05-20T00:58:20.531Z",
+  "totalAttempts": 3,
+  "totalRateLimitErrors": 1,
+  "rateLimitErrorRate": 33.33333333333333,
+  "errorsByScenario": [
+    {
+      "scenario": "SCENARIO_1",
+      "description": "Même session + même IP (persistance optimale)",
+      "attempts": 2,
+      "rateLimitErrors": 0,
+      "errorRate": 0,
+      "errors": []
+    },
+    {
+      "scenario": "SCENARIO_2",
+      "description": "Nouvelle session + même IP (reset agressif - à éviter)",
+      "attempts": 1,
+      "rateLimitErrors": 1,
+      "errorRate": 100,
+      "errors": [
+        {
+          "attempt": 1,
+          "error": "RATE_LIMIT_VOWINT_5_CLICKS",
+          "sessionReset": true,
+          "ipChanged": false,
+          "proxySessionId": "default"
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    "Les erreurs RATE_LIMIT_VOWINT_5_CLICKS indiquent que la limite de 5 clics/heure a été atteinte",
+    "Éviter les resets de session inutiles pour préserver les clics",
+    "Utiliser le cache de session autant que possible",
+    "Monitorer le compteur de clics et attendre 1 heure si la limite est atteinte",
+    "Consulter les logs détaillés dans ./http-logs/ pour analyser les réponses exactes"
+  ]
+}
