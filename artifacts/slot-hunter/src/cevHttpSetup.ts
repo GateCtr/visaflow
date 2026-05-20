@@ -20,8 +20,7 @@
 
 import { botLog } from "./convexClient.js";
 import { randomUserAgent } from "./browser.js";
-import { Impit } from "impit";
-import { setSharedDirectImpit } from "./cevPolling.js";
+import { cevImpitFetch } from "./cev-shared-impit.js";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
@@ -29,47 +28,9 @@ const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
 
-// ─── Impit avec fingerprint TLS Chrome (même pattern que le bot USA) ───────────
-// Garantit que les requêtes HTTP sont indistinguables d'un vrai Chrome (JA3/JA4).
-const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
-
-let _setupImpit: InstanceType<typeof Impit> | undefined;
-function getSetupImpit(): InstanceType<typeof Impit> {
-  if (!_setupImpit) {
-    const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
-    if (IPROYAL_PROXY_URL) opts.proxyUrl = IPROYAL_PROXY_URL;
-    _setupImpit = new Impit(opts as any);
-  }
-  return _setupImpit;
-}
-
-/** Instance impit directe (sans proxy) — singleton réutilisé pour garder les cookies cohérents.
- *  PARTAGÉ avec cevPolling via setSharedDirectImpit() pour que le polling
- *  réutilise exactement la même connexion TLS que le setup. */
-let _directImpit: InstanceType<typeof Impit> | undefined;
-function getDirectImpit(): InstanceType<typeof Impit> {
-  if (!_directImpit) {
-    _directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
-    // Partager avec le polling pour cohérence TLS/session
-    setSharedDirectImpit(_directImpit);
-  }
-  return _directImpit;
-}
-
-/** Fetch CEV avec fingerprint TLS Chrome via impit.
- *  Fallback sans proxy si le proxy échoue (proxy down).
- *  IMPORTANT : le fallback réutilise le même singleton impit direct pour garder
- *  les cookies/session cohérents entre les appels d'un même setup. */
-async function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
-  try {
-    return await getSetupImpit().fetch(url, options as any) as unknown as Response;
-  } catch (err) {
-    if (IPROYAL_PROXY_URL) {
-      console.log(`[CEV-SETUP] ⚠️ impit+proxy failed → fallback impit direct pour ${url.slice(0, 80)}`);
-      return getDirectImpit().fetch(url, options as any) as unknown as Response;
-    }
-    throw err;
-  }
+/** Fetch CEV via impit partagé (setup + polling = même instance TLS → session stable) */
+function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
+  return cevImpitFetch(url, options, "[CEV-SETUP]");
 }
 
 // ─── Cache session VOWINT (persisté en mémoire entre les checks) ─────────────

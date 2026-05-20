@@ -13,54 +13,14 @@
 // Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
 import { randomUserAgent } from "./browser.js";
-import { Impit } from "impit";
+import { cevImpitFetch } from "./cev-shared-impit.js";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 
-// Proxy pour le polling API — évite que l'IP Railway soit flaggée
-const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
-
-/** Singleton impit avec proxy (fingerprint TLS Chrome — même pattern que le bot USA) */
-let _pollImpit: InstanceType<typeof Impit> | undefined;
-function getPollImpit(): InstanceType<typeof Impit> {
-  if (!_pollImpit) {
-    const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
-    if (IPROYAL_PROXY_URL) opts.proxyUrl = IPROYAL_PROXY_URL;
-    _pollImpit = new Impit(opts as any);
-  }
-  return _pollImpit;
-}
-
-/** Singleton impit direct (sans proxy) — réutilisé pour garder les cookies cohérents.
- *  IMPORTANT: Partagé avec cevHttpSetup.ts via getSharedDirectImpit() pour que la session
- *  créée pendant le setup soit pollable depuis la même instance TLS. */
-let _directPollImpit: InstanceType<typeof Impit> | undefined;
-function getDirectPollImpit(): InstanceType<typeof Impit> {
-  if (!_directPollImpit) {
-    _directPollImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
-  }
-  return _directPollImpit;
-}
-
-/** Permet au setup d'injecter son singleton pour que le polling réutilise la même connexion TLS */
-export function setSharedDirectImpit(instance: InstanceType<typeof Impit>): void {
-  _directPollImpit = instance;
-}
-
-/** Fetch CEV avec fingerprint TLS Chrome via impit.
- *  Fallback sans proxy si le proxy échoue. Réutilise un singleton direct. */
-async function cevFetch(url: string, options: RequestInit): Promise<Response> {
-  try {
-    return await getPollImpit().fetch(url, options as any) as unknown as Response;
-  } catch (err) {
-    // Si proxy configuré et échec → retry sans proxy (impit direct singleton)
-    if (IPROYAL_PROXY_URL) {
-      console.log(`[CEV-POLL] ⚠️ impit+proxy failed → fallback impit direct`);
-      return getDirectPollImpit().fetch(url, options as any) as unknown as Response;
-    }
-    throw err;
-  }
+/** Fetch CEV avec fingerprint TLS Chrome via impit partagé (setup + polling = même instance) */
+function cevFetch(url: string, options: RequestInit): Promise<Response> {
+  return cevImpitFetch(url, options, "[CEV-POLL]");
 }
 
 export type CevPollResult =
