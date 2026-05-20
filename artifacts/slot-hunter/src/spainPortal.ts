@@ -1589,11 +1589,14 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
     }
 
     // ── Flow Playwright complet (premier passage ou session expirée) ──────
+    const spainNoProxy = process.env.SPAIN_WATCHER_NO_PROXY === "1";
     const { browser, page } = await launchBrowser({
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
       acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
-      proxySource: "2captcha",  // IP résidentielle → bypass Cloudflare naturellement
+      ...(spainNoProxy
+        ? { forceNoProxy: true }
+        : { proxySource: "2captcha" as const }),  // IP résidentielle → bypass Cloudflare naturellement
     });
 
     const payloadHits: unknown[] = [];
