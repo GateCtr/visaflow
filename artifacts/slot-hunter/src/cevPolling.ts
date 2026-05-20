@@ -28,7 +28,11 @@ if (IPROYAL_PROXY_URL) {
 function cevFetch(url: string, options: RequestInit): Promise<Response> {
   if (_pollProxyAgent) {
     // @ts-expect-error — dispatcher est une option undici
-    return fetch(url, { ...options, dispatcher: _pollProxyAgent });
+    return fetch(url, { ...options, dispatcher: _pollProxyAgent }).catch((proxyErr) => {
+      // Proxy down → fallback direct (sans proxy)
+      console.log(`[CEV-POLL] ⚠️ Proxy fetch failed → fallback direct`);
+      return fetch(url, options);
+    });
   }
   return fetch(url, options);
 }

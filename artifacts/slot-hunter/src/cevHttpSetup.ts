@@ -35,11 +35,18 @@ if (IPROYAL_PROXY_URL) {
   _setupProxyAgent = new ProxyAgent(IPROYAL_PROXY_URL);
 }
 
-/** Fetch via le proxy iProyal (si configuré) — même IP que le polling */
-function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
+/** Fetch via le proxy iProyal (si configuré) — même IP que le polling.
+ *  Fallback automatique sans proxy si le proxy échoue (fetch failed / timeout). */
+async function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
   if (_setupProxyAgent) {
-    // @ts-expect-error — dispatcher est une option undici
-    return fetch(url, { ...options, dispatcher: _setupProxyAgent });
+    try {
+      // @ts-expect-error — dispatcher est une option undici
+      return await fetch(url, { ...options, dispatcher: _setupProxyAgent });
+    } catch (proxyErr) {
+      // Proxy down → fallback direct (sans proxy)
+      console.log(`[CEV-SETUP] ⚠️ Proxy fetch failed → fallback direct pour ${url.slice(0, 80)}`);
+      return fetch(url, options);
+    }
   }
   return fetch(url, options);
 }
