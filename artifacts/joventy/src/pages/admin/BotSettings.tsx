@@ -61,6 +61,14 @@ const CONFIG_ITEMS: ConfigItem[] = [
     category: "mode",
     defaultValue: "0",
   },
+  {
+    key: "cev_stealth_mode",
+    label: "CEV Stealth Mode (Belgique)",
+    description: "Rotation IP iProyal + 3 checks/cycle + reset session. Dépasse la limite 5 clics/h. Désactive les loops CEV classiques.",
+    type: "toggle",
+    category: "mode",
+    defaultValue: "0",
+  },
   // ─── Timing / Intervalles
   {
     key: "watcher_base_interval_ms",
