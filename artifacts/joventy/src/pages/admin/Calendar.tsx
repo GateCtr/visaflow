@@ -10,11 +10,12 @@ const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   dubai:    { bg: "bg-amber-100",  text: "text-amber-800",  dot: "bg-amber-500" },
   turkey:   { bg: "bg-red-100",    text: "text-red-800",    dot: "bg-red-500" },
   india:    { bg: "bg-orange-100", text: "text-orange-800", dot: "bg-orange-500" },
+  germany:  { bg: "bg-yellow-100", text: "text-yellow-800", dot: "bg-yellow-500" },
 };
 
 const DEST_LABELS: Record<string, string> = {
   usa: "USA 🇺🇸", schengen: "Schengen 🇪🇺", dubai: "Dubaï 🇦🇪",
-  turkey: "Turquie 🇹🇷", india: "Inde 🇮🇳",
+  turkey: "Turquie 🇹🇷", india: "Inde 🇮🇳", germany: "Allemagne 🇩🇪",
 };
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];

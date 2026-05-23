@@ -31,6 +31,7 @@ const DEST_COLORS: Record<string, string> = {
   DUBAI: "#F59E0B",
   TURKEY: "#10B981",
   INDIA: "#8B5CF6",
+  GERMANY: "#D4A843",
 };
 
 const PIE_COLORS = [

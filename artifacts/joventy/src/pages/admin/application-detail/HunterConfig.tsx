@@ -238,6 +238,12 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         {destination === "spain" && (
           <Field label="URL Bookitit"><Input value={scheduleUrl} onChange={(e) => setScheduleUrl(e.target.value)} placeholder="https://www.citaconsular.es/..." className="h-9 bg-slate-50/80 text-sm font-mono" /></Field>
         )}
+        {destination === "germany" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-yellow-50/50 rounded-xl border border-yellow-100/80">
+            <Field label="Schedule URL (optionnel)"><Input value={scheduleUrl} onChange={(e) => setScheduleUrl(e.target.value)} placeholder="https://service2.diplo.de/rktermin/extern/..." className="h-9 bg-white text-sm font-mono" /></Field>
+            <Field label="Données applicant (JSON)"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder='{"nationality":"Kongolesisch","passportNumber":"OB..."}' className="h-9 bg-white text-sm font-mono" /></Field>
+          </div>
+        )}
         {destination === "usa" && (
           <>
             <Toggle label="Proxy résidentiel (USA)" checked={useProxy} onChange={setUseProxy} />

@@ -122,6 +122,16 @@ const DESTINATIONS = [
     note: "Frais consulaires 90€/adulte non inclus",
     badge: "Nouveau",
   },
+  {
+    code: "de",
+    name: "Allemagne",
+    visaTypes: ["Visa National Études", "Regroupement familial", "Travail / Chancenkarte", "Au-pair / Volontariat"],
+    engagement: 150,
+    success: 450,
+    model: "appointment",
+    note: "Frais consulaires (75-80€) non inclus",
+    badge: "Nouveau",
+  },
 ];
 
 const STEPS = [

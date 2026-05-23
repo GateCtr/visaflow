@@ -9,6 +9,7 @@ const DEST_LABELS: Record<string, string> = {
   dubai: "Dubaï",
   turkey: "Turquie",
   india: "Inde",
+  germany: "Allemagne",
 };
 
 const DEST_FLAG: Record<string, string> = {
@@ -17,6 +18,7 @@ const DEST_FLAG: Record<string, string> = {
   dubai: "🇦🇪",
   turkey: "🇹🇷",
   india: "🇮🇳",
+  germany: "🇩🇪",
 };
 
 const DEST_COLOR: Record<string, string> = {
@@ -25,6 +27,7 @@ const DEST_COLOR: Record<string, string> = {
   dubai: "from-amber-500 to-amber-700",
   turkey: "from-red-600 to-red-800",
   india: "from-orange-500 to-orange-700",
+  germany: "from-yellow-500 to-yellow-700",
 };
 
 type StatusStep = {

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain"]),
+  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -35,6 +35,7 @@ const DESTINATIONS = [
   { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous VFS Global — visa Schengen court séjour (Visa C)",          processType: "appointment" as const },
   { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
   { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
+  { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Rendez-vous RK-Termin — ambassade d'Allemagne (visa national & Schengen)", processType: "appointment" as const },
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
   { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                        processType: "hybrid" as const },
   { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
@@ -120,6 +121,8 @@ function getPackageInfo(
         ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
         : destination === "spain"
         ? `créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es — Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
+        : destination === "germany"
+        ? "créneau à l'ambassade d'Allemagne à Kinshasa (portail RK-Termin — visa national ou Schengen)"
         : "créneau de dépôt au centre VFS Global Kinshasa";
     return {
       label: base.label,
@@ -192,6 +195,14 @@ function getPackageInfo(
         tagline: "Rendez-vous uniquement",
         description: "Vous avez reçu vos identifiants citaconsular.es de l'ambassade ? Joventy surveille le portail Bookitit et verrouille votre créneau dès qu'une place se libère.",
         slotNote: "Prérequis : inscription préalable par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) pour obtenir vos identifiants. Frais consulaires espagnols (90 €/adulte) payés à l'ambassade — non inclus.",
+      };
+    }
+    if (destination === "germany") {
+      return {
+        label: "Créneau RK-Termin",
+        tagline: "Rendez-vous uniquement",
+        description: "Votre dossier est prêt ? Joventy surveille le portail RK-Termin et capture un créneau dès qu'une disponibilité apparaît à l'ambassade d'Allemagne à Kinshasa.",
+        slotNote: "Prérequis : passeport valide, documents selon catégorie visa. Frais consulaires (75-80€) payés séparément.",
       };
     }
     return { label: base.label, tagline: base.tagline, description: base.description };
