@@ -343,9 +343,14 @@ function ResetCredentialsModal({
               type="url"
               value={appUrl}
               onChange={(e) => setAppUrl(e.target.value)}
-              placeholder="https://visaonweb.diplomatie.be/en/VisaApplication/Detail/..."
+              placeholder="https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=xxxxxxxx-xxxx-..."
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
             />
+            <p className="text-xs text-slate-500 mt-1">
+              <strong>Multi-dossiers :</strong> Si le compte a plusieurs applications, colle ici l'URL complète 
+              <code className="bg-slate-100 px-1 rounded">GetEAppointmentUrl?id=UUID</code> du bon dossier. 
+              Le bot utilisera cet ID au lieu de prendre le premier trouvé.
+            </p>
           </div>
 
           {/* Bannière info */}
