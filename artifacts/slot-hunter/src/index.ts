@@ -16,6 +16,7 @@ import { startCevSetupLoop } from "./loops/cev-setup-loop.js";
 import { startCevPollingLoop } from "./loops/cev-polling-loop.js";
 import { startCevStealthLoop } from "./loops/cev-stealth-loop.js";
 import { startSpainWatcherLoop } from "./loops/spain-watcher-loop.js";
+import { startGermanyLoop } from "./loops/germany-loop.js";
 import { startV3Loop } from "./loops/v3-loop.js";
 import { initParallelWatchers, startParallelReloginLoop } from "./loops/parallel-loop.js";
 import { checkPortalBundleKey } from "./bundle-check.js";
@@ -92,6 +93,10 @@ async function main(): Promise<void> {
 
   startSpainWatcherLoop().catch((err) => {
     console.error("[SPAIN-WATCHER] Boucle crashée:", err);
+  });
+
+  startGermanyLoop().catch((err) => {
+    console.error("[GERMANY-RKTERMIN] Boucle crashée:", err);
   });
 
   // ─── Auto-config CEV ─────
