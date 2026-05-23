@@ -141,10 +141,23 @@ async function getVowintSession(
   botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
 
   // 3. Récupérer l'appId
+  // Supporté : UUID direct, URL GetEAppointmentUrl?id=UUID, ou numéro VOWINT (ex: VOWINT5903406)
   let appId: string | null = null;
+  let vowintRefNumber: string | null = null; // Numéro de référence VOWINT à résoudre via MyList
 
-  if (vowintAppUrl?.includes("GetEAppointmentUrl")) {
-    appId = vowintAppUrl.match(/id=([^&]+)/)?.[1] ?? null;
+  if (vowintAppUrl) {
+    if (vowintAppUrl.includes("GetEAppointmentUrl")) {
+      // Format: https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=UUID
+      appId = vowintAppUrl.match(/id=([a-f0-9-]+)/i)?.[1] ?? null;
+    } else if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(vowintAppUrl.trim())) {
+      // Format: UUID direct (e978b2fd-472f-f111-a3ae-00505691de06)
+      appId = vowintAppUrl.trim();
+    } else if (/^VOWINT\d+$/i.test(vowintAppUrl.trim())) {
+      // Format: Numéro de référence VOWINT (ex: VOWINT5903406)
+      // On devra le résoudre via MyList API ci-dessous
+      vowintRefNumber = vowintAppUrl.trim().toUpperCase();
+      console.log(`[CEV-SETUP] Numéro VOWINT détecté: ${vowintRefNumber} — résolution via MyList...`);
+    }
   }
 
   if (!appId) {
@@ -181,8 +194,21 @@ async function getVowintSession(
         const text = await listRes.text();
         try {
           const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
-          const first = data.data?.find(d => d.Id || d.VOWId);
-          if (first) appId = first.Id ?? first.VOWId ?? null;
+          // Si on cherche un numéro VOWINT spécifique, matcher dessus
+          if (vowintRefNumber && data.data) {
+            const match = data.data.find(d => d.VOWId?.toUpperCase() === vowintRefNumber);
+            if (match?.Id) {
+              appId = match.Id;
+              console.log(`[CEV-SETUP] ✅ Numéro ${vowintRefNumber} résolu → UUID: ${appId}`);
+            } else {
+              console.log(`[CEV-SETUP] ⚠️ Numéro ${vowintRefNumber} non trouvé dans MyList (${data.data?.length ?? 0} dossiers). Dossiers disponibles: ${data.data?.map(d => d.VOWId).join(', ')}`);
+            }
+          }
+          // Fallback: premier dossier si pas de match spécifique
+          if (!appId) {
+            const first = data.data?.find(d => d.Id || d.VOWId);
+            if (first) appId = first.Id ?? first.VOWId ?? null;
+          }
         } catch {
           const m = text.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
           if (m) appId = m[0];
