@@ -19,8 +19,7 @@
  */
 
 import { botLog } from "./convexClient.js";
-import { randomUserAgent } from "./browser.js";
-import { cevImpitFetch } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile } from "./cev-shared-impit.js";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
@@ -80,12 +79,13 @@ async function getVowintSession(
   }
 
   // Cache miss ou expiré — faire un login complet
-  const ua = randomUserAgent();
+  const ua = getCevSessionUa();
+  rotateCevUaProfile(); // Nouveau profil Chrome pour cette session
 
   // 1. GET page login → CSRF token + cookies
   const loginPageRes = await fetch(`${VOWINT_BASE}/`, {
     method: "GET",
-    headers: { "User-Agent": ua, "Accept": "text/html" },
+    headers: getCevBrowserHeaders({ referer: "https://www.google.com/" }),
     redirect: "follow",
     signal: AbortSignal.timeout(30_000),
   });
@@ -103,12 +103,12 @@ async function getVowintSession(
   const loginRes = await fetch(`${VOWINT_BASE}/en/Account/Login`, {
     method: "POST",
     headers: {
-      "User-Agent": ua,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Cookie": vowintCookies,
-      "Referer": `${VOWINT_BASE}/`,
-      "Origin": VOWINT_BASE,
-      "Accept": "text/html,application/xhtml+xml,*/*",
+      ...getCevBrowserHeaders({
+        referer: `${VOWINT_BASE}/`,
+        origin: VOWINT_BASE,
+        contentType: "application/x-www-form-urlencoded",
+        cookie: vowintCookies,
+      }),
     },
     body: new URLSearchParams({
       __RequestVerificationToken: csrfToken,
@@ -130,7 +130,7 @@ async function getVowintSession(
     const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
     const r = await fetch(fullUrl, {
       method: "GET",
-      headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/` },
+      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies }),
       redirect: "manual",
       signal: AbortSignal.timeout(20_000),
     });
@@ -164,7 +164,7 @@ async function getVowintSession(
     // GET IndexByUserId (initialise la vue)
     const pageRes = await fetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
       method: "GET",
-      headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "text/html,application/xhtml+xml,*/*", "Referer": `${VOWINT_BASE}/en`, "Upgrade-Insecure-Requests": "1" },
+      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: cookies }),
       redirect: "follow",
       signal: AbortSignal.timeout(30_000),
     });
@@ -179,7 +179,7 @@ async function getVowintSession(
     if (!appId) {
       await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
         method: "GET",
-        headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
+        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
         signal: AbortSignal.timeout(20_000),
       }).then(r => { cookies = mergeCookies(cookies, r); return r.text(); }).catch(() => {});
 
@@ -187,7 +187,7 @@ async function getVowintSession(
       const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
       const listRes = await fetch(dtUrl, {
         method: "GET",
-        headers: { "User-Agent": ua, "Cookie": cookies, "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest", "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId` },
+        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
         signal: AbortSignal.timeout(30_000),
       });
       if (listRes.ok) {
@@ -270,14 +270,12 @@ export async function setupCevSessionHttp(
     if (eAppointmentUrl.includes("GetEAppointmentUrl")) {
       const eRes = await fetch(eAppointmentUrl, {
         method: "GET",
-        headers: {
-          "User-Agent": ua,
-          "Cookie": postLoginCookies,
-          "Accept": "application/json, text/html, */*",
-          "X-Requested-With": "XMLHttpRequest",
-          "If-Modified-Since": "0",
-          "Referer": `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-        },
+        headers: getCevBrowserHeaders({
+          referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+          cookie: postLoginCookies,
+          xRequestedWith: true,
+          accept: "application/json, text/html, */*",
+        }),
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
@@ -371,11 +369,7 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     const cevRes = await cevSetupFetch(integrationUrl, {
       method: "GET",
-      headers: {
-        "User-Agent": ua,
-        "Accept": "text/html,application/xhtml+xml,*/*",
-        "Referer": `${VOWINT_BASE}/`,
-      },
+      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/` }),
       redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
@@ -416,15 +410,14 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     const captchaRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": fullCevCookie,
-        "User-Agent": ua,
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": `${CEV_BASE}/Captcha`,
-        "Origin": CEV_BASE,
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-      },
+      headers: getCevBrowserHeaders({
+        referer: `${CEV_BASE}/Captcha`,
+        origin: CEV_BASE,
+        cookie: fullCevCookie,
+        contentType: "application/x-www-form-urlencoded",
+        xRequestedWith: true,
+        accept: "application/json, text/javascript, */*; q=0.01",
+      }),
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
       signal: AbortSignal.timeout(30_000),
     });
@@ -491,13 +484,7 @@ export async function setupCevSessionHttp(
       const probe = await cevSetupFetch(fullRedirectUrl, {
         method: "GET",
         redirect: "follow",
-        headers: {
-          "Cookie": fullCevCookie,
-          "User-Agent": ua,
-          "Accept": "text/html,application/xhtml+xml,*/*",
-          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Referer": `${CEV_BASE}/Captcha`,
-        },
+        headers: getCevBrowserHeaders({ referer: `${CEV_BASE}/Captcha`, cookie: fullCevCookie }),
         signal: AbortSignal.timeout(30_000),
       });
       finalUrl = probe.url; // URL après tous les 302
