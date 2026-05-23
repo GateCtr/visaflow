@@ -19,7 +19,7 @@
 //
 // IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-setup-loop + cev-polling-loop.
 
-import { setupCevSessionHttp, invalidateVowintCache } from "../cevHttpSetup.js";
+import { setupCevSessionHttp } from "../cevHttpSetup.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
@@ -274,8 +274,9 @@ async function performSingleCheck(
   process.env.IPROYAL_PROXY_URL = ipSlot.proxyUrl;
 
   try {
-    // Invalider le cache pour forcer un nouveau flow avec la nouvelle IP
-    invalidateVowintCache(vowintEmail);
+    // NE PAS invalider le cache VOWINT — la session login est réutilisable entre IPs.
+    // Seul le GetEAppointmentUrl est sensible à l'IP (compteur 5 clics/h par IP).
+    // Le re-login inutile DÉCLENCHE le rate-limit (testé et confirmé 19/05/2026).
 
     const result = await setupCevSessionHttp(
       vowintEmail,
