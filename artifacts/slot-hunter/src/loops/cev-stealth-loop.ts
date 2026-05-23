@@ -1,23 +1,23 @@
-// ─── CEV Stealth Loop — Stratégie "3 checks + pause + re-login" ─────────────
+// ─── CEV Stealth Loop v2 — Pool d'IPs rotatif + couverture 24/7 ─────────────
 //
-// Objectif : surveiller les créneaux CEV (Belgique) avec UN SEUL COMPTE et
-// UNE SEULE IP (Kinshasa) sans jamais déclencher le rate-limit VOWINT (5 clics/heure).
+// Stratégie : rotation d'IPs iProyal pour contourner la limite 5 clics/heure.
+// Chaque IP a son propre compteur de clics. Quand une IP atteint sa limite,
+// on passe automatiquement à la suivante — ZERO downtime.
 //
-// Cycle complet (~5 min) :
-//   1. LOGIN   — Se connecte proprement à VOWINT (POST /Login), récupère session + appId
-//   2. CHASSE  — 3 vérifications max via GetEAppointmentUrl + hCaptcha + redirect probe
-//                Chaque vérification espacée de 30 secondes
-//   3. RESET   — Détruit toute trace en mémoire (cookies, cache session)
-//   4. SOMMEIL — Pause complète de 3-4 minutes (aucune requête)
-//   5. REPEAT  — Retour à l'étape 1
+// Architecture :
+//   - Pool de N IPs résidentielles iProyal (sticky sessions 60 min)
+//   - Chaque IP peut faire 4 clics/heure (marge sécurité vs limite de 5)
+//   - Rotation automatique quand rate-limit détecté sur une IP
+//   - Couverture 24/7 : avec 5 IPs → 20 checks/heure, 10 IPs → 40 checks/heure
+//   - Coût : ~$0.003/check (hCaptcha) + ~$0.01/check (proxy résidentiel)
 //
-// Coût : 3 hCaptcha/cycle × ~$0.003 = ~$0.009/cycle ≈ $2.60/jour (24h continu)
-// Débit : ~3 checks / 5 min = 36 checks/heure (bien sous la limite de 5 clics/heure
-//         car chaque "clic" ici est un setup complet avec captcha)
+// Config Convex (bot-config) :
+//   cev_stealth_mode = "1"                 → activer le loop
+//   cev_stealth_pool_size = "8"            → nombre d'IPs dans le pool (défaut: 8)
+//   cev_stealth_checks_per_cycle = "4"     → checks par cycle avant rotation (défaut: 4)
+//   cev_stealth_pause_between_checks = "20" → secondes entre checks (défaut: 20)
 //
-// IMPORTANT : Ce loop est MUTUELLEMENT EXCLUSIF avec le cev-setup-loop + cev-polling-loop.
-//   Quand stealth mode est activé, les deux autres loops sont désactivés pour ce compte.
-//   Configurable via bot-config Convex : cev_stealth_mode = "1"
+// IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-setup-loop + cev-polling-loop.
 
 import { setupCevSessionHttp, invalidateVowintCache } from "../cevHttpSetup.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
@@ -34,21 +34,186 @@ import {
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-/** Nombre max de vérifications par cycle avant pause */
-const MAX_CHECKS_PER_CYCLE = 3;
+/** Nombre d'IPs dans le pool (configurable via bot-config) */
+let POOL_SIZE = 8;
 
-/** Délai entre chaque vérification dans un cycle (ms) */
-const INTER_CHECK_DELAY_MS = 30_000; // 30 secondes
+/** Max clics par IP par heure (4 = marge sécurité vs limite serveur de 5) */
+const MAX_CLICKS_PER_IP_PER_HOUR = 4;
 
-/** Pause totale entre les cycles (ms) — randomisée entre min et max */
-const CYCLE_PAUSE_MIN_MS = 3 * 60_000; // 3 minutes
-const CYCLE_PAUSE_MAX_MS = 4 * 60_000; // 4 minutes
+/** Délai entre chaque check dans un cycle (ms) */
+let INTER_CHECK_DELAY_MS = 20_000; // 20 secondes
 
-/** Délai avant de lancer le premier cycle (évite un burst au démarrage) */
-const INITIAL_DELAY_MS = 10_000; // 10 secondes
+/** Checks par cycle (avant rotation IP) */
+let CHECKS_PER_CYCLE = 4;
 
-/** Nombre max de cycles sans succès avant de loguer un warning */
-const WARN_AFTER_CYCLES = 50;
+/** Pause entre cycles (rotation IP) — courte car on change d'IP */
+const CYCLE_PAUSE_MIN_MS = 5_000;  // 5 secondes
+const CYCLE_PAUSE_MAX_MS = 15_000; // 15 secondes
+
+/** Délai initial avant le premier cycle */
+const INITIAL_DELAY_MS = 5_000;
+
+/** Cooldown d'une IP rate-limitée (ms) — elle reviendra disponible après */
+const IP_COOLDOWN_MS = 65 * 60_000; // 65 min (marge sur les 60 min du serveur)
+
+// ─── IP Pool Manager ────────────────────────────────────────────────────────
+
+interface IpSlot {
+  /** Index dans le pool (0-based) */
+  index: number;
+  /** Proxy URL complète */
+  proxyUrl: string;
+  /** Session ID iProyal (pour sticky) */
+  sessionId: string;
+  /** Timestamps des clics effectués sur cette IP */
+  clickTimestamps: number[];
+  /** Timestamp où cette IP sera à nouveau disponible (si rate-limitée) */
+  cooldownUntil: number;
+  /** Nombre total de checks réussis */
+  totalChecks: number;
+  /** Nombre de rate-limits rencontrés */
+  rateLimitCount: number;
+}
+
+class CevIpPool {
+  private slots: IpSlot[] = [];
+  private currentIndex = 0;
+  private readonly baseProxyUrl: string;
+
+  constructor() {
+    // iProyal proxy base — on ajoute un suffix _session-XXX pour le sticky
+    this.baseProxyUrl = process.env.IPROYAL_PROXY_URL 
+      || "http://jT9eIHi669kwIORb:ngucIBfEKjEkUfDn_country-cd_city-kinshasa@geo.iproyal.com:12321";
+  }
+
+  /** Initialise le pool avec N IPs (sticky sessions iProyal) */
+  initialize(poolSize: number): void {
+    this.slots = [];
+    for (let i = 0; i < poolSize; i++) {
+      const sessionId = `cev_stealth_${i}_${Date.now().toString(36)}`;
+      // iProyal sticky session format: ajouter _session-{id}_lifetime-60m au username
+      const proxyUrl = this.buildStickyProxy(sessionId);
+      this.slots.push({
+        index: i,
+        proxyUrl,
+        sessionId,
+        clickTimestamps: [],
+        cooldownUntil: 0,
+        totalChecks: 0,
+        rateLimitCount: 0,
+      });
+    }
+    this.currentIndex = 0;
+    log("INFO", `Pool initialisé: ${poolSize} IPs (iProyal sticky sessions)`);
+  }
+
+  /** Construit l'URL proxy avec sticky session iProyal */
+  private buildStickyProxy(sessionId: string): string {
+    // Format iProyal: user_session-{id}_lifetime-60m:pass@host:port
+    const url = new URL(this.baseProxyUrl.startsWith("http") ? this.baseProxyUrl : `http://${this.baseProxyUrl}`);
+    const baseUser = url.username;
+    // Ajouter le suffix sticky au username
+    url.username = `${baseUser}_session-${sessionId}_lifetime-60m`;
+    return url.toString();
+  }
+
+  /** Obtient la prochaine IP disponible (non rate-limitée, quota non épuisé) */
+  getNextAvailable(): IpSlot | null {
+    const now = Date.now();
+    const startIndex = this.currentIndex;
+    
+    for (let attempts = 0; attempts < this.slots.length; attempts++) {
+      const idx = (startIndex + attempts) % this.slots.length;
+      const slot = this.slots[idx];
+      
+      // Skip si en cooldown
+      if (slot.cooldownUntil > now) continue;
+      
+      // Purger les clics > 1 heure
+      slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < 60 * 60_000);
+      
+      // Skip si quota atteint
+      if (slot.clickTimestamps.length >= MAX_CLICKS_PER_IP_PER_HOUR) continue;
+      
+      // IP disponible !
+      this.currentIndex = (idx + 1) % this.slots.length;
+      return slot;
+    }
+    
+    return null; // Toutes les IPs sont épuisées ou en cooldown
+  }
+
+  /** Enregistre un clic réussi sur une IP */
+  recordClick(slot: IpSlot): void {
+    slot.clickTimestamps.push(Date.now());
+    slot.totalChecks++;
+  }
+
+  /** Met une IP en cooldown après un rate-limit */
+  markRateLimited(slot: IpSlot): void {
+    slot.cooldownUntil = Date.now() + IP_COOLDOWN_MS;
+    slot.rateLimitCount++;
+    log("WARN", `IP #${slot.index} rate-limitée → cooldown ${Math.round(IP_COOLDOWN_MS / 60_000)} min`);
+  }
+
+  /** Régénère une IP (nouvelle sticky session) — appelé quand le cooldown expire */
+  regenerateSlot(slot: IpSlot): void {
+    const newSessionId = `cev_stealth_${slot.index}_${Date.now().toString(36)}`;
+    slot.sessionId = newSessionId;
+    slot.proxyUrl = this.buildStickyProxy(newSessionId);
+    slot.clickTimestamps = [];
+    slot.cooldownUntil = 0;
+    log("INFO", `IP #${slot.index} régénérée (nouvelle session sticky)`);
+  }
+
+  /** Temps avant qu'une IP ne soit à nouveau disponible */
+  getNextAvailableIn(): number {
+    const now = Date.now();
+    let minWait = Infinity;
+    
+    for (const slot of this.slots) {
+      if (slot.cooldownUntil > now) {
+        minWait = Math.min(minWait, slot.cooldownUntil - now);
+      } else {
+        // Purger et vérifier quota
+        slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < 60 * 60_000);
+        if (slot.clickTimestamps.length < MAX_CLICKS_PER_IP_PER_HOUR) {
+          return 0; // Disponible maintenant
+        }
+        // Quota atteint — calculer quand le plus ancien clic expire
+        const oldest = slot.clickTimestamps[0];
+        const availableAt = oldest + 60 * 60_000;
+        minWait = Math.min(minWait, availableAt - now);
+      }
+    }
+    
+    return minWait === Infinity ? 60_000 : minWait;
+  }
+
+  /** Stats du pool */
+  getStats(): { total: number; available: number; rateLimited: number; totalChecks: number } {
+    const now = Date.now();
+    let available = 0;
+    let rateLimited = 0;
+    let totalChecks = 0;
+    
+    for (const slot of this.slots) {
+      totalChecks += slot.totalChecks;
+      if (slot.cooldownUntil > now) {
+        rateLimited++;
+      } else {
+        slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < 60 * 60_000);
+        if (slot.clickTimestamps.length < MAX_CLICKS_PER_IP_PER_HOUR) {
+          available++;
+        }
+      }
+    }
+    
+    return { total: this.slots.length, available, rateLimited, totalChecks };
+  }
+}
+
+const ipPool = new CevIpPool();
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -59,6 +224,7 @@ interface StealthState {
   lastCycleAt: number;
   consecutiveErrors: number;
   isRunning: boolean;
+  startedAt: number;
 }
 
 const state: StealthState = {
@@ -68,6 +234,7 @@ const state: StealthState = {
   lastCycleAt: 0,
   consecutiveErrors: 0,
   isRunning: false,
+  startedAt: 0,
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -82,10 +249,10 @@ function randomBetween(min: number, max: number): number {
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
   const ts = new Date().toISOString().slice(11, 19);
-  console.log(`[${ts}] [CEV-STEALTH] [${level}] ${msg}`);
+  console.log(`[${ts}] [CEV-STEALTH-v2] [${level}] ${msg}`);
 }
 
-// ─── Core: un check complet (login → captcha → redirect probe → verdict) ───
+// ─── Core: un check avec IP spécifique ──────────────────────────────────────
 
 interface CheckResult {
   verdict: "no_slot" | "slot_found" | "error" | "rate_limited";
@@ -99,9 +266,17 @@ async function performSingleCheck(
   vowintEmail: string,
   vowintPassword: string,
   applicationId: string,
+  ipSlot: IpSlot,
   vowintAppUrl?: string,
 ): Promise<CheckResult> {
+  // Configurer le proxy pour cette requête
+  const prevIproyal = process.env.IPROYAL_PROXY_URL;
+  process.env.IPROYAL_PROXY_URL = ipSlot.proxyUrl;
+
   try {
+    // Invalider le cache pour forcer un nouveau flow avec la nouvelle IP
+    invalidateVowintCache(vowintEmail);
+
     const result = await setupCevSessionHttp(
       vowintEmail,
       vowintPassword,
@@ -111,14 +286,15 @@ async function performSingleCheck(
     );
 
     if (!result.success) {
-      // Distinguer rate-limit des autres erreurs
       if (result.error?.includes("RATE_LIMIT")) {
         return { verdict: "rate_limited", error: result.error };
       }
       return { verdict: "error", error: result.error };
     }
 
-    // Setup réussi — vérifier le verdict
+    // Enregistrer le clic réussi
+    ipPool.recordClick(ipSlot);
+
     if (result.slotsAvailable) {
       return {
         verdict: "slot_found",
@@ -128,8 +304,7 @@ async function performSingleCheck(
       };
     }
 
-    // NoAvailability ou autre — pas de créneau mais session valide
-    // On peut aussi tenter un poll API rapide avec le cookie frais
+    // Poll API rapide avec le cookie frais
     if (result.sessionCookie) {
       const pollResult = await pollCevSlot(
         result.integrationUrl ?? "",
@@ -149,97 +324,14 @@ async function performSingleCheck(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { verdict: "error", error: msg };
-  }
-}
-
-// ─── Core: un cycle complet (3 checks + destruction) ────────────────────────
-
-interface CycleResult {
-  checksPerformed: number;
-  slotFound: boolean;
-  sessionCookie?: string;
-  integrationUrl?: string;
-  applicationId?: string;
-  error?: string;
-  rateLimited: boolean;
-}
-
-async function runStealthCycle(
-  vowintEmail: string,
-  vowintPassword: string,
-  applicationId: string,
-  vowintAppUrl?: string,
-): Promise<CycleResult> {
-  const result: CycleResult = {
-    checksPerformed: 0,
-    slotFound: false,
-    rateLimited: false,
-  };
-
-  for (let i = 0; i < MAX_CHECKS_PER_CYCLE; i++) {
-    const checkNum = i + 1;
-    log("INFO", `  Check ${checkNum}/${MAX_CHECKS_PER_CYCLE}...`);
-
-    const check = await performSingleCheck(
-      vowintEmail,
-      vowintPassword,
-      applicationId,
-      vowintAppUrl,
-    );
-
-    result.checksPerformed++;
-    state.totalChecks++;
-
-    if (check.verdict === "slot_found") {
-      log("INFO", `  SLOT TROUVE au check ${checkNum}!`);
-      result.slotFound = true;
-      result.sessionCookie = check.sessionCookie;
-      result.integrationUrl = check.integrationUrl;
-      result.applicationId = applicationId;
-      return result; // Sortir immédiatement
-    }
-
-    if (check.verdict === "rate_limited") {
-      log("WARN", `  Rate-limit détecté au check ${checkNum}: ${check.error}`);
-      result.rateLimited = true;
-      result.error = check.error;
-      // STOP immédiat — ne pas continuer les checks, passer directement au sommeil long
-      break;
-    }
-
-    if (check.verdict === "error") {
-      log("WARN", `  Erreur au check ${checkNum}: ${check.error}`);
-      result.error = check.error;
-      // Continuer avec les checks suivants si l'erreur n'est pas fatale
-      if (check.error?.includes("LOGIN") || check.error?.includes("CSRF")) {
-        break; // Erreur de login = inutile de réessayer
-      }
-    }
-
-    if (check.verdict === "no_slot") {
-      log("INFO", `  Check ${checkNum}: pas de créneau`);
-    }
-
-    // Attendre 30 secondes avant le prochain check (sauf le dernier)
-    if (i < MAX_CHECKS_PER_CYCLE - 1) {
-      log("INFO", `  Pause inter-check: 30s...`);
-      await sleep(INTER_CHECK_DELAY_MS);
+  } finally {
+    // Restaurer le proxy
+    if (prevIproyal) {
+      process.env.IPROYAL_PROXY_URL = prevIproyal;
+    } else {
+      delete process.env.IPROYAL_PROXY_URL;
     }
   }
-
-  return result;
-}
-
-// ─── Destruction de session (le "nettoyage radical") ────────────────────────
-
-function destroyAllSessions(vowintEmail: string): void {
-  // 1. Invalider le cache VOWINT en mémoire
-  invalidateVowintCache(vowintEmail);
-
-  // 2. Pas de cookie jar global (fetch Node.js est stateless par défaut)
-  //    Mais on s'assure qu'aucune variable locale ne persiste
-
-  log("INFO", "  Sessions détruites (cache VOWINT vidé, état nettoyé)");
 }
 
 // ─── Booking quand un slot est trouvé ───────────────────────────────────────
@@ -249,7 +341,7 @@ async function handleSlotFound(
   integrationUrl: string,
   applicationId: string,
 ): Promise<void> {
-  log("INFO", "SLOT DETECTE — Lancement booking...");
+  log("INFO", "🚨 SLOT DETECTE — Lancement booking IMMEDIAT...");
   state.slotsFound++;
 
   botLog({
@@ -259,6 +351,7 @@ async function handleSlotFound(
     data: {
       cycleCount: state.cycleCount,
       totalChecks: state.totalChecks,
+      uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
     },
   });
 
@@ -268,7 +361,7 @@ async function handleSlotFound(
   let bookedCode: string | undefined;
   let bookedScreenshot: string | undefined;
 
-  // Tentative 1 : HTTP pur (rapide)
+  // Tentative 1 : HTTP pur (rapide, ~5s)
   log("INFO", "  Tentative booking HTTP...");
   try {
     const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie, applicationId);
@@ -278,11 +371,10 @@ async function handleSlotFound(
       bookedDate = httpResult.bookedDate;
       bookedTime = httpResult.bookedTime;
       bookedCode = httpResult.confirmationCode;
-      log("INFO", `  BOOKING HTTP REUSSI! code=${bookedCode ?? "N/A"} date=${bookedDate ?? "?"}`);
+      log("INFO", `  ✅ BOOKING HTTP REUSSI! code=${bookedCode ?? "N/A"} date=${bookedDate ?? "?"}`);
     } else if (httpResult.needsPlaywright !== false) {
       log("INFO", `  HTTP insuffisant (${httpResult.error}) — fallback Playwright...`);
 
-      // Tentative 2 : Playwright
       const playwrightResult = await bookWithExistingSession(
         integrationUrl,
         sessionCookie,
@@ -294,15 +386,15 @@ async function handleSlotFound(
         bookedTime = playwrightResult.bookedTime;
         bookedCode = playwrightResult.confirmationCode;
         bookedScreenshot = playwrightResult.screenshotStorageId;
-        log("INFO", `  BOOKING PLAYWRIGHT REUSSI! code=${bookedCode ?? "N/A"} date=${bookedDate ?? "?"}`);
+        log("INFO", `  ✅ BOOKING PLAYWRIGHT REUSSI! code=${bookedCode ?? "N/A"} date=${bookedDate ?? "?"}`);
       } else {
-        log("ERROR", `  Playwright aussi echoue: ${playwrightResult.error}`);
+        log("ERROR", `  ❌ Playwright echoue: ${playwrightResult.error}`);
       }
     } else {
-      log("ERROR", `  Booking HTTP erreur definitive: ${httpResult.error}`);
+      log("ERROR", `  ❌ Booking HTTP erreur definitive: ${httpResult.error}`);
     }
   } catch (err) {
-    log("ERROR", `  Crash booking: ${err}`);
+    log("ERROR", `  💥 Crash booking: ${err}`);
   }
 
   if (booked) {
@@ -310,180 +402,249 @@ async function handleSlotFound(
       applicationId,
       date: bookedDate ?? "",
       time: bookedTime ?? "",
-      location: "CEV - Ambassade de Belgique (Stealth Loop)",
+      location: "CEV - Ambassade de Belgique (Stealth v2 - IP Pool)",
       confirmationCode: bookedCode,
       screenshotStorageId: bookedScreenshot,
     });
-    log("INFO", `  Slot rapporte a Convex`);
+    log("INFO", `  📤 Slot rapporté à Convex`);
   }
 }
 
-// ─── Loop principal ─────────────────────────────────────────────────────────
+// ─── Loop principal v2 ──────────────────────────────────────────────────────
 
 export async function startCevStealthLoop(): Promise<void> {
-  log("INFO", "=== CEV Stealth Loop demarrage ===");
-  log("INFO", `Config: ${MAX_CHECKS_PER_CYCLE} checks/cycle, ${INTER_CHECK_DELAY_MS / 1000}s inter-check, pause ${CYCLE_PAUSE_MIN_MS / 60_000}-${CYCLE_PAUSE_MAX_MS / 60_000} min`);
+  log("INFO", "═══ CEV Stealth Loop v2 — IP Pool Rotatif ═══");
 
   // Vérifier si le mode stealth est activé
   const stealthEnabled = await getBotConfigValue("cev_stealth_mode");
   if (stealthEnabled !== "1") {
-    log("INFO", "Mode stealth desactive (cev_stealth_mode != 1) — loop inactif");
-    // Re-vérifier toutes les 60s au cas où l'admin l'active
+    log("INFO", "Mode stealth desactivé (cev_stealth_mode != 1) — attente activation...");
     while (true) {
       await sleep(60_000);
       const check = await getBotConfigValue("cev_stealth_mode");
       if (check === "1") {
-        log("INFO", "Mode stealth active par admin — demarrage!");
+        log("INFO", "Mode stealth activé par admin → démarrage!");
         break;
       }
     }
   }
 
-  // Délai initial pour éviter un burst au démarrage
+  // Charger la config dynamique depuis Convex
+  try {
+    const poolSizeStr = await getBotConfigValue("cev_stealth_pool_size");
+    if (poolSizeStr) POOL_SIZE = Math.max(2, Math.min(30, parseInt(poolSizeStr, 10) || 8));
+    
+    const checksStr = await getBotConfigValue("cev_stealth_checks_per_cycle");
+    if (checksStr) CHECKS_PER_CYCLE = Math.max(1, Math.min(10, parseInt(checksStr, 10) || 4));
+    
+    const pauseStr = await getBotConfigValue("cev_stealth_pause_between_checks");
+    if (pauseStr) INTER_CHECK_DELAY_MS = Math.max(5, parseInt(pauseStr, 10) || 20) * 1000;
+  } catch { /* defaults */ }
+
+  // Initialiser le pool d'IPs
+  ipPool.initialize(POOL_SIZE);
+
+  log("INFO", `Config: pool=${POOL_SIZE} IPs, ${CHECKS_PER_CYCLE} checks/cycle, ${INTER_CHECK_DELAY_MS / 1000}s entre checks`);
+  log("INFO", `Débit théorique: ${POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR} checks/heure (${POOL_SIZE} IPs × ${MAX_CLICKS_PER_IP_PER_HOUR} clics/IP)`);
+  log("INFO", `Coût estimé: ~$${((POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 0.003) + (POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 0.01)).toFixed(2)}/heure`);
+
   await sleep(INITIAL_DELAY_MS);
 
   state.isRunning = true;
+  state.startedAt = Date.now();
 
   while (state.isRunning) {
     try {
-      // Re-vérifier périodiquement si le mode est toujours actif
-      if (state.cycleCount > 0 && state.cycleCount % 10 === 0) {
+      // Re-vérifier le mode toutes les 20 cycles
+      if (state.cycleCount > 0 && state.cycleCount % 20 === 0) {
         const stillEnabled = await getBotConfigValue("cev_stealth_mode");
         if (stillEnabled !== "1") {
-          log("INFO", "Mode stealth desactive par admin — arret loop");
+          log("INFO", "Mode stealth désactivé par admin → arrêt loop");
           state.isRunning = false;
           break;
         }
+        // Recharger la config dynamique
+        try {
+          const poolSizeStr = await getBotConfigValue("cev_stealth_pool_size");
+          if (poolSizeStr) {
+            const newSize = Math.max(2, Math.min(30, parseInt(poolSizeStr, 10) || 8));
+            if (newSize !== POOL_SIZE) {
+              POOL_SIZE = newSize;
+              ipPool.initialize(POOL_SIZE);
+              log("INFO", `Pool redimensionné: ${POOL_SIZE} IPs`);
+            }
+          }
+        } catch { /* ignore */ }
       }
 
-      // ══════════════════════════════════════════════════════════════════════
-      // Récupérer les sessions CEV needs_setup (contiennent les credentials)
-      // ══════════════════════════════════════════════════════════════════════
+      // Récupérer les credentials VOWINT
       const pendingSetups = await getPendingCevSetups();
-      const activeSessions = await getActiveCevSessions();
-
-      // Trouver la session avec credentials VOWINT (celle d'Esther)
-      // Priorité : needs_setup > active (en mode stealth on force le cycle complet)
-      const target = pendingSetups.find(s => s.vowintEmail && s.vowintPassword)
-        ?? (activeSessions.length > 0 ? null : null); // active sessions n'ont pas les credentials exposées
+      const target = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
 
       if (!target) {
-        // Pas de session avec credentials — attendre
         if (state.cycleCount === 0) {
-          log("WARN", "Aucune session CEV avec credentials VOWINT trouvee — en attente...");
+          log("WARN", "Aucune session CEV avec credentials VOWINT — attente...");
         }
         await sleep(30_000);
         continue;
       }
 
       // ══════════════════════════════════════════════════════════════════════
-      // CYCLE COMPLET
+      // OBTENIR UNE IP DISPONIBLE
+      // ══════════════════════════════════════════════════════════════════════
+      const ipSlot = ipPool.getNextAvailable();
+      
+      if (!ipSlot) {
+        // Toutes les IPs sont épuisées — attendre la prochaine disponible
+        const waitMs = ipPool.getNextAvailableIn();
+        const waitMin = Math.ceil(waitMs / 60_000);
+        const stats = ipPool.getStats();
+        log("INFO", `⏳ Pool épuisé (${stats.rateLimited} rate-limited, 0 available) — attente ${waitMin} min`);
+        await sleep(Math.min(waitMs + 5000, 5 * 60_000)); // Max 5 min d'attente
+        continue;
+      }
+
+      // ══════════════════════════════════════════════════════════════════════
+      // CYCLE : N checks avec cette IP
       // ══════════════════════════════════════════════════════════════════════
       state.cycleCount++;
       state.lastCycleAt = Date.now();
 
-      const cycleStart = Date.now();
-      log("INFO", `═══ Cycle #${state.cycleCount} ═══ (total checks: ${state.totalChecks}, slots: ${state.slotsFound})`);
+      const stats = ipPool.getStats();
+      log("INFO", `═══ Cycle #${state.cycleCount} ═══ IP#${ipSlot.index} | Pool: ${stats.available}/${stats.total} dispo | Total: ${state.totalChecks} checks, ${state.slotsFound} slots`);
 
-      // ETAPE 1 + 2 : Login + 3 checks
-      const cycleResult = await runStealthCycle(
-        target.vowintEmail!,
-        target.vowintPassword!,
-        target.applicationId,
-        target.vowintAppUrl,
-      );
+      let rateLimitedThisCycle = false;
 
-      const cycleDuration = Date.now() - cycleStart;
-      log("INFO", `  Cycle termine: ${cycleResult.checksPerformed} checks en ${Math.round(cycleDuration / 1000)}s`);
-
-      // Rapporter à Convex
-      if (cycleResult.slotFound && cycleResult.sessionCookie && cycleResult.integrationUrl) {
-        // SLOT TROUVE — booking immédiat
-        await recordCevSessionCheck(target.sessionId, "slot_found");
-        await handleSlotFound(
-          cycleResult.sessionCookie,
-          cycleResult.integrationUrl,
-          target.applicationId,
-        );
-        state.consecutiveErrors = 0;
-      } else if (cycleResult.rateLimited) {
-        // Rate-limit — pause longue (60 min) pour respecter VOWINT
-        log("WARN", `  RATE-LIMIT detecte — pause longue 60 min`);
-        state.consecutiveErrors++;
-        botLog({
-          applicationId: target.applicationId,
-          step: "cev_stealth_rate_limit",
-          status: "warn",
-          data: { error: cycleResult.error, cycleCount: state.cycleCount },
-        });
-        // ETAPE 3 : Destruction radicale
-        destroyAllSessions(target.vowintEmail!);
-        // Pause longue
-        await sleep(60 * 60_000);
-        continue; // Skip la pause normale
-      } else if (cycleResult.error) {
-        state.consecutiveErrors++;
-        log("WARN", `  Erreur cycle: ${cycleResult.error} (consecutives: ${state.consecutiveErrors})`);
-        if (state.consecutiveErrors >= 5) {
-          log("ERROR", `  5 erreurs consecutives — pause longue 10 min`);
-          botLog({
-            applicationId: target.applicationId,
-            step: "cev_stealth_consecutive_errors",
-            status: "fail",
-            data: { errors: state.consecutiveErrors, lastError: cycleResult.error },
-          });
-          destroyAllSessions(target.vowintEmail!);
-          await sleep(10 * 60_000);
-          state.consecutiveErrors = 0;
-          continue;
+      for (let i = 0; i < CHECKS_PER_CYCLE; i++) {
+        const checkNum = i + 1;
+        
+        // Vérifier que l'IP a encore du quota
+        const now = Date.now();
+        ipSlot.clickTimestamps = ipSlot.clickTimestamps.filter(t => now - t < 60 * 60_000);
+        if (ipSlot.clickTimestamps.length >= MAX_CLICKS_PER_IP_PER_HOUR) {
+          log("INFO", `  IP#${ipSlot.index} quota atteint (${ipSlot.clickTimestamps.length}/${MAX_CLICKS_PER_IP_PER_HOUR}) → rotation`);
+          break;
         }
-      } else {
-        // no_slot normal
-        state.consecutiveErrors = 0;
-        await recordCevSessionCheck(target.sessionId, "no_slot");
+
+        log("INFO", `  Check ${checkNum}/${CHECKS_PER_CYCLE} (IP#${ipSlot.index}, clics: ${ipSlot.clickTimestamps.length}/${MAX_CLICKS_PER_IP_PER_HOUR})...`);
+
+        const check = await performSingleCheck(
+          target.vowintEmail!,
+          target.vowintPassword!,
+          target.applicationId,
+          ipSlot,
+          target.vowintAppUrl,
+        );
+
+        state.totalChecks++;
+
+        if (check.verdict === "slot_found") {
+          log("INFO", `  🚨 SLOT TROUVÉ au check ${checkNum}!`);
+          await recordCevSessionCheck(target.sessionId, "slot_found");
+          await handleSlotFound(
+            check.sessionCookie!,
+            check.integrationUrl!,
+            target.applicationId,
+          );
+          state.consecutiveErrors = 0;
+          break;
+        }
+
+        if (check.verdict === "rate_limited") {
+          log("WARN", `  ⚡ Rate-limit IP#${ipSlot.index} — rotation immédiate`);
+          ipPool.markRateLimited(ipSlot);
+          rateLimitedThisCycle = true;
+          state.consecutiveErrors = 0; // Rate-limit n'est PAS une erreur — c'est normal
+          break; // Sortir du cycle, prochaine itération = nouvelle IP
+        }
+
+        if (check.verdict === "error") {
+          log("WARN", `  ❌ Erreur check ${checkNum}: ${check.error}`);
+          state.consecutiveErrors++;
+          if (check.error?.includes("LOGIN") || check.error?.includes("CSRF")) {
+            break;
+          }
+          // Erreur non-fatale → continuer
+        }
+
+        if (check.verdict === "no_slot") {
+          state.consecutiveErrors = 0;
+          log("INFO", `  Check ${checkNum}: pas de créneau`);
+        }
+
+        // Pause entre les checks
+        if (i < CHECKS_PER_CYCLE - 1) {
+          const pause = randomBetween(INTER_CHECK_DELAY_MS * 0.8, INTER_CHECK_DELAY_MS * 1.2);
+          await sleep(pause);
+        }
       }
 
-      // Warning périodique
-      if (state.cycleCount % WARN_AFTER_CYCLES === 0) {
-        log("INFO", `  [Stats] ${state.cycleCount} cycles, ${state.totalChecks} checks, ${state.slotsFound} slots trouves`);
+      // Rapporter no_slot à Convex (si pas de rate-limit ni slot)
+      if (!rateLimitedThisCycle && state.slotsFound === 0) {
+        await recordCevSessionCheck(target.sessionId, "no_slot").catch(() => {});
+      }
+
+      // Stats périodiques
+      if (state.cycleCount % 25 === 0) {
+        const poolStats = ipPool.getStats();
+        const uptimeMin = Math.round((Date.now() - state.startedAt) / 60_000);
+        const checksPerHour = uptimeMin > 0 ? Math.round(state.totalChecks / (uptimeMin / 60)) : 0;
+        log("INFO", `  📊 Stats: ${state.totalChecks} checks en ${uptimeMin} min (${checksPerHour}/h) | Pool: ${poolStats.available}/${poolStats.total} dispo, ${poolStats.rateLimited} cooldown | Slots: ${state.slotsFound}`);
         botLog({
           applicationId: target.applicationId,
-          step: "cev_stealth_stats",
+          step: "cev_stealth_v2_stats",
           status: "ok",
           data: {
             cycleCount: state.cycleCount,
             totalChecks: state.totalChecks,
+            checksPerHour,
             slotsFound: state.slotsFound,
-            uptimeMin: Math.round((Date.now() - (state.lastCycleAt - cycleDuration * state.cycleCount)) / 60_000),
+            uptimeMin,
+            poolAvailable: poolStats.available,
+            poolTotal: poolStats.total,
+            poolRateLimited: poolStats.rateLimited,
           },
         });
       }
 
-      // ══════════════════════════════════════════════════════════════════════
-      // ETAPE 3 : DESTRUCTION RADICALE
-      // ══════════════════════════════════════════════════════════════════════
-      log("INFO", "  Nettoyage: destruction session...");
-      destroyAllSessions(target.vowintEmail!);
+      // Gestion erreurs consécutives
+      if (state.consecutiveErrors >= 10) {
+        log("ERROR", `  10 erreurs consécutives — pause 5 min`);
+        botLog({
+          applicationId: target.applicationId,
+          step: "cev_stealth_v2_errors",
+          status: "fail",
+          data: { errors: state.consecutiveErrors },
+        });
+        await sleep(5 * 60_000);
+        state.consecutiveErrors = 0;
+        continue;
+      }
 
       // ══════════════════════════════════════════════════════════════════════
-      // ETAPE 4 : SOMMEIL (3-4 minutes)
+      // PAUSE COURTE entre cycles (on change d'IP → pas besoin d'attendre)
       // ══════════════════════════════════════════════════════════════════════
-      const pauseMs = randomBetween(CYCLE_PAUSE_MIN_MS, CYCLE_PAUSE_MAX_MS);
-      log("INFO", `  Sommeil: ${Math.round(pauseMs / 1000)}s (${(pauseMs / 60_000).toFixed(1)} min) — aucune requete...`);
-      await sleep(pauseMs);
+      if (rateLimitedThisCycle) {
+        // Rate-limit → pas de pause, rotation immédiate vers prochaine IP
+        log("INFO", `  ⚡ Rotation immédiate vers prochaine IP...`);
+        await sleep(2_000); // Juste 2s pour éviter un burst
+      } else {
+        // Cycle normal terminé → petite pause humaine
+        const pauseMs = randomBetween(CYCLE_PAUSE_MIN_MS, CYCLE_PAUSE_MAX_MS);
+        await sleep(pauseMs);
+      }
 
     } catch (loopErr) {
       log("ERROR", `Erreur loop: ${loopErr}`);
       state.consecutiveErrors++;
-      // En cas de crash, pause courte puis retry
       await sleep(30_000);
     }
   }
 
-  log("INFO", "=== CEV Stealth Loop arrete ===");
+  log("INFO", "═══ CEV Stealth Loop v2 arrêté ═══");
 }
 
-/** Expose l'état pour monitoring (ex: endpoint /status) */
-export function getCevStealthState(): Readonly<StealthState> {
-  return { ...state };
+/** Expose l'état pour monitoring */
+export function getCevStealthState(): Readonly<StealthState> & { pool: ReturnType<CevIpPool["getStats"]> } {
+  return { ...state, pool: ipPool.getStats() };
 }
