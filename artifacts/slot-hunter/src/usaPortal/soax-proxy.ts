@@ -1,26 +1,28 @@
 /**
  * SOAX Residential Proxy — sticky session management avec keep-alive.
  *
- * Format URL SOAX:
- *   http://{username}:{password};country-{cc};city-{city};sessid-{sessionId};sesstime-{minutes}@proxy.soax.com:9000
+ * Format URL SOAX (Dashboard v2 — paramètres dans le USERNAME) :
+ *   http://{package}-sessionid-{id}-sessionlength-{seconds}-country-{cc}-city-{city}:{password}@proxy.soax.com:5000
  *
  * Différences avec les autres providers:
  *   - IPRoyal: session ID dans le PASSWORD (_session-XXX_lifetime-60m)
  *   - BrightData: session ID dans le USERNAME (-session-XXX)
- *   - SOAX: paramètres de ciblage dans le PASSWORD, séparés par ";" (point-virgule)
- *   - SOAX utilise "sessid" pour la session sticky et "sesstime" pour la durée (minutes)
+ *   - SOAX (v2): paramètres dans le USERNAME, séparés par "-" (tiret)
+ *   - SOAX utilise "sessionid" pour le sticky et "sessionlength" en SECONDES
+ *   - IMPORTANT: codes pays/ville en MINUSCULE obligatoire (CD → cd, Kinshasa → kinshasa)
  *   - Idle timeout SOAX: variable — session libérée si pas d'activité pendant ~5 min
  *   - Solution: keep-alive automatique toutes les 2-3 min (même pattern que BrightData)
  *
  * Variables d'environnement:
- *   SOAX_PROXY_URL — URL complète du proxy résidentiel SOAX (avec credentials)
- *     Format attendu: http://USERNAME:PASSWORD@proxy.soax.com:9000
- *     Le PASSWORD peut déjà contenir des paramètres (;country-cd;city-kinshasa) — ils seront remplacés.
- *   SOAX_COUNTRY — Code pays de sortie (défaut: "cd" = Congo/RDC)
- *   SOAX_CITY — Ville cible (défaut: "kinshasa")
+ *   SOAX_PROXY_URL — URL de base du proxy SOAX (credentials sans paramètres de session)
+ *     Format attendu: http://package-XXXXX:PASSWORD@proxy.soax.com:5000
+ *     Les paramètres (sessionid, sessionlength, country, city) sont ajoutés dynamiquement.
+ *   SOAX_COUNTRY — Code pays de sortie en minuscule (défaut: "cd" = Congo/RDC)
+ *   SOAX_CITY — Ville cible en minuscule (défaut: "kinshasa")
  *   SOAX_FALLBACK_COUNTRIES — Liste de pays de fallback séparés par virgule
  *     Défaut: "za,ke,ng" — essayés dans l'ordre si le pays principal timeout.
  *   SOAX_SESSION_TIME — Durée de session sticky en minutes (défaut: 600 = 10h)
+ *     Converti en secondes pour l'API SOAX (600 min → 36000 sec).
  */
 
 import { tokenCache, isCachedTokenValid } from "./usa-http.js";
@@ -81,16 +83,16 @@ function simpleHash(seed: string): string {
 }
 
 /**
- * Nettoie le mot de passe SOAX des paramètres existants (;country-..., ;city-..., ;sessid-..., ;sesstime-...).
- * Retourne le mot de passe de base sans les options SOAX.
+ * Nettoie le username SOAX des paramètres de session existants.
+ * Retourne le username de base (package-XXXXX) sans les options dynamiques.
  */
-function cleanSoaxPassword(password: string): string {
-  return password
-    .replace(/;country-[^;]*/g, "")
-    .replace(/;city-[^;]*/g, "")
-    .replace(/;sessid-[^;]*/g, "")
-    .replace(/;sesstime-[^;]*/g, "")
-    .replace(/;+$/, ""); // supprimer les ";" trailing
+function cleanSoaxUsername(username: string): string {
+  return username
+    .replace(/-sessionid-[^-]*/g, "")
+    .replace(/-sessionlength-[^-]*/g, "")
+    .replace(/-country-[^-]*/g, "")
+    .replace(/-city-[^-]*/g, "")
+    .replace(/-+$/, ""); // supprimer les "-" trailing
 }
 
 // ─── API publique ───────────────────────────────────────────────────────────
@@ -116,9 +118,9 @@ export function makeSoaxStickyUrl(
   try {
     const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
 
-    // Nettoyer le mot de passe existant
-    let password = decodeURIComponent(parsed.password);
-    password = cleanSoaxPassword(password);
+    // Nettoyer le username existant (enlever anciens paramètres de session)
+    let proxyUser = decodeURIComponent(parsed.username);
+    proxyUser = cleanSoaxUsername(proxyUser);
 
     // Générer session ID déterministe (stable par période + compteur de rotation)
     const now = new Date();
@@ -127,19 +129,20 @@ export function makeSoaxStickyUrl(
     const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:soax:r${rotationCount}`;
     const sessionId = simpleHash(seed);
 
-    // Construire le password avec les paramètres SOAX
-    // Format: {basePassword};country-{cc};city-{city};sessid-{id};sesstime-{min}
-    password += `;country-${country}`;
+    // Construire le username avec les paramètres SOAX (format Dashboard v2)
+    // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}
+    const sessionLengthSec = SOAX_SESSION_TIME_MIN * 60; // SOAX attend des secondes
+    proxyUser += `-sessionid-${sessionId}`;
+    proxyUser += `-sessionlength-${sessionLengthSec}`;
+    proxyUser += `-country-${country}`;
     if (city) {
-      password += `;city-${city}`;
+      proxyUser += `-city-${city}`;
     }
-    password += `;sessid-${sessionId}`;
-    password += `;sesstime-${SOAX_SESSION_TIME_MIN}`;
 
-    parsed.password = encodeURIComponent(password);
+    parsed.username = encodeURIComponent(proxyUser);
 
     const finalUrl = parsed.toString();
-    console.log(`[soax] 🔒 Sticky session=${sessionId} country=${country}${city ? ` city=${city}` : ""} sesstime=${SOAX_SESSION_TIME_MIN}min rot#${rotationCount}`);
+    console.log(`[soax] 🔒 Sticky sessionid=${sessionId} country=${country}${city ? ` city=${city}` : ""} sessionlength=${sessionLengthSec}s rot#${rotationCount}`);
 
     return finalUrl;
   } catch (err) {
@@ -228,7 +231,7 @@ export function startSoaxKeepAlive(proxyUrl: string, username: string): void {
   stopSoaxKeepAlive(key);
 
   // Extraire le session ID de l'URL pour le log
-  const sessionMatch = decodeURIComponent(proxyUrl).match(/sessid-([a-z0-9]+)/);
+  const sessionMatch = decodeURIComponent(proxyUrl).match(/sessionid-([a-z0-9]+)/);
   const sessionId = sessionMatch?.[1] ?? "unknown";
 
   const session: SoaxSession = {

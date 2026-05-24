@@ -130,20 +130,21 @@ const soaxProvider: ProxyProvider = {
     const sesstime = process.env.SOAX_SESSION_TIME ?? "600";
     try {
       const parsed = new URL(base.startsWith("http") ? base : `http://${base}`);
-      let password = decodeURIComponent(parsed.password);
-      // Nettoyer les anciens paramètres SOAX si présents
-      password = password
-        .replace(/;country-[^;]*/g, "")
-        .replace(/;city-[^;]*/g, "")
-        .replace(/;sessid-[^;]*/g, "")
-        .replace(/;sesstime-[^;]*/g, "")
-        .replace(/;+$/, "");
-      // Ajouter les paramètres sticky
-      password += `;country-${country}`;
-      if (city) password += `;city-${city}`;
-      password += `;sessid-${hash}`;
-      password += `;sesstime-${sesstime}`;
-      parsed.password = encodeURIComponent(password);
+      let proxyUser = decodeURIComponent(parsed.username);
+      // Nettoyer les anciens paramètres SOAX du username si présents
+      proxyUser = proxyUser
+        .replace(/-country-[^-]*/g, "")
+        .replace(/-city-[^-]*/g, "")
+        .replace(/-sessionid-[^-]*/g, "")
+        .replace(/-sessionlength-[^-]*/g, "")
+        .replace(/-+$/, "");
+      // Ajouter les paramètres sticky dans le USERNAME (format SOAX Dashboard v2)
+      // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}
+      proxyUser += `-sessionid-${hash}`;
+      proxyUser += `-sessionlength-${parseInt(sesstime) * 60}`; // SOAX attend des secondes
+      proxyUser += `-country-${country}`;
+      if (city) proxyUser += `-city-${city}`;
+      parsed.username = encodeURIComponent(proxyUser);
       return parsed.toString();
     } catch {
       return null;
