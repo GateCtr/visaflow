@@ -223,6 +223,132 @@ export function rotateCevIproyalSession(identifier: string): void {
   console.log(`[CEV] 🔄 Rotation proxy iProyal demandée pour ${key.slice(0, 20)}… (rot#${current + 1})`);
 }
 
+// ─── SOAX Sticky Session Management (format Dashboard v2 — params dans USERNAME) ─
+
+const SOAX_PROXY_URL = process.env.SOAX_PROXY_URL;
+const SOAX_COUNTRY = process.env.SOAX_COUNTRY ?? "cd";
+const SOAX_CITY = process.env.SOAX_CITY ?? "kinshasa";
+const SOAX_SESSION_TIME_MIN = parseInt(process.env.SOAX_SESSION_TIME ?? "600", 10);
+
+/** Compteur de rotation SOAX par identifiant. */
+const _cevSoaxRotationCount = new Map<string, number>();
+
+/**
+ * Génère une URL SOAX avec session sticky (format Dashboard v2).
+ *
+ * Format: http://{package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}:{pass}@proxy.soax.com:5000
+ *
+ * IMPORTANT: codes pays/ville en MINUSCULE obligatoire.
+ * SOAX sessionlength est en SECONDES (pas minutes).
+ *
+ * @param baseUrl - URL de base SOAX (http://package-XXXXX:PASSWORD@proxy.soax.com:5000)
+ * @param lifetimeMinutes - Durée de session sticky en minutes (converti en secondes pour SOAX)
+ * @param identifier - Identifiant unique du slot IP (pour session ID déterministe)
+ */
+export function makeCevSoaxStickyUrl(
+  baseUrl: string,
+  lifetimeMinutes: number = SOAX_SESSION_TIME_MIN,
+  identifier?: string,
+): string {
+  try {
+    const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+    let proxyUser = decodeURIComponent(parsed.username);
+
+    // Nettoyer les anciens paramètres de session du username
+    proxyUser = proxyUser
+      .replace(/-sessionid-[^-]*/g, "")
+      .replace(/-sessionlength-[^-]*/g, "")
+      .replace(/-country-[^-]*/g, "")
+      .replace(/-city-[^-]*/g, "")
+      .replace(/-+$/, "");
+
+    // Générer un session ID stable par période + identifiant (même logique que iProyal)
+    const now = new Date();
+    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
+    const rotationCount = _cevSoaxRotationCount.get((identifier ?? "cev-default").toLowerCase()) ?? 0;
+    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(identifier ?? "cev-default").toLowerCase()}:cev-soax:r${rotationCount}`;
+    let hash = 0;
+    for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let sessionId = "";
+    let h = Math.abs(hash);
+    for (let i = 0; i < 8; i++) {
+      sessionId += chars[h % 36];
+      h = Math.floor(h / 36) + (i + 1) * 7;
+    }
+
+    // Construire le username avec les paramètres SOAX
+    const sessionLengthSec = lifetimeMinutes * 60;
+    proxyUser += `-sessionid-${sessionId}`;
+    proxyUser += `-sessionlength-${sessionLengthSec}`;
+    proxyUser += `-country-${SOAX_COUNTRY}`;
+    if (SOAX_CITY) proxyUser += `-city-${SOAX_CITY}`;
+
+    parsed.username = encodeURIComponent(proxyUser);
+    console.log(`[CEV] 🔒 SOAX sticky sessionid=${sessionId} sessionlength=${sessionLengthSec}s country=${SOAX_COUNTRY} rot#${rotationCount}`);
+    return parsed.toString();
+  } catch {
+    console.warn(`[CEV] ⚠️ Impossible de parser l'URL SOAX — fallback URL brute`);
+    return baseUrl;
+  }
+}
+
+/**
+ * Force la rotation du proxy SOAX pour un identifiant CEV donné.
+ * Appelé après un échec proxy persistant pour obtenir une nouvelle IP au prochain cycle.
+ */
+export function rotateCevSoaxSession(identifier: string): void {
+  const key = identifier.toLowerCase();
+  const current = _cevSoaxRotationCount.get(key) ?? 0;
+  _cevSoaxRotationCount.set(key, current + 1);
+  _proxyImpit = undefined;
+  _proxyImpitUrl = undefined;
+  console.log(`[CEV] 🔄 Rotation proxy SOAX demandée pour ${key.slice(0, 20)}… (rot#${current + 1})`);
+}
+
+/**
+ * Génère une URL proxy CEV sticky agnostique (SOAX ou iProyal selon le provider choisi).
+ *
+ * @param provider - "soax" | "iproyal"
+ * @param lifetimeMinutes - Durée de session sticky
+ * @param identifier - Identifiant unique du slot IP
+ */
+export function makeCevProxyStickyUrl(
+  provider: "soax" | "iproyal",
+  lifetimeMinutes?: number,
+  identifier?: string,
+): string {
+  if (provider === "soax") {
+    const base = SOAX_PROXY_URL;
+    if (!base) {
+      console.warn(`[CEV] ⚠️ SOAX_PROXY_URL non configurée — fallback iProyal`);
+      return makeCevIproyalStickyUrl(
+        IPROYAL_PROXY_URL ?? "",
+        lifetimeMinutes ?? IPROYAL_STICKY_LIFETIME_MIN,
+        identifier,
+      );
+    }
+    return makeCevSoaxStickyUrl(base, lifetimeMinutes ?? SOAX_SESSION_TIME_MIN, identifier);
+  }
+  // iProyal (défaut)
+  return makeCevIproyalStickyUrl(
+    IPROYAL_PROXY_URL ?? "",
+    lifetimeMinutes ?? IPROYAL_STICKY_LIFETIME_MIN,
+    identifier,
+  );
+}
+
+/**
+ * Force la rotation du proxy CEV agnostique.
+ */
+export function rotateCevProxySession(provider: "soax" | "iproyal", identifier: string): void {
+  if (provider === "soax") {
+    rotateCevSoaxSession(identifier);
+  } else {
+    rotateCevIproyalSession(identifier);
+  }
+}
+
 // ─── CEV Proxy Session Guard (aligné sur usa proxy-session-guard.ts) ────────
 
 /** Intervalle minimum entre deux health checks mid-session (ms). */

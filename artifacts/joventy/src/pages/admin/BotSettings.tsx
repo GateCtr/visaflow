@@ -102,6 +102,19 @@ const CONFIG_ITEMS: ConfigItem[] = [
     min: 5,
     max: 60,
   },
+  {
+    key: "cev_stealth_proxy_provider",
+    label: "CEV Proxy Provider",
+    description: "Provider proxy pour le pool CEV stealth. SOAX = sessions 10h + ciblage Kinshasa. iProyal = sessions 60min. Auto = SOAX si configuré, sinon iProyal.",
+    type: "select",
+    category: "mode",
+    defaultValue: "auto",
+    options: [
+      { value: "auto", label: "Auto (SOAX > iProyal)" },
+      { value: "soax", label: "SOAX (191M IPs, sessions 10h)" },
+      { value: "iproyal", label: "iProyal (sessions 60min)" },
+    ],
+  },
   // ─── Timing / Intervalles
   {
     key: "watcher_base_interval_ms",
@@ -225,11 +238,15 @@ const CONFIG_ITEMS: ConfigItem[] = [
     description: "Ordre de préférence des providers.",
     type: "select",
     category: "proxy",
-    defaultValue: "iproyal,brightdata,2captcha",
+    defaultValue: "iproyal,soax,brightdata,2captcha",
     options: [
-      { value: "iproyal,brightdata,2captcha", label: "iProyal > BrightData > 2captcha" },
+      { value: "iproyal,soax,brightdata,2captcha", label: "iProyal > SOAX > BrightData > 2captcha" },
+      { value: "soax,iproyal,brightdata,2captcha", label: "SOAX > iProyal > BrightData > 2captcha" },
+      { value: "soax,brightdata,2captcha", label: "SOAX > BrightData > 2captcha (sans iProyal)" },
+      { value: "iproyal,brightdata,2captcha", label: "iProyal > BrightData > 2captcha (sans SOAX)" },
       { value: "brightdata,iproyal,2captcha", label: "BrightData > iProyal > 2captcha" },
       { value: "2captcha,iproyal,brightdata", label: "2captcha > iProyal > BrightData" },
+      { value: "soax", label: "SOAX uniquement" },
       { value: "2captcha", label: "2captcha uniquement" },
     ],
   },
@@ -328,6 +345,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
     options: [
       { value: "", label: "Défaut" },
       { value: "iproyal", label: "iProyal" },
+      { value: "soax", label: "SOAX" },
       { value: "brightdata", label: "BrightData" },
       { value: "2captcha", label: "2captcha" },
     ],
