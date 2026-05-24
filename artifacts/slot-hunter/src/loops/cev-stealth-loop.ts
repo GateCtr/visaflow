@@ -26,6 +26,8 @@ import { pollCevSlot } from "../cevPolling.js";
 import {
   makeCevIproyalStickyUrl,
   rotateCevIproyalSession,
+  makeCevProxyStickyUrl,
+  rotateCevProxySession,
   initCevProxyGuard,
   releaseCevProxyGuard,
   isCevSessionFrozen,
@@ -88,20 +90,31 @@ class CevIpPool {
   private slots: IpSlot[] = [];
   private currentIndex = 0;
   private readonly baseProxyUrl: string;
+  private provider: "soax" | "iproyal" = "iproyal";
 
   constructor() {
-    // iProyal proxy base — on utilise makeCevIproyalStickyUrl pour le sticky (aligné sur usa-http.ts)
+    // URL de base — sera sélectionnée dynamiquement selon le provider
     this.baseProxyUrl = process.env.IPROYAL_PROXY_URL 
       || "http://jT9eIHi669kwIORb:ngucIBfEKjEkUfDn_country-cd_city-kinshasa@geo.iproyal.com:12321";
   }
 
-  /** Initialise le pool avec N IPs (sticky sessions iProyal — aligné usa-http.ts) */
+  /** Configure le provider proxy (appelé après lecture de bot-config) */
+  setProvider(provider: "soax" | "iproyal"): void {
+    this.provider = provider;
+    log("INFO", `Provider proxy CEV: ${provider.toUpperCase()}`);
+  }
+
+  /** Retourne le provider actif */
+  getProvider(): "soax" | "iproyal" {
+    return this.provider;
+  }
+
+  /** Initialise le pool avec N IPs (sessions sticky selon le provider actif) */
   initialize(poolSize: number): void {
     this.slots = [];
     for (let i = 0; i < poolSize; i++) {
       const identifier = `cev-stealth-ip${i}`;
-      // Utiliser makeCevIproyalStickyUrl (même logique déterministe que usa-http.ts)
-      const proxyUrl = makeCevIproyalStickyUrl(this.baseProxyUrl, 60, identifier);
+      const proxyUrl = this.buildStickyProxy(identifier);
       this.slots.push({
         index: i,
         proxyUrl,
@@ -113,12 +126,23 @@ class CevIpPool {
       });
     }
     this.currentIndex = 0;
-    log("INFO", `Pool initialisé: ${poolSize} IPs (iProyal sticky sessions — usa-style)`);
+    const providerLabel = this.provider === "soax" 
+      ? `SOAX (sessions ${Math.round((parseInt(process.env.SOAX_SESSION_TIME ?? "600") * 60) / 3600)}h, country=${process.env.SOAX_COUNTRY ?? "cd"})`
+      : `iProyal (sessions 60min)`;
+    log("INFO", `Pool initialisé: ${poolSize} IPs (${providerLabel})`);
   }
 
-  /** Construit l'URL proxy avec sticky session iProyal (usa-style) */
+  /** Construit l'URL proxy sticky selon le provider actif */
   private buildStickyProxy(identifier: string): string {
-    return makeCevIproyalStickyUrl(this.baseProxyUrl, 60, identifier);
+    if (this.provider === "soax") {
+      const soaxUrl = process.env.SOAX_PROXY_URL;
+      if (!soaxUrl) {
+        log("WARN", `SOAX_PROXY_URL non configurée — fallback iProyal`);
+        return makeCevIproyalStickyUrl(this.baseProxyUrl, 60, identifier);
+      }
+      return makeCevProxyStickyUrl("soax", undefined, identifier);
+    }
+    return makeCevProxyStickyUrl("iproyal", 60, identifier);
   }
 
   /** Obtient la prochaine IP disponible (non rate-limitée, quota non épuisé) */
@@ -163,13 +187,13 @@ class CevIpPool {
   /** Régénère une IP (nouvelle sticky session) — appelé quand le cooldown expire */
   regenerateSlot(slot: IpSlot): void {
     const identifier = `cev-stealth-ip${slot.index}-regen-${Date.now().toString(36)}`;
-    // Forcer la rotation iProyal pour ce slot (nouvelle IP)
-    rotateCevIproyalSession(identifier);
+    // Forcer la rotation pour ce slot (nouvelle IP) — agnostique provider
+    rotateCevProxySession(this.provider, identifier);
     slot.sessionId = identifier;
     slot.proxyUrl = this.buildStickyProxy(identifier);
     slot.clickTimestamps = [];
     slot.cooldownUntil = 0;
-    log("INFO", `IP #${slot.index} régénérée (nouvelle session sticky — usa-style rotation)`);
+    log("INFO", `IP #${slot.index} régénérée (${this.provider} — nouvelle session sticky)`);
   }
 
   /** Temps avant qu'une IP ne soit à nouveau disponible */
@@ -279,7 +303,7 @@ async function performSingleCheck(
   if (isCevSessionFrozen()) {
     log("ERROR", `  🛑 Session gelée (proxy mort) — skip check, rotation forcée`);
     releaseCevProxyGuard();
-    rotateCevIproyalSession(ipSlot.sessionId);
+    rotateCevProxySession(ipPool.getProvider(), ipSlot.sessionId);
     // Régénérer le slot avec une nouvelle IP
     ipPool.regenerateSlot(ipSlot);
     return { verdict: "error", error: "CEV_PROXY_FROZEN_MID_SESSION" };
@@ -294,8 +318,10 @@ async function performSingleCheck(
     return { verdict: "error", error: "CEV_PROXY_DEAD_GUARD" };
   }
 
-  // Configurer le proxy pour cette requête
+  // Configurer le proxy pour cette requête — utiliser SOAX_PROXY_URL ou IPROYAL_PROXY_URL
   const prevIproyal = process.env.IPROYAL_PROXY_URL;
+  const prevSoax = process.env.SOAX_PROXY_URL;
+  // Le proxy est toujours injecté via IPROYAL_PROXY_URL (ce que cevImpitFetch lit)
   process.env.IPROYAL_PROXY_URL = ipSlot.proxyUrl;
   // Réinitialiser impit si le proxy a changé (garantir une instance fraîche avec la bonne URL)
   if (prevIproyal !== ipSlot.proxyUrl) {
@@ -322,7 +348,7 @@ async function performSingleCheck(
       // Si l'erreur est liée au proxy, forcer la rotation
       if (result.error?.includes("PROXY") || result.error?.includes("TIMEOUT") || result.error?.includes("ECONNREFUSED")) {
         log("WARN", `  Erreur proxy détectée: ${result.error} — rotation IP #${ipSlot.index}`);
-        rotateCevIproyalSession(ipSlot.sessionId);
+        rotateCevProxySession(ipPool.getProvider(), ipSlot.sessionId);
         ipPool.regenerateSlot(ipSlot);
       }
       return { verdict: "error", error: result.error };
@@ -362,12 +388,12 @@ async function performSingleCheck(
     // Détecter les erreurs proxy pour forcer la rotation
     if (msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("EPIPE") || msg.includes("TIMEOUT") || msg.includes("proxy")) {
       log("WARN", `  💥 Erreur réseau/proxy: ${msg.slice(0, 80)} — rotation IP #${ipSlot.index}`);
-      rotateCevIproyalSession(ipSlot.sessionId);
+      rotateCevProxySession(ipPool.getProvider(), ipSlot.sessionId);
       ipPool.regenerateSlot(ipSlot);
     }
     return { verdict: "error", error: msg };
   } finally {
-    // Restaurer le proxy
+    // Restaurer les variables proxy
     if (prevIproyal) {
       process.env.IPROYAL_PROXY_URL = prevIproyal;
     } else {
@@ -481,6 +507,23 @@ export async function startCevStealthLoop(): Promise<void> {
     
     const pauseStr = await getBotConfigValue("cev_stealth_pause_between_checks");
     if (pauseStr) INTER_CHECK_DELAY_MS = Math.max(5, parseInt(pauseStr, 10) || 20) * 1000;
+
+    // Déterminer le provider proxy (auto = SOAX si configuré, sinon iProyal)
+    const providerStr = await getBotConfigValue("cev_stealth_proxy_provider");
+    if (providerStr === "soax") {
+      ipPool.setProvider("soax");
+    } else if (providerStr === "iproyal") {
+      ipPool.setProvider("iproyal");
+    } else {
+      // "auto" — SOAX prioritaire si SOAX_PROXY_URL est configuré
+      if (process.env.SOAX_PROXY_URL) {
+        ipPool.setProvider("soax");
+        log("INFO", `Provider auto → SOAX (SOAX_PROXY_URL configuré)`);
+      } else {
+        ipPool.setProvider("iproyal");
+        log("INFO", `Provider auto → iProyal (SOAX_PROXY_URL absent)`);
+      }
+    }
   } catch { /* defaults */ }
 
   // Initialiser le pool d'IPs
@@ -515,6 +558,17 @@ export async function startCevStealthLoop(): Promise<void> {
               ipPool.initialize(POOL_SIZE);
               log("INFO", `Pool redimensionné: ${POOL_SIZE} IPs`);
             }
+          }
+          // Re-read provider (hot-swap sans redémarrage)
+          const providerStr = await getBotConfigValue("cev_stealth_proxy_provider");
+          let newProvider: "soax" | "iproyal" = ipPool.getProvider();
+          if (providerStr === "soax") newProvider = "soax";
+          else if (providerStr === "iproyal") newProvider = "iproyal";
+          else newProvider = process.env.SOAX_PROXY_URL ? "soax" : "iproyal";
+          if (newProvider !== ipPool.getProvider()) {
+            log("INFO", `⚡ Hot-swap provider: ${ipPool.getProvider()} → ${newProvider}`);
+            ipPool.setProvider(newProvider);
+            ipPool.initialize(POOL_SIZE);
           }
         } catch { /* ignore */ }
       }
