@@ -24,6 +24,15 @@ import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
 import {
+  makeCevIproyalStickyUrl,
+  rotateCevIproyalSession,
+  initCevProxyGuard,
+  releaseCevProxyGuard,
+  isCevSessionFrozen,
+  checkCevProxyLiveness,
+  resetCevImpitInstances,
+} from "../cev-shared-impit.js";
+import {
   getActiveCevSessions,
   getPendingCevSetups,
   recordCevSessionCheck,
@@ -81,22 +90,22 @@ class CevIpPool {
   private readonly baseProxyUrl: string;
 
   constructor() {
-    // iProyal proxy base — on ajoute un suffix _session-XXX pour le sticky
+    // iProyal proxy base — on utilise makeCevIproyalStickyUrl pour le sticky (aligné sur usa-http.ts)
     this.baseProxyUrl = process.env.IPROYAL_PROXY_URL 
       || "http://jT9eIHi669kwIORb:ngucIBfEKjEkUfDn_country-cd_city-kinshasa@geo.iproyal.com:12321";
   }
 
-  /** Initialise le pool avec N IPs (sticky sessions iProyal) */
+  /** Initialise le pool avec N IPs (sticky sessions iProyal — aligné usa-http.ts) */
   initialize(poolSize: number): void {
     this.slots = [];
     for (let i = 0; i < poolSize; i++) {
-      const sessionId = `cev_stealth_${i}_${Date.now().toString(36)}`;
-      // iProyal sticky session format: ajouter _session-{id}_lifetime-60m au username
-      const proxyUrl = this.buildStickyProxy(sessionId);
+      const identifier = `cev-stealth-ip${i}`;
+      // Utiliser makeCevIproyalStickyUrl (même logique déterministe que usa-http.ts)
+      const proxyUrl = makeCevIproyalStickyUrl(this.baseProxyUrl, 60, identifier);
       this.slots.push({
         index: i,
         proxyUrl,
-        sessionId,
+        sessionId: identifier,
         clickTimestamps: [],
         cooldownUntil: 0,
         totalChecks: 0,
@@ -104,17 +113,12 @@ class CevIpPool {
       });
     }
     this.currentIndex = 0;
-    log("INFO", `Pool initialisé: ${poolSize} IPs (iProyal sticky sessions)`);
+    log("INFO", `Pool initialisé: ${poolSize} IPs (iProyal sticky sessions — usa-style)`);
   }
 
-  /** Construit l'URL proxy avec sticky session iProyal */
-  private buildStickyProxy(sessionId: string): string {
-    // Format iProyal: user_session-{id}_lifetime-60m:pass@host:port
-    const url = new URL(this.baseProxyUrl.startsWith("http") ? this.baseProxyUrl : `http://${this.baseProxyUrl}`);
-    const baseUser = url.username;
-    // Ajouter le suffix sticky au username
-    url.username = `${baseUser}_session-${sessionId}_lifetime-60m`;
-    return url.toString();
+  /** Construit l'URL proxy avec sticky session iProyal (usa-style) */
+  private buildStickyProxy(identifier: string): string {
+    return makeCevIproyalStickyUrl(this.baseProxyUrl, 60, identifier);
   }
 
   /** Obtient la prochaine IP disponible (non rate-limitée, quota non épuisé) */
@@ -158,12 +162,14 @@ class CevIpPool {
 
   /** Régénère une IP (nouvelle sticky session) — appelé quand le cooldown expire */
   regenerateSlot(slot: IpSlot): void {
-    const newSessionId = `cev_stealth_${slot.index}_${Date.now().toString(36)}`;
-    slot.sessionId = newSessionId;
-    slot.proxyUrl = this.buildStickyProxy(newSessionId);
+    const identifier = `cev-stealth-ip${slot.index}-regen-${Date.now().toString(36)}`;
+    // Forcer la rotation iProyal pour ce slot (nouvelle IP)
+    rotateCevIproyalSession(identifier);
+    slot.sessionId = identifier;
+    slot.proxyUrl = this.buildStickyProxy(identifier);
     slot.clickTimestamps = [];
     slot.cooldownUntil = 0;
-    log("INFO", `IP #${slot.index} régénérée (nouvelle session sticky)`);
+    log("INFO", `IP #${slot.index} régénérée (nouvelle session sticky — usa-style rotation)`);
   }
 
   /** Temps avant qu'une IP ne soit à nouveau disponible */
@@ -269,9 +275,32 @@ async function performSingleCheck(
   ipSlot: IpSlot,
   vowintAppUrl?: string,
 ): Promise<CheckResult> {
+  // ── Proxy liveness guard (aligné usa-http.ts Pillar 2) ────────────────────
+  if (isCevSessionFrozen()) {
+    log("ERROR", `  🛑 Session gelée (proxy mort) — skip check, rotation forcée`);
+    releaseCevProxyGuard();
+    rotateCevIproyalSession(ipSlot.sessionId);
+    // Régénérer le slot avec une nouvelle IP
+    ipPool.regenerateSlot(ipSlot);
+    return { verdict: "error", error: "CEV_PROXY_FROZEN_MID_SESSION" };
+  }
+
+  // Mid-session liveness check (non-bloquant si pas encore temps)
+  const proxyAlive = await checkCevProxyLiveness();
+  if (!proxyAlive) {
+    log("ERROR", `  🛑 Proxy déclaré mort par le guard — rotation forcée`);
+    releaseCevProxyGuard();
+    ipPool.regenerateSlot(ipSlot);
+    return { verdict: "error", error: "CEV_PROXY_DEAD_GUARD" };
+  }
+
   // Configurer le proxy pour cette requête
   const prevIproyal = process.env.IPROYAL_PROXY_URL;
   process.env.IPROYAL_PROXY_URL = ipSlot.proxyUrl;
+  // Réinitialiser impit si le proxy a changé (garantir une instance fraîche avec la bonne URL)
+  if (prevIproyal !== ipSlot.proxyUrl) {
+    resetCevImpitInstances();
+  }
 
   try {
     // NE PAS invalider le cache VOWINT — la session login est réutilisable entre IPs.
@@ -289,6 +318,12 @@ async function performSingleCheck(
     if (!result.success) {
       if (result.error?.includes("RATE_LIMIT")) {
         return { verdict: "rate_limited", error: result.error };
+      }
+      // Si l'erreur est liée au proxy, forcer la rotation
+      if (result.error?.includes("PROXY") || result.error?.includes("TIMEOUT") || result.error?.includes("ECONNREFUSED")) {
+        log("WARN", `  Erreur proxy détectée: ${result.error} — rotation IP #${ipSlot.index}`);
+        rotateCevIproyalSession(ipSlot.sessionId);
+        ipPool.regenerateSlot(ipSlot);
       }
       return { verdict: "error", error: result.error };
     }
@@ -324,6 +359,12 @@ async function performSingleCheck(
     return { verdict: "no_slot" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Détecter les erreurs proxy pour forcer la rotation
+    if (msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("EPIPE") || msg.includes("TIMEOUT") || msg.includes("proxy")) {
+      log("WARN", `  💥 Erreur réseau/proxy: ${msg.slice(0, 80)} — rotation IP #${ipSlot.index}`);
+      rotateCevIproyalSession(ipSlot.sessionId);
+      ipPool.regenerateSlot(ipSlot);
+    }
     return { verdict: "error", error: msg };
   } finally {
     // Restaurer le proxy
@@ -511,6 +552,9 @@ export async function startCevStealthLoop(): Promise<void> {
       state.cycleCount++;
       state.lastCycleAt = Date.now();
 
+      // Initialiser le proxy guard pour cette IP (aligné usa-http.ts Pillar 2)
+      initCevProxyGuard(ipSlot.proxyUrl, ipSlot.sessionId);
+
       const stats = ipPool.getStats();
       log("INFO", `═══ Cycle #${state.cycleCount} ═══ IP#${ipSlot.index} | Pool: ${stats.available}/${stats.total} dispo | Total: ${state.totalChecks} checks, ${state.slotsFound} slots`);
 
@@ -584,6 +628,9 @@ export async function startCevStealthLoop(): Promise<void> {
       if (!rateLimitedThisCycle && state.slotsFound === 0) {
         await recordCevSessionCheck(target.sessionId, "no_slot").catch(() => {});
       }
+
+      // Libérer le proxy guard en fin de cycle (avant rotation IP)
+      releaseCevProxyGuard();
 
       // Stats périodiques
       if (state.cycleCount % 25 === 0) {

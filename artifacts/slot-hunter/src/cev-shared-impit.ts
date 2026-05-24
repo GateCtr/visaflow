@@ -4,6 +4,13 @@
  * ANTI-DETECTION: Aligné sur le niveau USA (getBrowserHeaders).
  * Inclut : Sec-CH-UA, Sec-Fetch-*, jitter réseau, device fingerprint cohérent.
  * 
+ * v2 (2026-05-24) : Alignement complet avec usa-http.ts —
+ *   - Sticky sessions iProyal (session-ID déterministe + lifetime)
+ *   - Retry avec timeout avant fallback (au lieu de fallback immédiat)
+ *   - Rotation forcée après échec proxy (rotateIproyalSession)
+ *   - Proxy liveness guard (mid-session freeze si proxy mort)
+ *   - Logging détaillé du proxy (masqué)
+ * 
  * Évite l'import circulaire : setup ↔ polling.
  * Les deux modules importent depuis ce fichier commun.
  */
@@ -11,6 +18,20 @@
 import { Impit } from "impit";
 
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
+
+// ─── Configuration proxy ────────────────────────────────────────────────────
+
+/** Timeout pour les requêtes via proxy (ms). Si dépassé → retry ou fallback. */
+const PROXY_FETCH_TIMEOUT_MS = 25_000;
+
+/** Nombre de retries proxy avant fallback direct. */
+const PROXY_MAX_RETRIES = 2;
+
+/** Délai entre retries proxy (ms). */
+const PROXY_RETRY_DELAY_MS = 2_000;
+
+/** Lifetime des sessions sticky iProyal (minutes). */
+const IPROYAL_STICKY_LIFETIME_MIN = 60;
 
 // ─── UA Pool Chrome (aligné sur usa-http.ts) ────────────────────────────────
 
@@ -130,6 +151,214 @@ export function getCevBrowserHeaders(overrides?: {
   return headers;
 }
 
+// ─── iProyal Sticky Session Management (aligné sur usa-http.ts) ─────────────
+
+/** Compteur de rotation par identifiant — incrémenté après échec proxy pour forcer nouvelle IP. */
+const _cevIproyalRotationCount = new Map<string, number>();
+
+/**
+ * Génère une URL iProyal avec session sticky — même logique que usa-http.ts makeIproyalStickyUrl.
+ * 
+ * Le session ID est déterministe par (date + demi-journée + identifiant + rotationCount).
+ * Cela permet :
+ *   - Même session ID si le bot redémarre dans la même période → reprise déterministe
+ *   - Changement automatique à 00h/12h UTC → nouvelle IP
+ *   - Rotation forcée via rotateCevIproyalSession() après échec proxy
+ * 
+ * IMPORTANT: La lifetime iProyal est de 60 min. Après 60 min, la session expire
+ * côté serveur iProyal et l'IP est relâchée.
+ */
+export function makeCevIproyalStickyUrl(
+  baseUrl: string,
+  lifetimeMinutes: number = IPROYAL_STICKY_LIFETIME_MIN,
+  identifier?: string,
+): string {
+  try {
+    const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+    let password = decodeURIComponent(parsed.password);
+
+    // Supprimer l'ancienne session sticky si présente
+    if (password.includes("_session-") && password.includes("_lifetime-")) {
+      password = password.replace(/_session-[^_]+_lifetime-\d+[mh]/, "");
+    }
+
+    // Générer un session ID stable par période + identifiant
+    const now = new Date();
+    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
+    const rotationCount = _cevIproyalRotationCount.get((identifier ?? "cev-default").toLowerCase()) ?? 0;
+    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(identifier ?? "cev-default").toLowerCase()}:cev-iproyal:r${rotationCount}`;
+    let hash = 0;
+    for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
+    // Convertir en base62 (8 chars)
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let sessionId = "";
+    let h = Math.abs(hash);
+    for (let i = 0; i < 8; i++) {
+      sessionId += chars[h % 62];
+      h = Math.floor(h / 62) + (i + 1) * 7;
+    }
+
+    const lifetimeStr = lifetimeMinutes >= 60 ? `${Math.round(lifetimeMinutes / 60)}h` : `${lifetimeMinutes}m`;
+    password += `_session-${sessionId}_lifetime-${lifetimeStr}`;
+    parsed.password = encodeURIComponent(password);
+    console.log(`[CEV] 🔒 iProyal sticky session=${sessionId} lifetime=${lifetimeStr} rot#${rotationCount}`);
+    return parsed.toString();
+  } catch {
+    console.warn(`[CEV] ⚠️ Impossible de parser l'URL proxy — fallback URL brute`);
+    return baseUrl;
+  }
+}
+
+/**
+ * Force la rotation du proxy iProyal pour un identifiant CEV donné.
+ * Appelé après un échec proxy persistant pour obtenir une nouvelle IP au prochain cycle.
+ */
+export function rotateCevIproyalSession(identifier: string): void {
+  const key = identifier.toLowerCase();
+  const current = _cevIproyalRotationCount.get(key) ?? 0;
+  _cevIproyalRotationCount.set(key, current + 1);
+  // Réinitialiser l'instance impit pour qu'elle soit recréée avec la nouvelle URL
+  _proxyImpit = undefined;
+  _proxyImpitUrl = undefined;
+  console.log(`[CEV] 🔄 Rotation proxy iProyal demandée pour ${key.slice(0, 20)}… (rot#${current + 1})`);
+}
+
+// ─── CEV Proxy Session Guard (aligné sur usa proxy-session-guard.ts) ────────
+
+/** Intervalle minimum entre deux health checks mid-session (ms). */
+const CEV_PROXY_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+/** Timeout pour le health check mid-session (ms). */
+const CEV_PROXY_CHECK_TIMEOUT_MS = 5000;
+
+/** Nombre d'échecs consécutifs avant de déclarer le proxy mort. */
+const CEV_PROXY_MAX_FAILURES = 2;
+
+/** URL légère pour tester la connectivité proxy. */
+const CEV_HEALTH_CHECK_URL = "https://api.ipify.org?format=text";
+
+interface CevProxyGuardState {
+  proxyUrl: string;
+  lastCheckAt: number;
+  consecutiveFailures: number;
+  frozen: boolean;
+  expectedExitIp?: string;
+  identifier?: string;
+}
+
+let _cevProxyGuardState: CevProxyGuardState | undefined;
+
+/**
+ * Initialise le proxy guard CEV pour la session active.
+ * Appelé après le premier fetch proxy réussi.
+ */
+export function initCevProxyGuard(proxyUrl: string, identifier?: string, exitIp?: string): void {
+  _cevProxyGuardState = {
+    proxyUrl,
+    lastCheckAt: Date.now(),
+    consecutiveFailures: 0,
+    frozen: false,
+    expectedExitIp: exitIp,
+    identifier,
+  };
+  console.log(`[CEV-PROXY-GUARD] ✅ Guard initialisé (IP: ${exitIp ?? "inconnue"})`);
+}
+
+/** Libère le proxy guard (fin de session / rotation). */
+export function releaseCevProxyGuard(): void {
+  _cevProxyGuardState = undefined;
+}
+
+/** Vérifie si la session CEV est gelée (proxy mort mid-session). */
+export function isCevSessionFrozen(): boolean {
+  return _cevProxyGuardState?.frozen ?? false;
+}
+
+/**
+ * Vérifie la santé du proxy CEV mid-session (non-bloquant si intervalle non écoulé).
+ * Retourne true = OK, false = proxy mort → session gelée.
+ */
+export async function checkCevProxyLiveness(): Promise<boolean> {
+  if (!_cevProxyGuardState) return true;
+  if (_cevProxyGuardState.frozen) return false;
+
+  const elapsed = Date.now() - _cevProxyGuardState.lastCheckAt;
+  if (elapsed < CEV_PROXY_CHECK_INTERVAL_MS) return true;
+
+  // Exécuter le health check
+  const healthy = await performCevProxyHealthCheck(_cevProxyGuardState);
+
+  if (healthy) {
+    _cevProxyGuardState.lastCheckAt = Date.now();
+    _cevProxyGuardState.consecutiveFailures = 0;
+    return true;
+  }
+
+  _cevProxyGuardState.consecutiveFailures++;
+  _cevProxyGuardState.lastCheckAt = Date.now();
+
+  if (_cevProxyGuardState.consecutiveFailures >= CEV_PROXY_MAX_FAILURES) {
+    _cevProxyGuardState.frozen = true;
+    const masked = _cevProxyGuardState.proxyUrl.replace(/:([^:@]+)@/, ":***@");
+    console.error(`[CEV-PROXY-GUARD] 🚨 PROXY MORT mid-session — SESSION GELÉE`);
+    console.error(`[CEV-PROXY-GUARD]    ${_cevProxyGuardState.consecutiveFailures} échecs consécutifs`);
+    console.error(`[CEV-PROXY-GUARD]    Proxy: ${masked.slice(0, 60)}…`);
+    console.error(`[CEV-PROXY-GUARD]    → Requêtes bloquées — rotation proxy nécessaire`);
+
+    // Forcer la rotation pour le prochain cycle
+    if (_cevProxyGuardState.identifier) {
+      rotateCevIproyalSession(_cevProxyGuardState.identifier);
+    }
+    return false;
+  }
+
+  // Premier échec → pas encore gelé, réduire l'intervalle pour revérifier rapidement
+  console.warn(
+    `[CEV-PROXY-GUARD] ⚠️ Health check échoué (${_cevProxyGuardState.consecutiveFailures}/${CEV_PROXY_MAX_FAILURES}) — re-check dans 30s`,
+  );
+  _cevProxyGuardState.lastCheckAt = Date.now() - CEV_PROXY_CHECK_INTERVAL_MS + 30_000;
+  return true;
+}
+
+async function performCevProxyHealthCheck(state: CevProxyGuardState): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CEV_PROXY_CHECK_TIMEOUT_MS);
+
+    // Utiliser impit avec le proxy actuel pour le health check
+    const impit = getProxyImpit(state.proxyUrl);
+    const res = await impit.fetch(CEV_HEALTH_CHECK_URL, {
+      signal: controller.signal,
+    } as any) as unknown as Response;
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      console.warn(`[CEV-PROXY-GUARD] Health check HTTP ${res.status}`);
+      return false;
+    }
+
+    const exitIp = (await res.text()).trim();
+
+    // Vérifier que l'IP de sortie n'a pas changé
+    if (state.expectedExitIp && exitIp !== state.expectedExitIp) {
+      console.warn(
+        `[CEV-PROXY-GUARD] ⚠️ IP de sortie changée mid-session: ${state.expectedExitIp} → ${exitIp}`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isTimeout = msg.includes("abort") || msg.includes("timeout");
+    console.warn(
+      `[CEV-PROXY-GUARD] Health check échoué: ${isTimeout ? "TIMEOUT" : msg.slice(0, 100)}`,
+    );
+    return false;
+  }
+}
+
 // ─── Impit Instances ────────────────────────────────────────────────────────
 
 /** Singleton impit avec proxy (fingerprint TLS Chrome) */
@@ -141,7 +370,11 @@ export function getProxyImpit(proxyUrl?: string): InstanceType<typeof Impit> {
   // Recréer si le proxy a changé
   if (!_proxyImpit || targetProxy !== _proxyImpitUrl) {
     const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
-    if (targetProxy) opts.proxyUrl = targetProxy;
+    if (targetProxy) {
+      opts.proxyUrl = targetProxy;
+      const masked = targetProxy.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[CEV] ✅ impit initialisé avec proxy: ${masked.slice(0, 60)}… (fingerprint TLS Chrome)`);
+    }
     _proxyImpit = new Impit(opts as any);
     _proxyImpitUrl = targetProxy;
   }
@@ -154,6 +387,7 @@ let _directImpit: InstanceType<typeof Impit> | undefined;
 export function getDirectImpit(): InstanceType<typeof Impit> {
   if (!_directImpit) {
     _directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+    console.log("[CEV] ✅ impit direct initialisé (fingerprint TLS Chrome) — sans proxy");
   }
   return _directImpit;
 }
@@ -169,23 +403,106 @@ export function resetCevImpitInstances(): void {
  * Fetch CEV via impit avec :
  * - Fingerprint TLS Chrome (JA3/JA4)
  * - Jitter réseau réaliste (30-200ms avant chaque requête)
- * - Fallback proxy → direct si proxy down
+ * - Retry avec timeout (aligné sur usa-http.ts) au lieu de fallback immédiat
+ * - Proxy liveness guard (bloque si proxy mort mid-session)
+ * - Fallback direct uniquement après épuisement des retries
+ * 
+ * v2: Plus de fallback silencieux ! On retry PROXY_MAX_RETRIES fois avec timeout
+ * avant de tomber en direct. Chaque échec est loggé avec détail.
  */
 export async function cevImpitFetch(url: string, options: RequestInit, logPrefix = "[CEV]"): Promise<Response> {
+  // ── Proxy liveness guard (comme usa-http.ts Pillar 2) ───────────────────────
+  if (_cevProxyGuardState && _cevProxyGuardState.frozen) {
+    console.error(`${logPrefix} 🛑 REQUÊTE BLOQUÉE — proxy mort mid-session (session gelée)`);
+    console.error(`${logPrefix}    URL: ${url.slice(0, 80)}…`);
+    // Retourner une fausse réponse 503 (comme usa-http.ts)
+    return new Response(
+      JSON.stringify({ error: "CEV_PROXY_DEAD_MID_SESSION", message: "Session frozen — proxy died mid-session" }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   // ── Jitter réseau réaliste (comme usa-http.ts) ──────────────────────────────
-  // Un vrai navigateur a une latence variable avant chaque requête.
-  // Sans jitter = signature de bot (requêtes à intervalle constant).
   const jitterMs = 30 + Math.random() * 170; // 30-200ms
   await new Promise(r => setTimeout(r, jitterMs));
 
-  const currentProxy = IPROYAL_PROXY_URL;
-  if (currentProxy) {
+  // ── Déterminer le proxy à utiliser ──────────────────────────────────────────
+  // Si un proxy est passé dynamiquement via process.env (par le stealth loop),
+  // l'utiliser. Sinon utiliser la variable globale IPROYAL_PROXY_URL.
+  const currentProxy = process.env.IPROYAL_PROXY_URL;
+  
+  if (!currentProxy) {
+    // Pas de proxy configuré — connexion directe
+    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+  }
+
+  // ── Fetch avec retry (aligné sur usa-http.ts) ─────────────────────────────
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= PROXY_MAX_RETRIES; attempt++) {
     try {
-      return await getProxyImpit(currentProxy).fetch(url, options as any) as unknown as Response;
-    } catch {
-      console.log(`${logPrefix} ⚠️ impit+proxy failed → fallback impit direct`);
-      return getDirectImpit().fetch(url, options as any) as unknown as Response;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), PROXY_FETCH_TIMEOUT_MS);
+
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal,
+      };
+
+      const res = await getProxyImpit(currentProxy).fetch(url, fetchOptions as any) as unknown as Response;
+      clearTimeout(timeout);
+
+      // Vérifier si la réponse est un 407 (proxy auth failed) ou 502/503 (proxy error)
+      if (res.status === 407) {
+        console.error(`${logPrefix} ❌ Proxy auth failed (407) — vérifier IPROYAL_PROXY_URL credentials`);
+        lastError = new Error(`PROXY_AUTH_FAILED_407`);
+        // Ne pas retry un 407, c'est un problème de credentials
+        break;
+      }
+
+      if (res.status === 502 || res.status === 503) {
+        console.warn(`${logPrefix} ⚠️ Proxy error ${res.status} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1})`);
+        lastError = new Error(`PROXY_ERROR_${res.status}`);
+        if (attempt < PROXY_MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
+          continue;
+        }
+        break;
+      }
+
+      // Succès ! Mettre à jour le proxy guard si besoin
+      return res;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTimeout = msg.includes("abort") || msg.includes("timeout") || msg.includes("TIMEOUT");
+      const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("EPIPE");
+
+      if (attempt < PROXY_MAX_RETRIES) {
+        console.warn(
+          `${logPrefix} ⚠️ Proxy ${isTimeout ? "TIMEOUT" : "error"} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1}): ${msg.slice(0, 80)}`
+        );
+        lastError = err instanceof Error ? err : new Error(msg);
+        await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
+        continue;
+      }
+
+      lastError = err instanceof Error ? err : new Error(msg);
+      console.error(
+        `${logPrefix} ❌ Proxy failed après ${PROXY_MAX_RETRIES + 1} tentatives: ${isTimeout ? "TIMEOUT" : isConnRefused ? "CONN_REFUSED" : msg.slice(0, 100)}`
+      );
     }
   }
-  return getDirectImpit().fetch(url, options as any) as unknown as Response;
+
+  // ── Fallback direct (dernier recours) ──────────────────────────────────────
+  const errorDetail = lastError?.message?.slice(0, 60) ?? "unknown";
+  console.warn(`${logPrefix} ⚠️ FALLBACK impit direct (après ${PROXY_MAX_RETRIES + 1} retries proxy: ${errorDetail})`);
+  
+  try {
+    return await getDirectImpit().fetch(url, options as any) as unknown as Response;
+  } catch (directErr) {
+    // Si même le direct échoue, c'est un problème réseau global
+    const directMsg = directErr instanceof Error ? directErr.message : String(directErr);
+    console.error(`${logPrefix} 💥 DIRECT aussi échoué: ${directMsg.slice(0, 100)}`);
+    throw directErr;
+  }
 }
