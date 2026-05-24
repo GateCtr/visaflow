@@ -6,16 +6,22 @@
 //
 // Architecture :
 //   - Pool de N IPs résidentielles iProyal (sticky sessions 60 min)
-//   - Chaque IP peut faire 4 clics/heure (marge sécurité vs limite de 5)
+//   - Chaque IP peut faire 4 clics/heure (marge sécurité vs limite serveur de 5)
 //   - Rotation automatique quand rate-limit détecté sur une IP
-//   - Couverture 24/7 : avec 5 IPs → 20 checks/heure, 10 IPs → 40 checks/heure
-//   - Coût : ~$0.003/check (hCaptcha) + ~$0.01/check (proxy résidentiel)
+//   - Couverture 24/7 : avec 4 IPs → 16 checks/heure (mode observation 48h)
+//
+// ═══ MODE OBSERVATION 48H ═══
+//   Budget : 2 GB iProyal + $4.19 anti-captcha
+//   Config optimale : pool=4, checks_per_cycle=1, pause=30s
+//   Débit : 16 checks/h = 1 check toutes les 3.75 min
+//   Coût total 48h : ~$2.30 captcha + ~768 MB proxy (marge ~45%)
+//   Objectif : observer quand CEV publie les 200 créneaux/jour (heure inconnue)
 //
 // Config Convex (bot-config) :
 //   cev_stealth_mode = "1"                 → activer le loop
-//   cev_stealth_pool_size = "8"            → nombre d'IPs dans le pool (défaut: 8)
-//   cev_stealth_checks_per_cycle = "4"     → checks par cycle avant rotation (défaut: 4)
-//   cev_stealth_pause_between_checks = "20" → secondes entre checks (défaut: 20)
+//   cev_stealth_pool_size = "4"            → nombre d'IPs dans le pool (défaut: 4)
+//   cev_stealth_checks_per_cycle = "1"     → checks par cycle avant rotation (défaut: 1)
+//   cev_stealth_pause_between_checks = "30" → secondes entre checks (défaut: 30)
 //
 // IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-setup-loop + cev-polling-loop.
 
@@ -35,16 +41,16 @@ import {
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 /** Nombre d'IPs dans le pool (configurable via bot-config) */
-let POOL_SIZE = 8;
+let POOL_SIZE = 4;
 
 /** Max clics par IP par heure (4 = marge sécurité vs limite serveur de 5) */
 const MAX_CLICKS_PER_IP_PER_HOUR = 4;
 
 /** Délai entre chaque check dans un cycle (ms) */
-let INTER_CHECK_DELAY_MS = 20_000; // 20 secondes
+let INTER_CHECK_DELAY_MS = 30_000; // 30 secondes (mode observation 48h)
 
-/** Checks par cycle (avant rotation IP) */
-let CHECKS_PER_CYCLE = 4;
+/** Checks par cycle (avant rotation IP) — 1 = rotation après chaque check (économise les clics) */
+let CHECKS_PER_CYCLE = 1;
 
 /** Pause entre cycles (rotation IP) — courte car on change d'IP */
 const CYCLE_PAUSE_MIN_MS = 5_000;  // 5 secondes
@@ -225,6 +231,9 @@ interface StealthState {
   consecutiveErrors: number;
   isRunning: boolean;
   startedAt: number;
+  /** Budget tracking — estimated costs consumed */
+  estimatedCaptchaCost: number;
+  estimatedProxyMB: number;
 }
 
 const state: StealthState = {
@@ -235,9 +244,16 @@ const state: StealthState = {
   consecutiveErrors: 0,
   isRunning: false,
   startedAt: 0,
+  estimatedCaptchaCost: 0,
+  estimatedProxyMB: 0,
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Budget Guards (mode observation 48h) ───────────────────────────────────
+// S'arrêter automatiquement si on dépasse le budget prévu
+const BUDGET_MAX_CAPTCHA_USD = 4.0;   // $4.19 dispo, stop à $4.00 (marge)
+const BUDGET_MAX_PROXY_MB = 1900;      // 2048 MB dispo, stop à 1900 MB (marge)
+const COST_PER_CAPTCHA_USD = 0.003;    // hCaptcha Proxyless via anti-captcha
+const COST_PER_CHECK_PROXY_MB = 1.0;   // ~1 MB par setup complet (conservateur)
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -447,7 +463,8 @@ export async function startCevStealthLoop(): Promise<void> {
 
   log("INFO", `Config: pool=${POOL_SIZE} IPs, ${CHECKS_PER_CYCLE} checks/cycle, ${INTER_CHECK_DELAY_MS / 1000}s entre checks`);
   log("INFO", `Débit théorique: ${POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR} checks/heure (${POOL_SIZE} IPs × ${MAX_CLICKS_PER_IP_PER_HOUR} clics/IP)`);
-  log("INFO", `Coût estimé: ~$${((POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 0.003) + (POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 0.01)).toFixed(2)}/heure`);
+  log("INFO", `Coût estimé 48h: ~$${((POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 48 * 0.003)).toFixed(2)} captcha + ~${Math.round(POOL_SIZE * MAX_CLICKS_PER_IP_PER_HOUR * 48)} MB proxy`);
+  log("INFO", `Mode OBSERVATION 48h: budget 2GB iProyal + $4.19 anti-captcha`);
 
   await sleep(INITIAL_DELAY_MS);
 
@@ -539,6 +556,34 @@ export async function startCevStealthLoop(): Promise<void> {
 
         state.totalChecks++;
 
+        // ── Budget tracking ──────────────────────────────────────────────────
+        state.estimatedCaptchaCost += COST_PER_CAPTCHA_USD;
+        state.estimatedProxyMB += COST_PER_CHECK_PROXY_MB;
+
+        // Budget guard — arrêt automatique si on approche des limites
+        if (state.estimatedCaptchaCost >= BUDGET_MAX_CAPTCHA_USD) {
+          log("ERROR", `💰 BUDGET CAPTCHA ÉPUISÉ: $${state.estimatedCaptchaCost.toFixed(2)} ≥ $${BUDGET_MAX_CAPTCHA_USD} — ARRÊT AUTOMATIQUE`);
+          botLog({
+            applicationId: target.applicationId,
+            step: "cev_stealth_budget_exhausted",
+            status: "fail",
+            data: { reason: "captcha", spent: state.estimatedCaptchaCost, limit: BUDGET_MAX_CAPTCHA_USD, totalChecks: state.totalChecks },
+          });
+          state.isRunning = false;
+          break;
+        }
+        if (state.estimatedProxyMB >= BUDGET_MAX_PROXY_MB) {
+          log("ERROR", `💰 BUDGET PROXY ÉPUISÉ: ${Math.round(state.estimatedProxyMB)} MB ≥ ${BUDGET_MAX_PROXY_MB} MB — ARRÊT AUTOMATIQUE`);
+          botLog({
+            applicationId: target.applicationId,
+            step: "cev_stealth_budget_exhausted",
+            status: "fail",
+            data: { reason: "proxy", spent: state.estimatedProxyMB, limit: BUDGET_MAX_PROXY_MB, totalChecks: state.totalChecks },
+          });
+          state.isRunning = false;
+          break;
+        }
+
         if (check.verdict === "slot_found") {
           log("INFO", `  🚨 SLOT TROUVÉ au check ${checkNum}!`);
           await recordCevSessionCheck(target.sessionId, "slot_found");
@@ -590,7 +635,13 @@ export async function startCevStealthLoop(): Promise<void> {
         const poolStats = ipPool.getStats();
         const uptimeMin = Math.round((Date.now() - state.startedAt) / 60_000);
         const checksPerHour = uptimeMin > 0 ? Math.round(state.totalChecks / (uptimeMin / 60)) : 0;
+        const captchaPct = Math.round((state.estimatedCaptchaCost / BUDGET_MAX_CAPTCHA_USD) * 100);
+        const proxyPct = Math.round((state.estimatedProxyMB / BUDGET_MAX_PROXY_MB) * 100);
+        const remainingHours = uptimeMin > 0 
+          ? Math.round(((BUDGET_MAX_CAPTCHA_USD - state.estimatedCaptchaCost) / (state.estimatedCaptchaCost / (uptimeMin / 60))) * 10) / 10
+          : 48;
         log("INFO", `  📊 Stats: ${state.totalChecks} checks en ${uptimeMin} min (${checksPerHour}/h) | Pool: ${poolStats.available}/${poolStats.total} dispo, ${poolStats.rateLimited} cooldown | Slots: ${state.slotsFound}`);
+        log("INFO", `  💰 Budget: captcha $${state.estimatedCaptchaCost.toFixed(2)}/$${BUDGET_MAX_CAPTCHA_USD} (${captchaPct}%) | proxy ${Math.round(state.estimatedProxyMB)}/${BUDGET_MAX_PROXY_MB} MB (${proxyPct}%) | ETA restant: ~${remainingHours}h`);
         botLog({
           applicationId: target.applicationId,
           step: "cev_stealth_v2_stats",
@@ -604,6 +655,11 @@ export async function startCevStealthLoop(): Promise<void> {
             poolAvailable: poolStats.available,
             poolTotal: poolStats.total,
             poolRateLimited: poolStats.rateLimited,
+            budgetCaptchaUsed: state.estimatedCaptchaCost,
+            budgetCaptchaMax: BUDGET_MAX_CAPTCHA_USD,
+            budgetProxyUsedMB: state.estimatedProxyMB,
+            budgetProxyMaxMB: BUDGET_MAX_PROXY_MB,
+            estimatedRemainingHours: remainingHours,
           },
         });
       }
