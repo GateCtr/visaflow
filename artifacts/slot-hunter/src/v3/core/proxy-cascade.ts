@@ -1,5 +1,5 @@
 /**
- * Proxy Cascade V3 — 3-way failover + budget protection.
+ * Proxy Cascade V3 — 4-way failover + budget protection.
  *
  * RESPONSABILITÉ UNIQUE :
  *   Résoudre un proxy fonctionnel en testant chaque provider dans l'ordre configuré.
@@ -11,11 +11,12 @@
  *
  * ORDRE PAR DÉFAUT :
  *   1. iProyal (sticky résidentiel, 12h)
- *   2. BrightData (sticky résidentiel, keep-alive)
- *   3. 2captcha gateway (eu.proxy.2captcha.com, sticky 1h)
+ *   2. SOAX (sticky résidentiel, 10h, ciblage ville)
+ *   3. BrightData (sticky résidentiel, keep-alive)
+ *   4. 2captcha gateway (eu.proxy.2captcha.com, sticky 1h)
  *
  * ADMIN-PILOTABLE :
- *   bot-config Convex clé "proxy_priority" → ex: "2captcha,iproyal,brightdata"
+ *   bot-config Convex clé "proxy_priority" → ex: "soax,iproyal,brightdata,2captcha"
  *   hunterConfig.preferredProxy → override par dossier
  *
  * USAGE :
@@ -33,7 +34,7 @@ export interface ProxyResolution {
   /** URL du proxy fonctionnel (prête pour setUsaSessionProxy). */
   url: string;
   /** Provider qui a répondu. */
-  provider: "iproyal" | "brightdata" | "2captcha";
+  provider: "iproyal" | "brightdata" | "2captcha" | "soax";
   /** Latence du pre-flight check (ms). */
   latencyMs: number;
   /** IP de sortie détectée. */
@@ -46,8 +47,8 @@ export interface ProxyCascadeConfig {
   username: string;
   /** Job ID (pour les logs). */
   jobId: string;
-  /** Ordre de priorité (si absent → défaut iproyal → brightdata → 2captcha). */
-  priority?: string[]; // ["iproyal", "brightdata", "2captcha"]
+  /** Ordre de priorité (si absent → défaut iproyal → soax → brightdata → 2captcha). */
+  priority?: string[]; // ["iproyal", "soax", "brightdata", "2captcha"]
   /** Pre-flight URL pour tester le proxy (défaut: api.ipify.org). */
   preFlightUrl?: string;
   /** Timeout pre-flight (ms). Défaut: 10s. */
@@ -56,7 +57,7 @@ export interface ProxyCascadeConfig {
 
 /** Provider abstrait (chaque implémentation sait construire son URL). */
 export interface ProxyProvider {
-  name: "iproyal" | "brightdata" | "2captcha";
+  name: "iproyal" | "brightdata" | "2captcha" | "soax";
   /** Le provider est-il configuré (env vars présentes) ? */
   isConfigured(): boolean;
   /** Construit l'URL sticky pour ce compte. */
@@ -117,7 +118,40 @@ const twocaptchaProvider: ProxyProvider = {
   },
 };
 
-const ALL_PROVIDERS: ProxyProvider[] = [iproyalProvider, brightdataProvider, twocaptchaProvider];
+const soaxProvider: ProxyProvider = {
+  name: "soax",
+  isConfigured: () => !!process.env.SOAX_PROXY_URL,
+  buildStickyUrl: (username: string) => {
+    const base = process.env.SOAX_PROXY_URL;
+    if (!base) return null;
+    const hash = simpleHash(`${username}:${new Date().toISOString().slice(0, 10)}`);
+    const country = process.env.SOAX_COUNTRY ?? "cd";
+    const city = process.env.SOAX_CITY ?? "kinshasa";
+    const sesstime = process.env.SOAX_SESSION_TIME ?? "600";
+    try {
+      const parsed = new URL(base.startsWith("http") ? base : `http://${base}`);
+      let password = decodeURIComponent(parsed.password);
+      // Nettoyer les anciens paramètres SOAX si présents
+      password = password
+        .replace(/;country-[^;]*/g, "")
+        .replace(/;city-[^;]*/g, "")
+        .replace(/;sessid-[^;]*/g, "")
+        .replace(/;sesstime-[^;]*/g, "")
+        .replace(/;+$/, "");
+      // Ajouter les paramètres sticky
+      password += `;country-${country}`;
+      if (city) password += `;city-${city}`;
+      password += `;sessid-${hash}`;
+      password += `;sesstime-${sesstime}`;
+      parsed.password = encodeURIComponent(password);
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  },
+};
+
+const ALL_PROVIDERS: ProxyProvider[] = [iproyalProvider, soaxProvider, brightdataProvider, twocaptchaProvider];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -164,7 +198,7 @@ export async function resolveProxy(config: ProxyCascadeConfig): Promise<ProxyRes
   const timeoutMs = config.preFlightTimeoutMs ?? 10_000;
 
   // Déterminer l'ordre des providers
-  const order = config.priority ?? ["iproyal", "brightdata", "2captcha"];
+  const order = config.priority ?? ["iproyal", "soax", "brightdata", "2captcha"];
   const providers = order
     .map(name => ALL_PROVIDERS.find(p => p.name === name))
     .filter((p): p is ProxyProvider => p !== undefined && p.isConfigured());
@@ -205,13 +239,13 @@ export async function resolveProxy(config: ProxyCascadeConfig): Promise<ProxyRes
 
 /**
  * Parse l'ordre de priorité proxy depuis une string bot-config Convex.
- * Format: "2captcha,iproyal,brightdata" ou "iproyal" ou "brightdata,2captcha"
+ * Format: "soax,iproyal,brightdata,2captcha" ou "soax" ou "brightdata,2captcha"
  * Retourne null si invalide (l'appelant utilise l'ordre par défaut).
  */
 export function parseProxyPriority(value: string | null): string[] | null {
   if (!value || !value.trim()) return null;
   const order = value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-  const valid = ["iproyal", "brightdata", "2captcha"];
+  const valid = ["iproyal", "brightdata", "2captcha", "soax"];
   const filtered = order.filter(o => valid.includes(o));
   return filtered.length > 0 ? filtered : null;
 }

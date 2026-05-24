@@ -10,6 +10,7 @@ playwrightChromium.use(StealthPlugin());
 const PROXY_URL          = process.env.PROXY_URL;
 const IPROYAL_PROXY_URL  = process.env.IPROYAL_PROXY_URL;
 const BRIGHTDATA_PROXY_URL = process.env.BRIGHTDATA_PROXY_URL;
+const SOAX_PROXY_URL     = process.env.SOAX_PROXY_URL;
 const DRY_RUN = process.env.DRY_RUN === "true";
 
 // ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
@@ -90,10 +91,11 @@ export interface BrowserOverrides {
    * Forcer un proxy spécifique par nom :
    *   "brightdata" → BRIGHTDATA_PROXY_URL  (portail belge CEV — priorité 1)
    *   "iproyal"    → IPROYAL_PROXY_URL     (portail Espagne — priorité 2)
+   *   "soax"       → SOAX_PROXY_URL        (résidentiel 191M IPs, ciblage ville)
    *   "2captcha"   → proxy résidentiel rotatif 2captcha (IP propre, bypass CF)
    *   "auto"       → sélection automatique (défaut)
    */
-  proxySource?: "brightdata" | "iproyal" | "2captcha" | "auto";
+  proxySource?: "brightdata" | "iproyal" | "soax" | "2captcha" | "auto";
   /** Mode headless (true par défaut) */
   headless?: boolean;
 }
@@ -114,14 +116,18 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
       proxyAddress = BRIGHTDATA_PROXY_URL;
     } else if (proxySource === "iproyal" && IPROYAL_PROXY_URL) {
       proxyAddress = IPROYAL_PROXY_URL;
+    } else if (proxySource === "soax" && SOAX_PROXY_URL) {
+      proxyAddress = SOAX_PROXY_URL;
     } else if (proxySource === "2captcha" && proxyPool.isConfigured) {
       const poolResult = await proxyPool.getProxy();
       proxyAddress = poolResult?.proxy ?? PROXY_URL;
     } else {
-      // auto : 2captcha (priorité USA — IPs stables 30 min) → iProyal → PROXY_URL statique
+      // auto : 2captcha (priorité USA — IPs stables 30 min) → SOAX → iProyal → PROXY_URL statique
       if (proxyPool.isConfigured) {
         const poolResult = await proxyPool.getProxy();
-        proxyAddress = poolResult?.proxy ?? IPROYAL_PROXY_URL ?? PROXY_URL;
+        proxyAddress = poolResult?.proxy ?? SOAX_PROXY_URL ?? IPROYAL_PROXY_URL ?? PROXY_URL;
+      } else if (SOAX_PROXY_URL) {
+        proxyAddress = SOAX_PROXY_URL;
       } else if (IPROYAL_PROXY_URL) {
         proxyAddress = IPROYAL_PROXY_URL;
       } else {
