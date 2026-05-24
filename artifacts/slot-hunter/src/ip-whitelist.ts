@@ -299,6 +299,7 @@ export interface WhitelistResult {
   ip: string;
   iproyal: { ok: boolean; message: string };
   brightdata: { ok: boolean; message: string };
+  soax: { ok: boolean; message: string };
   twocaptcha: { ok: boolean; message: string };
 }
 
@@ -311,6 +312,7 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     ip: serverIp,
     iproyal: { ok: false, message: "non configuré" },
     brightdata: { ok: false, message: "non configuré" },
+    soax: { ok: false, message: "non configuré" },
     twocaptcha: { ok: false, message: "non configuré" },
   };
 
@@ -392,6 +394,23 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     console.log(`[ip-whitelist] ✅ 2Captcha: Mode gateway — whitelist IP non requise (auth credentials)`);
   } else {
     result.twocaptcha = { ok: false, message: "TWOCAPTCHA_API_KEY absent" };
+  }
+
+  // ── SOAX ───────────────────────────────────────────────────────────────────
+  // SOAX utilise l'authentification par user:pass (comme 2Captcha gateway).
+  // Pas de whitelist IP nécessaire — auth par credentials dans l'URL proxy.
+  // On vérifie simplement que SOAX_PROXY_URL est configurée.
+  const soaxProxyUrl = process.env.SOAX_PROXY_URL;
+
+  if (soaxProxyUrl) {
+    result.soax = {
+      ok: true,
+      message: `Auth user:pass ✅ — proxy.soax.com:9000 (whitelist IP NON requise)`,
+    };
+    console.log(`[ip-whitelist] ✅ SOAX: Auth par credentials — whitelist IP non requise`);
+  } else {
+    result.soax = { ok: false, message: "SOAX_PROXY_URL absent" };
+    console.log(`[ip-whitelist] ⚠️ SOAX: non configuré (SOAX_PROXY_URL absent)`);
   }
 
   return result;
