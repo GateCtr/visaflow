@@ -594,8 +594,8 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Pool Dossier v3 Panel ────────────────────────────────────────────────────
-function DossierPoolPanel() {
+// ─── Pool Dossier v3 Modal ────────────────────────────────────────────────────
+function DossierPoolModal({ onClose }: { onClose: () => void }) {
   const allConfigs = useQuery(api.hunter.listBotConfig);
   const setBotConfig = useMutation(api.hunter.setBotConfig);
   const [poolInput, setPoolInput] = useState("");
@@ -625,79 +625,98 @@ function DossierPoolPanel() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
-            <RotateCcw className="w-4 h-4 text-violet-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-violet-600" />
+            <h2 className="text-lg font-semibold text-slate-900">Pool Dossier v3</h2>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Pool Dossier v3</h3>
-            <p className="text-xs text-slate-500">Round-robin multi-dossiers — 1 IP, N compteurs séparés</p>
-          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
         </div>
-        <button
-          onClick={toggleMode}
-          disabled={saving}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            isEnabled ? "bg-violet-600" : "bg-slate-300"
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              isEnabled ? "translate-x-6" : "translate-x-1"
-            }`}
-          />
-        </button>
-      </div>
 
-      {isEnabled && (
-        <div className="space-y-4 pt-3 border-t border-slate-100">
-          <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
-            <p className="font-medium mb-1">Fonctionnement :</p>
-            <p>{dossiers.length} dossier{dossiers.length !== 1 ? "s" : ""} × 4 clics/h = {dossiers.length * 4} scans/h = 1 scan toutes les ~{effectiveInterval}s</p>
-            <p className="mt-1 text-violet-600">Chaque dossier a son propre compteur de rate-limit côté serveur.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Dossiers VOWINT <span className="text-slate-400 font-normal">(séparés par virgule)</span>
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={poolInput || currentPool}
-                onChange={(e) => setPoolInput(e.target.value)}
-                placeholder="VOWINT6085888,VOWINT6085889,VOWINT6085890"
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+        <div className="p-5 space-y-5">
+          {/* Toggle activation */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-800">Activer le mode Pool Dossier</p>
+              <p className="text-xs text-slate-500">Round-robin multi-dossiers — 1 IP, N compteurs séparés</p>
+            </div>
+            <button
+              onClick={toggleMode}
+              disabled={saving}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isEnabled ? "bg-violet-600" : "bg-slate-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
               />
-              <button
-                onClick={savePool}
-                disabled={saving || (!poolInput && !currentPool)}
-                className="px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 text-xs font-medium"
-              >
-                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Sauver"}
-              </button>
-            </div>
+            </button>
           </div>
 
-          {dossiers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {dossiers.map((d: string, i: number) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-700">
-                  <span className="w-4 h-4 bg-violet-200 rounded-full flex items-center justify-center text-[10px] font-bold text-violet-700">{i + 1}</span>
-                  {d}
-                </span>
-              ))}
-            </div>
+          {isEnabled && (
+            <>
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 text-xs text-violet-800">
+                <p className="font-medium mb-1">Fonctionnement :</p>
+                <p>{dossiers.length} dossier{dossiers.length !== 1 ? "s" : ""} × 4 clics/h = {dossiers.length * 4} scans/h = 1 scan toutes les ~{effectiveInterval}s</p>
+                <p className="mt-2 text-violet-600">Chaque dossier a son propre compteur de rate-limit côté serveur.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Dossiers VOWINT <span className="text-slate-400 font-normal">(séparés par virgule)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={poolInput || currentPool}
+                    onChange={(e) => setPoolInput(e.target.value)}
+                    placeholder="VOWINT6085888,VOWINT6085889,VOWINT6085890"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={savePool}
+                    disabled={saving || (!poolInput && !currentPool)}
+                    className="px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 text-xs font-medium"
+                  >
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Sauver"}
+                  </button>
+                </div>
+              </div>
+
+              {dossiers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {dossiers.map((d: string, i: number) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-700">
+                      <span className="w-4 h-4 bg-violet-200 rounded-full flex items-center justify-center text-[10px] font-bold text-violet-700">{i + 1}</span>
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Clock className="w-3 h-3" />
+                <span>Intervalle : {effectiveInterval}s {intervalSec === "0" ? "(auto-calculé)" : "(manuel)"}</span>
+              </div>
+            </>
           )}
-
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Clock className="w-3 h-3" />
-            <span>Intervalle : {effectiveInterval}s {intervalSec === "0" ? "(auto-calculé)" : "(manuel)"}</span>
-          </div>
         </div>
-      )}
+
+        <div className="flex justify-end p-5 border-t border-slate-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -709,6 +728,7 @@ export default function CevSessions() {
   const deleteSession = useMutation(api.cevSessions.deleteSession);
 
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showPoolModal, setShowPoolModal] = useState(false);
   const [resetSession, setResetSession] = useState<ResetSession | null>(null);
   const [restartSessionId, setRestartSessionId] = useState<Id<"cevSessions"> | null>(null);
   const [deleteSessionId, setDeleteSessionId] = useState<Id<"cevSessions"> | null>(null);
@@ -744,16 +764,21 @@ export default function CevSessions() {
             Connexion autonome VOWINT + polling automatique — zéro intervention manuelle.
           </p>
         </div>
-        <button
-          onClick={() => setShowNewModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" /> Nouvelle session
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPoolModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 text-violet-700 hover:bg-violet-50 text-sm font-medium"
+          >
+            <RotateCcw className="w-4 h-4" /> Pool Dossier v3
+          </button>
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" /> Nouvelle session
+          </button>
+        </div>
       </div>
-
-      {/* Pool Dossier v3 — Round-robin multi-dossiers */}
-      <DossierPoolPanel />
 
       {sessions === undefined ? (
         <div className="flex items-center justify-center py-20">
@@ -957,6 +982,7 @@ export default function CevSessions() {
       )}
 
       {showNewModal && <NewSessionModal onClose={() => setShowNewModal(false)} />}
+      {showPoolModal && <DossierPoolModal onClose={() => setShowPoolModal(false)} />}
       {resetSession && (
         <ResetCredentialsModal
           session={resetSession}
