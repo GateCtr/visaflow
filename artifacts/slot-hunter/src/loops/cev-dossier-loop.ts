@@ -51,9 +51,13 @@ import {
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 4; // Marge sécurité (limite serveur = 5)
+const MAX_CLICKS_PER_SESSION = 4; // Limite GLOBALE par session VOWINT (serveur bloque au 5ème)
+const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 4; // Garde pour le calcul d'intervalle
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
 const DEFAULT_INTERVAL_SEC = 30; // Pause par défaut entre scans
+
+// Compteur GLOBAL de clics sur la session VOWINT courante
+let globalSessionClicks = 0;
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
@@ -286,6 +290,7 @@ async function performScan(
 
     // Clic réussi — enregistrer
     pool.recordClick(dossier);
+    globalSessionClicks++;
 
     if (result.slotsAvailable) {
       return {
@@ -639,6 +644,12 @@ export async function startCevDossierLoop(): Promise<void> {
       switch (result.status) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
+          // Re-login préventif si on atteint la limite (avant le booking)
+          if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
+            log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
+            invalidateVowintCache(vowintEmail!);
+            globalSessionClicks = 0;
+          }
           await handleSlotFound(
             vowintEmail!, vowintPassword!, dossier, logApplicationId,
             result.sessionCookie, result.integrationUrl,
@@ -646,10 +657,18 @@ export async function startCevDossierLoop(): Promise<void> {
           break;
         case "rate_limited":
           state.rateLimits++;
+          // Le rate-limit vient du serveur → session grillée, reset le compteur
+          globalSessionClicks = 0;
           log("WARN", `  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
           break;
         case "no_slot":
           log("INFO", `  — Pas de créneau`);
+          // Re-login préventif après MAX_CLICKS_PER_SESSION clics GLOBAUX
+          if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
+            log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
+            invalidateVowintCache(vowintEmail!);
+            globalSessionClicks = 0;
+          }
           break;
         case "error":
           state.errors++;
