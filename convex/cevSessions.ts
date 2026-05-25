@@ -634,6 +634,7 @@ export const internalGetCredentials = internalQuery({
           vowintPassword: s.vowintPassword,
           vowintAppUrl: s.vowintAppUrl,
           sessionId: s._id,
+          applicationId: s.applicationId,
           status: s.status,
         };
       }

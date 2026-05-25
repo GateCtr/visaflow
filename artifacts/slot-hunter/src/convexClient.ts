@@ -434,6 +434,7 @@ export interface CevCredentials {
   vowintPassword: string;
   vowintAppUrl?: string;
   sessionId: string;
+  applicationId: string;
   status: string;
 }
 

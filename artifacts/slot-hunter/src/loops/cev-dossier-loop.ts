@@ -390,6 +390,8 @@ export async function startCevDossierLoop(): Promise<void> {
   const creds = await getCevCredentials();
   let vowintEmail = creds?.vowintEmail;
   let vowintPassword = creds?.vowintPassword;
+  // applicationId pour les botLogs — celui de l'application Convex associée à la session CEV
+  const logApplicationId = creds?.applicationId ?? "cev-dossier-v3";
 
   if (!vowintEmail || !vowintPassword) {
     // Fallback: sessions actives (peut être lockée mais on tente)
@@ -468,13 +470,13 @@ export async function startCevDossierLoop(): Promise<void> {
         vowintEmail!,
         vowintPassword!,
         dossier,
-        "cev-dossier-v3",
+        logApplicationId,
       );
 
       switch (result) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
-          await handleSlotFound(vowintEmail!, vowintPassword!, dossier, "cev-dossier-v3");
+          await handleSlotFound(vowintEmail!, vowintPassword!, dossier, logApplicationId);
           break;
         case "rate_limited":
           state.rateLimits++;
@@ -495,7 +497,7 @@ export async function startCevDossierLoop(): Promise<void> {
         const poolStats = pool.getStats();
         log("INFO", `📊 Stats: ${state.scanCount} scans en ${uptimeMin}min (${scansPerHour}/h) | Slots: ${state.slotsFound} | RL: ${state.rateLimits} | Pool: ${poolStats.available}/${poolStats.total}`);
         botLog({
-          applicationId: "cev-dossier-v3",
+          applicationId: logApplicationId,
           step: "cev_dossier_v3_stats",
           status: "ok",
           data: { scanCount: state.scanCount, slotsFound: state.slotsFound, rateLimits: state.rateLimits, scansPerHour, uptimeMin },
