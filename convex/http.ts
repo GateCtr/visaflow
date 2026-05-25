@@ -143,6 +143,30 @@ http.route({
   }),
 });
 
+// ─── CEV Credentials: lecture des identifiants VOWINT SANS lock ──────────────
+// Utilisé par le dossier-loop pour obtenir les credentials sans claimer/locker
+// la session. Retourne le premier couple vowintEmail/vowintPassword trouvé.
+http.route({
+  path: "/hunter/cev-credentials",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+    try {
+      const creds = await ctx.runQuery(internal.cevSessions.internalGetCredentials);
+      return new Response(JSON.stringify(creds), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // ─── CEV Sessions: liste active pour le bot polling ─────────────────────────
 http.route({
   path: "/hunter/cev-sessions",
