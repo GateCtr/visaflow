@@ -600,7 +600,18 @@ export async function startCevDossierLoop(): Promise<void> {
       // Scan
       state.scanCount++;
       const stats = pool.getStats();
-      const clicsRestants = (pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR) - (stats.totalScans % (pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR));
+
+      // ─── Intervalle DYNAMIQUE basé sur les dossiers réellement actifs ──────
+      // Si des dossiers sont rate-limités/pausés, les restants doivent espacer
+      // leurs clics pour ne pas dépasser 4/h chacun.
+      // Formula: 3600s / (dossiers_actifs × 4 clics/h) = intervalle minimum
+      const activeDossiers = stats.available - pausedDossiers.size;
+      const dynamicIntervalMs = activeDossiers > 0
+        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) * 1000)
+        : intervalMs;
+      // Utiliser le max entre l'intervalle configuré et le dynamique
+      const effectiveIntervalMs = Math.max(intervalMs, dynamicIntervalMs);
+
       log("INFO", `[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
 
       const result = await performScan(
@@ -662,10 +673,10 @@ export async function startCevDossierLoop(): Promise<void> {
       // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
       syncPoolStateToRedis(pool.exportState());
 
-      // Pause entre les scans
+      // Pause entre les scans (intervalle dynamique)
       // Ajouter un jitter de ±20% pour paraître humain
-      const jitter = intervalMs * 0.2 * (Math.random() * 2 - 1);
-      await sleep(intervalMs + jitter);
+      const jitter = effectiveIntervalMs * 0.2 * (Math.random() * 2 - 1);
+      await sleep(effectiveIntervalMs + jitter);
 
     } catch (loopErr) {
       log("ERROR", `Erreur loop: ${loopErr}`);
