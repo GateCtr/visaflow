@@ -43,8 +43,12 @@ interface VowintSessionCache {
 }
 const vowintSessionCache = new Map<string, VowintSessionCache>();
 
-// Durée max avant de forcer un re-login (30 min — session VOWINT expire après ~20-30 min d'inactivité)
-const VOWINT_SESSION_MAX_AGE_MS = 25 * 60_000;
+// Durée max avant de forcer un re-login préventif.
+// La session VOWINT persiste plusieurs jours côté serveur.
+// On ne force le re-login que si le serveur retourne 302→login (détecté dynamiquement).
+// Ce timeout est un filet de sécurité (24h) — en pratique le cache est invalidé
+// par invalidateVowintCache() quand une requête détecte une session morte.
+const VOWINT_SESSION_MAX_AGE_MS = 24 * 60 * 60_000; // 24h (session persiste des jours)
 
 export interface CevHttpSetupResult {
   success: boolean;
