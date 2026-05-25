@@ -385,14 +385,25 @@ export async function startCevDossierLoop(): Promise<void> {
     log("WARN", `  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
   }
 
-  // Récupérer les credentials depuis les sessions CEV actives
-  const allSessions = await getActiveCevSessions();
-  const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
-  let vowintEmail = target?.vowintEmail;
-  let vowintPassword = target?.vowintPassword;
+  // Récupérer les credentials VOWINT — 3 sources possibles :
+  //   1. bot-config (cev_vowint_email / cev_vowint_password) — prioritaire, pas de lock
+  //   2. Sessions CEV actives (via /hunter/cev-sessions) — peut être lockée
+  //   3. Sessions needs_setup (via /hunter/cev-sessions/needs-setup) — lock 13min
+  let vowintEmail: string | undefined | null = await getBotConfigValue("cev_vowint_email");
+  let vowintPassword: string | undefined | null = await getBotConfigValue("cev_vowint_password");
 
   if (!vowintEmail || !vowintPassword) {
-    // Fallback: chercher dans les sessions en needs_setup
+    // Fallback 2: sessions actives
+    const allSessions = await getActiveCevSessions();
+    const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
+    if (target) {
+      vowintEmail = target.vowintEmail;
+      vowintPassword = target.vowintPassword;
+    }
+  }
+
+  if (!vowintEmail || !vowintPassword) {
+    // Fallback 3: sessions needs_setup
     const pendingSetups = await getPendingCevSetups();
     const pending = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
     if (pending) {
@@ -402,9 +413,15 @@ export async function startCevDossierLoop(): Promise<void> {
   }
 
   if (!vowintEmail || !vowintPassword) {
-    log("ERROR", "Aucun compte VOWINT configuré — attente session avec credentials...");
+    log("ERROR", "Aucun compte VOWINT configuré — configurer bot-config: cev_vowint_email + cev_vowint_password");
+    log("ERROR", "Attente credentials...");
     while (true) {
       await sleep(30_000);
+      // Re-check bot-config first (no lock issues)
+      vowintEmail = await getBotConfigValue("cev_vowint_email");
+      vowintPassword = await getBotConfigValue("cev_vowint_password");
+      if (vowintEmail && vowintPassword) break;
+      // Then sessions
       const sessions = await getActiveCevSessions();
       const t = sessions.find((s: any) => s.vowintEmail && s.vowintPassword);
       if (t) { vowintEmail = t.vowintEmail; vowintPassword = t.vowintPassword; break; }
