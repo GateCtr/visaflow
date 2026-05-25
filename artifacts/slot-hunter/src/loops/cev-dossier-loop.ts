@@ -58,6 +58,8 @@ const DEFAULT_INTERVAL_SEC = 30; // Pause par défaut entre scans
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
 interface DossierSlot {
+  /** Index dans le pool (0-based) */
+  index: number;
   /** Numéro VOWINT (ex: "VOWINT6085888") */
   vowintRef: string;
   /** Timestamps des clics GetEAppointmentUrl effectués */
@@ -74,7 +76,8 @@ class CevDossierPool {
 
   /** Initialise le pool avec les numéros VOWINT */
   initialize(vowintRefs: string[]): void {
-    this.slots = vowintRefs.map(ref => ({
+    this.slots = vowintRefs.map((ref, i) => ({
+      index: i,
       vowintRef: ref.trim().toUpperCase(),
       clickTimestamps: [],
       totalScans: 0,
@@ -103,6 +106,13 @@ class CevDossierPool {
         this.currentIndex = (idx + 1) % this.slots.length;
         return slot;
       }
+
+      // Dossier épuisé — loguer le skip
+      if (attempts === 0 || this.slots.length <= 3) {
+        const oldestClick = slot.clickTimestamps[0];
+        const availableInMin = Math.ceil((oldestClick + CLICK_WINDOW_MS - now) / 60_000);
+        log("INFO", `  ⏭️ #${slot.index} ${slot.vowintRef} épuisé (${slot.clickTimestamps.length}/${MAX_CLICKS_PER_DOSSIER_PER_HOUR}) — dispo dans ${availableInMin}min`);
+      }
     }
 
     return null; // Tous les dossiers sont épuisés
@@ -122,7 +132,7 @@ class CevDossierPool {
       slot.clickTimestamps.push(now);
     }
     slot.rateLimitCount++;
-    log("WARN", `Dossier ${slot.vowintRef} rate-limité (${slot.rateLimitCount}x)`);
+    log("WARN", `Dossier #${slot.index} ${slot.vowintRef} rate-limité (${slot.rateLimitCount}x)`);
   }
 
   /** Temps d'attente avant qu'un dossier soit disponible */
@@ -297,7 +307,7 @@ async function handleSlotFound(
   dossier: DossierSlot,
   applicationId: string,
 ): Promise<void> {
-  log("INFO", `🚨 SLOT DÉTECTÉ sur dossier ${dossier.vowintRef} — BOOKING IMMÉDIAT`);
+  log("INFO", `🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — BOOKING IMMÉDIAT`);
   state.slotsFound++;
 
   botLog({
@@ -516,7 +526,7 @@ export async function startCevDossierLoop(): Promise<void> {
       state.scanCount++;
       const stats = pool.getStats();
       const clicsRestants = (pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR) - (stats.totalScans % (pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR));
-      log("INFO", `[Scan #${state.scanCount}] Dossier: ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
+      log("INFO", `[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
 
       const result = await performScan(
         vowintEmail!,
@@ -531,7 +541,8 @@ export async function startCevDossierLoop(): Promise<void> {
         step: "cev_dossier_scan",
         status: result === "error" || result === "rate_limited" ? "warn" : "ok",
         data: {
-          dossier: dossier.vowintRef,
+          dossierIndex: dossier.index,
+          dossier: `#${dossier.index} ${dossier.vowintRef}`,
           result,
           scanNumber: state.scanCount,
           poolAvailable: stats.available,
@@ -546,7 +557,7 @@ export async function startCevDossierLoop(): Promise<void> {
           break;
         case "rate_limited":
           state.rateLimits++;
-          log("WARN", `  ⚡ Rate-limit sur ${dossier.vowintRef} — rotation vers prochain dossier`);
+          log("WARN", `  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
           break;
         case "no_slot":
           log("INFO", `  — Pas de créneau`);
