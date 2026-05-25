@@ -1,4 +1,4 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
@@ -609,5 +609,36 @@ export const internalRecordCheck = internalMutation({
         }
       }
     }
+  },
+});
+
+
+
+// ─── INTERNAL: lecture des credentials VOWINT SANS lock ──────────────────────
+// Utilisé par le dossier-loop pour obtenir les identifiants VOWINT sans
+// poser de lock ni vérifier les conditions de timing/rate-limit.
+// Retourne le premier couple vowintEmail/vowintPassword trouvé parmi
+// toutes les sessions CEV (tous statuts sauf expired).
+export const internalGetCredentials = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const allSessions = await ctx.db
+      .query("cevSessions")
+      .collect();
+
+    for (const s of allSessions) {
+      if (s.status === "expired") continue;
+      if (s.vowintEmail && s.vowintPassword) {
+        return {
+          vowintEmail: s.vowintEmail,
+          vowintPassword: s.vowintPassword,
+          vowintAppUrl: s.vowintAppUrl,
+          sessionId: s._id,
+          status: s.status,
+        };
+      }
+    }
+
+    return null;
   },
 });

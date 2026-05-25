@@ -425,6 +425,37 @@ export async function getPendingCevSetups(): Promise<CevSetupTask[]> {
 }
 
 /**
+ * Lecture des credentials VOWINT SANS lock ni conditions de timing.
+ * Retourne le premier couple vowintEmail/vowintPassword trouvé dans les sessions CEV.
+ * Utilisé par le dossier-loop qui a juste besoin des credentials, pas de claimer une session.
+ */
+export interface CevCredentials {
+  vowintEmail: string;
+  vowintPassword: string;
+  vowintAppUrl?: string;
+  sessionId: string;
+  status: string;
+}
+
+export async function getCevCredentials(): Promise<CevCredentials | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-credentials`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) {
+      console.warn(`[convexClient] getCevCredentials failed: ${res.status}`);
+      return null;
+    }
+    return (await res.json()) as CevCredentials | null;
+  } catch (err) {
+    console.warn("[convexClient] getCevCredentials error:", err);
+    return null;
+  }
+}
+
+/**
  * Enregistre un échec de login VOWINT lors du setup d'une session CEV.
  * Incrémente loginFailCount dans Convex (persisté — survie aux redémarrages Railway).
  * Retourne { loginFailCount, paused: true } quand la session est auto-pausée (≥ 3 échecs).
