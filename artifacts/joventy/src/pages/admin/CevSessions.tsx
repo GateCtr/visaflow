@@ -399,6 +399,8 @@ function ResetCredentialsModal({
 function NewSessionModal({ onClose }: { onClose: () => void }) {
   const apps = useQuery(api.applications.list, {});
   const upsert = useMutation(api.cevSessions.upsertSession);
+  const allConfigs = useQuery(api.hunter.listBotConfig);
+  const setBotConfig = useMutation(api.hunter.setBotConfig);
 
   const cevApps = (apps ?? []).filter(
     (a: { destination: string }) => a.destination === "schengen"
@@ -410,8 +412,13 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   const [vowintAppUrl, setVowintAppUrl] = useState("");
   const [pollMs, setPollMs] = useState(30_000);
   const [notes, setNotes] = useState("");
+  const [addToPool, setAddToPool] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const currentPool = allConfigs?.find((c: any) => c.key === "cev_dossier_pool")?.value ?? "";
+  const isDossierModeOn = allConfigs?.find((c: any) => c.key === "cev_dossier_mode")?.value === "1";
+  const poolDossiers = currentPool ? currentPool.split(",").map((d: string) => d.trim()).filter(Boolean) : [];
 
   const canSubmit = !!applicationId && !!vowintEmail.trim() && !!vowintPassword.trim();
 
@@ -430,6 +437,20 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
         notes: notes.trim() || undefined,
         pollIntervalMs: pollMs,
       });
+
+      // Ajouter au pool dossier v3 si coché
+      if (addToPool && vowintAppUrl.trim()) {
+        const vowintRef = vowintAppUrl.trim().toUpperCase();
+        if (!poolDossiers.includes(vowintRef)) {
+          const newPool = [...poolDossiers, vowintRef].join(",");
+          await setBotConfig({ key: "cev_dossier_pool", value: newPool });
+          // Activer le mode dossier si pas encore actif
+          if (!isDossierModeOn) {
+            await setBotConfig({ key: "cev_dossier_mode", value: "1" });
+          }
+        }
+      }
+
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
@@ -565,6 +586,42 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
+          {/* Pool Dossier v3 */}
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addToPool}
+                onChange={(e) => setAddToPool(e.target.checked)}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-violet-900">Ajouter au Pool Dossier v3</span>
+                <p className="text-xs text-violet-700 mt-0.5">
+                  Round-robin multi-dossiers — scan automatique avec les autres dossiers du pool.
+                </p>
+              </div>
+            </label>
+            {addToPool && poolDossiers.length > 0 && (
+              <div className="pt-2 border-t border-violet-200">
+                <p className="text-xs text-violet-600 mb-1">
+                  {poolDossiers.length} dossier{poolDossiers.length !== 1 ? "s" : ""} actuellement dans le pool :
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {poolDossiers.map((d, i) => (
+                    <span key={i} className="px-1.5 py-0.5 bg-violet-100 rounded text-[10px] font-mono text-violet-700">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {addToPool && !vowintAppUrl.trim() && (
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Remplis le champ "URL dossier VOWINT" ci-dessus pour l'ajouter au pool.
+              </p>
+            )}
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-800">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -594,133 +651,6 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Pool Dossier v3 Modal ────────────────────────────────────────────────────
-function DossierPoolModal({ onClose }: { onClose: () => void }) {
-  const allConfigs = useQuery(api.hunter.listBotConfig);
-  const setBotConfig = useMutation(api.hunter.setBotConfig);
-  const [poolInput, setPoolInput] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const isEnabled = allConfigs?.find((c: any) => c.key === "cev_dossier_mode")?.value === "1";
-  const currentPool = allConfigs?.find((c: any) => c.key === "cev_dossier_pool")?.value ?? "";
-  const intervalSec = allConfigs?.find((c: any) => c.key === "cev_dossier_interval_sec")?.value ?? "0";
-
-  const dossiers = currentPool ? currentPool.split(",").map((d: string) => d.trim()).filter(Boolean) : [];
-  const autoInterval = dossiers.length > 0 ? Math.round(3600 / (dossiers.length * 4)) : 0;
-  const effectiveInterval = intervalSec === "0" ? autoInterval : parseInt(intervalSec);
-
-  // Sync input with saved value
-  useState(() => { setPoolInput(currentPool); });
-
-  const toggleMode = async () => {
-    setSaving(true);
-    await setBotConfig({ key: "cev_dossier_mode", value: isEnabled ? "0" : "1" });
-    setSaving(false);
-  };
-
-  const savePool = async () => {
-    setSaving(true);
-    await setBotConfig({ key: "cev_dossier_pool", value: poolInput.trim() });
-    setSaving(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <RotateCcw className="w-5 h-5 text-violet-600" />
-            <h2 className="text-lg font-semibold text-slate-900">Pool Dossier v3</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-5">
-          {/* Toggle activation */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-800">Activer le mode Pool Dossier</p>
-              <p className="text-xs text-slate-500">Round-robin multi-dossiers — 1 IP, N compteurs séparés</p>
-            </div>
-            <button
-              onClick={toggleMode}
-              disabled={saving}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isEnabled ? "bg-violet-600" : "bg-slate-300"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isEnabled ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {isEnabled && (
-            <>
-              <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 text-xs text-violet-800">
-                <p className="font-medium mb-1">Fonctionnement :</p>
-                <p>{dossiers.length} dossier{dossiers.length !== 1 ? "s" : ""} × 4 clics/h = {dossiers.length * 4} scans/h = 1 scan toutes les ~{effectiveInterval}s</p>
-                <p className="mt-2 text-violet-600">Chaque dossier a son propre compteur de rate-limit côté serveur.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Dossiers VOWINT <span className="text-slate-400 font-normal">(séparés par virgule)</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={poolInput || currentPool}
-                    onChange={(e) => setPoolInput(e.target.value)}
-                    placeholder="VOWINT6085888,VOWINT6085889,VOWINT6085890"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  />
-                  <button
-                    onClick={savePool}
-                    disabled={saving || (!poolInput && !currentPool)}
-                    className="px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 text-xs font-medium"
-                  >
-                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Sauver"}
-                  </button>
-                </div>
-              </div>
-
-              {dossiers.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {dossiers.map((d: string, i: number) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-700">
-                      <span className="w-4 h-4 bg-violet-200 rounded-full flex items-center justify-center text-[10px] font-bold text-violet-700">{i + 1}</span>
-                      {d}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <Clock className="w-3 h-3" />
-                <span>Intervalle : {effectiveInterval}s {intervalSec === "0" ? "(auto-calculé)" : "(manuel)"}</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex justify-end p-5 border-t border-slate-200">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium"
-          >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function CevSessions() {
   const sessions = useQuery(api.cevSessions.listSessions);
@@ -728,7 +658,6 @@ export default function CevSessions() {
   const deleteSession = useMutation(api.cevSessions.deleteSession);
 
   const [showNewModal, setShowNewModal] = useState(false);
-  const [showPoolModal, setShowPoolModal] = useState(false);
   const [resetSession, setResetSession] = useState<ResetSession | null>(null);
   const [restartSessionId, setRestartSessionId] = useState<Id<"cevSessions"> | null>(null);
   const [deleteSessionId, setDeleteSessionId] = useState<Id<"cevSessions"> | null>(null);
@@ -765,12 +694,6 @@ export default function CevSessions() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowPoolModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 text-violet-700 hover:bg-violet-50 text-sm font-medium"
-          >
-            <RotateCcw className="w-4 h-4" /> Pool Dossier v3
-          </button>
           <button
             onClick={() => setShowNewModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A3F96] text-white hover:bg-[#15347e] text-sm font-medium"
@@ -982,7 +905,6 @@ export default function CevSessions() {
       )}
 
       {showNewModal && <NewSessionModal onClose={() => setShowNewModal(false)} />}
-      {showPoolModal && <DossierPoolModal onClose={() => setShowPoolModal(false)} />}
       {resetSession && (
         <ResetCredentialsModal
           session={resetSession}
