@@ -42,6 +42,12 @@ import {
   botLog,
   getBotConfigValue,
 } from "../convexClient.js";
+import {
+  initCevRedis,
+  syncPoolStateToRedis,
+  restorePoolStateFromRedis,
+  type SerializablePoolState,
+} from "../cev-redis-persistence.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -159,6 +165,42 @@ class CevDossierPool {
   }
 
   get size(): number { return this.slots.length; }
+
+  /** Exporte l'état complet du pool pour persistance Redis */
+  exportState(): SerializablePoolState {
+    return {
+      currentIndex: this.currentIndex,
+      slots: this.slots.map(s => ({
+        vowintRef: s.vowintRef,
+        clickTimestamps: [...s.clickTimestamps],
+        totalScans: s.totalScans,
+        rateLimitCount: s.rateLimitCount,
+      })),
+      savedAt: Date.now(),
+    };
+  }
+
+  /** Restaure l'état depuis Redis (merge avec les dossiers configurés) */
+  restoreState(saved: SerializablePoolState): void {
+    // Créer un index rapide par vowintRef
+    const savedMap = new Map(saved.slots.map(s => [s.vowintRef, s]));
+
+    for (const slot of this.slots) {
+      const savedSlot = savedMap.get(slot.vowintRef);
+      if (savedSlot) {
+        slot.clickTimestamps = savedSlot.clickTimestamps;
+        slot.totalScans = savedSlot.totalScans;
+        slot.rateLimitCount = savedSlot.rateLimitCount;
+      }
+    }
+
+    // Restaurer currentIndex seulement s'il est valide
+    if (saved.currentIndex >= 0 && saved.currentIndex < this.slots.length) {
+      this.currentIndex = saved.currentIndex;
+    }
+
+    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex})`);
+  }
 }
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -359,6 +401,16 @@ export async function startCevDossierLoop(): Promise<void> {
     pool.initialize(dossierPoolStr.split(",").map(s => s.trim()).filter(Boolean));
   }
 
+  // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
+  await initCevRedis();
+  const savedPoolState = await restorePoolStateFromRedis();
+  if (savedPoolState) {
+    pool.restoreState(savedPoolState);
+    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}`);
+  } else {
+    log("INFO", "Pas de pool state en Redis — démarrage frais");
+  }
+
   // Calculer l'intervalle optimal
   const intervalStr = await getBotConfigValue("cev_dossier_interval_sec");
   const configuredInterval = intervalStr ? parseInt(intervalStr, 10) : 0;
@@ -517,6 +569,9 @@ export async function startCevDossierLoop(): Promise<void> {
           data: { scanCount: state.scanCount, slotsFound: state.slotsFound, rateLimits: state.rateLimits, scansPerHour, uptimeMin },
         });
       }
+
+      // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
+      syncPoolStateToRedis(pool.exportState());
 
       // Pause entre les scans
       // Ajouter un jitter de ±20% pour paraître humain
