@@ -34,6 +34,7 @@ import {
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
+  getActiveCevSessions,
   recordCevSessionCheck,
   reportSlotFound,
   botLog,
@@ -370,14 +371,14 @@ export async function startCevDossierLoop(): Promise<void> {
   log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
 
   // Récupérer les credentials
-  const pendingSetups = await getPendingCevSetups();
-  const target = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
+  const allSessions = await getActiveCevSessions();
+  const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
   if (!target) {
     log("ERROR", "Aucun compte VOWINT configuré — attente...");
     while (true) {
       await sleep(30_000);
-      const setups = await getPendingCevSetups();
-      const t = setups.find(s => s.vowintEmail && s.vowintPassword);
+      const sessions = await getActiveCevSessions();
+      const t = sessions.find((s: any) => s.vowintEmail && s.vowintPassword);
       if (t) break;
     }
   }
@@ -409,8 +410,8 @@ export async function startCevDossierLoop(): Promise<void> {
       }
 
       // Récupérer les credentials (refresh)
-      const setups = await getPendingCevSetups();
-      const creds = setups.find(s => s.vowintEmail && s.vowintPassword);
+      const setups = await getActiveCevSessions();
+      const creds = setups.find((s: any) => s.vowintEmail && s.vowintPassword);
       if (!creds) {
         log("WARN", "Credentials VOWINT introuvables — attente 30s");
         await sleep(30_000);
