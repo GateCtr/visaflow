@@ -15,6 +15,7 @@ import { runSpainSession } from "./spainPortal.js";
 import { startCevSetupLoop } from "./loops/cev-setup-loop.js";
 import { startCevPollingLoop } from "./loops/cev-polling-loop.js";
 import { startCevStealthLoop } from "./loops/cev-stealth-loop.js";
+import { startCevDossierLoop } from "./loops/cev-dossier-loop.js";
 import { startSpainWatcherLoop } from "./loops/spain-watcher-loop.js";
 import { startGermanyLoop } from "./loops/germany-loop.js";
 import { startV3Loop } from "./loops/v3-loop.js";
@@ -66,15 +67,28 @@ async function main(): Promise<void> {
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
 
   // Lancer les boucles background
-  // ─── Mode CEV Stealth : si activé, remplace les loops setup+polling classiques ───
+  // ─── Mode CEV : priorité Dossier v3 > Stealth v2 > classique ───
+  let cevDossierMode = false;
   let cevStealthMode = false;
   try {
-    const stealthValue = await getBotConfigValue("cev_stealth_mode");
-    cevStealthMode = stealthValue === "1";
+    const dossierValue = await getBotConfigValue("cev_dossier_mode");
+    cevDossierMode = dossierValue === "1";
+    if (!cevDossierMode) {
+      const stealthValue = await getBotConfigValue("cev_stealth_mode");
+      cevStealthMode = stealthValue === "1";
+    }
   } catch { /* Convex inaccessible — fallback normal */ }
 
-  if (cevStealthMode) {
-    log("INFO", "═══ CEV STEALTH MODE ACTIF ═══");
+  if (cevDossierMode) {
+    log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF ═══");
+    log("INFO", "   → Pool de DOSSIERS en round-robin (1 IP, N compteurs)");
+    log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
+    log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
+    startCevDossierLoop().catch((err) => {
+      console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
+    });
+  } else if (cevStealthMode) {
+    log("INFO", "═══ CEV STEALTH MODE v2 ACTIF ═══");
     log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
     log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
     log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
