@@ -473,6 +473,20 @@ export async function startCevDossierLoop(): Promise<void> {
         logApplicationId,
       );
 
+      // Log chaque scan dans Convex avec le dossier concerné
+      botLog({
+        applicationId: logApplicationId,
+        step: "cev_dossier_scan",
+        status: result === "error" || result === "rate_limited" ? "warn" : "ok",
+        data: {
+          dossier: dossier.vowintRef,
+          result,
+          scanNumber: state.scanCount,
+          poolAvailable: stats.available,
+          poolTotal: stats.total,
+        },
+      });
+
       switch (result) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
