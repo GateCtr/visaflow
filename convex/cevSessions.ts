@@ -394,6 +394,9 @@ export const internalClaimDue = internalMutation({
       integrationUrl: string;
       sessionCookie: string;
       pollIntervalMs: number;
+      vowintEmail?: string;
+      vowintPassword?: string;
+      vowintAppUrl?: string;
     }> = [];
 
     for (const s of sessions) {
@@ -411,6 +414,9 @@ export const internalClaimDue = internalMutation({
         integrationUrl: s.integrationUrl,
         sessionCookie: s.sessionCookie,
         pollIntervalMs: interval,
+        vowintEmail: s.vowintEmail,
+        vowintPassword: s.vowintPassword,
+        vowintAppUrl: s.vowintAppUrl,
       });
     }
     return claimed;

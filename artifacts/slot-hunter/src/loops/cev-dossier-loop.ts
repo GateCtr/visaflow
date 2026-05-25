@@ -370,31 +370,32 @@ export async function startCevDossierLoop(): Promise<void> {
   log("INFO", `  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
   log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
 
-  // Récupérer les credentials depuis bot-config OU sessions pending
-  let vowintEmail = await getBotConfigValue("cev_dossier_email");
-  let vowintPassword = await getBotConfigValue("cev_dossier_password");
+  // Récupérer les credentials depuis les sessions CEV actives
+  const allSessions = await getActiveCevSessions();
+  const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
+  let vowintEmail = target?.vowintEmail;
+  let vowintPassword = target?.vowintPassword;
 
-  // Fallback: chercher dans les sessions CEV (needs-setup a les credentials)
   if (!vowintEmail || !vowintPassword) {
+    // Fallback: chercher dans les sessions en needs_setup
     const pendingSetups = await getPendingCevSetups();
-    const target = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
-    if (target) {
-      vowintEmail = target.vowintEmail!;
-      vowintPassword = target.vowintPassword!;
+    const pending = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
+    if (pending) {
+      vowintEmail = pending.vowintEmail!;
+      vowintPassword = pending.vowintPassword!;
     }
   }
 
   if (!vowintEmail || !vowintPassword) {
-    log("ERROR", "Aucun compte VOWINT configuré. Configurez cev_dossier_email et cev_dossier_password dans bot-config, ou créez une session CEV en needs_setup.");
-    log("ERROR", "Attente configuration...");
+    log("ERROR", "Aucun compte VOWINT configuré — attente session avec credentials...");
     while (true) {
       await sleep(30_000);
-      vowintEmail = await getBotConfigValue("cev_dossier_email");
-      vowintPassword = await getBotConfigValue("cev_dossier_password");
-      if (vowintEmail && vowintPassword) break;
+      const sessions = await getActiveCevSessions();
+      const t = sessions.find((s: any) => s.vowintEmail && s.vowintPassword);
+      if (t) { vowintEmail = t.vowintEmail; vowintPassword = t.vowintPassword; break; }
       const setups = await getPendingCevSetups();
-      const t = setups.find(s => s.vowintEmail && s.vowintPassword);
-      if (t) { vowintEmail = t.vowintEmail!; vowintPassword = t.vowintPassword!; break; }
+      const p = setups.find(s => s.vowintEmail && s.vowintPassword);
+      if (p) { vowintEmail = p.vowintEmail!; vowintPassword = p.vowintPassword!; break; }
     }
   }
 

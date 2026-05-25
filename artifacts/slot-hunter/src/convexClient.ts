@@ -338,6 +338,9 @@ export interface CevSessionTask {
   integrationUrl: string;
   sessionCookie: string;
   pollIntervalMs: number;
+  vowintEmail?: string;
+  vowintPassword?: string;
+  vowintAppUrl?: string;
 }
 
 export async function getActiveCevSessions(): Promise<CevSessionTask[]> {
