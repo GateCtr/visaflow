@@ -440,9 +440,11 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
 
       // Ajouter au pool dossier v3 si coché
       if (addToPool && vowintAppUrl.trim()) {
-        const vowintRef = vowintAppUrl.trim().toUpperCase();
-        if (!poolDossiers.includes(vowintRef)) {
-          const newPool = [...poolDossiers, vowintRef].join(",");
+        // Supporter plusieurs VOWINT séparés par virgule
+        const refs = vowintAppUrl.split(",").map(r => r.trim().toUpperCase()).filter(Boolean);
+        const newRefs = refs.filter(r => !poolDossiers.includes(r));
+        if (newRefs.length > 0) {
+          const newPool = [...poolDossiers, ...newRefs].join(",");
           await setBotConfig({ key: "cev_dossier_pool", value: newPool });
           // Activer le mode dossier si pas encore actif
           if (!isDossierModeOn) {
@@ -536,22 +538,19 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              URL dossier VOWINT{" "}
-              <span className="text-slate-400 font-normal">(optionnel — auto-détection si vide)</span>
+              Dossier(s) VOWINT{" "}
+              <span className="text-slate-400 font-normal">(séparés par virgule si plusieurs)</span>
             </label>
             <input
-              type="url"
+              type="text"
               value={vowintAppUrl}
               onChange={(e) => setVowintAppUrl(e.target.value)}
-              placeholder="VOWINT5903406 ou UUID ou URL complète"
+              placeholder="VOWINT6085888,VOWINT6085889,VOWINT6085890"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#1A3F96] focus:border-transparent"
             />
             <p className="text-xs text-slate-500 mt-1">
-              Si le compte a plusieurs dossiers, entre l'identifiant du bon. Formats :
-              <code className="bg-slate-100 px-1 rounded mx-0.5">VOWINT5903406</code>
-              <code className="bg-slate-100 px-1 rounded mx-0.5">UUID</code>
-              <code className="bg-slate-100 px-1 rounded mx-0.5">URL GetEAppointmentUrl</code>.
-              Si vide → auto-détection (premier dossier).
+              Un seul dossier ou plusieurs séparés par virgule. Le CEV pool v3 scannera chaque dossier en rotation.
+              Si vide → auto-détection (premier dossier du compte).
             </p>
           </div>
 
