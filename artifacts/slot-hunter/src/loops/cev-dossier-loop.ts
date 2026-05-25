@@ -1,29 +1,36 @@
 /**
- * CEV Dossier Loop v3 — Pool de DOSSIERS + SESSION PERSISTANTE
+ * CEV Dossier Loop v3.1 — Pool de DOSSIERS + SESSION PERSISTANTE
  *
  * STRATEGIE :
  *   La limite des 5 clics/heure est PAR DOSSIER (AppId), pas par IP ni par compte.
  *   -> On utilise N dossiers en rotation round-robin sur 1 seule IP SOAX.
  *   -> 5 dossiers x 5 clics/h = 25 scans/heure = 1 scan toutes les ~2.5 min
  *
- * SESSION PERSISTANTE (v3.1) :
- *   Le cookie ASP.NET_SessionId CEV dure plusieurs heures.
- *   -> Login VOWINT + hCaptcha + GetEAppointmentUrl = 1 seul setup initial
- *   -> Ensuite, on REUTILISE le cookie pour tous les polls (POST /Home/AvailableTimeSlots)
- *   -> Re-login uniquement quand la session expire (detecte par 403/302->SessionExpired)
- *   -> Economie massive : 1 captcha toutes les ~2-4h au lieu de 1 par scan
+ * SESSION MODEL (2 niveaux) :
+ *   1. VOWINT LOGIN (partage par COMPTE) :
+ *      - 1 seul login par compte VOWINT, cache 25 min (getVowintSession)
+ *      - Tous les dossiers du meme compte reutilisent les memes cookies VOWINT
+ *      - Re-login uniquement quand la session VOWINT expire (302 -> login)
+ *
+ *   2. CEV SCAN SESSION (par DOSSIER) :
+ *      - GetEAppointmentUrl = 1 clic (limite 5/h par dossier)
+ *      - Cree un cookie ASP.NET_SessionId unique par scan
+ *      - hCaptcha active la session CEV
+ *      - Le cookie CEV reste VALIDE meme si NoAvailability (pas de slots)
+ *      - Seule session_expired (403/302->SessionExpired) tue le cookie
+ *      - On REUTILISE le cookie pour poll POST /Home/AvailableTimeSlots (GRATUIT)
  *
  * ARCHITECTURE :
- *   - 1 seule IP proxy (SOAX Kinshasa, sticky session 5min)
+ *   - 1 seule IP proxy SOAX (Kinshasa, sticky session)
  *   - N dossiers VOWINT (configures via bot-config "cev_dossier_pool")
- *   - Chaque dossier a sa propre session CEV persistante
+ *   - Chaque dossier a sa propre session CEV persistante (ASP.NET_SessionId)
  *   - Rotation round-robin entre les dossiers pour le polling
  *   - Quand un dossier detecte un slot -> booking immediat avec CE dossier
  *
  * CONFIG Convex (bot-config) :
  *   cev_dossier_mode = "1"                  -> activer ce loop
  *   cev_dossier_pool = "VOWINT6085888,VOWINT6085889,VOWINT6085890"
- *   cev_dossier_interval_sec = "30"         -> pause entre chaque scan (defaut: calcule auto)
+ *   cev_dossier_interval_sec = "15"         -> pause entre chaque poll (defaut: 15s)
  *
  * IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-stealth-loop (v2 IP pool).
  */
@@ -32,7 +39,10 @@ import { setupCevSessionHttp } from "../cevHttpSetup.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
-// cev-shared-impit not needed in v3.1 — polling uses pollCevSlot() which handles its own fetch
+import {
+  makeCevProxyStickyUrl,
+  resetCevImpitInstances,
+} from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
   getActiveCevSessions,
@@ -506,6 +516,22 @@ export async function startCevDossierLoop(): Promise<void> {
   log("INFO", `  - Session max age: ${CEV_SESSION_MAX_AGE_MS / 60_000} min`);
   log("INFO", `  - Clics login/h max: ${pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR} (seulement pour (re)login)`);
   log("INFO", `  - Proxy: SOAX (1 IP fixe Kinshasa)`);
+
+  // --- Configure SOAX proxy ---
+  // cevImpitFetch() reads process.env.IPROYAL_PROXY_URL as the proxy to use.
+  // We override it with the SOAX sticky URL so all requests go through SOAX.
+  // (iProyal account expired/402 — SOAX is the active provider)
+  const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+  if (soaxBaseUrl) {
+    const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-dossier-v3");
+    process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
+    resetCevImpitInstances(); // Force impit to recreate with new proxy URL
+    log("INFO", `  - Proxy SOAX configure: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}...`);
+  } else if (!process.env.IPROYAL_PROXY_URL) {
+    log("WARN", `  - AUCUN PROXY configure (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+  } else {
+    log("INFO", `  - Proxy IPROYAL_PROXY_URL (fallback): ${process.env.IPROYAL_PROXY_URL.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}...`);
+  }
 
 
   // Recuperer les credentials depuis les sessions CEV actives
