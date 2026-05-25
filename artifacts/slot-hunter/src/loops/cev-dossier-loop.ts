@@ -390,8 +390,8 @@ export async function startCevDossierLoop(): Promise<void> {
   const creds = await getCevCredentials();
   let vowintEmail = creds?.vowintEmail;
   let vowintPassword = creds?.vowintPassword;
-  // applicationId pour les botLogs — utiliser le sessionId (toujours valide dans Convex)
-  const logApplicationId = creds?.sessionId ?? "cev-dossier-v3";
+  // applicationId pour les botLogs — celui de l'application Convex associée à la session CEV
+  const logApplicationId = creds?.applicationId ?? "cev-dossier-v3";
 
   if (!vowintEmail || !vowintPassword) {
     // Fallback: sessions actives (peut être lockée mais on tente)
