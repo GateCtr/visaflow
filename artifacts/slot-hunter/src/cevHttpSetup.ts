@@ -20,6 +20,12 @@
 
 import { botLog } from "./convexClient.js";
 import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile } from "./cev-shared-impit.js";
+import {
+  initCevRedis,
+  syncVowintSessionToRedis,
+  restoreVowintSessionFromRedis,
+  removeVowintSessionFromRedis,
+} from "./cev-redis-persistence.js";
 
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
@@ -78,7 +84,20 @@ async function getVowintSession(
   if (cached && (Date.now() - cached.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
     botLog({ applicationId: clientId, step: "cev_http_vowint_cache_hit", status: "ok", data: { appId: cached.appId } });
     cached.lastUsedAt = Date.now();
+    // Refresh TTL dans Redis (fire-and-forget)
+    syncVowintSessionToRedis(vowintEmail, { cookies: cached.cookies, appId: cached.appId, ua: cached.ua, lastUsedAt: cached.lastUsedAt });
     return { success: true, cookies: cached.cookies, appId: cached.appId, ua: cached.ua };
+  }
+
+  // Cache mémoire miss — tenter restauration depuis Redis
+  const redisSession = await restoreVowintSessionFromRedis(vowintEmail);
+  if (redisSession && (Date.now() - redisSession.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
+    botLog({ applicationId: clientId, step: "cev_http_vowint_redis_hit", status: "ok", data: { appId: redisSession.appId } });
+    // Restaurer dans le cache mémoire
+    const restored = { cookies: redisSession.cookies, appId: redisSession.appId, ua: redisSession.ua, lastUsedAt: Date.now() };
+    vowintSessionCache.set(vowintEmail, restored);
+    syncVowintSessionToRedis(vowintEmail, restored);
+    return { success: true, cookies: restored.cookies, appId: restored.appId, ua: restored.ua };
   }
 
   // Cache miss ou expiré — faire un login complet
@@ -229,6 +248,8 @@ async function getVowintSession(
 
   // Stocker dans le cache
   vowintSessionCache.set(vowintEmail, { cookies, appId, ua, lastUsedAt: Date.now() });
+  // Persister dans Redis pour survivre aux redémarrages
+  syncVowintSessionToRedis(vowintEmail, { cookies, appId, ua, lastUsedAt: Date.now() });
 
   return { success: true, cookies, appId, ua };
 }
@@ -236,6 +257,7 @@ async function getVowintSession(
 /** Invalide le cache VOWINT (appelé quand on détecte une session expirée) */
 export function invalidateVowintCache(vowintEmail: string): void {
   vowintSessionCache.delete(vowintEmail);
+  removeVowintSessionFromRedis(vowintEmail);
 }
 
 /**
