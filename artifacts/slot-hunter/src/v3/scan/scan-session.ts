@@ -43,6 +43,7 @@ import {
 } from "../admin/bot-log.js";
 import { reportSlotDiscoveryBatch, reportSlotFound, uploadFile } from "../../convexClient.js";
 import { downloadUsaConfirmationPdf } from "../../usaPortal/usa-scan-confirmation.js";
+import { recordScan, recordSlotFound as recordSlotFoundStat } from "../../daily-stats.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,7 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
 
       // Pas de slot → fin normale
       if (!scanResult.slotFound) {
+        recordScan(jobId, username);
         return "no_slot";
       }
 
@@ -347,12 +349,15 @@ export async function runScanSession(config: ScanSessionConfig): Promise<Session
           }
         }
 
+        recordScan(jobId, username);
+        recordSlotFoundStat(jobId, username, slot.date, slot.time);
         return "slot_captured";
       }
 
       // 409 → retry
       if (bookingOutcome.slotTaken && isRetryableError(bookingOutcome.statusCode)) {
         retryTracker.recordAttempt();
+        recordScan(jobId, username); // Count each retry scan attempt
         await retryTracker.waitBeforeRetry();
         continue; // Re-scan
       }

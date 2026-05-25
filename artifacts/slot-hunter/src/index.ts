@@ -21,6 +21,7 @@ import { startGermanyLoop } from "./loops/germany-loop.js";
 import { startV3Loop } from "./loops/v3-loop.js";
 import { initParallelWatchers, startParallelReloginLoop } from "./loops/parallel-loop.js";
 import { checkPortalBundleKey } from "./bundle-check.js";
+import { startDailyReportLoop } from "./daily-report.js";
 
 import {
   log,
@@ -163,6 +164,9 @@ async function main(): Promise<void> {
   log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | stagger ${formatMs(SILENCE_RADIO_SAME_TIER_MIN_MS)}–${formatMs(SILENCE_RADIO_SAME_TIER_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
   log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
   log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
+
+  // ─── Rapport quotidien automatique (23h00 Kinshasa) ────────────────────────
+  startDailyReportLoop();
 
   if (isParallelMode) {
     log("INFO", `═══════════════════════════════════════════════════════════════`);

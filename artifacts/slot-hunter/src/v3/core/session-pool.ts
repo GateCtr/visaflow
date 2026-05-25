@@ -31,6 +31,7 @@ import type {
   RushWindow,
   SessionPoolConfig,
 } from "./types.js";
+import { recordRelogin } from "../../daily-stats.js";
 
 // ─── Configuration par défaut ───────────────────────────────────────────────
 
@@ -407,6 +408,12 @@ export function recordLogin(username: string, phase?: LoginPhase): void {
     `[session-pool] 🔑 Login #${state.totalUsed} enregistré pour ${username.slice(0, 12)}… ` +
     `(phase=${effectivePhase}, restant=${remaining}/${budget.maxPerDay})`
   );
+
+  // ─── Daily stats : tracker le re-login ─────────────────────────────────────
+  const reloginType = effectivePhase === "emergency" ? "emergency"
+    : state.totalUsed === 1 ? "preventive"
+    : "reactive";
+  recordRelogin("", username, reloginType);
 
   // Persister dans Redis (fire-and-forget)
   syncBudgetToRedis(username);

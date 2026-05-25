@@ -3,6 +3,7 @@
 
 import type { HunterJob } from "./convexClient.js";
 import { sendHeartbeat } from "./convexClient.js";
+import { recordScan, recordSlotFound, recordPause, recordRateLimit } from "./daily-stats.js";
 import {
   log,
   generateIntervalMs,
@@ -113,12 +114,16 @@ export function syncAdminResets(freshJobs: HunterJob[]): void {
 export async function handleResult(job: HunterJob, result: SessionResult): Promise<void> {
   log("INFO", `[${job.applicantName}] Résultat: ${result}`);
 
+  // ─── Daily stats tracking ─────────────────────────────────────────────────
+  recordScan(job.id, job.applicantName);
+
   switch (result) {
     case "slot_found":
       consecutiveLoginFailures.delete(job.id);
       consecutiveErrors.delete(job.id);
       pausedJobs.add(job.id);
       completedJobs.add(job.id);
+      recordSlotFound(job.id, job.applicantName);
       log("INFO", `[${job.applicantName}] ✅ CRÉNEAU TROUVÉ — dossier retiré de la file`);
       return;
 
@@ -130,6 +135,7 @@ export async function handleResult(job: HunterJob, result: SessionResult): Promi
 
       if (loginFails >= MAX_LOGIN_FAILURES) {
         pausedJobs.add(job.id);
+        recordPause(job.id, job.applicantName, `${loginFails} login failures consécutives`);
         log("ERROR", `[${job.applicantName}] ${MAX_LOGIN_FAILURES} échecs consécutifs — auto-pause`);
         try {
           await sendHeartbeat({
@@ -154,6 +160,7 @@ export async function handleResult(job: HunterJob, result: SessionResult): Promi
 
       if (errCount >= MAX_CONSECUTIVE_ERRORS) {
         pausedJobs.add(job.id);
+        recordPause(job.id, job.applicantName, `${errCount} erreurs consécutives`);
         log("ERROR", `[${job.applicantName}] ${MAX_CONSECUTIVE_ERRORS} erreurs consécutives — auto-pause (compte potentiellement bloqué)`);
         try {
           await sendHeartbeat({
@@ -178,6 +185,7 @@ export async function handleResult(job: HunterJob, result: SessionResult): Promi
       consecutiveLoginFailures.delete(job.id);
       consecutiveErrors.delete(job.id);
       pausedJobs.add(job.id);
+      recordPause(job.id, job.applicantName, "Paiement MRV non confirmé");
       log("WARN", `[${job.applicantName}] 💳 Paiement MRV non confirmé — auto-pause (reprendra après reset admin)`);
       try {
         await sendHeartbeat({

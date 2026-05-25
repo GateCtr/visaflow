@@ -4,6 +4,7 @@
 import { getActiveJobs, sendHeartbeat, getBotConfigValue, reportSlotFound, uploadFile, botLog, type HunterJob } from "../convexClient.js";
 import { log, URGENCY_ORDER } from "../scheduler-utils.js";
 import { pausedJobs, completedJobs } from "../scheduler-state.js";
+import { recordScan, recordSlotFound as recordSlotFoundStat, recordPause, recordRelogin } from "../daily-stats.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -290,17 +291,21 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
       // Sans ça, le panneau affiche "Dernier: 17 mai" et "Tentatives: 85" figés.
       if (outcome === "no_slot" || outcome === "token_expired" || outcome === "error" || outcome === "proxy_down") {
         sendHeartbeat({ applicationId: job.id, result: "not_found" }).catch(() => {});
+        recordScan(job.id, job.applicantName);
       }
 
       if (outcome === "slot_captured") {
         completedJobs.add(job.id);
         pausedJobs.add(job.id);
+        recordSlotFoundStat(job.id, job.applicantName);
         await sendHeartbeat({ applicationId: job.id, result: "slot_found" as any });
       } else if (outcome === "restricted") {
         pausedJobs.add(job.id);
+        recordPause(job.id, job.applicantName, "Compte restreint par le portail");
         sendHeartbeat({ applicationId: job.id, result: "error", errorMessage: "Compte restreint par le portail" }).catch(() => {});
       } else if (outcome === "payment_required") {
         pausedJobs.add(job.id);
+        recordPause(job.id, job.applicantName, "Paiement MRV non vérifié");
         await sendHeartbeat({ applicationId: job.id, result: "payment_required", errorMessage: "Paiement MRV non vérifié" });
       } else if (outcome === "budget_exhausted") {
         // ── FIX: Attendre au lieu de spammer des critical errors ──
