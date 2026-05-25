@@ -103,6 +103,11 @@ class CevDossierPool {
 
       // Vérifier quota
       if (slot.clickTimestamps.length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) {
+        // Vérifier si le dossier est en pause (slot trouvé précédemment)
+        if (pausedDossiers.has(slot.vowintRef)) {
+          log("INFO", `  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
+          continue;
+        }
         this.currentIndex = (idx + 1) % this.slots.length;
         return slot;
       }
@@ -248,12 +253,18 @@ function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
 
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
 
+interface ScanResult {
+  status: "no_slot" | "slot_found" | "rate_limited" | "error";
+  sessionCookie?: string;
+  integrationUrl?: string;
+}
+
 async function performScan(
   vowintEmail: string,
   vowintPassword: string,
   dossier: DossierSlot,
   applicationId: string,
-): Promise<"no_slot" | "slot_found" | "rate_limited" | "error"> {
+): Promise<ScanResult> {
 
   try {
     const result = await setupCevSessionHttp(
@@ -267,17 +278,21 @@ async function performScan(
     if (!result.success) {
       if (result.error?.includes("RATE_LIMIT")) {
         pool.markRateLimited(dossier);
-        return "rate_limited";
+        return { status: "rate_limited" };
       }
       log("WARN", `  Erreur setup: ${result.error}`);
-      return "error";
+      return { status: "error" };
     }
 
     // Clic réussi — enregistrer
     pool.recordClick(dossier);
 
     if (result.slotsAvailable) {
-      return "slot_found";
+      return {
+        status: "slot_found",
+        sessionCookie: result.sessionCookie,
+        integrationUrl: result.integrationUrl,
+      };
     }
 
     // Poll rapide si on a un cookie de session
@@ -287,28 +302,43 @@ async function performScan(
         result.sessionCookie,
       );
       if (pollResult.status === "slot_found") {
-        return "slot_found";
+        return {
+          status: "slot_found",
+          sessionCookie: result.sessionCookie,
+          integrationUrl: result.integrationUrl,
+        };
       }
     }
 
-    return "no_slot";
+    return { status: "no_slot" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log("ERROR", `  Exception: ${msg.slice(0, 100)}`);
-    return "error";
+    return { status: "error" };
   }
 }
 
 // ─── Booking ────────────────────────────────────────────────────────────────
+
+import { discoverSlotBookingFlow, sendSlotDetectedEmail } from "../cev-slot-discovery.js";
+
+/** Dossiers en pause (après slot_found) — ne pas re-scanner */
+const pausedDossiers = new Set<string>();
 
 async function handleSlotFound(
   vowintEmail: string,
   vowintPassword: string,
   dossier: DossierSlot,
   applicationId: string,
+  existingSessionCookie?: string,
+  existingIntegrationUrl?: string,
 ): Promise<void> {
-  log("INFO", `🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — BOOKING IMMÉDIAT`);
+  log("INFO", `🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
   state.slotsFound++;
+
+  // ── PAUSE immédiate du dossier (ne plus le re-scanner) ──
+  pausedDossiers.add(dossier.vowintRef);
+  log("INFO", `  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE`);
 
   botLog({
     applicationId,
@@ -316,12 +346,57 @@ async function handleSlotFound(
     status: "ok",
     data: {
       dossier: dossier.vowintRef,
+      dossierIndex: dossier.index,
       scanCount: state.scanCount,
       uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
+      hasExistingSession: !!existingSessionCookie,
+      paused: true,
     },
   });
 
-  // Re-setup pour obtenir la session fraîche + booking
+  // ── DISCOVERY : capturer TOUT le flow avec la session EXISTANTE ──
+  // Pas de re-login ! On utilise la session qui vient de détecter le slot.
+  // Le slot ne peut pas disparaître entre la détection et la capture.
+  const sessionCookie = existingSessionCookie;
+  const integrationUrl = existingIntegrationUrl;
+
+  if (sessionCookie && integrationUrl) {
+    log("INFO", `  🔬 Discovery avec session existante (pas de re-login)...`);
+
+    const discovery = await discoverSlotBookingFlow(
+      sessionCookie,
+      integrationUrl,
+      dossier.vowintRef,
+      applicationId,
+    );
+
+    // Envoyer email admin
+    log("INFO", `  📧 Envoi email admin...`);
+    await sendSlotDetectedEmail(dossier.vowintRef, discovery);
+
+    // Tenter le booking HTTP avec la session existante
+    log("INFO", `  🎯 Tentative booking HTTP avec session existante...`);
+    try {
+      const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie, applicationId);
+      if (httpResult.success) {
+        log("INFO", `  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
+        await reportSlotFound({
+          applicationId,
+          date: httpResult.bookedDate ?? "",
+          time: httpResult.bookedTime ?? "",
+          location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
+          confirmationCode: httpResult.confirmationCode,
+        });
+        return;
+      }
+      log("INFO", `  ⚠️ Booking HTTP échoué: ${httpResult.error} — tentative avec re-login...`);
+    } catch (err) {
+      log("WARN", `  ⚠️ Booking HTTP crash: ${err} — tentative avec re-login...`);
+    }
+  }
+
+  // ── FALLBACK : re-login + nouveau setup (si session existante a échoué) ──
+  log("INFO", `  🔄 Re-login pour tentative fallback...`);
   const session = await setupCevSessionHttp(
     vowintEmail,
     vowintPassword,
@@ -331,15 +406,15 @@ async function handleSlotFound(
   );
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
-    log("ERROR", `  Session re-setup échoué pour booking`);
+    log("ERROR", `  Session re-setup échoué pour booking fallback`);
     return;
   }
 
-  // Tentative booking HTTP
+  // Tentative booking HTTP avec session fraîche
   try {
     const httpResult = await bookCevViaHttp(session.integrationUrl, session.sessionCookie, applicationId);
     if (httpResult.success) {
-      log("INFO", `  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
+      log("INFO", `  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
       await reportSlotFound({
         applicationId,
         date: httpResult.bookedDate ?? "",
@@ -539,21 +614,24 @@ export async function startCevDossierLoop(): Promise<void> {
       botLog({
         applicationId: logApplicationId,
         step: "cev_dossier_scan",
-        status: result === "error" || result === "rate_limited" ? "warn" : "ok",
+        status: result.status === "error" || result.status === "rate_limited" ? "warn" : "ok",
         data: {
           dossierIndex: dossier.index,
           dossier: `#${dossier.index} ${dossier.vowintRef}`,
-          result,
+          result: result.status,
           scanNumber: state.scanCount,
           poolAvailable: stats.available,
           poolTotal: stats.total,
         },
       });
 
-      switch (result) {
+      switch (result.status) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
-          await handleSlotFound(vowintEmail!, vowintPassword!, dossier, logApplicationId);
+          await handleSlotFound(
+            vowintEmail!, vowintPassword!, dossier, logApplicationId,
+            result.sessionCookie, result.integrationUrl,
+          );
           break;
         case "rate_limited":
           state.rateLimits++;
