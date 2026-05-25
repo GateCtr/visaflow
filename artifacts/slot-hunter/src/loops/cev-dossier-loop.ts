@@ -370,18 +370,35 @@ export async function startCevDossierLoop(): Promise<void> {
   log("INFO", `  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
   log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
 
-  // Récupérer les credentials
-  const allSessions = await getActiveCevSessions();
-  const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
-  if (!target) {
-    log("ERROR", "Aucun compte VOWINT configuré — attente...");
-    while (true) {
-      await sleep(30_000);
-      const sessions = await getActiveCevSessions();
-      const t = sessions.find((s: any) => s.vowintEmail && s.vowintPassword);
-      if (t) break;
+  // Récupérer les credentials depuis bot-config OU sessions pending
+  let vowintEmail = await getBotConfigValue("cev_dossier_email");
+  let vowintPassword = await getBotConfigValue("cev_dossier_password");
+
+  // Fallback: chercher dans les sessions CEV (needs-setup a les credentials)
+  if (!vowintEmail || !vowintPassword) {
+    const pendingSetups = await getPendingCevSetups();
+    const target = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
+    if (target) {
+      vowintEmail = target.vowintEmail!;
+      vowintPassword = target.vowintPassword!;
     }
   }
+
+  if (!vowintEmail || !vowintPassword) {
+    log("ERROR", "Aucun compte VOWINT configuré. Configurez cev_dossier_email et cev_dossier_password dans bot-config, ou créez une session CEV en needs_setup.");
+    log("ERROR", "Attente configuration...");
+    while (true) {
+      await sleep(30_000);
+      vowintEmail = await getBotConfigValue("cev_dossier_email");
+      vowintPassword = await getBotConfigValue("cev_dossier_password");
+      if (vowintEmail && vowintPassword) break;
+      const setups = await getPendingCevSetups();
+      const t = setups.find(s => s.vowintEmail && s.vowintPassword);
+      if (t) { vowintEmail = t.vowintEmail!; vowintPassword = t.vowintPassword!; break; }
+    }
+  }
+
+  log("INFO", `Credentials VOWINT: ${vowintEmail!.slice(0, 5)}…`);
 
   state.isRunning = true;
   state.startedAt = Date.now();
@@ -409,10 +426,8 @@ export async function startCevDossierLoop(): Promise<void> {
         continue;
       }
 
-      // Récupérer les credentials (refresh)
-      const setups = await getActiveCevSessions();
-      const creds = setups.find((s: any) => s.vowintEmail && s.vowintPassword);
-      if (!creds) {
+      // Utiliser les credentials chargés au démarrage
+      if (!vowintEmail || !vowintPassword) {
         log("WARN", "Credentials VOWINT introuvables — attente 30s");
         await sleep(30_000);
         continue;
@@ -425,16 +440,16 @@ export async function startCevDossierLoop(): Promise<void> {
       log("INFO", `[Scan #${state.scanCount}] Dossier: ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
 
       const result = await performScan(
-        creds.vowintEmail!,
-        creds.vowintPassword!,
+        vowintEmail!,
+        vowintPassword!,
         dossier,
-        creds.applicationId,
+        "cev-dossier-v3",
       );
 
       switch (result) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
-          await handleSlotFound(creds.vowintEmail!, creds.vowintPassword!, dossier, creds.applicationId);
+          await handleSlotFound(vowintEmail!, vowintPassword!, dossier, "cev-dossier-v3");
           break;
         case "rate_limited":
           state.rateLimits++;
@@ -455,7 +470,7 @@ export async function startCevDossierLoop(): Promise<void> {
         const poolStats = pool.getStats();
         log("INFO", `📊 Stats: ${state.scanCount} scans en ${uptimeMin}min (${scansPerHour}/h) | Slots: ${state.slotsFound} | RL: ${state.rateLimits} | Pool: ${poolStats.available}/${poolStats.total}`);
         botLog({
-          applicationId: creds.applicationId,
+          applicationId: "cev-dossier-v3",
           step: "cev_dossier_v3_stats",
           status: "ok",
           data: { scanCount: state.scanCount, slotsFound: state.slotsFound, rateLimits: state.rateLimits, scansPerHour, uptimeMin },
