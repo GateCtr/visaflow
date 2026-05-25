@@ -228,7 +228,7 @@ export function rotateCevIproyalSession(identifier: string): void {
 const SOAX_PROXY_URL = process.env.SOAX_PROXY_URL;
 const SOAX_COUNTRY = process.env.SOAX_COUNTRY ?? "cd";
 const SOAX_CITY = process.env.SOAX_CITY ?? "kinshasa";
-const SOAX_SESSION_TIME_MIN = parseInt(process.env.SOAX_SESSION_TIME ?? "600", 10);
+const SOAX_SESSION_TIME_MIN = parseInt(process.env.SOAX_SESSION_TIME ?? "5", 10);
 
 /** Compteur de rotation SOAX par identifiant. */
 const _cevSoaxRotationCount = new Map<string, number>();

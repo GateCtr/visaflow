@@ -127,7 +127,7 @@ const soaxProvider: ProxyProvider = {
     const hash = simpleHash(`${username}:${new Date().toISOString().slice(0, 10)}`);
     const country = process.env.SOAX_COUNTRY ?? "cd";
     const city = process.env.SOAX_CITY ?? "kinshasa";
-    const sesstime = process.env.SOAX_SESSION_TIME ?? "600";
+    const sesstime = process.env.SOAX_SESSION_TIME ?? "5";
     try {
       const parsed = new URL(base.startsWith("http") ? base : `http://${base}`);
       let proxyUser = decodeURIComponent(parsed.username);

@@ -38,8 +38,8 @@ const SOAX_PRIMARY_COUNTRY = process.env.SOAX_COUNTRY ?? "cd";
 /** Ville cible pour SOAX (env: SOAX_CITY, défaut: "kinshasa") */
 const SOAX_CITY = process.env.SOAX_CITY ?? "kinshasa";
 
-/** Durée de session sticky en minutes (env: SOAX_SESSION_TIME, défaut: 600 = 10h) */
-const SOAX_SESSION_TIME_MIN = parseInt(process.env.SOAX_SESSION_TIME ?? "600", 10);
+/** Durée de session sticky en minutes (env: SOAX_SESSION_TIME, défaut: 5 = 5min = 300s) */
+const SOAX_SESSION_TIME_MIN = parseInt(process.env.SOAX_SESSION_TIME ?? "5", 10);
 
 /**
  * Liste de pays de fallback à essayer si le pays principal timeout.

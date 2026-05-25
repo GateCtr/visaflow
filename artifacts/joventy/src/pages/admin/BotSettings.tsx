@@ -115,33 +115,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
       { value: "iproyal", label: "iProyal (sessions 60min)" },
     ],
   },
-  {
-    key: "cev_dossier_mode",
-    label: "CEV Dossier Mode v3",
-    description: "Pool de DOSSIERS (pas d'IPs). 5 dossiers × 5 clics/h = 25 scans/h = 1 scan/2.5min. Remplace le stealth loop v2.",
-    type: "toggle",
-    category: "mode",
-    defaultValue: "0",
-  },
-  {
-    key: "cev_dossier_pool",
-    label: "CEV Dossiers (VOWINT)",
-    description: "Liste de numéros VOWINT séparés par virgule. Ex: VOWINT6085888,VOWINT6085889,VOWINT6085890",
-    type: "text",
-    category: "mode",
-    defaultValue: "",
-  },
-  {
-    key: "cev_dossier_interval_sec",
-    label: "CEV Dossier Intervalle",
-    description: "Secondes entre chaque scan. 0 = auto-calculé (60min ÷ dossiers × 4). Avec 5 dossiers = ~150s.",
-    type: "number",
-    category: "mode",
-    defaultValue: "0",
-    unit: "sec",
-    min: 0,
-    max: 600,
-  },
+
   // ─── Timing / Intervalles
   {
     key: "watcher_base_interval_ms",

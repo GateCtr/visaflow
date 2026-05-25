@@ -594,6 +594,114 @@ function NewSessionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Pool Dossier v3 Panel ────────────────────────────────────────────────────
+function DossierPoolPanel() {
+  const allConfigs = useQuery(api.hunter.listBotConfig);
+  const setBotConfig = useMutation(api.hunter.setBotConfig);
+  const [poolInput, setPoolInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const isEnabled = allConfigs?.find((c: any) => c.key === "cev_dossier_mode")?.value === "1";
+  const currentPool = allConfigs?.find((c: any) => c.key === "cev_dossier_pool")?.value ?? "";
+  const intervalSec = allConfigs?.find((c: any) => c.key === "cev_dossier_interval_sec")?.value ?? "0";
+
+  const dossiers = currentPool ? currentPool.split(",").map((d: string) => d.trim()).filter(Boolean) : [];
+  const autoInterval = dossiers.length > 0 ? Math.round(3600 / (dossiers.length * 4)) : 0;
+  const effectiveInterval = intervalSec === "0" ? autoInterval : parseInt(intervalSec);
+
+  // Sync input with saved value
+  useState(() => { setPoolInput(currentPool); });
+
+  const toggleMode = async () => {
+    setSaving(true);
+    await setBotConfig({ key: "cev_dossier_mode", value: isEnabled ? "0" : "1" });
+    setSaving(false);
+  };
+
+  const savePool = async () => {
+    setSaving(true);
+    await setBotConfig({ key: "cev_dossier_pool", value: poolInput.trim() });
+    setSaving(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
+            <RotateCcw className="w-4 h-4 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Pool Dossier v3</h3>
+            <p className="text-xs text-slate-500">Round-robin multi-dossiers — 1 IP, N compteurs séparés</p>
+          </div>
+        </div>
+        <button
+          onClick={toggleMode}
+          disabled={saving}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            isEnabled ? "bg-violet-600" : "bg-slate-300"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              isEnabled ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
+      </div>
+
+      {isEnabled && (
+        <div className="space-y-4 pt-3 border-t border-slate-100">
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
+            <p className="font-medium mb-1">Fonctionnement :</p>
+            <p>{dossiers.length} dossier{dossiers.length !== 1 ? "s" : ""} × 4 clics/h = {dossiers.length * 4} scans/h = 1 scan toutes les ~{effectiveInterval}s</p>
+            <p className="mt-1 text-violet-600">Chaque dossier a son propre compteur de rate-limit côté serveur.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Dossiers VOWINT <span className="text-slate-400 font-normal">(séparés par virgule)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={poolInput || currentPool}
+                onChange={(e) => setPoolInput(e.target.value)}
+                placeholder="VOWINT6085888,VOWINT6085889,VOWINT6085890"
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+              <button
+                onClick={savePool}
+                disabled={saving || (!poolInput && !currentPool)}
+                className="px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 text-xs font-medium"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Sauver"}
+              </button>
+            </div>
+          </div>
+
+          {dossiers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {dossiers.map((d: string, i: number) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-700">
+                  <span className="w-4 h-4 bg-violet-200 rounded-full flex items-center justify-center text-[10px] font-bold text-violet-700">{i + 1}</span>
+                  {d}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Clock className="w-3 h-3" />
+            <span>Intervalle : {effectiveInterval}s {intervalSec === "0" ? "(auto-calculé)" : "(manuel)"}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function CevSessions() {
   const sessions = useQuery(api.cevSessions.listSessions);
@@ -643,6 +751,9 @@ export default function CevSessions() {
           <Plus className="w-4 h-4" /> Nouvelle session
         </button>
       </div>
+
+      {/* Pool Dossier v3 — Round-robin multi-dossiers */}
+      <DossierPoolPanel />
 
       {sessions === undefined ? (
         <div className="flex items-center justify-center py-20">
