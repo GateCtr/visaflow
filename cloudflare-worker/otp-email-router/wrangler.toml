@@ -1,7 +1,12 @@
-name            = "joventy-otp-router"
-main            = "src/index.js"
+name               = "joventy-otp-router"
+main               = "src/index.js"
 compatibility_date = "2024-09-23"
-workers_dev     = false
+workers_dev        = false
 
-# Ce Worker est déclenché uniquement par Cloudflare Email Routing.
-# Pas de route HTTP workers.dev nécessaire.
+[observability]
+enabled = true
+
+# Déclare que ce worker gère des emails entrants (trigger Email Routing)
+[[email_triggers]]
+# La routing rule (otp+*@otp.joventy.cd → ce worker) est configurée
+# dans le dashboard Cloudflare → Email → Email Routing → Routing rules.
