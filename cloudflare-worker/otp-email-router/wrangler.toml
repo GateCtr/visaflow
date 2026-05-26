@@ -6,6 +6,11 @@ workers_dev        = false
 [observability]
 enabled = true
 
-# Email Worker trigger — lie ce worker à la routing rule Email Routing
-[triggers]
-emails = ["otp@otp.joventy.cd"]
+# Ce worker est un Email Worker (reçoit les emails entrants).
+# Le trigger email est configuré via le dashboard Cloudflare :
+#   Email → Email Routing → Routing rules → otp@otp.joventy.cd → Send to Worker
+#
+# "No deploy targets" lors de `wrangler deploy` est NORMAL pour un Email Worker.
+# Le worker est uploadé et disponible — le routing rule dans le dashboard le déclenche.
+#
+# Ref: https://developers.cloudflare.com/email-routing/email-workers/
