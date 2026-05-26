@@ -245,6 +245,16 @@ export const getStats = query({
       byMode[m] = (byMode[m] ?? 0) + 1;
     }
 
+    // Regrouper par office/service (pour Espagne : serviceName, pour USA : OFC/POST)
+    const byOffice: Record<string, { captured: number; ignored: number; total: number }> = {};
+    for (const d of filtered) {
+      const office = d.office ?? "unknown";
+      if (!byOffice[office]) byOffice[office] = { captured: 0, ignored: 0, total: 0 };
+      byOffice[office].total++;
+      if (d.outcome === "captured") byOffice[office].captured++;
+      else byOffice[office].ignored++;
+    }
+
     return {
       totalCaptured,
       totalIgnored,
@@ -254,6 +264,7 @@ export const getStats = query({
       byDayOfWeek,
       byReason,
       byMode,
+      byOffice,
       // Dernières découvertes brutes (pour le feed temps réel) — dédupliquées avec seenCount
       recent: filtered.slice(0, 50).map((d) => ({
         _id: d._id,

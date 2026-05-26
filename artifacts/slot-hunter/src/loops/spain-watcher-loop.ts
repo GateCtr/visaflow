@@ -15,14 +15,14 @@
 //   3. Exécute le booking HTTP pour chaque dossier éligible
 //   → Pas de env vars SPAIN_BOOK_LOGIN/PASSWORD — tout vient de Convex (comme le bot USA)
 
-import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, type HunterJob } from "../convexClient.js";
+import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, reportSlotDiscoveryBatch, type HunterJob, type SlotDiscoveryEvent } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
 import { executeHttpBooking, extractServicesFromHtml, type SpainBookingConfig } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
-import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex } from "../spain-slot-explorer.js";
+import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
@@ -100,6 +100,60 @@ function isSlotInDateWindow(slotDate: string, dossier: SpainDossier): boolean {
   }
 
   return true;
+}
+
+/**
+ * Construit des SlotDiscoveryEvents à partir du résultat d'exploration.
+ * Chaque slot exploré = 1 event par dossier actif, groupé par service (office = serviceName).
+ * Les dossiers actifs déterminent si un slot est "captured" (dans la fenêtre) ou "ignored" (hors fenêtre).
+ * Si aucun dossier actif → pas d'events (pas d'applicationId valide pour Convex).
+ */
+function buildDiscoveryEventsFromExploration(
+  exploration: SlotExplorationResult,
+  dossiers: SpainDossier[],
+): SlotDiscoveryEvent[] {
+  if (dossiers.length === 0) return [];
+
+  const events: SlotDiscoveryEvent[] = [];
+
+  for (const service of exploration.services) {
+    for (const slot of service.slots) {
+      for (const dossier of dossiers) {
+        const inWindow = isSlotInDateWindow(slot.date, dossier);
+        events.push({
+          applicationId: dossier.applicationId,
+          destination: "spain",
+          office: service.serviceName || `service_${service.serviceId}`,
+          dateFound: slot.date,
+          timeFound: slot.time || undefined,
+          outcome: inWindow ? "captured" : "ignored",
+          reason: inWindow ? undefined : getDateWindowReason(slot.date, dossier),
+          context: { serviceId: service.serviceId, freeSlots: slot.freeSlots, applicant: dossier.applicantName },
+          mode: "schedule",
+        });
+      }
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Détermine la raison d'ignorement pour un slot hors fenêtre.
+ */
+function getDateWindowReason(slotDate: string, dossier: SpainDossier): string {
+  const slot = new Date(slotDate);
+  if (isNaN(slot.getTime())) return "invalid_date";
+
+  if (dossier.slotDateFrom) {
+    const from = new Date(dossier.slotDateFrom);
+    if (!isNaN(from.getTime()) && slot < from) return "before_from_date";
+  }
+  if (dossier.slotDateDeadline) {
+    const deadline = new Date(dossier.slotDateDeadline);
+    if (!isNaN(deadline.getTime()) && slot > deadline) return "after_deadline";
+  }
+  return "out_of_window";
 }
 
 // ─── Main Loop ───────────────────────────────────────────────────────────────
@@ -200,6 +254,16 @@ export async function startSpainWatcherLoop(): Promise<void> {
               for (const line of logLines) {
                 log("INFO", line);
               }
+
+              // ─── SLOT DISCOVERY REPORTING: émettre les événements vers Convex ──
+              if (exploration.totalSlots > 0) {
+                const dossiers = await getActiveSpainDossiers();
+                const discoveryEvents = buildDiscoveryEventsFromExploration(exploration, dossiers);
+                if (discoveryEvents.length > 0) {
+                  reportSlotDiscoveryBatch(discoveryEvents);
+                  log("INFO", `[SPAIN-WATCHER] 📊 ${discoveryEvents.length} slot discovery event(s) reporté(s) (${discoveryEvents.filter(e => e.outcome === "captured").length} captured, ${discoveryEvents.filter(e => e.outcome === "ignored").length} ignored)`);
+                }
+              }
             } catch (exploreErr) {
               log("WARN", `[SPAIN-WATCHER] ⚠️ Exploration slots échouée (non-fatal): ${exploreErr}`);
             }
@@ -271,6 +335,17 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 );
 
                 if (bookingResult.status === "booked") {
+                  // ── 0. Report slot discovery outcome: BOOKED ──
+                  reportSlotDiscoveryBatch([{
+                    applicationId: dossier.applicationId,
+                    destination: "spain",
+                    office: matched.serviceName,
+                    dateFound: result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10),
+                    outcome: "captured",
+                    context: { locator: bookingResult.locator, serviceId: matched.serviceId },
+                    mode: "schedule",
+                  }]);
+
                   // ── 1. Upload + attach PDF de confirmation ──
                   let pdfStorageId: string | undefined;
                   if (bookingResult.confirmationPdf) {
@@ -304,6 +379,18 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   // Override slotInfo with booking confirmation
                   result.slotInfo = `✅ BOOKING CONFIRMÉ pour ${dossier.applicantName} ! Locator: ${bookingResult.locator ?? "N/A"} | ${result.slotInfo}`;
                 } else {
+                  // ── Report slot discovery outcome: FAILED ──
+                  reportSlotDiscoveryBatch([{
+                    applicationId: dossier.applicationId,
+                    destination: "spain",
+                    office: matched.serviceName,
+                    dateFound: new Date().toISOString().slice(0, 10),
+                    outcome: "ignored",
+                    reason: `booking_failed_${bookingResult.status}`,
+                    context: { errorMessage: bookingResult.errorMessage, serviceId: matched.serviceId },
+                    mode: "schedule",
+                  }]);
+
                   // Report heartbeat with error
                   await sendHeartbeat({
                     applicationId: dossier.applicationId,
