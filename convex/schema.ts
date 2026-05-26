@@ -369,6 +369,7 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     // Page capture data (network requests, headers, responses, cookies, HTML)
     pageCaptures: v.optional(v.string()), // JSON-encoded array of captured requests
+    detectedServices: v.optional(v.string()), // JSON: [{serviceId, serviceName}] when status=found
   }).index("by_ts", ["ts"]),
 
   // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)

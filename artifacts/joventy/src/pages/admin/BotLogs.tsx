@@ -951,12 +951,18 @@ function SpainPageCapturesBlock({ pageCaptures }: { pageCaptures: string }) {
 }
 
 function SpainWatcherTab() {
-  const data = useQuery(api.spainWatcher.getWatcher);
+  const [scanPage, setScanPage] = useState(0);
+  const [scanFilter, setScanFilter] = useState<"" | "found" | "not_found" | "error">("");
+
+  const data = useQuery(api.spainWatcher.getWatcherPaginated, { page: scanPage, pageSize: 20, statusFilter: scanFilter || undefined });
   const setWatcher = useMutation(api.spainWatcher.setWatcher);
   const clearSpainScans = useMutation(api.spainWatcher.clearScans);
 
   const watcher = data?.watcher ?? null;
   const scans   = data?.scans  ?? [];
+  const stats   = data?.stats ?? { total: 0, found: 0, notFound: 0, errors: 0 };
+  const totalPages = data?.totalPages ?? 0;
+  const totalCount = data?.totalCount ?? 0;
 
   const [portalUrl,    setPortalUrl]    = useState("https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5");
   const [adminEmail,   setAdminEmail]   = useState("");
@@ -964,6 +970,7 @@ function SpainWatcherTab() {
   const [isActive,     setIsActive]     = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [saved,        setSaved]        = useState(false);
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!watcher) return;
@@ -1002,6 +1009,33 @@ function SpainWatcherTab() {
   const lastResultMeta = watcher?.lastResult
     ? SCAN_META[watcher.lastResult as keyof typeof SCAN_META] ?? SCAN_META.error
     : null;
+
+  // Pagination helpers
+  const safePage = Math.min(scanPage, Math.max(0, totalPages - 1));
+  const getScanPageNumbers = () => {
+    const pages: (number | "...")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 0; i < totalPages; i++) pages.push(i);
+    } else {
+      pages.push(0);
+      if (safePage > 2) pages.push("...");
+      for (let i = Math.max(1, safePage - 1); i <= Math.min(totalPages - 2, safePage + 1); i++) {
+        pages.push(i);
+      }
+      if (safePage < totalPages - 3) pages.push("...");
+      pages.push(totalPages - 1);
+    }
+    return pages;
+  };
+
+  const toggleErrorExpand = (id: string) => {
+    setExpandedErrors(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -1098,10 +1132,10 @@ function SpainWatcherTab() {
           <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
             <Flag className="w-4 h-4 text-red-500" />
             Historique scans
-            {scans.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full">{scans.length}</span>}
+            {stats.total > 0 && <span className="ml-1 text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full">{stats.total}</span>}
           </h3>
           <span className="flex-1" />
-          {scans.length > 0 && (
+          {stats.total > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <button className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors">
@@ -1112,18 +1146,58 @@ function SpainWatcherTab() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Supprimer l'historique Espagne</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Supprimer tous les scans Espagne ({scans.length} entrées) ? Les screenshots seront aussi supprimés. Cette action est irréversible.
+                    Supprimer tous les scans Espagne ({stats.total} entrées) ? Les screenshots seront aussi supprimés. Cette action est irréversible.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={async () => { await clearSpainScans(); }} className="bg-red-600 hover:bg-red-700">
+                  <AlertDialogAction onClick={async () => { await clearSpainScans(); setScanPage(0); }} className="bg-red-600 hover:bg-red-700">
                     Supprimer tout
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
+        </div>
+
+        {/* Stats bar */}
+        {stats.total > 0 && (
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+              <CheckCircle2 className="w-3 h-3" /> {stats.found} créneaux
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200">
+              <XCircle className="w-3 h-3" /> {stats.notFound} vides
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+              <AlertTriangle className="w-3 h-3" /> {stats.errors} erreurs
+            </span>
+          </div>
+        )}
+
+        {/* Filter buttons */}
+        <div className="flex gap-1 mb-4">
+          {([
+            { id: "" as const, label: "Tous", count: stats.total },
+            { id: "found" as const, label: "Créneaux", count: stats.found },
+            { id: "not_found" as const, label: "Vide", count: stats.notFound },
+            { id: "error" as const, label: "Erreurs", count: stats.errors },
+          ]).map(f => (
+            <button
+              key={f.id}
+              onClick={() => { setScanFilter(f.id); setScanPage(0); }}
+              className={`px-3 py-1.5 text-[11px] rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                scanFilter === f.id
+                  ? "bg-red-600 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {f.label}
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                scanFilter === f.id ? "bg-red-500 text-white" : "bg-slate-200/70 text-slate-400"
+              }`}>{f.count}</span>
+            </button>
+          ))}
         </div>
 
         {data === undefined ? (
@@ -1133,38 +1207,143 @@ function SpainWatcherTab() {
         ) : scans.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-10">Aucun scan.</p>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string }) => {
-              const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
-              return (
-                <div key={scan._id} className="py-3">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
-                          {meta.icon} {meta.label}
-                        </span>
-                        <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
-                        <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
-                        {scan.screenshotUrl && (
-                          <a href={scan.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                            className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-medium">
-                            <ExternalLink className="w-3 h-3" /> Screenshot
-                          </a>
-                        )}
-                      </div>
-                      {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
-                      {scan.errorMessage && <p className="text-[10px] font-mono text-red-500 mt-1 truncate">{scan.errorMessage}</p>}
+          <>
+            <div className="divide-y divide-slate-100">
+              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string }) => {
+                const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
+                const isErrorExpanded = expandedErrors.has(scan._id);
+                return (
+                  <div key={scan._id} className={`py-3 ${scan.status === "found" ? "border-l-4 border-l-green-400 pl-3" : ""}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
+                            {meta.icon} {meta.label}
+                          </span>
+                          <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
+                          <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
+                          {scan.screenshotUrl && (
+                            <a href={scan.screenshotUrl} target="_blank" rel="noopener noreferrer"
+                              className="ml-auto text-[10px] text-red-600 hover:text-red-800 flex items-center gap-1 font-medium">
+                              <ExternalLink className="w-3 h-3" /> Screenshot
+                            </a>
+                          )}
+                        </div>
+                        {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
 
-                      {/* Page captures - network requests, headers, responses, cookies */}
-                      {scan.pageCaptures && <SpainPageCapturesBlock pageCaptures={scan.pageCaptures} />}
+                        {/* Detected services for "found" */}
+                        {scan.status === "found" && scan.detectedServices && (() => {
+                          try {
+                            const services = JSON.parse(scan.detectedServices) as Array<{serviceId: string; serviceName: string}>;
+                            if (services.length > 0) {
+                              return (
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {services.map((svc, i) => (
+                                    <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded border border-green-200">
+                                      🎯 {svc.serviceName} <span className="text-green-500">#{svc.serviceId}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            return null;
+                          } catch { return null; }
+                        })()}
+
+                        {scan.status === "found" && !scan.detectedServices && (
+                          <p className="text-[10px] text-amber-600 mt-1">⚠️ Aucun service extrait — possible faux positif</p>
+                        )}
+
+                        {/* Error message with expand toggle */}
+                        {scan.errorMessage && (
+                          <div className="mt-1">
+                            {scan.errorMessage.length > 120 && !isErrorExpanded ? (
+                              <div className="flex items-start gap-1">
+                                <p className="text-[10px] font-mono text-red-500 truncate flex-1">{scan.errorMessage}</p>
+                                <button onClick={() => toggleErrorExpand(scan._id)} className="text-[9px] text-red-400 hover:text-red-600 shrink-0 underline">
+                                  voir +
+                                </button>
+                              </div>
+                            ) : scan.errorMessage.length > 120 ? (
+                              <div>
+                                <p className="text-[10px] font-mono text-red-500 whitespace-pre-wrap break-all">{scan.errorMessage}</p>
+                                <button onClick={() => toggleErrorExpand(scan._id)} className="text-[9px] text-red-400 hover:text-red-600 underline mt-0.5">
+                                  réduire
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] font-mono text-red-500">{scan.errorMessage}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Page captures - network requests, headers, responses, cookies */}
+                        {scan.pageCaptures && <SpainPageCapturesBlock pageCaptures={scan.pageCaptures} />}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1 px-4 py-3 border-t border-slate-100 bg-slate-50/50 mt-3 rounded-lg">
+                <button
+                  onClick={() => setScanPage(0)}
+                  disabled={safePage === 0}
+                  className="text-[10px] px-2 py-1 rounded border border-slate-200 text-slate-500 hover:border-slate-400 disabled:opacity-30"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setScanPage(p => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  className="text-[10px] px-2 py-1 rounded border border-slate-200 text-slate-500 hover:border-slate-400 disabled:opacity-30"
+                >
+                  ‹
+                </button>
+
+                {getScanPageNumbers().map((p, idx) =>
+                  p === "..." ? (
+                    <span key={`dots-${idx}`} className="text-[10px] px-1 text-slate-400">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setScanPage(p)}
+                      className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${
+                        safePage === p
+                          ? "bg-red-600 text-white border-red-600"
+                          : "border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-700"
+                      }`}
+                    >
+                      {p + 1}
+                    </button>
+                  )
+                )}
+
+                <button
+                  onClick={() => setScanPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  className="text-[10px] px-2 py-1 rounded border border-slate-200 text-slate-500 hover:border-slate-400 disabled:opacity-30"
+                >
+                  ›
+                </button>
+                <button
+                  onClick={() => setScanPage(totalPages - 1)}
+                  disabled={safePage >= totalPages - 1}
+                  className="text-[10px] px-2 py-1 rounded border border-slate-200 text-slate-500 hover:border-slate-400 disabled:opacity-30"
+                >
+                  »
+                </button>
+
+                <span className="text-[9px] text-slate-400 ml-2">
+                  {safePage * 20 + 1}–{Math.min((safePage + 1) * 20, totalCount)} sur {totalCount}
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

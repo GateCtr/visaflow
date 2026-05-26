@@ -171,6 +171,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
       // ─── DIAGNOSTIC: quand found, toujours extraire et logger les services ──
       // Permet de vérifier si c'est un vrai créneau (services rendus) ou un faux positif
+      let detectedServicesJson: string | undefined;
       if (
         SPAIN_HTTP_MODE &&
         result.status === "found" &&
@@ -181,6 +182,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
         // Extraction diagnostic — toujours logué, même sans dossier actif
         const diagServices = extractServicesFromHtml(mainHtml);
         if (diagServices.length > 0) {
+          detectedServicesJson = JSON.stringify(diagServices.map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName })));
           log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) rendu(s) dans le HTML :`);
           for (const svc of diagServices) {
             log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
@@ -316,6 +318,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
         slotInfo: result.slotInfo,
         screenshotStorageId,
         errorMessage: result.errorMessage,
+        detectedServices: detectedServicesJson,
       });
 
       await new Promise((r) => setTimeout(r, intervalMs));

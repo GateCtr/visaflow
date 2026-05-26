@@ -683,6 +683,7 @@ export async function reportSpainWatcherScan(payload: {
   slotInfo?: string;
   screenshotStorageId?: string;
   errorMessage?: string;
+  detectedServices?: string; // JSON string of [{serviceId, serviceName}]
 }): Promise<void> {
   const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/scan-result`;
   try {

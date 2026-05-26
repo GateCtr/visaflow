@@ -1077,6 +1077,7 @@ http.route({
         screenshotStorageId: body.screenshotStorageId,
         errorMessage: body.errorMessage,
         pageCaptures: body.pageCaptures,
+        detectedServices: body.detectedServices,
       });
 
       return new Response(JSON.stringify({ ok: true }), {

@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 const WATCHER_KEY = "default";
-const MAX_SCANS = 20;
+const MAX_SCANS = 200;
 
 // ─── Auth helpers (même pattern que admin.ts) ─────────────────────────────────
 
@@ -53,6 +53,65 @@ export const getWatcher = query({
     );
 
     return { watcher: watcher ?? null, scans };
+  },
+});
+
+export const getWatcherPaginated = query({
+  args: {
+    page: v.optional(v.number()),     // 0-indexed page number (default 0)
+    pageSize: v.optional(v.number()), // items per page (default 20)
+    statusFilter: v.optional(v.string()), // "found" | "not_found" | "error" | "" (all)
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const watcher = await ctx.db
+      .query("spainWatcher")
+      .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
+      .first();
+
+    const pageSize = Math.min(args.pageSize ?? 20, 50);
+    const page = args.page ?? 0;
+
+    // Fetch all scans for counting + filtering
+    const allScans = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_ts")
+      .order("desc")
+      .take(MAX_SCANS);
+
+    // Apply status filter
+    const filtered = args.statusFilter
+      ? allScans.filter((s) => s.status === args.statusFilter)
+      : allScans;
+
+    const totalCount = filtered.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    // Paginate
+    const start = page * pageSize;
+    const pageScans = filtered.slice(start, start + pageSize);
+
+    // Resolve screenshot URLs
+    const scans = await Promise.all(
+      pageScans.map(async (scan) => {
+        const screenshotUrl = scan.screenshotStorageId
+          ? await ctx.storage.getUrl(scan.screenshotStorageId)
+          : null;
+        return { ...scan, screenshotUrl };
+      }),
+    );
+
+    // Stats summary
+    const stats = {
+      total: allScans.length,
+      found: allScans.filter((s) => s.status === "found").length,
+      notFound: allScans.filter((s) => s.status === "not_found").length,
+      errors: allScans.filter((s) => s.status === "error").length,
+    };
+
+    return { watcher: watcher ?? null, scans, page, pageSize, totalCount, totalPages, stats };
   },
 });
 
@@ -109,6 +168,7 @@ export const internalRecordScan = internalMutation({
     screenshotStorageId: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
     pageCaptures: v.optional(v.string()),
+    detectedServices: v.optional(v.string()),  // JSON array of {serviceId, serviceName}
   },
   handler: async (ctx, args) => {
     const watcher = await ctx.db
@@ -126,6 +186,7 @@ export const internalRecordScan = internalMutation({
       screenshotStorageId: args.screenshotStorageId,
       errorMessage: args.errorMessage,
       pageCaptures: args.pageCaptures,
+      detectedServices: args.detectedServices,
     });
 
     // Prune old scans (keep last MAX_SCANS)
