@@ -105,7 +105,7 @@ async function getVowintSession(
   rotateCevUaProfile(); // Nouveau profil Chrome pour cette session
 
   // 1. GET page login → CSRF token + cookies
-  const loginPageRes = await fetch(`${VOWINT_BASE}/`, {
+  const loginPageRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: "https://www.google.com/" }),
     redirect: "follow",
@@ -122,7 +122,7 @@ async function getVowintSession(
   if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
 
   // 2. POST login
-  const loginRes = await fetch(`${VOWINT_BASE}/en/Account/Login`, {
+  const loginRes = await cevSetupFetch(`${VOWINT_BASE}/en/Account/Login`, {
     method: "POST",
     headers: {
       ...getCevBrowserHeaders({
@@ -150,7 +150,7 @@ async function getVowintSession(
   let redirectUrl = loginRes.headers.get("location");
   for (let i = 0; i < 5 && redirectUrl; i++) {
     const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
-    const r = await fetch(fullUrl, {
+    const r = await cevSetupFetch(fullUrl, {
       method: "GET",
       headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies }),
       redirect: "manual",
@@ -184,7 +184,7 @@ async function getVowintSession(
 
   if (!appId) {
     // GET IndexByUserId (initialise la vue)
-    const pageRes = await fetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
+    const pageRes = await cevSetupFetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
       method: "GET",
       headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: cookies }),
       redirect: "follow",
@@ -199,7 +199,7 @@ async function getVowintSession(
 
     // GET DataTables (initialise état serveur)
     if (!appId) {
-      await fetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+      await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
         method: "GET",
         headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
         signal: AbortSignal.timeout(20_000),
@@ -207,7 +207,7 @@ async function getVowintSession(
 
       // GET MyList (DataTables AJAX)
       const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
-      const listRes = await fetch(dtUrl, {
+      const listRes = await cevSetupFetch(dtUrl, {
         method: "GET",
         headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
         signal: AbortSignal.timeout(30_000),
