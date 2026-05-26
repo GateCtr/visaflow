@@ -555,7 +555,7 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   // ── Déterminer le proxy à utiliser ──────────────────────────────────────────
   // Si un proxy est passé dynamiquement via process.env (par le stealth loop),
   // l'utiliser. Sinon utiliser la variable globale IPROYAL_PROXY_URL.
-  const currentProxy = process.env.IPROYAL_PROXY_URL;
+  let currentProxy = process.env.IPROYAL_PROXY_URL;
   
   if (!currentProxy) {
     // Pas de proxy configuré — connexion directe
@@ -566,6 +566,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= PROXY_MAX_RETRIES; attempt++) {
+    // Re-lire le proxy à chaque retry (peut avoir été roté entre les tentatives)
+    currentProxy = process.env.IPROYAL_PROXY_URL ?? currentProxy;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), PROXY_FETCH_TIMEOUT_MS);
@@ -590,6 +592,14 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
         console.warn(`${logPrefix} ⚠️ Proxy error ${res.status} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1})`);
         lastError = new Error(`PROXY_ERROR_${res.status}`);
         if (attempt < PROXY_MAX_RETRIES) {
+          // ── Rotation IP SOAX entre les retries (HTTP 502/503) ──────────────
+          if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
+            rotateCevSoaxSession("cev-retry");
+            const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
+            process.env.IPROYAL_PROXY_URL = newProxyUrl;
+            resetCevImpitInstances();
+            console.log(`${logPrefix} 🔄 Rotation SOAX IP pour retry #${attempt + 2} (HTTP ${res.status})`);
+          }
           await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
           continue;
         }
@@ -608,6 +618,16 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
           `${logPrefix} ⚠️ Proxy ${isTimeout ? "TIMEOUT" : "error"} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1}): ${msg.slice(0, 80)}`
         );
         lastError = err instanceof Error ? err : new Error(msg);
+        // ── Rotation IP SOAX entre les retries ──────────────────────────────
+        // Si l'IP sticky actuelle est morte, on en demande une nouvelle
+        // avant de retenter (nouveau sessionid = nouvelle IP SOAX).
+        if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
+          rotateCevSoaxSession("cev-retry");
+          const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
+          process.env.IPROYAL_PROXY_URL = newProxyUrl;
+          resetCevImpitInstances();
+          console.log(`${logPrefix} 🔄 Rotation SOAX IP pour retry #${attempt + 2}`);
+        }
         await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
         continue;
       }
