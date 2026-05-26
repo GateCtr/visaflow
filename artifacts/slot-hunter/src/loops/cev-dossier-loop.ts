@@ -48,6 +48,7 @@ import {
   restorePoolStateFromRedis,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
+import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -591,6 +592,7 @@ export async function startCevDossierLoop(): Promise<void> {
         const waitMin = Math.ceil(waitMs / 60_000);
         const stats = pool.getStats();
         log("INFO", `⏳ Tous les dossiers épuisés (${stats.exhausted}/${stats.total}) — attente ${waitMin} min`);
+        // This triggers idle period detection in daily-stats (checkIdleState will catch it)
         await sleep(Math.min(waitMs + 5000, 5 * 60_000));
         continue;
       }
@@ -644,11 +646,14 @@ export async function startCevDossierLoop(): Promise<void> {
       switch (result.status) {
         case "slot_found":
           log("INFO", `  🚨 SLOT TROUVÉ!`);
+          recordScan(logApplicationId, dossier.vowintRef);
+          recordSlotFound(logApplicationId, dossier.vowintRef);
           // Re-login préventif si on atteint la limite (avant le booking)
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
             log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
             invalidateVowintCache(vowintEmail!);
             globalSessionClicks = 0;
+            recordRelogin(logApplicationId, dossier.vowintRef, "preventive");
           }
           await handleSlotFound(
             vowintEmail!, vowintPassword!, dossier, logApplicationId,
@@ -657,21 +662,26 @@ export async function startCevDossierLoop(): Promise<void> {
           break;
         case "rate_limited":
           state.rateLimits++;
+          recordScan(logApplicationId, dossier.vowintRef);
+          recordRateLimit(logApplicationId, dossier.vowintRef, "CEV 5 clics/h");
           // Le rate-limit vient du serveur → session grillée, reset le compteur
           globalSessionClicks = 0;
           log("WARN", `  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
           break;
         case "no_slot":
           log("INFO", `  — Pas de créneau`);
+          recordScan(logApplicationId, dossier.vowintRef);
           // Re-login préventif après MAX_CLICKS_PER_SESSION clics GLOBAUX
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
             log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
             invalidateVowintCache(vowintEmail!);
             globalSessionClicks = 0;
+            recordRelogin(logApplicationId, dossier.vowintRef, "preventive");
           }
           break;
         case "error":
           state.errors++;
+          recordScan(logApplicationId, dossier.vowintRef);
           break;
       }
 

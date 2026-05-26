@@ -118,7 +118,7 @@ async function generateAndSendReport(): Promise<boolean> {
   const proxyState = proxyPool.getState?.() ?? {};
   const proxyStatusStr = proxyPool.isConfigured
     ? `SOAX OK — Gateway 2captcha (eu.proxy.2captcha.com:2334)`
-    : (process.env.SOAX_PROXY_URL ? "SOAX configuré" : "Direct (aucun proxy)");
+    : (process.env.SOAX_PROXY_URL ? "SOAX configuré (CEV Dossier v3)" : "Direct (aucun proxy)");
 
   const snapshot = getDailySnapshot(proxyStatusStr);
   const subject = buildSubject(snapshot);
