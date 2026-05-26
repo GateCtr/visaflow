@@ -7,14 +7,15 @@ import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Gri
 const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   usa:      { bg: "bg-blue-100",   text: "text-blue-800",   dot: "bg-blue-500" },
   schengen: { bg: "bg-indigo-100", text: "text-indigo-800", dot: "bg-indigo-500" },
+  spain:    { bg: "bg-red-100",    text: "text-red-800",    dot: "bg-red-500" },
   dubai:    { bg: "bg-amber-100",  text: "text-amber-800",  dot: "bg-amber-500" },
-  turkey:   { bg: "bg-red-100",    text: "text-red-800",    dot: "bg-red-500" },
+  turkey:   { bg: "bg-rose-100",   text: "text-rose-800",   dot: "bg-rose-500" },
   india:    { bg: "bg-orange-100", text: "text-orange-800", dot: "bg-orange-500" },
   germany:  { bg: "bg-yellow-100", text: "text-yellow-800", dot: "bg-yellow-500" },
 };
 
 const DEST_LABELS: Record<string, string> = {
-  usa: "USA 🇺🇸", schengen: "Schengen 🇪🇺", dubai: "Dubaï 🇦🇪",
+  usa: "USA 🇺🇸", schengen: "Schengen 🇪🇺", spain: "Espagne 🇪🇸", dubai: "Dubaï 🇦🇪",
   turkey: "Turquie 🇹🇷", india: "Inde 🇮🇳", germany: "Allemagne 🇩🇪",
 };
 
@@ -86,7 +87,11 @@ function AppointmentCard({ app, compact = false }: { app: Appointment; compact?:
 export default function AdminCalendar() {
   const data = useQuery(api.admin.getCalendarData);
   const [modeFilter, setModeFilter] = useState<"schedule" | "reschedule" | undefined>(undefined);
-  const discoveryStats = useQuery(api.slotDiscoveries.getStats, modeFilter ? { mode: modeFilter } : {});
+  const [destFilter, setDestFilter] = useState<string | undefined>(undefined);
+  const discoveryStats = useQuery(api.slotDiscoveries.getStats, {
+    ...(modeFilter ? { mode: modeFilter } : {}),
+    ...(destFilter ? { destination: destFilter } : {}),
+  });
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState<string | null>(toISODateKey(today));
@@ -376,7 +381,7 @@ export default function AdminCalendar() {
         </div>
       ) : (
         /* Discoveries view — stats de dates captées/ignorées par le bot */
-        <DiscoveriesPanel stats={discoveryStats} modeFilter={modeFilter} setModeFilter={setModeFilter} />
+        <DiscoveriesPanel stats={discoveryStats} modeFilter={modeFilter} setModeFilter={setModeFilter} destFilter={destFilter} setDestFilter={setDestFilter} />
       )}
     </div>
   );
@@ -390,6 +395,12 @@ const REASON_LABELS: Record<string, string> = {
   after_deadline: "Après deadline",
   before_from_date: "Avant date min",
   no_time_slots: "Pas d'horaires",
+  out_of_window: "Hors fenêtre",
+  booking_failed_otp_timeout: "OTP timeout",
+  booking_failed_turnstile_failed: "Turnstile échoué",
+  booking_failed_signin_failed: "Connexion échouée",
+  booking_failed_booking_failed: "Booking échoué",
+  booking_failed_no_slots: "Plus de créneaux",
 };
 
 type DiscoveryStats = {
@@ -401,6 +412,7 @@ type DiscoveryStats = {
   byDayOfWeek: Record<number, { captured: number; ignored: number }>;
   byReason: Record<string, number>;
   byMode: Record<string, number>;
+  byOffice: Record<string, { captured: number; ignored: number; total: number }>;
   recent: Array<{
     _id: string;
     destination: string;
@@ -414,7 +426,7 @@ type DiscoveryStats = {
   }>;
 };
 
-function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: DiscoveryStats | null | undefined; modeFilter: "schedule" | "reschedule" | undefined; setModeFilter: (m: "schedule" | "reschedule" | undefined) => void }) {
+function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDestFilter }: { stats: DiscoveryStats | null | undefined; modeFilter: "schedule" | "reschedule" | undefined; setModeFilter: (m: "schedule" | "reschedule" | undefined) => void; destFilter: string | undefined; setDestFilter: (d: string | undefined) => void }) {
   if (stats === undefined) {
     return <div className="p-12 text-center text-muted-foreground">Chargement des statistiques de découverte...</div>;
   }
@@ -434,6 +446,29 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: Discove
 
   return (
     <div className="space-y-6">
+      {/* Destination filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-muted-foreground">Destination :</span>
+        <button
+          onClick={() => setDestFilter(undefined)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!destFilter ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+        >
+          Toutes
+        </button>
+        {Object.entries(DEST_LABELS).map(([key, label]) => {
+          const c = DEST_COLORS[key];
+          return (
+            <button
+              key={key}
+              onClick={() => setDestFilter(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${destFilter === key ? `${c.bg} ${c.text} shadow` : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Mode filter */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground">Mode :</span>
@@ -597,6 +632,49 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter }: { stats: Discove
           </div>
         </div>
       </div>
+
+      {/* By Office/Service breakdown */}
+      {stats.byOffice && Object.keys(stats.byOffice).length > 0 && (
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-secondary" />
+            {destFilter === "spain" ? "Par service" : "Par bureau"}
+          </h3>
+          <div className="space-y-2">
+            {Object.entries(stats.byOffice)
+              .sort(([, a], [, b]) => b.total - a.total)
+              .slice(0, 10)
+              .map(([office, data]) => {
+                const maxOfficeVal = Math.max(...Object.values(stats.byOffice).map(o => o.total), 1);
+                const pct = (data.total / maxOfficeVal) * 100;
+                return (
+                  <div key={office} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-700 w-40 truncate" title={office}>{office}</span>
+                    <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden relative">
+                      {data.captured > 0 && (
+                        <div
+                          className="absolute left-0 top-0 h-full bg-green-400 rounded-full"
+                          style={{ width: `${(data.captured / maxOfficeVal) * 100}%` }}
+                        />
+                      )}
+                      {data.ignored > 0 && (
+                        <div
+                          className="absolute top-0 h-full bg-amber-300 rounded-full"
+                          style={{ left: `${(data.captured / maxOfficeVal) * 100}%`, width: `${(data.ignored / maxOfficeVal) * 100}%` }}
+                        />
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground w-12 text-right">{data.captured}/{data.total}</span>
+                  </div>
+                );
+              })}
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-400 inline-block" /> Retenues</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-300 inline-block" /> Ignorées</span>
+          </div>
+        </div>
+      )}
 
       {/* Reasons breakdown */}
       {Object.keys(stats.byReason).length > 0 && (
