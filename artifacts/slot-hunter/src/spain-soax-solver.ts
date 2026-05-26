@@ -18,6 +18,14 @@
  */
 
 import { Impit } from "impit";
+import {
+  syncSpainCfSessionToRedis,
+  restoreSpainCfSessionFromRedis,
+  removeSpainCfSessionFromRedis,
+  syncSoaxRotationToRedis,
+  restoreSoaxRotationFromRedis,
+  type SerializableSpainCfSession,
+} from "./spain-redis-persistence.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -136,6 +144,9 @@ export function rotateSpainSoaxSession(identifier: string = "spain-cf"): void {
   _spainSoaxRotationCount.set(identifier, current + 1);
   // Invalider le cache de session CF
   _activeCfSession = undefined;
+  // Persist rotation state + remove dead session from Redis
+  syncSoaxRotationToRedis(_spainSoaxRotationCount);
+  removeSpainCfSessionFromRedis();
   console.log(`[spain-soax] 🔄 Rotation SOAX Espagne demandée (rot#${current + 1})`);
 }
 
@@ -355,24 +366,50 @@ export function invalidateSpainCfSession(): void {
   if (_activeCfSession) {
     console.log(`[spain-soax] 🗑️ Session CF invalidée manuellement`);
     _activeCfSession = undefined;
+    removeSpainCfSessionFromRedis();
   }
 }
 
 /**
  * Obtient ou renouvelle la session CF pour l'Espagne.
- * - Si une session valide existe → la retourne
- * - Si expirée ou absente → solve via CapSolver + SOAX
+ * - Si une session valide existe en mémoire → la retourne
+ * - Si pas en mémoire → tente restauration depuis Redis
+ * - Si Redis vide/expiré → solve via CapSolver + SOAX
  * - Retry automatique (max 2 tentatives avec rotation IP)
  */
 export async function ensureSpainCfSession(
   targetUrl: string = DEFAULT_SPAIN_TARGET_URL,
 ): Promise<SpainCfSession | null> {
-  // Session active et valide ?
+  // Session active et valide en mémoire ?
   const existing = getActiveSpainCfSession();
   if (existing) {
     const remainMin = Math.round((_activeCfSession!.expiresAt - Date.now()) / 60_000);
     console.log(`[spain-soax] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
     return existing;
+  }
+
+  // Tenter restauration depuis Redis (survit aux redéploiements)
+  try {
+    const cached = await restoreSpainCfSessionFromRedis();
+    if (cached) {
+      // Reconstruire la session en mémoire
+      const restored: SpainCfSession = {
+        cfClearance: cached.cfClearance,
+        cfDomain: cached.cfDomain,
+        soaxProxyUrl: cached.soaxProxyUrl,
+        userAgent: cached.userAgent,
+        createdAt: cached.createdAt,
+        expiresAt: cached.expiresAt,
+        allCookies: cached.allCookies,
+        extraHeaders: cached.extraHeaders,
+      };
+      _activeCfSession = restored;
+      const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
+      console.log(`[spain-soax] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min)`);
+      return restored;
+    }
+  } catch (err) {
+    console.warn(`[spain-soax] ⚠️ Redis restore échoué (non-fatal): ${err}`);
   }
 
   // Vérifier les prérequis
@@ -402,6 +439,10 @@ export async function ensureSpainCfSession(
       _activeCfSession = result.session;
       console.log(`[spain-soax] 🎉 Session CF établie! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
       console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
+
+      // Persister dans Redis pour survivre aux redéploiements
+      syncSpainCfSessionToRedis(result.session as SerializableSpainCfSession);
+
       return result.session;
     }
 
@@ -419,6 +460,24 @@ export async function ensureSpainCfSession(
 }
 
 // ─── Impit Instance (Chrome fingerprint + SOAX proxy) ───────────────────────
+
+/**
+ * Restaure l'état SOAX rotation depuis Redis (appelé au démarrage).
+ * Permet de reprendre avec le bon rotation count après un redéploiement.
+ */
+export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
+  try {
+    const rotationMap = await restoreSoaxRotationFromRedis();
+    if (rotationMap && rotationMap.size > 0) {
+      for (const [key, value] of rotationMap) {
+        _spainSoaxRotationCount.set(key, value);
+      }
+      console.log(`[spain-soax] ✅ Rotation state restauré depuis Redis (${rotationMap.size} identifiers)`);
+    }
+  } catch (err) {
+    console.warn(`[spain-soax] ⚠️ Restauration rotation échouée (non-fatal): ${err}`);
+  }
+}
 
 let _spainImpit: InstanceType<typeof Impit> | undefined;
 let _spainImpitProxyUrl: string | undefined;
