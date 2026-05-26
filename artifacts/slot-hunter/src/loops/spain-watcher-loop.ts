@@ -59,9 +59,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
         continue;
       }
 
-      // En mode HTTP : intervalle beaucoup plus court (30-60s vs 3min)
-      const defaultIntervalMin = SPAIN_HTTP_MODE ? 0.5 : 3; // 30s en HTTP, 3min en Playwright
-      const intervalMs = (config.intervalMin ?? defaultIntervalMin) * 60_000;
+      // En mode HTTP : intervalle fixe 30s (ignore config Convex qui est calibrée pour Playwright)
+      // En mode Playwright : utilise config.intervalMin (défaut 3min)
+      const intervalMs = SPAIN_HTTP_MODE
+        ? 30_000 // 30s — scan ultra-rapide, coût CF nul (1 solve = 2h)
+        : (config.intervalMin ?? 3) * 60_000;
       const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
       log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
 
