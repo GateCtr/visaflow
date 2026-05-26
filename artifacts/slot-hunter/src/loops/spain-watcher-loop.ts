@@ -11,7 +11,8 @@
 import { getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
-import { isSpainCfSessionExpiringSoon, ensureSpainCfSession } from "../spain-soax-solver.js";
+import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
+import { initSpainRedis } from "../spain-redis-persistence.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
@@ -19,8 +20,23 @@ const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
 export async function startSpainWatcherLoop(): Promise<void> {
   log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright"})`);
 
-  // En mode HTTP : pre-warm la session CF au démarrage (évite 3min de latence au 1er scan)
+  // En mode HTTP : initialiser Redis + restaurer l'état SOAX avant le pre-warm
   if (SPAIN_HTTP_MODE) {
+    // 1. Connecter Redis (persistence CF session + SOAX rotation)
+    const redisOk = await initSpainRedis().catch((e) => {
+      log("WARN", `[SPAIN-WATCHER] Redis init échoué (non-fatal): ${e}`);
+      return false;
+    });
+    if (redisOk) {
+      log("INFO", "[SPAIN-WATCHER] ✅ Redis Spain connecté — session CF persistée entre redéploiements");
+    }
+
+    // 2. Restaurer le rotation count SOAX (évite collisions session ID)
+    await restoreSpainSoaxStateFromRedis().catch((e) => {
+      log("WARN", `[SPAIN-WATCHER] Restauration SOAX rotation échouée (non-fatal): ${e}`);
+    });
+
+    // 3. Pre-warm la session CF (Redis restore tenté automatiquement dans ensureSpainCfSession)
     log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (SOAX + CapSolver)…");
     const session = await ensureSpainCfSession().catch((e) => {
       log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);

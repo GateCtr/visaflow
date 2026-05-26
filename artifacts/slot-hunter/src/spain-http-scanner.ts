@@ -543,8 +543,25 @@ async function scanViaMainEndpoint(
   }
 
   // Step 1: GET entry page → PHPSESSID + token
+  // IMPORTANT: Use full Chrome header set — Cloudflare validates the fingerprint
+  // (missing sec-ch-ua headers was causing immediate 403 → session invalidation)
   const entryRes = await impit.fetch(portalUrl, {
-    headers: { "User-Agent": session.userAgent, "Accept": "text/html", "Cookie": cookieParts.join("; ") },
+    headers: {
+      "User-Agent": session.userAgent,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "Cookie": cookieParts.join("; "),
+      "Sec-CH-UA": '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+      "Sec-CH-UA-Mobile": "?0",
+      "Sec-CH-UA-Platform": '"Windows"',
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+      ...session.extraHeaders,
+    },
   } as any) as any;
 
   if (!entryRes || entryRes.status === 403) {
@@ -607,11 +624,22 @@ async function scanViaMainEndpoint(
     method: "POST",
     headers: {
       "User-Agent": session.userAgent,
-      "Accept": "text/html",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
       "Content-Type": "application/x-www-form-urlencoded",
       "Cookie": cookieParts.join("; "),
       "Origin": "https://www.citaconsular.es",
       "Referer": portalUrl,
+      "Sec-CH-UA": '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+      "Sec-CH-UA-Mobile": "?0",
+      "Sec-CH-UA-Platform": '"Windows"',
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+      ...session.extraHeaders,
     },
     body: `token=${encodeURIComponent(tokenMatch[1])}`,
   } as any) as any;
@@ -642,13 +670,18 @@ async function scanViaMainEndpoint(
     headers: {
       "User-Agent": session.userAgent,
       "Accept": "*/*",
-      "Accept-Language": "es-ES,es;q=0.9",
+      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
       "Cookie": cookieParts.join("; "),
       "Referer": portalUrl.replace(/\/?$/, "/"),
       "X-Requested-With": "XMLHttpRequest",
+      "Sec-CH-UA": '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+      "Sec-CH-UA-Mobile": "?0",
+      "Sec-CH-UA-Platform": '"Windows"',
       "Sec-Fetch-Dest": "script",
       "Sec-Fetch-Mode": "no-cors",
       "Sec-Fetch-Site": "same-origin",
+      ...session.extraHeaders,
     },
   } as any) as any;
 
