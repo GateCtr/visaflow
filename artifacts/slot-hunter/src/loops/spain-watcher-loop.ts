@@ -169,15 +169,32 @@ export async function startSpainWatcherLoop(): Promise<void> {
         `[SPAIN-WATCHER] [${modeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
-      // ─── AUTO-BOOKING MULTI-DOSSIER (Convex-driven) ────────────────────
-      // Si créneau détecté en mode HTTP → chercher les dossiers Espagne actifs dans Convex
-      // et tenter le booking pour chaque dossier éligible.
+      // ─── DIAGNOSTIC: quand found, toujours extraire et logger les services ──
+      // Permet de vérifier si c'est un vrai créneau (services rendus) ou un faux positif
       if (
         SPAIN_HTTP_MODE &&
         result.status === "found" &&
         (result as any)._mainHtml
       ) {
         const mainHtml = (result as any)._mainHtml as string;
+
+        // Extraction diagnostic — toujours logué, même sans dossier actif
+        const diagServices = extractServicesFromHtml(mainHtml);
+        if (diagServices.length > 0) {
+          log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) rendu(s) dans le HTML :`);
+          for (const svc of diagServices) {
+            log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
+          }
+        } else {
+          log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service rendu (0 liens #selectservice dans le HTML)`);
+          // Log un extrait du HTML pour diagnostic
+          const renderedHtml = mainHtml.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
+          const containerMatch = renderedHtml.match(/idDivBktServicesContainer[^>]*>([\s\S]{0,500})/i);
+          if (containerMatch) {
+            log("INFO", `[SPAIN-WATCHER]    Container preview: ${containerMatch[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}`);
+          }
+        }
+
         const cfSession = getActiveSpainCfSession();
 
         if (!cfSession) {
