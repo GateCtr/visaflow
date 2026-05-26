@@ -27,6 +27,7 @@ import {
   consumeOtpCode,
   reportSpainWatcherScan,
 } from "./convexClient.js";
+import { matchServiceForVisa } from "./spain-service-mapping.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,14 +36,18 @@ export interface SpainBookingConfig {
   login: string;
   /** Mot de passe Bookitit */
   password: string;
-  /** Application ID pour le flow OTP (Convex) */
+  /** Application ID Convex (pour OTP + reporting) */
   applicationId?: string;
   /** Canal OTP : email, sms, ou manual */
   otpChannel?: "email" | "sms" | "manual";
   /** Si true, utilise signup au lieu de signin */
   useSignup?: boolean;
-  /** Nom du demandeur (pour signup) */
+  /** Nom du demandeur (pour signup et logs) */
   applicantName?: string;
+  /** Service cible spécifique (si fourni, bypass l'auto-sélection) */
+  targetServiceId?: string;
+  /** Type de visa du dossier (pour le matching service, ex: "Visa C — Tourisme / Affaires") */
+  visaType?: string;
 }
 
 export interface SpainBookingResult {
@@ -52,7 +57,7 @@ export interface SpainBookingResult {
   durationMs: number;
 }
 
-interface ExtractedSlotInfo {
+export interface ExtractedSlotInfo {
   serviceId: string;
   serviceName: string;
   agendaId?: string;
@@ -238,9 +243,28 @@ export async function executeHttpBooking(
     return { status: "no_slots", errorMessage: "Aucun service rendu dans le HTML", durationMs: Date.now() - t0 };
   }
 
-  // Prendre le premier service disponible
-  const targetService = services[0];
-  console.log(`[spain-booking] 🎯 Service cible: ${targetService.serviceName} (ID: ${targetService.serviceId})`);
+  // Sélection du service cible :
+  //   1. Si targetServiceId fourni → chercher par ID
+  //   2. Si visaType fourni → matching par nom via spain-service-mapping
+  //   3. Sinon → premier service disponible (legacy)
+  let targetService: ExtractedSlotInfo | null = null;
+
+  if (config.targetServiceId) {
+    targetService = services.find((s) => s.serviceId === config.targetServiceId) ?? null;
+    if (!targetService) {
+      return { status: "no_slots", errorMessage: `Service cible ID ${config.targetServiceId} non trouvé dans le HTML`, durationMs: Date.now() - t0 };
+    }
+  } else if (config.visaType) {
+    targetService = matchServiceForVisa(services, config.visaType);
+    if (!targetService) {
+      return { status: "no_slots", errorMessage: `Aucun service Bookitit ne matche le visa "${config.visaType}"`, durationMs: Date.now() - t0 };
+    }
+  } else {
+    targetService = services[0];
+  }
+
+  const logPrefix = config.applicantName ? `[spain-booking][${config.applicantName}]` : "[spain-booking]";
+  console.log(`${logPrefix} 🎯 Service cible: ${targetService.serviceName} (ID: ${targetService.serviceId})`);
 
   // ─── 2. Récupérer les agendas pour ce service ────────────────────────
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
