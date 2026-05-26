@@ -566,15 +566,44 @@ async function scanViaMainEndpoint(
     return null;
   }
 
-  // Extract token for POST
-  const tokenMatch = entryHtml.match(/name="token"\s+value="([^"]+)"/);
+  // ─── Extract token for POST (with structural monitoring) ──────────────
+  // The entry page must contain a <form method="POST"> with a hidden input name="token".
+  // If the structure changes (CF update, site redesign), this is the breakpoint.
+  // We use multiple extraction strategies and report anomalies.
+
+  const tokenMatch = entryHtml.match(/name="token"\s+value="([^"]+)"/)
+    ?? entryHtml.match(/<input[^>]+name=["']token["'][^>]+value=["']([^"']+)["']/i)
+    ?? entryHtml.match(/<input[^>]+value=["']([a-f0-9]{20,})["'][^>]+name=["']token["']/i);
+
   if (!tokenMatch) {
-    console.warn("[spain-http] ⚠️ Pas de token trouvé sur la page d'entrée");
-    return null;
+    // ─── STRUCTURAL ANOMALY DETECTION ──────────────────────────────────
+    // The token is missing. Diagnose WHY to help future debugging.
+    const hasForm = /<form[^>]*method=["']POST["']/i.test(entryHtml);
+    const hasAnyHiddenInput = /<input[^>]+type=["']hidden["']/i.test(entryHtml);
+    const hiddenInputNames = [...entryHtml.matchAll(/<input[^>]+type=["']hidden["'][^>]+name=["']([^"']+)["']/gi)].map(m => m[1]);
+    const hasButton = /idCaptchaButton|[Cc]ontinue|[Cc]ontinuar/i.test(entryHtml);
+    const pageTitle = entryHtml.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "unknown";
+    const bodyPreview = entryHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+
+    console.error(`[spain-http] 🚨 ALERTE STRUCTURELLE — Token CSRF non trouvé !`);
+    console.error(`[spain-http]    Page title: "${pageTitle}"`);
+    console.error(`[spain-http]    Has <form POST>: ${hasForm}`);
+    console.error(`[spain-http]    Has hidden inputs: ${hasAnyHiddenInput} (names: ${hiddenInputNames.join(", ") || "none"})`);
+    console.error(`[spain-http]    Has Continue button: ${hasButton}`);
+    console.error(`[spain-http]    Body preview: ${bodyPreview}`);
+    console.error(`[spain-http]    → Le formulaire d'entrée a peut-être changé de structure`);
+    console.error(`[spain-http]    → Vérifier: nouveau nom de champ? Token généré par JS? Nouveau challenge?`);
+
+    // Report the structural change via scan result (will trigger admin email)
+    return {
+      status: "error" as const,
+      errorMessage: `ALERTE STRUCTURELLE: Token CSRF absent. Form=${hasForm}, HiddenInputs=${hiddenInputNames.join(",") || "none"}, Title="${pageTitle}". La page d'entrée citaconsular a peut-être changé.`,
+      scanDurationMs: Date.now() - t0,
+    };
   }
 
   // Step 2: POST Continue
-  await impit.fetch(portalUrl.replace(/\/?$/, "/"), {
+  const postRes = await impit.fetch(portalUrl.replace(/\/?$/, "/"), {
     method: "POST",
     headers: {
       "User-Agent": session.userAgent,
@@ -585,7 +614,12 @@ async function scanViaMainEndpoint(
       "Referer": portalUrl,
     },
     body: `token=${encodeURIComponent(tokenMatch[1])}`,
-  } as any);
+  } as any) as any;
+
+  // Monitor POST response for structural changes
+  if (postRes && postRes.status !== 200) {
+    console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
+  }
 
   // Step 3: Call /onlinebookings/main/ — the critical widget init call
   const cbName = `jQuery21104${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
@@ -632,6 +666,28 @@ async function scanViaMainEndpoint(
     try { html = JSON.parse(`"${jsonpMatch[1]}"`); } catch { html = mainBody; }
   } else {
     html = mainBody;
+  }
+
+  // ─── STRUCTURAL MONITORING: /main/ response ────────────────────────────
+  // Monitor that the response is valid and contains expected landmarks
+  if (html.length < 1000) {
+    console.error(`[spain-http] 🚨 /main/ retourné seulement ${html.length} chars — possible erreur serveur ou changement API`);
+    return {
+      status: "error" as const,
+      errorMessage: `ALERTE: /onlinebookings/main/ retourné ${html.length} chars (attendu: ~100K+). Possible changement d'API Bookitit.`,
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  const hasWidgetBody = /idBktWidgetDefaultBodyContainer|idDivBktServicesContainer/i.test(html);
+  if (!hasWidgetBody) {
+    console.error(`[spain-http] 🚨 /main/ ne contient pas les landmarks attendus (idBktWidgetDefaultBodyContainer)`);
+    console.error(`[spain-http]    Preview: ${html.slice(0, 500)}`);
+    return {
+      status: "error" as const,
+      errorMessage: `ALERTE: /onlinebookings/main/ structure HTML inattendue (pas de idBktWidgetDefaultBodyContainer). Le widget Bookitit a peut-être changé.`,
+      scanDurationMs: Date.now() - t0,
+    };
   }
 
   console.log(`[spain-http] 📊 /main/ retourné ${html.length} chars`);
