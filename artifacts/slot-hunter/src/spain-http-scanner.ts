@@ -83,28 +83,34 @@ function getCachedBookititConfig(portalUrl: string): BookititConfig | null {
  *   bkt_init_widget = {...};
  */
 function extractBktInitFromHtml(html: string): Record<string, string> | null {
-  // Pattern 1: var bkt_init_widget = {...}
-  const m1 = html.match(/bkt_init_widget\s*=\s*(\{[^}]*\})/);
+  // Pattern 1: var bkt_init_widget = {...} — parse complet
+  const m1 = html.match(/bkt_init_widget\s*=\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/s);
   if (m1) {
-    try {
-      // Nettoyer les single quotes → double quotes pour JSON.parse
-      const cleaned = m1[1]
-        .replace(/'/g, '"')
-        .replace(/,\s*\}/g, "}") // trailing commas
-        .replace(/(\w+)\s*:/g, '"$1":'); // unquoted keys
-      return JSON.parse(cleaned) as Record<string, string>;
-    } catch {
-      // Fallback: regex individuel
+    const block = m1[1];
+    const params: Record<string, string> = {};
+
+    // Extraire chaque propriété : key: 'value' ou key: "value" ou key: value
+    const propMatches = block.matchAll(/(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|([\w.]+))/g);
+    for (const pm of propMatches) {
+      const key = pm[1];
+      const value = pm[2] ?? pm[3] ?? pm[4] ?? "";
+      if (key && value && value !== "undefined" && !value.startsWith("[")) {
+        params[key] = value;
+      }
     }
+
+    if (Object.keys(params).length > 0) return params;
   }
 
-  // Pattern 2: extraire les paires clé-valeur individuellement
+  // Pattern 2: extraire les paires clé-valeur individuellement (fallback)
   const params: Record<string, string> = {};
   const patterns = [
     /["']?idCentre["']?\s*[:=]\s*["']?(\d+)["']?/,
     /["']?idService["']?\s*[:=]\s*["']?(\d+)["']?/,
     /["']?idWidget["']?\s*[:=]\s*["']?(\w+)["']?/,
     /["']?lang["']?\s*[:=]\s*["']?(\w+)["']?/,
+    /["']?publickey["']?\s*[:=]\s*["']?([a-f0-9]+)["']?/,
+    /["']?srvsrc["']?\s*[:=]\s*["']?(https?:\/\/[^"']+)["']?/,
   ];
 
   for (const p of patterns) {
@@ -134,13 +140,23 @@ function extractBktInitFromHtml(html: string): Record<string, string> | null {
 /**
  * Extrait l'URL de base Bookitit depuis le HTML de la page widget.
  * Cherche les références au script/iframe bookitit.
+ *
+ * citaconsular.es pattern: bkt_init_widget.srvsrc = 'https://www.citaconsular.es'
+ * → API base = srvsrc + '/onlinebookings/'
  */
 function extractBookititBaseFromHtml(html: string): string | null {
+  // Pattern 0: srvsrc dans bkt_init_widget (citaconsular.es pattern)
+  // Le loader utilise: sServerUrl + '/onlinebookings/main'
+  const srvsrcMatch = html.match(/srvsrc['":\s]+['"]?(https?:\/\/[^'"}\s,]+)/i);
+  if (srvsrcMatch) {
+    const base = srvsrcMatch[1].replace(/\/$/, "") + "/onlinebookings/";
+    return base;
+  }
+
   // Pattern 1: iframe src avec bookitit
   const iframeMatch = html.match(/src=["'](https?:\/\/[^"']*bookitit\.com[^"']*onlinebookings[^"']*)/i);
   if (iframeMatch) {
     const url = iframeMatch[1].split("?")[0];
-    // S'assurer que ça finit par /
     return url.endsWith("/") ? url : url + "/";
   }
 
@@ -295,6 +311,12 @@ function lastMonthDayYmd(d: Date): string {
 /**
  * Récupère la configuration Bookitit depuis la page widget.
  * Fait un GET sur le portalUrl via impit+CF cookie, parse le HTML pour extraire les params.
+ *
+ * Flow citaconsular.es :
+ *   1. GET portalUrl → page "Continue / Continuar" avec token hidden
+ *   2. POST portalUrl/ avec token → widget Bookitit (page SPA avec JS)
+ *   3. Le widget charge ses scripts puis fait des appels JSONP vers les APIs
+ *      → On doit extraire la baseUrl Bookitit depuis les scripts/iframes
  */
 async function fetchBookititConfig(
   session: SpainCfSession,
@@ -302,7 +324,8 @@ async function fetchBookititConfig(
 ): Promise<BookititConfig | null> {
   console.log(`[spain-http] 📄 Fetch config Bookitit depuis ${portalUrl}`);
 
-  const res = await spainCfFetch(portalUrl, session, {
+  // Step 1: GET la page d'entrée (bouton Continue + token)
+  const entryRes = await spainCfFetch(portalUrl, session, {
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
@@ -310,47 +333,153 @@ async function fetchBookititConfig(
     "Upgrade-Insecure-Requests": "1",
   });
 
-  if (!res) {
+  if (!entryRes) {
     console.error(`[spain-http] ❌ Pas de réponse pour ${portalUrl}`);
     return null;
   }
 
-  if (res.status === 403) {
-    console.warn(`[spain-http] ⚠️ 403 sur widget page → CF cookie mort`);
+  if (entryRes.status === 403) {
+    console.warn(`[spain-http] ⚠️ 403 sur portal page → CF cookie mort`);
     invalidateSpainCfSession();
     return null;
   }
 
-  const html = await res.text();
+  let html = await entryRes.text();
 
   // Vérifier qu'on n'a pas un challenge CF
   if (/un instant|just a moment|verifying you are human/i.test(html.slice(0, 2000))) {
-    console.warn(`[spain-http] ⚠️ Challenge CF sur widget page → cookie invalide`);
+    console.warn(`[spain-http] ⚠️ Challenge CF sur portal page → cookie invalide`);
     invalidateSpainCfSession();
     return null;
   }
 
+  // Step 2: Détecter le formulaire "Continue / Continuar" et soumettre
+  const tokenMatch = html.match(/<input[^>]+name=["']token["'][^>]+value=["']([^"']+)["']/i)
+    ?? html.match(/name="token"\s+value="([^"]+)"/i);
+  const formActionMatch = html.match(/<form[^>]+action=["']([^"']+)["'][^>]+method=["']POST["']/i)
+    ?? html.match(/action="([^"]+)"\s+method="POST"/i);
+
+  if (tokenMatch) {
+    const token = tokenMatch[1];
+    const formAction = formActionMatch ? formActionMatch[1] : portalUrl + "/";
+    const postUrl = formAction.startsWith("http") ? formAction : `https://www.citaconsular.es${formAction}`;
+
+    console.log(`[spain-http] 🔘 Bouton "Continue" détecté — POST avec token vers ${postUrl}`);
+
+    // Soumettre le formulaire
+    const { getSpainImpit } = await import("./spain-soax-solver.js");
+    const impit = getSpainImpit(session);
+
+    // Construire le cookie header
+    const cookieParts = [`cf_clearance=${session.cfClearance}`];
+    for (const c of session.allCookies) {
+      if (c.name !== "cf_clearance") cookieParts.push(`${c.name}=${c.value}`);
+    }
+
+    const postHeaders: Record<string, string> = {
+      "User-Agent": session.userAgent,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cookie": cookieParts.join("; "),
+      "Origin": "https://www.citaconsular.es",
+      "Referer": portalUrl,
+      "Sec-CH-UA": '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+      "Sec-CH-UA-Mobile": "?0",
+      "Sec-CH-UA-Platform": '"Windows"',
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+    };
+
+    try {
+      const postRes = await impit.fetch(postUrl, {
+        method: "POST",
+        headers: postHeaders,
+        body: `token=${encodeURIComponent(token)}`,
+      } as any) as unknown as Response;
+
+      if (postRes.ok || postRes.status === 302 || postRes.status === 301) {
+        html = await postRes.text();
+        console.log(`[spain-http] ✅ POST réussi — ${html.length} chars reçus`);
+      } else {
+        console.warn(`[spain-http] ⚠️ POST status ${postRes.status}`);
+        html = await postRes.text();
+      }
+    } catch (err) {
+      console.error(`[spain-http] ❌ POST error: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }
+  }
+
+  // Step 3: Parser le HTML du widget Bookitit
   // Extraire la base URL Bookitit
   const baseUrl = extractBookititBaseFromHtml(html);
+
+  // Si pas trouvé dans le HTML statique, chercher dans les scripts JS référencés
   if (!baseUrl) {
-    console.error(`[spain-http] ❌ Impossible d'extraire baseUrl Bookitit depuis HTML`);
-    console.log(`[spain-http]    HTML preview: ${html.slice(0, 500)}…`);
-    return null;
+    // Chercher une URL d'API directement dans le HTML (inline scripts)
+    const inlineApiMatch = html.match(/(https?:\/\/[^"'\s]*bookitit\.com[^"'\s]*)/i);
+    if (inlineApiMatch) {
+      const extractedBase = inlineApiMatch[1].replace(/(?:getwidget|getservice|datetime|getagenda).*$/, "");
+      console.log(`[spain-http] 📍 Base URL trouvée dans inline script: ${extractedBase}`);
+      return buildConfigFromBase(session, extractedBase, portalUrl, html);
+    }
+
+    // Chercher dans les scripts JS chargés par la page
+    const scriptSrcs = [...html.matchAll(/src=["']([^"']+bookitit[^"']*)/gi)].map(m => m[1]);
+    const widgetScriptSrcs = [...html.matchAll(/src=["']([^"']+(?:widget|bkt)[^"']*\.js[^"']*)/gi)].map(m => m[1]);
+    const allScripts = [...new Set([...scriptSrcs, ...widgetScriptSrcs])];
+
+    if (allScripts.length > 0) {
+      console.log(`[spain-http] 🔍 Analyse de ${allScripts.length} scripts pour trouver la base URL…`);
+      for (const scriptUrl of allScripts.slice(0, 3)) {
+        const absUrl = scriptUrl.startsWith("http") ? scriptUrl : `https://www.citaconsular.es${scriptUrl}`;
+        const scriptRes = await spainCfFetch(absUrl, session);
+        if (scriptRes) {
+          const scriptBody = await scriptRes.text();
+          const apiInScript = scriptBody.match(/(https?:\/\/[^"'\s]*bookitit\.com[^"'\s]*onlinebookings\/)/i)
+            ?? scriptBody.match(/(https?:\/\/app\.bookitit\.com\/[^"'\s]*\/)/i);
+          if (apiInScript) {
+            console.log(`[spain-http] 📍 Base URL trouvée dans script: ${apiInScript[1]}`);
+            return buildConfigFromBase(session, apiInScript[1], portalUrl, html);
+          }
+        }
+      }
+    }
+
+    // Fallback: construire l'URL de base depuis le domaine bookitit.com standard
+    // Le widget citaconsular utilise webapp.bookitit.com/onlinebookings/
+    const webappUrl = "https://webapp.bookitit.com/onlinebookings/";
+    console.log(`[spain-http] 🔄 Fallback: essai avec ${webappUrl}`);
+    return buildConfigFromBase(session, webappUrl, portalUrl, html);
   }
 
-  // Extraire les params bkt_init_widget
+  return buildConfigFromBase(session, baseUrl, portalUrl, html);
+}
+
+// ─── Main Scan Function ─────────────────────────────────────────────────────
+
+/**
+ * Helper : Construit la config Bookitit à partir d'une base URL connue.
+ */
+async function buildConfigFromBase(
+  session: SpainCfSession,
+  baseUrl: string,
+  portalUrl: string,
+  html: string,
+): Promise<BookititConfig | null> {
+  // Extraire les params bkt_init_widget depuis le HTML
   const initParams = extractBktInitFromHtml(html);
-  if (!initParams) {
-    console.warn(`[spain-http] ⚠️ Pas de bkt_init_widget dans HTML — extraction via API`);
-  }
-
   const params = initParams ?? {};
 
   // Bootstrap: appeler getwidgetconfigurations pour initialiser la session
   const cfgPayload = await callBookititJsonp(session, baseUrl, "getwidgetconfigurations/", params, portalUrl);
   if (cfgPayload === null) {
-    console.error(`[spain-http] ❌ getwidgetconfigurations a échoué (CF ou session)`);
-    return null;
+    console.warn(`[spain-http] ⚠️ getwidgetconfigurations null sur ${baseUrl} — session ou URL invalide`);
+    // Ne pas retourner null immédiatement — essayer quand même les services
   }
 
   // Récupérer services
@@ -388,8 +517,6 @@ async function fetchBookititConfig(
   console.log(`[spain-http] ✅ Config extraite — base: ${baseUrl} | services: ${services.join(",") || "none"} | agendas: ${agendas.join(",") || "none"}`);
   return config;
 }
-
-// ─── Main Scan Function ─────────────────────────────────────────────────────
 
 /**
  * Effectue un scan HTTP-only des créneaux Espagne.
@@ -488,6 +615,17 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
 /**
  * Variante probe pour le watcher (compatible avec SpainWatcherProbeResult).
  * Drop-in replacement pour runSpainWatcherProbe() quand SPAIN_HTTP_MODE=1.
+ *
+ * STRATÉGIE HYBRIDE :
+ *   - Si une session Bookitit est déjà cachée (par un passage Playwright précédent) :
+ *     → Scan direct via HTTP (impit + SOAX + cf_clearance) — ultra-rapide
+ *   - Si pas de session cachée :
+ *     → Le CF bypass est prêt, mais Bookitit nécessite un init JS
+ *     → Retourne "error" pour que la boucle fallback sur Playwright
+ *
+ * L'avantage principal : une fois la session Bookitit établie (25min TTL),
+ * les scans suivants sont 100% HTTP avec le cookie CF pré-résolu.
+ * Le CF bypass réduit le temps Playwright de 120s (attente passive) → 10s.
  */
 export async function runSpainHttpProbe(portalUrl: string): Promise<{
   status: "found" | "not_found" | "error";

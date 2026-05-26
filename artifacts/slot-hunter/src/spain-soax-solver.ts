@@ -155,10 +155,11 @@ interface CapSolverResultResponse {
   status: "processing" | "ready" | "failed";
   solution?: {
     token: string;
-    type: string;
+    type?: string;
     userAgent: string;
-    cookies: Array<{ name: string; value: string }>;
-    headers: Record<string, string>;
+    /** CapSolver returns cookies as an object { name: value } (NOT an array) */
+    cookies: Record<string, string>;
+    headers?: Record<string, string>;
   };
 }
 
@@ -278,49 +279,37 @@ export async function solveSpainCloudflare(
 
       if (resultData.status === "ready" && resultData.solution) {
         const solution = resultData.solution;
-        const cfCookie = solution.cookies?.find((c) => c.name === "cf_clearance");
 
-        if (!cfCookie) {
-          // CapSolver peut retourner le token directement au lieu du cookie
-          // Dans ce cas, le token EST le cf_clearance
-          const cfValue = solution.token || "";
-          if (!cfValue) {
-            console.error(`[spain-soax] ❌ Solution ready mais pas de cf_clearance ni token`);
-            return { success: false, error: "No cf_clearance in solution", durationMs: Date.now() - t0 };
-          }
+        // CapSolver returns cookies as object { name: value }, not array
+        const cookiesObj = solution.cookies ?? {};
+        const cfClearanceValue = cookiesObj["cf_clearance"] || solution.token || "";
 
-          console.log(`[spain-soax] ✅ Résolu via token! (${Math.round((Date.now() - t0) / 1000)}s)`);
-          console.log(`[spain-soax]    Token: ${cfValue.slice(0, 30)}…`);
-          console.log(`[spain-soax]    UA: ${solution.userAgent?.slice(0, 60)}`);
-
-          const session: SpainCfSession = {
-            cfClearance: cfValue,
-            cfDomain: ".citaconsular.es",
-            soaxProxyUrl,
-            userAgent: solution.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-            createdAt: Date.now(),
-            expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
-            allCookies: solution.cookies || [{ name: "cf_clearance", value: cfValue }],
-            extraHeaders: solution.headers || {},
-          };
-
-          return { success: true, session, durationMs: Date.now() - t0 };
+        if (!cfClearanceValue) {
+          console.error(`[spain-soax] ❌ Solution ready mais pas de cf_clearance ni token`);
+          return { success: false, error: "No cf_clearance in solution", durationMs: Date.now() - t0 };
         }
 
-        // Cookie cf_clearance trouvé directement
-        console.log(`[spain-soax] ✅ Résolu! cf_clearance obtenu (${Math.round((Date.now() - t0) / 1000)}s)`);
-        console.log(`[spain-soax]    Cookie: ${cfCookie.value.slice(0, 30)}…`);
+        console.log(`[spain-soax] ✅ Résolu! (${Math.round((Date.now() - t0) / 1000)}s)`);
+        console.log(`[spain-soax]    cf_clearance: ${cfClearanceValue.slice(0, 40)}…`);
         console.log(`[spain-soax]    UA: ${solution.userAgent?.slice(0, 60)}`);
-        console.log(`[spain-soax]    Cookies total: ${solution.cookies?.length}`);
+
+        // Convert cookies object to array format for our session
+        const allCookies: Array<{ name: string; value: string }> = [];
+        for (const [name, value] of Object.entries(cookiesObj)) {
+          allCookies.push({ name, value });
+        }
+        if (allCookies.length === 0 && cfClearanceValue) {
+          allCookies.push({ name: "cf_clearance", value: cfClearanceValue });
+        }
 
         const session: SpainCfSession = {
-          cfClearance: cfCookie.value,
+          cfClearance: cfClearanceValue,
           cfDomain: ".citaconsular.es",
           soaxProxyUrl,
           userAgent: solution.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
           createdAt: Date.now(),
           expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
-          allCookies: solution.cookies || [],
+          allCookies,
           extraHeaders: solution.headers || {},
         };
 
