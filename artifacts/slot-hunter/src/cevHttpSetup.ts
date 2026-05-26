@@ -293,7 +293,7 @@ export async function setupCevSessionHttp(
     let integrationUrl: string | null = null;
 
     if (eAppointmentUrl.includes("GetEAppointmentUrl")) {
-      const eRes = await fetch(eAppointmentUrl, {
+      const eRes = await cevSetupFetch(eAppointmentUrl, {
         method: "GET",
         headers: getCevBrowserHeaders({
           referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
