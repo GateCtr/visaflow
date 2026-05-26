@@ -1,13 +1,36 @@
 // ─── Spain Watcher Loop — veille créneaux Espagne ────────────────────────────
 // Extracted from index.ts
 // Boucle indépendante, tourne en background.
+//
+// MODES :
+//   - SPAIN_HTTP_MODE=1 → scan HTTP pur (impit + SOAX + CapSolver CF cookie)
+//     ✅ 10x plus rapide, 0 RAM browser, scan toutes les 30-60s
+//     Prérequis : SOAX_PROXY_URL + CAPSOLVER_API_KEY
+//   - SPAIN_HTTP_MODE=0 (défaut) → Playwright stealth (ancien mode)
 
 import { getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
+import { runSpainHttpProbe } from "../spain-http-scanner.js";
+import { isSpainCfSessionExpiringSoon, ensureSpainCfSession } from "../spain-soax-solver.js";
 import { log } from "../scheduler-utils.js";
 
+const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
+
 export async function startSpainWatcherLoop(): Promise<void> {
-  log("INFO", "[SPAIN-WATCHER] Boucle démarrée");
+  log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright"})`);
+
+  // En mode HTTP : pre-warm la session CF au démarrage (évite 3min de latence au 1er scan)
+  if (SPAIN_HTTP_MODE) {
+    log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (SOAX + CapSolver)…");
+    const session = await ensureSpainCfSession().catch((e) => {
+      log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
+      return null;
+    });
+    if (session) {
+      log("INFO", `[SPAIN-WATCHER] ✅ Session CF prête (expire: ${new Date(session.expiresAt).toISOString()})`);
+    }
+  }
+
   while (true) {
     try {
       const config = await getSpainWatcherConfig();
@@ -17,13 +40,28 @@ export async function startSpainWatcherLoop(): Promise<void> {
         continue;
       }
 
-      const intervalMs = (config.intervalMin ?? 3) * 60_000;
-      log("INFO", `[SPAIN-WATCHER] Probe → ${config.portalUrl} (intervalle: ${config.intervalMin ?? 3} min)`);
+      // En mode HTTP : intervalle beaucoup plus court (30-60s vs 3min)
+      const defaultIntervalMin = SPAIN_HTTP_MODE ? 0.5 : 3; // 30s en HTTP, 3min en Playwright
+      const intervalMs = (config.intervalMin ?? defaultIntervalMin) * 60_000;
+      const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
+      log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
 
-      const result = await runSpainWatcherProbe(config.portalUrl);
+      // Proactive re-solve si le cookie CF expire bientôt (mode HTTP)
+      if (SPAIN_HTTP_MODE && isSpainCfSessionExpiringSoon()) {
+        log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif");
+        await ensureSpainCfSession(config.portalUrl).catch((e) => {
+          log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
+        });
+      }
+
+      // Exécuter le probe selon le mode
+      const result = SPAIN_HTTP_MODE
+        ? await runSpainHttpProbe(config.portalUrl)
+        : await runSpainWatcherProbe(config.portalUrl);
+
       log(
         "INFO",
-        `[SPAIN-WATCHER] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
+        `[SPAIN-WATCHER] [${modeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
       let screenshotStorageId: string | undefined;
@@ -40,8 +78,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
       await new Promise((r) => setTimeout(r, intervalMs));
     } catch (err) {
-      log("WARN", `[SPAIN-WATCHER] Erreur boucle: ${err} — retry dans 5 min`);
-      await new Promise((r) => setTimeout(r, 5 * 60_000));
+      log("WARN", `[SPAIN-WATCHER] Erreur boucle: ${err} — retry dans ${SPAIN_HTTP_MODE ? "1" : "5"} min`);
+      await new Promise((r) => setTimeout(r, SPAIN_HTTP_MODE ? 60_000 : 5 * 60_000));
     }
   }
 }
