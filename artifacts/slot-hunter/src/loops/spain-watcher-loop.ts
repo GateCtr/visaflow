@@ -15,7 +15,7 @@
 //   3. Exécute le booking HTTP pour chaque dossier éligible
 //   → Pas de env vars SPAIN_BOOK_LOGIN/PASSWORD — tout vient de Convex (comme le bot USA)
 
-import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, type HunterJob } from "../convexClient.js";
+import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, type HunterJob } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
@@ -235,13 +235,34 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 );
 
                 if (bookingResult.status === "booked") {
-                  // Report slot found to Convex (marque le dossier comme "slot_found")
+                  // ── 1. Upload + attach PDF de confirmation ──
+                  let pdfStorageId: string | undefined;
+                  if (bookingResult.confirmationPdf) {
+                    try {
+                      const b64 = bookingResult.confirmationPdf.toString("base64");
+                      pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+                      if (pdfStorageId) {
+                        await attachConfirmationDoc({
+                          applicationId: dossier.applicationId,
+                          storageId: pdfStorageId,
+                          docKey: "booking_confirmation_pdf",
+                          label: "Confirmation de rendez-vous Espagne (PDF)",
+                        });
+                        log("INFO", `[SPAIN-WATCHER] 📄 ${dossier.applicantName}: PDF confirmation uploadé et attaché au dossier`);
+                      }
+                    } catch (pdfErr) {
+                      log("WARN", `[SPAIN-WATCHER] ⚠️ ${dossier.applicantName}: PDF upload/attach échoué (non-fatal): ${pdfErr}`);
+                    }
+                  }
+
+                  // ── 2. Report slot found to Convex (marque le dossier comme "slot_found") ──
                   await reportSlotFound({
                     applicationId: dossier.applicationId,
                     date: result.slotInfo ?? "unknown",
                     time: "",
                     location: "Ambassade d'Espagne Kinshasa",
                     confirmationCode: bookingResult.locator,
+                    screenshotStorageId: undefined,
                   }).catch((e) => log("WARN", `[SPAIN-WATCHER] reportSlotFound error: ${e}`));
 
                   // Override slotInfo with booking confirmation

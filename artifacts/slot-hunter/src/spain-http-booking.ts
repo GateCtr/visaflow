@@ -28,6 +28,7 @@ import {
   reportSpainWatcherScan,
 } from "./convexClient.js";
 import { matchServiceForVisa } from "./spain-service-mapping.js";
+import { generateSpainConfirmationPdf, extractConfirmationData } from "./spain-confirmation-pdf.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,8 @@ export interface SpainBookingResult {
   locator?: string;
   errorMessage?: string;
   durationMs: number;
+  /** PDF de confirmation généré (Buffer base64-ready) — présent uniquement si status="booked" */
+  confirmationPdf?: Buffer;
 }
 
 export interface ExtractedSlotInfo {
@@ -518,9 +521,32 @@ export async function executeHttpBooking(
   const elapsed = Math.round((Date.now() - t0) / 1000);
   console.log(`[spain-booking] 🎉 BOOKING CONFIRMÉ ! Locator: ${locator} (${elapsed}s)`);
 
+  // ─── 8. GÉNÉRATION PDF DE CONFIRMATION ────────────────────────────────
+  let confirmationPdf: Buffer | undefined;
+  try {
+    const confirmData = extractConfirmationData(summaryPayload, {
+      applicantName: config.applicantName ?? config.login,
+      serviceName: targetService.serviceName,
+      slotDate,
+      slotTime,
+    });
+
+    if (confirmData) {
+      console.log(`[spain-booking] 📄 Génération PDF confirmation…`);
+      const pdf = await generateSpainConfirmationPdf(confirmData);
+      if (pdf) {
+        confirmationPdf = pdf;
+        console.log(`[spain-booking] ✅ PDF généré: ${pdf.length} bytes`);
+      }
+    }
+  } catch (pdfErr) {
+    console.warn(`[spain-booking] ⚠️ PDF generation failed (non-fatal): ${pdfErr}`);
+  }
+
   return {
     status: "booked",
     locator: locator || undefined,
+    confirmationPdf,
     durationMs: Date.now() - t0,
   };
 }
