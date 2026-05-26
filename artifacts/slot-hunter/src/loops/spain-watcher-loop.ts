@@ -11,11 +11,13 @@
 import { getSpainWatcherConfig, uploadFile, reportSpainWatcherScan } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
-import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
+import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
+import { executeHttpBooking, type SpainBookingConfig } from "../spain-http-booking.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
+const SPAIN_AUTO_BOOK = process.env.SPAIN_AUTO_BOOK === "1";
 
 export async function startSpainWatcherLoop(): Promise<void> {
   log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright"})`);
@@ -84,6 +86,55 @@ export async function startSpainWatcherLoop(): Promise<void> {
         "INFO",
         `[SPAIN-WATCHER] [${modeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
+
+      // ─── AUTO-BOOKING HTTP-ONLY ─────────────────────────────────────────
+      // Si créneau détecté + SPAIN_AUTO_BOOK=1 + credentials configurés
+      // → tenter le booking immédiatement via HTTP (pas de Playwright)
+      if (
+        SPAIN_HTTP_MODE &&
+        SPAIN_AUTO_BOOK &&
+        result.status === "found" &&
+        (result as any)._mainHtml
+      ) {
+        const bookLogin = process.env.SPAIN_BOOK_LOGIN ?? "";
+        const bookPassword = process.env.SPAIN_BOOK_PASSWORD ?? "";
+
+        if (bookLogin && bookPassword) {
+          log("INFO", "[SPAIN-WATCHER] 🚀 AUTO-BOOKING DÉCLENCHÉ — créneau détecté !");
+
+          const cfSession = getActiveSpainCfSession();
+          if (cfSession) {
+            const bookingConfig: SpainBookingConfig = {
+              login: bookLogin,
+              password: bookPassword,
+              applicationId: process.env.SPAIN_BOOK_APP_ID,
+              otpChannel: (process.env.SPAIN_OTP_CHANNEL as "email" | "sms" | "manual") ?? "email",
+            };
+
+            try {
+              const bookingResult = await executeHttpBooking(
+                cfSession,
+                config.portalUrl,
+                (result as any)._mainHtml,
+                bookingConfig,
+              );
+
+              log("INFO", `[SPAIN-WATCHER] 📋 Booking result: ${bookingResult.status}${bookingResult.locator ? ` — locator: ${bookingResult.locator}` : ""}${bookingResult.errorMessage ? ` (${bookingResult.errorMessage})` : ""} (${bookingResult.durationMs}ms)`);
+
+              if (bookingResult.status === "booked") {
+                // Override slotInfo with booking confirmation
+                result.slotInfo = `✅ BOOKING CONFIRMÉ ! Locator: ${bookingResult.locator ?? "N/A"} | ${result.slotInfo}`;
+              }
+            } catch (bookErr) {
+              log("WARN", `[SPAIN-WATCHER] ❌ Auto-booking erreur: ${bookErr}`);
+            }
+          } else {
+            log("WARN", "[SPAIN-WATCHER] Auto-booking impossible — pas de session CF active");
+          }
+        } else {
+          log("INFO", "[SPAIN-WATCHER] ⚠️ Créneau trouvé mais SPAIN_BOOK_LOGIN/PASSWORD non configurés — alerte seule");
+        }
+      }
 
       let screenshotStorageId: string | undefined;
       if ((result.status === "found" || result.status === "not_found") && result.screenshotBase64) {

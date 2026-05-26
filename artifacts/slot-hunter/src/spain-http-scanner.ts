@@ -44,6 +44,8 @@ export interface SpainHttpScanResult {
   slotInfo?: string;
   errorMessage?: string;
   scanDurationMs: number;
+  /** Raw HTML from /main/ when found — passed to auto-booking */
+  _mainHtml?: string;
 }
 
 /** Configuration Bookitit extraite de la page widget (persistée entre scans). */
@@ -769,6 +771,7 @@ async function scanViaMainEndpoint(
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (message 'No hay horas' masqué = dispo)",
       scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
     };
   }
 
@@ -800,6 +803,7 @@ async function scanViaMainEndpoint(
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (services rendus dans le DOM)",
       scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
     };
   }
 
@@ -811,6 +815,7 @@ async function scanViaMainEndpoint(
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (idListServices peuplé)",
       scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
     };
   }
 
@@ -824,6 +829,7 @@ async function scanViaMainEndpoint(
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (datetime slots rendus)",
       scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
     };
   }
 
@@ -842,6 +848,7 @@ async function scanViaMainEndpoint(
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (absence de message 'No hay horas' dans container)",
       scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
     };
   }
 
@@ -913,12 +920,14 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
   slotInfo?: string;
   screenshotBase64?: string;
   errorMessage?: string;
+  /** Raw HTML from /main/ when status=found (used for auto-booking extraction) */
+  _mainHtml?: string;
 }> {
   const result = await scanSpainHttp(portalUrl);
 
   switch (result.status) {
     case "found":
-      return { status: "found", slotInfo: result.slotInfo };
+      return { status: "found", slotInfo: result.slotInfo, _mainHtml: result._mainHtml };
     case "not_found":
       return { status: "not_found" };
     case "cf_blocked":
