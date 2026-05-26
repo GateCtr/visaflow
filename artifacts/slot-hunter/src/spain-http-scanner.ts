@@ -519,12 +519,174 @@ async function buildConfigFromBase(
 }
 
 /**
+ * Scan rapide via /onlinebookings/main/ — le serveur pré-rend la disponibilité.
+ *
+ * DÉCOUVERTE CLÉ : citaconsular.es intègre le résultat de disponibilité directement
+ * dans le HTML retourné par /onlinebookings/main/. Quand pas de créneaux :
+ *   <div style='text-align: center;...'>No hay horas disponibles</div>
+ * Quand créneaux dispo : ce message est en display:none et le calendrier est rendu.
+ *
+ * → UN SEUL appel HTTP suffit pour savoir s'il y a des créneaux !
+ */
+async function scanViaMainEndpoint(
+  session: SpainCfSession,
+  portalUrl: string,
+): Promise<SpainHttpScanResult | null> {
+  const t0 = Date.now();
+  const { getSpainImpit } = await import("./spain-soax-solver.js");
+  const impit = getSpainImpit(session);
+
+  // Build cookie jar
+  const cookieParts = [`cf_clearance=${session.cfClearance}`];
+  for (const c of session.allCookies) {
+    if (c.name !== "cf_clearance") cookieParts.push(`${c.name}=${c.value}`);
+  }
+
+  // Step 1: GET entry page → PHPSESSID + token
+  const entryRes = await impit.fetch(portalUrl, {
+    headers: { "User-Agent": session.userAgent, "Accept": "text/html", "Cookie": cookieParts.join("; ") },
+  } as any) as any;
+
+  if (!entryRes || entryRes.status === 403) {
+    invalidateSpainCfSession();
+    return null;
+  }
+
+  // Capture PHPSESSID
+  for (const sc of (entryRes.headers?.getSetCookie?.() ?? [])) {
+    const nv = sc.split(";")[0];
+    if (nv) cookieParts.push(nv);
+  }
+
+  const entryHtml = await entryRes.text();
+
+  // Check CF challenge
+  if (/un instant|just a moment|verifying/i.test(entryHtml.slice(0, 2000))) {
+    invalidateSpainCfSession();
+    return null;
+  }
+
+  // Extract token for POST
+  const tokenMatch = entryHtml.match(/name="token"\s+value="([^"]+)"/);
+  if (!tokenMatch) {
+    console.warn("[spain-http] ⚠️ Pas de token trouvé sur la page d'entrée");
+    return null;
+  }
+
+  // Step 2: POST Continue
+  await impit.fetch(portalUrl.replace(/\/?$/, "/"), {
+    method: "POST",
+    headers: {
+      "User-Agent": session.userAgent,
+      "Accept": "text/html",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cookie": cookieParts.join("; "),
+      "Origin": "https://www.citaconsular.es",
+      "Referer": portalUrl,
+    },
+    body: `token=${encodeURIComponent(tokenMatch[1])}`,
+  } as any);
+
+  // Step 3: Call /onlinebookings/main/ — the critical widget init call
+  const cbName = `jQuery21104${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  const params = new URLSearchParams({
+    type: "default",
+    publickey: "25028fcd7126544630b8da0c6e60722b5",
+    lang: "es",
+    version: "4",
+    src: portalUrl.replace(/\/?$/, "/"),
+    callback: cbName,
+    _: String(Date.now()),
+  });
+
+  // Extract publickey from portalUrl if possible
+  const pkMatch = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/);
+  if (pkMatch) params.set("publickey", pkMatch[1]);
+
+  const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${params}`;
+  const mainRes = await impit.fetch(mainUrl, {
+    headers: {
+      "User-Agent": session.userAgent,
+      "Accept": "*/*",
+      "Accept-Language": "es-ES,es;q=0.9",
+      "Cookie": cookieParts.join("; "),
+      "Referer": portalUrl.replace(/\/?$/, "/"),
+      "X-Requested-With": "XMLHttpRequest",
+      "Sec-Fetch-Dest": "script",
+      "Sec-Fetch-Mode": "no-cors",
+      "Sec-Fetch-Site": "same-origin",
+    },
+  } as any) as any;
+
+  if (!mainRes || mainRes.status !== 200) {
+    console.warn(`[spain-http] ⚠️ /onlinebookings/main/ status: ${mainRes?.status ?? "no response"}`);
+    return null;
+  }
+
+  const mainBody = await mainRes.text();
+
+  // Parse JSONP → HTML
+  const jsonpMatch = mainBody.match(/^[^(]+\("(.*)"\);?$/s);
+  let html: string;
+  if (jsonpMatch) {
+    try { html = JSON.parse(`"${jsonpMatch[1]}"`); } catch { html = mainBody; }
+  } else {
+    html = mainBody;
+  }
+
+  console.log(`[spain-http] 📊 /main/ retourné ${html.length} chars`);
+
+  // DÉTECTION : "No hay horas disponibles" visible (pas en display:none)
+  // Pattern: <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas
+  // Si display:none → un créneau POURRAIT être dispo (le message caché est un placeholder)
+  // Si visible (pas display:none juste avant) → PAS de créneau
+
+  // Chercher les divs "No hay horas" qui sont VISIBLES (pas précédées de display: none)
+  const noHorasVisible = html.match(/<div[^>]*style='[^']*text-align:\s*center[^']*'[^>]*>No hay horas disponibles/gi);
+  const noHorasHidden = html.match(/<div[^>]*style='[^']*display:\s*none[^']*'[^>]*>No hay horas disponibles/gi);
+
+  const visibleCount = (noHorasVisible?.length ?? 0) - (noHorasHidden?.length ?? 0);
+
+  if (visibleCount > 0) {
+    console.log(`[spain-http] 📋 "No hay horas disponibles" visible (${visibleCount}x) → pas de créneau`);
+    return {
+      status: "not_found",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  // Si pas de "no hay horas" visible → possiblement des créneaux !
+  // Chercher des indicateurs positifs : calendrier, datetime list, slots
+  const hasCalendar = /idDivBktDatetimeListContainer|clsDivDatetimeSlot|idBktCalendar/i.test(html);
+  const hasSlotData = /freeSlots|freeslots|totalSlots/i.test(html) && !/template/i.test(html.slice(html.indexOf("freeSlots") - 100, html.indexOf("freeSlots")));
+
+  if (hasCalendar || hasSlotData) {
+    console.log(`[spain-http] 🎉 Indicateurs de créneaux détectés! (calendar: ${hasCalendar}, slotData: ${hasSlotData})`);
+    return {
+      status: "found",
+      slotInfo: "Créneau détecté via /main/ HTML (calendar visible)",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  // Pas de signal clair → "not_found" par défaut (le message "No hay horas" est dans un template)
+  console.log(`[spain-http] 📋 Pas de signal positif de créneau dans HTML`);
+  return {
+    status: "not_found",
+    scanDurationMs: Date.now() - t0,
+  };
+}
+
+/**
  * Effectue un scan HTTP-only des créneaux Espagne.
  *
- * Flow :
+ * Flow OPTIMISÉ (reverse-engineered de loadermaec.js) :
  *   1. ensureSpainCfSession() → obtient/réutilise le cookie CF
- *   2. getCachedBookititConfig() ou fetchBookititConfig() → params Bookitit
- *   3. Scan datetime/ sur 9 mois → détection créneaux
+ *   2. GET portal → POST Continue → GET /onlinebookings/main/
+ *   3. Parse le HTML retourné pour détecter "No hay horas disponibles"
+ *   4. Si pas de "No hay horas" visible → créneaux potentiels !
+ *
+ * UN SEUL appel API (au lieu de 9+ appels JSONP) → scan en ~2s au lieu de ~10s
  *
  * @param portalUrl - URL du widget citaconsular.es
  */
@@ -541,73 +703,16 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     };
   }
 
-  // 2. Obtenir la config Bookitit (cache ou fetch)
-  let config = getCachedBookititConfig(portalUrl);
-  if (!config) {
-    config = await fetchBookititConfig(session, portalUrl);
-    if (!config) {
-      return {
-        status: "error",
-        errorMessage: "Impossible d'extraire la config Bookitit depuis la page widget",
-        scanDurationMs: Date.now() - t0,
-      };
-    }
+  // 2. Scan via /onlinebookings/main/ (méthode optimisée — 1 seul appel)
+  const mainResult = await scanViaMainEndpoint(session, portalUrl);
+  if (mainResult) {
+    return mainResult;
   }
 
-  // 3. Vérifier que les services/agendas sont disponibles
-  if (config.services.length === 0 || config.agendas.length === 0) {
-    // Re-fetch config pour tenter d'obtenir les services/agendas
-    _bookititConfigCache.delete(portalUrl);
-    config = await fetchBookititConfig(session, portalUrl);
-    if (!config || config.services.length === 0 || config.agendas.length === 0) {
-      return {
-        status: "not_found",
-        errorMessage: "Aucun service/agenda disponible (normal si pas de créneau possible)",
-        scanDurationMs: Date.now() - t0,
-      };
-    }
-  }
-
-  // 4. Scan datetime sur 9 mois
-  const baseDate = new Date();
-  for (let i = 0; i < 9; i++) {
-    const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
-    const payload = await callBookititJsonp(session, config.baseUrl, "datetime/", {
-      ...config.initParams,
-      services: config.services.join(","),
-      agendas: config.agendas.join(","),
-      start: firstMonthDayYmd(d),
-      end: lastMonthDayYmd(d),
-      selectedPeople: "1",
-    }, config.referer);
-
-    // Si null → CF challenge mid-scan → session morte
-    if (payload === null) {
-      console.warn(`[spain-http] ⚠️ Session CF morte mid-scan (mois ${i})`);
-      invalidateSpainCfSession();
-      _bookititConfigCache.delete(portalUrl);
-      return {
-        status: "session_expired",
-        errorMessage: "CF cookie expiré pendant le scan",
-        scanDurationMs: Date.now() - t0,
-      };
-    }
-
-    const slot = extractSlotFromBookititPayload(payload);
-    if (slot) {
-      const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
-      console.log(`[spain-http] 🎉 CRÉNEAU TROUVÉ: ${slotInfo}`);
-      return {
-        status: "found",
-        slot,
-        slotInfo,
-        scanDurationMs: Date.now() - t0,
-      };
-    }
-  }
-
+  // 3. Fallback: si /main/ échoue, erreur
   return {
-    status: "not_found",
+    status: "error",
+    errorMessage: "Scan /main/ échoué (CF cookie invalide ou erreur réseau)",
     scanDurationMs: Date.now() - t0,
   };
 }
