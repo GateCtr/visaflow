@@ -636,41 +636,84 @@ async function scanViaMainEndpoint(
 
   console.log(`[spain-http] 📊 /main/ retourné ${html.length} chars`);
 
-  // DÉTECTION : "No hay horas disponibles" visible (pas en display:none)
-  // Pattern: <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas
-  // Si display:none → un créneau POURRAIT être dispo (le message caché est un placeholder)
-  // Si visible (pas display:none juste avant) → PAS de créneau
+  // ─── DÉTECTION ROBUSTE DE DISPONIBILITÉ ─────────────────────────────────
+  //
+  // Le serveur pré-rend #idDivBktServicesContainer avec deux divs consécutives :
+  //
+  //   <div style='display: none; text-align: center; ...'>No hay horas disponibles...</div>   ← HIDDEN (placeholder)
+  //   <div style='text-align: center; ...'>No hay horas disponibles...</div>                  ← VISIBLE = PAS DE CRÉNEAU
+  //
+  // Quand des créneaux sont dispos, la 2ème div passe aussi en display:none
+  // et le service list (#idListServices) est peuplé à la place.
+  //
+  // RÈGLE :
+  //   On cible la div qui a style commençant par text-align (sans display:none)
+  //   ET contient "No hay horas disponibles".
+  //   Si elle existe → pas de créneau.
+  //   Si toutes les divs "No hay horas" sont en display:none → CRÉNEAU POTENTIEL.
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // Chercher les divs "No hay horas" qui sont VISIBLES (pas précédées de display: none)
-  const noHorasVisible = html.match(/<div[^>]*style='[^']*text-align:\s*center[^']*'[^>]*>No hay horas disponibles/gi);
-  const noHorasHidden = html.match(/<div[^>]*style='[^']*display:\s*none[^']*'[^>]*>No hay horas disponibles/gi);
+  // Regex précise : div dont le style commence par text-align (PAS display:none en premier)
+  // Pattern vu : style='text-align: center; font-size: 1.500em; font-weight: bold;'
+  const VISIBLE_NO_SLOTS_RE = /<div\s+style='text-align:\s*center;[^']*'[^>]*>\s*No hay horas disponibles/i;
 
-  const visibleCount = (noHorasVisible?.length ?? 0) - (noHorasHidden?.length ?? 0);
+  // Pattern pour la div hidden (display: none en premier dans le style)
+  const HIDDEN_NO_SLOTS_RE = /<div\s+style='display:\s*none;[^']*'[^>]*>\s*No hay horas disponibles/i;
 
-  if (visibleCount > 0) {
-    console.log(`[spain-http] 📋 "No hay horas disponibles" visible (${visibleCount}x) → pas de créneau`);
+  const hasVisibleNoSlots = VISIBLE_NO_SLOTS_RE.test(html);
+  const hasHiddenNoSlots = HIDDEN_NO_SLOTS_RE.test(html);
+
+  if (hasVisibleNoSlots) {
+    // La div visible "No hay horas disponibles" est présente → PAS DE CRÉNEAU
+    console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE dans #idDivBktServicesContainer → pas de créneau`);
     return {
       status: "not_found",
       scanDurationMs: Date.now() - t0,
     };
   }
 
-  // Si pas de "no hay horas" visible → possiblement des créneaux !
-  // Chercher des indicateurs positifs : calendrier, datetime list, slots
-  const hasCalendar = /idDivBktDatetimeListContainer|clsDivDatetimeSlot|idBktCalendar/i.test(html);
-  const hasSlotData = /freeSlots|freeslots|totalSlots/i.test(html) && !/template/i.test(html.slice(html.indexOf("freeSlots") - 100, html.indexOf("freeSlots")));
-
-  if (hasCalendar || hasSlotData) {
-    console.log(`[spain-http] 🎉 Indicateurs de créneaux détectés! (calendar: ${hasCalendar}, slotData: ${hasSlotData})`);
+  if (hasHiddenNoSlots && !hasVisibleNoSlots) {
+    // La div "No hay horas" existe mais est cachée (display:none) →
+    // Le serveur a rendu le widget avec des services/créneaux disponibles !
+    console.log(`[spain-http] 🎉 "No hay horas" est en display:none → CRÉNEAUX POTENTIELS !`);
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (calendar visible)",
+      slotInfo: "Créneau détecté via /main/ HTML (message 'No hay horas' masqué = dispo)",
       scanDurationMs: Date.now() - t0,
     };
   }
 
-  // Pas de signal clair → "not_found" par défaut (le message "No hay horas" est dans un template)
-  console.log(`[spain-http] 📋 Pas de signal positif de créneau dans HTML`);
+  // Indicateurs secondaires : présence de calendrier ou données de créneaux
+  // (en dehors des <script type='text/template'> qui sont juste des templates Underscore.js)
+  const servicesContainer = html.match(/id='idDivBktServicesContainer'[^>]*>([\s\S]*?)(?=<div\s+id='idBktDefault)/i);
+  const containerHtml = servicesContainer?.[1] ?? "";
+
+  // Chercher si #idListServices contient des éléments rendus (pas vide)
+  const listServicesContent = containerHtml.match(/id='idListServices'[^>]*>([\s\S]*?)<\/div>/i);
+  if (listServicesContent && listServicesContent[1].trim().length > 10) {
+    console.log(`[spain-http] 🎉 #idListServices non-vide → services/créneaux disponibles`);
+    return {
+      status: "found",
+      slotInfo: "Créneau détecté via /main/ HTML (idListServices peuplé)",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  // Aucun signal clair — fallback conservateur
+  // Si le message "No hay horas" n'apparaît nulle part dans le container de services,
+  // c'est probablement qu'il y a des créneaux (le serveur n'aurait pas de raison de le cacher)
+  const hasNoHorasAnywhere = /No hay horas disponibles/i.test(containerHtml);
+  if (!hasNoHorasAnywhere && containerHtml.length > 100) {
+    console.log(`[spain-http] 🎉 Pas de "No hay horas" dans le container services → créneaux possibles`);
+    return {
+      status: "found",
+      slotInfo: "Créneau détecté via /main/ HTML (absence de message 'No hay horas')",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  // Dernier fallback : pas de signal positif → not_found
+  console.log(`[spain-http] 📋 Pas de signal positif de créneau dans HTML (fallback not_found)`);
   return {
     status: "not_found",
     scanDurationMs: Date.now() - t0,
