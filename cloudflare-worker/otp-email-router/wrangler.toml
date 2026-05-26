@@ -6,7 +6,6 @@ workers_dev        = false
 [observability]
 enabled = true
 
-# Déclare que ce worker gère des emails entrants (trigger Email Routing)
-[[email_triggers]]
-# La routing rule (otp+*@otp.joventy.cd → ce worker) est configurée
-# dans le dashboard Cloudflare → Email → Email Routing → Routing rules.
+# Email Worker trigger — lie ce worker à la routing rule Email Routing
+[triggers]
+emails = ["otp@otp.joventy.cd"]
