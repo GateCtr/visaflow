@@ -683,14 +683,40 @@ async function scanViaMainEndpoint(
     };
   }
 
-  // Indicateurs secondaires : présence de calendrier ou données de créneaux
-  // (en dehors des <script type='text/template'> qui sont juste des templates Underscore.js)
-  const servicesContainer = html.match(/id='idDivBktServicesContainer'[^>]*>([\s\S]*?)(?=<div\s+id='idBktDefault)/i);
-  const containerHtml = servicesContainer?.[1] ?? "";
+  // ─── Indicateurs secondaires (HTML rendu vs templates) ──────────────────
+  //
+  // IMPORTANT : Ne pas confondre le HTML de la page avec les <script type='text/template'>
+  // Les templates Underscore.js contiennent aussi "clsBktServiceDataContainer" et
+  // "#selectservice" mais ce ne sont PAS des éléments rendus.
+  //
+  // Pour distinguer :
+  //   - HTML rendu = en dehors de <script type='text/template'>...</script>
+  //   - Template = à l'intérieur de <script type='text/template'>
+  //
+  // On extrait le contenu hors-template pour l'analyser.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Supprimer les blocs <script type='text/template'>...</script> pour garder le HTML rendu
+  const renderedHtml = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
+
+  // Chercher des services RENDUS (hors template) dans #idListServices
+  // Quand des créneaux existent, le serveur pré-rend les services comme :
+  //   <a href='#selectservice/123'><div class="clsBktServiceDataContainer ...">...</div></a>
+  const hasRenderedServices = /#selectservice\/\d+/i.test(renderedHtml);
+  const hasRenderedServiceContainers = /clsBktServiceDataContainer\s+clsBktServiceAtt/i.test(renderedHtml);
+
+  if (hasRenderedServices || hasRenderedServiceContainers) {
+    console.log(`[spain-http] 🎉 Services RENDUS détectés (liens #selectservice ou .clsBktServiceDataContainer)`);
+    return {
+      status: "found",
+      slotInfo: "Créneau détecté via /main/ HTML (services rendus dans le DOM)",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
 
   // Chercher si #idListServices contient des éléments rendus (pas vide)
-  const listServicesContent = containerHtml.match(/id='idListServices'[^>]*>([\s\S]*?)<\/div>/i);
-  if (listServicesContent && listServicesContent[1].trim().length > 10) {
+  const listServicesMatch = renderedHtml.match(/id=['"]?idListServices['"]?[^>]*>([\s\S]*?)<\/div>/i);
+  if (listServicesMatch && listServicesMatch[1].trim().length > 10) {
     console.log(`[spain-http] 🎉 #idListServices non-vide → services/créneaux disponibles`);
     return {
       status: "found",
@@ -699,15 +725,33 @@ async function scanViaMainEndpoint(
     };
   }
 
-  // Aucun signal clair — fallback conservateur
-  // Si le message "No hay horas" n'apparaît nulle part dans le container de services,
-  // c'est probablement qu'il y a des créneaux (le serveur n'aurait pas de raison de le cacher)
-  const hasNoHorasAnywhere = /No hay horas disponibles/i.test(containerHtml);
-  if (!hasNoHorasAnywhere && containerHtml.length > 100) {
+  // Chercher des créneaux datetime rendus (pas dans un template)
+  // Quand le calendrier s'affiche, il contient des éléments comme :
+  //   <div class="clsDivDatetimeSlot ..."> ou des inputs type="radio" pour les heures
+  const hasRenderedDatetime = /clsDivDatetimeSlot|clsDivBktDatetime|type=['"]radio['"][^>]*name=['"]datetime/i.test(renderedHtml);
+  if (hasRenderedDatetime) {
+    console.log(`[spain-http] 🎉 Créneaux datetime RENDUS détectés`);
+    return {
+      status: "found",
+      slotInfo: "Créneau détecté via /main/ HTML (datetime slots rendus)",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
+  // ─── Dernier fallback : analyse du container services ───────────────────
+
+  // Extraire le contenu entre #idDivBktServicesContainer et le prochain grand div
+  const servicesContainer = renderedHtml.match(/id=['"]?idDivBktServicesContainer['"]?[^>]*>([\s\S]*?)(?=<div\s+id=['"]?idBktDefault)/i);
+  const containerHtml = servicesContainer?.[1] ?? "";
+
+  // Si le container services ne contient PAS "No hay horas" du tout
+  // (ni visible ni hidden) → quelque chose d'autre est rendu = potentiellement des créneaux
+  const hasNoHorasInContainer = /No hay horas disponibles/i.test(containerHtml);
+  if (!hasNoHorasInContainer && containerHtml.length > 100) {
     console.log(`[spain-http] 🎉 Pas de "No hay horas" dans le container services → créneaux possibles`);
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (absence de message 'No hay horas')",
+      slotInfo: "Créneau détecté via /main/ HTML (absence de message 'No hay horas' dans container)",
       scanDurationMs: Date.now() - t0,
     };
   }
