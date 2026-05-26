@@ -530,7 +530,7 @@ export async function spainCfFetch(
     "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
     "Accept-Encoding": "gzip, deflate, br, zstd",
     "Cookie": cookieParts.join("; "),
-    "Sec-CH-UA": '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+    "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
     "Sec-CH-UA-Mobile": "?0",
     "Sec-CH-UA-Platform": '"Windows"',
     "Sec-Fetch-Dest": "script",

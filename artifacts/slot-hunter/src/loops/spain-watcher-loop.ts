@@ -38,7 +38,10 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
     // 3. Pre-warm la session CF (Redis restore tenté automatiquement dans ensureSpainCfSession)
     log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (SOAX + CapSolver)…");
-    const session = await ensureSpainCfSession().catch((e) => {
+    // Get config first to use the actual portal URL for CF solve
+    const preWarmConfig = await getSpainWatcherConfig().catch(() => null);
+    const preWarmUrl = preWarmConfig?.portalUrl || undefined;
+    const session = await ensureSpainCfSession(preWarmUrl).catch((e) => {
       log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
       return null;
     });
