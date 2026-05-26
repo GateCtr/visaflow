@@ -22,6 +22,7 @@ import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSes
 import { initSpainRedis } from "../spain-redis-persistence.js";
 import { executeHttpBooking, extractServicesFromHtml, type SpainBookingConfig } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
+import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex } from "../spain-slot-explorer.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
@@ -172,6 +173,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
       // ─── DIAGNOSTIC: quand found, toujours extraire et logger les services ──
       // Permet de vérifier si c'est un vrai créneau (services rendus) ou un faux positif
       let detectedServicesJson: string | undefined;
+      let detectedSlotsJson: string | undefined;
       if (
         SPAIN_HTTP_MODE &&
         result.status === "found" &&
@@ -186,6 +188,21 @@ export async function startSpainWatcherLoop(): Promise<void> {
           log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) rendu(s) dans le HTML :`);
           for (const svc of diagServices) {
             log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
+          }
+
+          // ─── EXPLORATION: naviguer les dates/heures exactes pour chaque service ──
+          const cfSessionExplore = getActiveSpainCfSession();
+          if (cfSessionExplore) {
+            try {
+              const exploration = await exploreAvailableSlots(cfSessionExplore, config.portalUrl, diagServices);
+              detectedSlotsJson = serializeExplorationForConvex(exploration);
+              const logLines = formatExplorationForLogs(exploration);
+              for (const line of logLines) {
+                log("INFO", line);
+              }
+            } catch (exploreErr) {
+              log("WARN", `[SPAIN-WATCHER] ⚠️ Exploration slots échouée (non-fatal): ${exploreErr}`);
+            }
           }
         } else {
           log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service rendu (0 liens #selectservice dans le HTML)`);
@@ -319,6 +336,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
         screenshotStorageId,
         errorMessage: result.errorMessage,
         detectedServices: detectedServicesJson,
+        detectedSlots: detectedSlotsJson,
       });
 
       await new Promise((r) => setTimeout(r, intervalMs));

@@ -1209,7 +1209,7 @@ function SpainWatcherTab() {
         ) : (
           <>
             <div className="divide-y divide-slate-100">
-              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string }) => {
+              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string; detectedSlots?: string }) => {
                 const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
                 const isErrorExpanded = expandedErrors.has(scan._id);
                 return (
@@ -1254,6 +1254,38 @@ function SpainWatcherTab() {
                         {scan.status === "found" && !scan.detectedServices && (
                           <p className="text-[10px] text-amber-600 mt-1">⚠️ Aucun service extrait — possible faux positif</p>
                         )}
+
+                        {/* Detected slots — dates/heures exactes */}
+                        {scan.status === "found" && scan.detectedSlots && (() => {
+                          try {
+                            const svcSlots = JSON.parse(scan.detectedSlots) as Array<{id: string; name: string; slots: Array<{d: string; t: string; n: number}>}>;
+                            if (svcSlots.length === 0) return null;
+                            return (
+                              <div className="mt-2 space-y-2">
+                                {svcSlots.map((svc, i) => (
+                                  <div key={i} className="bg-green-50/50 border border-green-100 rounded-lg p-2">
+                                    <p className="text-[10px] font-semibold text-green-800 mb-1">📋 {svc.name} <span className="text-green-500 font-normal">#{svc.id}</span></p>
+                                    {svc.slots.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {svc.slots.slice(0, 12).map((slot, j) => (
+                                          <span key={j} className="inline-flex items-center gap-0.5 text-[9px] bg-white text-green-900 px-1.5 py-0.5 rounded border border-green-200 font-mono">
+                                            📅 {slot.d} <span className="text-green-600">{slot.t}</span>
+                                            {slot.n > 0 && <span className="text-green-500 ml-0.5">({slot.n}p)</span>}
+                                          </span>
+                                        ))}
+                                        {svc.slots.length > 12 && (
+                                          <span className="text-[9px] text-green-500 self-center">+{svc.slots.length - 12} autres</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[9px] text-green-600 italic">Aucun créneau datetime trouvé</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          } catch { return null; }
+                        })()}
 
                         {/* Error message with expand toggle */}
                         {scan.errorMessage && (

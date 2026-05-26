@@ -1058,6 +1058,8 @@ http.route({
       screenshotStorageId?: string;
       errorMessage?: string;
       pageCaptures?: string;
+      detectedServices?: string;
+      detectedSlots?: string;
     };
 
     try {
@@ -1078,6 +1080,7 @@ http.route({
         errorMessage: body.errorMessage,
         pageCaptures: body.pageCaptures,
         detectedServices: body.detectedServices,
+        detectedSlots: body.detectedSlots,
       });
 
       return new Response(JSON.stringify({ ok: true }), {
