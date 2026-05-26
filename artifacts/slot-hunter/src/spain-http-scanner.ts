@@ -301,6 +301,47 @@ function collectIds(value: unknown, keyHint: RegExp): string[] {
   return [...out];
 }
 
+/**
+ * Extrait les détails complets des services (ID + nom + durée) depuis le payload getservices/.
+ * Utilisé pour le logging et le mapping visa → service.
+ */
+function extractServiceDetails(payload: unknown): Array<{ id: string; name: string; duration?: number }> {
+  const results: Array<{ id: string; name: string; duration?: number }> = [];
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        if (item && typeof item === "object") {
+          const obj = item as Record<string, unknown>;
+          // Service-like object: has id + name/description
+          const id = obj.id ?? obj.Id ?? obj.serviceId ?? obj.ServiceId ?? obj.idService ?? obj.IdService;
+          const name = obj.name ?? obj.Name ?? obj.serviceName ?? obj.ServiceName
+            ?? obj.description ?? obj.Description ?? obj.label ?? obj.Label;
+
+          if (id && name) {
+            results.push({
+              id: String(id),
+              name: String(name),
+              duration: typeof obj.duration === "number" ? obj.duration
+                : typeof obj.Duration === "number" ? obj.Duration
+                : undefined,
+            });
+          } else {
+            walk(item);
+          }
+        }
+      }
+    } else if (node && typeof node === "object") {
+      for (const value of Object.values(node as Record<string, unknown>)) {
+        if (value && typeof value === "object") walk(value);
+      }
+    }
+  };
+
+  walk(payload);
+  return results;
+}
+
 function firstMonthDayYmd(d: Date): string {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
@@ -492,6 +533,17 @@ async function buildConfigFromBase(
   const services = svcPayload
     ? collectIds(svcPayload, /(service.*id|services.*id|^id$)/i).slice(0, 3)
     : [];
+
+  // ─── LOG DÉTAILLÉ: capturer les noms de services pour le mapping visa ───
+  if (svcPayload && typeof svcPayload === "object") {
+    const serviceDetails = extractServiceDetails(svcPayload);
+    if (serviceDetails.length > 0) {
+      console.log(`[spain-http] 📋 SERVICES BOOKITIT DÉTECTÉS :`);
+      for (const svc of serviceDetails) {
+        console.log(`[spain-http]    • "${svc.name}" → ID: ${svc.id}${svc.duration ? ` (${svc.duration}min)` : ""}`);
+      }
+    }
+  }
 
   // Récupérer agendas
   let agendas: string[] = [];
