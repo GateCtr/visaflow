@@ -38,14 +38,36 @@ function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
   return cevImpitFetch(url, options, "[CEV-SETUP]");
 }
 
-// ─── Cache session VOWINT (persisté en mémoire entre les checks) ─────────────
-// Clé = vowintEmail, Valeur = { cookies, appId, ua, lastUsedAt }
-// On réutilise la session tant qu'elle n'a pas expiré (détecté par 302 vers login).
+// ─── Cache session VOWINT — DEUX COUCHES ─────────────────────────────────────
+//
+// COUCHE 1 : Auth cache (cookies + ua) — clé = email
+//   On ne re-login que si la session HTTP VOWINT a expiré (302→login).
+//   TOUS les dossiers du même compte partagent les mêmes cookies.
+//
+// COUCHE 2 : AppId cache — clé = "email|VOWINTREF"
+//   Chaque dossier a son propre UUID (appId) résolu via MyList.
+//   Cela évite que le même appId soit utilisé pour tous les dossiers.
+//
+// BUG FIX (2026-05-28) : Avant, le cache était clé=email uniquement et stockait
+// un seul appId. En mode dossier pool, TOUS les dossiers utilisaient le même appId
+// (celui résolu au premier login), causant des rate-limits fantômes sur les mauvais dossiers.
+
+interface VowintAuthCache {
+  cookies: string;
+  ua: string;
+  lastUsedAt: number;
+}
+const vowintAuthCache = new Map<string, VowintAuthCache>();
+
+// AppId par dossier — clé = "email|VOWINTREF" (ex: "user@mail.com|VOWINT6085888")
+const vowintAppIdCache = new Map<string, { appId: string; resolvedAt: number }>();
+
+// Legacy compat: l'ancien cache est gardé pour les appels sans vowintAppUrl (mode non-pool)
 interface VowintSessionCache {
   cookies: string;
-  appId: string;       // UUID du dossier (pour GetEAppointmentUrl)
-  ua: string;          // User-Agent utilisé lors du login (garder le même)
-  lastUsedAt: number;  // timestamp du dernier usage réussi
+  appId: string;
+  ua: string;
+  lastUsedAt: number;
 }
 const vowintSessionCache = new Map<string, VowintSessionCache>();
 
@@ -54,6 +76,9 @@ const vowintSessionCache = new Map<string, VowintSessionCache>();
 // On ne force le re-login que si le serveur retourne 302→login (détecté dynamiquement
 // via invalidateVowintCache()). Ce timeout 24h est un filet de sécurité ultime.
 const VOWINT_SESSION_MAX_AGE_MS = 24 * 60 * 60_000; // 24h
+
+// Durée max pour le cache appId (24h — les UUIDs ne changent pas)
+const VOWINT_APPID_CACHE_MAX_AGE_MS = 24 * 60 * 60_000;
 
 export interface CevHttpSetupResult {
   success: boolean;
@@ -67,11 +92,13 @@ export interface CevHttpSetupResult {
 }
 
 /**
- * Obtient une session VOWINT (login + appId) — utilise le cache si disponible.
- * Ne re-login que si :
- *   - Pas de cache pour cet email
- *   - Cache expiré (> 25 min)
- *   - Session invalide (détecté par 302 vers login lors d'un appel ultérieur)
+ * Obtient une session VOWINT (login + appId) — cache à DEUX COUCHES.
+ *
+ * COUCHE 1 (auth) : cookies + ua par email — évite re-login inutile
+ * COUCHE 2 (appId) : UUID par dossier (email+vowintRef) — résout le BON dossier
+ *
+ * BUG FIX (2026-05-28) : Avant, un seul appId était caché par email.
+ * En mode pool, tous les dossiers utilisaient le même appId (le premier résolu).
  */
 async function getVowintSession(
   vowintEmail: string,
@@ -79,164 +106,140 @@ async function getVowintSession(
   clientId: string,
   vowintAppUrl?: string,
 ): Promise<{ success: true; cookies: string; appId: string; ua: string } | { success: false; error: string }> {
-  // Vérifier le cache
-  const cached = vowintSessionCache.get(vowintEmail);
-  if (cached && (Date.now() - cached.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
-    botLog({ applicationId: clientId, step: "cev_http_vowint_cache_hit", status: "ok", data: { appId: cached.appId } });
-    cached.lastUsedAt = Date.now();
-    // Refresh TTL dans Redis (fire-and-forget)
-    syncVowintSessionToRedis(vowintEmail, { cookies: cached.cookies, appId: cached.appId, ua: cached.ua, lastUsedAt: cached.lastUsedAt });
-    return { success: true, cookies: cached.cookies, appId: cached.appId, ua: cached.ua };
+
+  // ═══ COUCHE 1 : Obtenir cookies authentifiés (partagés entre dossiers) ═══
+  let authCookies: string | null = null;
+  let authUa: string | null = null;
+
+  // Cache mémoire auth (nouveau)
+  const cachedAuth = vowintAuthCache.get(vowintEmail);
+  if (cachedAuth && (Date.now() - cachedAuth.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
+    authCookies = cachedAuth.cookies;
+    authUa = cachedAuth.ua;
+    cachedAuth.lastUsedAt = Date.now();
   }
 
-  // Cache mémoire miss — tenter restauration depuis Redis
-  const redisSession = await restoreVowintSessionFromRedis(vowintEmail);
-  if (redisSession && (Date.now() - redisSession.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
-    botLog({ applicationId: clientId, step: "cev_http_vowint_redis_hit", status: "ok", data: { appId: redisSession.appId } });
-    // Restaurer dans le cache mémoire
-    const restored = { cookies: redisSession.cookies, appId: redisSession.appId, ua: redisSession.ua, lastUsedAt: Date.now() };
-    vowintSessionCache.set(vowintEmail, restored);
-    syncVowintSessionToRedis(vowintEmail, restored);
-    return { success: true, cookies: restored.cookies, appId: restored.appId, ua: restored.ua };
-  }
-
-  // Cache miss ou expiré — faire un login complet
-  const ua = getCevSessionUa();
-  rotateCevUaProfile(); // Nouveau profil Chrome pour cette session
-
-  // 1. GET page login → CSRF token + cookies
-  const loginPageRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
-    method: "GET",
-    headers: getCevBrowserHeaders({ referer: "https://www.google.com/" }),
-    redirect: "follow",
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!loginPageRes.ok) {
-    return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
-  }
-  const loginHtml = await loginPageRes.text();
-  const tokenMatch = loginHtml.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
-  if (!tokenMatch) return { success: false, error: "CSRF_TOKEN_NOT_FOUND" };
-  const csrfToken = tokenMatch[1];
-  const vowintCookies = extractCookies(loginPageRes);
-  if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
-
-  // 2. POST login
-  const loginRes = await cevSetupFetch(`${VOWINT_BASE}/en/Account/Login`, {
-    method: "POST",
-    headers: {
-      ...getCevBrowserHeaders({
-        referer: `${VOWINT_BASE}/`,
-        origin: VOWINT_BASE,
-        contentType: "application/x-www-form-urlencoded",
-        cookie: vowintCookies,
-      }),
-    },
-    body: new URLSearchParams({
-      __RequestVerificationToken: csrfToken,
-      UserName: vowintEmail,
-      Password: vowintPassword,
-    }).toString(),
-    redirect: "manual",
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (loginRes.status !== 302) {
-    botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
-    return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
-  }
-
-  // Suivre les redirections post-login pour collecter tous les cookies
-  let cookies = mergeCookies(vowintCookies, loginRes);
-  let redirectUrl = loginRes.headers.get("location");
-  for (let i = 0; i < 5 && redirectUrl; i++) {
-    const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
-    const r = await cevSetupFetch(fullUrl, {
-      method: "GET",
-      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies }),
-      redirect: "manual",
-      signal: AbortSignal.timeout(20_000),
-    });
-    cookies = mergeCookies(cookies, r);
-    if (r.status >= 300 && r.status < 400) { redirectUrl = r.headers.get("location"); }
-    else break;
-  }
-  botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
-
-  // 3. Récupérer l'appId
-  // Supporté : UUID direct, URL GetEAppointmentUrl?id=UUID, ou numéro VOWINT (ex: VOWINT5903406)
-  let appId: string | null = null;
-  let vowintRefNumber: string | null = null; // Numéro de référence VOWINT à résoudre via MyList
-
-  if (vowintAppUrl) {
-    if (vowintAppUrl.includes("GetEAppointmentUrl")) {
-      // Format: https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=UUID
-      appId = vowintAppUrl.match(/id=([a-f0-9-]+)/i)?.[1] ?? null;
-    } else if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(vowintAppUrl.trim())) {
-      // Format: UUID direct (e978b2fd-472f-f111-a3ae-00505691de06)
-      appId = vowintAppUrl.trim();
-    } else if (/^VOWINT\d+$/i.test(vowintAppUrl.trim())) {
-      // Format: Numéro de référence VOWINT (ex: VOWINT5903406)
-      // On devra le résoudre via MyList API ci-dessous
-      vowintRefNumber = vowintAppUrl.trim().toUpperCase();
-      console.log(`[CEV-SETUP] Numéro VOWINT détecté: ${vowintRefNumber} — résolution via MyList...`);
+  // Legacy cache (compat mode non-pool)
+  if (!authCookies) {
+    const cachedLegacy = vowintSessionCache.get(vowintEmail);
+    if (cachedLegacy && (Date.now() - cachedLegacy.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
+      authCookies = cachedLegacy.cookies;
+      authUa = cachedLegacy.ua;
+      cachedLegacy.lastUsedAt = Date.now();
     }
   }
 
-  if (!appId) {
-    // GET IndexByUserId (initialise la vue)
-    const pageRes = await cevSetupFetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
+  // Redis fallback
+  if (!authCookies) {
+    const redisSession = await restoreVowintSessionFromRedis(vowintEmail);
+    if (redisSession && (Date.now() - redisSession.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
+      authCookies = redisSession.cookies;
+      authUa = redisSession.ua;
+      vowintAuthCache.set(vowintEmail, { cookies: redisSession.cookies, ua: redisSession.ua, lastUsedAt: Date.now() });
+      botLog({ applicationId: clientId, step: "cev_http_vowint_redis_hit", status: "ok" });
+    }
+  }
+
+  // Pas de cookies → login complet
+  if (!authCookies) {
+    const ua = getCevSessionUa();
+    rotateCevUaProfile();
+
+    // 1. GET page login → CSRF token + cookies
+    const loginPageRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
       method: "GET",
-      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: cookies }),
+      headers: getCevBrowserHeaders({ referer: "https://www.google.com/" }),
       redirect: "follow",
       signal: AbortSignal.timeout(30_000),
     });
-    if (pageRes.ok) {
-      const html = await pageRes.text();
-      cookies = mergeCookies(cookies, pageRes);
-      const m = html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
-      if (m) appId = m[1];
+    if (!loginPageRes.ok) {
+      return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
+    }
+    const loginHtml = await loginPageRes.text();
+    const tokenMatch = loginHtml.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
+    if (!tokenMatch) return { success: false, error: "CSRF_TOKEN_NOT_FOUND" };
+    const csrfToken = tokenMatch[1];
+    const vowintCookies = extractCookies(loginPageRes);
+    if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
+
+    // 2. POST login
+    const loginRes = await cevSetupFetch(`${VOWINT_BASE}/en/Account/Login`, {
+      method: "POST",
+      headers: {
+        ...getCevBrowserHeaders({
+          referer: `${VOWINT_BASE}/`,
+          origin: VOWINT_BASE,
+          contentType: "application/x-www-form-urlencoded",
+          cookie: vowintCookies,
+        }),
+      },
+      body: new URLSearchParams({
+        __RequestVerificationToken: csrfToken,
+        UserName: vowintEmail,
+        Password: vowintPassword,
+      }).toString(),
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (loginRes.status !== 302) {
+      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
+      return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
     }
 
-    // GET DataTables (initialise état serveur)
-    if (!appId) {
-      await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+    // Suivre les redirections post-login
+    let cookies = mergeCookies(vowintCookies, loginRes);
+    let redirectUrl = loginRes.headers.get("location");
+    for (let i = 0; i < 5 && redirectUrl; i++) {
+      const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
+      const r = await cevSetupFetch(fullUrl, {
         method: "GET",
-        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
+        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies }),
+        redirect: "manual",
         signal: AbortSignal.timeout(20_000),
-      }).then(r => { cookies = mergeCookies(cookies, r); return r.text(); }).catch(() => {});
-
-      // GET MyList (DataTables AJAX)
-      const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
-      const listRes = await cevSetupFetch(dtUrl, {
-        method: "GET",
-        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
-        signal: AbortSignal.timeout(30_000),
       });
-      if (listRes.ok) {
-        const text = await listRes.text();
-        try {
-          const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
-          // Si on cherche un numéro VOWINT spécifique, matcher dessus
-          if (vowintRefNumber && data.data) {
-            const match = data.data.find(d => d.VOWId?.toUpperCase() === vowintRefNumber);
-            if (match?.Id) {
-              appId = match.Id;
-              console.log(`[CEV-SETUP] ✅ Numéro ${vowintRefNumber} résolu → UUID: ${appId}`);
-            } else {
-              console.log(`[CEV-SETUP] ⚠️ Numéro ${vowintRefNumber} non trouvé dans MyList (${data.data?.length ?? 0} dossiers). Dossiers disponibles: ${data.data?.map(d => d.VOWId).join(', ')}`);
-            }
-          }
-          // Fallback: premier dossier si pas de match spécifique
-          if (!appId) {
-            const first = data.data?.find(d => d.Id || d.VOWId);
-            if (first) appId = first.Id ?? first.VOWId ?? null;
-          }
-        } catch {
-          const m = text.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
-          if (m) appId = m[0];
+      cookies = mergeCookies(cookies, r);
+      if (r.status >= 300 && r.status < 400) { redirectUrl = r.headers.get("location"); }
+      else break;
+    }
+    botLog({ applicationId: clientId, step: "cev_http_login_ok", status: "ok" });
+
+    authCookies = cookies;
+    authUa = ua;
+    // Stocker dans le cache auth
+    vowintAuthCache.set(vowintEmail, { cookies, ua, lastUsedAt: Date.now() });
+  }
+
+  // ═══ COUCHE 2 : Résoudre l'appId pour le dossier SPÉCIFIQUE demandé ═══
+  let appId: string | null = null;
+
+  if (vowintAppUrl) {
+    if (vowintAppUrl.includes("GetEAppointmentUrl")) {
+      appId = vowintAppUrl.match(/id=([a-f0-9-]+)/i)?.[1] ?? null;
+    } else if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(vowintAppUrl.trim())) {
+      appId = vowintAppUrl.trim();
+    } else if (/^VOWINT\d+$/i.test(vowintAppUrl.trim())) {
+      // Mode Pool : résoudre via cache appId ou MyList
+      const vowintRefNumber = vowintAppUrl.trim().toUpperCase();
+      const appIdCacheKey = `${vowintEmail}|${vowintRefNumber}`;
+      const cachedAppId = vowintAppIdCache.get(appIdCacheKey);
+      if (cachedAppId && (Date.now() - cachedAppId.resolvedAt) < VOWINT_APPID_CACHE_MAX_AGE_MS) {
+        appId = cachedAppId.appId;
+        console.log(`[CEV-SETUP] AppId cache HIT: ${vowintRefNumber} → ${appId.slice(0, 8)}…`);
+      } else {
+        // Résoudre via MyList (ne consomme PAS de clic)
+        console.log(`[CEV-SETUP] Résolution ${vowintRefNumber} via MyList...`);
+        appId = await resolveVowintRefViaMyList(vowintRefNumber, authCookies!);
+        if (appId) {
+          vowintAppIdCache.set(appIdCacheKey, { appId, resolvedAt: Date.now() });
+          console.log(`[CEV-SETUP] ✅ ${vowintRefNumber} résolu et caché → ${appId}`);
         }
       }
     }
+  }
+
+  // Fallback : pas de dossier spécifique ou résolution échouée → premier dossier
+  if (!appId) {
+    appId = await resolveFirstAppIdFromMyList(authCookies!);
   }
 
   if (!appId) {
@@ -244,19 +247,96 @@ async function getVowintSession(
     return { success: false, error: "NO_APP_ID" };
   }
 
-  botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId, source: "login" } });
+  botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId, dossier: vowintAppUrl ?? "default" } });
 
-  // Stocker dans le cache
-  vowintSessionCache.set(vowintEmail, { cookies, appId, ua, lastUsedAt: Date.now() });
-  // Persister dans Redis pour survivre aux redémarrages
-  syncVowintSessionToRedis(vowintEmail, { cookies, appId, ua, lastUsedAt: Date.now() });
+  // Mettre à jour les caches
+  vowintSessionCache.set(vowintEmail, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
+  syncVowintSessionToRedis(vowintEmail, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
 
-  return { success: true, cookies, appId, ua };
+  return { success: true, cookies: authCookies!, appId, ua: authUa! };
+}
+
+/**
+ * Résout un numéro VOWINT (ex: "VOWINT6085888") en UUID via l'API MyList.
+ * Ne consomme PAS de clic GetEAppointmentUrl — c'est une simple lecture.
+ */
+async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: string): Promise<string | null> {
+  // GET DataTables init
+  await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
+    signal: AbortSignal.timeout(20_000),
+  }).then(r => r.text()).catch(() => {});
+
+  // GET MyList — length=50 pour voir tous les dossiers
+  const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=50&search%5Bvalue%5D=&search%5Bregex%5D=false`;
+  const listRes = await cevSetupFetch(dtUrl, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!listRes.ok) return null;
+
+  const text = await listRes.text();
+  try {
+    const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
+    if (data.data) {
+      const match = data.data.find(d => d.VOWId?.toUpperCase() === vowintRefNumber);
+      if (match?.Id) return match.Id;
+      console.log(`[CEV-SETUP] ⚠️ ${vowintRefNumber} non trouvé dans MyList (${data.data.length} dossiers). Disponibles: ${data.data.map(d => d.VOWId).join(', ')}`);
+    }
+  } catch { /* non-JSON */ }
+  return null;
+}
+
+/**
+ * Résout le premier appId disponible (mode non-pool / fallback).
+ */
+async function resolveFirstAppIdFromMyList(cookies: string): Promise<string | null> {
+  // GET IndexByUserId
+  const pageRes = await cevSetupFetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: cookies }),
+    redirect: "follow",
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (pageRes.ok) {
+    const html = await pageRes.text();
+    const m = html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
+    if (m) return m[1];
+  }
+
+  // Fallback MyList
+  const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
+  const listRes = await cevSetupFetch(dtUrl, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, */*" }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (listRes.ok) {
+    const text = await listRes.text();
+    try {
+      const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
+      const first = data.data?.find(d => d.Id || d.VOWId);
+      if (first) return first.Id ?? first.VOWId ?? null;
+    } catch {
+      const m = text.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i);
+      if (m) return m[0];
+    }
+  }
+  return null;
 }
 
 /** Invalide le cache VOWINT (appelé quand on détecte une session expirée) */
 export function invalidateVowintCache(vowintEmail: string): void {
   vowintSessionCache.delete(vowintEmail);
+  vowintAuthCache.delete(vowintEmail);
+  // Invalider tous les appId cachés pour cet email
+  for (const key of vowintAppIdCache.keys()) {
+    if (key.startsWith(`${vowintEmail}|`)) {
+      vowintAppIdCache.delete(key);
+    }
+  }
   removeVowintSessionFromRedis(vowintEmail);
 }
 
