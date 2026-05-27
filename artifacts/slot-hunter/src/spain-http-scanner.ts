@@ -817,8 +817,21 @@ async function scanViaMainEndpoint(
 
   if (hasHiddenNoSlots && !hasVisibleNoSlots) {
     // La div "No hay horas" existe mais est cachée (display:none) →
-    // Le serveur a rendu le widget avec des services/créneaux disponibles !
+    // POTENTIELLEMENT des créneaux, mais vérifier qu'il y a des services rendus
+    // pour éviter les faux positifs (état transitoire serveur, maintenance nocturne)
     console.log(`[spain-http] 🎉 "No hay horas" est en display:none → CRÉNEAUX POTENTIELS !`);
+
+    const renderedForCheck = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
+    const hasServices = /#selectservice\/\d+/i.test(renderedForCheck);
+
+    if (!hasServices) {
+      console.log(`[spain-http] ⚠️ FAUX POSITIF: "No hay horas" masqué MAIS 0 service rendu → not_found`);
+      return {
+        status: "not_found",
+        scanDurationMs: Date.now() - t0,
+      };
+    }
+
     return {
       status: "found",
       slotInfo: "Créneau détecté via /main/ HTML (message 'No hay horas' masqué = dispo)",
