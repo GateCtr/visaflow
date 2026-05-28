@@ -536,7 +536,32 @@ export function resetCevImpitInstances(): void {
  * v2: Plus de fallback silencieux ! On retry PROXY_MAX_RETRIES fois avec timeout
  * avant de tomber en direct. Chaque échec est loggé avec détail.
  */
+
+// ─── Mode direct durable (après 422 proxy) ─────────────────────────────────
+// Quand le proxy rejette avec 422, on bascule en mode direct pour une durée fixe
+// au lieu de retenter le proxy à chaque requête et échouer à répétition.
+const CEV_DIRECT_MODE_DURATION_MS = 30 * 60_000; // 30 minutes en mode direct
+let _cevDirectModeUntil = 0; // timestamp jusqu'auquel on reste en direct
+
+/** Force le retour au mode proxy (appelable manuellement) */
+export function resetCevDirectMode(): void {
+  _cevDirectModeUntil = 0;
+  console.log("[CEV] 🔄 Mode direct reseté → retour proxy");
+}
+
+/** Vérifie si on est en mode direct forcé */
+export function isCevDirectMode(): boolean {
+  return Date.now() < _cevDirectModeUntil;
+}
+
 export async function cevImpitFetch(url: string, options: RequestInit, logPrefix = "[CEV]"): Promise<Response> {
+  // ── Mode direct forcé (après 422 proxy) ─────────────────────────────────────
+  if (Date.now() < _cevDirectModeUntil) {
+    // Jitter réseau réaliste même en mode direct
+    await new Promise(r => setTimeout(r, 30 + Math.random() * 170));
+    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+  }
+
   // ── Proxy liveness guard (comme usa-http.ts Pillar 2) ───────────────────────
   if (_cevProxyGuardState && _cevProxyGuardState.frozen) {
     console.error(`${logPrefix} 🛑 REQUÊTE BLOQUÉE — proxy mort mid-session (session gelée)`);
@@ -580,12 +605,27 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
       const res = await getProxyImpit(currentProxy).fetch(url, fetchOptions as any) as unknown as Response;
       clearTimeout(timeout);
 
-      // Vérifier si la réponse est un 407 (proxy auth failed) ou 502/503 (proxy error)
+      // Vérifier si la réponse est un 407 (proxy auth failed) ou 422/502/503 (proxy error)
       if (res.status === 407) {
         console.error(`${logPrefix} ❌ Proxy auth failed (407) — vérifier IPROYAL_PROXY_URL credentials`);
         lastError = new Error(`PROXY_AUTH_FAILED_407`);
         // Ne pas retry un 407, c'est un problème de credentials
         break;
+      }
+
+      if (res.status === 422) {
+        // 422 = proxy CONNECT tunnel rejeté — basculer en mode DIRECT durablement
+        console.error(`${logPrefix} ❌ Proxy 422 (CONNECT tunnel rejected) — BASCULEMENT MODE DIRECT`);
+        _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
+        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
+        // Exécuter immédiatement en direct (pas de retry proxy)
+        try {
+          return await getDirectImpit().fetch(url, options as any) as unknown as Response;
+        } catch (directErr) {
+          const directMsg = directErr instanceof Error ? directErr.message : String(directErr);
+          console.error(`${logPrefix} 💥 DIRECT aussi échoué après 422: ${directMsg.slice(0, 100)}`);
+          throw directErr;
+        }
       }
 
       if (res.status === 502 || res.status === 503) {
@@ -612,6 +652,19 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
       const msg = err instanceof Error ? err.message : String(err);
       const isTimeout = msg.includes("abort") || msg.includes("timeout") || msg.includes("TIMEOUT");
       const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("EPIPE");
+      const is422Tunnel = msg.includes("422") || msg.includes("CONNECT tunnel");
+
+      // 422 proxy error in exception form → basculer en direct immédiatement
+      if (is422Tunnel) {
+        console.error(`${logPrefix} ❌ Proxy 422 tunnel error (exception) — BASCULEMENT MODE DIRECT`);
+        _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
+        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
+        try {
+          return await getDirectImpit().fetch(url, options as any) as unknown as Response;
+        } catch (directErr) {
+          throw directErr;
+        }
+      }
 
       if (attempt < PROXY_MAX_RETRIES) {
         console.warn(

@@ -585,6 +585,16 @@ export async function startCevDossierLoop(): Promise<void> {
         }
       }
 
+      // ─── Check stop signal (permet d'arrêter même en config automatique) ───
+      if (state.scanCount > 0 && state.scanCount % 10 === 0) {
+        const stopSignal = await getBotConfigValue("cev_session_stop");
+        if (stopSignal === "1") {
+          log("INFO", "🛑 Signal d'arrêt reçu (cev_session_stop=1) → arrêt gracieux");
+          state.isRunning = false;
+          break;
+        }
+      }
+
       // Récupérer le prochain dossier disponible
       const dossier = pool.getNextAvailable();
       if (!dossier) {
