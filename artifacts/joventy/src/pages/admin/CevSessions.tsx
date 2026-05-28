@@ -790,6 +790,17 @@ export default function CevSessions() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
+                        {/* Stop : session en configuration automatique */}
+                        {s.status === "needs_setup" && (
+                          <button
+                            onClick={() => setStatus({ sessionId: s._id, status: "paused" })}
+                            className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                            title="Stopper la configuration auto"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
+
                         {/* Pause : session active sans login failure */}
                         {s.status === "active" && (
                           <button
