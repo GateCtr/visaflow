@@ -642,57 +642,6 @@ export async function setupCevSessionHttp(
         status: "ok",
         data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
       });
-
-      // ═══ TEST REPLAY: Re-GET la même redirectUrl après 10s pour voir si les GUIDs sont réutilisables ═══
-      // Si le replay donne aussi NoAvailability → on peut poll toutes les 10s pendant 15 min avec 1 seul clic!
-      // Si le replay donne Error/Default → token usage unique, replay impossible.
-      try {
-        await new Promise(r => setTimeout(r, 10_000)); // Attendre 10s
-        const replayRes = await cevSetupFetch(fullRedirectUrl, {
-          method: "GET",
-          redirect: "follow",
-          headers: getCevBrowserHeaders({ referer: `${CEV_BASE}/Captcha`, cookie: fullCevCookie }),
-          signal: AbortSignal.timeout(20_000),
-        });
-        const replayFinalUrl = replayRes.url ?? fullRedirectUrl;
-        const replayStatus = replayRes.status;
-        const isReplayNoAvail = replayFinalUrl.includes("NoAvailability");
-        const isReplayError = replayFinalUrl.includes("Error") && !isReplayNoAvail;
-        const isReplaySelectSlot = replayFinalUrl.includes("SelectSlot");
-
-        botLog({
-          applicationId: clientId,
-          step: "cev_http_replay_test",
-          status: isReplayNoAvail ? "ok" : isReplaySelectSlot ? "ok" : "warn",
-          data: {
-            replayFinalUrl,
-            replayStatus,
-            isReplayNoAvail,
-            isReplayError,
-            isReplaySelectSlot,
-            verdict: isReplayNoAvail ? "REPLAY_WORKS_NoAvail" : isReplaySelectSlot ? "REPLAY_WORKS_SelectSlot!" : isReplayError ? "REPLAY_DEAD_Error" : "REPLAY_UNKNOWN",
-            delayMs: 10_000,
-          },
-        });
-
-        if (isReplayNoAvail) {
-          console.log(`[CEV-SETUP] 🔬 REPLAY TEST: ✅ NoAvailability après 10s — REPLAY FONCTIONNE! Les GUIDs sont réutilisables!`);
-        } else if (isReplaySelectSlot) {
-          console.log(`[CEV-SETUP] 🔬 REPLAY TEST: 🎉 SelectSlot après 10s — DES SLOTS SONT APPARUS!`);
-        } else {
-          console.log(`[CEV-SETUP] 🔬 REPLAY TEST: ❌ ${replayFinalUrl.split("/").pop()} — replay impossible (token usage unique)`);
-        }
-      } catch (replayErr) {
-        const replayMsg = replayErr instanceof Error ? replayErr.message : String(replayErr);
-        botLog({
-          applicationId: clientId,
-          step: "cev_http_replay_test",
-          status: "warn",
-          data: { error: replayMsg, verdict: "REPLAY_ERROR" },
-        });
-        console.log(`[CEV-SETUP] 🔬 REPLAY TEST: ⚠️ Erreur: ${replayMsg.slice(0, 80)}`);
-      }
-
       return {
         success: true,
         sessionCookie: cevSessionCookie,
