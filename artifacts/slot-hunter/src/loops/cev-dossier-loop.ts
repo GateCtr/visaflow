@@ -55,7 +55,7 @@ import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPaus
 const MAX_CLICKS_PER_SESSION = 4; // Limite GLOBALE par session VOWINT (serveur bloque au 5ème)
 const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 4; // Garde pour le calcul d'intervalle
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
-const DEFAULT_INTERVAL_SEC = 30; // Pause par défaut entre scans
+const DEFAULT_INTERVAL_SEC = 15; // Pause par défaut entre scans (réduit de 30 → 15)
 
 // Compteur GLOBAL de clics sur la session VOWINT courante
 let globalSessionClicks = 0;
@@ -602,8 +602,8 @@ export async function startCevDossierLoop(): Promise<void> {
         const waitMin = Math.ceil(waitMs / 60_000);
         const stats = pool.getStats();
         log("INFO", `⏳ Tous les dossiers épuisés (${stats.exhausted}/${stats.total}) — attente ${waitMin} min`);
-        // This triggers idle period detection in daily-stats (checkIdleState will catch it)
-        await sleep(Math.min(waitMs + 5000, 5 * 60_000));
+        // Attente réduite: max 2 min au lieu de 5 min
+        await sleep(Math.min(waitMs + 5000, 2 * 60_000));
         continue;
       }
 
@@ -622,9 +622,10 @@ export async function startCevDossierLoop(): Promise<void> {
       // Si des dossiers sont rate-limités/pausés, les restants doivent espacer
       // leurs clics pour ne pas dépasser 4/h chacun.
       // Formula: 3600s / (dossiers_actifs × 4 clics/h) = intervalle minimum
+      // Réduit: on accepte un rythme plus agressif (closer to rate limit)
       const activeDossiers = stats.available - pausedDossiers.size;
       const dynamicIntervalMs = activeDossiers > 0
-        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) * 1000)
+        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) * 1000 * 0.6) // 60% du max théorique
         : intervalMs;
       // Utiliser le max entre l'intervalle configuré et le dynamique
       const effectiveIntervalMs = Math.max(intervalMs, dynamicIntervalMs);
@@ -713,14 +714,14 @@ export async function startCevDossierLoop(): Promise<void> {
       syncPoolStateToRedis(pool.exportState());
 
       // Pause entre les scans (intervalle dynamique)
-      // Ajouter un jitter de ±20% pour paraître humain
-      const jitter = effectiveIntervalMs * 0.2 * (Math.random() * 2 - 1);
+      // Jitter réduit à ±10% 
+      const jitter = effectiveIntervalMs * 0.1 * (Math.random() * 2 - 1);
       await sleep(effectiveIntervalMs + jitter);
 
     } catch (loopErr) {
       log("ERROR", `Erreur loop: ${loopErr}`);
       state.errors++;
-      await sleep(30_000);
+      await sleep(10_000); // Réduit de 30s → 10s
     }
   }
 
