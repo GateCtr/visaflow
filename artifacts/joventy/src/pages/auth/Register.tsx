@@ -2,6 +2,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { useSignUp, useSignIn } from "@clerk/react";
+import { Helmet } from "react-helmet-async";
 import {
   Eye,
   EyeOff,
@@ -197,6 +198,10 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex">
+      <Helmet>
+        <title>Créer un dossier — Joventy</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       {/* Left Panel */}
       <div className="hidden lg:flex lg:w-5/12 xl:w-1/2 bg-brand-gradient flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">

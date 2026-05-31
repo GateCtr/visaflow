@@ -6,5 +6,20 @@ Disallow: /dashboard
 Disallow: /admin
 Disallow: /sso-callback
 Disallow: /continue
+Disallow: /login
+Disallow: /register
+
+# Crawlers IA — autoriser les bots de recherche, bloquer les scrapers d'entraînement
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
 
 Sitemap: https://www.joventy.cd/sitemap.xml

@@ -22,11 +22,18 @@ export function LegalLayout({ title, subtitle, lastUpdated, description, slug, c
       <Helmet>
         <title>{pageTitle}</title>
         <meta name="description" content={metaDesc} />
+        <meta name="robots" content="noindex, follow" />
         <link rel="canonical" href={canonical} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={metaDesc} />
         <meta property="og:url" content={canonical} />
         <meta property="og:type" content="website" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={metaDesc} />
+        <meta name="twitter:site" content="@JoventyCD" />
       </Helmet>
 
       {/* Header */}

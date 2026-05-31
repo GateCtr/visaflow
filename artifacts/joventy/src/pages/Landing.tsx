@@ -293,13 +293,21 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Joventy — Visa USA, Canada, UK, Suisse, Espagne, Dubaï depuis Kinshasa (RDC)</title>
-        <meta name="description" content="Assistance visa USA, Canada, Royaume-Uni, Suisse, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Formulaires, créneaux consulaires, e-Visas. Paiement M-Pesa." />
+        <title>Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy</title>
+        <meta name="description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa — Formulaires remplis, créneaux consulaires, e-Visas. Vous payez uniquement si ça marche. Paiement M-Pesa ✓" />
         <link rel="canonical" href="https://www.joventy.cd/" />
-        <meta property="og:title" content="Joventy — Visa USA, Canada, UK, Suisse, Espagne, Dubaï depuis Kinshasa (RDC)" />
-        <meta property="og:description" content="Assistance visa USA, Canada, Royaume-Uni, Suisse, Espagne, Dubaï, Turquie et Inde depuis Kinshasa. Formulaires, créneaux consulaires, e-Visas. Paiement M-Pesa." />
+        <meta property="og:title" content="Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy" />
+        <meta property="og:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa — Formulaires remplis, créneaux consulaires, e-Visas. Vous payez uniquement si ça marche. Paiement M-Pesa." />
         <meta property="og:url" content="https://www.joventy.cd/" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy" />
+        <meta name="twitter:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa. Formulaires, créneaux, e-Visas. Paiement M-Pesa. Résultat garanti ou remboursé." />
+        <meta name="twitter:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta name="twitter:site" content="@JoventyCD" />
       </Helmet>
 
       <Navbar />
