@@ -2,6 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
 
+  <!-- Homepage -->
   <url>
     <loc>https://www.joventy.cd/</loc>
     <lastmod>2025-06-01</lastmod>
@@ -11,6 +12,71 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://www.joventy.cd/" />
   </url>
 
+  <!-- Destination pages (high SEO value) -->
+  <url>
+    <loc>https://www.joventy.cd/visa-usa-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-canada-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-royaume-uni-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-schengen-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-espagne-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-suisse-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/e-visa-dubai-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-turquie-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/e-visa-inde-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Legal pages -->
   <url>
     <loc>https://www.joventy.cd/mentions-legales</loc>
     <lastmod>2025-01-01</lastmod>

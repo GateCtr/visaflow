@@ -989,18 +989,18 @@ export default function Landing() {
               <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Destinations</h4>
               <ul className="space-y-2 text-sm text-white/50">
                 {([
-                  { code: "us", label: "Visa États-Unis" },
-                  { code: "ca", label: "Visa Canada" },
-                  { code: "gb", label: "Visa Royaume-Uni" },
-                  { code: "ch", label: "Visa Suisse" },
-                  { code: "eu", label: "Visa Schengen" },
-                  { code: "es", label: "Visa Espagne" },
-                  { code: "ae", label: "E-Visa Dubaï" },
-                  { code: "tr", label: "Visa Turquie" },
-                  { code: "in", label: "E-Visa Inde" },
-                ] as { code: string; label: string }[]).map((d) => (
+                  { code: "us", label: "Visa États-Unis", href: "/visa-usa-kinshasa" },
+                  { code: "ca", label: "Visa Canada", href: "/visa-canada-kinshasa" },
+                  { code: "gb", label: "Visa Royaume-Uni", href: "/visa-royaume-uni-kinshasa" },
+                  { code: "ch", label: "Visa Suisse", href: "/visa-suisse-kinshasa" },
+                  { code: "eu", label: "Visa Schengen", href: "/visa-schengen-kinshasa" },
+                  { code: "es", label: "Visa Espagne", href: "/visa-espagne-kinshasa" },
+                  { code: "ae", label: "E-Visa Dubaï", href: "/e-visa-dubai-kinshasa" },
+                  { code: "tr", label: "Visa Turquie", href: "/visa-turquie-kinshasa" },
+                  { code: "in", label: "E-Visa Inde", href: "/e-visa-inde-kinshasa" },
+                ] as { code: string; label: string; href: string }[]).map((d) => (
                   <li key={d.code}>
-                    <Link href="/register" className="hover:text-white transition-colors flex items-center gap-2">
+                    <Link href={d.href} className="hover:text-white transition-colors flex items-center gap-2">
                       <FlagImg code={d.code} size={20} className="opacity-90" />
                       {d.label}
                     </Link>

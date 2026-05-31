@@ -20,6 +20,7 @@ import SSOCallback from "@/pages/auth/SSOCallback";
 import ContinueSignUp from "@/pages/auth/ContinueSignUp";
 import NotFound from "@/pages/not-found";
 import PublicTracking from "@/pages/PublicTracking";
+import DestinationPage from "@/pages/DestinationPage";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
 import Confidentialite from "@/pages/legal/Confidentialite";
@@ -96,6 +97,18 @@ function Router() {
       <Route path="/sso-callback" component={SSOCallback} />
       <Route path="/continue" component={ContinueSignUp} />
       <Route path="/suivi/:token" component={PublicTracking} />
+
+      {/* Destination SEO pages */}
+      <Route path="/visa-usa-kinshasa" component={DestinationPage} />
+      <Route path="/visa-canada-kinshasa" component={DestinationPage} />
+      <Route path="/visa-royaume-uni-kinshasa" component={DestinationPage} />
+      <Route path="/visa-schengen-kinshasa" component={DestinationPage} />
+      <Route path="/visa-espagne-kinshasa" component={DestinationPage} />
+      <Route path="/visa-suisse-kinshasa" component={DestinationPage} />
+      <Route path="/e-visa-dubai-kinshasa" component={DestinationPage} />
+      <Route path="/visa-turquie-kinshasa" component={DestinationPage} />
+      <Route path="/e-visa-inde-kinshasa" component={DestinationPage} />
+
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/confidentialite" component={Confidentialite} />
       <Route path="/conditions" component={Conditions} />
