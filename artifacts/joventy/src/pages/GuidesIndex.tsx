@@ -48,7 +48,7 @@ export default function GuidesIndex() {
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-primary font-bold text-lg">
-            <JoventyLogo className="w-8 h-8" />
+            <JoventyLogo className="w-8 h-8" showText={false} />
             Joventy
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
