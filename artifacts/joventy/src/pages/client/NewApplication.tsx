@@ -37,7 +37,7 @@ const DESTINATIONS = [
   { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
   { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Rendez-vous RK-Termin — ambassade d'Allemagne (visa national & Schengen)", processType: "appointment" as const },
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
-  { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne ou Visa Sticker via VFS Global",                        processType: "hybrid" as const },
+  { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",  processType: "evisa" as const },
   { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
 ];
 
@@ -166,10 +166,10 @@ function getPackageInfo(
     }
     if (destination === "turkey") {
       return {
-        label: "Créneau VFS",
-        tagline: "Dépôt uniquement",
-        description: "Vos formulaires sont remplis et votre dossier prêt ? Joventy réserve votre créneau de dépôt au centre VFS Global Kinshasa pour votre Visa Sticker Turquie.",
-        slotNote: "Pour le Visa Sticker (VFS) uniquement — pas applicable à l'e-Visa.",
+        label: "E-Visa Turquie",
+        tagline: "En ligne",
+        description: "Joventy soumet votre demande d'e-Visa Turquie sur le portail officiel. Disponible pour les détenteurs d'un visa USA, Schengen ou UK valide. Résultat en 24-48h.",
+        slotNote: "Si vous n'êtes pas éligible à l'e-Visa, Joventy prépare votre dossier pour l'ambassade.",
       };
     }
     if (destination === "schengen") {

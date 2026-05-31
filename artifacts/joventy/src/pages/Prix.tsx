@@ -19,7 +19,7 @@ const PRICING = [
   { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null },
   { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
   { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", engagement: 150, success: 200, external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
-  { code: "tr", name: "Visa Turquie", types: "E-Visa, Sticker VFS, Transit", engagement: 150, success: 200, external: "50-300 USD (e-Visa/VFS)", delay: "24h-4 semaines", href: "/visa-turquie-kinshasa", alert: null },
+  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", engagement: 150, success: 200, external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
   { code: "ma", name: "Visa Maroc", types: "E-Visa (si visa USA/Schengen), Sticker", engagement: 150, success: 200, external: "77-110 USD (e-Visa)", delay: "24-72h", href: "/visa-maroc-kinshasa", alert: null },
   { code: "eg", name: "Visa Égypte", types: "Touriste (ambassade)", engagement: 150, success: 200, external: "~60 USD (consulat)", delay: "24-72h", href: "/e-visa-egypte-kinshasa", alert: null },
   { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },

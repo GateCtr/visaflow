@@ -182,12 +182,12 @@ const PACKAGES = [
     icon: Calendar,
     label: "Créneau Uniquement",
     tagline: "Dossier déjà prêt",
-    desc: "Vos formulaires sont remplis, vos frais MRV payés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade (USA) ou au centre VFS (Turquie).",
+    desc: "Vos formulaires sont remplis, vos frais MRV payés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade (USA) ou au CEV (Schengen/Espagne).",
     highlight: false,
     features: [
       "Surveillance continue du portail consulaire",
       "Alerte immédiate à la capture",
-      "Disponible USA & Turquie VFS",
+      "Disponible USA, Schengen (CEV) & Espagne",
       "Niveaux d'urgence : Standard → Très urgent",
       "Prime due uniquement si créneau obtenu",
     ],
@@ -246,7 +246,7 @@ const TESTIMONIALS = [
   {
     name: "Patrick B.",
     city: "Goma",
-    dest: "Visa Sticker VFS Turquie",
+    dest: "E-Visa Turquie",
     code: "tr",
     text: "Le suivi en temps réel dans l'application est rassurant. Mon conseiller répondait dans la journée. Je recommande vivement.",
     stars: 5,
@@ -442,7 +442,7 @@ export default function Landing() {
                 {[
                   "Remplit vos formulaires officiels (DS-160, VFS, portails e-Visa)",
                   "Vérifie que vos pièces justificatives sont conformes aux exigences consulaires",
-                  "Recherche activement un créneau de rendez-vous consulaire (USA, Turquie)",
+                  "Recherche activement un créneau de rendez-vous consulaire (USA, Schengen, Espagne)",
                   "Soumet votre dossier e-Visa auprès du gouvernement (Dubaï, Inde)",
                   "Vous accompagne par chat dédié à chaque étape du dossier",
                   "Vous transmet le résultat dès obtention (convocation ou e-Visa PDF)",
@@ -467,7 +467,7 @@ export default function Landing() {
                 {[
                   { text: "Joventy n'est pas un consulat et ne délivre pas de visas", note: "La décision d'accord ou de refus appartient exclusivement à l'ambassade ou au gouvernement étranger." },
                   { text: "Joventy ne garantit pas l'approbation finale du visa", note: "Nous garantissons uniquement le service : si nous ne trouvons pas de créneau ou si l'e-Visa est refusé, vous ne payez pas la prime de succès." },
-                  { text: "Les frais consulaires et annexes ne sont pas inclus dans nos tarifs", note: "MRV USA (265$), frais VFS Turquie (100-300$), e-Visa EAU (~90$), e-Visa Inde (~25-80$), assurance voyage, réservations d'hôtel et de billets d'avion restent à la charge du client et sont payés directement aux organismes concernés." },
+                  { text: "Les frais consulaires et annexes ne sont pas inclus dans nos tarifs", note: "MRV USA (185-210$), frais CEV Schengen (90€), e-Visa Turquie (~50$), e-Visa EAU (~90$), e-Visa Inde (~25-80$), assurance voyage, réservations d'hôtel et de billets d'avion restent à la charge du client et sont payés directement aux organismes concernés." },
                 ].map((item) => (
                   <li key={item.text} className="flex items-start gap-3">
                     <XCircle className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
@@ -776,11 +776,11 @@ export default function Landing() {
               },
               {
                 q: "Que se passe-t-il si mon visa est refusé après un rendez-vous ?",
-                a: "Si vous avez obtenu un créneau de rendez-vous (USA, Turquie), Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy. Nous vous accompagnons cependant pour préparer au mieux votre dossier.",
+                a: "Si vous avez obtenu un créneau de rendez-vous (USA, Schengen) ou votre e-Visa (Dubaï, Turquie, Inde), Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy.",
               },
               {
                 q: "Les frais consulaires, assurances et réservations sont-ils inclus dans vos tarifs ?",
-                a: "Non. Les frais consulaires sont payés directement par vous au gouvernement ou à l'organisme concerné (banque pour le MRV USA, centre VFS pour la Turquie, portail officiel pour Dubaï et l'Inde). De même, l'assurance voyage, les réservations d'hôtel et les billets d'avion — souvent exigés par le consulat comme pièces justificatives — sont entièrement à votre charge. Joventy vous indique ce qu'il faut préparer, mais ne règle pas ces frais à votre place.",
+                a: "Non. Les frais consulaires sont payés directement par vous au gouvernement ou à l'organisme concerné (banque pour le MRV USA, CEV pour le Schengen, portail officiel pour Dubaï, Turquie et l'Inde). De même, l'assurance voyage, les réservations d'hôtel et les billets d'avion — souvent exigés par le consulat comme pièces justificatives — sont entièrement à votre charge. Joventy vous indique ce qu'il faut préparer, mais ne règle pas ces frais à votre place.",
               },
               {
                 q: "Mes documents et informations personnelles sont-ils en sécurité ?",
