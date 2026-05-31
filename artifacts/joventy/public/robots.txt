@@ -9,17 +9,60 @@ Disallow: /continue
 Disallow: /login
 Disallow: /register
 
-# Crawlers IA — autoriser les bots de recherche, bloquer les scrapers d'entraînement
-User-agent: GPTBot
-Disallow: /
+# ═══ AI Search Bots — TOUS AUTORISÉS pour apparaître dans les réponses IA ═══
 
-User-agent: Google-Extended
+# OpenAI (ChatGPT Search & Browse)
+User-agent: GPTBot
 Allow: /
 
+# OpenAI Search
 User-agent: OAI-SearchBot
 Allow: /
 
+# OpenAI ChatGPT User browsing
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic (Claude)
+User-agent: ClaudeBot
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+
+# Perplexity
 User-agent: PerplexityBot
 Allow: /
+
+# Google AI (Gemini, AI Overviews, AI Mode)
+User-agent: Google-Extended
+Allow: /
+User-agent: Googlebot
+Allow: /
+
+# Microsoft Copilot / Bing Chat
+User-agent: bingbot
+Allow: /
+
+# Meta AI
+User-agent: meta-externalagent
+Allow: /
+
+# Cohere
+User-agent: cohere-ai
+Allow: /
+
+# You.com
+User-agent: YouBot
+Allow: /
+
+# ═══ Bloquer les scrapers d'entraînement non-recherche ═══
+User-agent: CCBot
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
 
 Sitemap: https://www.joventy.cd/sitemap.xml
