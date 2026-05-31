@@ -19,7 +19,7 @@
 - Visa Schengen (France, Belgique, Allemagne, Espagne, Italie, Suisse) : créneau CEV Kinshasa, dossier complet
 - Visa Royaume-Uni : dossier UKVI, rendez-vous biométrie
 - E-Visa Dubaï (EAU) : soumission portail ICP, résultat 48-72h
-- E-Visa/Visa Turquie : e-Visa ou créneau VFS
+- E-Visa/Visa Turquie : e-Visa pour détenteurs de visa USA/Schengen/UK (24-48h en ligne)
 - Visa transit pays neutres (Maroc, Égypte, Maurice) : pour purger les 21 jours Ebola
 
 ## Tarification (USD)
@@ -31,7 +31,7 @@
 | Schengen | 150 | 450 | 90 € (CEV) |
 | Royaume-Uni | 200 | 600 | £115+ (UKVI) |
 | Dubaï | 150 | 200 | ~90 (portail ICP) |
-| Turquie | 150 | 200 | 50-300 (e-Visa/VFS) |
+| Turquie | 150 | 200 | ~50 (e-Visa) |
 | Transit Ebola (Maroc, Égypte, Dubaï) | 150 | 200 | variable |
 
 ## Contexte actuel (mai-juin 2026)
