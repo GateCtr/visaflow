@@ -1015,6 +1015,7 @@ export default function Landing() {
                 {[
                   { label: "Nos Services", href: "/#services" },
                   { label: "Tarifs", href: "/#destinations" },
+                  { label: "Guides Visa", href: "/guides" },
                   { label: "Contact", href: "/#contact" },
                   { label: "Espace Client", href: "/login" },
                   { label: "Créer un compte", href: "/register" },

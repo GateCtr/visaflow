@@ -21,6 +21,8 @@ import ContinueSignUp from "@/pages/auth/ContinueSignUp";
 import NotFound from "@/pages/not-found";
 import PublicTracking from "@/pages/PublicTracking";
 import DestinationPage from "@/pages/DestinationPage";
+import GuidesIndex from "@/pages/GuidesIndex";
+import GuidePage from "@/pages/GuidePage";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
 import Confidentialite from "@/pages/legal/Confidentialite";
@@ -97,6 +99,10 @@ function Router() {
       <Route path="/sso-callback" component={SSOCallback} />
       <Route path="/continue" component={ContinueSignUp} />
       <Route path="/suivi/:token" component={PublicTracking} />
+
+      {/* Guides SEO pages */}
+      <Route path="/guides" component={GuidesIndex} />
+      <Route path="/guides/:slug" component={GuidePage} />
 
       {/* Destination SEO pages */}
       <Route path="/visa-usa-kinshasa" component={DestinationPage} />

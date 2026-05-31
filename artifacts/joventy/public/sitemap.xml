@@ -76,6 +76,57 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- Guides index -->
+  <url>
+    <loc>https://www.joventy.cd/guides</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Individual guides -->
+  <url>
+    <loc>https://www.joventy.cd/guides/comment-obtenir-creneau-visa-usa-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/guides/documents-visa-schengen-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/guides/entretien-visa-usa-b1-b2-questions</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/guides/visa-usa-refuse-que-faire</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/guides/payer-frais-mrv-visa-usa-kinshasa</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/guides/delais-visa-usa-canada-schengen-kinshasa-2025</loc>
+    <lastmod>2025-06-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- Legal pages -->
   <url>
     <loc>https://www.joventy.cd/mentions-legales</loc>
