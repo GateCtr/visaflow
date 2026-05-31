@@ -308,6 +308,17 @@ export default function Landing() {
         <meta name="twitter:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa. Formulaires, créneaux, e-Visas. Paiement M-Pesa. Résultat garanti ou remboursé." />
         <meta name="twitter:image" content="https://www.joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            { "@type": "Question", "name": "Joventy garantit-il l'obtention du visa ?", "acceptedAnswer": { "@type": "Answer", "text": "Non. Joventy garantit le service, pas le visa. La décision finale appartient exclusivement à l'ambassade ou au gouvernement étranger. En revanche, si nous n'obtenons pas de résultat (créneau de rendez-vous ou e-Visa), vous ne payez pas la prime de succès — seuls les frais d'engagement restent dus." } },
+            { "@type": "Question", "name": "Combien coûte le service Joventy pour un visa USA ?", "acceptedAnswer": { "@type": "Answer", "text": "Les frais d'engagement pour un visa USA sont de 250 USD, payés à la création du dossier via M-Pesa. La prime de succès (750 USD) n'est due que lorsque Joventy verrouille votre créneau consulaire. Les frais MRV (185-210 USD payés directement à l'ambassade) ne sont pas inclus." } },
+            { "@type": "Question", "name": "Que se passe-t-il si mon visa est refusé après un rendez-vous ?", "acceptedAnswer": { "@type": "Answer", "text": "Si vous avez obtenu un créneau de rendez-vous, Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy." } },
+            { "@type": "Question", "name": "Peut-on payer Joventy avec M-Pesa ou Airtel Money ?", "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy accepte exclusivement les paiements Mobile Money : M-Pesa (Vodacom), Airtel Money et Orange Money. Aucun virement bancaire international ni carte étrangère n'est requis." } },
+            { "@type": "Question", "name": "Combien de temps prend le traitement d'un dossier visa ?", "acceptedAnswer": { "@type": "Answer", "text": "Pour les e-Visas (Dubaï, Inde) : résultat en 48 à 72 heures ouvrables. Pour les créneaux consulaires (USA, Canada, Europe) : le délai dépend de la disponibilité sur le portail officiel. Joventy surveille en continu et vous notifie dès qu'un créneau est capturé." } }
+          ]
+        })}</script>
       </Helmet>
 
       <Navbar />
