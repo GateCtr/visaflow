@@ -24,6 +24,9 @@ import DestinationPage from "@/pages/DestinationPage";
 import GuidesIndex from "@/pages/GuidesIndex";
 import GuidePage from "@/pages/GuidePage";
 
+import Prix from "@/pages/Prix";
+import APropos from "@/pages/APropos";
+
 import MentionsLegales from "@/pages/legal/MentionsLegales";
 import Confidentialite from "@/pages/legal/Confidentialite";
 import Conditions from "@/pages/legal/Conditions";
@@ -116,6 +119,10 @@ function Router() {
       <Route path="/e-visa-inde-kinshasa" component={DestinationPage} />
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
+
+      {/* Pricing & About */}
+      <Route path="/prix" component={Prix} />
+      <Route path="/a-propos" component={APropos} />
 
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/confidentialite" component={Confidentialite} />

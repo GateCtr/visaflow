@@ -1,0 +1,266 @@
+import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
+import { ArrowRight, CheckCircle2, MessageCircle, ChevronRight, AlertTriangle, HelpCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { JoventyLogo } from "@/components/JoventyLogo";
+
+const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
+function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
+function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
+  const snapped = snapFlagSize(size);
+  return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={code} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
+}
+
+const PRICING = [
+  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", engagement: 250, success: 750, external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)" },
+  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", engagement: 250, success: 750, external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)" },
+  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null },
+  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", engagement: 200, success: 600, external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null },
+  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null },
+  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
+  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", engagement: 150, success: 200, external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
+  { code: "tr", name: "Visa Turquie", types: "E-Visa, Sticker VFS, Transit", engagement: 150, success: 200, external: "50-300 USD (e-Visa/VFS)", delay: "24h-4 semaines", href: "/visa-turquie-kinshasa", alert: null },
+  { code: "ma", name: "Visa Maroc", types: "E-Visa (si visa USA/Schengen), Sticker", engagement: 150, success: 200, external: "77-110 USD (e-Visa)", delay: "24-72h", href: "/visa-maroc-kinshasa", alert: null },
+  { code: "eg", name: "Visa Égypte", types: "Touriste (ambassade)", engagement: 150, success: 200, external: "~60 USD (consulat)", delay: "24-72h", href: "/e-visa-egypte-kinshasa", alert: null },
+  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
+];
+
+const INCLUDES = [
+  "Remplissage complet des formulaires officiels (DS-160, IRCC, Schengen, etc.)",
+  "Vérification et préparation de votre dossier complet",
+  "Recherche active de créneaux consulaires (USA, Schengen, Canada)",
+  "Soumission de votre e-Visa sur les portails officiels",
+  "Suivi en temps réel via votre espace client + notifications WhatsApp",
+  "Assistance pour la préparation à l'entretien consulaire",
+  "Support WhatsApp réactif (réponse en moins de 2h)",
+];
+
+const NOT_INCLUDES = [
+  "Frais consulaires / frais gouvernementaux (payés directement à l'ambassade ou au portail officiel)",
+  "Assurance voyage (obligatoire pour Schengen, environ 20-50 USD/semaine)",
+  "Réservations d'hôtel et billets d'avion (requis comme pièces justificatives)",
+  "Frais de traduction certifiée (si documents en langues autres que français/anglais)",
+  "Photos d'identité aux normes (réalisées chez un photographe agréé)",
+];
+
+export default function Prix() {
+  const pricingSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Assistance Visa Joventy — Kinshasa, RDC",
+    "description": "Service d'assistance visa premium depuis Kinshasa. Formulaires, créneaux consulaires, e-Visas. Paiement au résultat via M-Pesa.",
+    "brand": { "@type": "Brand", "name": "Joventy" },
+    "offers": {
+      "@type": "AggregateOffer",
+      "priceCurrency": "USD",
+      "lowPrice": "250",
+      "highPrice": "1000",
+      "offerCount": PRICING.length.toString(),
+    },
+  };
+
+  return (
+    <div className="min-h-screen bg-white font-sans">
+      <Helmet>
+        <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
+        <meta name="description" content="Tarifs transparents pour l'assistance visa depuis Kinshasa : USA 250+750$, Schengen 150+450$, Dubaï 150+200$, Maroc/Égypte 150+200$. Paiement M-Pesa. Prime de succès uniquement si résultat obtenu." />
+        <link rel="canonical" href="https://www.joventy.cd/prix" />
+        <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
+        <meta property="og:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
+        <meta property="og:url" content="https://www.joventy.cd/prix" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
+        <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
+      </Helmet>
+
+      {/* NAV */}
+      <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <Link href="/"><JoventyLogo variant="light" size="sm" /></Link>
+          <nav className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+            <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-primary font-semibold">Tarifs</span>
+          </nav>
+          <Link href="/register">
+            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
+              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      {/* HERO */}
+      <section className="bg-gradient-to-b from-primary/5 to-white py-16 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <h1 className="text-3xl md:text-4xl font-bold text-primary mb-4">
+            Tarifs Joventy — Assistance Visa depuis Kinshasa
+          </h1>
+          <p className="text-muted-foreground text-lg leading-relaxed max-w-2xl mx-auto mb-6">
+            Un modèle simple et transparent : <strong>frais d'engagement</strong> (payés à la création du dossier) + <strong>prime de succès</strong> (payée uniquement si nous obtenons un résultat). Paiement exclusivement via M-Pesa, Airtel Money ou Orange Money.
+          </p>
+          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm font-medium px-4 py-2 rounded-full">
+            <CheckCircle2 className="w-4 h-4" />
+            Pas de résultat = pas de prime de succès
+          </div>
+        </div>
+      </section>
+
+      {/* TABLE DES TARIFS */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-muted border-b-2 border-primary/20">
+                <th className="text-left px-4 py-3 font-bold text-primary">Destination</th>
+                <th className="text-left px-4 py-3 font-bold text-primary hidden sm:table-cell">Types de visa</th>
+                <th className="text-center px-4 py-3 font-bold text-primary">Engagement</th>
+                <th className="text-center px-4 py-3 font-bold text-primary">Prime succès</th>
+                <th className="text-center px-4 py-3 font-bold text-primary">Total max</th>
+                <th className="text-left px-4 py-3 font-bold text-primary hidden md:table-cell">Frais consulaires</th>
+                <th className="text-center px-4 py-3 font-bold text-primary hidden lg:table-cell">Délai</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PRICING.map((p) => (
+                <tr key={p.code} className="border-b border-border hover:bg-muted/50 transition-colors">
+                  <td className="px-4 py-4">
+                    <Link href={p.href} className="flex items-center gap-2 hover:text-primary transition-colors">
+                      <FlagImg code={p.code} size={24} />
+                      <span className="font-semibold text-slate-800">{p.name}</span>
+                    </Link>
+                    {p.alert && <p className="text-[10px] text-red-600 font-medium mt-1">{p.alert}</p>}
+                  </td>
+                  <td className="px-4 py-4 text-xs text-muted-foreground hidden sm:table-cell">{p.types}</td>
+                  <td className="px-4 py-4 text-center font-bold text-primary">{p.engagement} $</td>
+                  <td className="px-4 py-4 text-center font-bold text-secondary">{p.success} $</td>
+                  <td className="px-4 py-4 text-center font-bold text-lg text-primary">{p.engagement + p.success} $</td>
+                  <td className="px-4 py-4 text-xs text-muted-foreground hidden md:table-cell">{p.external}</td>
+                  <td className="px-4 py-4 text-xs text-center text-muted-foreground hidden lg:table-cell">{p.delay}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4 italic">* Tous les prix sont en USD. Les frais consulaires sont payés directement au gouvernement/organisme concerné et ne sont pas inclus dans les tarifs Joventy.</p>
+      </section>
+
+      {/* TRANSIT EBOLA */}
+      <section className="bg-red-50 border-y border-red-200 py-10 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertTriangle className="w-6 h-6 text-red-600" />
+            <h2 className="text-xl font-bold text-primary">Tarif spécial — Transit 21 jours (Ebola 2026)</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-5">
+            Pour les personnes devant purger 21 jours dans un pays neutre avant d'entrer aux USA, au Canada ou au Mexique. Joventy obtient votre visa de transit en urgence.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { flag: "ma", name: "Maroc", price: "150 + 200 $", visa: "E-Visa 77-110$", delay: "24-72h" },
+              { flag: "eg", name: "Égypte", price: "150 + 200 $", visa: "Visa ~60$", delay: "24-72h" },
+              { flag: "ae", name: "Dubaï", price: "150 + 200 $", visa: "E-Visa ~90$", delay: "48-72h" },
+            ].map((t) => (
+              <div key={t.flag} className="bg-white border border-red-200 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <FlagImg code={t.flag} size={24} />
+                  <span className="font-bold text-primary">{t.name}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Frais Joventy : <span className="font-bold text-primary">{t.price}</span></p>
+                <p className="text-xs text-muted-foreground">Frais visa : {t.visa}</p>
+                <p className="text-xs text-muted-foreground">Délai : {t.delay}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5">
+            <Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026">
+              <Button variant="outline" size="sm" className="border-red-300 text-red-700 hover:bg-red-100 font-semibold">
+                Lire le guide complet — Purger 21 jours <ChevronRight className="ml-1 w-3 h-3" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* CE QUI EST INCLUS / NON INCLUS */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
+        <h2 className="text-2xl font-bold text-primary text-center mb-10">Ce qui est inclus dans les tarifs Joventy</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
+            <h3 className="font-bold text-green-800 mb-4 flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" /> Inclus dans les frais Joventy
+            </h3>
+            <ul className="space-y-2.5">
+              {INCLUDES.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-green-900">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+            <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+              <HelpCircle className="w-5 h-5" /> Non inclus (à votre charge)
+            </h3>
+            <ul className="space-y-2.5">
+              {NOT_INCLUDES.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-slate-600">
+                  <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 mt-0.5 text-slate-400">—</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* PAIEMENT */}
+      <section className="bg-muted py-12 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-2xl font-bold text-primary mb-4">Moyens de paiement acceptés</h2>
+          <p className="text-muted-foreground mb-6">Joventy accepte exclusivement les paiements Mobile Money. Aucune carte bancaire internationale requise.</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            {["M-Pesa (Vodacom)", "Airtel Money", "Orange Money"].map((m) => (
+              <div key={m} className="bg-white border border-border rounded-xl px-5 py-3 text-sm font-semibold text-primary shadow-sm">{m}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="bg-primary py-14 px-4">
+        <div className="max-w-2xl mx-auto text-center text-white">
+          <h2 className="text-2xl font-bold mb-3">Prêt à démarrer ?</h2>
+          <p className="text-white/70 mb-8">Créez votre dossier en 5 minutes ou contactez-nous sur WhatsApp pour une question sur les tarifs.</p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Link href="/register">
+              <Button size="lg" className="bg-secondary hover:bg-secondary/90 text-white font-bold">
+                Créer mon dossier <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+              <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 font-semibold">
+                <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp
+              </Button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-slate-900 text-white/50 py-8 px-4">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
+          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
+          <div className="flex gap-4">
+            <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
+            <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
+            <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
