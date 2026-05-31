@@ -8,6 +8,7 @@ import { getAllGuides } from "@/data/guides-seo";
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
+  "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
 };
 
@@ -35,7 +36,7 @@ export default function GuidesIndex() {
   return (
     <>
       <Helmet>
-        <title>Guides Visa depuis Kinshasa 2025 — Conseils & Démarches | Joventy</title>
+        <title>Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy</title>
         <meta
           name="description"
           content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir."

@@ -24,17 +24,17 @@ export interface Guide {
 const guides: Guide[] = [
   {
     slug: "comment-obtenir-creneau-visa-usa-kinshasa",
-    title: "Comment obtenir un créneau visa USA à Kinshasa en 2025",
-    metaTitle: "Créneau Visa USA Kinshasa 2025 — Guide Complet | Joventy",
+    title: "Comment obtenir un créneau visa USA à Kinshasa en 2026",
+    metaTitle: "Créneau Visa USA Kinshasa 2026 — Guide Complet | Joventy",
     metaDescription:
       "Le portail usvisaappt.com affiche souvent « aucune date disponible ». Découvrez comment obtenir un créneau d'entretien visa américain à Kinshasa rapidement grâce au suivi permanent de notre équipe.",
     publishedDate: "2025-05-01",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 7,
     category: "Visa USA",
     coverEmoji: "🇺🇸",
     intro:
-      "Obtenir un créneau d'entretien au consulat américain de Kinshasa est devenu l'un des obstacles les plus frustrants pour les demandeurs de visa B1/B2. Le portail officiel usvisaappt.com affiche régulièrement « aucune date disponible » pendant des semaines, voire des mois. Ce guide vous explique pourquoi les créneaux sont si rares, comment le système fonctionne, et comment maximiser vos chances d'en obtenir un rapidement.",
+      "Obtenir un créneau d'entretien au consulat américain de Kinshasa est devenu l'un des obstacles les plus frustrants pour les demandeurs de visa B1/B2. Le portail officiel usvisaappt.com affiche régulièrement « aucune date disponible » pendant des semaines, voire des mois. En 2026, la situation est d'autant plus tendue que l'ambassade américaine à Kinshasa est passée en Travel Advisory Level 4 en raison de l'épidémie d'Ebola en Ituri. Ce guide vous explique pourquoi les créneaux sont si rares, comment le système fonctionne, et comment maximiser vos chances d'en obtenir un rapidement.",
     sections: [
       {
         heading: "Pourquoi les créneaux visa USA sont-ils si rares à Kinshasa ?",
@@ -53,7 +53,7 @@ const guides: Guide[] = [
           "Le portail officiel usvisaappt.com est l'interface pour prendre un rendez-vous visa américain en RDC. Voici les étapes clés :",
         list: [
           "Créer un compte sur usvisaappt.com avec votre adresse e-mail",
-          "Payer les frais de visa (185 USD en 2025) via les canaux agréés en RDC",
+          "Payer les frais de visa (185 à 210 USD selon le type de visa) via les canaux agréés en RDC",
           "Remplir le formulaire DS-160 sur ceac.state.gov",
           "Accéder à la section « Schedule Appointment » et consulter les créneaux disponibles",
           "Le calendrier affiche les dates : les jours disponibles peuvent apparaître à tout moment suite à des annulations",
@@ -97,7 +97,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Combien de temps faut-il attendre pour un créneau visa USA à Kinshasa ?",
-        a: "En 2025, les délais d'attente varient entre 4 et 16 semaines selon la saison. Avec le suivi régulier de l'équipe Joventy, nos clients obtiennent généralement un créneau dans les 48 à 96 heures suivant l'activation de leur dossier.",
+        a: "En 2026, les délais d'attente varient entre 4 et 16 semaines selon la saison. Avec le Travel Advisory Level 4 actuel (Ebola), certains services consulaires peuvent être perturbés. L'équipe Joventy suit la situation et obtient généralement un créneau pour ses clients dans les 48 à 96 heures suivant l'activation de leur dossier.",
       },
       {
         q: "Peut-on réserver un créneau visa USA sans remplir le DS-160 d'abord ?",
@@ -122,17 +122,17 @@ const guides: Guide[] = [
 
   {
     slug: "documents-visa-schengen-kinshasa",
-    title: "Documents requis pour un visa Schengen depuis Kinshasa (liste complète 2025)",
-    metaTitle: "Documents Visa Schengen Kinshasa 2025 — Liste Complète | Joventy",
+    title: "Documents requis pour un visa Schengen depuis Kinshasa (liste complète 2026)",
+    metaTitle: "Documents Visa Schengen Kinshasa 2026 — Liste Complète | Joventy",
     metaDescription:
-      "Liste officielle des documents requis pour un visa Schengen depuis Kinshasa en 2025. Relevés bancaires, assurance voyage, lettre d'invitation — tout ce qu'il faut préparer.",
+      "Liste officielle des documents requis pour un visa Schengen depuis Kinshasa en 2026. Relevés bancaires, assurance voyage, lettre d'invitation — tout ce qu'il faut préparer.",
     publishedDate: "2025-05-10",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 8,
     category: "Visa Schengen",
     coverEmoji: "🇪🇺",
     intro:
-      "Le visa Schengen permet de voyager librement dans 27 pays européens avec un seul visa. Depuis Kinshasa, les demandes se déposent auprès du Centre de Visas Européens (CEV). Ce guide détaille la liste complète des documents exigés en 2025, les erreurs fréquentes qui entraînent un refus, et les astuces pour renforcer votre dossier.",
+      "Le visa Schengen permet de voyager librement dans 27 pays européens avec un seul visa. Depuis Kinshasa, les demandes se déposent auprès du Centre de Visas Européens (CEV). En 2026, les frais consulaires sont passés à 90 € par adulte, le système EES (Entry/Exit System) est désormais opérationnel aux frontières, et la digitalisation du visa progresse. Ce guide détaille la liste complète des documents exigés, les erreurs fréquentes qui entraînent un refus, et les astuces pour renforcer votre dossier.",
     sections: [
       {
         heading: "Documents d'identité et de voyage",
@@ -236,7 +236,7 @@ const guides: Guide[] = [
     metaDescription:
       "L'officier consulaire américain de Kinshasa pose toujours les mêmes questions. Découvrez les 15 questions les plus fréquentes de l'entretien visa B1/B2 et comment y répondre pour maximiser vos chances.",
     publishedDate: "2025-05-15",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 9,
     category: "Visa USA",
     coverEmoji: "🎤",
@@ -337,7 +337,7 @@ const guides: Guide[] = [
     metaDescription:
       "Votre visa américain a été refusé sous l'article 214(b) à Kinshasa ? Ce guide vous explique pourquoi, comment renforcer votre dossier, et quand représenter votre demande.",
     publishedDate: "2025-05-20",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 6,
     category: "Visa USA",
     coverEmoji: "❌",
@@ -429,26 +429,26 @@ const guides: Guide[] = [
 
   {
     slug: "payer-frais-mrv-visa-usa-kinshasa",
-    title: "Comment payer les frais de visa USA depuis la RDC (guide 2025)",
-    metaTitle: "Payer Frais Visa USA depuis RDC 2025 — Guide Complet | Joventy",
+    title: "Comment payer les frais de visa USA depuis la RDC (guide 2026)",
+    metaTitle: "Payer Frais Visa USA depuis RDC 2026 — Guide Complet | Joventy",
     metaDescription:
-      "Les frais de visa américain (185 USD) se paient via des canaux spécifiques en RDC. Guide étape par étape pour payer correctement les frais de visa USA depuis Kinshasa via usvisaappt.com.",
+      "Les frais de visa américain (185 à 210 USD selon le type) se paient via des canaux spécifiques en RDC. Guide étape par étape pour payer correctement les frais de visa USA depuis Kinshasa via usvisaappt.com.",
     publishedDate: "2025-05-25",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 5,
     category: "Visa USA",
     coverEmoji: "💳",
     intro:
-      "Payer les frais de visa américain est la première étape concrète d'une demande de visa USA. Ces frais s'élèvent à 185 USD en 2025 pour un visa B1/B2 et doivent être payés via des canaux spécifiques agréés. Ce guide vous explique les méthodes disponibles depuis Kinshasa, les pièges à éviter, et comment vérifier que votre paiement est bien enregistré sur usvisaappt.com.",
+      "Payer les frais de visa américain est la première étape concrète d'une demande de visa USA. Ces frais varient de 185 à 210 USD selon le type de visa en 2026 et doivent être payés via des canaux spécifiques agréés. Ce guide vous explique les méthodes disponibles depuis Kinshasa, les pièges à éviter, et comment vérifier que votre paiement est bien enregistré sur usvisaappt.com.",
     sections: [
       {
         heading: "Qu'est-ce que les frais de visa américain ?",
         body:
-          "Les frais de visa américain (anciennement appelés MRV — Machine Readable Visa) sont des frais non remboursables exigés par le gouvernement américain pour traiter toute demande de visa non-immigrant. En 2025 :",
+          "Les frais de visa américain (anciennement appelés MRV — Machine Readable Visa) sont des frais non remboursables exigés par le gouvernement américain pour traiter toute demande de visa non-immigrant. En 2026 :",
         list: [
           "Montant B1/B2 (tourisme & affaires) : 185 USD",
-          "Montant F1, J1, M1 (étudiant, échange, formation) : 185 USD",
-          "Certains visas de travail (H, L, O, P) ont des frais différents — vérifiez sur usvisaappt.com",
+          "Montant F1, J1, M1 (étudiant, échange, formation) : 200 USD",
+          "Visas de travail (H, L, O, P) : 205 à 210 USD — vérifiez sur usvisaappt.com",
           "Les frais sont valables 12 mois — si vous ne prenez pas de rendez-vous dans ce délai, ils expirent",
           "Un refus ne donne pas droit au remboursement",
         ],
@@ -498,8 +498,8 @@ const guides: Guide[] = [
     ],
     faq: [
       {
-        q: "Combien coûtent les frais de visa B1/B2 USA depuis la RDC en 2025 ?",
-        a: "En 2025, les frais de visa pour un B1/B2 (tourisme et affaires) sont de 185 USD. Ce montant est non remboursable et valable 12 mois à partir de la date de paiement pour prendre un rendez-vous sur usvisaappt.com.",
+        q: "Combien coûtent les frais de visa B1/B2 USA depuis la RDC en 2026 ?",
+        a: "En 2026, les frais de visa pour un B1/B2 (tourisme et affaires) sont de 185 USD. Pour les visas étudiants (F1, J1), comptez 200 USD, et pour les visas de travail (H, L, O, P), 205 à 210 USD. Ces montants sont non remboursables et valables 12 mois à partir de la date de paiement pour prendre un rendez-vous sur usvisaappt.com.",
       },
       {
         q: "Peut-on payer les frais de visa USA via M-Pesa ou Airtel Money ?",
@@ -520,17 +520,17 @@ const guides: Guide[] = [
 
   {
     slug: "delais-visa-usa-canada-schengen-kinshasa-2025",
-    title: "Délais d'attente visa USA, Canada et Schengen à Kinshasa en 2025",
-    metaTitle: "Délais Visa USA Canada Schengen Kinshasa 2025 | Joventy",
+    title: "Délais d'attente visa USA, Canada et Schengen à Kinshasa en 2026",
+    metaTitle: "Délais Visa USA Canada Schengen Kinshasa 2026 | Joventy",
     metaDescription:
-      "Combien de temps pour obtenir un visa USA, Canada ou Schengen depuis Kinshasa en 2025 ? Délais réels constatés, périodes à éviter, et comment réduire l'attente.",
+      "Combien de temps pour obtenir un visa USA, Canada ou Schengen depuis Kinshasa en 2026 ? Délais réels constatés, périodes à éviter, suspension Canada Ebola, et comment réduire l'attente.",
     publishedDate: "2025-06-01",
-    updatedDate: "2025-06-01",
+    updatedDate: "2026-05-31",
     readingTime: 6,
     category: "Comparatif",
     coverEmoji: "⏱️",
     intro:
-      "Le délai entre la décision de voyager et l'obtention du visa peut varier de 2 semaines à 6 mois selon la destination, la saison et votre profil. Ce guide compile les délais réels constatés par l'équipe Joventy sur les principales destinations depuis Kinshasa en 2025, ainsi que les stratégies pour planifier intelligemment votre demande.",
+      "Le délai entre la décision de voyager et l'obtention du visa peut varier de 2 semaines à 6 mois selon la destination, la saison et votre profil. En 2026, la situation est marquée par la suspension temporaire des visas canadiens pour les résidents RDC (Ebola, mai-août 2026), le Travel Advisory Level 4 de l'ambassade US à Kinshasa, et la mise en place du système EES aux frontières Schengen. Ce guide compile les délais réels constatés par l'équipe Joventy sur les principales destinations depuis Kinshasa.",
     sections: [
       {
         heading: "Visa USA (B1/B2) — délai total estimé",
@@ -548,37 +548,39 @@ const guides: Guide[] = [
       {
         heading: "Visa Canada (visiteur, étudiant) — délai total estimé",
         body:
-          "Le Canada traite les visas en ligne depuis Kinshasa via IRCC (canada.ca). Pas d'entretien physique dans la plupart des cas.",
+          "Le Canada traite les visas en ligne depuis Kinshasa via IRCC (canada.ca). Pas d'entretien physique dans la plupart des cas. ⚠️ ALERTE : depuis le 27 mai 2026, le Canada a suspendu tous les documents d'immigration pour les résidents de la RDC (mesure Ebola, jusqu'au 28 août 2026 minimum).",
         list: [
-          "Préparation et soumission du dossier en ligne : 5 à 10 jours",
+          "⚠️ SUSPENSION EN COURS : Du 27 mai au 28 août 2026, aucune demande de visa canadien ne peut être traitée pour les résidents RDC",
+          "Mesure liée à l'épidémie d'Ebola en Ituri — isolation obligatoire de 21 jours pour tout voyageur quittant la RDC",
+          "Préparation et soumission du dossier en ligne (hors période de suspension) : 5 à 10 jours",
           "Traitement IRCC : 4 à 12 semaines selon la saison et la complexité du dossier",
           "Biométrie : à déposer en personne après l'invitation IRCC — prévoir 1 à 2 semaines supplémentaires",
-          "Total estimé : 6 à 14 semaines depuis la soumission",
-          "Période la plus lente : octobre à décembre (volumes élevés d'étudiants pour la rentrée de janvier)",
-          "Conseil : déposez votre demande au moins 3 mois avant la date de voyage souhaitée",
+          "Total estimé (hors suspension) : 6 à 14 semaines depuis la soumission",
+          "Conseil : attendez la levée de la suspension avant de payer les frais IRCC",
         ],
       },
       {
         heading: "Visa Schengen — délai total estimé",
         body:
-          "Les demandes Schengen se déposent au Centre de Visas Européens (CEV) à Kinshasa. Le délai de traitement est réglementé à 15 jours ouvrables maximum.",
+          "Les demandes Schengen se déposent au Centre de Visas Européens (CEV) à Kinshasa. Le délai de traitement est réglementé à 15 jours ouvrables maximum. Depuis avril 2026, le système EES (Entry/Exit System) est actif aux frontières — les tampons de passeport sont supprimés et remplacés par un scan biométrique.",
         list: [
           "Prise de rendez-vous CEV : 1 à 4 semaines d'attente",
+          "Frais consulaires : 90 €/adulte, 45 €/enfant 6-12 ans (hausse de 80 € à 90 € en 2026)",
           "Délai de traitement légal : 15 jours ouvrables (peut aller jusqu'à 30 en période chargée)",
           "Total estimé : 4 à 8 semaines depuis la décision de voyager",
-          "Certains pays (France, Allemagne, Espagne) ont des délais de traitement plus courts",
-          "Périodes les plus chargées : avril-juillet (vacances d'été), décembre",
+          "Nouveau en 2026 : le visa Schengen devient progressivement digital (code-barre 2D à la place du sticker)",
+          "Certains pays (France, Italie) acceptent déjà les demandes en ligne — biométrie toujours en personne",
           "Conseil : déposez votre demande 6 semaines avant la date de voyage",
         ],
       },
       {
-        heading: "Tableau comparatif 2025",
+        heading: "Tableau comparatif 2026",
         body:
           "Résumé des délais moyens constatés par l'équipe Joventy sur les dossiers traités depuis Kinshasa :",
         list: [
-          "🇺🇸 Visa USA B1/B2 : 8 à 16 semaines (avec Joventy : 3 à 5 semaines grâce au suivi rapproché du portail)",
-          "🇨🇦 Visa Canada visiteur : 6 à 14 semaines",
-          "🇪🇺 Visa Schengen : 4 à 8 semaines",
+          "🇺🇸 Visa USA B1/B2 : 8 à 16 semaines (avec Joventy : 3 à 5 semaines grâce au suivi rapproché du portail). Travel Advisory Level 4 en cours.",
+          "🇨🇦 Visa Canada visiteur : ⚠️ SUSPENDU pour les résidents RDC du 27 mai au 28 août 2026 (mesure Ebola)",
+          "🇪🇺 Visa Schengen : 4 à 8 semaines — frais passés à 90 €/adulte, système EES biométrique actif aux frontières",
           "🇬🇧 Visa Royaume-Uni : 5 à 10 semaines",
           "🇦🇪 E-Visa Dubaï : 3 à 5 jours ouvrables",
           "🇹🇷 Visa Turquie (e-Visa) : 24 à 72 heures",
@@ -618,6 +620,140 @@ const guides: Guide[] = [
       "payer-frais-mrv-visa-usa-kinshasa",
     ],
     relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
+    slug: "suspension-visa-canada-rdc-ebola-2026",
+    title: "Suspension visa Canada pour la RDC (Ebola 2026) : que faire ?",
+    metaTitle: "Suspension Visa Canada RDC Ebola 2026 — Alternatives | Joventy",
+    metaDescription: "Le Canada a suspendu tous les visas pour les résidents RDC du 27 mai au 28 août 2026 (Ebola). Découvrez vos options, les alternatives et comment préparer la reprise.",
+    publishedDate: "2026-05-29",
+    updatedDate: "2026-05-31",
+    readingTime: 6,
+    category: "Visa Canada",
+    coverEmoji: "🚨",
+    intro: "Depuis le 27 mai 2026, le gouvernement canadien a suspendu tous les documents d'immigration pour les résidents de la RDC, de l'Ouganda et du Sud-Soudan, en réponse à l'épidémie d'Ebola (souche Bundibugyo) en province de l'Ituri. Cette suspension court jusqu'au 28 août 2026 minimum et affecte plus de 24 000 dossiers. Ce guide explique ce que cela signifie concrètement, quelles sont vos options, et comment préparer la reprise.",
+    sections: [
+      { heading: "Ce qui est suspendu exactement", body: "Le Canada a mis en pause le traitement de la quasi-totalité des demandes d'immigration pour les résidents RDC :", list: ["Visas visiteurs (tourisme, affaires)", "Permis d'études (Study Permit)", "Permis de travail (Work Permit)", "Visas déjà approuvés mais non utilisés — leur validité est suspendue", "Invitations à la biométrie — reportées", "Super Visa et regroupement familial — également touchés"] },
+      { heading: "Mesures sanitaires associées", body: "En plus de la suspension des visas, le Canada impose des mesures sanitaires strictes :", list: ["Isolation obligatoire de 21 jours pour tout voyageur ayant quitté la RDC (même via un pays tiers)", "Surveillance active par l'Agence de la santé publique du Canada (PHAC)", "Les Congolais résidant à l'étranger depuis plus de 21 jours ne sont PAS concernés par la suspension", "L'équipe nationale de football RDC (Léopards) a été autorisée pour la Coupe du Monde après 21 jours en Europe"] },
+      { heading: "Ce que vous pouvez faire maintenant", body: "Même si la suspension est en cours, voici les actions productives à prendre :", list: ["Ne payez PAS les frais IRCC tant que la suspension est active — attendez la levée", "Rassemblez et préparez tous vos documents pour être prêt dès la reprise", "Si vous avez déjà payé : vos frais et votre dossier restent valides — IRCC reprendra le traitement à la levée", "Envisagez des destinations alternatives (Dubaï, Turquie, Schengen) si votre voyage est urgent", "Si vous résidez hors RDC depuis plus de 21 jours, vous pouvez potentiellement déposer depuis votre pays de résidence"] },
+      { heading: "Alternatives de voyage pendant la suspension", body: "Si votre voyage ne peut pas attendre août 2026, voici les options :", list: ["🇦🇪 Dubaï (e-Visa) : 48 à 72h, aucune restriction liée à Ebola pour les Congolais", "🇹🇷 Turquie (e-Visa ou VFS) : 48h à 4 semaines, pas de suspension", "🇪🇺 Schengen : dossier et créneau CEV toujours ouverts (vérifier EES biométrique à l'arrivée)", "🇬🇧 Royaume-Uni : demandes UKVI toujours acceptées pour les Congolais", "🇺🇸 USA : l'ambassade à Kinshasa est en Travel Advisory Level 4 mais les entretiens continuent"] },
+      { heading: "Comment se préparer pour la reprise (août 2026+)", body: "Dès la levée de la suspension, il y aura un afflux massif de demandes. Soyez prêt :", list: ["Préparez votre dossier IRCC complet MAINTENANT (formulaires, documents, photos)", "Ouvrez un compte sur le portail IRCC si ce n'est pas fait", "Accumulez vos preuves financières (3 à 6 mois de relevés bancaires frais)", "Contactez Joventy pour un audit de dossier gratuit — soyez parmi les premiers à soumettre à la reprise", "Surveillez les annonces IRCC : la date de levée peut être avancée ou repoussée selon l'évolution de l'épidémie"] },
+    ],
+    faq: [
+      { q: "Ma demande de visa Canada déjà soumise est-elle annulée ?", a: "Non. Les demandes déjà en cours ne sont pas annulées mais mises en pause. IRCC reprendra le traitement dès la levée de la suspension. Vos frais payés restent valides." },
+      { q: "Je suis Congolais mais je réside en Europe depuis 2 ans. Suis-je concerné ?", a: "Si vous résidez hors de la RDC depuis plus de 21 jours et que vous déposez depuis votre pays de résidence (France, Belgique, etc.), vous n'êtes normalement pas concerné par la suspension. Vérifiez auprès du bureau IRCC de votre pays de résidence." },
+      { q: "Peut-on quand même voyager au Canada avec un visa déjà obtenu ?", a: "Non. Même les visas déjà approuvés sont suspendus pendant la période. Si vous vous présentez à la frontière canadienne, vous serez soumis à 21 jours d'isolation obligatoire et votre entrée pourrait être refusée." },
+      { q: "Quand la suspension sera-t-elle levée ?", a: "La date officielle est le 28 août 2026, mais elle peut être prolongée si l'épidémie n'est pas maîtrisée, ou raccourcie si la situation s'améliore. Joventy suit les annonces IRCC et vous notifie immédiatement." },
+    ],
+    relatedSlugs: ["delais-visa-usa-canada-schengen-kinshasa-2025", "comment-obtenir-creneau-visa-usa-kinshasa", "documents-visa-schengen-kinshasa"],
+    relatedDestination: "visa-canada-kinshasa",
+  },
+
+  {
+    slug: "coupe-du-monde-2026-visa-usa-kinshasa",
+    title: "Coupe du Monde 2026 : comment obtenir un visa USA depuis Kinshasa pour supporter les Léopards",
+    metaTitle: "Visa USA Coupe du Monde 2026 Kinshasa — Guide Supporters RDC | Joventy",
+    metaDescription: "La RDC est qualifiée pour la Coupe du Monde 2026 aux USA. Guide complet pour obtenir votre visa B1/B2 depuis Kinshasa et supporter les Léopards malgré le Travel Advisory Level 4.",
+    publishedDate: "2026-05-29",
+    updatedDate: "2026-05-31",
+    readingTime: 8,
+    category: "Visa USA",
+    coverEmoji: "⚽",
+    intro: "La RDC est qualifiée pour la Coupe du Monde FIFA 2026 aux États-Unis ! Les Léopards vont fouler les pelouses américaines cet été, et des milliers de supporters congolais veulent y assister. Mais obtenir un visa B1/B2 depuis Kinshasa dans le contexte actuel (Travel Advisory Level 4, épidémie d'Ebola) présente des défis particuliers. Ce guide vous explique comment maximiser vos chances d'obtenir votre visa à temps.",
+    sections: [
+      { heading: "La RDC qualifiée : ce que cela change pour les visas", body: "La qualification de la RDC est une opportunité unique mais le timing est serré :", list: ["Les matchs de la Coupe du Monde 2026 se jouent de juin à juillet 2026 aux USA, Canada et Mexique", "L'ambassade US à Kinshasa est en Travel Advisory Level 4 (Ebola) — les entretiens visa continuent malgré tout", "L'équipe nationale a dû annuler son camp à Kinshasa et passer 21 jours en Europe avant d'entrer aux USA", "Les supporters doivent également respecter les règles sanitaires américaines (pas de quarantaine obligatoire, mais screening renforcé)", "Le gouvernement US a levé les visa bonds ($15 000) pour les détenteurs de billets FIFA officiels"] },
+      { heading: "Les conditions spéciales FIFA World Cup", body: "Le Département d'État américain a mis en place des dispositions pour les supporters :", list: ["Exemption de visa bond pour les détenteurs d'un FIFA Pass ou billet officiel", "Les consulats sont invités à traiter les demandes World Cup en priorité — mentionnez-le dans votre DS-160", "Un visa B1/B2 standard suffit — pas de visa spécial requis", "La durée de séjour demandée doit correspondre aux dates de matchs de la RDC", "Apportez votre preuve d'achat de billet FIFA à l'entretien consulaire"] },
+      { heading: "Comment préparer votre dossier visa USA World Cup", body: "Votre dossier doit être irréprochable vu le contexte Level 4 :", list: ["Remplissez le DS-160 en mentionnant explicitement « FIFA World Cup 2026 — supporter » comme motif", "Préparez une preuve d'achat de billets FIFA (confirmation email ou FIFA Pass)", "Réservez un hébergement dans la ville du match de la RDC", "Préparez un itinéraire précis : date d'arrivée, match(s), date de retour", "Documents financiers solides — montrez que vous pouvez financer le séjour ET que vous rentrerez", "Preuve de liens avec la RDC : emploi, famille, propriété"] },
+      { heading: "Le défi sanitaire : quitter la RDC à temps", body: "Le principal obstacle n'est pas le visa mais les règles sanitaires :", list: ["Les USA n'exigent pas de quarantaine formelle pour les Congolais, mais un screening sanitaire renforcé à l'arrivée", "Conseil : quittez la RDC au moins 21 jours avant votre vol vers les USA (comme l'équipe nationale)", "Passez ces 21 jours en Europe, Dubaï ou dans un pays tiers sans restriction", "Cela élimine le risque de refus d'embarquement ou de problème à la frontière américaine", "Joventy peut organiser un itinéraire combiné : Kinshasa → Europe (21j) → USA (World Cup)"] },
+      { heading: "Combien ça coûte au total ?", body: "Budget estimé pour un supporter congolais :", list: ["Frais de visa USA (B1/B2) : 185 USD", "Frais Joventy (engagement + prime de succès) : 250 + 750 USD", "Billet FIFA (catégorie 4, la moins chère) : à partir de 60 USD par match", "Vol Kinshasa → USA (via Europe) : 1 500 à 3 000 USD", "Hébergement USA (2 semaines) : 800 à 2 000 USD", "Séjour intermédiaire 21 jours (si nécessaire) : 500 à 1 500 USD", "Total estimé : 3 500 à 8 000 USD selon les options"] },
+    ],
+    faq: [
+      { q: "Peut-on obtenir un visa USA depuis Kinshasa malgré le Travel Advisory Level 4 ?", a: "Oui. Le Level 4 est un avertissement aux voyageurs américains (ne pas voyager EN RDC). Il n'empêche pas les Congolais de demander un visa USA. L'ambassade américaine à Kinshasa continue de traiter les demandes de visa non-immigrant." },
+      { q: "Les détenteurs de billets FIFA ont-ils un traitement prioritaire ?", a: "Les consulats américains sont invités à faciliter le traitement des demandes liées à la Coupe du Monde. Mentionnez explicitement le motif FIFA dans votre DS-160 et apportez votre preuve de billet à l'entretien. La visa bond de $15 000 est levée pour les détenteurs de billets officiels." },
+      { q: "Dois-je quitter la RDC 21 jours avant pour entrer aux USA ?", a: "Ce n'est pas obligatoire légalement, mais c'est fortement recommandé. L'équipe nationale a elle-même dû passer 21 jours en Europe. Les autorités américaines effectuent un screening sanitaire renforcé et un séjour préalable hors zone Ebola élimine tout risque de complication à l'arrivée." },
+    ],
+    relatedSlugs: ["comment-obtenir-creneau-visa-usa-kinshasa", "entretien-visa-usa-b1-b2-questions", "travel-advisory-level-4-rdc-visa-usa-2026"],
+    relatedDestination: "visa-usa-kinshasa",
+  },
+
+  {
+    slug: "ees-schengen-2026-controle-biometrique",
+    title: "EES Schengen 2026 : le nouveau contrôle biométrique aux frontières européennes",
+    metaTitle: "EES Schengen 2026 — Contrôle Biométrique Frontières Europe | Joventy",
+    metaDescription: "Le système EES est opérationnel depuis avril 2026 aux frontières Schengen. Empreintes, scan facial, fin des tampons. Ce que les voyageurs congolais doivent savoir.",
+    publishedDate: "2026-05-29",
+    updatedDate: "2026-05-31",
+    readingTime: 5,
+    category: "Visa Schengen",
+    coverEmoji: "🔐",
+    intro: "Depuis le 10 avril 2026, le système EES (Entry/Exit System) est pleinement opérationnel à toutes les frontières extérieures de l'espace Schengen. Fini les tampons de passeport — désormais, chaque voyageur non-européen est enregistré biométriquement (empreintes digitales et photo faciale) à l'entrée et à la sortie. Ce guide explique ce que cela change concrètement pour les voyageurs congolais.",
+    sections: [
+      { heading: "Qu'est-ce que l'EES ?", body: "L'Entry/Exit System est un système informatique européen qui enregistre les entrées et sorties de tous les ressortissants de pays tiers (non-UE) :", list: ["Remplace les tampons de passeport par un enregistrement numérique", "Collecte les empreintes digitales (4 doigts) et une image faciale à la première entrée", "Les passages suivants nécessitent une vérification biométrique simplifiée", "Les données sont conservées 3 ans", "Opérationnel dans les 29 pays du système Schengen depuis le 10 avril 2026", "Plus de 66 millions de passages enregistrés dans les 6 premières semaines"] },
+      { heading: "Ce qui change pour les voyageurs congolais", body: "L'impact principal est sur le temps de passage aux frontières :", list: ["Premier passage : prévoir 5 à 15 minutes supplémentaires pour l'enregistrement biométrique complet", "Passages suivants : scan rapide d'empreintes (1-2 minutes)", "Le système calcule automatiquement vos 90 jours sur 180 — impossible de dépasser sans être détecté", "Plus besoin de compter vos jours manuellement : le système le fait pour vous", "Si vous dépassez vos 90 jours, vous serez signalé automatiquement à la sortie", "Les e-gates (portiques automatiques) se multiplient dans les aéroports — mais pas encore pour les détenteurs de passeport congolais"] },
+      { heading: "Ce qui ne change PAS", body: "Rassurez-vous, beaucoup reste identique :", list: ["Le processus de demande de visa Schengen est inchangé", "Les documents requis sont les mêmes", "Les frais restent à 90 €/adulte", "La durée maximale de 90 jours sur 180 est inchangée", "Votre visa sticker reste valable (jusqu'à la transition vers le visa digital)", "Le CEV de Kinshasa fonctionne normalement"] },
+      { heading: "Conseils pratiques pour votre prochain voyage Schengen", body: "Pour que votre passage aux frontières se passe bien avec l'EES :", list: ["Arrivez plus tôt à l'aéroport — surtout si c'est votre première entrée Schengen avec l'EES", "Gardez votre passeport en bon état : les lecteurs biométriques sont sensibles", "Ne vous inquiétez pas si la file est plus longue que d'habitude — c'est normal pendant la phase d'adaptation", "Conservez votre itinéraire de voyage — en cas de contrôle, le système peut vérifier votre historique", "Si vous avez un doute sur vos jours restants, demandez à l'agent frontalier — le système affiche le décompte"] },
+    ],
+    faq: [
+      { q: "Dois-je faire quelque chose de spécial avant mon voyage à cause de l'EES ?", a: "Non. L'EES est géré directement à la frontière. Vous n'avez rien à faire en amont. Prévoyez simplement plus de temps à l'arrivée (surtout si c'est votre première entrée sous le nouveau système)." },
+      { q: "Mes empreintes seront-elles prises à chaque entrée dans l'espace Schengen ?", a: "Complètement lors de la première entrée (4 doigts + photo faciale). Pour les entrées suivantes dans les 3 ans, une vérification simplifiée suffit." },
+      { q: "Que se passe-t-il si je dépasse mes 90 jours ?", a: "Le système EES vous signale automatiquement. Vous risquez une interdiction d'entrée future, une amende, et un refus de visa lors de votre prochaine demande. Ne dépassez jamais vos 90 jours." },
+    ],
+    relatedSlugs: ["documents-visa-schengen-kinshasa", "visa-schengen-digital-2026", "delais-visa-usa-canada-schengen-kinshasa-2025"],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
+    slug: "visa-schengen-digital-2026",
+    title: "Visa Schengen digital 2026 : la fin du sticker visa approche",
+    metaTitle: "Visa Schengen Digital 2026 — Fin du Sticker, Code-Barre 2D | Joventy",
+    metaDescription: "L'UE remplace progressivement le sticker visa par un code-barre 2D digital. France et Italie acceptent déjà les demandes en ligne. Ce que cela change pour les Congolais.",
+    publishedDate: "2026-05-29",
+    updatedDate: "2026-05-31",
+    readingTime: 5,
+    category: "Visa Schengen",
+    coverEmoji: "📱",
+    intro: "L'Union Européenne est en train de révolutionner son système de visa. En avril 2026, la Commission européenne a adopté les actes juridiques qui remplaceront le sticker visa physique par un code-barre 2D sécurisé, vérifiable en ligne. La France et l'Italie acceptent déjà des demandes entièrement en ligne (sauf la biométrie). Ce guide explique la transition en cours et ce que cela signifie pour les voyageurs depuis Kinshasa.",
+    sections: [
+      { heading: "Que change le visa digital ?", body: "Le visa Schengen tel qu'on le connaît (sticker collé dans le passeport) va progressivement disparaître :", list: ["Le sticker physique sera remplacé par un code-barre 2D cryptographiquement sécurisé", "Le visa sera stocké dans une base de données centralisée (EU VAP — Visa Application Platform)", "Plus de risque de falsification ou de vol de sticker", "Vérification instantanée par scan à la frontière", "Transition complète prévue d'ici 2028-2031", "Les visas sticker actuels restent valables pendant la période de transition"] },
+      { heading: "La plateforme EU VAP (Visa Application Platform)", body: "L'UE développe une plateforme unique de demande de visa en ligne gérée par eu-LISA :", list: ["Objectif : remplacer les portails nationaux séparés par une interface unique", "Upload de documents en ligne avant le rendez-vous", "Paiement des frais en ligne", "Suivi du dossier en temps réel", "La France, l'Italie et l'Estonie acceptent déjà les soumissions en ligne", "La biométrie reste obligatoire en personne (VFS, TLS ou consulat) pour les premiers demandeurs"] },
+      { heading: "Ce que cela change pour les demandeurs depuis Kinshasa", body: "À court terme (2026), l'impact est encore limité mais positif :", list: ["Le CEV de Kinshasa continue de fonctionner normalement", "Vous pouvez déjà uploader certains documents en ligne avant votre rendez-vous (via VFS Global / TLScontact)", "Le formulaire papier cède progressivement la place au formulaire en ligne", "La biométrie reste en personne — pas de changement sur ce point", "À moyen terme (2027-2028) : vous pourrez potentiellement faire toute votre demande en ligne depuis Kinshasa", "Joventy anticipe cette transition et prépare déjà les dossiers au format digital"] },
+      { heading: "Calendrier de la transition", body: "Voici les étapes clés de la digitalisation du visa Schengen :", list: ["Octobre 2025 : lancement du système EES (phase pilote)", "Avril 2026 : EES pleinement opérationnel aux 29 frontières", "Avril 2026 : adoption des actes juridiques pour le visa digital", "Juin 2026 : l'Italie lance son portail de visa entièrement digital", "Q4 2026 : lancement de ETIAS pour les voyageurs exemptés de visa (ne concerne pas les Congolais)", "2027-2028 : déploiement progressif du code-barre 2D remplaçant le sticker", "2031 : date limite pour la transition complète dans tous les consulats"] },
+    ],
+    faq: [
+      { q: "Mon visa sticker actuel est-il encore valable ?", a: "Oui, absolument. Tous les visas sticker délivrés restent valables jusqu'à leur date d'expiration. La transition vers le digital sera progressive et les deux systèmes coexisteront pendant plusieurs années." },
+      { q: "Dois-je faire ma demande de visa en ligne maintenant ?", a: "Pas obligatoirement. Le CEV de Kinshasa accepte toujours les dossiers physiques. Cependant, certains consulats (France, Italie) offrent déjà la possibilité d'uploader des documents en ligne pour gagner du temps au rendez-vous." },
+      { q: "La biométrie sera-t-elle toujours nécessaire ?", a: "Oui pour les premiers demandeurs. Si vos empreintes ont déjà été collectées dans les 59 derniers mois, vous n'aurez pas besoin de les refaire — ce qui ouvre la voie à une demande 100% en ligne pour les renouvellements." },
+    ],
+    relatedSlugs: ["ees-schengen-2026-controle-biometrique", "documents-visa-schengen-kinshasa", "delais-visa-usa-canada-schengen-kinshasa-2025"],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
+    slug: "travel-advisory-level-4-rdc-visa-usa-2026",
+    title: "Travel Advisory Level 4 RDC (Ebola 2026) : impact sur les demandes de visa USA",
+    metaTitle: "Travel Advisory Level 4 RDC 2026 — Impact Visa USA Kinshasa | Joventy",
+    metaDescription: "L'ambassade US à Kinshasa est en Level 4 (Do Not Travel) suite à Ebola. Ce que cela signifie pour vos demandes de visa USA et comment adapter votre stratégie.",
+    publishedDate: "2026-05-29",
+    updatedDate: "2026-05-31",
+    readingTime: 5,
+    category: "Visa USA",
+    coverEmoji: "⚠️",
+    intro: "Depuis mai 2026, l'ambassade américaine à Kinshasa est passée en Travel Advisory Level 4 (« Do Not Travel ») en raison de l'épidémie d'Ebola Bundibugyo en province de l'Ituri. Beaucoup de Congolais pensent à tort que cela empêche de demander un visa USA. Ce n'est pas le cas. Ce guide clarifie la situation et explique comment adapter votre stratégie de demande de visa.",
+    sections: [
+      { heading: "Qu'est-ce que le Travel Advisory Level 4 ?", body: "Le système d'alerte voyage américain comporte 4 niveaux :", list: ["Level 1 : Exercise Normal Precautions (précautions normales)", "Level 2 : Exercise Increased Caution (prudence accrue)", "Level 3 : Reconsider Travel (reconsidérer le voyage)", "Level 4 : Do Not Travel (ne pas voyager) — c'est le niveau actuel pour la RDC", "IMPORTANT : ce level s'adresse aux AMÉRICAINS qui envisagent de voyager EN RDC", "Il ne concerne PAS la capacité des Congolais à demander un visa pour voyager AUX USA"] },
+      { heading: "Impact réel sur les demandes de visa depuis Kinshasa", body: "Voici ce qui change et ce qui ne change pas :", list: ["✅ L'ambassade continue de traiter les demandes de visa non-immigrant", "✅ Les entretiens consulaires ont toujours lieu à Kinshasa (Gombe)", "✅ Le portail usvisaappt.com fonctionne normalement pour la RDC", "⚠️ Certains services consulaires non-essentiels peuvent être réduits", "⚠️ Le personnel américain non-essentiel a été évacué — les délais de traitement peuvent augmenter", "⚠️ Un screening sanitaire renforcé est possible à l'arrivée aux USA pour les voyageurs en provenance de RDC"] },
+      { heading: "Précautions à prendre pour votre demande", body: "Dans ce contexte, adaptez votre approche :", list: ["Mentionnez votre lieu de résidence exact — si vous êtes à Kinshasa (loin de l'Ituri), précisez-le", "Préparez-vous à des questions sur Ebola lors de l'entretien (« Have you been to Ituri province? »)", "Si vous prévoyez de voyager aux USA, partez de RDC au moins 21 jours avant votre vol (recommandé mais pas obligatoire)", "Ayez un certificat médical récent attestant de votre bonne santé si possible", "L'officier consulaire ne refusera pas votre visa à cause d'Ebola — mais le contexte peut rallonger les délais de traitement post-entretien"] },
+      { heading: "Alternative : demander le visa depuis un pays tiers", body: "Si les délais à Kinshasa deviennent trop longs, une option existe :", list: ["Vous pouvez demander un visa USA depuis un autre pays où vous résidez ou séjournez légalement", "Options populaires : Brazzaville, Nairobi, Johannesburg, Paris (si vous avez un visa Schengen)", "L'entretien Third Country National (TCN) est accepté par de nombreuses ambassades", "Inconvénient : vous devez prouver votre séjour légal dans ce pays tiers", "Joventy peut vous conseiller sur la meilleure ambassade alternative selon votre profil"] },
+    ],
+    faq: [
+      { q: "Le Travel Advisory Level 4 empêche-t-il d'obtenir un visa USA ?", a: "Non. Le Level 4 est un avertissement aux citoyens américains de ne pas voyager en RDC. Il n'a aucun impact juridique sur la capacité des Congolais à demander et obtenir un visa américain." },
+      { q: "L'ambassade US à Kinshasa est-elle fermée ?", a: "Non. L'ambassade reste ouverte et continue de traiter les demandes de visa. Certains services non-essentiels peuvent être réduits et le personnel non-essentiel a été évacué, ce qui peut entraîner des délais légèrement plus longs." },
+      { q: "Dois-je mentionner Ebola dans mon DS-160 ?", a: "Le DS-160 ne demande pas directement d'informations sur Ebola. Cependant, si vous avez voyagé en Ituri récemment, soyez honnête si la question se pose lors de l'entretien. Mentir à un officier consulaire est un motif d'interdiction permanente." },
+      { q: "Un screening sanitaire sera-t-il fait à mon arrivée aux USA ?", a: "Possiblement. Les voyageurs en provenance de zones touchées par Ebola peuvent faire l'objet d'un contrôle de température et de questions sanitaires à l'arrivée aux USA. Ce n'est pas une quarantaine et cela ne dure que quelques minutes." },
+    ],
+    relatedSlugs: ["comment-obtenir-creneau-visa-usa-kinshasa", "coupe-du-monde-2026-visa-usa-kinshasa", "visa-usa-refuse-que-faire"],
+    relatedDestination: "visa-usa-kinshasa",
   },
 ];
 

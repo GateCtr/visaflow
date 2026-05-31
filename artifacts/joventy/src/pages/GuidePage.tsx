@@ -8,6 +8,7 @@ import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
+  "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
 };
 function getCategoryColor(cat: string) {
