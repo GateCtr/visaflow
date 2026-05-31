@@ -770,6 +770,101 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══ DRC E-VISA / VISA VOLANT — INTERNATIONAL CLIENTS ═══ */}
+      <section className="py-24 bg-white border-b border-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 mb-3">
+              <FlagImg code="cd" size={32} />
+              <p className="text-secondary font-semibold text-sm uppercase tracking-widest">International Clients</p>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">
+              DRC E-Visa &amp; Visa Volant Services
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
+              Planning to travel to the Democratic Republic of Congo? We handle the entire process for you — from e-Visa and Visa Volant applications to physical follow-up on pending cases right here in Kinshasa.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+            {/* E-Visa & Visa Volant */}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-blue-900">E-Visa &amp; Visa Volant Applications</h3>
+              </div>
+              <p className="text-sm text-blue-800 leading-relaxed mb-4">
+                Whether you need a standard DRC e-Visa or a Visa Volant (emergency/express visa), our team based in Kinshasa handles the full application process on your behalf. We prepare the paperwork, submit your request, and keep you informed at every step.
+              </p>
+              <ul className="space-y-2.5">
+                {[
+                  "Full application preparation and submission",
+                  "DRC e-Visa (tourist, business, transit)",
+                  "Visa Volant (emergency/express processing)",
+                  "Document verification and compliance check",
+                  "Real-time status updates via WhatsApp",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-blue-800">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Physical Follow-up */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-amber-900">Physical Follow-Up in Kinshasa</h3>
+              </div>
+              <p className="text-sm text-amber-800 leading-relaxed mb-4">
+                Already submitted your DRC visa application but it's been taking too long? Our team physically follows up on your case at the immigration offices in Kinshasa. We track your file, check its status in person, and push to get you a resolution faster.
+              </p>
+              <ul className="space-y-2.5">
+                {[
+                  "In-person follow-up at DGM (Direction Générale de Migration)",
+                  "Case status tracking and escalation",
+                  "Direct liaison with immigration officers",
+                  "Regular progress reports via WhatsApp",
+                  "Available for all visa types (e-Visa, Visa Volant, extensions)",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-amber-800">
+                    <CheckCircle2 className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* CTA for international clients */}
+          <div className="bg-primary rounded-2xl p-6 sm:p-8 text-center">
+            <h3 className="text-xl font-bold text-white mb-3">
+              Need help with your DRC visa? Get in touch today.
+            </h3>
+            <p className="text-white/70 text-sm mb-6 max-w-lg mx-auto leading-relaxed">
+              For all DRC e-Visa, Visa Volant applications, or physical follow-up on pending cases, contact us directly on WhatsApp. Our team in Kinshasa is ready to assist you.
+            </p>
+            <a
+              href="https://wa.me/243840808122"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size="lg" className="h-14 px-8 text-lg bg-green-500 hover:bg-green-600 text-white font-bold shadow-xl rounded-xl transition-all hover:scale-105">
+                <MessageCircle className="mr-2 w-5 h-5" />
+                Contact us on WhatsApp
+              </Button>
+            </a>
+            <p className="text-white/50 text-xs mt-4">+243 840 808 122 · Response within 2 hours</p>
+          </div>
+        </div>
+      </section>
+
       {/* ═══ CTA FINAL ═══ */}
       <section className="py-20 bg-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(255,152,0,0.12),transparent_55%)]" />
