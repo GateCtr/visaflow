@@ -27,14 +27,14 @@ const guides: Guide[] = [
     title: "Comment obtenir un créneau visa USA à Kinshasa en 2025",
     metaTitle: "Créneau Visa USA Kinshasa 2025 — Guide Complet | Joventy",
     metaDescription:
-      "Le portail USCIS affiche souvent « aucune date disponible ». Découvrez comment obtenir un créneau d'entretien visa américain à Kinshasa rapidement grâce à la surveillance automatisée.",
+      "Le portail usvisaappt.com affiche souvent « aucune date disponible ». Découvrez comment obtenir un créneau d'entretien visa américain à Kinshasa rapidement grâce au suivi permanent de notre équipe.",
     publishedDate: "2025-05-01",
     updatedDate: "2025-06-01",
     readingTime: 7,
     category: "Visa USA",
     coverEmoji: "🇺🇸",
     intro:
-      "Obtenir un créneau d'entretien au consulat américain de Kinshasa est devenu l'un des obstacles les plus frustrants pour les demandeurs de visa B1/B2. Le portail officiel USCIS affiche régulièrement « aucune date disponible » pendant des semaines, voire des mois. Ce guide vous explique pourquoi les créneaux sont si rares, comment le système fonctionne, et comment maximiser vos chances d'en obtenir un rapidement.",
+      "Obtenir un créneau d'entretien au consulat américain de Kinshasa est devenu l'un des obstacles les plus frustrants pour les demandeurs de visa B1/B2. Le portail officiel usvisaappt.com affiche régulièrement « aucune date disponible » pendant des semaines, voire des mois. Ce guide vous explique pourquoi les créneaux sont si rares, comment le système fonctionne, et comment maximiser vos chances d'en obtenir un rapidement.",
     sections: [
       {
         heading: "Pourquoi les créneaux visa USA sont-ils si rares à Kinshasa ?",
@@ -42,43 +42,42 @@ const guides: Guide[] = [
           "Le consulat américain de Kinshasa traite environ 200 à 300 demandes de visa non-immigrant par jour. Face à une demande en constante augmentation, les créneaux se remplissent en quelques minutes dès leur ouverture. Plusieurs facteurs aggravent la situation :",
         list: [
           "Les demandes de visa B1/B2 (tourisme, affaires) représentent la majorité du volume",
-          "Le consulat libère souvent les annulations la nuit ou tôt le matin, hors des heures de bureau",
-          "Les revendeurs de créneaux (illégaux) monopolisent certaines plages horaires",
+          "Le consulat libère souvent des annulations la nuit ou tôt le matin, hors des heures de bureau",
+          "Les périodes de forte demande (vacances, saison estivale) saturent le calendrier",
           "Les fêtes locales et fermetures consulaires réduisent encore la disponibilité",
         ],
       },
       {
-        heading: "Comment fonctionne le portail USCIS (cgifederal.com) ?",
+        heading: "Comment fonctionne le portail de rendez-vous visa USA (usvisaappt.com) ?",
         body:
-          "Le portail CGI Federal est l'interface officielle pour prendre un rendez-vous visa américain en RDC. Voici les étapes clés :",
+          "Le portail officiel usvisaappt.com est l'interface pour prendre un rendez-vous visa américain en RDC. Voici les étapes clés :",
         list: [
-          "Créer un compte sur ais.usvisa-info.com avec votre adresse e-mail",
-          "Payer les frais MRV (265 USD en 2025) via les canaux agréés en RDC",
+          "Créer un compte sur usvisaappt.com avec votre adresse e-mail",
+          "Payer les frais de visa (185 USD en 2025) via les canaux agréés en RDC",
           "Remplir le formulaire DS-160 sur ceac.state.gov",
-          "Accéder à la section « Schedule Appointment » et vérifier les créneaux disponibles",
-          "Les créneaux affichent un calendrier : en rouge = complet, en vert = disponible",
+          "Accéder à la section « Schedule Appointment » et consulter les créneaux disponibles",
+          "Le calendrier affiche les dates : les jours disponibles peuvent apparaître à tout moment suite à des annulations",
         ],
       },
       {
         heading: "Les moments où des créneaux se libèrent",
         body:
-          "Les créneaux annulés ou nouvellement ouverts apparaissent généralement à des horaires précis. Une surveillance manuelle est quasi impossible, mais connaître ces créneaux vous donne un avantage :",
+          "Les créneaux annulés ou nouvellement ouverts apparaissent à des moments variables. Connaître ces tendances vous donne un avantage :",
         list: [
-          "Entre 00h00 et 02h00 (minuit à Kinshasa) : le système effectue ses synchronisations",
-          "Entre 07h00 et 08h00 : avant l'ouverture consulaire, des annulations sont traitées",
-          "72 heures avant la date d'un entretien non confirmé : créneau libéré automatiquement",
-          "Premier jour de chaque mois : nouveaux créneaux ajoutés pour le mois suivant",
+          "Tôt le matin (7h00-8h00) : avant l'ouverture consulaire, des annulations sont souvent traitées",
+          "72 heures avant la date d'un entretien non confirmé : le créneau est libéré automatiquement par le système",
+          "Premier jour de chaque mois : de nouveaux créneaux sont généralement ajoutés pour le mois suivant",
+          "En soirée (20h00-22h00) : certaines disponibilités s'ouvrent après les traitements de fin de journée",
         ],
       },
       {
-        heading: "La solution : la surveillance automatisée 24h/24",
-        body:
-          "Joventy a développé un système de bots qui scanne le portail USCIS toutes les 60 à 90 secondes, 24h/24, 7j/7. Dès qu'un créneau correspondant à votre profil se libère, vous recevez une alerte immédiate par WhatsApp et e-mail. Notre taux de capture est de 94% dans les 48 premières heures suivant l'activation d'une surveillance.",
+        heading: "La solution : un suivi régulier et une réactivité immédiate",
+        body: "L'obtention d'un créneau repose essentiellement sur la réactivité : dès qu'une disponibilité apparaît sur usvisaappt.com, il faut être en mesure de la réserver en quelques minutes. Joventy accompagne ses clients dans cette démarche grâce à un suivi rapproché du portail et une prise en charge rapide :",
         list: [
-          "Surveillance continue sans interruption, y compris la nuit et les week-ends",
-          "Alerte WhatsApp instantanée dès la détection d'un créneau libre",
-          "Option de capture automatique : Joventy réserve le créneau en votre nom",
-          "Tableau de bord en temps réel pour suivre l'état de votre dossier",
+          "Suivi régulier du portail usvisaappt.com par l'équipe Joventy, y compris en dehors des heures de bureau",
+          "Alerte WhatsApp dès qu'une disponibilité est détectée pour votre profil",
+          "Prise en charge de la réservation à votre place dès confirmation de votre part",
+          "Tableau de bord client pour suivre l'état de votre dossier en temps réel",
         ],
       },
       {
@@ -87,10 +86,10 @@ const guides: Guide[] = [
           "Obtenir le créneau n'est que la première étape. Pour que votre entretien se passe bien, préparez ces éléments en amont :",
         list: [
           "DS-160 complété et soumis (numéro de confirmation à 10 caractères)",
-          "Reçu de paiement des frais MRV (265 USD)",
+          "Reçu de paiement des frais de visa (185 USD)",
           "Photo conforme aux standards américains (5×5 cm, fond blanc, moins de 6 mois)",
           "Passeport valide au moins 6 mois après la date d'entrée prévue",
-          "Documents de support financiers (relevés bancaires 6 derniers mois)",
+          "Documents financiers (relevés bancaires 6 derniers mois)",
           "Preuve de liens avec la RDC (contrat de travail, titres de propriété, etc.)",
         ],
       },
@@ -98,19 +97,19 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Combien de temps faut-il attendre pour un créneau visa USA à Kinshasa ?",
-        a: "En 2025, les délais d'attente varient entre 4 et 16 semaines selon la saison. Avec la surveillance automatisée de Joventy, nos clients obtiennent généralement un créneau dans les 48 à 96 heures suivant l'activation de leur dossier.",
+        a: "En 2025, les délais d'attente varient entre 4 et 16 semaines selon la saison. Avec le suivi régulier de l'équipe Joventy, nos clients obtiennent généralement un créneau dans les 48 à 96 heures suivant l'activation de leur dossier.",
       },
       {
         q: "Peut-on réserver un créneau visa USA sans remplir le DS-160 d'abord ?",
-        a: "Non. Le portail USCIS exige le numéro de confirmation DS-160 avant de permettre la prise de rendez-vous. Joventy vous aide à remplir et soumettre le DS-160 correctement avant de lancer la surveillance de créneaux.",
+        a: "Non. Le portail usvisaappt.com exige le numéro de confirmation DS-160 avant de permettre la prise de rendez-vous. Joventy vous aide à remplir et soumettre le DS-160 correctement avant de lancer le suivi des créneaux.",
       },
       {
-        q: "Les frais MRV sont-ils remboursables si je n'obtiens pas de créneau ?",
-        a: "Les frais MRV (265 USD) sont remboursables si vous n'avez pas pu programmer de rendez-vous dans les 12 mois suivant le paiement. En revanche, si un rendez-vous a été programmé puis manqué, les frais ne sont généralement pas remboursés.",
+        q: "Les frais de visa sont-ils remboursables si je n'obtiens pas de créneau ?",
+        a: "Les frais de visa (185 USD) sont remboursables si vous n'avez pas pu programmer de rendez-vous dans les 12 mois suivant le paiement. En revanche, si un rendez-vous a été programmé puis manqué, les frais ne sont généralement pas remboursés.",
       },
       {
-        q: "Joventy peut-il réserver automatiquement un créneau à ma place ?",
-        a: "Oui. Notre service inclut une option de capture automatique : dès qu'un créneau compatible se libère, notre système complète la réservation en votre nom sans que vous ayez à intervenir. Vous recevez la confirmation par WhatsApp.",
+        q: "Joventy peut-il réserver un créneau à ma place sur usvisaappt.com ?",
+        a: "Oui. Notre équipe prend en charge la réservation sur usvisaappt.com en votre nom dès qu'une disponibilité compatible avec votre profil apparaît. Vous recevez la confirmation par WhatsApp.",
       },
     ],
     relatedSlugs: [
@@ -142,7 +141,7 @@ const guides: Guide[] = [
           "Passeport valide encore au moins 3 mois après la date de retour prévue, avec au moins 2 pages vierges",
           "Copie de toutes les pages du passeport actuel (y compris les pages vierges)",
           "Copies des passeports précédents contenant des visas Schengen ou américains",
-          "2 photos d'identité récentes conformes au format Schengen (35×45 mm, fond blanc, 6 mois)",
+          "2 photos d'identité récentes conformes au format Schengen (35×45 mm, fond blanc, moins de 6 mois)",
           "Formulaire de demande Schengen complété et signé (disponible sur le site du CEV)",
         ],
       },
@@ -175,7 +174,7 @@ const guides: Guide[] = [
           "L'assurance voyage est une obligation légale pour tout visa Schengen. Elle doit couvrir :",
         list: [
           "Couverture minimale de 30 000 € pour les frais médicaux et le rapatriement",
-          "Valable dans les 26 pays Schengen (pas uniquement le pays de destination)",
+          "Valable dans les 27 pays Schengen (pas uniquement le pays de destination)",
           "Valable pour toute la durée du séjour, du jour d'entrée au jour de sortie",
           "Compagnies acceptées : Europ Assistance, AXA, Allianz, Chapka — environ 20 à 50 USD/semaine",
         ],
@@ -249,7 +248,7 @@ const guides: Guide[] = [
         body:
           "Contrairement à ce qu'on croit, l'officier ne cherche pas à vous piéger. Il vérifie trois points fondamentaux :",
         list: [
-          "Intenzione non-immigrant : avez-vous l'intention de rentrer en RDC après votre séjour ?",
+          "Intention non-immigrant : avez-vous l'intention de rentrer en RDC après votre séjour ?",
           "Solvabilité : pouvez-vous financer votre voyage sans chercher à travailler aux USA ?",
           "Cohérence du dossier : vos documents, vos réponses et votre profil sont-ils cohérents ?",
         ],
@@ -301,8 +300,8 @@ const guides: Guide[] = [
         heading: "Conseils pratiques pour le jour J",
         body: "La forme compte autant que le fond. Quelques points qui font la différence :",
         list: [
-          "Arrivez 15 minutes en avance au consulat (rue Ngonga, Gombe). Les files peuvent être longues.",
-          "Apportez vos documents dans un classeur ordonné — l'officier vous demandera peut-être à les voir",
+          "Arrivez 15 minutes en avance au consulat américain de Kinshasa (Gombe). Les files peuvent être longues.",
+          "Apportez vos documents dans un classeur ordonné — l'officier peut vous demander à les voir",
           "Parlez en anglais si vous le maîtrisez. Sinon, le français est accepté à Kinshasa.",
           "Restez calme et naturel. Un refus n'est pas définitif — vous pouvez représenter votre demande.",
           "Ne répondez pas plus que ce qui est demandé. Soyez concis et factuel.",
@@ -316,7 +315,7 @@ const guides: Guide[] = [
       },
       {
         q: "Que se passe-t-il si l'officier me demande des documents que je n'ai pas apportés ?",
-        a: "Si l'officier demande un document manquant, il peut refuser le visa ou demander une mise en attente administrative (221g). Dans ce cas, vous avez généralement 12 mois pour fournir les documents complémentaires sans repayer les frais MRV.",
+        a: "Si l'officier demande un document manquant, il peut refuser le visa ou demander une mise en attente administrative (221g). Dans ce cas, vous avez généralement 12 mois pour fournir les documents complémentaires sans repayer les frais de visa.",
       },
       {
         q: "Peut-on repasser l'entretien après un refus visa USA ?",
@@ -377,7 +376,7 @@ const guides: Guide[] = [
           "Notez par écrit toutes les questions qui vous ont été posées et vos réponses",
           "Ne représentez PAS votre demande immédiatement — analysez d'abord les faiblesses",
           "Évaluez honnêtement quelles attaches supplémentaires vous pouvez documenter",
-          "Consultez un expert pour analyser votre dossier avant de repayer les frais MRV",
+          "Consultez un expert pour analyser votre dossier avant de repayer les frais de visa",
         ],
       },
       {
@@ -412,8 +411,8 @@ const guides: Guide[] = [
         a: "Non. Un refus 214(b) n'est pas permanent. Vous pouvez représenter votre demande autant de fois que vous le souhaitez. Chaque nouvelle demande est évaluée indépendamment. Seule une fraude documentaire avérée ou une interdiction formelle peut entraîner un refus permanent.",
       },
       {
-        q: "Faut-il repayer les frais MRV de 265 USD pour chaque nouvelle demande ?",
-        a: "Oui, les frais MRV sont non remboursables et doivent être payés pour chaque nouvelle demande, quel que soit le résultat. En cas de refus sous 214(b), vous devrez payer à nouveau avant de prendre un nouveau rendez-vous.",
+        q: "Faut-il repayer les frais de visa de 185 USD pour chaque nouvelle demande ?",
+        a: "Oui, les frais de visa sont non remboursables et doivent être payés pour chaque nouvelle demande, quel que soit le résultat. En cas de refus sous 214(b), vous devrez payer à nouveau avant de prendre un nouveau rendez-vous sur usvisaappt.com.",
       },
       {
         q: "Mon enfant ou mon conjoint aux USA nuira-t-il à ma demande ?",
@@ -430,85 +429,85 @@ const guides: Guide[] = [
 
   {
     slug: "payer-frais-mrv-visa-usa-kinshasa",
-    title: "Comment payer les frais MRV du visa USA depuis la RDC (guide 2025)",
-    metaTitle: "Payer Frais MRV Visa USA depuis RDC 2025 — Guide Complet | Joventy",
+    title: "Comment payer les frais de visa USA depuis la RDC (guide 2025)",
+    metaTitle: "Payer Frais Visa USA depuis RDC 2025 — Guide Complet | Joventy",
     metaDescription:
-      "Les frais MRV (265 USD) se paient via des canaux spécifiques en RDC. Guide étape par étape pour payer correctement les frais de visa américain depuis Kinshasa.",
+      "Les frais de visa américain (185 USD) se paient via des canaux spécifiques en RDC. Guide étape par étape pour payer correctement les frais de visa USA depuis Kinshasa via usvisaappt.com.",
     publishedDate: "2025-05-25",
     updatedDate: "2025-06-01",
     readingTime: 5,
     category: "Visa USA",
     coverEmoji: "💳",
     intro:
-      "Payer les frais MRV (Machine Readable Visa) est la première étape concrète d'une demande de visa américain. Ces frais s'élèvent à 265 USD en 2025 et doivent être payés via des canaux spécifiques agréés par l'ambassade américaine en RDC. Ce guide vous explique les méthodes disponibles, les pièges à éviter, et comment vérifier que votre paiement est bien enregistré.",
+      "Payer les frais de visa américain est la première étape concrète d'une demande de visa USA. Ces frais s'élèvent à 185 USD en 2025 pour un visa B1/B2 et doivent être payés via des canaux spécifiques agréés. Ce guide vous explique les méthodes disponibles depuis Kinshasa, les pièges à éviter, et comment vérifier que votre paiement est bien enregistré sur usvisaappt.com.",
     sections: [
       {
-        heading: "Qu'est-ce que les frais MRV ?",
+        heading: "Qu'est-ce que les frais de visa américain ?",
         body:
-          "Les frais MRV (Machine Readable Visa Fee) sont des frais non remboursables exigés par le gouvernement américain pour traiter toute demande de visa non-immigrant (B1/B2 tourisme/affaires, F1 étudiant, J1, etc.). En 2025 :",
+          "Les frais de visa américain (anciennement appelés MRV — Machine Readable Visa) sont des frais non remboursables exigés par le gouvernement américain pour traiter toute demande de visa non-immigrant. En 2025 :",
         list: [
-          "Montant : 185 USD pour la plupart des visas non-immigrants (B1/B2, F, J, M)",
-          "Note : certains types de visas (H, L, O, P, Q, R) ont des frais différents",
+          "Montant B1/B2 (tourisme & affaires) : 185 USD",
+          "Montant F1, J1, M1 (étudiant, échange, formation) : 185 USD",
+          "Certains visas de travail (H, L, O, P) ont des frais différents — vérifiez sur usvisaappt.com",
           "Les frais sont valables 12 mois — si vous ne prenez pas de rendez-vous dans ce délai, ils expirent",
           "Un refus ne donne pas droit au remboursement",
         ],
       },
       {
         heading: "Les canaux de paiement officiels depuis la RDC",
-        body: "L'ambassade américaine a désigné des banques et établissements partenaires pour collecter les frais MRV :",
+        body: "L'ambassade américaine a désigné des banques partenaires pour collecter les frais de visa. Depuis Kinshasa :",
         list: [
-          "Rawbank (agences Kinshasa) : paiement en CDF ou USD au guichet, récupération du reçu immédiate",
-          "Equity Bank RDC : service disponible dans les principales agences de Kinshasa",
-          "TMB (Trust Merchant Bank) : paiement au guichet avec présentation du code de référence USCIS",
-          "Paiement en ligne via le portail ais.usvisa-info.com avec carte Visa/Mastercard internationale",
-          "Western Union (pour les ressortissants hors de Kinshasa) : vérifier les agences agréées",
+          "Rawbank (agences Kinshasa) : paiement en USD au guichet avec votre code de référence usvisaappt.com",
+          "Equity Bank RDC : paiement disponible dans les principales agences de Kinshasa",
+          "TMB (Trust Merchant Bank) : paiement au guichet sur présentation de votre référence de dossier",
+          "Paiement en ligne via usvisaappt.com avec carte Visa/Mastercard internationale",
         ],
       },
       {
         heading: "Procédure étape par étape",
         body: "Voici comment procéder pour payer correctement et éviter les erreurs :",
         list: [
-          "1. Créez d'abord votre compte sur ais.usvisa-info.com — c'est à partir de là que vous obtenez votre référence de paiement unique",
-          "2. Notez votre référence MRV (un code alphanumérique unique à votre dossier)",
+          "1. Créez d'abord votre compte sur usvisaappt.com — c'est de là que vous obtenez votre référence de paiement unique",
+          "2. Notez votre référence de paiement (code alphanumérique unique à votre dossier)",
           "3. Rendez-vous à la banque partenaire avec cette référence, votre pièce d'identité, et le montant en USD",
-          "4. Conservez précieusement votre reçu de paiement (RECEIPT NUMBER) — vous en aurez besoin pour le DS-160 et le portail USCIS",
-          "5. Attendez 24 à 48 heures que le paiement apparaisse sur votre profil USCIS avant de tenter de prendre un rendez-vous",
+          "4. Conservez précieusement votre reçu de paiement (RECEIPT NUMBER) — vous en aurez besoin pour le DS-160 et usvisaappt.com",
+          "5. Attendez 24 à 48 heures que le paiement apparaisse sur votre profil usvisaappt.com avant de tenter de prendre un rendez-vous",
         ],
       },
       {
         heading: "Erreurs fréquentes et comment les éviter",
         body: "Ces erreurs peuvent bloquer votre dossier ou vous faire perdre vos frais :",
         list: [
-          "Payer sans avoir créé son compte USCIS d'abord — le paiement ne peut pas être lié à votre dossier",
+          "Payer sans avoir créé son compte usvisaappt.com d'abord — le paiement ne peut pas être lié à votre dossier",
           "Utiliser un intermédiaire non officiel pour le paiement — risque d'arnaque",
-          "Confondre les frais MRV avec les frais SEVIS (uniquement pour les visas étudiants F/J)",
+          "Confondre les frais de visa avec les frais SEVIS (uniquement pour les visas étudiants F/J)",
           "Ne pas conserver le reçu — sans le RECEIPT NUMBER, vous ne pouvez pas prendre de rendez-vous",
-          "Payer en CDF sans s'assurer que le taux de change est celui de l'ambassade — vérifiez le montant exact en CDF le jour du paiement",
+          "Payer en CDF sans vérifier le taux de change officiel du jour — vérifiez le montant exact en CDF à la banque",
         ],
       },
       {
         heading: "Vérifier que le paiement est bien enregistré",
         body: "Avant de passer à l'étape suivante, confirmez que tout est en ordre :",
         list: [
-          "Connectez-vous sur ais.usvisa-info.com 24 à 48h après le paiement",
+          "Connectez-vous sur usvisaappt.com 24 à 48h après le paiement",
           "Dans la section « Payment », votre statut doit passer de « Pending » à « Confirmed »",
-          "Si après 72h le paiement n'apparaît pas, contactez le support USCIS avec votre reçu bancaire",
-          "Joventy vérifie automatiquement le statut de paiement de ses clients et les alerte en cas de problème",
+          "Si après 72h le paiement n'apparaît pas, contactez le support usvisaappt.com avec votre reçu bancaire",
+          "L'équipe Joventy vérifie le statut de paiement pour ses clients et les alerte en cas de problème",
         ],
       },
     ],
     faq: [
       {
-        q: "Combien coûtent les frais MRV pour un visa B1/B2 USA depuis la RDC en 2025 ?",
-        a: "En 2025, les frais MRV pour un visa B1/B2 (tourisme et affaires) sont de 185 USD. Ce montant est non remboursable et valable 12 mois à partir de la date de paiement pour prendre un rendez-vous.",
+        q: "Combien coûtent les frais de visa B1/B2 USA depuis la RDC en 2025 ?",
+        a: "En 2025, les frais de visa pour un B1/B2 (tourisme et affaires) sont de 185 USD. Ce montant est non remboursable et valable 12 mois à partir de la date de paiement pour prendre un rendez-vous sur usvisaappt.com.",
       },
       {
-        q: "Peut-on payer les frais MRV via M-Pesa ou Airtel Money ?",
-        a: "Non. Les frais MRV ne peuvent pas être payés via Mobile Money (M-Pesa, Airtel Money, Orange Money) en RDC. Les seuls canaux acceptés sont les banques partenaires agréées (Rawbank, Equity Bank, TMB) et le paiement en ligne par carte internationale sur le portail USCIS.",
+        q: "Peut-on payer les frais de visa USA via M-Pesa ou Airtel Money ?",
+        a: "Non. Les frais de visa américain ne peuvent pas être payés via Mobile Money (M-Pesa, Airtel Money, Orange Money) en RDC. Les seuls canaux acceptés sont les banques partenaires agréées (Rawbank, Equity Bank, TMB) et le paiement en ligne par carte internationale sur usvisaappt.com.",
       },
       {
-        q: "Les frais MRV sont-ils remboursables en cas de refus de visa ?",
-        a: "Non. Les frais MRV sont non remboursables dans tous les cas — refus de visa, annulation de rendez-vous, ou changement de plans. Ils expirent si vous ne prenez pas de rendez-vous dans les 12 mois suivant le paiement.",
+        q: "Les frais de visa sont-ils remboursables en cas de refus ?",
+        a: "Non. Les frais de visa sont non remboursables dans tous les cas — refus de visa, annulation de rendez-vous, ou changement de plans. Ils expirent si vous ne prenez pas de rendez-vous dans les 12 mois suivant le paiement.",
       },
     ],
     relatedSlugs: [
@@ -531,25 +530,25 @@ const guides: Guide[] = [
     category: "Comparatif",
     coverEmoji: "⏱️",
     intro:
-      "Le délai entre la décision de voyager et l'obtention du visa peut varier de 2 semaines à 6 mois selon la destination, la saison et votre profil. Ce guide compile les délais réels constatés par Joventy sur les principales destinations depuis Kinshasa en 2025, ainsi que les stratégies pour planifier intelligemment votre demande.",
+      "Le délai entre la décision de voyager et l'obtention du visa peut varier de 2 semaines à 6 mois selon la destination, la saison et votre profil. Ce guide compile les délais réels constatés par l'équipe Joventy sur les principales destinations depuis Kinshasa en 2025, ainsi que les stratégies pour planifier intelligemment votre demande.",
     sections: [
       {
         heading: "Visa USA (B1/B2) — délai total estimé",
         body:
           "Le délai total pour un visa américain comprend deux phases : la préparation du dossier et l'attente d'un créneau consulaire.",
         list: [
-          "Préparation du dossier (DS-160, paiement MRV, documents) : 3 à 7 jours",
-          "Attente d'un créneau d'entretien : 4 à 16 semaines (très variable selon la saison)",
+          "Préparation du dossier (DS-160, paiement frais, documents) : 3 à 7 jours",
+          "Attente d'un créneau d'entretien sur usvisaappt.com : 4 à 16 semaines (très variable selon la saison)",
           "Délai de traitement post-entretien : 5 à 10 jours ouvrables pour la plupart des dossiers",
           "Total estimé : 6 à 20 semaines depuis le début des démarches",
-          "Avec Joventy (capture automatique de créneau) : créneau obtenu en 48 à 96h dans 94% des cas",
+          "Avec Joventy (suivi rapproché du portail usvisaappt.com) : créneau obtenu en 48 à 96h dans la majorité des cas",
           "Périodes les plus chargées : juin-août (saison estivale), novembre-janvier (fêtes de fin d'année)",
         ],
       },
       {
         heading: "Visa Canada (visiteur, étudiant) — délai total estimé",
         body:
-          "Le Canada traite les visas en ligne depuis Kinshasa via IRCC (Immigration, Réfugiés et Citoyenneté Canada). Pas d'entretien physique dans la plupart des cas.",
+          "Le Canada traite les visas en ligne depuis Kinshasa via IRCC (canada.ca). Pas d'entretien physique dans la plupart des cas.",
         list: [
           "Préparation et soumission du dossier en ligne : 5 à 10 jours",
           "Traitement IRCC : 4 à 12 semaines selon la saison et la complexité du dossier",
@@ -575,9 +574,9 @@ const guides: Guide[] = [
       {
         heading: "Tableau comparatif 2025",
         body:
-          "Résumé des délais moyens constatés par Joventy sur les dossiers traités depuis Kinshasa :",
+          "Résumé des délais moyens constatés par l'équipe Joventy sur les dossiers traités depuis Kinshasa :",
         list: [
-          "🇺🇸 Visa USA B1/B2 : 8 à 16 semaines (avec Joventy : 3 à 5 semaines grâce à la capture de créneaux)",
+          "🇺🇸 Visa USA B1/B2 : 8 à 16 semaines (avec Joventy : 3 à 5 semaines grâce au suivi rapproché du portail)",
           "🇨🇦 Visa Canada visiteur : 6 à 14 semaines",
           "🇪🇺 Visa Schengen : 4 à 8 semaines",
           "🇬🇧 Visa Royaume-Uni : 5 à 10 semaines",
@@ -592,9 +591,9 @@ const guides: Guide[] = [
         body: "Quelques stratégies concrètes pour gagner du temps sur l'ensemble du processus :",
         list: [
           "Préparez tous vos documents AVANT de prendre votre rendez-vous pour ne pas perdre un créneau obtenu rapidement",
-          "Utilisez la surveillance automatisée Joventy pour capturer des créneaux annulés — divisez par 3 l'attente moyenne pour les visas USA",
+          "Confiez la veille du portail usvisaappt.com à l'équipe Joventy — ils assurent un suivi régulier et prennent en charge la réservation dès qu'une date est disponible",
           "Pour le Schengen, déposez dès que la fenêtre de 6 mois s'ouvre (les consulats acceptent les dossiers jusqu'à 6 mois avant le voyage)",
-          "Pour le Canada, soumettez votre demande en ligne dès que possible — les délais IRCC varient énormément et imprévisiblement",
+          "Pour le Canada, soumettez votre demande en ligne dès que possible — les délais IRCC varient considérablement",
           "Les e-Visas (Dubaï, Inde, Turquie) ne nécessitent aucun rendez-vous et peuvent s'obtenir en 24 à 72h",
         ],
       },
@@ -602,15 +601,15 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Quel visa est le plus rapide à obtenir depuis Kinshasa en 2025 ?",
-        a: "Les e-Visas sont de loin les plus rapides : Turquie (24-72h), Dubaï et Inde (3-5 jours ouvrables). Le visa Schengen est le plus rapide parmi les ambassades physiques (4-8 semaines). Le visa USA est le plus long à cause des délais de créneaux consulaires.",
+        a: "Les e-Visas sont de loin les plus rapides : Turquie (24-72h), Dubaï et Inde (3-5 jours ouvrables). Le visa Schengen est le plus rapide parmi les ambassades physiques (4-8 semaines). Le visa USA est le plus long à cause des délais de créneaux consulaires sur usvisaappt.com.",
       },
       {
         q: "Peut-on accélérer le traitement d'un visa USA ou Canada ?",
-        a: "Il n'existe pas de service d'urgence officiel pour les visas USA et Canada. L'ambassade américaine accepte cependant des demandes d'entretien d'urgence dans des cas humanitaires avérés (décès d'un proche, urgence médicale). Pour le Canada, les délais sont automatisés et ne peuvent pas être accélérés manuellement.",
+        a: "Il n'existe pas de service officiel d'urgence pour les visas USA et Canada. L'ambassade américaine accepte cependant des demandes de rendez-vous d'urgence dans des cas humanitaires avérés (décès d'un proche, urgence médicale documentée). Pour le Canada, les délais sont gérés par IRCC et ne peuvent pas être accélérés manuellement.",
       },
       {
         q: "Les délais sont-ils différents pour les étudiants et les travailleurs ?",
-        a: "Pour les États-Unis, les visas étudiants F1 et les visas de travail H-1B ont souvent des délais différents des visas B1/B2. Pour le Canada, les permis d'études et de travail suivent des processus distincts avec des délais propres. Consultez Joventy pour une estimation personnalisée selon votre type de visa.",
+        a: "Pour les États-Unis, les visas étudiants F1 et les visas de travail H-1B ont souvent des délais différents des visas B1/B2. Pour le Canada, les permis d'études et de travail suivent des processus distincts. Consultez Joventy pour une estimation personnalisée selon votre type de visa.",
       },
     ],
     relatedSlugs: [

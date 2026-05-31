@@ -119,7 +119,7 @@ export default function DestinationPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-5 max-w-3xl">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-5 max-w-3xl text-white">
             {dest.h1}
           </h1>
           <p className="text-white/75 text-lg max-w-2xl leading-relaxed mb-8">{dest.intro}</p>
