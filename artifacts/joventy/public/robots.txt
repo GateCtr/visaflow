@@ -9,42 +9,67 @@ Disallow: /continue
 Disallow: /login
 Disallow: /register
 
-# ═══ AI Search Bots — TOUS AUTORISÉS pour apparaître dans les réponses IA ═══
+# ═══ AI Search & Retrieval Bots — TOUS AUTORISÉS ═══
+# Pour apparaître dans les réponses IA (ChatGPT, Claude, Perplexity, Gemini, Copilot, etc.)
 
-# OpenAI (ChatGPT Search & Browse)
+# OpenAI (ChatGPT)
 User-agent: GPTBot
 Allow: /
 
-# OpenAI Search
 User-agent: OAI-SearchBot
 Allow: /
 
-# OpenAI ChatGPT User browsing
 User-agent: ChatGPT-User
 Allow: /
 
 # Anthropic (Claude)
 User-agent: ClaudeBot
 Allow: /
+
 User-agent: anthropic-ai
+Allow: /
+
+# Google (Gemini, AI Overviews, AI Mode, Search)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: GoogleOther
+Allow: /
+
+# Microsoft (Copilot, Bing Chat)
+User-agent: bingbot
+Allow: /
+
+User-agent: MicrosoftPreview
 Allow: /
 
 # Perplexity
 User-agent: PerplexityBot
 Allow: /
 
-# Google AI (Gemini, AI Overviews, AI Mode)
-User-agent: Google-Extended
-Allow: /
-User-agent: Googlebot
+# Apple (Siri, Apple Intelligence, Spotlight)
+User-agent: Applebot
 Allow: /
 
-# Microsoft Copilot / Bing Chat
-User-agent: bingbot
+User-agent: Applebot-Extended
 Allow: /
 
-# Meta AI
+# Meta AI (Llama, Meta AI assistant)
 User-agent: meta-externalagent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# DeepSeek
+User-agent: DeepSeekBot
+Allow: /
+
+# Mistral AI
+User-agent: MistralBot
 Allow: /
 
 # Cohere
@@ -55,7 +80,30 @@ Allow: /
 User-agent: YouBot
 Allow: /
 
-# ═══ Bloquer les scrapers d'entraînement non-recherche ═══
+# Amazon (Alexa, Q)
+User-agent: Amazonbot
+Allow: /
+
+# DuckDuckGo (DuckAssist AI)
+User-agent: DuckDuckBot
+Allow: /
+
+# Brave Search (Leo AI)
+User-agent: BraveBot
+Allow: /
+
+# Yandex (Alice AI)
+User-agent: YandexBot
+Allow: /
+
+# AI search aggregators
+User-agent: Phind
+Allow: /
+
+User-agent: iaskBot
+Allow: /
+
+# ═══ Bloquer UNIQUEMENT les scrapers d'entraînement/masse ═══
 User-agent: CCBot
 Disallow: /
 
@@ -63,6 +111,18 @@ User-agent: DataForSeoBot
 Disallow: /
 
 User-agent: Bytespider
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: DotBot
 Disallow: /
 
 Sitemap: https://www.joventy.cd/sitemap.xml
