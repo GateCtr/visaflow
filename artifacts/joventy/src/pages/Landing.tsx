@@ -9,7 +9,7 @@ import {
   ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
   Calendar, ClipboardList, ChevronRight, XCircle, HelpCircle,
-  Landmark, CreditCard, BadgeCheck,
+  Landmark, CreditCard, BadgeCheck, AlertTriangle, BookOpen,
 } from "lucide-react";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
@@ -323,6 +323,22 @@ export default function Landing() {
 
       <Navbar />
 
+      {/* ═══ ALERTE EBOLA — BANNIÈRE URGENCE ═══ */}
+      <div className="bg-red-600 text-white py-3 px-4 relative z-40">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 animate-pulse" />
+            <p className="text-sm font-medium">
+              <span className="font-bold">ALERTE EBOLA :</span> USA, Canada et Mexique interdisent l'entrée aux personnes ayant été en RDC dans les 21 derniers jours. Services visa USA suspendus à Kinshasa.
+            </p>
+          </div>
+          <Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026">
+            <Button size="sm" className="bg-white text-red-700 hover:bg-red-50 font-bold text-xs whitespace-nowrap flex-shrink-0">
+              Voir les solutions <ArrowRight className="ml-1 w-3 h-3" />
+            </Button>
+          </Link>
+        </div>
+      </div>
       {/* ═══ HERO ═══ */}
       <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden">
         <div className="absolute inset-0 z-0">
@@ -785,6 +801,72 @@ export default function Landing() {
                 <p className="text-sm text-muted-foreground leading-relaxed pl-9">{item.a}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ GUIDES D'URGENCE — EBOLA 2026 ═══ */}
+      <section className="py-16 bg-red-50 border-y border-red-200">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-red-100 text-red-700 text-xs font-bold px-3 py-1.5 rounded-full mb-4">
+              <AlertTriangle className="w-4 h-4" />
+              URGENCE EBOLA — MAI 2026
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold text-primary mb-3">
+              Guides d'urgence — Restrictions de voyage RDC
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Les USA, le Canada et le Mexique interdisent l'entrée aux personnes ayant séjourné en RDC dans les 21 derniers jours. Voici comment réagir.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              {
+                emoji: "🌍",
+                title: "Purger 21 jours dans un pays neutre",
+                desc: "Maroc, Égypte, Dubaï, Turquie, Maurice — où aller, quel visa, quel budget. Joventy vous obtient le visa en 24-72h.",
+                href: "/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026",
+                badge: "GUIDE #1",
+              },
+              {
+                emoji: "🚨",
+                title: "Suspension visa Canada RDC",
+                desc: "Tous les visas suspendus du 27 mai au 28 août 2026. Alternatives et préparation pour la reprise.",
+                href: "/guides/suspension-visa-canada-rdc-ebola-2026",
+                badge: "ALERTE",
+              },
+              {
+                emoji: "⚽",
+                title: "Coupe du Monde 2026 — Visa USA",
+                desc: "Les Léopards jouent aux USA ! Comment y assister malgré l'interdiction d'entrée et la règle des 21 jours.",
+                href: "/guides/coupe-du-monde-2026-visa-usa-kinshasa",
+                badge: "WORLD CUP",
+              },
+            ].map((guide) => (
+              <Link key={guide.href} href={guide.href}>
+                <div className="bg-white border border-red-200 rounded-2xl p-6 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-3xl">{guide.emoji}</span>
+                    <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{guide.badge}</span>
+                  </div>
+                  <h3 className="font-bold text-primary text-sm mb-2">{guide.title}</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed flex-1">{guide.desc}</p>
+                  <div className="flex items-center gap-1 text-red-600 text-xs font-semibold mt-4">
+                    Lire le guide <ChevronRight className="w-3 h-3" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="text-center mt-8">
+            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+              <Button className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold">
+                <MessageCircle className="mr-2 w-4 h-4" /> Besoin d'aide urgente ? WhatsApp Joventy
+              </Button>
+            </a>
           </div>
         </div>
       </section>

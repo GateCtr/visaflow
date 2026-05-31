@@ -114,6 +114,8 @@ function Router() {
       <Route path="/e-visa-dubai-kinshasa" component={DestinationPage} />
       <Route path="/visa-turquie-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-inde-kinshasa" component={DestinationPage} />
+      <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
+      <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
 
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/confidentialite" component={Confidentialite} />
