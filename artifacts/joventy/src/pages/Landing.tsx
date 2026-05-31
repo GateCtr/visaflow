@@ -1091,6 +1091,8 @@ export default function Landing() {
                   { code: "ae", label: "E-Visa Dubaï", href: "/e-visa-dubai-kinshasa" },
                   { code: "tr", label: "Visa Turquie", href: "/visa-turquie-kinshasa" },
                   { code: "in", label: "E-Visa Inde", href: "/e-visa-inde-kinshasa" },
+                  { code: "ma", label: "Visa Maroc", href: "/visa-maroc-kinshasa" },
+                  { code: "eg", label: "Visa Égypte", href: "/e-visa-egypte-kinshasa" },
                 ] as { code: string; label: string; href: string }[]).map((d) => (
                   <li key={d.code}>
                     <Link href={d.href} className="hover:text-white transition-colors flex items-center gap-2">
@@ -1103,15 +1105,16 @@ export default function Landing() {
             </div>
 
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Liens utiles</h4>
+              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Guides populaires</h4>
               <ul className="space-y-2 text-sm text-white/50">
                 {[
-                  { label: "Nos Services", href: "/#services" },
-                  { label: "Tarifs", href: "/#destinations" },
-                  { label: "Guides Visa", href: "/guides" },
-                  { label: "Contact", href: "/#contact" },
-                  { label: "Espace Client", href: "/login" },
-                  { label: "Créer un compte", href: "/register" },
+                  { label: "🌍 Purger 21 jours (Ebola)", href: "/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026" },
+                  { label: "🚨 Suspension Canada RDC", href: "/guides/suspension-visa-canada-rdc-ebola-2026" },
+                  { label: "⚽ Coupe du Monde 2026", href: "/guides/coupe-du-monde-2026-visa-usa-kinshasa" },
+                  { label: "Créneau visa USA", href: "/guides/comment-obtenir-creneau-visa-usa-kinshasa" },
+                  { label: "Entretien B1/B2", href: "/guides/entretien-visa-usa-b1-b2-questions" },
+                  { label: "Documents Schengen", href: "/guides/documents-visa-schengen-kinshasa" },
+                  { label: "Tous les guides →", href: "/guides" },
                 ].map((l) => (
                   <li key={l.label}><Link href={l.href} className="hover:text-white transition-colors">{l.label}</Link></li>
                 ))}

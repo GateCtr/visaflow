@@ -82,6 +82,9 @@ export default function GuidePage() {
         <meta property="og:description" content={guide.metaDescription} />
         <meta property="og:type" content="article" />
         <meta property="og:url" content={`https://www.joventy.cd/guides/${guide.slug}`} />
+        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
         <meta property="article:published_time" content={guide.publishedDate} />
         <meta property="article:modified_time" content={guide.updatedDate} />
         <script type="application/ld+json">{JSON.stringify(articleSchema)}</script>
@@ -253,12 +256,52 @@ export default function GuidePage() {
       </a>
 
       <footer className="bg-slate-900 text-white/50 py-8 px-4 mt-10">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
-          <div className="flex gap-4">
-            <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
-            <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8 text-xs">
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Destinations</p>
+              <ul className="space-y-1">
+                <li><Link href="/visa-usa-kinshasa" className="hover:text-white transition-colors">Visa USA</Link></li>
+                <li><Link href="/visa-canada-kinshasa" className="hover:text-white transition-colors">Visa Canada</Link></li>
+                <li><Link href="/visa-schengen-kinshasa" className="hover:text-white transition-colors">Visa Schengen</Link></li>
+                <li><Link href="/e-visa-dubai-kinshasa" className="hover:text-white transition-colors">E-Visa Dubaï</Link></li>
+                <li><Link href="/visa-maroc-kinshasa" className="hover:text-white transition-colors">Visa Maroc</Link></li>
+                <li><Link href="/e-visa-egypte-kinshasa" className="hover:text-white transition-colors">Visa Égypte</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Guides urgents</p>
+              <ul className="space-y-1">
+                <li><Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026" className="hover:text-white transition-colors">Purger 21 jours</Link></li>
+                <li><Link href="/guides/suspension-visa-canada-rdc-ebola-2026" className="hover:text-white transition-colors">Suspension Canada</Link></li>
+                <li><Link href="/guides/coupe-du-monde-2026-visa-usa-kinshasa" className="hover:text-white transition-colors">World Cup 2026</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Guides visa</p>
+              <ul className="space-y-1">
+                <li><Link href="/guides/comment-obtenir-creneau-visa-usa-kinshasa" className="hover:text-white transition-colors">Créneau USA</Link></li>
+                <li><Link href="/guides/documents-visa-schengen-kinshasa" className="hover:text-white transition-colors">Documents Schengen</Link></li>
+                <li><Link href="/guides" className="hover:text-white transition-colors">Tous les guides →</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Joventy</p>
+              <ul className="space-y-1">
+                <li><Link href="/" className="hover:text-white transition-colors">Accueil</Link></li>
+                <li><Link href="/guides" className="hover:text-white transition-colors">Guides</Link></li>
+                <li><Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link></li>
+                <li><a href="https://wa.me/243840808122" className="hover:text-white transition-colors">WhatsApp</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-xs border-t border-white/10 pt-6">
+            <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
+            <div className="flex gap-4">
+              <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
+              <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
+              <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
+            </div>
           </div>
         </div>
       </footer>
