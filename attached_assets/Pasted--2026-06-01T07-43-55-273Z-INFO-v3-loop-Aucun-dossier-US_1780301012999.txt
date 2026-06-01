@@ -1,0 +1,67 @@
+[2026-06-01T07:43:55.273Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:44:30.473Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:44:55.676Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[07:45:08] [CEV-DOSSIER-v3] [INFO] [Scan #753] Dossier: #2 VOWINT6088189 | Dispo: 5/5 | Total: 1847 scans
+[CEV-SETUP] ❌ Proxy 422 tunnel error (exception) — BASCULEMENT MODE DIRECT
+[CEV-SETUP] 🔀 Mode DIRECT activé pour 30 min
+[CEV-SETUP] Résolution VOWINT6088189 via MyList...
+[CEV-SETUP] ✅ VOWINT6088189 résolu et caché → 3c7f4dae-d257-f111-a3ae-00505691de06
+[2026-06-01T07:45:15.725Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:45:55.905Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:46:00.939Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[07:46:31] [CEV-DOSSIER-v3] [INFO]   — Pas de créneau
+[2026-06-01T07:46:46.193Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:46:56.124Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:47:31.458Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:47:56.366Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:48:16.847Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:48:56.629Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:49:02.066Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[07:49:26] [CEV-DOSSIER-v3] [INFO] [Scan #754] Dossier: #3 VOWINT6088178 | Dispo: 5/5 | Total: 1848 scans
+[CEV-SETUP] Résolution VOWINT6088178 via MyList...
+[CEV-SETUP] ✅ VOWINT6088178 résolu et caché → d501376b-cf57-f111-a3ae-00505691de06
+[2026-06-01T07:49:47.308Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:49:56.861Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[07:50:17] [CEV-DOSSIER-v3] [INFO]   — Pas de créneau
+[2026-06-01T07:50:32.557Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:50:57.068Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:51:17.806Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:51:57.326Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:52:03.016Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:52:48.283Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:52:57.541Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[07:53:08] [CEV-DOSSIER-v3] [INFO] [Scan #755] Dossier: #4 VOWINT6085888 | Dispo: 5/5 | Total: 1849 scans
+[CEV-SETUP] Résolution VOWINT6085888 via MyList...
+[CEV-SETUP] ✅ VOWINT6085888 résolu et caché → 57f49a76-dc56-f111-a3ae-00505691de06
+[2026-06-01T07:53:33.509Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:53:57.729Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:54:18.883Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[07:54:46] [CEV-DOSSIER-v3] [INFO]   — Pas de créneau
+[2026-06-01T07:54:57.951Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:55:04.118Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:55:49.587Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:55:58.191Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:56:34.840Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:56:58.434Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:57:20.091Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[07:57:37] [CEV-DOSSIER-v3] [INFO] [Scan #756] Dossier: #0 VOWINT6088211 | Dispo: 5/5 | Total: 1850 scans
+[CEV-SETUP] Résolution VOWINT6088211 via MyList...
+[CEV-SETUP] ✅ VOWINT6088211 résolu et caché → 4084ce04-d857-f111-a3ae-00505691de06
+[2026-06-01T07:57:58.660Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:58:05.297Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[07:58:07] [CEV-DOSSIER-v3] [INFO]   — Pas de créneau
+[07:58:07] [CEV-DOSSIER-v3] [INFO]   🔄 Session VOWINT: 4/4 clics — re-login préventif
+[2026-06-01T07:58:50.694Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:58:58.898Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T07:59:35.956Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T07:59:59.131Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T08:00:21.659Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T08:00:59.370Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[08:01:00] [CEV-DOSSIER-v3] [INFO] [Scan #757] Dossier: #1 VOWINT6088201 | Dispo: 5/5 | Total: 1851 scans
+[CEV-SETUP] Résolution VOWINT6088201 via MyList...
+[CEV-SETUP] ✅ VOWINT6088201 résolu et caché → d58e7ca9-d657-f111-a3ae-00505691de06
+[2026-06-01T08:01:06.854Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-06-01T08:01:52.063Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[08:01:52] [CEV-DOSSIER-v3] [INFO]   — Pas de créneau
+[2026-06-01T08:01:59.592Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-06-01T08:02:37.326Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
