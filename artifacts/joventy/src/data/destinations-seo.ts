@@ -354,8 +354,8 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     ],
     faqs: [
       { q: "Les Congolais (RDC) peuvent-ils obtenir un e-Visa pour la Turquie ?", a: "Oui, si vous détenez un visa valide USA, Schengen ou UK. L'e-Visa turc s'obtient en ligne en 24-48h pour environ 50 USD. Sans visa existant, un visa sticker doit être demandé auprès de l'ambassade. Joventy analyse votre éligibilité et gère le processus." },
-      { q: "Combien coûte le visa Turquie depuis Kinshasa avec Joventy ?", a: "Frais Joventy : 150 USD d'engagement + 200 USD de prime de succès. Les frais e-Visa (~50 USD) ou les frais consulaires pour le visa sticker sont payés directement au gouvernement turc." }, gouvernement turc ou au centre VFS." },
-      { q: "Combien de temps pour obtenir un visa Turquie depuis Kinshasa ?", a: "Pour l'e-Visa : 48 heures en général. Pour le visa sticker via VFS : 2 à 4 semaines selon la période et la disponibilité des créneaux." },
+      { q: "Combien coûte le visa Turquie depuis Kinshasa avec Joventy ?", a: "Frais Joventy : 150 USD d'engagement + 200 USD de prime de succès. Les frais e-Visa (~50 USD) ou les frais consulaires pour le visa sticker sont payés directement au gouvernement turc." },
+      { q: "Combien de temps pour obtenir un visa Turquie depuis Kinshasa ?", a: "Pour l'e-Visa : 24-48 heures en général. Pour le visa sticker (ambassade) : 5 à 10 jours ouvrables." },
     ],
     relatedSlugs: ["e-visa-dubai-kinshasa", "e-visa-inde-kinshasa", "visa-schengen-kinshasa"],
   },
