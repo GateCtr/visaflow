@@ -53,9 +53,9 @@ import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPaus
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const MAX_CLICKS_PER_SESSION = 4; // Limite GLOBALE par session VOWINT (serveur bloque au 5ème)
-const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 4; // Garde pour le calcul d'intervalle
+const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 60; // Pas de throttle interne — portail gère son propre rate-limit
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
-const DEFAULT_INTERVAL_SEC = 15; // Pause par défaut entre scans (réduit de 30 → 15)
+const DEFAULT_INTERVAL_SEC = 30; // Pause par défaut entre scans
 
 // Compteur GLOBAL de clics sur la session VOWINT courante
 let globalSessionClicks = 0;
@@ -505,9 +505,7 @@ export async function startCevDossierLoop(): Promise<void> {
   // Calculer l'intervalle optimal
   const intervalStr = await getBotConfigValue("cev_dossier_interval_sec");
   const configuredInterval = intervalStr ? parseInt(intervalStr, 10) : 0;
-  // Auto-calcul: 60 min ÷ (dossiers × 5 clics/h) = intervalle en minutes
-  const autoIntervalSec = Math.ceil((60 * 60) / (pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR));
-  const intervalMs = (configuredInterval > 0 ? configuredInterval : autoIntervalSec) * 1000;
+  const intervalMs = (configuredInterval > 0 ? configuredInterval : DEFAULT_INTERVAL_SEC) * 1000;
 
   log("INFO", `Config:`);
   log("INFO", `  • Dossiers: ${pool.size}`);
