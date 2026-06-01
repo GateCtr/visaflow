@@ -88,26 +88,6 @@ async function main(): Promise<void> {
     startCevDossierLoop().catch((err) => {
       console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
     });
-
-    // ─── Mode CAPTURE CEV (diagnostic) — lancé en background après le dossier-loop ───
-    (async () => {
-      try {
-        await new Promise(r => setTimeout(r, 15_000)); // Attendre 15s que le bot soit stable
-        const captureMode = await getBotConfigValue("cev_capture_mode");
-        if (captureMode === "1") {
-          log("INFO", "═══ CEV CAPTURE MODE ACTIVÉ (background) ═══");
-          const { runCevCaptureCompare } = await import("./cev-capture-compare.js");
-          const { getCevCredentials } = await import("./convexClient.js");
-          const creds = await getCevCredentials();
-          if (creds?.vowintEmail && creds?.vowintPassword) {
-            const result = await runCevCaptureCompare(creds.vowintEmail, creds.vowintPassword, creds.applicationId ?? "cev-capture-diag", creds.vowintAppUrl);
-            log("INFO", `[CEV-CAPTURE] Verdict: ${result.finalVerdict} | Divergences: ${result.divergences.length > 0 ? result.divergences.join(" | ") : "AUCUNE"}`);
-          } else {
-            log("WARN", "[CEV-CAPTURE] Pas de credentials VOWINT");
-          }
-        }
-      } catch (err) { log("WARN", `[CEV-CAPTURE] Erreur background: ${err}`); }
-    })();
   } else if (cevStealthMode) {
     log("INFO", "═══ CEV STEALTH MODE v2 ACTIF ═══");
     log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
