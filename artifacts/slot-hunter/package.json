@@ -28,6 +28,7 @@
     "cloudflare:test-unified": "tsx test-unified-cloudflare.ts",
     "cloudflare:capture-manual": "tsx capture-manual-cookie.ts",
     "cloudflare:test-hybrid": "tsx test-hybrid-solution.ts",
+    "cev:capture": "tsx scripts/cev-capture-interactive.ts",
     "spain:capture": "tsx scripts/spain-manual-capture.ts",
     "spain:capture:manual": "tsx scripts/spain-manual-capture.ts",
     "spain:analyze": "tsx scripts/analyze-spain-capture.ts",
