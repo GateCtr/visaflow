@@ -67,6 +67,37 @@ async function main(): Promise<void> {
   log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
 
+  // ─── Mode CAPTURE CEV (diagnostic) — exécute UNE capture Playwright puis continue ───
+  try {
+    const captureMode = await getBotConfigValue("cev_capture_mode");
+    if (captureMode === "1") {
+      log("INFO", "═══ CEV CAPTURE MODE ACTIVÉ ═══");
+      log("INFO", "   → Exécution d'UNE capture Playwright pour comparer cookies browser vs HTTP");
+      log("INFO", "   → Résultat visible dans botLog Convex (step: cev_capture_compare_result)");
+      const { runCevCaptureCompare } = await import("./cev-capture-compare.js");
+      const { getCevCredentials } = await import("./convexClient.js");
+      const creds = await getCevCredentials();
+      if (creds?.vowintEmail && creds?.vowintPassword) {
+        const captureResult = await runCevCaptureCompare(
+          creds.vowintEmail,
+          creds.vowintPassword,
+          creds.applicationId ?? "cev-capture-diag",
+          creds.vowintAppUrl,
+        );
+        log("INFO", `[CEV-CAPTURE] Terminé — verdict: ${captureResult.finalVerdict}`);
+        log("INFO", `[CEV-CAPTURE] Divergences: ${captureResult.divergences.length > 0 ? captureResult.divergences.join(" | ") : "AUCUNE"}`);
+        if (captureResult.error) {
+          log("WARN", `[CEV-CAPTURE] Erreur: ${captureResult.error}`);
+        }
+      } else {
+        log("WARN", "[CEV-CAPTURE] Aucun credentials VOWINT — impossible de lancer la capture");
+      }
+      log("INFO", "═══ CEV CAPTURE MODE TERMINÉ — reprise mode normal ═══");
+    }
+  } catch (captureErr) {
+    log("WARN", `[CEV-CAPTURE] Erreur non-fatale: ${captureErr}`);
+  }
+
   // Lancer les boucles background
   // ─── Mode CEV : priorité Dossier v3 > Stealth v2 > classique ───
   let cevDossierMode = false;

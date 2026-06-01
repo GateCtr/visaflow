@@ -62,6 +62,14 @@ const CONFIG_ITEMS: ConfigItem[] = [
     defaultValue: "0",
   },
   {
+    key: "cev_capture_mode",
+    label: "CEV Capture & Compare (Diagnostic)",
+    description: "Lance UNE capture Playwright pour comparer cookies browser vs HTTP. Identifie pourquoi NoAvailability systématique. Résultat dans botLog (cev_capture_compare_result). Se désactive automatiquement après exécution.",
+    type: "toggle",
+    category: "mode",
+    defaultValue: "0",
+  },
+  {
     key: "cev_stealth_mode",
     label: "CEV Stealth Mode v2 (Belgique)",
     description: "Pool d'IPs rotatif iProyal + session VOWINT persistante. Couverture 24/7 sans rate-limit. Désactive les loops CEV classiques.",
