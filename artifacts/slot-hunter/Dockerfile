@@ -18,13 +18,15 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV VERCEL=true
 # Skip browser download during playwright installation
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Set Puppeteer cache dir to a location accessible by slothunter user
+ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
 # Install Chrome for Puppeteer (after dependencies are installed)
 RUN pnpm exec puppeteer browsers install chrome
 # Use Puppeteer's installed Chrome (path matches our package.json puppeteer version)
-ENV PUPPETEER_EXECUTABLE_PATH=/root/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
+ENV PUPPETEER_EXECUTABLE_PATH=/app/.puppeteer-cache/chrome/linux-149.0.7827.22/chrome-linux64/chrome
 
 # Chromium is already installed in the base Playwright image
 # No need to install it again
