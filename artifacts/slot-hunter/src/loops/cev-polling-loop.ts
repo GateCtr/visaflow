@@ -20,7 +20,14 @@ export async function startCevPollingLoop(): Promise<void> {
       // Check séquentiel — évite les bursts parallèles qui génèrent des 500 Convex
       for (const s of due) {
         const t0 = Date.now();
-        const r = await pollCevSlot(s.integrationUrl, s.sessionCookie);
+        const siphoned = s.siphonedF5CookieValue ? {
+          f5CookieValue: s.siphonedF5CookieValue,
+          f5CookieName: s.siphonedF5CookieName,
+          aspNetSessionId: s.siphonedAspNetSessionId,
+          userAgent: s.siphonedUserAgent,
+          validUntil: s.siphonedValidUntil
+        } : undefined;
+        const r = await pollCevSlot(s.integrationUrl, s.sessionCookie, siphoned);
         const ms = Date.now() - t0;
 
         if (r.status === "slot_found") {
@@ -36,7 +43,14 @@ export async function startCevPollingLoop(): Promise<void> {
 
             // Tentative 1 : HTTP pur (rapide, zéro browser)
             console.log(`[CEV-POLL] 🌐 Tentative booking HTTP session=${s.sessionId}...`);
-            const httpResult = await bookCevViaHttp(s.integrationUrl, s.sessionCookie, s.applicationId);
+            const siphoned = s.siphonedF5CookieValue ? {
+              f5CookieValue: s.siphonedF5CookieValue,
+              f5CookieName: s.siphonedF5CookieName,
+              aspNetSessionId: s.siphonedAspNetSessionId,
+              userAgent: s.siphonedUserAgent,
+              validUntil: s.siphonedValidUntil
+            } : undefined;
+            const httpResult = await bookCevViaHttp(s.integrationUrl, s.sessionCookie, s.applicationId, siphoned);
 
             if (httpResult.success) {
               booked        = true;

@@ -358,6 +358,48 @@ http.route({
   }),
 });
 
+// ─── CEV Sessions: injecter des cookies F5 siphonnés ────────────────────────────
+http.route({
+  path: "/hunter/cev-sessions/inject-f5",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    try {
+      const body = await request.json() as {
+        sessionId: string;
+        f5CookieValue?: string;
+        f5CookieName?: string;
+        f5TsCookieValue?: string;
+        aspNetSessionId?: string;
+        userAgent: string;
+        validityMinutes?: number;
+      };
+
+      const result = await ctx.runMutation(internal.cevSessions.internalInjectF5Cookies, {
+        sessionId: body.sessionId as Id<"cevSessions">,
+        f5CookieValue: body.f5CookieValue ?? "",
+        f5CookieName: body.f5CookieName ?? "",
+        f5TsCookieValue: body.f5TsCookieValue,
+        aspNetSessionId: body.aspNetSessionId,
+        userAgent: body.userAgent,
+        validityMinutes: body.validityMinutes,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // ─── CEV Sessions: enregistrer le résultat d'un check ───────────────────────
 http.route({
   path: "/hunter/cev-sessions/check",

@@ -43,28 +43,28 @@ interface UaProfile {
 
 const CEV_UA_POOL: UaProfile[] = [
   {
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Google Chrome";v="148"',
     platform: '"Windows"',
   },
   {
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="135", "Not.A/Brand";v="99", "Google Chrome";v="135"',
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    chUa: '"Chromium";v="147", "Not:A-Brand";v="99", "Google Chrome";v="147"',
     platform: '"Windows"',
   },
   {
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="136", "Not.A/Brand";v="99", "Google Chrome";v="136"',
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Google Chrome";v="148"',
     platform: '"macOS"',
   },
   {
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-    chUa: '"Chromium";v="136", "Not.A/Brand";v="99", "Microsoft Edge";v="136"',
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.0.0",
+    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Microsoft Edge";v="148"',
     platform: '"Windows"',
   },
   {
-    ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="135", "Not.A/Brand";v="99", "Google Chrome";v="135"',
+    ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    chUa: '"Chromium";v="147", "Not:A-Brand";v="99", "Google Chrome";v="147"',
     platform: '"Linux"',
   },
 ];
@@ -73,6 +73,98 @@ const CEV_UA_POOL: UaProfile[] = [
 let _sessionUa: UaProfile = CEV_UA_POOL[Math.floor(Math.random() * CEV_UA_POOL.length)];
 let _sessionAcceptLang = "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7";
 let _sessionAcceptEnc = "gzip, deflate, br, zstd";
+
+// ─── UA externe siphonné (prioritaire sur le pool interne) ──────────────────
+let _externalSiphonedUa: string | null = null;
+let _externalSiphonedChUa: string | null = null;
+let _externalSiphonedPlatform: string | null = null;
+let _externalSiphonedChUaMobile: string = "?0";
+let _externalSiphonedChUaFullVersionList: string | null = null;
+let _externalSiphonedChUaPlatformVersion: string = '"10.0"';
+let _externalSiphonedChUaArch: string = '"x86"';
+let _externalSiphonedChUaBitness: string = '"64"';
+
+/** Parse a User-Agent string to extract full sec-ch-ua* headers */
+function parseUserAgentForSecCh(ua: string): {
+  chUa: string;
+  platform: string;
+  chUaMobile: string;
+  chUaFullVersionList: string;
+  chUaPlatformVersion: string;
+  chUaArch: string;
+  chUaBitness: string;
+} {
+  // Default values based on our internal pool
+  let majorVersion = "148";
+  let fullVersion = "148.0.7778.96";
+  let platform = '"Windows"';
+  let platformVersion = '"10.0"';
+  let arch = '"x86"';
+  let bitness = '"64"';
+
+  // Extract full Chrome version (major.minor.build.patch)
+  const chromeFullMatch = ua.match(/Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
+  if (chromeFullMatch) {
+    majorVersion = chromeFullMatch[1];
+    fullVersion = `${chromeFullMatch[1]}.${chromeFullMatch[2]}.${chromeFullMatch[3]}.${chromeFullMatch[4]}`;
+  } else if (ua.match(/Chrome\/(\d+)/)) {
+    // Fallback to just major version if full is not available
+    majorVersion = ua.match(/Chrome\/(\d+)/)?.[1] || "148";
+    fullVersion = `${majorVersion}.0.0.0`;
+  }
+
+  // Extract platform
+  if (ua.includes("Windows NT")) {
+    platform = '"Windows"';
+    platformVersion = '"10.0"';
+  } else if (ua.includes("Mac OS X")) {
+    platform = '"macOS"';
+    platformVersion = '"15.0"';
+  } else if (ua.includes("Linux")) {
+    platform = '"Linux"';
+    platformVersion = '"6.8"';
+  }
+
+  // Build all client hints
+  return {
+    chUa: `"Not:A-Brand";v="99", "Chromium";v="${majorVersion}", "Google Chrome";v="${majorVersion}"`,
+    platform,
+    chUaMobile: "?0",
+    chUaFullVersionList: `"Not:A-Brand";v="99.0.0.0", "Chromium";v="${fullVersion}", "Google Chrome";v="${fullVersion}"`,
+    chUaPlatformVersion: platformVersion,
+    chUaArch: arch,
+    chUaBitness: bitness
+  };
+}
+
+/** Injecte un User-Agent siphonné depuis l'extérieur (extension Chrome, etc.)
+ *  Ce UA sera utilisé pour TOUTES les requêtes tant qu'il est défini.
+ *  Prioritaire sur le pool CEV_UA_POOL. */
+export function setCevExternalUserAgent(ua: string | null): void {
+  _externalSiphonedUa = ua;
+  if (ua) {
+    const parsed = parseUserAgentForSecCh(ua);
+    _externalSiphonedChUa = parsed.chUa;
+    _externalSiphonedPlatform = parsed.platform;
+    _externalSiphonedChUaMobile = parsed.chUaMobile;
+    _externalSiphonedChUaFullVersionList = parsed.chUaFullVersionList;
+    _externalSiphonedChUaPlatformVersion = parsed.chUaPlatformVersion;
+    _externalSiphonedChUaArch = parsed.chUaArch;
+    _externalSiphonedChUaBitness = parsed.chUaBitness;
+    console.log(`[CEV] 🔒 UA externe injecté: ${ua.slice(0, 60)}…`);
+    console.log(`[CEV] 🔒 Matching sec-ch-ua: ${_externalSiphonedChUa.slice(0, 80)}…`);
+  } else {
+    _externalSiphonedChUa = null;
+    _externalSiphonedPlatform = null;
+    _externalSiphonedChUaFullVersionList = null;
+    console.log(`[CEV] 🔓 UA externe retiré → retour pool interne`);
+  }
+}
+
+/** Retourne le UA externe siphonné ou null */
+export function getCevExternalUserAgent(): string | null {
+  return _externalSiphonedUa;
+}
 
 /** Régénère le profil UA (appelé quand on change d'IP / nouvelle session) */
 export function rotateCevUaProfile(): void {
@@ -97,7 +189,7 @@ export function rotateCevUaProfile(): void {
 
 /** Retourne le UA actuel (pour les headers manuels comme hCaptcha solve) */
 export function getCevSessionUa(): string {
-  return _sessionUa.ua;
+  return _externalSiphonedUa ?? _sessionUa.ua;
 }
 
 /**
@@ -111,29 +203,52 @@ export function getCevBrowserHeaders(overrides?: {
   contentType?: string;
   cookie?: string;
   xRequestedWith?: boolean;
+  userAgent?: string;
 }): Record<string, string> {
+  // Determine which client hints to use
+  const chUa = _externalSiphonedChUa ?? _sessionUa.chUa;
+  const chUaPlatform = _externalSiphonedPlatform ?? _sessionUa.platform;
+  const chUaMobile = _externalSiphonedChUaMobile;
+  const chUaFullVersionList = _externalSiphonedChUaFullVersionList 
+    ? _externalSiphonedChUaFullVersionList 
+    // For internal pool, parse the major version from chUa and build full version list
+    : (() => {
+        const poolMatch = _sessionUa.chUa.match(/"Google Chrome";v="(\d+)"/);
+        const poolMajor = poolMatch?.[1] || "148";
+        return `"Not:A-Brand";v="99.0.0.0", "Chromium";v="${poolMajor}.0.0.0", "Google Chrome";v="${poolMajor}.0.0.0"`;
+      })();
+  
   const headers: Record<string, string> = {
-    "Accept": overrides?.accept ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept": overrides?.accept ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Encoding": _sessionAcceptEnc,
     "Accept-Language": _sessionAcceptLang,
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
-    "Sec-CH-UA": _sessionUa.chUa,
-    "Sec-CH-UA-Mobile": "?0",
-    "Sec-CH-UA-Platform": _sessionUa.platform,
+    "Sec-CH-UA": chUa,
+    "Sec-CH-UA-Arch": _externalSiphonedChUaArch ?? '"x86"',
+    "Sec-CH-UA-Bitness": _externalSiphonedChUaBitness ?? '"64"',
+    "Sec-CH-UA-Full-Version-List": chUaFullVersionList,
+    "Sec-CH-UA-Mobile": chUaMobile,
+    "Sec-CH-UA-Platform": chUaPlatform,
+    "Sec-CH-UA-Platform-Version": _externalSiphonedChUaPlatformVersion ?? '"10.0"',
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "same-origin",
     "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
-    "User-Agent": _sessionUa.ua,
+    "User-Agent": overrides?.userAgent ?? _externalSiphonedUa ?? _sessionUa.ua,
   };
 
   if (overrides?.referer) headers["Referer"] = overrides.referer;
   if (overrides?.origin) headers["Origin"] = overrides.origin;
   if (overrides?.cookie) headers["Cookie"] = overrides.cookie;
   if (overrides?.contentType) {
-    headers["Content-Type"] = overrides.contentType;
+    let contentType = overrides.contentType;
+    // Auto-add charset=UTF-8 to application/x-www-form-urlencoded (like real browsers)
+    if (contentType.toLowerCase() === "application/x-www-form-urlencoded") {
+      contentType = "application/x-www-form-urlencoded; charset=UTF-8";
+    }
+    headers["Content-Type"] = contentType;
     // AJAX requests have different Sec-Fetch values
     headers["Sec-Fetch-Dest"] = "empty";
     headers["Sec-Fetch-Mode"] = "cors";

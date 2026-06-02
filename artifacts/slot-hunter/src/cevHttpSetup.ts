@@ -19,7 +19,7 @@
  */
 
 import { botLog } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent } from "./cev-shared-impit.js";
 import {
   initCevRedis,
   syncVowintSessionToRedis,
@@ -349,6 +349,13 @@ export async function setupCevSessionHttp(
   _applicationId: string,
   clientId: string,
   vowintAppUrl?: string,
+  siphoned?: {
+    f5CookieValue?: string;
+    f5CookieName?: string;
+    aspNetSessionId?: string;
+    userAgent?: string;
+    validUntil?: number;
+  },
 ): Promise<CevHttpSetupResult> {
   try {
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
@@ -361,7 +368,11 @@ export async function setupCevSessionHttp(
       return { success: false, error: vowintSession.error };
     }
 
-    const { cookies: postLoginCookies, appId: vowintAppId, ua } = vowintSession;
+    const { cookies: postLoginCookies, appId: vowintAppId, ua: defaultUa } = vowintSession;
+    const ua = siphoned?.userAgent ?? defaultUa;
+    if (siphoned?.userAgent) {
+      setCevExternalUserAgent(siphoned.userAgent);
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 2 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
@@ -470,37 +481,46 @@ export async function setupCevSessionHttp(
     botLog({ applicationId: clientId, step: "cev_http_integration_url", status: "ok", data: { url: integrationUrl.slice(0, 100) } });
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 4 : GET integrationUrl → cookie ASP.NET_SessionId CEV
+    // ÉTAPE 4 : GET integrationUrl → cookie ASP.NET_SessionId CEV (ou utiliser siphonné)
     // ══════════════════════════════════════════════════════════════════════════
-    const cevRes = await cevSetupFetch(integrationUrl, {
-      method: "GET",
-      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/` }),
-      redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
-    });
-
     let cevSessionCookie: string | null = null;
-    const cevSetCookies = cevRes.headers.getSetCookie?.() ?? [];
-    for (const c of cevSetCookies) {
-      const m = c.match(/ASP\.NET_SessionId=([^;]+)/);
-      if (m) { cevSessionCookie = m[1]; break; }
-    }
-    // Fallback raw header
-    if (!cevSessionCookie) {
-      const raw = cevRes.headers.get("set-cookie") ?? "";
-      const m = raw.match(/ASP\.NET_SessionId=([^;]+)/);
-      if (m) cevSessionCookie = m[1];
+    
+    // Utiliser le cookie ASP.NET siphonné si disponible
+    if (siphoned?.aspNetSessionId) {
+      cevSessionCookie = siphoned.aspNetSessionId;
+      botLog({ applicationId: clientId, step: "cev_http_using_siphoned_asp_net", status: "ok" });
+    } else {
+      const cevRes = await cevSetupFetch(integrationUrl, {
+        method: "GET",
+        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, userAgent: siphoned?.userAgent }),
+        redirect: "manual",
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      const cevSetCookies = cevRes.headers.getSetCookie?.() ?? [];
+      for (const c of cevSetCookies) {
+        const m = c.match(/ASP\.NET_SessionId=([^;]+)/);
+        if (m) { cevSessionCookie = m[1]; break; }
+      }
+      // Fallback raw header
+      if (!cevSessionCookie) {
+        const raw = cevRes.headers.get("set-cookie") ?? "";
+        const m = raw.match(/ASP\.NET_SessionId=([^;]+)/);
+        if (m) cevSessionCookie = m[1];
+      }
+
+      if (!cevSessionCookie) {
+        botLog({ applicationId: clientId, step: "cev_http_no_cev_cookie", status: "fail", data: { status: cevRes.status } });
+        return { success: false, error: "NO_CEV_SESSION_COOKIE" };
+      }
     }
 
-    if (!cevSessionCookie) {
-      botLog({ applicationId: clientId, step: "cev_http_no_cev_cookie", status: "fail", data: { status: cevRes.status } });
-      return { success: false, error: "NO_CEV_SESSION_COOKIE" };
+    // Construire le cookie header complet, avec F5 si disponible
+    let fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=en-US`;
+    if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
+      fullCevCookie = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${fullCevCookie}`;
     }
-
-    // Stocker uniquement la VALEUR du cookie (cohérent avec le Playwright setup)
-    // Le polling reconstruit le header complet "ASP.NET_SessionId=xxx; PreferredCulture=en-US"
-    const fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=en-US`;
-    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie.length } });
+    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie.length, usingSiphoned: !!siphoned } });
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 5 : Résoudre hCaptcha
@@ -785,16 +805,39 @@ function mergeCookies(existing: string, res: Response): string {
 async function solveHcaptcha(clientId: string): Promise<string | null> {
   const pageUrl = `${CEV_BASE}/Captcha`;
 
+  // Extract proxy info from current environment (used by cevImpitFetch)
+  const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
+  let proxyConfig: any = null;
+  
+  if (proxyUrl) {
+    try {
+      const parsedProxy = new URL(proxyUrl);
+      proxyConfig = {
+        proxyType: parsedProxy.protocol.replace(':', ''),
+        proxyAddress: parsedProxy.hostname,
+        proxyPort: parseInt(parsedProxy.port || (parsedProxy.protocol === 'https:' ? '443' : '80'), 10),
+        proxyLogin: decodeURIComponent(parsedProxy.username || ''),
+        proxyPassword: decodeURIComponent(parsedProxy.password || ''),
+      };
+    } catch (e) {
+      // If proxy URL parsing fails, just use proxyless mode
+    }
+  }
+
   // Priorité 1 : Anti-Captcha
   if (ANTICAPTCHA_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha" } });
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig } });
     try {
+      const task = proxyConfig 
+        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig }
+        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      
       const createRes = await fetch("https://api.anti-captcha.com/createTask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientKey: ANTICAPTCHA_KEY,
-          task: { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY },
+          task: task,
         }),
         signal: AbortSignal.timeout(30_000),
       });
@@ -824,14 +867,18 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
 
   // Priorité 2 : CapSolver
   if (CAPSOLVER_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "capsolver" } });
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "capsolver", useProxy: !!proxyConfig } });
     try {
+      const task = proxyConfig 
+        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig }
+        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      
       const createRes = await fetch("https://api.capsolver.com/createTask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientKey: CAPSOLVER_KEY,
-          task: { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY },
+          task: task,
         }),
         signal: AbortSignal.timeout(30_000),
       });

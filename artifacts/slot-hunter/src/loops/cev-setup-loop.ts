@@ -70,12 +70,20 @@ export async function startCevSetupLoop(): Promise<void> {
           }
 
           console.log(`[CEV-SETUP] 🌐 Tentative HTTP pur session=${s.sessionId} (clics: ${clickTimestamps.length}/${MAX_CLICKS_PER_HOUR})...`);
+          const siphoned = s.siphonedF5CookieValue ? {
+            f5CookieValue: s.siphonedF5CookieValue,
+            f5CookieName: s.siphonedF5CookieName,
+            aspNetSessionId: s.siphonedAspNetSessionId,
+            userAgent: s.siphonedUserAgent,
+            validUntil: s.siphonedValidUntil,
+          } : undefined;
           const httpResult = await setupCevSessionHttp(
             s.vowintEmail!,
             s.vowintPassword!,
             s.applicationId,
             s.applicationId,
             s.vowintAppUrl,
+            siphoned,
           );
 
           if (httpResult.success) {

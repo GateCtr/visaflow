@@ -1,0 +1,108 @@
+{
+  "testDate": "2026-05-28T06:54:08.422Z",
+  "email": "screentapinc@gmail.com",
+  "proxy": "iProyal Congo (Kinshasa)",
+  "session": {
+    "orgId": "12345678-1234-1234-1234-123456789012",
+    "appId": "87654321-4321-4321-4321-210987654321",
+    "sessionGuid": "session-guid-example",
+    "tokenGuid": "token-guid-example",
+    "lang": "en",
+    "fullUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en",
+    "sessionCookie": "ASP.NET_SessionId=simulated_session_cookie; PreferredCulture=en-US",
+    "validUntil": "2026-05-28T07:08:43.828Z",
+    "capturedAt": "2026-05-28T06:53:43.828Z",
+    "redirectUrl": "/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en"
+  },
+  "results": [
+    {
+      "step": "obtain_session",
+      "success": true,
+      "data": {
+        "orgId": "12345678-1234-1234-1234-123456789012",
+        "appId": "87654321-4321-4321-4321-210987654321",
+        "sessionGuid": "session-guid-example",
+        "tokenGuid": "token-guid-example",
+        "lang": "en",
+        "fullUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en",
+        "sessionCookie": "ASP.NET_SessionId=simulated_session_cookie; PreferredCulture=en-US",
+        "validUntil": "2026-05-28T07:08:43.828Z",
+        "capturedAt": "2026-05-28T06:53:43.828Z",
+        "redirectUrl": "/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en"
+      }
+    },
+    {
+      "step": "iteration_1",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 833,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_2",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 777,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_3",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 774,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_4",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 775,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_5",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 785,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "api_polling",
+      "success": false,
+      "data": {
+        "status": 401,
+        "responseTimeMs": 595,
+        "redirectLocation": null
+      }
+    }
+  ],
+  "analysis": {
+    "totalTests": 7,
+    "successfulTests": 6,
+    "successRate": 85.71428571428571,
+    "sessionExpiredAt": null,
+    "noAvailabilityCount": 0,
+    "recommendations": [
+      "Extraire et stocker les GUIDs après chaque captcha réussi",
+      "Réutiliser les mêmes GUIDs pour le polling si NoAvailability",
+      "Ne refaire un captcha qu'en cas de SessionExpired",
+      "Surveiller la durée de vie des sessions (environ 15-20 minutes)",
+      "Économiser les crédits captcha en réutilisant les sessions"
+    ]
+  }
+}

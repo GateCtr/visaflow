@@ -19,6 +19,7 @@
 
 import { botLog, saveCevBookingConfig, type CevDiscoveredConfig } from './convexClient.js';
 import { randomUserAgent } from './browser.js';
+import { cevImpitFetch } from './cev-shared-impit.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 
@@ -50,12 +51,28 @@ export interface HttpBookingResult {
   needsPlaywright?: boolean;
 }
 
+interface SiphonedCookies {
+  f5CookieValue?: string;
+  f5CookieName?: string;
+  aspNetSessionId?: string;
+  userAgent?: string;
+  validUntil?: number;
+}
+
 // ─── Helpers réseau ───────────────────────────────────────────────────────────
 
-function makeCevHeaders(sessionCookie: string, ua: string, extra?: Record<string, string>): Record<string, string> {
+function makeCevHeaders(sessionCookie: string, ua: string, siphoned?: SiphonedCookies, extra?: Record<string, string>): Record<string, string> {
+  const aspCookie = siphoned?.aspNetSessionId ?? sessionCookie;
+  let cookieStr = `ASP.NET_SessionId=${aspCookie}; PreferredCulture=en-US`;
+  if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
+    if (!siphoned.validUntil || Date.now() < siphoned.validUntil) {
+      cookieStr = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${cookieStr}`;
+    }
+  }
+  const actualUa = siphoned?.userAgent ?? ua;
   return {
-    'Cookie': `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`,
-    'User-Agent': ua,
+    'Cookie': cookieStr,
+    'User-Agent': actualUa,
     'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
     ...extra,
   };
@@ -65,20 +82,21 @@ async function fetchFollowRedirects(
   startUrl: string,
   sessionCookie: string,
   ua: string,
+  siphoned?: SiphonedCookies,
   maxHops = 6,
 ): Promise<{ ok: boolean; url: string; html: string; status: number; responseHeaders?: Record<string, string>; error?: string }> {
   let url = startUrl;
   for (let hop = 0; hop < maxHops; hop++) {
-    const res = await fetch(url, {
+    const res = await cevImpitFetch(url, {
       method: 'GET',
-      headers: makeCevHeaders(sessionCookie, ua, {
+      headers: makeCevHeaders(sessionCookie, ua, siphoned, {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Cache-Control': 'no-cache',
         'Upgrade-Insecure-Requests': '1',
       }),
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
-    });
+    }, "[CEV-BOOKING]");
 
     if (res.status === 302 || res.status === 301) {
       const loc = res.headers.get('location');
@@ -242,16 +260,17 @@ async function fetchAvailableTimeSlots(
   sessionCookie: string,
   referer: string,
   ua: string,
+  siphoned?: SiphonedCookies,
   month?: number,
   year?: number,
-): Promise<{ ok: boolean; slots: ParsedSlot[]; rawJson: unknown; error?: string }> {
+): Promise<{ ok: boolean; slots: ParsedSlot[]; rawJson: unknown; error?: string; responseHeaders?: Record<string, string> }> {
   const now = new Date();
   const body = { month: month ?? now.getMonth() + 1, year: year ?? now.getFullYear() };
 
   try {
-    const res = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
+    const res = await cevImpitFetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
       method: 'POST',
-      headers: makeCevHeaders(sessionCookie, ua, {
+      headers: makeCevHeaders(sessionCookie, ua, siphoned, {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': referer,
@@ -260,7 +279,7 @@ async function fetchAvailableTimeSlots(
       }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
-    });
+    }, "[CEV-BOOKING]");
 
     if (!res.ok) {
       return { ok: false, slots: [], rawJson: null, error: `HTTP ${res.status}` };
@@ -300,6 +319,7 @@ async function submitSlotSelection(
   hiddenInputs: Record<string, string>,
   slot: ParsedSlot,
   clientId: string,
+  siphoned?: SiphonedCookies,
   preferredEndpoint?: string, // endpoint confirmé depuis la config auto-découverte (essayé en premier)
 ): Promise<{ success: boolean; html: string; finalUrl: string; confirmedEndpoint?: string; error?: string }> {
   // Si on a un endpoint confirmé → le tester en premier, avant les guesses
@@ -357,9 +377,9 @@ async function submitSlotSelection(
   for (const endpoint of uniqueCandidates) {
     try {
       const body = new URLSearchParams(formFields).toString();
-      const res = await fetch(endpoint, {
+      const res = await cevImpitFetch(endpoint, {
         method: 'POST',
-        headers: makeCevHeaders(sessionCookie, ua, {
+        headers: makeCevHeaders(sessionCookie, ua, siphoned, {
           'Content-Type': 'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest',
           'Referer': referer,
@@ -369,7 +389,7 @@ async function submitSlotSelection(
         body,
         redirect: 'follow',
         signal: AbortSignal.timeout(30_000),
-      });
+      }, "[CEV-BOOKING]");
 
       const html = await res.text().catch(() => '');
       const finalUrl = res.url;
@@ -453,6 +473,7 @@ export async function bookCevViaHttp(
   integrationUrl: string,
   sessionCookie: string,
   clientId: string,
+  siphoned?: SiphonedCookies,
 ): Promise<HttpBookingResult> {
   const ua = randomUserAgent();
 
@@ -465,7 +486,7 @@ export async function bookCevViaHttp(
 
   try {
     // ═══ ÉTAPE 1 : GET SelectSlot page (suit les redirections) ═══
-    const pageResult = await fetchFollowRedirects(integrationUrl, sessionCookie, ua);
+    const pageResult = await fetchFollowRedirects(integrationUrl, sessionCookie, ua, siphoned);
 
     botLog({
       applicationId: clientId,
@@ -537,7 +558,7 @@ export async function bookCevViaHttp(
 
     // ═══ ÉTAPE 3 : GET /Home/AvailableTimeSlots (mois courant) ═══
     const now = new Date();
-    const slotsResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, now.getMonth() + 1, now.getFullYear());
+    const slotsResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, now.getMonth() + 1, now.getFullYear());
 
     botLog({
       applicationId: clientId,
@@ -561,7 +582,7 @@ export async function bookCevViaHttp(
     let availableSlots = slotsResult.slots;
     if (slotsResult.ok && availableSlots.length === 0) {
       const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const nextResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, next.getMonth() + 1, next.getFullYear());
+      const nextResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, next.getMonth() + 1, next.getFullYear());
       botLog({
         applicationId: clientId,
         step: 'cev_http_available_slots_next_month',
@@ -619,6 +640,7 @@ export async function bookCevViaHttp(
       hiddenInputs,
       slot,
       clientId,
+      siphoned,
       knownConfig?.submitEndpoint,    // preferredEndpoint — essayé en premier si connu
     );
 

@@ -341,6 +341,12 @@ export interface CevSessionTask {
   vowintEmail?: string;
   vowintPassword?: string;
   vowintAppUrl?: string;
+  siphonedF5CookieValue?: string;
+  siphonedF5CookieName?: string;
+  siphonedAspNetSessionId?: string;
+  siphonedUserAgent?: string;
+  siphonedAt?: number;
+  siphonedValidUntil?: number;
 }
 
 export async function getActiveCevSessions(): Promise<CevSessionTask[]> {
@@ -390,6 +396,13 @@ export interface CevSetupTask {
   vowintEmail?: string;
   vowintPassword?: string;
   vowintAppUrl?: string;
+  // Siphoned cookies from F5 WAF
+  siphonedF5CookieValue?: string;
+  siphonedF5CookieName?: string;
+  siphonedAspNetSessionId?: string;
+  siphonedUserAgent?: string;
+  siphonedAt?: number;
+  siphonedValidUntil?: number;
 }
 
 export async function resetCevSetupLock(sessionId: string): Promise<boolean> {
@@ -480,6 +493,46 @@ export async function recordCevSetupLoginFail(
   } catch (err) {
     console.warn("[convexClient] recordCevSetupLoginFail error:", err);
     return { loginFailCount: 0, paused: false };
+  }
+}
+
+export async function injectCevF5Cookies(
+  sessionId: string,
+  f5TsCookieValueOrF5CookieValue: string,
+  aspNetSessionId?: string,
+  userAgent?: string,
+  options?: {
+    f5CookieName?: string;
+    validityMinutes?: number;
+  }
+): Promise<boolean> {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-sessions/inject-f5`;
+  try {
+    const body = {
+      sessionId,
+      f5CookieValue: f5TsCookieValueOrF5CookieValue,
+      aspNetSessionId,
+      userAgent,
+      f5CookieName: options?.f5CookieName,
+      validityMinutes: options?.validityMinutes,
+    };
+    const res = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'X-Hunter-Key': HUNTER_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn('[convexClient] injectCevF5Cookies failed:', res.status);
+      return false;
+    }
+    const data = await res.json();
+    return data.ok === true;
+  } catch (err) {
+    console.warn('[convexClient] injectCevF5Cookies error:', err);
+    return false;
   }
 }
 

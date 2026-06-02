@@ -1,0 +1,96 @@
+[
+  {
+    "timestamp": "2026-06-01T20:52:26.549Z",
+    "tab": "tab_3",
+    "requestHeaders": {
+      "sec-ch-ua-platform": "\"Windows\"",
+      "referer": "",
+      "accept-language": "fr-BE",
+      "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+      "sec-ch-ua-mobile": "?0",
+      "x-requested-with": "XMLHttpRequest",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "accept": "*/*",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8"
+    },
+    "requestCookies": {},
+    "requestBody": "captcha=P1_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.haJwZACjZXhwzmod8YOncGFzc2tlecUFgWU4hu--tAUoyev_F-wOAXQyiVpJ3ZbGLX8CrSHDGcMaKcJIaKgEERRN7nUof8JmzTDNLKNtuVAe4ER-rboAHyZN4D0KeDD2-mKdo3Or-ROrqPbhuj4qjsZVJNXBc2D98ZHQCrLeZpPzYf4RK14LCxkE6K7SK1G-zxfKi5qeYt4hvrCXHjAPUtId4nhosj3USV51F1meqEnum9_rW8Rs4n2aHXqJaNkdeltQytGMjhqr8nduAgiX6WltcKL-NIIEpv39U0vo32dbTUWXyWf0mhyrWPqY7l1KlAUezZlmgLCc1bYuEiuFXV14VSwNITj4i3BSrJy75ZQtDDX9EEqsGipQIwpQHhSAOaLUkDa31sEu6p0YcounYTivcNuzCbLmPpYVu4YFEtqRXCFyuMDitf4DnPpTd02LEY8RuWFDl1_BTbGZlE5Uzvfx6UWak2DSxNbvPG84ih-OFwIuGFid8UJcgfIbGQ142cv88RhNgDYEHj3Fr56gfKLCgOcv_0cb3CYIcA5VDPrrekK9BfO54r-al5ruL-FNun62EZgQZyq75K02f2taDYHdGLjdkxW8_Tdb5wSEodG4p9Ec50nJvJDEdExyO2nNJ-w8c7Y1RsZ1YcZWZpC-uLEOes2EC_-ezJkFUkQI8MwN0Oq7K5aUrYL-FCKRNlDg0RbvJNFYAujUioRv3_nJKP3X5sv1n2RlcuB8gM3WxMLN_gPZ-1XWsH4pr2juZghq_ORJu9ruS3hNWNvf1nQGXBak4gZNp09y3DKehNE0LeBmL3UAh52xKFIOn8Qp-dnDBDftnyJZACiGhwYeCgCmvVBqgwauZm_wTyC-cNEUUFKywrg2TFxekO2UlqJpHxPDaEm07eRzyIsUIQI6gdNgg81s8cVEv0tAIVgEUvn-Lya3elwCMCJgCOCA2PajWEZdpAAHrFe12i2D03abtWI4xJjQx9xjPUoEVdZao2zT2v2gJZJi0x2DVJSRPIzKgZkQvQyjvFvosRXuzpAScAHebEFelSaIfDij2O5t5lWyxkHK6HS6M7WTmgOLG2V-TxhGrIbM1pe_GGJ5lq20Pe75Bwryg99OoJBl_UG5W2gUkGCQYnKoP73-4e1ie_WGNKJUbUf71dM-UCuZDLkpIcfc0kNux4rVP31wW3P7jRFteAPeMRWXgijPdYGXg6L5igAI206HBRSVlqgfc9UgdPTQMCUn8YFARHW79nQsXOq8_OECbN2reqRYZ6F542mLf-d2tjky6uhirtAJ-i3Y7hnnKn4WUq6OtLAYBI__3iJPNl1ev_YiXKDZ8hIsKouOBYcAbpWD6borfM7hTkIPDn7eldNO4m83ORvwGfykJbcbB9HOMyAfxk4zJcYJQ9N05gsGXpcay8TtGd3AWrvlTqu4WFMmGCwjb2vWsSXWlBsQRa4hJ7iFs_gbSTnkxSDJE4XtBim2mRzyAXZmQCKaFDKJPcmPNTeReSECvsBad2vXvBGEXNHm9qXqM8blF-QGJjK0r7CuRcT3gNR16WXocoajmelLJGtJrKJH3XmMpla6q2P6eDFCGL0XiJk_QaTma7ixxyByuIpy7azrSO0Cq0kLTeLOKU2MythdLwF6qaFL2kH4XK5BVSeF2FEGvEIYlwXycina69Gm502C08gHvsvabnEYoxdmis1lSPRBFjo594sH5cg80i0hBlF1tJ84z4aodeqaoMmslKhr_5nji_Ukew8dzmyEswEZR72AP2LoLk7IrqIXCbxebw5X8vKYOFe6jJVQbXg5kcmptAd2pAbzEazR6SsRPiQHlv7sjGP1-IS8whGCb1KFG1c8fnLMR0uN2xjVV-ti_gYC4o9gXOaMMEt6eXNUxogmsFWsQk2UrMml_2-FNngYsZnZomtyqDNiOGRiN2ZlqHNoYXJkX2lkzhQ8hB8.T28qEIt2yRRYFEXgd734LMK0VeOkHjblJRexEf7oG_o",
+    "responseStatus": 200,
+    "responseHeaders": {
+      "access-control-expose-headers": "Request-Context",
+      "content-encoding": "gzip",
+      "x-content-type-options": "nosniff",
+      "expires": "-1",
+      "date": "Mon, 01 Jun 2026 20:52:28 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Accept-Encoding",
+      "x-frame-options": "Deny",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "content-security-policy": "default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true",
+      "cache-control": "no-cache, no-store, must-revalidate",
+      "pragma": "no-cache",
+      "connection": "keep-alive",
+      "referrer-policy": "no-referrer",
+      "x-download-options": "noopen",
+      "request-context": "appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f",
+      "content-length": "415",
+      "x-xss-protection": "1; mode=block"
+    },
+    "responseBody": "",
+    "redirectUrl": null,
+    "validUntil": null,
+    "finalVerdict": null,
+    "cookiesAtMoment": [
+      {
+        "name": "__RequestVerificationToken",
+        "value": "Ey1i29nI7xwC5IigjVzJF-nMcFltK8bx5sU2R4oINUaALxjiA5HtvahHKVqdnLrqUaUqvbNn-HBPp7yAKcaVsJxrnuV0OKrJ6hHpHyjTLuw1",
+        "domain": "visaonweb.diplomatie.be"
+      },
+      {
+        "name": "ServerId",
+        "value": "eb66856f90f0d6ab",
+        "domain": "visaonweb.diplomatie.be"
+      },
+      {
+        "name": "TS0110ceb4",
+        "value": "01f258f401f6f06076705f5f14e78e1623589bdaff6b4eceecdb130825e9e62a6a2dfa2be02a5a80daa26d3cbb74c1003055f66040",
+        "domain": ".visaonweb.diplomatie.be"
+      },
+      {
+        "name": "__cf_bm",
+        "value": "PGCvabYmL2izmnaMoH_x.VKoevIGQ2kiWx5E4S3FUsc-1780347055.4268286-1.0.1.1-50TbQGSUXymBlPxthiNKXhhkf_fndGUgnqOx6DKnu3m9MWbQiNUQdHOcA_5ez7EDhRhbP7ehm2we_dV1EFsAfuwMaoxMYmiBxqewndrcgkK46p7E2oxcYinbjofu4amQ",
+        "domain": ".hcaptcha.com"
+      },
+      {
+        "name": "OSOnline",
+        "value": "j5bG4qbTPNtc8qxCc_vBYVhXvv_H8U-XQAb2Q_q1SHRLbdxosKczoE26DJeE_oZcKqD9PpqXKywOYiWNIOd0aU6FMPv3_cejxIdo9giZNzPAVR9KpZ8EyGupU_lWQ3ToBvs3eZYyqZwYvhe8jNlmQrkhIL-_3muo9SLF7-O1CNxpcPyDXSlJC3wduMS1bYyTNngLHo9EgNIII6etbZNYSZrvZprm1-NZ2ZAljz2zHwZvpN75Z7ntmgqhjFQqQ4ZceyEzT6OU_gLkLYk2LFppz_stVaSDgcKWaKz0a7c5_Op58bu8fkEVZfxtU3QihoWRUU5PrScNiU2w_-iJh4FbJPKJtEJsBGWYrtCfNvskM4GKmRCQ6I2hjxrLpgwm4NBlrT37MpYziiZR1ZkL2T6gWrC68frZAcNCK7iCrONbAzP2tOORxdGEWtH68qdfkKoRG7pN8Iqhr4srne3yJBU-G4C2CvbMJEZf9MpFEFnJUazDLKfWKDv8gNMVEKhaE3HnHYDfgXQSwnUi2EE4b_uqY1j3xeDwh3mp3fCZeiGDk7FIu164sk4EPneUyv9bkDV3Sz2N-Mskpn2UfxHbORd6m0WjWbOpED0BJfXCx_onp6rDJIVQVFYbC6MXxBAoCmGLXzcW-I4JOI07E7CMCM_VKeuvZG4lXi9yVBV9oXYnuokhXxq4BqVOTWthW6C2UDtLiXk9ND_ecaruRU0OqMybBflhL9xloJcebigqnw5NN14q79s7Sm-3_WLN5W4sN127pftoNULHSh5zw_zsiVxs9G6qQ2w9efm7O7_Kkswplv4",
+        "domain": "visaonweb.diplomatie.be"
+      },
+      {
+        "name": "_culture",
+        "value": "en-US",
+        "domain": "visaonweb.diplomatie.be"
+      },
+      {
+        "name": "ASP.NET_SessionId",
+        "value": "vxjk0oupsqtgrygku0yv1xdl",
+        "domain": "appointment.cloud.diplomatie.be"
+      },
+      {
+        "name": "PreferredCulture",
+        "value": "en-US",
+        "domain": "appointment.cloud.diplomatie.be"
+      },
+      {
+        "name": "__cf_bm",
+        "value": "KHLy_..Z7xK5rBp1XXQwYjtyENa9f0Y2cWUKogOdB2M-1780347116.7663672-1.0.1.1-bougEG9ZQDhFrKotaFPXFVBzngYKUiPDcj7M5sdH_vF_ppb6W9jJBMUP0x.RijgxYc5W_sKaeSazL8U7XnthrncbBKHPuVPTS8j5HnDOzwAJM0nYDGhtDthPMqtkNXEf",
+        "domain": ".w.hcaptcha.com"
+      },
+      {
+        "name": "hmt_id",
+        "value": "ed4a608c-7620-4f9f-ab95-db0dc20bcab5",
+        "domain": "api.hcaptcha.com"
+      }
+    ]
+  }
+]

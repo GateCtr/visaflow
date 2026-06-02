@@ -13,7 +13,8 @@
 // Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
 import { randomUserAgent } from "./browser.js";
-import { cevImpitFetch } from "./cev-shared-impit.js";
+import { cevImpitFetch, setCevExternalUserAgent, getCevExternalUserAgent } from "./cev-shared-impit.js";
+import { F5CookieManager } from "./cev-f5-cookie-manager.js";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
@@ -21,6 +22,47 @@ const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 /** Fetch CEV avec fingerprint TLS Chrome via impit partagé (setup + polling = même instance) */
 function cevFetch(url: string, options: RequestInit): Promise<Response> {
   return cevImpitFetch(url, options, "[CEV-POLL]");
+}
+
+interface SiphonedCookies {
+  f5CookieValue?: string;
+  f5CookieName?: string;
+  aspNetSessionId?: string;
+  userAgent?: string;
+  validUntil?: number;
+}
+
+/** Construit le cookie header enrichi avec le F5 si disponible (siphonné > manager) */
+function buildEnrichedCookieHeader(
+  sessionCookie: string,
+  siphoned?: SiphonedCookies
+): string {
+  // Use siphoned ASP.NET Session ID if available and valid
+  const aspNetCookie = siphoned?.aspNetSessionId || sessionCookie;
+  const baseCookie = aspNetCookie.includes("ASP.NET_SessionId")
+    ? aspNetCookie
+    : `ASP.NET_SessionId=${aspNetCookie}; PreferredCulture=en-US`;
+
+  // Check if siphoned F5 cookie is available and valid
+  if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
+    if (!siphoned.validUntil || Date.now() < siphoned.validUntil) {
+      return `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${baseCookie}`;
+    }
+  }
+
+  // Fallback to F5 manager
+  const f5Manager = F5CookieManager.getInstance();
+  const f5Session = f5Manager.getValidSession();
+  if (f5Session) {
+    return `${f5Session.tsCookie.name}=${f5Session.tsCookie.value}; ${baseCookie}`;
+  }
+
+  return baseCookie;
+}
+
+/** Retourne le UA effectif (siphonné > external > random) */
+function getEffectiveUa(siphoned?: SiphonedCookies): string {
+  return siphoned?.userAgent ?? getCevExternalUserAgent() ?? randomUserAgent();
 }
 
 export type CevPollResult =
@@ -31,11 +73,13 @@ export type CevPollResult =
 
 // UA généré une fois par appel à pollCevSlot — reste stable dans la même session HTTP
 // mais tourne entre sessions pour éviter les fingerprints répétitifs (desktop uniquement).
-function fetchManual(url: string, cookie: string, userAgent: string): Promise<Response> {
-  // cookie = valeur brute ASP.NET_SessionId (ex: "abc123") stockée dans Convex
-  const cookieHeader = cookie.includes("ASP.NET_SessionId")
-    ? cookie  // déjà au format complet (legacy)
-    : `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`;
+function fetchManual(
+  url: string,
+  cookie: string,
+  userAgent: string,
+  siphoned?: SiphonedCookies
+): Promise<Response> {
+  const cookieHeader = buildEnrichedCookieHeader(cookie, siphoned);
   return cevFetch(url, {
     method: "GET",
     headers: {
@@ -60,7 +104,7 @@ function isVowintEAppointmentUrl(url: string): boolean {
   return /^https:\/\/visaonweb\.diplomatie\.be\/Common\/GetEAppointmentUrl\?/i.test(url);
 }
 
-async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string, siphoned?: SiphonedCookies): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   // Déjà une URL CEV directe: /Integration/VOW/... => pas besoin de résolution.
   if (entryUrl.startsWith(`${BASE}/Integration/VOW/`)) {
     return { ok: true, url: entryUrl };
@@ -70,10 +114,8 @@ async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string): Pr
   // et tenter de récupérer la redirection CEV en lisant l'en-tête Location.
   if (isVowintEAppointmentUrl(entryUrl)) {
     try {
-      const cookieHeader = cookie.includes("ASP.NET_SessionId")
-        ? cookie
-        : `ASP.NET_SessionId=${cookie}; PreferredCulture=en-US`;
-      const r = await fetch(entryUrl, {
+      const cookieHeader = buildEnrichedCookieHeader(cookie, siphoned);
+      const r = await cevFetch(entryUrl, {
         method: "GET",
         headers: {
           Cookie: cookieHeader,
@@ -163,11 +205,13 @@ function bodyIsErrorPage(body: string): boolean {
  * Bundle JS confirmé : callPost("/Home/AvailableTimeSlots", {month, year}, success, error)
  * Content-Type: application/json (pas form-urlencoded)
  */
-async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollResult | null> {
+async function pollViaApi(
+  sessionCookie: string,
+  ua: string,
+  siphoned?: SiphonedCookies
+): Promise<CevPollResult | null> {
   // sessionCookie = valeur brute ou format complet (legacy)
-  const cookieHeader = sessionCookie.includes("ASP.NET_SessionId")
-    ? sessionCookie
-    : `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`;
+  const cookieHeader = buildEnrichedCookieHeader(sessionCookie, siphoned);
   const now = new Date();
   // Vérifier mois courant + mois suivant (comme pollCevSlotsMultiMonth)
   for (let i = 0; i < 2; i++) {
@@ -275,14 +319,18 @@ async function pollViaApi(sessionCookie: string, ua: string): Promise<CevPollRes
 export async function pollCevSlot(
   integrationUrl: string,
   sessionCookie: string,
+  siphoned?: SiphonedCookies,
 ): Promise<CevPollResult> {
   try {
-    const ua = randomUserAgent();
+    if (siphoned?.userAgent) {
+      setCevExternalUserAgent(siphoned.userAgent);
+    }
+    const ua = getEffectiveUa(siphoned);
 
-    // ── Stratégie 1 : POST /Home/AvailableTimeSlots (API JSON directe) ──────
+    // ─── Stratégie 1 : POST /Home/AvailableTimeSlots (API JSON directe) ──────
     // Plus fiable que le GET redirect — retourne les slots en JSON
     // Fonctionne tant que le cookie est valide (pas besoin de l'integrationUrl)
-    const apiResult = await pollViaApi(sessionCookie, ua);
+    const apiResult = await pollViaApi(sessionCookie, ua, siphoned);
     if (apiResult !== null) return apiResult;
 
     // ── Stratégie 2 (fallback) : GET integrationUrl → suivre redirections ───
@@ -293,7 +341,7 @@ export async function pollCevSlot(
       return { status: "session_expired" };
     }
 
-    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua);
+    const resolved = await resolveEntryUrl(integrationUrl, sessionCookie, ua, siphoned);
     if (!resolved.ok) {
       return { status: "error", error: resolved.error };
     }

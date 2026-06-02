@@ -330,6 +330,21 @@ export default defineSchema({
     lastSetupError: v.optional(v.string()),
     // Timestamp du dernier setup réussi
     lastSuccessfulSetupAt: v.optional(v.number()),
+    // ══════════════════════════════════════════════════════════════════════════
+    // SIPHONNAGE F5 — Cookies WAF BIG-IP injectés depuis l'extérieur
+    // ══════════════════════════════════════════════════════════════════════════
+    /** Cookie WAF F5 BIG-IP (valeur du TS01*) siphonné depuis un vrai navigateur */
+    siphonedF5CookieValue: v.optional(v.string()),
+    /** Nom du cookie F5 (ex: "TS0110ceb4") */
+    siphonedF5CookieName: v.optional(v.string()),
+    /** ASP.NET_SessionId siphonné (remplace le sessionCookie normal si présent) */
+    siphonedAspNetSessionId: v.optional(v.string()),
+    /** User-Agent EXACT du navigateur qui a généré les cookies siphonnés */
+    siphonedUserAgent: v.optional(v.string()),
+    /** Timestamp de l'injection des cookies siphonnés */
+    siphonedAt: v.optional(v.number()),
+    /** Timestamp d'expiration estimé des cookies siphonnés */
+    siphonedValidUntil: v.optional(v.number()),
   })
     .index("by_application", ["applicationId"])
     .index("by_status", ["status"]),

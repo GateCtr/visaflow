@@ -55,7 +55,7 @@ import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPaus
 const MAX_CLICKS_PER_SESSION = 4; // Limite GLOBALE par session VOWINT (serveur bloque au 5ème)
 const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 60; // Pas de throttle interne — portail gère son propre rate-limit
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
-const DEFAULT_INTERVAL_SEC = 30; // Pause par défaut entre scans
+const DEFAULT_INTERVAL_SEC = 225; // Pause par défaut entre scans (3 min 45 s)
 
 // Compteur GLOBAL de clics sur la session VOWINT courante
 let globalSessionClicks = 0;

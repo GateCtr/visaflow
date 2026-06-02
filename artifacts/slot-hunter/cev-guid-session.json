@@ -1,0 +1,12 @@
+{
+  "orgId": "12345678-1234-1234-1234-123456789012",
+  "appId": "87654321-4321-4321-4321-210987654321",
+  "sessionGuid": "session-guid-example",
+  "tokenGuid": "token-guid-example",
+  "lang": "en",
+  "fullUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en",
+  "sessionCookie": "ASP.NET_SessionId=simulated_session_cookie; PreferredCulture=en-US",
+  "validUntil": "2026-05-28T07:08:43.828Z",
+  "capturedAt": "2026-05-28T06:53:43.828Z",
+  "redirectUrl": "/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en"
+}

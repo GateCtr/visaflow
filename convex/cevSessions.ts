@@ -309,6 +309,12 @@ export const internalClaimNeedsSetup = internalMutation({
       vowintEmail?: string;
       vowintPassword?: string;
       vowintAppUrl?: string;
+      siphonedF5CookieValue?: string;
+      siphonedF5CookieName?: string;
+      siphonedAspNetSessionId?: string;
+      siphonedUserAgent?: string;
+      siphonedAt?: number;
+      siphonedValidUntil?: number;
     }> = [];
 
     for (const s of sessions) {
@@ -353,6 +359,12 @@ export const internalClaimNeedsSetup = internalMutation({
         vowintEmail: s.vowintEmail,
         vowintPassword: s.vowintPassword,
         vowintAppUrl: s.vowintAppUrl,
+        siphonedF5CookieValue: s.siphonedF5CookieValue,
+        siphonedF5CookieName: s.siphonedF5CookieName,
+        siphonedAspNetSessionId: s.siphonedAspNetSessionId,
+        siphonedUserAgent: s.siphonedUserAgent,
+        siphonedAt: s.siphonedAt,
+        siphonedValidUntil: s.siphonedValidUntil,
       });
     }
 
@@ -397,6 +409,12 @@ export const internalClaimDue = internalMutation({
       vowintEmail?: string;
       vowintPassword?: string;
       vowintAppUrl?: string;
+      siphonedF5CookieValue?: string;
+      siphonedF5CookieName?: string;
+      siphonedAspNetSessionId?: string;
+      siphonedUserAgent?: string;
+      siphonedAt?: number;
+      siphonedValidUntil?: number;
     }> = [];
 
     for (const s of sessions) {
@@ -417,6 +435,12 @@ export const internalClaimDue = internalMutation({
         vowintEmail: s.vowintEmail,
         vowintPassword: s.vowintPassword,
         vowintAppUrl: s.vowintAppUrl,
+        siphonedF5CookieValue: s.siphonedF5CookieValue,
+        siphonedF5CookieName: s.siphonedF5CookieName,
+        siphonedAspNetSessionId: s.siphonedAspNetSessionId,
+        siphonedUserAgent: s.siphonedUserAgent,
+        siphonedAt: s.siphonedAt,
+        siphonedValidUntil: s.siphonedValidUntil,
       });
     }
     return claimed;
@@ -641,5 +665,43 @@ export const internalGetCredentials = internalQuery({
     }
 
     return null;
+  },
+});
+
+// ─── INTERNAL: injecter des cookies F5 siphonnés pour une session CEV ───────────
+export const internalInjectF5Cookies = internalMutation({
+  args: {
+    sessionId: v.id("cevSessions"),
+    f5CookieValue: v.string(), // from sessionWorker.ts
+    f5CookieName: v.string(), // from sessionWorker.ts
+    aspNetSessionId: v.optional(v.string()),
+    userAgent: v.string(),
+    validityMinutes: v.optional(v.number()),
+    // Also support the original name for backwards compatibility
+    f5TsCookieValue: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return { ok: false, error: "Session not found" };
+
+    const now = Date.now();
+    const actualF5Value = args.f5CookieValue ?? args.f5TsCookieValue;
+    const actualF5Name = args.f5CookieName ?? "TS0110ceb4";
+    const validityMs = (args.validityMinutes ?? 480) * 60 * 1000; // default 8h = 480 min
+
+    if (!actualF5Value) {
+      return { ok: false, error: "f5CookieValue or f5TsCookieValue is required" };
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      siphonedF5CookieValue: actualF5Value,
+      siphonedF5CookieName: actualF5Name,
+      siphonedAspNetSessionId: args.aspNetSessionId,
+      siphonedUserAgent: args.userAgent,
+      siphonedAt: now,
+      siphonedValidUntil: now + validityMs,
+    });
+
+    return { ok: true };
   },
 });

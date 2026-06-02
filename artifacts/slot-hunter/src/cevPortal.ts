@@ -1,5 +1,6 @@
 import { botLog } from './convexClient';
 import { randomUserAgent } from './browser.js';
+import { cevImpitFetch, getCevBrowserHeaders, setCevExternalUserAgent } from './cev-shared-impit.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 
@@ -45,25 +46,62 @@ export type CevCaptchaResult =
 export async function completeCevCaptcha(
   sessionCookies: string,
   hcaptchaToken: string,
-  clientId: string
+  clientId: string,
+  options?: {
+    f5CookieValue?: string;      // Valeur du cookie TS0110ceb4
+    f5CookieName?: string;       // Nom du cookie F5 (par défaut TS0110ceb4)
+    aspNetSessionId?: string;    // ASP.NET_SessionId siphonné
+    userAgent?: string;          // User-Agent spécifique (doit matcher celui qui a généré le cookie F5)
+    additionalCookies?: string;  // Cookies additionnels (TS0110ceb4=...; autres)
+  }
 ): Promise<CevCaptchaResult> {
-  botLog({ applicationId: clientId, step: 'cev_captcha_submit', status: 'ok', data: { cookieLen: sessionCookies.length } });
+  botLog({ applicationId: clientId, step: 'cev_captcha_submit', status: 'ok', data: { 
+    cookieLen: sessionCookies.length,
+    hasF5Cookie: !!options?.f5CookieValue,
+    hasCustomUA: !!options?.userAgent
+  } });
 
   try {
-    const res = await fetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
+    // Set external user agent if provided
+    if (options?.userAgent) {
+      setCevExternalUserAgent(options.userAgent);
+    }
+
+    // Construire le header Cookie complet
+    let cookieHeader = "";
+    if (options?.aspNetSessionId) {
+      cookieHeader = `ASP.NET_SessionId=${options.aspNetSessionId}; PreferredCulture=en-US`;
+    } else {
+      cookieHeader = sessionCookies;
+    }
+    
+    // Ajouter le cookie F5 si fourni
+    if (options?.f5CookieValue) {
+      const f5Name = options.f5CookieName || "TS0110ceb4";
+      cookieHeader = `${f5Name}=${options.f5CookieValue}; ${cookieHeader}`;
+    }
+    
+    // Ajouter les cookies additionnels
+    if (options?.additionalCookies) {
+      cookieHeader = `${options.additionalCookies}; ${cookieHeader}`;
+    }
+    
+    // Utiliser le User-Agent spécifié ou un aléatoire
+    const userAgent = options?.userAgent || randomUserAgent();
+
+    const res = await cevImpitFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': sessionCookies,
-        'User-Agent': randomUserAgent(),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': `${CEV_BASE}/Captcha`,
-        'Origin': CEV_BASE,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+      headers: getCevBrowserHeaders({
+        referer: `${CEV_BASE}/Captcha`,
+        origin: CEV_BASE,
+        cookie: cookieHeader,
+        userAgent: userAgent,
+        xRequestedWith: true,
+        contentType: 'application/x-www-form-urlencoded',
+        accept: 'application/json, text/javascript, */*; q=0.01',
+      }),
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
-    });
+    }, "[CEV-PORTAL]");
 
     if (!res.ok) {
       botLog({ applicationId: clientId, step: 'cev_captcha_error', status: 'fail', data: { httpStatus: res.status } });
@@ -89,16 +127,16 @@ export async function completeCevCaptcha(
     let probeBodyPreview = '';
     let probeBodyRaw = '';
     try {
-      const probe = await fetch(data.redirectUrl, {
+      const fullProbeUrl = data.redirectUrl.startsWith('http') ? data.redirectUrl : `${CEV_BASE}${data.redirectUrl}`;
+      const probe = await cevImpitFetch(fullProbeUrl, {
         method: 'GET',
         redirect: 'follow',
-        headers: {
-          'Cookie': sessionCookies,
-          'User-Agent': randomUserAgent(),
-          'Accept': 'text/html,application/xhtml+xml,*/*',
-          'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8',
-        },
-      });
+        headers: getCevBrowserHeaders({
+          cookie: cookieHeader,
+          userAgent: userAgent,
+          accept: 'text/html,application/xhtml+xml,*/*',
+        }),
+      }, "[CEV-PORTAL]");
       finalUrl = probe.url; // URL après tous les 302
       // Capturer le body pour diagnostiquer les pages d'erreur
       let probeBody = '';
@@ -192,7 +230,13 @@ export async function completeCevCaptcha(
 export async function pollCevSlots(
   session: CevSession,
   clientId: string,
-  requestBody?: Record<string, unknown>
+  requestBody?: Record<string, unknown>,
+  options?: {
+    f5CookieValue?: string;
+    f5CookieName?: string;
+    aspNetSessionId?: string;
+    userAgent?: string;
+  }
 ): Promise<CevPollResult> {
   const now = new Date();
   const body = requestBody ?? {
@@ -201,20 +245,36 @@ export async function pollCevSlots(
   };
 
   try {
-    const res = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
+    // Set external user agent if provided
+    if (options?.userAgent) {
+      setCevExternalUserAgent(options.userAgent);
+    }
+
+    // Build the cookie header
+    let cookieHeader = session.cookies;
+    if (options?.aspNetSessionId) {
+      cookieHeader = `ASP.NET_SessionId=${options.aspNetSessionId}; PreferredCulture=en-US`;
+    }
+    if (options?.f5CookieValue) {
+      const f5Name = options.f5CookieName || "TS0110ceb4";
+      cookieHeader = `${f5Name}=${options.f5CookieValue}; ${cookieHeader}`;
+    }
+    
+    const userAgent = options?.userAgent || randomUserAgent();
+
+    const res = await cevImpitFetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cookie': session.cookies,
-        'User-Agent': randomUserAgent(),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': `${CEV_BASE}${session.redirectUrl}`,
-        'Origin': CEV_BASE,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+      headers: getCevBrowserHeaders({
+        referer: `${CEV_BASE}${session.redirectUrl}`,
+        origin: CEV_BASE,
+        cookie: cookieHeader,
+        userAgent: userAgent,
+        xRequestedWith: true,
+        contentType: 'application/json',
+        accept: 'application/json, text/javascript, */*; q=0.01',
+      }),
       body: JSON.stringify(body),
-    });
+    }, "[CEV-PORTAL]");
 
     if (res.redirected) {
       if (res.url.includes('NoAvailability')) {

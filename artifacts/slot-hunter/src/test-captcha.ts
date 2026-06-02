@@ -123,3 +123,5 @@ async function main() {
 }
 
 main().catch(err => { console.error('Erreur:', err); process.exit(1); });
+
+export {};

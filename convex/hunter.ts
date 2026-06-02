@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { coreMarkSlotFound } from "./slotFoundHelper";
 import { VISA_PRICING } from "./constants";
+import type { Doc, Id } from "./_generated/dataModel";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -61,7 +62,30 @@ export const setHunterConfig = mutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
 
-    const existing = (app as { hunterConfig?: { checkCount?: number; lastCheckAt?: number; lastResult?: string; twoCaptchaApiKey?: string; scheduleUrl?: string; portalApplicationId?: string; slotDateFrom?: string; slotDateDeadline?: string; vowintAppId?: string; cevCountry?: string; cevClickCount?: number; cevClickWindowStart?: number } }).hunterConfig;
+    const existing = (app as { hunterConfig?: { 
+      checkCount?: number; 
+      lastCheckAt?: number; 
+      lastResult?: string; 
+      twoCaptchaApiKey?: string; 
+      scheduleUrl?: string; 
+      portalApplicationId?: string; 
+      slotDateFrom?: string; 
+      slotDateDeadline?: string; 
+      vowintAppId?: string; 
+      cevCountry?: string; 
+      cevClickCount?: number; 
+      cevClickWindowStart?: number;
+      // V3 Chasseur fields
+      accountRole?: "eclaireur" | "confine" | "hybride";
+      currentAppointmentDate?: string;
+      maxLoginsPerDay?: number;
+      rushWindows?: string;
+      blindBookingEnabled?: boolean;
+      slotPriorityDates?: string[];
+      maxMonthsToScan?: number;
+      nightModeEnabled?: boolean;
+      preferredProxy?: string;
+    } }).hunterConfig;
 
     const existingFull = existing as (typeof existing & {
       cevActiveSessionCookie?: string;
@@ -96,17 +120,17 @@ export const setHunterConfig = mutation({
         // Proxy résidentiel USA
         useResidentialProxy: args.useResidentialProxy ?? undefined,
         // ═══ V3 Chasseur — champs par dossier ═══
-        accountRole: args.accountRole ?? (existing as Record<string, unknown> | undefined)?.accountRole ?? undefined,
-        currentAppointmentDate: args.currentAppointmentDate || (existing as Record<string, unknown> | undefined)?.currentAppointmentDate || undefined,
-        maxLoginsPerDay: args.maxLoginsPerDay ?? (existing as Record<string, unknown> | undefined)?.maxLoginsPerDay ?? undefined,
-        rushWindows: args.rushWindows || (existing as Record<string, unknown> | undefined)?.rushWindows || undefined,
-        blindBookingEnabled: args.blindBookingEnabled ?? (existing as Record<string, unknown> | undefined)?.blindBookingEnabled ?? undefined,
+        accountRole: args.accountRole ?? existing?.accountRole ?? undefined,
+        currentAppointmentDate: args.currentAppointmentDate || existing?.currentAppointmentDate || undefined,
+        maxLoginsPerDay: args.maxLoginsPerDay ?? existing?.maxLoginsPerDay ?? undefined,
+        rushWindows: args.rushWindows || existing?.rushWindows || undefined,
+        blindBookingEnabled: args.blindBookingEnabled ?? existing?.blindBookingEnabled ?? undefined,
         slotPriorityDates: args.slotPriorityDates
           ? args.slotPriorityDates.split(",").map((s: string) => s.trim()).filter(Boolean)
-          : (existing as Record<string, unknown> | undefined)?.slotPriorityDates ?? undefined,
-        maxMonthsToScan: args.maxMonthsToScan ?? (existing as Record<string, unknown> | undefined)?.maxMonthsToScan ?? undefined,
-        nightModeEnabled: args.nightModeEnabled ?? (existing as Record<string, unknown> | undefined)?.nightModeEnabled ?? undefined,
-        preferredProxy: args.preferredProxy || (existing as Record<string, unknown> | undefined)?.preferredProxy || undefined,
+          : existing?.slotPriorityDates,
+        maxMonthsToScan: args.maxMonthsToScan ?? existing?.maxMonthsToScan ?? undefined,
+        nightModeEnabled: args.nightModeEnabled ?? existing?.nightModeEnabled ?? undefined,
+        preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
       },
       updatedAt: Date.now(),
     });
@@ -127,13 +151,16 @@ export const internalPersistCevLoopSession = internalMutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) return;
     const hc = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig ?? {};
+    // Create updated hunterConfig by merging existing fields with new CEV session fields
+    const updatedHunterConfig = {
+      ...hc,
+      cevActiveSessionCookie: args.sessionCookie,
+      cevActiveSessionValidUntil: args.validUntil,
+      cevActiveSessionRedirectUrl: args.redirectUrl,
+    };
+    
     await ctx.db.patch(args.applicationId, {
-      hunterConfig: {
-        ...(hc as Record<string, unknown>),
-        cevActiveSessionCookie: args.sessionCookie,
-        cevActiveSessionValidUntil: args.validUntil,
-        cevActiveSessionRedirectUrl: args.redirectUrl,
-      } as Parameters<(typeof ctx.db)["patch"]>[1]["hunterConfig"],
+      hunterConfig: updatedHunterConfig as any,
       updatedAt: Date.now(),
     });
   },
@@ -366,7 +393,12 @@ export const recordCevClick = internalMutation({
   handler: async (ctx, args) => {
     const app = await ctx.db.get(args.applicationId);
     if (!app) return;
-    const existing = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig;
+    const existing = (app as { hunterConfig?: { 
+      embassyUsername: string; 
+      embassyPassword: string; 
+      isActive: boolean;
+      [key: string]: unknown;
+    } }).hunterConfig;
     if (!existing) return;
     await ctx.db.patch(args.applicationId, {
       hunterConfig: {
@@ -421,14 +453,14 @@ export const ingestOtp = internalMutation({
     const now = Date.now();
     const targetFlow = args.flow ?? "spain";
 
-    let challenge: Awaited<ReturnType<typeof ctx.db.get>> | undefined;
+    let challenge: Doc<"otpChallenges"> | undefined;
 
     if (args.applicationId) {
-      const rows = await ctx.db
+      const rows = (await ctx.db
         .query("otpChallenges")
         .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId!))
         .order("desc")
-        .take(10);
+        .take(10)) as Doc<"otpChallenges">[];
       challenge = rows.find(
         (r) =>
           (r.status === "pending" || r.status === "submitted") &&
@@ -439,28 +471,32 @@ export const ingestOtp = internalMutation({
 
     if (!challenge) {
       // Fallback global : défi le plus récent en cours toutes applications confondues
-      const pending = await ctx.db
+      const pending = (await ctx.db
         .query("otpChallenges")
         .withIndex("by_status", (q) => q.eq("status", "pending"))
         .order("desc")
-        .take(30);
+        .take(30)) as Doc<"otpChallenges">[];
       challenge = pending.find((r) => r.expiresAt > now && r.flow === targetFlow);
     }
 
     if (!challenge) return { ok: false as const, reason: "no_active_challenge" };
-    if (challenge.expiresAt <= now) {
-      await ctx.db.patch(challenge._id, { status: "expired" });
+    
+    // Type assertion for otpChallenges document
+    const otpChallenge = challenge as Doc<"otpChallenges">;
+    
+    if (otpChallenge.expiresAt <= now) {
+      await ctx.db.patch(otpChallenge._id, { status: "expired" });
       return { ok: false as const, reason: "challenge_expired" };
     }
 
-    await ctx.db.patch(challenge._id, {
+    await ctx.db.patch(otpChallenge._id, {
       status: "submitted",
       code,
       submittedAt: now,
     });
 
-    console.log(`[OTP ingest] ✅ Code ${code} soumis pour challenge ${challenge._id} (app ${challenge.applicationId})`);
-    return { ok: true as const, challengeId: challenge._id, code, applicationId: challenge.applicationId };
+    console.log(`[OTP ingest] ✅ Code ${code} soumis pour challenge ${otpChallenge._id} (app ${otpChallenge.applicationId})`);
+    return { ok: true as const, challengeId: otpChallenge._id, code, applicationId: otpChallenge.applicationId };
   },
 });
 
@@ -524,7 +560,7 @@ export const submitOtpCode = internalMutation({
       (r) =>
         r.flow === args.flow &&
         (r.status === "pending" || r.status === "submitted"),
-    );
+    ) as Doc<"otpChallenges"> | undefined;
 
     if (!target) return { ok: false, reason: "no_active_challenge" as const };
     if (target.expiresAt <= now) {
@@ -559,7 +595,7 @@ export const consumeOtpCode = internalMutation({
       (r) =>
         r.flow === args.flow &&
         (r.status === "pending" || r.status === "submitted"),
-    );
+    ) as Doc<"otpChallenges"> | undefined;
     if (!target) return { status: "none" as const };
     if (target.expiresAt <= now) {
       await ctx.db.patch(target._id, { status: "expired" });

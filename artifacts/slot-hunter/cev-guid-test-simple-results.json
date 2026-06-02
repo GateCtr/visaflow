@@ -1,0 +1,78 @@
+{
+  "testDate": "2026-05-28T06:43:06.542Z",
+  "email": "screentapinc@gmail.com",
+  "session": {
+    "orgId": "12345678-1234-1234-1234-123456789012",
+    "appId": "87654321-4321-4321-4321-210987654321",
+    "sessionGuid": "session-guid-example",
+    "tokenGuid": "token-guid-example",
+    "lang": "en",
+    "fullUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en",
+    "sessionCookie": "ASP.NET_SessionId=simulated_session_cookie; PreferredCulture=en-US",
+    "validUntil": "2026-05-28T06:57:54.075Z",
+    "capturedAt": "2026-05-28T06:42:54.075Z",
+    "redirectUrl": "/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en"
+  },
+  "results": [
+    {
+      "step": "obtain_session",
+      "success": true,
+      "data": {
+        "orgId": "12345678-1234-1234-1234-123456789012",
+        "appId": "87654321-4321-4321-4321-210987654321",
+        "sessionGuid": "session-guid-example",
+        "tokenGuid": "token-guid-example",
+        "lang": "en",
+        "fullUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en",
+        "sessionCookie": "ASP.NET_SessionId=simulated_session_cookie; PreferredCulture=en-US",
+        "validUntil": "2026-05-28T06:57:54.075Z",
+        "capturedAt": "2026-05-28T06:42:54.075Z",
+        "redirectUrl": "/Integration/VOW/12345678-1234-1234-1234-123456789012/87654321-4321-4321-4321-210987654321/session-guid-example/token-guid-example/en"
+      }
+    },
+    {
+      "step": "iteration_1",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 888,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_2",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 776,
+        "bodyLength": 154
+      }
+    },
+    {
+      "step": "iteration_3",
+      "success": true,
+      "data": {
+        "status": 302,
+        "redirectLocation": "/Integration/Error/ParametersNotFound",
+        "responseTimeMs": 776,
+        "bodyLength": 154
+      }
+    }
+  ],
+  "analysis": {
+    "totalTests": 4,
+    "successfulTests": 4,
+    "successRate": 100,
+    "sessionExpiredAt": null,
+    "noAvailabilityCount": 0,
+    "recommendations": [
+      "Implémenter l'extraction des GUIDs après SetCaptchaToken",
+      "Stocker les GUIDs avec la session pour réutilisation",
+      "Réutiliser la même URL pour le polling sans nouveau captcha",
+      "Surveiller SessionExpired pour déclencher un nouveau captcha",
+      "Économiser les crédits captcha en réutilisant les sessions"
+    ]
+  }
+}
