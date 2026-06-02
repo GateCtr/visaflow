@@ -29,12 +29,19 @@ interface CapturedCookies {
   userAgent: string;
 }
 
+// Import makeCevProxyStickyUrl to use the same proxy configuration as the main bot
+import { makeCevProxyStickyUrl } from "./cev-shared-impit.js";
+
 const CEV_URL = "https://appointment.cloud.diplomatie.be/";
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";
 let CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? "";
-// Priorise SOAX_PROXY_URL d'abord, puis IPROYAL_PROXY_URL (utilisé par le bot), puis les autres
-const PROXY_URL = process.env.SOAX_PROXY_URL ?? process.env.IPROYAL_PROXY_URL ?? process.env.PROXY_URL ?? "";
+// Priorise SOAX via makeCevProxyStickyUrl pour utiliser la même configuration que le bot principal
+let PROXY_URL = process.env.SOAX_PROXY_URL 
+  ? makeCevProxyStickyUrl("soax", undefined, "session-worker")
+  : process.env.IPROYAL_PROXY_URL 
+  ? process.env.IPROYAL_PROXY_URL 
+  : process.env.PROXY_URL ?? "";
 const REFRESH_INTERVAL_MIN = parseInt(process.env.REFRESH_INTERVAL_MIN ?? "13", 10);
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
@@ -55,9 +62,24 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     // @ts-ignore: puppeteer-extra-plugin-stealth has no official types
     const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
     puppeteer.default.use(StealthPlugin());
+    
+    // Install Chrome if it's missing
+    try {
+      const { install } = await import("@puppeteer/browsers");
+      log("INFO", "Vérification installation Chrome pour Puppeteer…");
+      await install({
+        browser: "chrome",
+        buildId: "latest",
+        cacheDir: process.env.PUPPETEER_CACHE_DIR || undefined,
+      });
+      log("INFO", "✅ Chrome pour Puppeteer prêt !");
+    } catch (installErr) {
+      log("WARN", `Impossible d'installer Chrome automatiquement: ${installErr}`);
+      log("WARN", "Tentative d'utilisation du Chrome système…");
+    }
   } catch {
     log("ERROR", "puppeteer-extra ou puppeteer-extra-plugin-stealth non installé.");
-    log("ERROR", "  → npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth");
+    log("ERROR", "  → npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth @puppeteer/browsers");
     return null;
   }
 
