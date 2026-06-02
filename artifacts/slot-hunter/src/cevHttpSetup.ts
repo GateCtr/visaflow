@@ -20,6 +20,7 @@
 
 import { botLog } from "./convexClient.js";
 import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp } from "./cev-shared-impit.js";
+import { lookup } from "node:dns/promises";
 import {
   syncVowintSessionToRedis,
   restoreVowintSessionFromRedis,
@@ -827,13 +828,19 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         port = '5000';
       }
       
-      // IMPORTANT: Use hostname (proxy.soax.com) not exit IP for SOAX, because SOAX routes based on sessionId in login!
-      // Anti-Captcha might fail, but we have a fallback to proxyless mode
+      // Résoudre le hostname du proxy en IP pour Anti-Captcha (requiert une IP, pas de hostname !)
       let proxyAddress = parsedProxy.hostname;
+      try {
+        console.log(`[CEV-SETUP] Resolving proxy hostname ${proxyAddress} to IP...`);
+        const dnsResult = await lookup(proxyAddress);
+        proxyAddress = dnsResult.address;
+        console.log(`[CEV-SETUP] ✅ Resolved to IP: ${proxyAddress}`);
+      } catch (dnsErr) {
+        console.warn(`[CEV-SETUP] ⚠️ Failed to resolve proxy hostname: ${dnsErr}. Using hostname anyway (may fail).`);
+      }
+      
       if (proxyExitIp) {
-        console.log(`[CEV-SETUP] Proxy exit IP: ${proxyExitIp} — but using hostname (${proxyAddress}) for Anti-Captcha (SOAX requires hostname + sessionId)`);
-      } else {
-        console.warn(`[CEV-SETUP] No proxy exit IP available; using hostname (token binding may fail)`);
+        console.log(`[CEV-SETUP] Proxy exit IP (token binding): ${proxyExitIp}`);
       }
       
       proxyConfig = {
