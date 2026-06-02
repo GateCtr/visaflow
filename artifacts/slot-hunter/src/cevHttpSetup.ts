@@ -811,6 +811,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   // Extract proxy info from current environment (used by cevImpitFetch)
   const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
   let proxyConfig: any = null;
+  let proxyDnsResolved: string | null = null;
   
   // Get the already-resolved proxy exit IP (from proxy guard) if available (for token binding!)
   const proxyExitIp = getCevProxyExitIp();
@@ -834,6 +835,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         console.log(`[CEV-SETUP] Resolving proxy hostname ${proxyAddress} to IP...`);
         const dnsResult = await lookup(proxyAddress);
         proxyAddress = dnsResult.address;
+        proxyDnsResolved = dnsResult.address;
         console.log(`[CEV-SETUP] ✅ Resolved to IP: ${proxyAddress}`);
       } catch (dnsErr) {
         console.warn(`[CEV-SETUP] ⚠️ Failed to resolve proxy hostname: ${dnsErr}. Using hostname anyway (may fail).`);
@@ -862,7 +864,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
 
   // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
   if (ANTICAPTCHA_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig } });
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
     try {
       let task;
       if (proxyConfig) {
@@ -878,6 +880,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       }
       
       console.log("[CEV-SETUP] Sending task to Anti-Captcha:", JSON.stringify(task, null, 2));
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { type: task.type, useProxy: !!proxyConfig, proxyAddress: proxyConfig?.proxyAddress, proxyLoginPrefix: proxyConfig?.proxyLogin ? proxyConfig.proxyLogin.slice(0, 40) + "..." : undefined } });
       
       const createRes = await fetch("https://api.anti-captcha.com/createTask", {
         method: "POST",
@@ -890,14 +893,17 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       });
       let createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
       console.log("[CEV-SETUP] Anti-Captcha createTask response:", createData);
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_create", status: createData.errorId === 0 ? "ok" : "fail", data: { errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode, errorDescription: createData.errorDescription } });
       
       // If proxy task failed, fallback to proxyless mode
       if ((createData.errorId !== 0 || !createData.taskId) && proxyConfig) {
         console.log("[CEV-SETUP] Proxy-based task failed, falling back to proxyless mode");
         errors.push(`anticaptcha_create_error_with_proxy: ${createData.errorCode} - ${createData.errorDescription}`);
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback", status: "ok", data: { reason: "proxy_task_failed", originalError: createData.errorCode, originalErrorDescription: createData.errorDescription } });
         
         const fallbackTask = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
         console.log("[CEV-SETUP] Sending fallback task to Anti-Captcha:", JSON.stringify(fallbackTask, null, 2));
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback_task", status: "ok", data: { type: fallbackTask.type } });
         
         const fallbackCreateRes = await fetch("https://api.anti-captcha.com/createTask", {
           method: "POST",
@@ -910,6 +916,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         });
         createData = await fallbackCreateRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
         console.log("[CEV-SETUP] Anti-Captcha fallback createTask response:", createData);
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback_create", status: createData.errorId === 0 ? "ok" : "fail", data: { errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode, errorDescription: createData.errorDescription } });
       }
       
       if (createData.errorId === 0 && createData.taskId) {
