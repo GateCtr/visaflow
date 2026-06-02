@@ -6,7 +6,7 @@
  * via l'endpoint /hunter/cev-sessions/inject-f5.
  *
  * Architecture découplée :
- *   - Le Recruteur (ce script) génère les cookies WAF via Playwright Stealth
+ *   - Le Recruteur (ce script) génère les cookies WAF via Puppeteer Stealth
  *   - Le Chasseur (bot impit) utilise les cookies pour les requêtes HTTP
  *
  * Usage :
@@ -54,37 +54,32 @@ function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
  * attend que le WAF F5 dépose ses cookies, et les capture.
  */
 async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
-  // Import dynamique — playwright n'est requis QUE par ce worker
-  let playwright: any;
-  let stealth: any;
+  // Import dynamique — puppeteer n'est requis QUE par ce worker
+  let puppeteer: any;
   try {
-    // @ts-ignore: playwright-extra has no official types
-    playwright = await import("playwright-extra");
-    // @ts-ignore: playwright-extra-plugin-stealth has no official types
-    stealth = (await import("playwright-extra-plugin-stealth")).default;
-    playwright.chromium.use(stealth());
-  } catch {
-    log("ERROR", "playwright-extra ou playwright-extra-plugin-stealth non installé.");
-    log("ERROR", "  → npm install playwright playwright-extra playwright-extra-plugin-stealth");
+    // @ts-ignore: puppeteer-extra has no official types
+    puppeteer = await import("puppeteer-extra");
+    // @ts-ignore: puppeteer-extra-plugin-stealth has no official types
+    const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
+    puppeteer.default.use(StealthPlugin());
+  } catch (err) {
+    log("ERROR", `puppeteer-extra ou puppeteer-extra-plugin-stealth non installé. ${err}`);
+    log("ERROR", "  → npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth");
     return null;
   }
 
-  const launchOptions: any = {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-blink-features=AutomationControlled",
-    ],
-  };
+  const launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+  ];
 
   if (PROXY_URL) {
+    // Extraire host:port du proxy (ignorer auth — sera passée via page.authenticate)
     try {
       const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
-      launchOptions.proxy = {
-        server: `http://${parsed.hostname}:${parsed.port}`,
-      };
+      launchArgs.push(`--proxy-server=${parsed.hostname}:${parsed.port}`);
       log("INFO", `Proxy configuré: ${parsed.hostname}:${parsed.port}`);
     } catch {
       log("WARN", `URL proxy invalide: ${PROXY_URL.slice(0, 40)}… — connexion directe`);
@@ -92,44 +87,44 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
   }
 
   let browser: any = null;
-  let context: any = null;
 
   try {
-    browser = await playwright.chromium.launch(launchOptions);
+    browser = await puppeteer.default.launch({
+      headless: "new",
+      args: launchArgs,
+    });
 
-    const contextOptions: any = {};
+    const page = await browser.newPage();
+
+    // Authentification proxy si nécessaire
     if (PROXY_URL) {
       try {
         const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
         if (parsed.username) {
-          contextOptions.proxy = {
-            server: `http://${parsed.hostname}:${parsed.port}`,
+          await page.authenticate({
             username: decodeURIComponent(parsed.username),
             password: decodeURIComponent(parsed.password),
-          };
+          });
         }
       } catch { /* pas d'auth */ }
     }
 
-    context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
+    // Capturer le User-Agent
+    const userAgent = await browser.userAgent();
+    log("INFO", `User-Agent: ${userAgent.slice(0, 80)}…`);
 
     // Naviguer vers le CEV
     log("INFO", `Navigation vers ${CEV_URL}…`);
-    await page.goto(CEV_URL, { waitUntil: "networkidle", timeout: 30_000 });
-
-    // Capturer le User-Agent
-    const userAgent = await page.evaluate(() => navigator.userAgent);
-    log("INFO", `User-Agent: ${userAgent.slice(0, 80)}…`);
+    await page.goto(CEV_URL, { waitUntil: "networkidle2", timeout: 30_000 });
 
     // Attendre que le WAF F5 exécute son JavaScript et dépose les cookies
     // Le JS F5 BIG-IP prend généralement 2-5 secondes
     const waitSec = 5 + Math.random() * 3; // 5-8 secondes
     log("INFO", `Attente ${waitSec.toFixed(1)}s pour exécution JS WAF F5…`);
-    await page.waitForTimeout(waitSec * 1000);
+    await new Promise(r => setTimeout(r, waitSec * 1000));
 
     // Capturer TOUS les cookies
-    const cookies = await context.cookies(CEV_URL);
+    const cookies = await page.cookies();
     log("INFO", `${cookies.length} cookie(s) capturé(s)`);
 
     // Trouver le cookie F5 (commence par TS, peu importe le suffixe)
@@ -140,10 +135,10 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
       log("WARN", `Cookie F5 (TS*) non trouvé. Cookies présents: ${cookies.map((c: any) => c.name).join(", ")}`);
       // Tenter un reload — parfois le F5 nécessite une deuxième navigation
       log("INFO", "Tentative reload…");
-      await page.reload({ waitUntil: "networkidle", timeout: 30_000 });
-      await page.waitForTimeout(5000);
+      await page.reload({ waitUntil: "networkidle2", timeout: 30_000 });
+      await new Promise(r => setTimeout(r, 5000));
 
-      const cookies2 = await context.cookies(CEV_URL);
+      const cookies2 = await page.cookies();
       const f5Cookie2 = cookies2.find((c: any) => c.name.startsWith("TS"));
       const aspNetCookie2 = cookies2.find((c: any) => c.name === "ASP.NET_SessionId");
 
@@ -175,13 +170,11 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log("ERROR", `Erreur Playwright: ${msg}`);
+    log("ERROR", `Erreur Puppeteer: ${msg}`);
+    log("ERROR", `Stack: ${err instanceof Error ? err.stack : ""}`);
     return null;
 
   } finally {
-    if (context) {
-      try { await context.close(); } catch { /* ignore */ }
-    }
     if (browser) {
       try { await browser.close(); } catch { /* ignore */ }
     }
