@@ -679,6 +679,39 @@ export function isCevDirectMode(): boolean {
   return Date.now() < _cevDirectModeUntil;
 }
 
+/** Récupère l'IP de sortie proxy actuellement configurée (si disponible) */
+export function getCevProxyExitIp(): string | undefined {
+  return _cevProxyGuardState?.expectedExitIp;
+}
+
+/** Effectue un health check proxy pour récupérer l'IP de sortie et initialiser le guard */
+export async function initCevProxyGuardWithExitIp(proxyUrl: string, identifier?: string): Promise<string | null> {
+  try {
+    const impit = getProxyImpit(proxyUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    
+    const res = await impit.fetch(CEV_HEALTH_CHECK_URL, {
+      signal: controller.signal,
+    } as any) as unknown as Response;
+    
+    clearTimeout(timeout);
+    
+    if (!res.ok) {
+      console.warn(`[CEV-PROXY-GUARD] Health check échoué (HTTP ${res.status})`);
+      return null;
+    }
+    
+    const exitIp = (await res.text()).trim();
+    console.log(`[CEV-PROXY-GUARD] IP de sortie proxy détectée: ${exitIp}`);
+    initCevProxyGuard(proxyUrl, identifier, exitIp);
+    return exitIp;
+  } catch (err) {
+    console.warn(`[CEV-PROXY-GUARD] Échec init proxy guard: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 export async function cevImpitFetch(url: string, options: RequestInit, logPrefix = "[CEV]"): Promise<Response> {
   // ── Mode direct forcé (après 422 proxy) ─────────────────────────────────────
   if (Date.now() < _cevDirectModeUntil) {

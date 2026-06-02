@@ -19,9 +19,8 @@
  */
 
 import { botLog } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp } from "./cev-shared-impit.js";
 import {
-  initCevRedis,
   syncVowintSessionToRedis,
   restoreVowintSessionFromRedis,
   removeVowintSessionFromRedis,
@@ -812,6 +811,9 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
   let proxyConfig: any = null;
   
+  // Get the already-resolved proxy exit IP (from proxy guard) if available (for token binding!)
+  const proxyExitIp = getCevProxyExitIp();
+  
   if (proxyUrl) {
     try {
       const parsedProxy = new URL(proxyUrl);
@@ -825,9 +827,17 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         port = '5000';
       }
       
+      // Use the already-detected exit IP (token binding!) if available; otherwise use hostname (warning)
+      let proxyAddress = proxyExitIp || parsedProxy.hostname;
+      if (proxyExitIp) {
+        console.log(`[CEV-SETUP] Using proxy exit IP (token binding): ${proxyAddress}`);
+      } else {
+        console.warn(`[CEV-SETUP] No proxy exit IP available; using hostname (token binding may fail)`);
+      }
+      
       proxyConfig = {
         proxyType: proxyType,
-        proxyAddress: parsedProxy.hostname,
+        proxyAddress: proxyAddress,
         proxyPort: parseInt(port, 10),
         proxyLogin: decodeURIComponent(parsedProxy.username || ''),
         proxyPassword: decodeURIComponent(parsedProxy.password || ''),
@@ -870,8 +880,29 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         }),
         signal: AbortSignal.timeout(30_000),
       });
-      const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
+      let createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
       console.log("[CEV-SETUP] Anti-Captcha createTask response:", createData);
+      
+      // If proxy task failed, fallback to proxyless mode
+      if ((createData.errorId !== 0 || !createData.taskId) && proxyConfig) {
+        console.log("[CEV-SETUP] Proxy-based task failed, falling back to proxyless mode");
+        errors.push(`anticaptcha_create_error_with_proxy: ${createData.errorCode} - ${createData.errorDescription}`);
+        
+        const fallbackTask = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+        console.log("[CEV-SETUP] Sending fallback task to Anti-Captcha:", JSON.stringify(fallbackTask, null, 2));
+        
+        const fallbackCreateRes = await fetch("https://api.anti-captcha.com/createTask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientKey: ANTICAPTCHA_KEY,
+            task: fallbackTask,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        createData = await fallbackCreateRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
+        console.log("[CEV-SETUP] Anti-Captcha fallback createTask response:", createData);
+      }
       
       if (createData.errorId === 0 && createData.taskId) {
         for (let i = 0; i < 60; i++) {

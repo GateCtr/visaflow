@@ -32,6 +32,7 @@ import {
   checkCevProxyLiveness,
   resetCevImpitInstances,
   makeCevProxyStickyUrl,
+  initCevProxyGuardWithExitIp,
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
@@ -518,12 +519,18 @@ export async function startCevDossierLoop(): Promise<void> {
   // We override it with the SOAX sticky URL so all requests go through SOAX.
   // (iProyal account expired/402 — SOAX is the active provider)
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+  let proxyExitIp: string | null = null;
   if (soaxBaseUrl) {
     const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-dossier-v3");
     process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
     resetCevImpitInstances(); // Force impit to recreate with new proxy URL
     log("INFO", `  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-  } else if (!process.env.IPROYAL_PROXY_URL) {
+    // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
+    proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, "cev-dossier-v3");
+  } else if (process.env.IPROYAL_PROXY_URL) {
+    // Si on utilise iProyal, aussi initialiser le guard
+    proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, "cev-dossier-v3");
+  } else {
     log("WARN", `  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
   }
 
