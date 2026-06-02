@@ -5,7 +5,7 @@ interface CapturedCookies {
   userAgent: string;
 }
 
-import { makeCevProxyStickyUrl } from "./cev-shared-impit.js";
+import { makeCevProxyStickyUrl, getCevProxyUrl } from "./cev-shared-impit.js";
 
 const VOWINT_URL = "https://visaonweb.diplomatie.be";
 const CEV_URL = "https://appointment.cloud.diplomatie.be/Captcha";
@@ -20,6 +20,22 @@ let PROXY_URL = process.env.SOAX_PROXY_URL
   : process.env.PROXY_URL ?? "";
 
 const REFRESH_INTERVAL_MIN = parseInt(process.env.REFRESH_INTERVAL_MIN ?? "13", 10);
+
+function getProxyUrl(): string {
+  // First priority: use the exact proxy already used by the CEV dossier loop
+  const cevProxy = getCevProxyUrl();
+  if (cevProxy) {
+    log("INFO", "Utilisant le proxy du CEV dossier loop (même IP)");
+    return cevProxy;
+  }
+  // Fallback: generate a new proxy URL
+  const proxyUrl = process.env.SOAX_PROXY_URL
+    ? makeCevProxyStickyUrl("soax", undefined, "session-worker")
+    : process.env.IPROYAL_PROXY_URL
+    ? process.env.IPROYAL_PROXY_URL
+    : process.env.PROXY_URL ?? "";
+  return proxyUrl;
+}
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
   const ts = new Date().toISOString().slice(11, 19);
@@ -44,6 +60,8 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
   ];
+
+  const PROXY_URL = getProxyUrl();
 
   let proxyHost = "";
   let proxyPort = "";

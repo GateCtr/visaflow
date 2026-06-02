@@ -684,6 +684,11 @@ export function getCevProxyExitIp(): string | undefined {
   return _cevProxyGuardState?.expectedExitIp;
 }
 
+/** Récupère l'URL proxy actuellement utilisé par le CEV (si disponible) */
+export function getCevProxyUrl(): string | undefined {
+  return _cevProxyGuardState?.proxyUrl;
+}
+
 /** Effectue un health check proxy pour récupérer l'IP de sortie et initialiser le guard */
 export async function initCevProxyGuardWithExitIp(proxyUrl: string, identifier?: string): Promise<string | null> {
   try {
