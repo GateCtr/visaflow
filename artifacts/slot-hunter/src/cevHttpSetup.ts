@@ -827,11 +827,10 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
 
   // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
   if (ANTICAPTCHA_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig } });
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: false } });
     try {
-      const task = proxyConfig 
-        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig }
-        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      // Always use HCaptchaTaskProxyless for CEV (proxy format issue)
+      const task = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
       
       const createRes = await fetch("https://api.anti-captcha.com/createTask", {
         method: "POST",
