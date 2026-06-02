@@ -241,7 +241,7 @@ async function refreshCycle(): Promise<void> {
 /**
  * Point d'entrée principal.
  */
-async function main(): Promise<void> {
+export async function startSessionWorker(): Promise<void> {
   log("INFO", "╔══════════════════════════════════════════════════╗");
   log("INFO", "║   Session Worker (Recruteur F5) — Démarrage      ║");
   log("INFO", "╚══════════════════════════════════════════════════╝");
@@ -256,7 +256,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   if (!CEV_SESSION_ID) {
-    log("ERROR", "CEV_SESSION_ID manquant ! ID de la session cible dans Convex.");
+    log("ERROR", "CEV_SESSION_ID manquant ! ID de la session CEV cible dans Convex.");
     process.exit(1);
   }
 
@@ -282,9 +282,12 @@ async function main(): Promise<void> {
   log("INFO", `Worker actif — refresh toutes les ${REFRESH_INTERVAL_MIN} min (Ctrl+C pour arrêter)`);
 }
 
-main().catch(err => {
-  log("ERROR", `Fatal: ${err}`);
-  process.exit(1);
-});
+// Lancer automatiquement seulement si le fichier est exécuté directement
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startSessionWorker().catch(err => {
+    log("ERROR", `Fatal: ${err}`);
+    process.exit(1);
+  });
+}
 
 export {};

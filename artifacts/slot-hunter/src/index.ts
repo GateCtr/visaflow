@@ -22,6 +22,7 @@ import { startV3Loop } from "./loops/v3-loop.js";
 import { initParallelWatchers, startParallelReloginLoop } from "./loops/parallel-loop.js";
 import { checkPortalBundleKey } from "./bundle-check.js";
 import { startDailyReportLoop } from "./daily-report.js";
+import { startSessionWorker } from "./sessionWorker.js";
 
 import {
   log,
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
   log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
 
   // Lancer les boucles background
-  // ─── Mode CEV : priorité Dossier v3 > Stealth v2 > classique ───
+  // ─── MODE CEV : priorité Dossier v3 > Stealth v2 > classique ───
   let cevDossierMode = false;
   let cevStealthMode = false;
   try {
@@ -79,6 +80,13 @@ async function main(): Promise<void> {
       cevStealthMode = stealthValue === "1";
     }
   } catch { /* Convex inaccessible — fallback normal */ }
+
+  // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si CEV_SESSION_ID est défini
+  if (process.env.CEV_SESSION_ID) {
+    startSessionWorker().catch(err => {
+      console.error("[SESSION-WORKER] Crash fatal:", err);
+    });
+  }
 
   if (cevDossierMode) {
     log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF ═══");
