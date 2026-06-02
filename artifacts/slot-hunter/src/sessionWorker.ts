@@ -62,24 +62,9 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     // @ts-ignore: puppeteer-extra-plugin-stealth has no official types
     const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
     puppeteer.default.use(StealthPlugin());
-    
-    // Install Chrome if it's missing
-    try {
-      const { install } = await import("@puppeteer/browsers");
-      log("INFO", "Vérification installation Chrome pour Puppeteer…");
-      await install({
-        browser: "chrome",
-        buildId: "latest",
-        cacheDir: process.env.PUPPETEER_CACHE_DIR || undefined,
-      });
-      log("INFO", "✅ Chrome pour Puppeteer prêt !");
-    } catch (installErr) {
-      log("WARN", `Impossible d'installer Chrome automatiquement: ${installErr}`);
-      log("WARN", "Tentative d'utilisation du Chrome système…");
-    }
   } catch {
     log("ERROR", "puppeteer-extra ou puppeteer-extra-plugin-stealth non installé.");
-    log("ERROR", "  → npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth @puppeteer/browsers");
+    log("ERROR", "  → npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth");
     return null;
   }
 
