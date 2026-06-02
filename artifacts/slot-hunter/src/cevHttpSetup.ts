@@ -805,6 +805,8 @@ function mergeCookies(existing: string, res: Response): string {
 async function solveHcaptcha(clientId: string): Promise<string | null> {
   const pageUrl = `${CEV_BASE}/Captcha`;
   const errors: string[] = [];
+  // Use a realistic user agent for Anti-Captcha
+  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
   // Extract proxy info from current environment (used by cevImpitFetch)
   const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
@@ -813,10 +815,14 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   if (proxyUrl) {
     try {
       const parsedProxy = new URL(proxyUrl);
+      let proxyType = parsedProxy.protocol.replace(':', '');
+      // Anti-Captcha uses http/socks4/socks5, if it's https we'll use http (since proxy is usually same for both)
+      if (proxyType === 'https') proxyType = 'http';
+      
       proxyConfig = {
-        proxyType: parsedProxy.protocol.replace(':', ''),
+        proxyType: proxyType,
         proxyAddress: parsedProxy.hostname,
-        proxyPort: parseInt(parsedProxy.port || (parsedProxy.protocol === 'https:' ? '443' : '80'), 10),
+        proxyPort: parseInt(parsedProxy.port || (proxyType === 'http' ? '8080' : '1080'), 10),
         proxyLogin: decodeURIComponent(parsedProxy.username || ''),
         proxyPassword: decodeURIComponent(parsedProxy.password || ''),
       };
@@ -827,10 +833,22 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
 
   // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
   if (ANTICAPTCHA_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: false } });
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig } });
     try {
-      // Always use HCaptchaTaskProxyless for CEV (proxy format issue)
-      const task = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      let task;
+      if (proxyConfig) {
+        task = {
+          type: "HCaptchaTask",
+          websiteURL: pageUrl,
+          websiteKey: HCAPTCHA_SITEKEY,
+          ...proxyConfig,
+          userAgent: userAgent,
+        };
+      } else {
+        task = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      }
+      
+      console.log("[CEV-SETUP] Sending task to Anti-Captcha:", JSON.stringify(task, null, 2));
       
       const createRes = await fetch("https://api.anti-captcha.com/createTask", {
         method: "POST",
@@ -842,6 +860,8 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         signal: AbortSignal.timeout(30_000),
       });
       const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
+      console.log("[CEV-SETUP] Anti-Captcha createTask response:", createData);
+      
       if (createData.errorId === 0 && createData.taskId) {
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 5000));
@@ -851,6 +871,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
             body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
           });
           const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { gRecaptchaResponse?: string; token?: string }; errorCode?: string; errorDescription?: string };
+          
           if (pollData.status === "ready") {
             const token = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;
             if (token) {
