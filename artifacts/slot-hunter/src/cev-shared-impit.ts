@@ -773,7 +773,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
 
       if (res.status === 422) {
         // 422 = proxy CONNECT tunnel rejeté — basculer en mode DIRECT durablement
-        console.error(`${logPrefix} ❌ Proxy 422 (CONNECT tunnel rejected) — BASCULEMENT MODE DIRECT`);
+        console.error(`${logPrefix} ❌ Proxy 422 (CONNECT tunnel rejected) — Proxy utilisé: ${currentProxy?.replace(/:([^:@]+)@/, ":***@")}`);
+        console.error(`${logPrefix} ❌ BASCULEMENT MODE DIRECT`);
         _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
         console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
         // Exécuter immédiatement en direct (pas de retry proxy)
@@ -814,7 +815,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
 
       // 422 proxy error in exception form → basculer en direct immédiatement
       if (is422Tunnel) {
-        console.error(`${logPrefix} ❌ Proxy 422 tunnel error (exception) — BASCULEMENT MODE DIRECT`);
+        console.error(`${logPrefix} ❌ Proxy 422 tunnel error (exception) — Proxy utilisé: ${currentProxy?.replace(/:([^:@]+)@/, ":***@")}`);
+        console.error(`${logPrefix} ❌ BASCULEMENT MODE DIRECT`);
         _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
         console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
         try {
