@@ -243,20 +243,24 @@ async function fetchActiveSession(): Promise<string | null> {
  * Cycle complet : capture + injection.
  */
 async function refreshCycle(): Promise<void> {
-  log("INFO", "═══ Début cycle de rafraîchissement ═══");
+  try {
+    log("INFO", "═══ Début cycle de rafraîchissement ═══");
 
-  const captured = await captureCookiesFromBrowser();
-  if (!captured) {
-    log("ERROR", "Capture échouée — retry au prochain cycle");
-    return;
+    const captured = await captureCookiesFromBrowser();
+    if (!captured) {
+      log("ERROR", "Capture échouée — retry au prochain cycle");
+      return;
+    }
+
+    if (!captured.aspNetSessionId) {
+      log("WARN", "ASP.NET_SessionId absent — injection du cookie F5 seul");
+    }
+
+    await injectCookiesToConvex(captured);
+    log("INFO", `═══ Fin cycle — prochain dans ${REFRESH_INTERVAL_MIN} min ═══`);
+  } catch (err) {
+    log("ERROR", `Erreur inattendue pendant le cycle: ${err}`);
   }
-
-  if (!captured.aspNetSessionId) {
-    log("WARN", "ASP.NET_SessionId absent — injection du cookie F5 seul");
-  }
-
-  await injectCookiesToConvex(captured);
-  log("INFO", `═══ Fin cycle — prochain dans ${REFRESH_INTERVAL_MIN} min ═══`);
 }
 
 /**
@@ -270,11 +274,13 @@ export async function startSessionWorker(): Promise<void> {
   // Validation des variables d'environnement
   if (!CONVEX_SITE_URL) {
     log("ERROR", "CONVEX_SITE_URL manquant ! Exemple: https://xxx.convex.site");
-    process.exit(1);
+    // Ne pas crasher tout le bot — juste ne pas démarrer le worker
+    return;
   }
   if (!HUNTER_API_KEY) {
     log("ERROR", "HUNTER_API_KEY manquant !");
-    process.exit(1);
+    // Ne pas crasher tout le bot — juste ne pas démarrer le worker
+    return;
   }
 
   // Récupérer la session CEV automatiquement si pas fournie
@@ -285,8 +291,10 @@ export async function startSessionWorker(): Promise<void> {
       CEV_SESSION_ID = autoSessionId;
       log("INFO", `✅ Session CEV trouvée automatiquement: ${CEV_SESSION_ID.slice(0, 15)}…`);
     } else {
-      log("ERROR", "Impossible de trouver une session CEV active ! Veuillez définir CEV_SESSION_ID.");
-      process.exit(1);
+      log("WARN", "Impossible de trouver une session CEV active ! Le worker attendra 30s avant de réessayer...");
+      // Réessayer dans 30s
+      setTimeout(() => startSessionWorker(), 30_000);
+      return;
     }
   }
 
