@@ -170,8 +170,7 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log("ERROR", `Erreur Puppeteer: ${msg}`);
-    log("ERROR", `Stack: ${err instanceof Error ? err.stack : ""}`);
+    log("ERROR", `Erreur Puppeteer: ${msg}");
     return null;
 
   } finally {
