@@ -819,13 +819,24 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       // Anti-Captcha uses http/socks4/socks5, if it's https we'll use http (since proxy is usually same for both)
       if (proxyType === 'https') proxyType = 'http';
       
+      // SOAX uses port 5000 by default
+      let port = parsedProxy.port;
+      if (!port) {
+        port = '5000';
+      }
+      
       proxyConfig = {
         proxyType: proxyType,
         proxyAddress: parsedProxy.hostname,
-        proxyPort: parseInt(parsedProxy.port || (proxyType === 'http' ? '8080' : '1080'), 10),
+        proxyPort: parseInt(port, 10),
         proxyLogin: decodeURIComponent(parsedProxy.username || ''),
         proxyPassword: decodeURIComponent(parsedProxy.password || ''),
       };
+      
+      console.log("[CEV-SETUP] Parsed proxy config:", {
+        ...proxyConfig,
+        proxyPassword: "***",
+      });
     } catch (e) {
       errors.push(`proxy_parse_failed: ${String(e)}`);
     }
