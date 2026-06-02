@@ -564,6 +564,7 @@ export async function startCevDossierLoop(): Promise<void> {
     aspNetSessionId?: string;
     userAgent?: string;
     validUntil?: number;
+    siphonedAt?: number;
   } | undefined = undefined;
   if (creds && (creds.siphonedF5CookieValue || creds.siphonedAspNetSessionId || creds.siphonedUserAgent)) {
     siphonedCreds = {
@@ -572,6 +573,7 @@ export async function startCevDossierLoop(): Promise<void> {
       aspNetSessionId: creds.siphonedAspNetSessionId,
       userAgent: creds.siphonedUserAgent,
       validUntil: creds.siphonedValidUntil,
+      siphonedAt: creds.siphonedAt,
     };
   }
   // applicationId pour les botLogs — celui de l'application Convex associée à la session CEV
@@ -582,38 +584,40 @@ export async function startCevDossierLoop(): Promise<void> {
     const allSessions = await getActiveCevSessions();
     const target = allSessions.find((s: any) => s.vowintEmail && s.vowintPassword);
     if (target) {
-      vowintEmail = target.vowintEmail;
-      vowintPassword = target.vowintPassword;
-      // Essayer de récupérer les champs siphonnés depuis la session active
-      if (target.siphonedF5CookieValue || target.siphonedAspNetSessionId || target.siphonedUserAgent) {
-        siphonedCreds = {
-          f5CookieValue: target.siphonedF5CookieValue,
-          f5CookieName: target.siphonedF5CookieName,
-          aspNetSessionId: target.siphonedAspNetSessionId,
-          userAgent: target.siphonedUserAgent,
-          validUntil: target.siphonedValidUntil,
-        };
+        vowintEmail = target.vowintEmail;
+        vowintPassword = target.vowintPassword;
+        // Essayer de récupérer les champs siphonnés depuis la session active
+        if (target.siphonedF5CookieValue || target.siphonedAspNetSessionId || target.siphonedUserAgent) {
+          siphonedCreds = {
+            f5CookieValue: target.siphonedF5CookieValue,
+            f5CookieName: target.siphonedF5CookieName,
+            aspNetSessionId: target.siphonedAspNetSessionId,
+            userAgent: target.siphonedUserAgent,
+            validUntil: target.siphonedValidUntil,
+            siphonedAt: target.siphonedAt,
+          };
+        }
       }
-    }
   }
 
   if (!vowintEmail || !vowintPassword) {
     const pendingSetups = await getPendingCevSetups();
     const pending = pendingSetups.find(s => s.vowintEmail && s.vowintPassword);
     if (pending) {
-      vowintEmail = pending.vowintEmail!;
-      vowintPassword = pending.vowintPassword!;
-      // Essayer de récupérer les champs siphonnés depuis le pending setup
-      if (pending.siphonedF5CookieValue || pending.siphonedAspNetSessionId || pending.siphonedUserAgent) {
-        siphonedCreds = {
-          f5CookieValue: pending.siphonedF5CookieValue,
-          f5CookieName: pending.siphonedF5CookieName,
-          aspNetSessionId: pending.siphonedAspNetSessionId,
-          userAgent: pending.siphonedUserAgent,
-          validUntil: pending.siphonedValidUntil,
-        };
+        vowintEmail = pending.vowintEmail!;
+        vowintPassword = pending.vowintPassword!;
+        // Essayer de récupérer les champs siphonnés depuis le pending setup
+        if (pending.siphonedF5CookieValue || pending.siphonedAspNetSessionId || pending.siphonedUserAgent) {
+          siphonedCreds = {
+            f5CookieValue: pending.siphonedF5CookieValue,
+            f5CookieName: pending.siphonedF5CookieName,
+            aspNetSessionId: pending.siphonedAspNetSessionId,
+            userAgent: pending.siphonedUserAgent,
+            validUntil: pending.siphonedValidUntil,
+            siphonedAt: pending.siphonedAt,
+          };
+        }
       }
-    }
   }
 
   if (!vowintEmail || !vowintPassword) {
@@ -633,6 +637,7 @@ export async function startCevDossierLoop(): Promise<void> {
             aspNetSessionId: retry.siphonedAspNetSessionId,
             userAgent: retry.siphonedUserAgent,
             validUntil: retry.siphonedValidUntil,
+            siphonedAt: retry.siphonedAt,
           };
         }
         break;
@@ -650,6 +655,7 @@ export async function startCevDossierLoop(): Promise<void> {
             aspNetSessionId: t.siphonedAspNetSessionId,
             userAgent: t.siphonedUserAgent,
             validUntil: t.siphonedValidUntil,
+            siphonedAt: t.siphonedAt,
           };
         }
         break;
@@ -709,21 +715,36 @@ export async function startCevDossierLoop(): Promise<void> {
         continue;
       }
 
-      // Actualiser les cookies siphonnés toutes les 5 scans
+      // Actualiser les credentials et cookies siphonnés toutes les 5 scans
       if (state.scanCount % 5 === 0) {
-        const [newCreds, newSiphoned] = await getCevCredentials();
-        if (newSiphoned) {
-          // Mettre à jour siphonedCreds si nouveau plus récent ou valide plus longtemps
-          const shouldUpdate = !siphonedCreds || 
-            (newSiphoned.siphonedAt && siphonedCreds.siphonedAt && newSiphoned.siphonedAt > siphonedCreds.siphonedAt) ||
-            (newSiphoned.validUntil && siphonedCreds.validUntil && newSiphoned.validUntil > siphonedCreds.validUntil);
-          
-          if (shouldUpdate) {
-            siphonedCreds = newSiphoned;
-            log("INFO", `  🔄 Cookies siphonnés actualisés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+        const newCreds = await getCevCredentials();
+        if (newCreds) {
+          // Mettre à jour les credentials VOWINT si besoin
+          if (newCreds.vowintEmail && newCreds.vowintPassword) {
+            vowintEmail = newCreds.vowintEmail;
+            vowintPassword = newCreds.vowintPassword;
+          }
+
+          // Mettre à jour les cookies siphonnés si présents et plus récents/valides
+          if (newCreds.siphonedF5CookieValue || newCreds.siphonedAspNetSessionId || newCreds.siphonedUserAgent) {
+            const shouldUpdateSiphoned = !siphonedCreds || 
+              (newCreds.siphonedAt && siphonedCreds.siphonedAt && newCreds.siphonedAt > siphonedCreds.siphonedAt) ||
+              (newCreds.siphonedValidUntil && siphonedCreds.validUntil && newCreds.siphonedValidUntil > siphonedCreds.validUntil);
             
-            if (siphonedCreds.userAgent && siphonedCreds.userAgent !== getCevExternalUserAgent()) {
-              setCevExternalUserAgent(siphonedCreds.userAgent);
+            if (shouldUpdateSiphoned) {
+              siphonedCreds = {
+                f5CookieValue: newCreds.siphonedF5CookieValue,
+                f5CookieName: newCreds.siphonedF5CookieName,
+                aspNetSessionId: newCreds.siphonedAspNetSessionId,
+                userAgent: newCreds.siphonedUserAgent,
+                validUntil: newCreds.siphonedValidUntil,
+                siphonedAt: newCreds.siphonedAt,
+              };
+              log("INFO", `  🔄 Cookies siphonnés actualisés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+              
+              if (siphonedCreds.userAgent && siphonedCreds.userAgent !== getCevExternalUserAgent()) {
+                setCevExternalUserAgent(siphonedCreds.userAgent);
+              }
             }
           }
         }
