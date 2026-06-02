@@ -131,59 +131,62 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     const userAgent = await browser.userAgent();
     log("INFO", `User-Agent: ${userAgent.slice(0, 80)}...`);
 
-    // Step 1: Go to VOWINT to get TS0110ceb4 cookie
-    log("INFO", `Navigating to VOWINT: ${VOWINT_URL}`);
+    // CORRECTION IMPORTANTE : Seulement capturer TS01 depuis VOWINT homepage
+    // ASP.NET_SessionId sera obtenu naturellement par les dossiers via leur flux VOWINT → CEV
+    
+    // Step 1: Go to VOWINT to get TS0110ceb4 cookie (IMMÉDIAT sur homepage)
+    log("INFO", `Navigating to VOWINT homepage pour TS cookie: ${VOWINT_URL}`);
     await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
-    const waitVowintSec = 10 + Math.random() * 5;
-    log("INFO", `Waiting ${waitVowintSec.toFixed(1)}s on VOWINT for TS cookie...`);
+    const waitVowintSec = 8 + Math.random() * 4;
+    log("INFO", `Waiting ${waitVowintSec.toFixed(1)}s sur VOWINT pour TS cookie...`);
     await new Promise(r => setTimeout(r, waitVowintSec * 1000));
 
-    // Step 2: Go to CEV Captcha to get ASP.NET_SessionId
-    log("INFO", `Navigating to CEV Captcha: ${CEV_URL}`);
-    await page.goto(CEV_URL, { waitUntil: "networkidle2", timeout: 60_000 });
-    const waitCevSec = 5 + Math.random() * 3;
-    log("INFO", `Waiting ${waitCevSec.toFixed(1)}s on CEV...`);
-    await new Promise(r => setTimeout(r, waitCevSec * 1000));
+    // Step 2: NE PAS naviguer sur /Captcha ! Cela ne crée pas ASP.NET_SessionId
+    // ASP.NET_SessionId sera créé par le flux réel : VOWINT → GetEAppointmentUrl → integrationUrl CEV
+    log("INFO", "⚠️ NE PAS naviguer sur /Captcha - ASP.NET_SessionId sera obtenu par les dossiers via flux naturel");
 
     const cookies = await page.cookies();
-    log("INFO", `${cookies.length} cookie(s) captured: ${cookies.map((c: any) => c.name).join(", ")}`);
+    log("INFO", `${cookies.length} cookie(s) capturés: ${cookies.map((c: any) => c.name).join(", ")}`);
 
     const f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
     const aspNetCookie = cookies.find((c: any) => c.name === "ASP.NET_SessionId");
 
     if (!f5Cookie) {
-      log("WARN", `F5 cookie (TS*) not found! Cookies present: ${cookies.map((c: any) => c.name).join(", ")}`);
+      log("WARN", `F5 cookie (TS*) introuvable! Cookies présents: ${cookies.map((c: any) => c.name).join(", ")}`);
       log("INFO", "Trying reload VOWINT...");
       await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
       await new Promise(r => setTimeout(r, 10000));
 
       const cookies2 = await page.cookies();
       const f5Cookie2 = cookies2.find((c: any) => c.name.startsWith("TS"));
-      const aspNetCookie2 = cookies2.find((c: any) => c.name === "ASP.NET_SessionId");
 
       if (!f5Cookie2) {
-        log("ERROR", "F5 cookie still missing after reload! Cookies: " + cookies2.map((c: any) => c.name).join(", "));
+        log("ERROR", "F5 cookie toujours manquant après reload! Cookies: " + cookies2.map((c: any) => c.name).join(", "));
         return null;
       }
 
       return {
         f5CookieValue: f5Cookie2.value,
         f5CookieName: f5Cookie2.name,
-        aspNetSessionId: aspNetCookie2?.value ?? "",
+        aspNetSessionId: "", // Vide - obtenu par les dossiers
         userAgent,
       };
     }
 
-    if (!aspNetCookie) {
-      log("WARN", "ASP.NET_SessionId missing — only injecting F5 cookie");
+    // ASP.NET_SessionId devrait être vide - c'est NORMAL
+    if (aspNetCookie) {
+      log("INFO", `ASP.NET_SessionId présent sur VOWINT (inattendu): ${aspNetCookie.value.slice(0, 10)}...`);
+    } else {
+      log("INFO", "ASP.NET_SessionId absent - NORMAL, sera obtenu par les dossiers via flux VOWINT → CEV");
     }
 
-    log("INFO", `  Cookies captured: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}... | ASP.NET_SessionId=${aspNetCookie?.value?.slice(0, 10) ?? "N/A"}...`);
+    log("INFO", `  ✅ TS cookie capturé: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}...`);
+    log("INFO", `  ✅ User-Agent: ${userAgent.slice(0, 80)}...`);
 
     return {
       f5CookieValue: f5Cookie.value,
       f5CookieName: f5Cookie.name,
-      aspNetSessionId: aspNetCookie?.value ?? "",
+      aspNetSessionId: "", // VIDE - ASP.NET_SessionId obtenu par les dossiers via flux naturel
       userAgent,
     };
   } catch (err) {
@@ -209,6 +212,10 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
   const endpoint = `${CONVEX_SITE_URL}/hunter/cev-sessions/inject-f5`;
 
   try {
+    // CORRECTION : ASP.NET_SessionId vide est NORMAL - obtenu par les dossiers via flux naturel
+    const aspNetSessionId = captured.aspNetSessionId;
+    const hasAspNet = !!aspNetSessionId;
+    
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -219,7 +226,7 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
         sessionId: CEV_SESSION_ID,
         f5CookieValue: captured.f5CookieValue,
         f5CookieName: captured.f5CookieName,
-        aspNetSessionId: captured.aspNetSessionId,
+        aspNetSessionId: aspNetSessionId,
         userAgent: captured.userAgent,
         validityMinutes: REFRESH_INTERVAL_MIN + 2,
       }),
@@ -234,7 +241,10 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
 
     const data = await res.json() as { ok?: boolean };
     if (data.ok) {
-      log("INFO", `  Cookies injected into Convex (session: ${CEV_SESSION_ID.slice(0, 10)}...)`);
+      log("INFO", `  ✅ Cookies injectés dans Convex (session: ${CEV_SESSION_ID.slice(0, 10)}...)`);
+      if (!hasAspNet) {
+        log("INFO", `  ⚠️ ASP.NET_SessionId vide - NORMAL, sera obtenu par les dossiers via flux VOWINT → CEV`);
+      }
       return true;
     }
 
@@ -267,7 +277,7 @@ async function fetchActiveSession(): Promise<string | null> {
 
 async function refreshCycle(): Promise<boolean> {
   try {
-    log("INFO", "=== Start refresh cycle ===");
+    log("INFO", "=== Start refresh cycle (TS01 seulement) ===");
 
     const captured = await captureCookiesFromBrowser();
     if (!captured) {
@@ -275,8 +285,11 @@ async function refreshCycle(): Promise<boolean> {
       return false;
     }
 
+    // CORRECTION : ASP.NET_SessionId vide est NORMAL - obtenu par les dossiers via flux VOWINT → CEV
     if (!captured.aspNetSessionId) {
-      log("WARN", "ASP.NET_SessionId missing — inject F5 cookie only");
+      log("INFO", "✅ ASP.NET_SessionId absent - NORMAL, sera obtenu par les dossiers via flux naturel");
+    } else {
+      log("INFO", `ℹ️ ASP.NET_SessionId présent (inattendu): ${captured.aspNetSessionId.slice(0, 10)}...`);
     }
 
     const injected = await injectCookiesToConvex(captured);
