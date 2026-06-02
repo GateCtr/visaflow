@@ -23,15 +23,15 @@ ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
-# Install Chrome for Puppeteer (after dependencies are installed)
+COPY artifacts/slot-hunter ./artifacts/slot-hunter
+
+# Install Chrome for Puppeteer (after code is copied)
 RUN pnpm exec puppeteer browsers install chrome
 # Use Puppeteer's installed Chrome (path matches our package.json puppeteer version)
 ENV PUPPETEER_EXECUTABLE_PATH=/app/.puppeteer-cache/chrome/linux-149.0.7827.22/chrome-linux64/chrome
 
 # Chromium is already installed in the base Playwright image
 # No need to install it again
-
-COPY artifacts/slot-hunter ./artifacts/slot-hunter
 
 # Exécuter en utilisateur non-root — réduit la surface d'attaque
 # en cas de compromission du process Playwright.
