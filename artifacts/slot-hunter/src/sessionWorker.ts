@@ -45,23 +45,35 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     "--disable-blink-features=AutomationControlled",
   ];
 
+  let proxyHost = "";
+  let proxyPort = "";
+
   if (PROXY_URL) {
     try {
       const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
+      proxyHost = parsed.hostname;
+      proxyPort = parsed.port;
       launchArgs.push(`--proxy-server=${parsed.hostname}:${parsed.port}`);
       log("INFO", `Proxy configured: ${parsed.hostname}:${parsed.port}`);
-    } catch {
-      log("WARN", `Invalid proxy URL: ${PROXY_URL.slice(0, 40)}... — direct connection`);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      log("ERROR", `Proxy URL invalide: ${PROXY_URL.slice(0, 40)}… — erreur: ${errMsg}`);
+      return null;
     }
+  } else {
+    log("ERROR", `Aucun proxy configuré ! (PROXY_URL / SOAX_PROXY_URL / IPROYAL_PROXY_URL)`);
+    return null;
   }
 
   let browser: any = null;
 
   try {
+    log("INFO", `Lancement du navigateur avec proxy: ${proxyHost}:${proxyPort}`);
     browser = await puppeteer.default.launch({
       headless: "new",
       args: launchArgs,
     });
+    log("INFO", "Navigateur lancé avec succès");
 
     const page = await browser.newPage();
 
@@ -69,12 +81,17 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
       try {
         const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
         if (parsed.username) {
+          log("INFO", `Authentification proxy avec username: ${decodeURIComponent(parsed.username).slice(0, 30)}…`);
           await page.authenticate({
             username: decodeURIComponent(parsed.username),
             password: decodeURIComponent(parsed.password),
           });
         }
-      } catch { }
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        log("ERROR", `Erreur lors de l'authentification proxy: ${errMsg}`);
+        return null;
+      }
     }
 
     const userAgent = await browser.userAgent();
@@ -95,7 +112,7 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     await new Promise(r => setTimeout(r, waitCevSec * 1000));
 
     const cookies = await page.cookies();
-    log("INFO", `${cookies.length} cookie(s) captured`);
+    log("INFO", `${cookies.length} cookie(s) captured: ${cookies.map(c => c.name).join(", ")}`);
 
     const f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
     const aspNetCookie = cookies.find((c: any) => c.name === "ASP.NET_SessionId");
@@ -137,11 +154,19 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : "";
     log("ERROR", `Puppeteer error: ${msg}`);
+    if (stack) log("ERROR", `Stack trace: ${stack}`);
     return null;
   } finally {
     if (browser) {
-      try { await browser.close(); } catch { }
+      try {
+        log("INFO", "Fermeture du navigateur");
+        await browser.close();
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        log("WARN", `Erreur lors de la fermeture du navigateur: ${errMsg}`);
+      }
     }
   }
 }
