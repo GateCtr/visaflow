@@ -7,7 +7,7 @@ interface CapturedCookies {
 
 import { makeCevProxyStickyUrl } from "./cev-shared-impit.js";
 
-const CEV_URL = "https://appointment.cloud.diplomatie.be/";
+const CEV_URL = "https://appointment.cloud.diplomatie.be/Captcha";
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";
 let CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? "";
@@ -80,9 +80,9 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     log("INFO", `User-Agent: ${userAgent.slice(0, 80)}...`);
 
     log("INFO", `Navigating to ${CEV_URL}...`);
-    await page.goto(CEV_URL, { waitUntil: "networkidle2", timeout: 30_000 });
+    await page.goto(CEV_URL, { waitUntil: "networkidle2", timeout: 60_000 });
 
-    const waitSec = 5 + Math.random() * 3;
+    const waitSec = 10 + Math.random() * 5;
     log("INFO", `Waiting ${waitSec.toFixed(1)}s for F5 WAF JS...`);
     await new Promise(r => setTimeout(r, waitSec * 1000));
 
@@ -95,8 +95,8 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     if (!f5Cookie) {
       log("WARN", `F5 cookie (TS*) not found! Cookies present: ${cookies.map((c: any) => c.name).join(", ")}`);
       log("INFO", "Trying reload...");
-      await page.reload({ waitUntil: "networkidle2", timeout: 30_000 });
-      await new Promise(r => setTimeout(r, 5000));
+      await page.reload({ waitUntil: "networkidle2", timeout: 60_000 });
+      await new Promise(r => setTimeout(r, 10000));
 
       const cookies2 = await page.cookies();
       const f5Cookie2 = cookies2.find((c: any) => c.name.startsWith("TS"));
