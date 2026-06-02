@@ -20,6 +20,8 @@ ENV VERCEL=true
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Set Puppeteer cache dir to a location accessible by slothunter user
 ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
+# Use Playwright's pre-installed Chrome for Puppeteer!
+ENV PUPPETEER_EXECUTABLE_PATH=/ms-playwright/chromium-1140/chrome
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
