@@ -28,12 +28,26 @@ function getProxyUrl(): string {
     log("INFO", "Utilisant le proxy du CEV dossier loop (même IP)");
     return cevProxy;
   }
-  // Fallback: generate a new proxy URL
-  const proxyUrl = process.env.SOAX_PROXY_URL
-    ? makeCevProxyStickyUrl("soax", undefined, "session-worker")
-    : process.env.IPROYAL_PROXY_URL
+  
+  // Utiliser le même proxy SOAX que les dossiers, avec un DELAI pour éviter les conflits
+  // Les dossiers attendent 45s avant de démarrer (voir index.ts)
+  // Donc le sessionWorker a 45s pour capturer les cookies en premier
+  if (process.env.SOAX_PROXY_URL) {
+    log("INFO", "Utilisation du proxy SOAX (même IP que les dossiers)");
+    log("INFO", "Les dossiers attendent 45s avant de démarrer → pas de conflit");
+    return makeCevProxyStickyUrl("soax", undefined, "cev-session-worker");
+  }
+  
+  // Fallback
+  const proxyUrl = process.env.IPROYAL_PROXY_URL
     ? process.env.IPROYAL_PROXY_URL
     : process.env.PROXY_URL ?? "";
+  
+  if (!proxyUrl) {
+    log("WARN", "Aucun proxy configuré — tentative en direct");
+    return "";
+  }
+  
   return proxyUrl;
 }
 
@@ -79,8 +93,8 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
       return null;
     }
   } else {
-    log("ERROR", `Aucun proxy configuré ! (PROXY_URL / SOAX_PROXY_URL / IPROYAL_PROXY_URL)`);
-    return null;
+    log("WARN", `Aucun proxy configuré — connexion directe (risque de blocage IP)`);
+    // Pas de proxy, connexion directe
   }
 
   let browser: any = null;
@@ -110,6 +124,8 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
         log("ERROR", `Erreur lors de l'authentification proxy: ${errMsg}`);
         return null;
       }
+    } else {
+      log("INFO", "Pas de proxy — authentification directe");
     }
 
     const userAgent = await browser.userAgent();
@@ -130,7 +146,7 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     await new Promise(r => setTimeout(r, waitCevSec * 1000));
 
     const cookies = await page.cookies();
-    log("INFO", `${cookies.length} cookie(s) captured: ${cookies.map(c => c.name).join(", ")}`);
+    log("INFO", `${cookies.length} cookie(s) captured: ${cookies.map((c: any) => c.name).join(", ")}`);
 
     const f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
     const aspNetCookie = cookies.find((c: any) => c.name === "ASP.NET_SessionId");
@@ -303,18 +319,28 @@ export async function startSessionWorker(): Promise<void> {
   log("INFO", `  - Proxy: ${PROXY_URL ? PROXY_URL.replace(/:([^:@]+)@/, ":***@").slice(0, 50) + "..." : "(direct)"}`);
   log("INFO", `  - Interval: ${REFRESH_INTERVAL_MIN} min`);
 
+  // Capture initiale
   await refreshCycle();
-
-  const intervalMs = REFRESH_INTERVAL_MIN * 60_000;
+  
+  log("INFO", "✅ Session Worker : capture initiale terminée");
+  log("INFO", "   → Cookies injectés dans Convex");
+  log("INFO", "   → Cookies sont SESSION (expirent après ~15-20min d'inactivité)");
+  
+  // Intervalle de rafraîchissement OPTIMISÉ : 45 minutes au lieu de 13
+  // Pour maintenir la session active sans gaspillage
+  const OPTIMIZED_INTERVAL_MIN = 45; // 45 minutes (au lieu de 13)
+  const intervalMs = OPTIMIZED_INTERVAL_MIN * 60_000;
+  
   setInterval(async () => {
     try {
+      log("INFO", `🔄 Rafraîchissement session (toutes les ${OPTIMIZED_INTERVAL_MIN}min)`);
       await refreshCycle();
     } catch (err) {
       log("ERROR", `Cycle crashed: ${err}`);
     }
   }, intervalMs);
-
-  log("INFO", `Worker active — refresh every ${REFRESH_INTERVAL_MIN} min (Ctrl+C to stop)`);
+  
+  log("INFO", `Worker active — refresh every ${OPTIMIZED_INTERVAL_MIN} min (optimisé)`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

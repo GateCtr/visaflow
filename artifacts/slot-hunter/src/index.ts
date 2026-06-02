@@ -83,28 +83,42 @@ async function main(): Promise<void> {
 
   // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si mode CEV actif
   if (cevDossierMode || cevStealthMode) {
+    // Démarrer le sessionWorker d'abord
+    log("INFO", "═══ DÉMARRAGE SESSION WORKER (capture cookies) ═══");
+    log("INFO", "   → Le worker va capturer les cookies F5/ASP.NET");
+    log("INFO", "   → Les dossiers attendront que les cookies soient prêts");
+    
     startSessionWorker().catch(err => {
       console.error("[SESSION-WORKER] Crash fatal:", err);
     });
-  }
-
-  if (cevDossierMode) {
-    log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF ═══");
-    log("INFO", "   → Pool de DOSSIERS en round-robin (1 IP, N compteurs)");
-    log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
-    log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
-    startCevDossierLoop().catch((err) => {
-      console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
-    });
-  } else if (cevStealthMode) {
-    log("INFO", "═══ CEV STEALTH MODE v2 ACTIF ═══");
-    log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
-    log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
-    log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
-    startCevStealthLoop().catch((err) => {
-      console.error("[CEV-STEALTH] Boucle crashée:", err);
-    });
+    
+    // Attendre 30s que le sessionWorker capture les cookies initiaux
+    // (Le worker ne rafraîchit plus automatiquement, capture une seule fois)
+    setTimeout(() => {
+      if (cevDossierMode) {
+        log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF (cookies capturés) ═══");
+        log("INFO", "   → Pool de DOSSIERS en round-robin (1 IP, N compteurs)");
+        log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
+        log("INFO", "   → Cookies frais injectés dans Convex");
+        log("INFO", "   → Rafraîchissement auto optimisé: toutes les 45min");
+        log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
+        startCevDossierLoop().catch((err) => {
+          console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
+        });
+      } else if (cevStealthMode) {
+        log("INFO", "═══ CEV STEALTH MODE v2 ACTIF (cookies capturés) ═══");
+        log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
+        log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
+        log("INFO", "   → Cookies frais injectés dans Convex");
+        log("INFO", "   → Rafraîchissement auto optimisé: toutes les 45min");
+        log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
+        startCevStealthLoop().catch((err) => {
+          console.error("[CEV-STEALTH] Boucle crashée:", err);
+        });
+      }
+    }, 30000); // 30 secondes d'attente (réduit car capture unique)
   } else {
+    // Mode classique (pas de sessionWorker)
     startCevSetupLoop().catch((err) => {
       console.error("[CEV-SETUP] Boucle crashée:", err);
     });

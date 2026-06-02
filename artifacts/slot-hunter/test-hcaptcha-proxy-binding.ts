@@ -1,47 +1,63 @@
 #!/usr/bin/env node
 import "dotenv/config";
-import { makeCevProxyStickyUrl } from "./src/cev-shared-impit.js";
+import { lookup } from "node:dns/promises";
+import { makeCevProxyStickyUrl, initCevProxyGuardWithExitIp } from "./src/cev-shared-impit.js";
 
 const ANTICAPTCHA_BASE = "https://api.anti-captcha.com";
 const WEBSITE_URL = "https://appointment.cloud.diplomatie.be/Captcha";
 const WEBSITE_KEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 
 async function testHcaptchaWithProxy() {
-    console.log("\n🚀 TEST HCaptchaTask WITH SOAX PROXY");
-    console.log("=".repeat(80));
+  console.log("\n🚀 TEST HCaptchaTask WITH SOAX PROXY");
+  console.log("=".repeat(80));
 
-    const soaxProxyUrl = process.env.SOAX_PROXY_URL;
-    if (!soaxProxyUrl) {
-        console.error("❌ SOAX_PROXY_URL not found!");
-        return;
-    }
+  const soaxProxyUrl = process.env.SOAX_PROXY_URL;
+  if (!soaxProxyUrl) {
+    console.error("❌ SOAX_PROXY_URL not found!");
+    return;
+  }
 
-    // Créer la même URL proxy SOAX que le bot CEV
-    const ceProxyUrl = makeCevProxyStickyUrl("soax", 360, "test-cev-proxy");
-    console.log(`✅ Proxy URL proxy SOAX générée: ${ceProxyUrl.replace(/:([^:@]+)@/, ":***@")}`);
+  // Créer la même URL proxy SOAX que le bot CEV
+  const ceProxyUrl = makeCevProxyStickyUrl("soax", 360, "test-cev-proxy");
+  console.log(`✅ Proxy URL proxy SOAX générée: ${ceProxyUrl.replace(/:([^:@]+)@/, ":***@")}`);
 
-    // Parser la proxy URL
-    const parsedProxy = new URL(ceProxyUrl);
-    const proxyType = parsedProxy.protocol.replace(":", "");
-    const proxyLogin = decodeURIComponent(parsedProxy.username);
-    const proxyPassword = decodeURIComponent(parsedProxy.password);
-    const proxyAddress = parsedProxy.hostname;
-    const proxyPort = parseInt(parsedProxy.port || "5000");
+  // Résoudre proxy.soax.com en IP (pour Anti-Captcha!)
+  console.log("\n🔍 Resolving proxy.soax.com to IP...");
+  const dnsResult = await lookup("proxy.soax.com");
+  const soaxServerIp = dnsResult.address;
+  console.log(`✅ proxy.soax.com resolved to: ${soaxServerIp}`);
 
-    console.log("\n📤 Création de la tâche Anti-Captcha...");
-    
-    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-    const task = {
-        type: "HCaptchaTask",
-        websiteURL: WEBSITE_URL,
-        websiteKey: WEBSITE_KEY,
-        proxyType: proxyType,
-        proxyAddress: proxyAddress,
-        proxyPort: proxyPort,
-        proxyLogin: proxyLogin,
-        proxyPassword: proxyPassword,
-        userAgent: userAgent,
-    };
+  // Initialiser proxy guard pour récupérer l'IP de sortie
+  console.log("\n🔍 Initializing proxy guard to get exit IP...");
+  const proxyExitIp = await initCevProxyGuardWithExitIp(ceProxyUrl);
+  if (!proxyExitIp) {
+    console.error("❌ Failed to get proxy exit IP!");
+    return;
+  }
+  console.log(`✅ Proxy exit IP (token binding): ${proxyExitIp}`);
+
+  // Parser la proxy URL
+  const parsedProxy = new URL(ceProxyUrl);
+  const proxyType = parsedProxy.protocol.replace(":", "");
+  const proxyLogin = decodeURIComponent(parsedProxy.username); // Conserve le sessionId !
+  const proxyPassword = decodeURIComponent(parsedProxy.password);
+  const proxyAddress = soaxServerIp; // Utiliser l'IP résolue de proxy.soax.com !
+  const proxyPort = parseInt(parsedProxy.port || "5000");
+
+  console.log("\n📤 Création de la tâche Anti-Captcha...");
+  
+  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+  const task = {
+    type: "HCaptchaTask",
+    websiteURL: WEBSITE_URL,
+    websiteKey: WEBSITE_KEY,
+    proxyType: proxyType,
+    proxyAddress: proxyAddress,
+    proxyPort: proxyPort,
+    proxyLogin: proxyLogin,
+    proxyPassword: proxyPassword,
+    userAgent: userAgent,
+  };
 
     console.log("📋 Tâche:", JSON.stringify({ ...task, proxyPassword: "***" }, null, 2));
 
