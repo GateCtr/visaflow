@@ -825,7 +825,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
     }
   }
 
-  // Priorité 1 : Anti-Captcha
+  // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
   if (ANTICAPTCHA_KEY) {
     botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig } });
     try {
@@ -873,52 +873,6 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
     }
   } else {
     errors.push(`anticaptcha_not_configured`);
-  }
-
-  // Priorité 2 : CapSolver
-  if (CAPSOLVER_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "capsolver", useProxy: !!proxyConfig } });
-    try {
-      const task = proxyConfig 
-        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig }
-        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
-      
-      const createRes = await fetch("https://api.capsolver.com/createTask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientKey: CAPSOLVER_KEY,
-          task: task,
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      const createData = await createRes.json() as { errorId: number; taskId?: string; errorCode?: string; errorDescription?: string };
-      if (createData.errorId === 0 && createData.taskId) {
-        for (let i = 0; i < 40; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          const pollRes = await fetch("https://api.capsolver.com/getTaskResult", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientKey: CAPSOLVER_KEY, taskId: createData.taskId }),
-          });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { token?: string }; errorCode?: string; errorDescription?: string };
-          if (pollData.status === "ready" && pollData.solution?.token) {
-            botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { service: "capsolver", seconds: (i + 1) * 3 } });
-            return pollData.solution.token;
-          }
-          if (pollData.errorId !== 0) {
-            errors.push(`capsolver_poll_error: ${pollData.errorCode} - ${pollData.errorDescription}`);
-            break;
-          }
-        }
-      } else {
-        errors.push(`capsolver_create_error: ${createData.errorCode} - ${createData.errorDescription}`);
-      }
-    } catch (e) {
-      errors.push(`capsolver_exception: ${String(e)}`);
-    }
-  } else {
-    errors.push(`capsolver_not_configured`);
   }
 
   botLog({ applicationId: clientId, step: "cev_http_hcaptcha_failed", status: "fail", data: { errors: errors.join(', ') } });
