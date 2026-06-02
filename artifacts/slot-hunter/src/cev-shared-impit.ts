@@ -369,12 +369,20 @@ export function makeCevSoaxStickyUrl(
     const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
     let proxyUser = decodeURIComponent(parsed.username);
 
+    // Extraire et conserver les paramètres fixes depuis la base URL (bindttl, opt)
+    const bindttlMatch = proxyUser.match(/-bindttl-(\d+)/);
+    const optMatch = proxyUser.match(/-opt-([^-]+)/);
+    const bindttl = bindttlMatch ? bindttlMatch[1] : "3600";
+    const opt = optMatch ? optMatch[1] : "wb";
+
     // Nettoyer les anciens paramètres de session du username
     proxyUser = proxyUser
       .replace(/-sessionid-[^-]*/g, "")
       .replace(/-sessionlength-[^-]*/g, "")
       .replace(/-country-[^-]*/g, "")
       .replace(/-city-[^-]*/g, "")
+      .replace(/-bindttl-[^-]*/g, "")
+      .replace(/-opt-[^-]*/g, "")
       .replace(/-+$/, "");
 
     // Générer un session ID stable par période + identifiant (même logique que iProyal)
@@ -398,6 +406,8 @@ export function makeCevSoaxStickyUrl(
     proxyUser += `-sessionlength-${sessionLengthSec}`;
     proxyUser += `-country-${SOAX_COUNTRY}`;
     if (SOAX_CITY) proxyUser += `-city-${SOAX_CITY}`;
+    proxyUser += `-bindttl-${bindttl}`;
+    proxyUser += `-opt-${opt}`;
 
     parsed.username = encodeURIComponent(proxyUser);
     console.log(`[CEV] 🔒 SOAX sticky sessionid=${sessionId} sessionlength=${sessionLengthSec}s country=${SOAX_COUNTRY} rot#${rotationCount}`);
