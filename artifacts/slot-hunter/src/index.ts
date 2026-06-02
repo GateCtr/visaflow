@@ -83,18 +83,29 @@ async function main(): Promise<void> {
 
   // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si mode CEV actif
   if (cevDossierMode || cevStealthMode) {
-    // Démarrer le sessionWorker d'abord
+    // Démarrer le sessionWorker et ATTENDRE qu'il capture les cookies
     log("INFO", "═══ DÉMARRAGE SESSION WORKER (capture cookies) ═══");
     log("INFO", "   → Le worker va capturer les cookies F5/ASP.NET");
-    log("INFO", "   → Les dossiers attendront que les cookies soient prêts");
+    log("INFO", "   → ATTENTE: Les dossiers ne démarrent qu'après capture COMPLÈTE");
     
-    startSessionWorker().catch(err => {
+    // Créer une promesse pour synchroniser
+    const sessionWorkerPromise = startSessionWorker().catch(err => {
       console.error("[SESSION-WORKER] Crash fatal:", err);
+      return null;
     });
     
-    // Attendre 30s que le sessionWorker capture les cookies initiaux
-    // (Le worker ne rafraîchit plus automatiquement, capture une seule fois)
-    setTimeout(() => {
+    // Attendre que le sessionWorker ait terminé SA PREMIÈRE CAPTURE
+    // (il tourne en background après, mais on attend la première)
+    setTimeout(async () => {
+      try {
+        await sessionWorkerPromise;
+        log("INFO", "✅ SessionWorker: première capture TERMINÉE");
+        log("INFO", "   → Cookies injectés dans Convex");
+        log("INFO", "   → Dossiers peuvent démarrer MAINTENANT");
+      } catch (err) {
+        log("ERROR", "❌ SessionWorker échoué, mais dossiers démarrent quand même");
+      }
+      
       if (cevDossierMode) {
         log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF (cookies capturés) ═══");
         log("INFO", "   → Pool de DOSSIERS en round-robin (1 IP, N compteurs)");
@@ -116,7 +127,7 @@ async function main(): Promise<void> {
           console.error("[CEV-STEALTH] Boucle crashée:", err);
         });
       }
-    }, 30000); // 30 secondes d'attente (réduit car capture unique)
+    }, 60000); // 60 secondes d'attente (augmenté pour capture complète)
   } else {
     // Mode classique (pas de sessionWorker)
     startCevSetupLoop().catch((err) => {

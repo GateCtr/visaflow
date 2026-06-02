@@ -29,13 +29,13 @@ function getProxyUrl(): string {
     return cevProxy;
   }
   
-  // Utiliser le même proxy SOAX que les dossiers, avec un DELAI pour éviter les conflits
-  // Les dossiers attendent 45s avant de démarrer (voir index.ts)
-  // Donc le sessionWorker a 45s pour capturer les cookies en premier
+  // IMPÉRATIF: Même proxy SOAX et même session-id que les dossiers
+  // pour avoir la MÊME IP et capturer le cookie TS01 valide
   if (process.env.SOAX_PROXY_URL) {
-    log("INFO", "Utilisation du proxy SOAX (même IP que les dossiers)");
-    log("INFO", "Les dossiers attendent 45s avant de démarrer → pas de conflit");
-    return makeCevProxyStickyUrl("soax", undefined, "cev-session-worker");
+    log("INFO", "🔒 MÊME PROXY SOAX que les dossiers (même IP obligatoire pour TS01)");
+    log("INFO", "🔒 Session-id: 'cev-dossier-v3' (IDENTIQUE aux dossiers)");
+    log("INFO", "⚠️ Les dossiers attendent 60s → pas de conflit simultané");
+    return makeCevProxyStickyUrl("soax", undefined, "cev-dossier-v3");
   }
   
   // Fallback
@@ -265,24 +265,26 @@ async function fetchActiveSession(): Promise<string | null> {
   }
 }
 
-async function refreshCycle(): Promise<void> {
+async function refreshCycle(): Promise<boolean> {
   try {
     log("INFO", "=== Start refresh cycle ===");
 
     const captured = await captureCookiesFromBrowser();
     if (!captured) {
       log("ERROR", "Capture failed — retry next cycle");
-      return;
+      return false;
     }
 
     if (!captured.aspNetSessionId) {
       log("WARN", "ASP.NET_SessionId missing — inject F5 cookie only");
     }
 
-    await injectCookiesToConvex(captured);
+    const injected = await injectCookiesToConvex(captured);
     log("INFO", `=== Cycle done — next in ${REFRESH_INTERVAL_MIN} min ===`);
+    return injected; // Retourne true si injecté avec succès
   } catch (err) {
     log("ERROR", `Unexpected error during cycle: ${err}`);
+    return false;
   }
 }
 
@@ -319,11 +321,19 @@ export async function startSessionWorker(): Promise<void> {
   log("INFO", `  - Proxy: ${PROXY_URL ? PROXY_URL.replace(/:([^:@]+)@/, ":***@").slice(0, 50) + "..." : "(direct)"}`);
   log("INFO", `  - Interval: ${REFRESH_INTERVAL_MIN} min`);
 
-  // Capture initiale
-  await refreshCycle();
+  // Capture initiale - SIGNALER quand terminée
+  log("INFO", "🔄 Session Worker: capture INITIALE en cours...");
+  const initialCaptureResult = await refreshCycle();
   
-  log("INFO", "✅ Session Worker : capture initiale terminée");
-  log("INFO", "   → Cookies injectés dans Convex");
+  if (initialCaptureResult) {
+    log("INFO", "✅ Session Worker : capture initiale TERMINÉE");
+    log("INFO", "   → Cookies injectés dans Convex");
+    log("INFO", "   → Dossiers peuvent démarrer MAINTENANT");
+  } else {
+    log("ERROR", "❌ Session Worker : capture initiale ÉCHOUÉE");
+    log("INFO", "   → Dossiers démarreront avec cookies potentiellement expirés");
+  }
+  
   log("INFO", "   → Cookies sont SESSION (expirent après ~15-20min d'inactivité)");
   
   // Intervalle de rafraîchissement OPTIMISÉ : 45 minutes au lieu de 13
