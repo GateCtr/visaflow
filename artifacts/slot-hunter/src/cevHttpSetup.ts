@@ -827,10 +827,11 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         port = '5000';
       }
       
-      // Use the already-detected exit IP (token binding!) if available; otherwise use hostname (warning)
-      let proxyAddress = proxyExitIp || parsedProxy.hostname;
+      // IMPORTANT: Use hostname (proxy.soax.com) not exit IP for SOAX, because SOAX routes based on sessionId in login!
+      // Anti-Captcha might fail, but we have a fallback to proxyless mode
+      let proxyAddress = parsedProxy.hostname;
       if (proxyExitIp) {
-        console.log(`[CEV-SETUP] Using proxy exit IP (token binding): ${proxyAddress}`);
+        console.log(`[CEV-SETUP] Proxy exit IP: ${proxyExitIp} — but using hostname (${proxyAddress}) for Anti-Captcha (SOAX requires hostname + sessionId)`);
       } else {
         console.warn(`[CEV-SETUP] No proxy exit IP available; using hostname (token binding may fail)`);
       }
