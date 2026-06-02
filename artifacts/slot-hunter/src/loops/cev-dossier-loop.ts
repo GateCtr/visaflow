@@ -34,6 +34,7 @@ import {
   makeCevProxyStickyUrl,
   initCevProxyGuardWithExitIp,
   setCevExternalUserAgent,
+  getCevExternalUserAgent,
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
@@ -706,6 +707,26 @@ export async function startCevDossierLoop(): Promise<void> {
         log("WARN", "Credentials VOWINT introuvables — attente 30s");
         await sleep(30_000);
         continue;
+      }
+
+      // Actualiser les cookies siphonnés toutes les 5 scans
+      if (state.scanCount % 5 === 0) {
+        const [newCreds, newSiphoned] = await getCevCredentials();
+        if (newSiphoned) {
+          // Mettre à jour siphonedCreds si nouveau plus récent ou valide plus longtemps
+          const shouldUpdate = !siphonedCreds || 
+            (newSiphoned.siphonedAt && siphonedCreds.siphonedAt && newSiphoned.siphonedAt > siphonedCreds.siphonedAt) ||
+            (newSiphoned.validUntil && siphonedCreds.validUntil && newSiphoned.validUntil > siphonedCreds.validUntil);
+          
+          if (shouldUpdate) {
+            siphonedCreds = newSiphoned;
+            log("INFO", `  🔄 Cookies siphonnés actualisés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+            
+            if (siphonedCreds.userAgent && siphonedCreds.userAgent !== getCevExternalUserAgent()) {
+              setCevExternalUserAgent(siphonedCreds.userAgent);
+            }
+          }
+        }
       }
 
       // Scan
