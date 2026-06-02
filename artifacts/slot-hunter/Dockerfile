@@ -22,7 +22,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
 # Install Chrome for Puppeteer (after dependencies are installed)
-RUN npx puppeteer browsers install chrome
+RUN pnpm exec puppeteer browsers install chrome
 # Use Puppeteer's installed Chrome (path matches our package.json puppeteer version)
 ENV PUPPETEER_EXECUTABLE_PATH=/root/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
 
