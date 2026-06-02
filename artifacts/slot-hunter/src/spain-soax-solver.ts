@@ -91,12 +91,20 @@ export function makeSpainSoaxStickyUrl(
     const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
     let proxyUser = decodeURIComponent(parsed.username);
 
+    // Extraire et conserver les paramètres fixes depuis la base URL (bindttl, opt)
+    const bindttlMatch = proxyUser.match(/-bindttl-(\d+)/);
+    const optMatch = proxyUser.match(/-opt-([^-]+)/);
+    const bindttl = bindttlMatch ? bindttlMatch[1] : "3600";
+    const opt = optMatch ? optMatch[1] : "wb";
+
     // Nettoyer les anciens paramètres de session du username
     proxyUser = proxyUser
       .replace(/-sessionid-[^-]*/g, "")
       .replace(/-sessionlength-[^-]*/g, "")
       .replace(/-country-[^-]*/g, "")
       .replace(/-city-[^-]*/g, "")
+      .replace(/-bindttl-[^-]*/g, "")
+      .replace(/-opt-[^-]*/g, "")
       .replace(/-+$/, "");
 
     // Session ID déterministe (stable pendant la demi-journée sauf rotation)
@@ -124,6 +132,8 @@ export function makeSpainSoaxStickyUrl(
     proxyUser += `-sessionlength-${sessionLengthSec}`;
     proxyUser += `-country-${country}`;
     if (city) proxyUser += `-city-${city}`;
+    proxyUser += `-bindttl-${bindttl}`;
+    proxyUser += `-opt-${opt}`;
 
     parsed.username = encodeURIComponent(proxyUser);
 

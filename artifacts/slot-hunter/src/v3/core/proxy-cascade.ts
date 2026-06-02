@@ -131,19 +131,30 @@ const soaxProvider: ProxyProvider = {
     try {
       const parsed = new URL(base.startsWith("http") ? base : `http://${base}`);
       let proxyUser = decodeURIComponent(parsed.username);
+      
+      // Extraire et conserver les paramètres fixes depuis la base URL (bindttl, opt)
+      const bindttlMatch = proxyUser.match(/-bindttl-(\d+)/);
+      const optMatch = proxyUser.match(/-opt-([^-]+)/);
+      const bindttl = bindttlMatch ? bindttlMatch[1] : "3600";
+      const opt = optMatch ? optMatch[1] : "wb";
+      
       // Nettoyer les anciens paramètres SOAX du username si présents
       proxyUser = proxyUser
         .replace(/-country-[^-]*/g, "")
         .replace(/-city-[^-]*/g, "")
         .replace(/-sessionid-[^-]*/g, "")
         .replace(/-sessionlength-[^-]*/g, "")
+        .replace(/-bindttl-[^-]*/g, "")
+        .replace(/-opt-[^-]*/g, "")
         .replace(/-+$/, "");
       // Ajouter les paramètres sticky dans le USERNAME (format SOAX Dashboard v2)
-      // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}
+      // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}-bindttl-{ttl}-opt-{opt}
       proxyUser += `-sessionid-${hash}`;
       proxyUser += `-sessionlength-${parseInt(sesstime) * 60}`; // SOAX attend des secondes
       proxyUser += `-country-${country}`;
       if (city) proxyUser += `-city-${city}`;
+      proxyUser += `-bindttl-${bindttl}`;
+      proxyUser += `-opt-${opt}`;
       parsed.username = encodeURIComponent(proxyUser);
       return parsed.toString();
     } catch {
