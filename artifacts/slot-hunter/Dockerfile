@@ -20,12 +20,24 @@ ENV VERCEL=true
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Set Puppeteer cache dir to a location accessible by slothunter user
 ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
-# Use Playwright's pre-installed Chrome for Puppeteer!
-ENV PUPPETEER_EXECUTABLE_PATH=/ms-playwright/chromium-1140/chrome
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
 COPY artifacts/slot-hunter ./artifacts/slot-hunter
+
+# Create a symlink to Chromium binary (handles version numbers automatically!)
+RUN for dir in /ms-playwright/chromium-*; do \
+  if [ -d "$dir" ]; then \
+    for bin in "$dir/chrome-linux/chrome" "$dir/chrome-linux64/chrome"; do \
+      if [ -f "$bin" ]; then \
+        ln -sf "$bin" /usr/local/bin/chromium; \
+        break 2; \
+      fi; \
+    done; \
+  fi; \
+done
+# Tell Puppeteer to use our symlink!
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
 
 # Exécuter en utilisateur non-root — réduit la surface d'attaque
 # en cas de compromission du process Playwright.
