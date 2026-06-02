@@ -32,8 +32,8 @@ interface CapturedCookies {
 const CEV_URL = "https://appointment.cloud.diplomatie.be/";
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";
-const CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? "";
-const PROXY_URL = process.env.PROXY_URL ?? process.env.IPROYAL_PROXY_URL ?? "";
+let CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? ""; // Peut être défini automatiquement
+const PROXY_URL = process.env.PROXY_URL ?? process.env.SOAX_PROXY_URL ?? process.env.IPROYAL_PROXY_URL ?? "";
 const REFRESH_INTERVAL_MIN = parseInt(process.env.REFRESH_INTERVAL_MIN ?? "13", 10);
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
@@ -219,6 +219,28 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
 }
 
 /**
+ * Récupère la session CEV active depuis Convex.
+ */
+async function fetchActiveSession(): Promise<string | null> {
+  try {
+    const res = await fetch(`${CONVEX_SITE_URL}/hunter/cev-sessions`, {
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+      },
+    });
+    if (!res.ok) return null;
+    const sessions = await res.json() as any[];
+    if (sessions.length > 0) {
+      // Prend la première session active
+      return sessions[0].sessionId;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Cycle complet : capture + injection.
  */
 async function refreshCycle(): Promise<void> {
@@ -255,9 +277,18 @@ export async function startSessionWorker(): Promise<void> {
     log("ERROR", "HUNTER_API_KEY manquant !");
     process.exit(1);
   }
+
+  // Récupérer la session CEV automatiquement si pas fournie
   if (!CEV_SESSION_ID) {
-    log("ERROR", "CEV_SESSION_ID manquant ! ID de la session CEV cible dans Convex.");
-    process.exit(1);
+    log("INFO", "CEV_SESSION_ID non défini — tentative de récupération automatique...");
+    const autoSessionId = await fetchActiveSession();
+    if (autoSessionId) {
+      CEV_SESSION_ID = autoSessionId;
+      log("INFO", `✅ Session CEV trouvée automatiquement: ${CEV_SESSION_ID.slice(0, 15)}…`);
+    } else {
+      log("ERROR", "Impossible de trouver une session CEV active ! Veuillez définir CEV_SESSION_ID.");
+      process.exit(1);
+    }
   }
 
   log("INFO", `Config:`);
