@@ -223,16 +223,15 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
  */
 async function fetchActiveSession(): Promise<string | null> {
   try {
-    const res = await fetch(`${CONVEX_SITE_URL}/hunter/cev-sessions`, {
+    const res = await fetch(`${CONVEX_SITE_URL}/hunter/cev-credentials`, {
       headers: {
         "X-Hunter-Key": HUNTER_API_KEY,
       },
     });
     if (!res.ok) return null;
-    const sessions = await res.json() as any[];
-    if (sessions.length > 0) {
-      // Prend la première session active
-      return sessions[0].sessionId;
+    const creds = await res.json();
+    if (creds && creds.sessionId) {
+      return creds.sessionId;
     }
     return null;
   } catch {
