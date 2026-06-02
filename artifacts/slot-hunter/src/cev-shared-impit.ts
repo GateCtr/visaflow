@@ -372,8 +372,8 @@ export function makeCevSoaxStickyUrl(
     // Extraire et conserver les paramètres fixes depuis la base URL (bindttl, opt)
     const bindttlMatch = proxyUser.match(/-bindttl-(\d+)/);
     const optMatch = proxyUser.match(/-opt-([^-]+)/);
-    const bindttl = bindttlMatch ? bindttlMatch[1] : "3600";
-    const opt = optMatch ? optMatch[1] : "wb";
+    const bindttl = bindttlMatch ? bindttlMatch[1] : null;
+    const opt = optMatch ? optMatch[1] : null;
 
     // Nettoyer les anciens paramètres de session du username
     proxyUser = proxyUser
@@ -406,8 +406,8 @@ export function makeCevSoaxStickyUrl(
     proxyUser += `-sessionlength-${sessionLengthSec}`;
     proxyUser += `-country-${SOAX_COUNTRY}`;
     if (SOAX_CITY) proxyUser += `-city-${SOAX_CITY}`;
-    proxyUser += `-bindttl-${bindttl}`;
-    proxyUser += `-opt-${opt}`;
+    if (bindttl) proxyUser += `-bindttl-${bindttl}`;
+    if (opt) proxyUser += `-opt-${opt}`;
 
     parsed.username = encodeURIComponent(proxyUser);
     console.log(`[CEV] 🔒 SOAX sticky sessionid=${sessionId} sessionlength=${sessionLengthSec}s country=${SOAX_COUNTRY} rot#${rotationCount}`);

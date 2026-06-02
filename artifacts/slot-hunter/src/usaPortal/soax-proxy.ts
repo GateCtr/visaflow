@@ -126,8 +126,8 @@ export function makeSoaxStickyUrl(
     // Extraire et conserver les paramètres fixes depuis la base URL (bindttl, opt)
     const bindttlMatch = proxyUser.match(/-bindttl-(\d+)/);
     const optMatch = proxyUser.match(/-opt-([^-]+)/);
-    const bindttl = bindttlMatch ? bindttlMatch[1] : "3600";
-    const opt = optMatch ? optMatch[1] : "wb";
+    const bindttl = bindttlMatch ? bindttlMatch[1] : null;
+    const opt = optMatch ? optMatch[1] : null;
     
     proxyUser = cleanSoaxUsername(proxyUser);
 
@@ -139,7 +139,7 @@ export function makeSoaxStickyUrl(
     const sessionId = simpleHash(seed);
 
     // Construire le username avec les paramètres SOAX (format Dashboard v2)
-    // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}-bindttl-{ttl}-opt-{opt}
+    // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}[-bindttl-{ttl}][-opt-{opt}]
     const sessionLengthSec = SOAX_SESSION_TIME_MIN * 60; // SOAX attend des secondes
     proxyUser += `-sessionid-${sessionId}`;
     proxyUser += `-sessionlength-${sessionLengthSec}`;
@@ -147,8 +147,8 @@ export function makeSoaxStickyUrl(
     if (city) {
       proxyUser += `-city-${city}`;
     }
-    proxyUser += `-bindttl-${bindttl}`;
-    proxyUser += `-opt-${opt}`;
+    if (bindttl) proxyUser += `-bindttl-${bindttl}`;
+    if (opt) proxyUser += `-opt-${opt}`;
 
     parsed.username = encodeURIComponent(proxyUser);
 
