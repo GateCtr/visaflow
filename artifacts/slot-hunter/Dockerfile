@@ -18,6 +18,8 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV VERCEL=true
 # Skip browser download during playwright installation
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Tell Puppeteer to use Playwright's Chromium (already installed)
+ENV PUPPETEER_EXECUTABLE_PATH=/ms-playwright/chromium-1142/chrome
 
 RUN pnpm install --frozen-lockfile --filter @workspace/slot-hunter
 
