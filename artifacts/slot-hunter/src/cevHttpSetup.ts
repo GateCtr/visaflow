@@ -359,6 +359,23 @@ export async function setupCevSessionHttp(
 ): Promise<CevHttpSetupResult> {
   try {
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
+    
+    // ✅ Log détaillé des cookies siphonnés (pour vérifier en production)
+    if (siphoned) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_siphoned_details",
+        status: "ok",
+        data: {
+          hasF5Cookie: !!siphoned.f5CookieValue,
+          f5CookieName: siphoned.f5CookieName,
+          hasAspNetCookie: !!siphoned.aspNetSessionId,
+          hasUserAgent: !!siphoned.userAgent,
+          userAgentPreview: siphoned.userAgent ? siphoned.userAgent.slice(0, 60) + "…" : undefined,
+          validUntil: siphoned.validUntil,
+        },
+      });
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 1 : Obtenir session VOWINT (login ou cache)
