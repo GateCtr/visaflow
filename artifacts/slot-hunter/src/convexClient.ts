@@ -449,6 +449,13 @@ export interface CevCredentials {
   sessionId: string;
   applicationId: string;
   status: string;
+  // Ajouter les champs siphonnés
+  siphonedF5CookieValue?: string;
+  siphonedF5CookieName?: string;
+  siphonedAspNetSessionId?: string;
+  siphonedUserAgent?: string;
+  siphonedAt?: number;
+  siphonedValidUntil?: number;
 }
 
 export async function getCevCredentials(): Promise<CevCredentials | null> {

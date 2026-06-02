@@ -660,6 +660,13 @@ export const internalGetCredentials = internalQuery({
           sessionId: s._id,
           applicationId: s.applicationId,
           status: s.status,
+          // Ajouter les champs siphonnés
+          siphonedF5CookieValue: s.siphonedF5CookieValue,
+          siphonedF5CookieName: s.siphonedF5CookieName,
+          siphonedAspNetSessionId: s.siphonedAspNetSessionId,
+          siphonedUserAgent: s.siphonedUserAgent,
+          siphonedAt: s.siphonedAt,
+          siphonedValidUntil: s.siphonedValidUntil,
         };
       }
     }

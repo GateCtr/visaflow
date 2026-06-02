@@ -33,6 +33,7 @@ import {
   resetCevImpitInstances,
   makeCevProxyStickyUrl,
   initCevProxyGuardWithExitIp,
+  setCevExternalUserAgent,
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
@@ -270,6 +271,13 @@ async function performScan(
   vowintPassword: string,
   dossier: DossierSlot,
   applicationId: string,
+  siphoned?: {
+    f5CookieValue?: string;
+    f5CookieName?: string;
+    aspNetSessionId?: string;
+    userAgent?: string;
+    validUntil?: number;
+  },
 ): Promise<ScanResult> {
 
   try {
@@ -279,6 +287,7 @@ async function performScan(
       applicationId,
       applicationId,
       dossier.vowintRef, // Le numéro VOWINT sera résolu via MyList
+      siphoned,
     );
 
     if (!result.success) {
@@ -307,6 +316,7 @@ async function performScan(
       const pollResult = await pollCevSlot(
         result.integrationUrl ?? "",
         result.sessionCookie,
+        siphoned,
       );
       if (pollResult.status === "slot_found") {
         return {
@@ -339,6 +349,13 @@ async function handleSlotFound(
   applicationId: string,
   existingSessionCookie?: string,
   existingIntegrationUrl?: string,
+  siphoned?: {
+    f5CookieValue?: string;
+    f5CookieName?: string;
+    aspNetSessionId?: string;
+    userAgent?: string;
+    validUntil?: number;
+  },
 ): Promise<void> {
   log("INFO", `🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
   state.slotsFound++;
@@ -384,7 +401,7 @@ async function handleSlotFound(
     // Tenter le booking HTTP avec la session existante
     log("INFO", `  🎯 Tentative booking HTTP avec session existante...`);
     try {
-      const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie, applicationId);
+      const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie!, applicationId, siphoned);
       if (httpResult.success) {
         log("INFO", `  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
         await reportSlotFound({
@@ -403,14 +420,15 @@ async function handleSlotFound(
   }
 
   // ── FALLBACK : re-login + nouveau setup (si session existante a échoué) ──
-  log("INFO", `  🔄 Re-login pour tentative fallback...`);
-  const session = await setupCevSessionHttp(
-    vowintEmail,
-    vowintPassword,
-    applicationId,
-    applicationId,
-    dossier.vowintRef,
-  );
+    log("INFO", `  🔄 Re-login pour tentative fallback...`);
+    const session = await setupCevSessionHttp(
+      vowintEmail,
+      vowintPassword,
+      applicationId,
+      applicationId,
+      dossier.vowintRef,
+      siphoned,
+    );
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
     log("ERROR", `  Session re-setup échoué pour booking fallback`);
@@ -419,7 +437,7 @@ async function handleSlotFound(
 
   // Tentative booking HTTP avec session fraîche
   try {
-    const httpResult = await bookCevViaHttp(session.integrationUrl, session.sessionCookie, applicationId);
+    const httpResult = await bookCevViaHttp(session.integrationUrl!, session.sessionCookie!, applicationId, siphoned);
     if (httpResult.success) {
       log("INFO", `  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
       await reportSlotFound({
@@ -538,6 +556,23 @@ export async function startCevDossierLoop(): Promise<void> {
   const creds = await getCevCredentials();
   let vowintEmail = creds?.vowintEmail;
   let vowintPassword = creds?.vowintPassword;
+  // Stocker les champs siphonnés
+  let siphonedCreds: {
+    f5CookieValue?: string;
+    f5CookieName?: string;
+    aspNetSessionId?: string;
+    userAgent?: string;
+    validUntil?: number;
+  } | undefined = undefined;
+  if (creds && (creds.siphonedF5CookieValue || creds.siphonedAspNetSessionId || creds.siphonedUserAgent)) {
+    siphonedCreds = {
+      f5CookieValue: creds.siphonedF5CookieValue,
+      f5CookieName: creds.siphonedF5CookieName,
+      aspNetSessionId: creds.siphonedAspNetSessionId,
+      userAgent: creds.siphonedUserAgent,
+      validUntil: creds.siphonedValidUntil,
+    };
+  }
   // applicationId pour les botLogs — celui de l'application Convex associée à la session CEV
   const logApplicationId = creds?.applicationId ?? "cev-dossier-v3";
 
@@ -548,6 +583,16 @@ export async function startCevDossierLoop(): Promise<void> {
     if (target) {
       vowintEmail = target.vowintEmail;
       vowintPassword = target.vowintPassword;
+      // Essayer de récupérer les champs siphonnés depuis la session active
+      if (target.siphonedF5CookieValue || target.siphonedAspNetSessionId || target.siphonedUserAgent) {
+        siphonedCreds = {
+          f5CookieValue: target.siphonedF5CookieValue,
+          f5CookieName: target.siphonedF5CookieName,
+          aspNetSessionId: target.siphonedAspNetSessionId,
+          userAgent: target.siphonedUserAgent,
+          validUntil: target.siphonedValidUntil,
+        };
+      }
     }
   }
 
@@ -557,6 +602,16 @@ export async function startCevDossierLoop(): Promise<void> {
     if (pending) {
       vowintEmail = pending.vowintEmail!;
       vowintPassword = pending.vowintPassword!;
+      // Essayer de récupérer les champs siphonnés depuis le pending setup
+      if (pending.siphonedF5CookieValue || pending.siphonedAspNetSessionId || pending.siphonedUserAgent) {
+        siphonedCreds = {
+          f5CookieValue: pending.siphonedF5CookieValue,
+          f5CookieName: pending.siphonedF5CookieName,
+          aspNetSessionId: pending.siphonedAspNetSessionId,
+          userAgent: pending.siphonedUserAgent,
+          validUntil: pending.siphonedValidUntil,
+        };
+      }
     }
   }
 
@@ -566,14 +621,48 @@ export async function startCevDossierLoop(): Promise<void> {
     while (true) {
       await sleep(30_000);
       const retry = await getCevCredentials();
-      if (retry) { vowintEmail = retry.vowintEmail; vowintPassword = retry.vowintPassword; break; }
+      if (retry) {
+        vowintEmail = retry.vowintEmail;
+        vowintPassword = retry.vowintPassword;
+        // Récupérer les champs siphonnés lors du retry
+        if (retry.siphonedF5CookieValue || retry.siphonedAspNetSessionId || retry.siphonedUserAgent) {
+          siphonedCreds = {
+            f5CookieValue: retry.siphonedF5CookieValue,
+            f5CookieName: retry.siphonedF5CookieName,
+            aspNetSessionId: retry.siphonedAspNetSessionId,
+            userAgent: retry.siphonedUserAgent,
+            validUntil: retry.siphonedValidUntil,
+          };
+        }
+        break;
+      }
       const sessions = await getActiveCevSessions();
       const t = sessions.find((s: any) => s.vowintEmail && s.vowintPassword);
-      if (t) { vowintEmail = t.vowintEmail; vowintPassword = t.vowintPassword; break; }
+      if (t) {
+        vowintEmail = t.vowintEmail;
+        vowintPassword = t.vowintPassword;
+        // Essayer de récupérer les champs siphonnés depuis la session active
+        if (t.siphonedF5CookieValue || t.siphonedAspNetSessionId || t.siphonedUserAgent) {
+          siphonedCreds = {
+            f5CookieValue: t.siphonedF5CookieValue,
+            f5CookieName: t.siphonedF5CookieName,
+            aspNetSessionId: t.siphonedAspNetSessionId,
+            userAgent: t.siphonedUserAgent,
+            validUntil: t.siphonedValidUntil,
+          };
+        }
+        break;
+      }
     }
   }
 
   log("INFO", `Credentials VOWINT: ${vowintEmail!.slice(0, 5)}…`);
+  if (siphonedCreds) {
+    log("INFO", `  📥 Cookies siphonnés chargés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}, UA=${!!siphonedCreds.userAgent}`);
+    if (siphonedCreds.userAgent) {
+      setCevExternalUserAgent(siphonedCreds.userAgent);
+    }
+  }
 
   state.isRunning = true;
   state.startedAt = Date.now();
@@ -642,6 +731,7 @@ export async function startCevDossierLoop(): Promise<void> {
         vowintPassword!,
         dossier,
         logApplicationId,
+        siphonedCreds,
       );
 
       // Log chaque scan dans Convex avec le dossier concerné
@@ -675,6 +765,7 @@ export async function startCevDossierLoop(): Promise<void> {
           await handleSlotFound(
             vowintEmail!, vowintPassword!, dossier, logApplicationId,
             result.sessionCookie, result.integrationUrl,
+            siphonedCreds,
           );
           break;
         case "rate_limited":
