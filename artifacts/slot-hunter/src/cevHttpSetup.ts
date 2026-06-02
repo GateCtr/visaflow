@@ -804,6 +804,7 @@ function mergeCookies(existing: string, res: Response): string {
 
 async function solveHcaptcha(clientId: string): Promise<string | null> {
   const pageUrl = `${CEV_BASE}/Captcha`;
+  const errors: string[] = [];
 
   // Extract proxy info from current environment (used by cevImpitFetch)
   const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
@@ -820,7 +821,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         proxyPassword: decodeURIComponent(parsedProxy.password || ''),
       };
     } catch (e) {
-      // If proxy URL parsing fails, just use proxyless mode
+      errors.push(`proxy_parse_failed: ${String(e)}`);
     }
   }
 
@@ -841,7 +842,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         }),
         signal: AbortSignal.timeout(30_000),
       });
-      const createData = await createRes.json() as { errorId: number; taskId?: number };
+      const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
       if (createData.errorId === 0 && createData.taskId) {
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 5000));
@@ -850,7 +851,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
           });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { gRecaptchaResponse?: string; token?: string } };
+          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { gRecaptchaResponse?: string; token?: string }; errorCode?: string; errorDescription?: string };
           if (pollData.status === "ready") {
             const token = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;
             if (token) {
@@ -859,10 +860,19 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
             }
             break;
           }
-          if (pollData.errorId !== 0) break;
+          if (pollData.errorId !== 0) {
+            errors.push(`anticaptcha_poll_error: ${pollData.errorCode} - ${pollData.errorDescription}`);
+            break;
+          }
         }
+      } else {
+        errors.push(`anticaptcha_create_error: ${createData.errorCode} - ${createData.errorDescription}`);
       }
-    } catch { /* fallback */ }
+    } catch (e) {
+      errors.push(`anticaptcha_exception: ${String(e)}`);
+    }
+  } else {
+    errors.push(`anticaptcha_not_configured`);
   }
 
   // Priorité 2 : CapSolver
@@ -882,7 +892,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         }),
         signal: AbortSignal.timeout(30_000),
       });
-      const createData = await createRes.json() as { errorId: number; taskId?: string };
+      const createData = await createRes.json() as { errorId: number; taskId?: string; errorCode?: string; errorDescription?: string };
       if (createData.errorId === 0 && createData.taskId) {
         for (let i = 0; i < 40; i++) {
           await new Promise(r => setTimeout(r, 3000));
@@ -891,17 +901,27 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ clientKey: CAPSOLVER_KEY, taskId: createData.taskId }),
           });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { token?: string } };
+          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { token?: string }; errorCode?: string; errorDescription?: string };
           if (pollData.status === "ready" && pollData.solution?.token) {
             botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { service: "capsolver", seconds: (i + 1) * 3 } });
             return pollData.solution.token;
           }
-          if (pollData.errorId !== 0) break;
+          if (pollData.errorId !== 0) {
+            errors.push(`capsolver_poll_error: ${pollData.errorCode} - ${pollData.errorDescription}`);
+            break;
+          }
         }
+      } else {
+        errors.push(`capsolver_create_error: ${createData.errorCode} - ${createData.errorDescription}`);
       }
-    } catch { /* failed */ }
+    } catch (e) {
+      errors.push(`capsolver_exception: ${String(e)}`);
+    }
+  } else {
+    errors.push(`capsolver_not_configured`);
   }
 
-  botLog({ applicationId: clientId, step: "cev_http_hcaptcha_failed", status: "fail" });
+  botLog({ applicationId: clientId, step: "cev_http_hcaptcha_failed", status: "fail", data: { errors: errors.join(', ') } });
+  console.log(`[CEV-SETUP] hCaptcha failed. Errors:`, errors);
   return null;
 }
