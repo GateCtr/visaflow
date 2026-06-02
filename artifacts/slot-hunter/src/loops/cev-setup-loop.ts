@@ -133,6 +133,7 @@ export async function startCevSetupLoop(): Promise<void> {
         const skipPlaywright = (
           r.error === "CEV_VOWINT_SESSION_FAILED" ||
           r.error === "SESSION_EXPIRED_AFTER_REDIRECT" ||
+          r.error === "MULTI_SESSION_NOT_ALLOWED" ||
           r.error === "PLAYWRIGHT_UNAVAILABLE" ||
           (r.error ?? "").includes("RATE_LIMIT") ||
           (r.error ?? "").includes("TooManyAttempts")

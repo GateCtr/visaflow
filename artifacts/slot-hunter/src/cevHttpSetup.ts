@@ -690,7 +690,18 @@ export async function setupCevSessionHttp(
       };
     }
 
-    // Cas 2 : Session expirée / re-captcha demandé
+    // Cas 2 : MultiSessionNotAllowed — URL d'intégration déjà utilisée dans une autre session
+    if (finalUrl.includes("MultiSessionNotAllowed")) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_multi_session",
+        status: "fail",
+        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+      });
+      return { success: false, error: "MULTI_SESSION_NOT_ALLOWED" };
+    }
+
+    // Cas 3 : Session expirée / re-captcha demandé
     if (finalUrl.includes("SessionExpired") || finalUrl.includes("/Captcha")) {
       botLog({
         applicationId: clientId,
@@ -701,7 +712,7 @@ export async function setupCevSessionHttp(
       return { success: false, error: "SESSION_EXPIRED_AFTER_REDIRECT" };
     }
 
-    // Cas 3 : Page d'erreur générique CEV (/Error/Default, /Error/*)
+    // Cas 4 : Page d'erreur générique CEV (/Error/Default, /Error/*)
     if (finalUrl.includes("/Error/")) {
       botLog({
         applicationId: clientId,
