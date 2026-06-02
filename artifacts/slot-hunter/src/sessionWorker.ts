@@ -32,8 +32,9 @@ interface CapturedCookies {
 const CEV_URL = "https://appointment.cloud.diplomatie.be/";
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";
-let CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? ""; // Peut être défini automatiquement
-const PROXY_URL = process.env.PROXY_URL ?? process.env.SOAX_PROXY_URL ?? process.env.IPROYAL_PROXY_URL ?? "";
+let CEV_SESSION_ID = process.env.CEV_SESSION_ID ?? "";
+// Utilise d'abord IPROYAL_PROXY_URL (car le bot main le configure pour SOAX), puis les autres
+const PROXY_URL = process.env.IPROYAL_PROXY_URL ?? process.env.SOAX_PROXY_URL ?? process.env.PROXY_URL ?? "";
 const REFRESH_INTERVAL_MIN = parseInt(process.env.REFRESH_INTERVAL_MIN ?? "13", 10);
 
 function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
