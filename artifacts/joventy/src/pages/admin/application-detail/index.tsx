@@ -25,14 +25,17 @@ import { DocumentVault } from "./DocumentVault";
 import { ActivityLog } from "./ActivityLog";
 import { BotLogTimeline } from "./BotLogTimeline";
 import { ChatPanel } from "./ChatPanel";
+import { InvoicePanel } from "./InvoicePanel";
+import { Receipt } from "lucide-react";
 
-type Tab = "overview" | "documents" | "bot" | "activity";
+type Tab = "overview" | "documents" | "bot" | "activity" | "invoice";
 
 const TAB_CONFIG: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Aperçu", icon: <Zap className="w-3.5 h-3.5" /> },
   { id: "documents", label: "Documents", icon: <FileText className="w-3.5 h-3.5" /> },
   { id: "bot", label: "Bot & Slot", icon: <Bot className="w-3.5 h-3.5" /> },
   { id: "activity", label: "Activité", icon: <Clock className="w-3.5 h-3.5" /> },
+  { id: "invoice", label: "Facture", icon: <Receipt className="w-3.5 h-3.5" /> },
 ];
 
 export default function ApplicationDetailPage() {
@@ -187,6 +190,9 @@ export default function ApplicationDetailPage() {
           )}
           {activeTab === "activity" && (
             <ActivityLog logs={(app.logs ?? []) as any} />
+          )}
+          {activeTab === "invoice" && (
+            <InvoicePanel app={app} />
           )}
         </div>
 

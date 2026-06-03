@@ -768,20 +768,29 @@ export default function ClientApplicationDetail() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={app.status} />
-          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
-            isDossierOnly
-              ? "bg-blue-100 text-blue-700"
-              : servicePackage === "slot_only"
-                ? "bg-purple-100 text-purple-700"
-                : "bg-orange-100 text-orange-700"
-          }`}>
-            {isDossierOnly
-              ? <ClipboardCheck className="w-3 h-3" />
-              : servicePackage === "slot_only"
-                ? <Calendar className="w-3 h-3" />
-                : <Star className="w-3 h-3" />}
-            {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+              isDossierOnly
+                ? "bg-blue-100 text-blue-700"
+                : servicePackage === "slot_only"
+                  ? "bg-purple-100 text-purple-700"
+                  : "bg-orange-100 text-orange-700"
+            }`}>
+              {isDossierOnly
+                ? <ClipboardCheck className="w-3 h-3" />
+                : servicePackage === "slot_only"
+                  ? <Calendar className="w-3 h-3" />
+                  : <Star className="w-3 h-3" />}
+              {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
+            </span>
+            <button
+              onClick={() => setLocation(`/dashboard/applications/${appId}/invoice`)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              <FileText className="w-3 h-3" />
+              Facture
+            </button>
+          </div>
         </div>
       </div>
 
