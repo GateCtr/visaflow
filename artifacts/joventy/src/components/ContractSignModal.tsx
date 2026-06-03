@@ -3,11 +3,146 @@ import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PenLine, ShieldCheck, ChevronDown } from "lucide-react";
+import { PenLine, ShieldCheck, ChevronDown, CheckCircle2, ArrowRight, FileText } from "lucide-react";
 
 interface ContractSignModalProps {
   userName: string;
   onSigned: () => void;
+}
+
+/* ── Écran de confirmation post-signature ── */
+function SignedConfirmation({
+  signedName,
+  onContinue,
+}: {
+  signedName: string;
+  onContinue: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+
+  const signedAt = new Date().toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const signedTime = new Date().toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  useEffect(() => {
+    // Étape 0 → 1 : cercle apparaît
+    const t1 = setTimeout(() => setVisible(true), 80);
+    // Étape 1 → 2 : contenu apparaît
+    const t2 = setTimeout(() => setStep(1), 500);
+    // Étape 2 : détails apparaissent
+    const t3 = setTimeout(() => setStep(2), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0B111E] px-4">
+
+      {/* Cercle animé */}
+      <div
+        className="relative flex items-center justify-center mb-8 transition-all duration-700"
+        style={{
+          opacity: visible ? 1 : 0,
+          transform: visible ? "scale(1)" : "scale(0.5)",
+        }}
+      >
+        {/* Halo pulsant */}
+        <div className="absolute w-36 h-36 rounded-full bg-[#F59E0B]/10 animate-ping" style={{ animationDuration: "2s" }} />
+        <div className="absolute w-28 h-28 rounded-full bg-[#F59E0B]/15" />
+        {/* Cercle principal */}
+        <div className="relative w-24 h-24 rounded-full bg-[#F59E0B] flex items-center justify-center shadow-[0_0_60px_rgba(245,158,11,0.5)]">
+          <CheckCircle2 className="w-12 h-12 text-[#0B111E]" strokeWidth={2.5} />
+        </div>
+      </div>
+
+      {/* Titre */}
+      <div
+        className="text-center transition-all duration-500 mb-6"
+        style={{
+          opacity: step >= 1 ? 1 : 0,
+          transform: step >= 1 ? "translateY(0)" : "translateY(16px)",
+        }}
+      >
+        <h1 className="text-white text-2xl sm:text-3xl font-bold mb-2">
+          Contrat signé !
+        </h1>
+        <p className="text-white/50 text-sm sm:text-base">
+          Votre engagement a été enregistré avec succès.
+        </p>
+      </div>
+
+      {/* Carte de détails */}
+      <div
+        className="w-full max-w-sm transition-all duration-500 mb-8"
+        style={{
+          opacity: step >= 2 ? 1 : 0,
+          transform: step >= 2 ? "translateY(0)" : "translateY(20px)",
+        }}
+      >
+        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+          {/* En-tête carte */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+            <div className="w-8 h-8 rounded-lg bg-[#F59E0B]/20 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-4 h-4 text-[#F59E0B]" />
+            </div>
+            <div>
+              <p className="text-white text-xs font-semibold">Contrat d'accompagnement Visa</p>
+              <p className="text-white/40 text-[11px]">Version 1.1 · Joventy / Akollad Groupe</p>
+            </div>
+          </div>
+          {/* Détails */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-white/40 text-xs">Signataire</span>
+              <span className="text-white text-xs font-semibold">{signedName}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/40 text-xs">Date</span>
+              <span className="text-white text-xs capitalize">{signedAt}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/40 text-xs">Heure</span>
+              <span className="text-white text-xs">{signedTime}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/40 text-xs">Statut</span>
+              <span className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                Archivé et horodaté
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bouton continuer */}
+      <div
+        className="w-full max-w-sm transition-all duration-500"
+        style={{
+          opacity: step >= 2 ? 1 : 0,
+          transform: step >= 2 ? "translateY(0)" : "translateY(20px)",
+        }}
+      >
+        <Button
+          onClick={onContinue}
+          className="w-full h-14 text-base font-bold gap-2 bg-[#F59E0B] hover:bg-[#d97706] text-[#0B111E] rounded-xl"
+        >
+          Accéder à mon espace
+          <ArrowRight className="w-5 h-5" />
+        </Button>
+        <p className="text-white/30 text-[11px] text-center mt-3">
+          Vous retrouverez ce contrat dans votre espace client à tout moment.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function ContractSignModal({ userName, onSigned }: ContractSignModalProps) {
@@ -17,6 +152,8 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
   const [scrollProgress, setScrollProgress] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState("");
+  const [isSigned, setIsSigned] = useState(false);
+  const [finalName, setFinalName] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const signContract = useMutation(api.contracts.signContract);
 
@@ -36,7 +173,6 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
       if (pct >= 98) setHasScrolled(true);
     };
     el.addEventListener("scroll", handleScroll);
-    // Check immediately in case content fits without scrolling
     handleScroll();
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
@@ -50,13 +186,19 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
     setError("");
     try {
       await signContract({ signedName: signedName.trim(), userAgent: navigator.userAgent });
-      onSigned();
+      setFinalName(signedName.trim());
+      setIsSigned(true);
     } catch {
       setError("Une erreur est survenue. Veuillez réessayer.");
     } finally {
       setIsPending(false);
     }
   };
+
+  /* Affiche la confirmation avant de continuer */
+  if (isSigned) {
+    return <SignedConfirmation signedName={finalName} onContinue={onSigned} />;
+  }
 
   const scrollDown = () => {
     scrollRef.current?.scrollBy({ top: 400, behavior: "smooth" });
