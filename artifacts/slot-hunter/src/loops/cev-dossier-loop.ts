@@ -35,6 +35,7 @@ import {
   initCevProxyGuardWithExitIp,
   setCevExternalUserAgent,
   getCevExternalUserAgent,
+  shouldUseProxy,
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
@@ -527,30 +528,39 @@ export async function startCevDossierLoop(): Promise<void> {
   const configuredInterval = intervalStr ? parseInt(intervalStr, 10) : 0;
   const intervalMs = (configuredInterval > 0 ? configuredInterval : DEFAULT_INTERVAL_SEC) * 1000;
 
+  const useProxy = await shouldUseProxy();
+  const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+  let proxyExitIp: string | null = null;
+
   log("INFO", `Config:`);
   log("INFO", `  • Dossiers: ${pool.size}`);
   log("INFO", `  • Clics/h total: ${pool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR}`);
   log("INFO", `  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
-  log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
 
-  // ─── Configure SOAX proxy ─────────────────────────────────────────────────
-  // cevImpitFetch() reads process.env.IPROYAL_PROXY_URL as the proxy to use.
-  // We override it with the SOAX sticky URL so all requests go through SOAX.
-  // (iProyal account expired/402 — SOAX is the active provider)
-  const soaxBaseUrl = process.env.SOAX_PROXY_URL;
-  let proxyExitIp: string | null = null;
-  if (soaxBaseUrl) {
-    const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-dossier-v3");
-    process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
-    resetCevImpitInstances(); // Force impit to recreate with new proxy URL
-    log("INFO", `  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-    // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
-    proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, "cev-dossier-v3");
-  } else if (process.env.IPROYAL_PROXY_URL) {
-    // Si on utilise iProyal, aussi initialiser le guard
-    proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, "cev-dossier-v3");
+  if (useProxy) {
+    log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
+
+    // ─── Configure SOAX proxy ─────────────────────────────────────────────────
+    // cevImpitFetch() reads process.env.IPROYAL_PROXY_URL as the proxy to use.
+    // We override it with the SOAX sticky URL so all requests go through SOAX.
+    // (iProyal account expired/402 — SOAX is the active provider)
+    if (soaxBaseUrl) {
+      const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-dossier-v3");
+      process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
+      resetCevImpitInstances(); // Force impit to recreate with new proxy URL
+      log("INFO", `  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+      // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
+      proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, "cev-dossier-v3");
+    } else if (process.env.IPROYAL_PROXY_URL) {
+      // Si on utilise iProyal, aussi initialiser le guard
+      proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, "cev-dossier-v3");
+    } else {
+      log("WARN", `  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+    }
   } else {
-    log("WARN", `  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+    log("INFO", `  • Proxy: Désactivé (mode sans proxy via botConfig)`);
+    delete process.env.IPROYAL_PROXY_URL;
+    resetCevImpitInstances();
   }
 
   // Récupérer les credentials VOWINT via /hunter/cev-credentials (lecture sans lock)
@@ -853,9 +863,11 @@ export async function startCevDossierLoop(): Promise<void> {
       syncPoolStateToRedis(pool.exportState());
 
       // Pause entre les scans (intervalle dynamique)
-      // Jitter réduit à ±10% 
-      const jitter = effectiveIntervalMs * 0.1 * (Math.random() * 2 - 1);
-      await sleep(effectiveIntervalMs + jitter);
+      // Jitter important de ±30s (anti-shadow ban)
+      const jitter = (Math.random() * 60 - 30) * 1000; // ±30s aléatoires
+      const finalSleepMs = Math.max(10_000, effectiveIntervalMs + jitter); // Garder au moins 10s
+      log("INFO", `Pause de ${Math.round(finalSleepMs / 1000)}s avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
+      await sleep(finalSleepMs);
 
     } catch (loopErr) {
       log("ERROR", `Erreur loop: ${loopErr}`);
