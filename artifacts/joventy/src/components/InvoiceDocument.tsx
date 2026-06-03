@@ -198,17 +198,28 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
           </div>
 
           <div className="mt-6 pt-4 border-t border-white/10">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: "#F59E0B" }}
-              />
-              <span className="text-white text-sm font-semibold">
-                Joventy — Service d'Accompagnement Visa
-              </span>
-            </div>
-            <div className="text-slate-400 text-xs mt-0.5 ml-3.5">
-              contact@akollad.com · joventy.cd · @AkolladGroup
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: "#F59E0B" }}
+                  />
+                  <span className="text-white text-sm font-semibold">
+                    Joventy — Service d'Accompagnement Visa
+                  </span>
+                </div>
+                <div className="text-slate-400 text-xs mt-0.5 ml-3.5">
+                  contact@akollad.com · joventy.cd · WhatsApp : +243 840 808 122
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-slate-400 text-[10px] leading-relaxed space-y-0.5">
+                  <div><span className="text-slate-500 font-semibold">RCCM :</span> CD/KNG/RCCM/25-A-07960</div>
+                  <div><span className="text-slate-500 font-semibold">N° Impôt :</span> A2557944L</div>
+                  <div><span className="text-slate-500 font-semibold">IDNAT :</span> 01-J6100-N86614P</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -405,6 +416,9 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
           <div className="mt-2 text-[10px] text-slate-400 text-center">
             Ce document a valeur de facture officielle. Signature numérique archivée sur la plateforme Joventy.
             Droit applicable : République Démocratique du Congo — Juridictions de Kinshasa.
+          </div>
+          <div className="mt-1.5 text-[10px] text-slate-400 text-center">
+            RCCM : CD/KNG/RCCM/25-A-07960 &nbsp;·&nbsp; N° Impôt : A2557944L &nbsp;·&nbsp; IDNAT : 01-J6100-N86614P
           </div>
         </div>
       </div>
