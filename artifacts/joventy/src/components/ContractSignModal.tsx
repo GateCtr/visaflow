@@ -30,12 +30,14 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
     const el = scrollRef.current;
     if (!el) return;
     const handleScroll = () => {
-      const progress = el.scrollTop / (el.scrollHeight - el.clientHeight);
-      const pct = Math.min(100, Math.round(progress * 100));
+      const max = el.scrollHeight - el.clientHeight;
+      const pct = max > 0 ? Math.min(100, Math.round((el.scrollTop / max) * 100)) : 100;
       setScrollProgress(pct);
       if (pct >= 98) setHasScrolled(true);
     };
     el.addEventListener("scroll", handleScroll);
+    // Check immediately in case content fits without scrolling
+    handleScroll();
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -57,8 +59,11 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
   };
 
   const scrollDown = () => {
-    scrollRef.current?.scrollBy({ top: 300, behavior: "smooth" });
+    scrollRef.current?.scrollBy({ top: 400, behavior: "smooth" });
   };
+
+  /* ─── shared padding ─── */
+  const docPx = "px-5 sm:px-8 lg:px-12";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0B111E]">
@@ -71,28 +76,28 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
         />
       </div>
 
-      {/* ── EN-TÊTE ── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-white/10">
-        <div className="flex items-center gap-3">
+      {/* ── EN-TÊTE NAV ── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-8 py-3 border-b border-white/10 gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <img
             src="https://akollad.com/web-app-manifest-512x512.png"
             alt="Akollad"
-            className="w-8 h-8 rounded-lg"
+            className="w-7 h-7 rounded-lg flex-shrink-0"
           />
-          <div>
+          <div className="min-w-0">
             <span className="text-white font-bold text-sm tracking-tight">Joventy</span>
-            <span className="text-white/30 mx-2 text-sm">·</span>
-            <span className="text-white/50 text-xs">Contrat d'accompagnement visa</span>
+            <span className="text-white/30 mx-1.5 text-sm hidden xs:inline">·</span>
+            <span className="text-white/50 text-xs hidden sm:inline">Contrat d'accompagnement</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex-shrink-0">
           {!hasScrolled ? (
-            <span className="text-[11px] text-white/40 hidden sm:block">
-              Lisez jusqu'au bas pour signer — {scrollProgress}% lu
+            <span className="text-[11px] text-white/40 tabular-nums">
+              {scrollProgress}%
             </span>
           ) : (
-            <span className="text-[11px] text-emerald-400 font-semibold hidden sm:block">
-              ✓ Lecture complète — vous pouvez signer
+            <span className="text-[11px] text-emerald-400 font-semibold whitespace-nowrap">
+              ✓ Lu — signez ci-dessous
             </span>
           )}
         </div>
@@ -101,30 +106,31 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
       {/* ── ZONE PRINCIPALE ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Colonne document */}
+        {/* Colonne document scrollable */}
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: "thin", scrollbarColor: "#334155 transparent" }}
         >
-          {/* Page blanche centrée */}
-          <div className="max-w-3xl mx-auto my-8 sm:my-12 px-4 sm:px-0">
-            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="max-w-3xl mx-auto my-6 sm:my-10 px-3 sm:px-4 lg:px-0">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden">
 
               {/* En-tête du document */}
-              <div className="bg-[#0B111E] px-8 sm:px-12 py-8">
-                <div className="flex items-start justify-between gap-4">
+              <div className={`bg-[#0B111E] ${docPx} py-6 sm:py-8`}>
+                {/* Titre + identifiants légaux */}
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                   <div>
                     <div className="text-[#F59E0B] text-[10px] font-bold tracking-widest uppercase mb-2">
                       Document officiel — Akollad Groupe
                     </div>
-                    <h1 className="text-white text-2xl sm:text-3xl font-bold leading-tight">
-                      Contrat d'Accompagnement<br />
+                    <h1 className="text-white text-xl sm:text-3xl font-bold leading-tight">
+                      Contrat d'Accompagnement{" "}
                       <span className="text-[#F59E0B]">Visa</span>
                     </h1>
-                    <p className="text-white/40 text-xs mt-2">Version 1.1 — {today}</p>
+                    <p className="text-white/40 text-xs mt-1.5">Version 1.1 — {today}</p>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  {/* Identifiants légaux — visibles uniquement sm+ */}
+                  <div className="hidden sm:block text-right flex-shrink-0">
                     <div className="text-white/30 text-[10px] leading-relaxed">
                       <div>RCCM : CD/KNG/RCCM/25-A-07960</div>
                       <div>N° Impôt : A2557944L</div>
@@ -133,8 +139,8 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-white/10 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
+                <div className="mt-5 pt-5 border-t border-white/10 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] flex-shrink-0" />
                   <span className="text-white/60 text-xs">
                     Signature numérique obligatoire avant l'accès à la plateforme
                   </span>
@@ -143,12 +149,11 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
 
               {/* Corps du contrat */}
               <div
-                className="px-8 sm:px-12 py-10 text-slate-700 leading-[1.85] space-y-8"
+                className={`${docPx} py-7 sm:py-10 text-slate-700 leading-[1.85] space-y-7 sm:space-y-8`}
                 style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "15px" }}
               >
-
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     1. Parties au contrat
                   </h2>
                   <p>
@@ -161,7 +166,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     2. Objet du contrat
                   </h2>
                   <p className="mb-3">
@@ -170,32 +175,32 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     de rendez-vous physique, selon le package sélectionné lors de l'ouverture du dossier.
                     Ce service comprend, selon le package choisi :
                   </p>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-4"><strong>Service Complet :</strong> remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire.</li>
-                    <li className="pl-4"><strong>Créneau Uniquement :</strong> surveillance automatisée des portails consulaires et capture d'un créneau disponible.</li>
-                    <li className="pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> constitution, vérification et soumission du dossier sur le portail officiel compétent.</li>
-                    <li className="pl-4"><strong>Dossier Uniquement :</strong> remplissage des formulaires et vérification des pièces justificatives, sans soumission ni prise de rendez-vous.</li>
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
+                    <li className="pl-3 sm:pl-4"><strong>Service Complet :</strong> remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Créneau Uniquement :</strong> surveillance automatisée des portails consulaires et capture d'un créneau disponible.</li>
+                    <li className="pl-3 sm:pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> constitution, vérification et soumission du dossier sur le portail officiel compétent.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Dossier Uniquement :</strong> remplissage des formulaires et vérification des pièces justificatives, sans soumission ni prise de rendez-vous.</li>
                   </ul>
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     3. Conditions financières
                   </h2>
                   <p className="mb-3">
                     Le service est soumis à une <strong>structure de paiement en deux temps</strong> pour les
                     packages incluant la recherche de créneau ou la soumission e-Visa :
                   </p>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30 mb-3">
-                    <li className="pl-4">
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30 mb-3">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Frais d'engagement</strong> (non remboursables) : payables à l'ouverture du dossier.
                       Ils couvrent le travail administratif initial, la mise en surveillance du portail et la préparation du dossier.
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement si un créneau consulaire
                       est effectivement obtenu. Elle n'est jamais due en cas d'indisponibilité de créneaux.
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement si le visa
                       est accordé par l'autorité compétente. Elle n'est jamais due en cas de refus ou de non-réponse.
                     </li>
@@ -208,7 +213,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     3 bis. E-Visa et visa sans rendez-vous
                   </h2>
                   <p className="mb-3">
@@ -216,15 +221,15 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     visa postal, etc.), le critère de succès est <strong>l'obtention effective du visa</strong>
                     (approbation officielle par l'autorité émettrice), et non la prise d'un rendez-vous.
                   </p>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-4">Joventy prend en charge la constitution, la vérification et la soumission du dossier sur le portail officiel.</li>
-                    <li className="pl-4">Le Client s'engage à fournir tous les documents requis dans les délais indiqués.</li>
-                    <li className="pl-4">La prime de succès est due dans les <strong>48 heures suivant la notification d'obtention du visa</strong>.</li>
-                    <li className="pl-4">
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
+                    <li className="pl-3 sm:pl-4">Joventy prend en charge la constitution, la vérification et la soumission du dossier sur le portail officiel.</li>
+                    <li className="pl-3 sm:pl-4">Le Client s'engage à fournir tous les documents requis dans les délais indiqués.</li>
+                    <li className="pl-3 sm:pl-4">La prime de succès est due dans les <strong>48 heures suivant la notification d'obtention du visa</strong>.</li>
+                    <li className="pl-3 sm:pl-4">
                       En cas de refus par l'autorité compétente, la prime de succès n'est pas due.
                       Les frais d'engagement restent non remboursables car le travail de préparation et de soumission a été accompli.
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       En cas de refus lié à des informations inexactes ou des documents manquants fournis par le Client,
                       les frais d'engagement et toute resoumission éventuelle restent à la charge du Client.
                     </li>
@@ -232,32 +237,32 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     4. Obligations de Joventy
                   </h2>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-4">Déployer les moyens techniques disponibles pour surveiller les portails consulaires de façon continue.</li>
-                    <li className="pl-4">Notifier le Client immédiatement (WhatsApp, email et tableau de bord) dès qu'un créneau est obtenu.</li>
-                    <li className="pl-4">Traiter les données personnelles du Client avec confidentialité, conformément à la section 8.</li>
-                    <li className="pl-4">Fournir un suivi transparent via le tableau de bord client en temps réel.</li>
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
+                    <li className="pl-3 sm:pl-4">Déployer les moyens techniques disponibles pour surveiller les portails consulaires de façon continue.</li>
+                    <li className="pl-3 sm:pl-4">Notifier le Client immédiatement (WhatsApp, email et tableau de bord) dès qu'un créneau est obtenu.</li>
+                    <li className="pl-3 sm:pl-4">Traiter les données personnelles du Client avec confidentialité, conformément à la section 8.</li>
+                    <li className="pl-3 sm:pl-4">Fournir un suivi transparent via le tableau de bord client en temps réel.</li>
                   </ul>
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     5. Obligations du Client
                   </h2>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-4">Fournir des informations exactes, complètes et à jour lors de l'ouverture du dossier.</li>
-                    <li className="pl-4">Transmettre sans délai les documents demandés par Joventy pour compléter le dossier.</li>
-                    <li className="pl-4">Régler les frais d'engagement dans les 48 heures suivant l'ouverture du dossier, sous peine d'annulation automatique.</li>
-                    <li className="pl-4"><strong>Visa avec rendez-vous :</strong> se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du créneau.</li>
-                    <li className="pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> s'assurer que tous les documents fournis sont authentiques et conformes aux exigences du pays de destination, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du visa.</li>
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
+                    <li className="pl-3 sm:pl-4">Fournir des informations exactes, complètes et à jour lors de l'ouverture du dossier.</li>
+                    <li className="pl-3 sm:pl-4">Transmettre sans délai les documents demandés par Joventy pour compléter le dossier.</li>
+                    <li className="pl-3 sm:pl-4">Régler les frais d'engagement dans les 48 heures suivant l'ouverture du dossier, sous peine d'annulation automatique.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Visa avec rendez-vous :</strong> se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du créneau.</li>
+                    <li className="pl-3 sm:pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> s'assurer que tous les documents fournis sont authentiques et conformes aux exigences du pays de destination, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du visa.</li>
                   </ul>
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     6. Limitation de responsabilité
                   </h2>
                   <p className="mb-3">
@@ -278,24 +283,24 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     7. Politique de remboursement
                   </h2>
-                  <ul className="space-y-2 pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-4">
+                  <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Frais d'engagement :</strong> non remboursables après paiement, quelle que soit l'issue
                       de la demande (créneau non disponible, refus de visa, annulation consulaire, etc.).
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement après obtention
                       effective d'un créneau. En l'absence de créneau, elle n'est jamais prélevée.
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement après
                       notification officielle d'obtention du visa. En cas de refus ou non-réponse de l'autorité
                       compétente, elle n'est jamais prélevée.
                     </li>
-                    <li className="pl-4">
+                    <li className="pl-3 sm:pl-4">
                       <strong>Annulation par le Client :</strong> en cas d'annulation avant toute action de Joventy,
                       un remboursement partiel peut être étudié au cas par cas. Contactez le support.
                     </li>
@@ -303,7 +308,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     8. Protection des données personnelles
                   </h2>
                   <p className="mb-3">
@@ -319,7 +324,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     9. Signature numérique
                   </h2>
                   <p>
@@ -330,7 +335,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 <section>
-                  <h2 className="font-sans font-bold text-[#0B111E] text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <h2 className="font-sans font-bold text-[#0B111E] text-sm sm:text-base uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
                     10. Droit applicable
                   </h2>
                   <p>
@@ -340,22 +345,22 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                 </section>
 
                 {/* Pied du document */}
-                <div className="pt-6 border-t border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-400">
+                <div className="pt-5 border-t border-dashed border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
                   <span>Joventy · Akollad Groupe · Kinshasa, RDC</span>
                   <span>Version 1.1 · {new Date().getFullYear()}</span>
                 </div>
               </div>
 
-              {/* ── ZONE DE SIGNATURE (n'apparaît qu'après lecture complète) ── */}
+              {/* ── ZONE DE SIGNATURE — apparaît uniquement après lecture complète ── */}
               <div
                 className="overflow-hidden transition-all duration-700 ease-out"
                 style={{
-                  maxHeight: hasScrolled ? "600px" : "0px",
+                  maxHeight: hasScrolled ? "700px" : "0px",
                   opacity: hasScrolled ? 1 : 0,
                 }}
               >
-                <div className="bg-slate-50 border-t-2 border-[#F59E0B] px-8 sm:px-12 py-8 space-y-6">
-                  <div className="flex items-center gap-3 mb-2">
+                <div className={`bg-slate-50 border-t-2 border-[#F59E0B] ${docPx} py-7 sm:py-8 space-y-5`}>
+                  <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-[#0B111E] flex items-center justify-center flex-shrink-0">
                       <PenLine className="w-5 h-5 text-[#F59E0B]" />
                     </div>
@@ -373,7 +378,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                       placeholder={userName ? `Ex : ${userName}` : "Votre nom complet"}
                       value={signedName}
                       onChange={(e) => setSignedName(e.target.value)}
-                      className="h-13 text-base font-medium border-slate-300 focus:border-[#0B111E] bg-white"
+                      className="text-base font-medium border-slate-300 focus:border-[#0B111E] bg-white"
                       style={{ height: "52px" }}
                     />
                     {signedName.trim().length > 0 && signedName.trim().length < 3 && (
@@ -402,28 +407,27 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                   <Button
                     onClick={handleSign}
                     disabled={!canSign}
-                    className="w-full h-14 text-base font-bold gap-2 bg-[#0B111E] hover:bg-[#1a2540] text-white disabled:opacity-30 rounded-xl"
+                    className="w-full text-base font-bold gap-2 bg-[#0B111E] hover:bg-[#1a2540] text-white disabled:opacity-30 rounded-xl"
+                    style={{ height: "56px" }}
                   >
                     <ShieldCheck className="w-5 h-5 text-[#F59E0B]" />
                     {isPending ? "Enregistrement en cours…" : "Je signe ce contrat numériquement"}
                   </Button>
 
                   <p className="text-[11px] text-slate-400 text-center">
-                    Signature horodatée et archivée · RCCM CD/KNG/RCCM/25-A-07960 · contact@joventy.cd
+                    Signature horodatée · RCCM CD/KNG/RCCM/25-A-07960 · contact@joventy.cd
                   </p>
                 </div>
               </div>
 
             </div>
 
-            {/* Espace bas de page */}
-            <div className="h-16" />
+            <div className="h-12 sm:h-16" />
           </div>
         </div>
 
-        {/* ── BARRE LATÉRALE DROITE (desktop) ── */}
-        <div className="hidden lg:flex flex-col items-center py-12 px-4 w-20 border-l border-white/10 gap-6">
-          {/* Progression verticale */}
+        {/* ── BARRE LATÉRALE DROITE — desktop uniquement ── */}
+        <div className="hidden lg:flex flex-col items-center py-12 px-4 w-16 border-l border-white/10 gap-4">
           <div className="flex-1 w-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
               className="w-full bg-[#F59E0B] rounded-full transition-all duration-300"
@@ -434,15 +438,16 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
         </div>
       </div>
 
-      {/* ── BOUTON "CONTINUER À LIRE" (fixé en bas si pas encore scrollé) ── */}
+      {/* ── BARRE BAS — "Continuer à lire" ── */}
       {!hasScrolled && (
-        <div className="flex-shrink-0 flex items-center justify-center py-4 bg-[#0B111E] border-t border-white/10">
+        <div className="flex-shrink-0 flex items-center justify-center py-3 bg-[#0B111E] border-t border-white/10">
           <button
             onClick={scrollDown}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs sm:text-sm font-medium transition-colors"
           >
-            <ChevronDown className="w-4 h-4 animate-bounce" />
-            Continuer la lecture pour signer ({scrollProgress}% lu)
+            <ChevronDown className="w-4 h-4 animate-bounce flex-shrink-0" />
+            <span className="hidden sm:inline">Continuer la lecture pour signer — </span>
+            <span>{scrollProgress}% lu</span>
           </button>
         </div>
       )}
