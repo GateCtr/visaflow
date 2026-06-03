@@ -21,7 +21,64 @@ let PROXY_URL = process.env.SOAX_PROXY_URL
 
 const REFRESH_INTERVAL_MIN = parseInt(process.env.REFRESH_INTERVAL_MIN ?? "13", 10);
 
-function getProxyUrl(): string {
+// Cache pour la valeur cev_use_proxy depuis botConfig
+let _cevUseProxyCache: boolean | null = null;
+let _cevUseProxyLastChecked = 0;
+const CEV_USE_PROXY_CACHE_TTL_MS = 60_000; // 1 minute
+
+/**
+ * Vérifie si le proxy doit être utilisé pour le sessionWorker.
+ * Consulte botConfig "cev_use_proxy" (0 = désactivé, 1 = activé).
+ * Par défaut: true (utiliser le proxy si configuré).
+ */
+async function shouldUseProxyForSessionWorker(): Promise<boolean> {
+  const now = Date.now();
+  
+  // Retourner la valeur mise en cache si elle est récente
+  if (_cevUseProxyCache !== null && (now - _cevUseProxyLastChecked) < CEV_USE_PROXY_CACHE_TTL_MS) {
+    return _cevUseProxyCache;
+  }
+  
+  // Mettre à jour le timestamp
+  _cevUseProxyLastChecked = now;
+  
+  try {
+    // Import dynamique pour éviter les problèmes de dépendance circulaire
+    const { getBotConfigValue } = await import("./convexClient.js");
+    const configValue = await getBotConfigValue("cev_use_proxy");
+    
+    if (configValue === "0") {
+      _cevUseProxyCache = false;
+      log("INFO", "🔄 Proxy désactivé via botConfig (cev_use_proxy=0)");
+      return false;
+    } else if (configValue === "1") {
+      _cevUseProxyCache = true;
+      log("INFO", "🔄 Proxy activé via botConfig (cev_use_proxy=1)");
+      return true;
+    } else {
+      // Non configuré ou autre valeur → utiliser le proxy par défaut s'il est configuré
+      _cevUseProxyCache = true;
+      log("INFO", "🔄 Proxy par défaut (cev_use_proxy non configuré ou ≠ 0/1)");
+      return true;
+    }
+  } catch (error) {
+    // En cas d'erreur (Convex inaccessible), utiliser la valeur cache ou true par défaut
+    log("WARN", `⚠️ Erreur lecture botConfig cev_use_proxy: ${error}`);
+    if (_cevUseProxyCache === null) {
+      _cevUseProxyCache = true; // Par défaut, utiliser le proxy
+    }
+    return _cevUseProxyCache;
+  }
+}
+
+async function getProxyUrl(): Promise<string> {
+  // Vérifier si le proxy est désactivé via botConfig
+  const useProxy = await shouldUseProxyForSessionWorker();
+  if (!useProxy) {
+    log("INFO", "🔄 Proxy désactivé via botConfig → mode direct");
+    return "";
+  }
+
   // First priority: use the exact proxy already used by the CEV dossier loop
   const cevProxy = getCevProxyUrl();
   if (cevProxy) {
@@ -75,7 +132,7 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
     "--disable-blink-features=AutomationControlled",
   ];
 
-  const PROXY_URL = getProxyUrl();
+  const PROXY_URL = await getProxyUrl();
 
   let proxyHost = "";
   let proxyPort = "";

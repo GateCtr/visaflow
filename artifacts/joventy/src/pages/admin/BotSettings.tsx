@@ -123,6 +123,14 @@ const CONFIG_ITEMS: ConfigItem[] = [
       { value: "iproyal", label: "iProyal (sessions 60min)" },
     ],
   },
+  {
+    key: "cev_use_proxy",
+    label: "CEV Utilisation Proxy",
+    description: "Activer/désactiver l'utilisation du proxy pour les sessions CEV. 0 = désactivé (mode direct), 1 = activé (utilise proxy configuré). Désactiver pour tester en mode direct sans proxy.",
+    type: "toggle",
+    category: "mode",
+    defaultValue: "0",
+  },
 
   // ─── Timing / Intervalles
   {

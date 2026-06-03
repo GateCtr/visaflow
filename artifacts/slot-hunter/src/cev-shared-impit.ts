@@ -19,6 +19,65 @@ import { Impit } from "impit";
 
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
 
+// ─── Configuration proxy via botConfig ──────────────────────────────────────
+
+/** Cache pour la valeur cev_use_proxy depuis botConfig */
+let _cevUseProxyCache: boolean | null = null;
+let _cevUseProxyLastChecked = 0;
+const CEV_USE_PROXY_CACHE_TTL_MS = 60_000; // 1 minute
+
+/**
+ * Vérifie si le proxy doit être utilisé pour les requêtes CEV.
+ * Consulte botConfig "cev_use_proxy" (0 = désactivé, 1 = activé).
+ * Par défaut: true (utiliser le proxy si configuré).
+ */
+async function shouldUseProxy(): Promise<boolean> {
+  const now = Date.now();
+  
+  // Retourner la valeur mise en cache si elle est récente
+  if (_cevUseProxyCache !== null && (now - _cevUseProxyLastChecked) < CEV_USE_PROXY_CACHE_TTL_MS) {
+    return _cevUseProxyCache;
+  }
+  
+  // Mettre à jour le timestamp
+  _cevUseProxyLastChecked = now;
+  
+  try {
+    // Import dynamique pour éviter les problèmes de dépendance circulaire
+    const { getBotConfigValue } = await import("./convexClient.js");
+    const configValue = await getBotConfigValue("cev_use_proxy");
+    
+    if (configValue === "0") {
+      _cevUseProxyCache = false;
+      console.log("[CEV-PROXY-CONFIG] 🔄 Proxy désactivé via botConfig (cev_use_proxy=0)");
+      return false;
+    } else if (configValue === "1") {
+      _cevUseProxyCache = true;
+      console.log("[CEV-PROXY-CONFIG] 🔄 Proxy activé via botConfig (cev_use_proxy=1)");
+      return true;
+    } else {
+      // Non configuré ou autre valeur → utiliser le proxy par défaut s'il est configuré
+      _cevUseProxyCache = true;
+      console.log("[CEV-PROXY-CONFIG] 🔄 Proxy par défaut (cev_use_proxy non configuré ou ≠ 0/1)");
+      return true;
+    }
+  } catch (error) {
+    // En cas d'erreur (Convex inaccessible), utiliser la valeur cache ou true par défaut
+    console.warn(`[CEV-PROXY-CONFIG] ⚠️ Erreur lecture botConfig cev_use_proxy: ${error}`);
+    if (_cevUseProxyCache === null) {
+      _cevUseProxyCache = true; // Par défaut, utiliser le proxy
+    }
+    return _cevUseProxyCache;
+  }
+}
+
+/** Force le rechargement de la config proxy (pour tests/debug) */
+export function forceReloadCevProxyConfig(): void {
+  _cevUseProxyCache = null;
+  _cevUseProxyLastChecked = 0;
+  console.log("[CEV-PROXY-CONFIG] 🔄 Forcé rechargement config proxy");
+}
+
 // ─── Configuration proxy ────────────────────────────────────────────────────
 
 /** Timeout pour les requêtes via proxy (ms). Si dépassé → retry ou fallback. */
@@ -721,6 +780,15 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   // ── Mode direct forcé (après 422 proxy) ─────────────────────────────────────
   if (Date.now() < _cevDirectModeUntil) {
     // Jitter réseau réaliste même en mode direct
+    await new Promise(r => setTimeout(r, 30 + Math.random() * 170));
+    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+  }
+
+  // ── Vérifier si le proxy est désactivé via botConfig ─────────────────────────
+  const useProxy = await shouldUseProxy();
+  if (!useProxy) {
+    // Proxy désactivé par configuration — connexion directe
+    console.log(`${logPrefix} 🔄 Proxy désactivé via botConfig → mode direct`);
     await new Promise(r => setTimeout(r, 30 + Math.random() * 170));
     return getDirectImpit().fetch(url, options as any) as unknown as Response;
   }
