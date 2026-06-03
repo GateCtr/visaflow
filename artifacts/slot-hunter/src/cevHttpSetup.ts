@@ -542,7 +542,29 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 5 : Résoudre hCaptcha
     // ══════════════════════════════════════════════════════════════════════════
-    const hcaptchaToken = await solveHcaptcha(clientId);
+    let hcaptchaToken;
+    try {
+      hcaptchaToken = await solveHcaptcha(clientId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // 🔥 DÉTECTION SPÉCIALE : ERREUR PROXY CONNECT REFUSED → ROTATION REQUISE
+      if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
+        botLog({ 
+          applicationId: clientId, 
+          step: "cev_http_proxy_connect_refused", 
+          status: "fail", 
+          data: { 
+            error: msg,
+            recommendation: "ROTATE_PROXY_IMMEDIATELY"
+          } 
+        });
+        return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
+      }
+      // Autre erreur
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg } });
+      return { success: false, error: "HCAPTCHA_FAILED" };
+    }
+    
     if (!hcaptchaToken) {
       return { success: false, error: "HCAPTCHA_FAILED" };
     }
@@ -967,6 +989,23 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
           }
           if (pollData.errorId !== 0) {
             errors.push(`anticaptcha_poll_error: ${pollData.errorCode} - ${pollData.errorDescription}`);
+            
+            // 🔥 DÉTECTION RAPIDE ERREUR PROXY - ROTATION IMMÉDIATE REQUISE
+            if (pollData.errorCode?.includes("PROXY_CONNECT_REFUSED") || 
+                pollData.errorDescription?.includes("Could not connect to proxy")) {
+              botLog({ 
+                applicationId: clientId, 
+                step: "cev_http_hcaptcha_proxy_refused", 
+                status: "fail", 
+                data: { 
+                  errorCode: pollData.errorCode,
+                  errorDescription: pollData.errorDescription,
+                  recommendation: "ROTATE PROXY IP IMMEDIATELY - RESTART DOSSIER LOOP"
+                } 
+              });
+              // Lancer une exception spéciale pour indiquer qu'il faut rotater l'IP
+              throw new Error("PROXY_CONNECT_REFUSED_NEEDS_ROTATION");
+            }
             break;
           }
         }
