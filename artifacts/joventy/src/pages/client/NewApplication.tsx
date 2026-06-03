@@ -6,7 +6,6 @@ import * as z from "zod";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/lib/auth";
-import { ContractSignModal } from "@/components/ContractSignModal";
 import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, getAvailablePackages, type ServicePackage, type SlotUrgencyTier } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -257,10 +256,6 @@ export default function NewApplication() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const hasSigned = useQuery(api.contracts.hasSignedContract);
-  const [contractSigned, setContractSigned] = useState(false);
-  const showContract = hasSigned === false && !contractSigned;
-
   const createApplication = useMutation(api.applications.create);
 
   const form = useForm<FormValues>({
@@ -382,12 +377,6 @@ export default function NewApplication() {
 
   return (
     <>
-      {showContract && (
-        <ContractSignModal
-          userName={user ? `${user.firstName} ${user.lastName}`.trim() : ""}
-          onSigned={() => setContractSigned(true)}
-        />
-      )}
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-serif font-bold text-primary">Nouveau Dossier</h1>

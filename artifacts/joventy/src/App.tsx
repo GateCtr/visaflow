@@ -12,6 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ClientContractGate } from "@/components/ClientContractGate";
 
 import Landing from "@/pages/Landing";
 import Login from "@/pages/auth/Login";
@@ -86,6 +87,16 @@ const ProtectedRoute = ({
 
   if (!user) return <Redirect to="/login" />;
   if (adminOnly && user.role !== "admin") return <Redirect to="/dashboard" />;
+
+  if (!adminOnly) {
+    return (
+      <ClientContractGate>
+        <DashboardLayout isAdmin={false}>
+          <Component {...rest} />
+        </DashboardLayout>
+      </ClientContractGate>
+    );
+  }
 
   return (
     <DashboardLayout isAdmin={adminOnly}>
