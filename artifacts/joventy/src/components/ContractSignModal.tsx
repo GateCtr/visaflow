@@ -84,7 +84,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
 
           <div className="text-center space-y-1">
             <p className="font-bold text-base text-primary uppercase tracking-wide">Contrat d'Accompagnement Visa</p>
-            <p className="text-xs text-muted-foreground">Version 1.0 — {today}</p>
+            <p className="text-xs text-muted-foreground">Version 1.1 — {today}</p>
           </div>
 
           <section className="space-y-2">
@@ -101,13 +101,15 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
             <h3 className="font-bold text-primary">2. Objet du contrat</h3>
             <p>
               Joventy s'engage à fournir au Client un service d'accompagnement pour l'obtention d'un
-              rendez-vous consulaire ou d'un visa électronique (e-Visa), selon le package sélectionné
-              lors de l'ouverture du dossier. Ce service comprend, selon le package choisi :
+              rendez-vous consulaire, d'un visa électronique (e-Visa) ou de tout visa ne nécessitant pas
+              de rendez-vous physique, selon le package sélectionné lors de l'ouverture du dossier.
+              Ce service comprend, selon le package choisi :
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm">
               <li><strong>Service Complet :</strong> remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire.</li>
               <li><strong>Créneau Uniquement :</strong> surveillance automatisée des portails consulaires et capture d'un créneau disponible.</li>
-              <li><strong>Dossier Uniquement :</strong> remplissage des formulaires et vérification des pièces justificatives.</li>
+              <li><strong>E-Visa / Visa sans rendez-vous :</strong> constitution, vérification et soumission du dossier sur le portail officiel compétent.</li>
+              <li><strong>Dossier Uniquement :</strong> remplissage des formulaires et vérification des pièces justificatives, sans soumission ni prise de rendez-vous.</li>
             </ul>
           </section>
 
@@ -115,16 +117,20 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
             <h3 className="font-bold text-primary">3. Conditions financières</h3>
             <p>
               Le service est soumis à une <strong>structure de paiement en deux temps</strong> pour les
-              packages incluant la recherche de créneau :
+              packages incluant la recherche de créneau ou la soumission e-Visa :
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm">
               <li>
                 <strong>Frais d'engagement</strong> (non remboursables) : payables à l'ouverture du dossier.
-                Ils couvrent le travail administratif initial et la mise en surveillance du portail consulaire.
+                Ils couvrent le travail administratif initial, la mise en surveillance du portail et la préparation du dossier.
               </li>
               <li>
-                <strong>Prime de succès</strong> : due uniquement si un créneau est effectivement obtenu ou si
-                le visa électronique est accordé. Elle n'est jamais due en cas d'échec.
+                <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement si un créneau consulaire
+                est effectivement obtenu. Elle n'est jamais due en cas d'indisponibilité de créneaux.
+              </li>
+              <li>
+                <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement si le visa
+                est accordé par l'autorité compétente. Elle n'est jamais due en cas de refus ou de non-réponse.
               </li>
             </ul>
             <p>
@@ -132,6 +138,30 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
               de succès n'est due. Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money,
               Orange Money) selon les instructions affichées sur la plateforme.
             </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-bold text-primary">3 bis. Cas particulier : E-Visa et visa sans rendez-vous</h3>
+            <p>
+              Pour les procédures ne requérant pas de rendez-vous consulaire physique (e-Visa, visa on arrival,
+              visa postal, etc.), le critère de succès est <strong>l'obtention effective du visa</strong>
+              (approbation officielle par l'autorité émettrice), et non la prise d'un rendez-vous.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-sm">
+              <li>Joventy prend en charge la constitution, la vérification et la soumission du dossier sur le portail officiel.</li>
+              <li>Le Client s'engage à fournir tous les documents requis dans les délais indiqués.</li>
+              <li>
+                La prime de succès est due dans les <strong>48 heures suivant la notification d'obtention du visa</strong>.
+              </li>
+              <li>
+                En cas de refus par l'autorité compétente, la prime de succès n'est pas due.
+                Les frais d'engagement restent non remboursables car le travail de préparation et de soumission a été accompli.
+              </li>
+              <li>
+                En cas de refus lié à des informations inexactes ou des documents manquants fournis par le Client,
+                les frais d'engagement et toute resoumission éventuelle restent à la charge du Client.
+              </li>
+            </ul>
           </section>
 
           <section className="space-y-2">
@@ -150,8 +180,8 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
               <li>Fournir des informations exactes, complètes et à jour lors de l'ouverture du dossier.</li>
               <li>Transmettre sans délai les documents demandés par Joventy pour compléter le dossier.</li>
               <li>Régler les frais d'engagement dans les 48 heures suivant l'ouverture du dossier, sous peine d'annulation automatique.</li>
-              <li>Se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis.</li>
-              <li>Payer la prime de succès dans les 48 heures suivant la notification d'obtention du créneau.</li>
+              <li><strong>Visa avec rendez-vous :</strong> se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du créneau.</li>
+              <li><strong>E-Visa / Visa sans rendez-vous :</strong> s'assurer que tous les documents fournis sont authentiques et conformes aux exigences du pays de destination, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du visa.</li>
             </ul>
           </section>
 
@@ -163,11 +193,14 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
             </p>
             <p>
               La décision d'accorder ou de refuser un visa appartient exclusivement à l'autorité consulaire
-              compétente. <strong>Joventy ne peut en aucun cas garantir l'obtention du visa.</strong>
+              ou gouvernementale compétente. <strong>Joventy ne peut en aucun cas garantir l'obtention du visa,
+              qu'il s'agisse d'un visa avec rendez-vous ou d'un e-Visa.</strong>
             </p>
             <p>
-              En cas de refus de visa par les autorités consulaires, les frais d'engagement déjà versés ne sont
-              pas remboursables. La prime de succès n'est pas due dans ce cas.
+              En cas de refus de visa par les autorités compétentes, les frais d'engagement déjà versés ne sont
+              pas remboursables. La prime de succès n'est pas due dans ce cas. Joventy ne peut être tenu
+              responsable des délais de traitement, des changements de politique consulaire ou des fermetures
+              de portails gouvernementaux indépendants de sa volonté.
             </p>
           </section>
 
@@ -175,11 +208,17 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
             <h3 className="font-bold text-primary">7. Politique de remboursement</h3>
             <ul className="list-disc pl-5 space-y-1 text-sm">
               <li>
-                <strong>Frais d'engagement :</strong> non remboursables après paiement, quelle que soit l'issue de la demande.
+                <strong>Frais d'engagement :</strong> non remboursables après paiement, quelle que soit l'issue
+                de la demande (créneau non disponible, refus de visa, annulation consulaire, etc.).
               </li>
               <li>
-                <strong>Prime de succès :</strong> due uniquement après obtention effective du créneau ou du visa.
-                En l'absence de résultat, elle n'est jamais prélevée.
+                <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement après obtention
+                effective d'un créneau. En l'absence de créneau, elle n'est jamais prélevée.
+              </li>
+              <li>
+                <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement après
+                notification officielle d'obtention du visa. En cas de refus ou non-réponse de l'autorité
+                compétente, elle n'est jamais prélevée.
               </li>
               <li>
                 <strong>Annulation par le Client :</strong> en cas d'annulation avant toute action de Joventy,
@@ -220,7 +259,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
           </section>
 
           <div className="border-t border-dashed border-slate-200 pt-4 text-xs text-muted-foreground text-center">
-            Fin du contrat — Version 1.0 | Joventy © {new Date().getFullYear()} | contact@joventy.cd
+            Fin du contrat — Version 1.1 | Joventy © {new Date().getFullYear()} | contact@joventy.cd
           </div>
         </div>
 

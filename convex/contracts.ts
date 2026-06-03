@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-export const CONTRACT_VERSION = "v1.0-2025";
+export const CONTRACT_VERSION = "v1.1-2025";
 
 export const hasSignedContract = query({
   args: {},
