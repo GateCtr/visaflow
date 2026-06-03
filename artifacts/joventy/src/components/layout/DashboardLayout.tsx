@@ -22,6 +22,7 @@ import {
   CalendarDays,
   Terminal,
   Settings,
+  ScrollText,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -41,6 +42,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/dashboard/applications", label: "Mes Dossiers", icon: FileText },
     { href: "/dashboard/applications/new", label: "Nouveau Dossier", icon: PlusCircle },
     { href: "/dashboard/messages", label: "Messagerie", icon: MessageCircle, badge: unreadTotal },
+    { href: "/dashboard/contrat", label: "Mon Contrat", icon: ScrollText },
   ];
 
   const pendingReviews = useQuery(api.reviews.listAll, isAdmin ? {} : undefined);

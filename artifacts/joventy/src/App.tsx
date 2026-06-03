@@ -40,6 +40,7 @@ import ClientApplicationDetail from "@/pages/client/ApplicationDetail";
 import PaymentGate from "@/pages/client/PaymentGate";
 import ClientInvoice from "@/pages/client/Invoice";
 import ClientMessages from "@/pages/client/Messages";
+import MyContract from "@/pages/client/MyContract";
 
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
@@ -161,6 +162,9 @@ function Router() {
       </Route>
       <Route path="/dashboard/messages">
         {() => <ProtectedRoute component={ClientMessages} />}
+      </Route>
+      <Route path="/dashboard/contrat">
+        {() => <ProtectedRoute component={MyContract} />}
       </Route>
 
       <Route path="/admin">
