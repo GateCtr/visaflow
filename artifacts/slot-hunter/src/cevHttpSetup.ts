@@ -19,7 +19,7 @@
  */
 
 import { botLog } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, shouldUseProxy } from "./cev-shared-impit.js";
 import { lookup } from "node:dns/promises";
 import {
   syncVowintSessionToRedis,
@@ -859,12 +859,13 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
   // Extract proxy info from current environment (used by cevImpitFetch)
-  const proxyUrl = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
+  const useProxy = await shouldUseProxy();
+  const proxyUrl = useProxy ? (process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL) : null;
   let proxyConfig: any = null;
   let proxyDnsResolved: string | null = null;
   
   // Get the already-resolved proxy exit IP (from proxy guard) if available (for token binding!)
-  const proxyExitIp = getCevProxyExitIp();
+  const proxyExitIp = useProxy ? getCevProxyExitIp() : undefined;
   
   if (proxyUrl) {
     try {

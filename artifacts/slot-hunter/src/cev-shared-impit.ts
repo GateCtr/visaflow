@@ -31,7 +31,7 @@ const CEV_USE_PROXY_CACHE_TTL_MS = 60_000; // 1 minute
  * Consulte botConfig "cev_use_proxy" (0 = désactivé, 1 = activé).
  * Par défaut: true (utiliser le proxy si configuré).
  */
-async function shouldUseProxy(): Promise<boolean> {
+export async function shouldUseProxy(): Promise<boolean> {
   const now = Date.now();
   
   // Retourner la valeur mise en cache si elle est récente
