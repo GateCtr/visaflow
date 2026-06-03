@@ -481,6 +481,16 @@ export default defineSchema({
   // Quand un éclaireur épuise son budget (ou atteint une fenêtre planifiée),
   // il passe le relais à un autre compte de la même broadcastVisaClass.
   // Le successeur promeut son rôle en "eclaireur" et l'ancien se confine.
+  contractSignatures: defineTable({
+    userId: v.string(),
+    signedName: v.string(),
+    contractVersion: v.string(),
+    signedAt: v.number(),
+    userAgent: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_version", ["userId", "contractVersion"]),
+
   slotRelayState: defineTable({
     /** Classe de visa de la meute (ex: "F1", "B1/B2"). */
     visaClass: v.string(),

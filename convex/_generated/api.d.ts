@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as applications from "../applications.js";
+import type * as contracts from "../contracts.js";
 import type * as botLogs from "../botLogs.js";
 import type * as cevSessions from "../cevSessions.js";
 import type * as constants from "../constants.js";
@@ -41,6 +42,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   applications: typeof applications;
+  contracts: typeof contracts;
   botLogs: typeof botLogs;
   cevSessions: typeof cevSessions;
   constants: typeof constants;

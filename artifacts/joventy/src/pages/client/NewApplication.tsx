@@ -3,8 +3,10 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
+import { useAuth } from "@/lib/auth";
+import { ContractSignModal } from "@/components/ContractSignModal";
 import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, getAvailablePackages, type ServicePackage, type SlotUrgencyTier } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -253,6 +255,11 @@ export default function NewApplication() {
   const [selectedUrgencyTier, setSelectedUrgencyTier] = useState<SlotUrgencyTier>("standard");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  const hasSigned = useQuery(api.contracts.hasSignedContract);
+  const [contractSigned, setContractSigned] = useState(false);
+  const showContract = hasSigned === false && !contractSigned;
 
   const createApplication = useMutation(api.applications.create);
 
@@ -374,6 +381,13 @@ export default function NewApplication() {
   const TOTAL_STEPS = 4;
 
   return (
+    <>
+      {showContract && (
+        <ContractSignModal
+          userName={user ? `${user.firstName} ${user.lastName}`.trim() : ""}
+          onSigned={() => setContractSigned(true)}
+        />
+      )}
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-serif font-bold text-primary">Nouveau Dossier</h1>
@@ -1124,5 +1138,6 @@ export default function NewApplication() {
         </Form>
       </div>
     </div>
+    </>
   );
 }
