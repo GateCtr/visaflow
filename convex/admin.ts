@@ -109,6 +109,8 @@ export const listClients = query({
         email: string;
         applicationCount: number;
         firstSeen: number;
+        contractSignedAt: number | null;
+        contractSignedName: string | null;
       }
     >();
 
@@ -121,6 +123,8 @@ export const listClients = query({
           email: app.userEmail || "",
           applicationCount: 1,
           firstSeen: app._creationTime,
+          contractSignedAt: null,
+          contractSignedName: null,
         });
       } else {
         const existing = clientMap.get(app.userId)!;
@@ -128,6 +132,21 @@ export const listClients = query({
         if (app._creationTime < existing.firstSeen) {
           existing.firstSeen = app._creationTime;
         }
+      }
+    }
+
+    // Enrich with contract signature data
+    const userIds = Array.from(clientMap.keys());
+    for (const userId of userIds) {
+      const sig = await ctx.db
+        .query("contractSignatures")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .order("desc")
+        .first();
+      if (sig) {
+        const entry = clientMap.get(userId)!;
+        entry.contractSignedAt = sig.signedAt;
+        entry.contractSignedName = sig.signedName;
       }
     }
 

@@ -13,6 +13,7 @@ import {
   Plane,
   ChevronRight,
   MessageCircle,
+  ScrollText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,7 @@ export default function ClientDashboard() {
   const applications = useQuery(api.applications.list, {}) ?? [];
   const conversations = useQuery(api.messages.listConversations) ?? [];
   const unreadTotal = useQuery(api.messages.getUnreadTotal) ?? 0;
+  const contractSig = useQuery(api.contracts.getContractSignature);
   const isLoading = applications === undefined;
 
   const recent = [...applications].slice(0, 3);
@@ -41,6 +43,20 @@ export default function ClientDashboard() {
           <p className="text-slate-300 mt-1 text-sm">
             Gérez vos dossiers et suivez leur évolution en temps réel.
           </p>
+          {contractSig && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-300 text-xs font-semibold">
+                Contrat signé le{" "}
+                {new Date(contractSig.signedAt).toLocaleDateString("fr-FR", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              <ScrollText className="w-3 h-3 text-emerald-400/70 ml-0.5" />
+            </div>
+          )}
         </div>
         <Link href="/dashboard/applications/new">
           <Button className="gap-2 bg-secondary text-primary hover:bg-yellow-400 font-bold h-11 px-6">
