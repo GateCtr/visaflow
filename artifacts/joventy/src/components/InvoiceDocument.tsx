@@ -75,32 +75,76 @@ function StatusGlobal({ status }: { status: string }) {
   );
 }
 
+/* ─── Pré-convertit les images externes en data URL pour éviter le blocage html2canvas ─── */
+async function preloadImages(el: HTMLElement): Promise<Map<HTMLImageElement, string>> {
+  const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
+  const restored = new Map<HTMLImageElement, string>();
+
+  await Promise.allSettled(
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src") ?? "";
+      if (!src || src.startsWith("data:")) return;
+      restored.set(img, src);
+      try {
+        const resp = await Promise.race<Response>([
+          fetch(src, { mode: "cors", cache: "force-cache" }),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("timeout")), 4000)
+          ),
+        ]);
+        const blob = await resp.blob();
+        const dataUrl = await new Promise<string>((res) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        img.src = dataUrl;
+      } catch {
+        img.style.visibility = "hidden";
+      }
+    })
+  );
+
+  return restored;
+}
+
+function restoreImages(restored: Map<HTMLImageElement, string>) {
+  restored.forEach((src, img) => {
+    img.src = src;
+    img.style.visibility = "";
+  });
+}
+
 /* ─── Génère le PDF en capturant uniquement le div document ─── */
 async function generatePdf(el: HTMLElement, filename: string) {
-  const html2canvas = (await import("html2canvas")).default;
+  const restored = await preloadImages(el);
+
+  let canvas: HTMLCanvasElement;
+  try {
+    const html2canvas = (await import("html2canvas")).default;
+    canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 0,
+    });
+  } finally {
+    restoreImages(restored);
+  }
+
   const { jsPDF } = await import("jspdf");
-
-  const canvas = await html2canvas(el, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-    imageTimeout: 15000,
-  });
-
-  const imgData = canvas.toDataURL("image/png");
+  const imgData = canvas!.toDataURL("image/png");
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
-  const imgH = (canvas.height * pageW) / canvas.width;
+  const imgH = (canvas!.height * pageW) / canvas!.width;
 
   let heightLeft = imgH;
   let position = 0;
-
   pdf.addImage(imgData, "PNG", 0, position, pageW, imgH);
   heightLeft -= pageH;
-
   while (heightLeft > 0) {
     position = heightLeft - imgH;
     pdf.addPage();
@@ -108,7 +152,16 @@ async function generatePdf(el: HTMLElement, filename: string) {
     heightLeft -= pageH;
   }
 
-  pdf.save(filename);
+  const blob = pdf.output("blob");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 /* ─── Imprime uniquement le div document dans une nouvelle fenêtre ─── */

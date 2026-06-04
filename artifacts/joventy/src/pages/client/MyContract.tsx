@@ -203,17 +203,46 @@ export default function MyContract() {
   const handleDownload = async () => {
     if (!contractRef.current) return;
     setIsGenerating(true);
+    const el = contractRef.current;
+
+    // Pré-convertit les images en data URL pour éviter que html2canvas se bloque
+    const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
+    const origSrcs = new Map<HTMLImageElement, string>();
+    await Promise.allSettled(
+      imgs.map(async (img) => {
+        const src = img.getAttribute("src") ?? "";
+        if (!src || src.startsWith("data:")) return;
+        origSrcs.set(img, src);
+        try {
+          const resp = await Promise.race<Response>([
+            fetch(src, { mode: "cors", cache: "force-cache" }),
+            new Promise<never>((_, rej) =>
+              setTimeout(() => rej(new Error("timeout")), 4000)
+            ),
+          ]);
+          const blob = await resp.blob();
+          const dataUrl = await new Promise<string>((res) => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          img.src = dataUrl;
+        } catch {
+          img.style.visibility = "hidden";
+        }
+      })
+    );
+
     try {
       const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
-      const el = contractRef.current;
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: "#ffffff",
         logging: false,
-        imageTimeout: 15000,
+        imageTimeout: 0,
       });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -230,10 +259,23 @@ export default function MyContract() {
         pdf.addImage(imgData, "PNG", 0, position, pageW, imgH);
         heightLeft -= pageH;
       }
-      pdf.save(filename);
+      // Blob URL — fonctionne dans les iframes et sur tous les navigateurs
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (err) {
       console.error("PDF error:", err);
     } finally {
+      // Restaure les src et visibilités d'origine
+      origSrcs.forEach((src, img) => { img.src = src; img.style.visibility = ""; });
+      imgs.forEach((img) => { if (!origSrcs.has(img)) img.style.visibility = ""; });
       setIsGenerating(false);
     }
   };
