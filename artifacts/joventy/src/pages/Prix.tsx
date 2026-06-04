@@ -20,8 +20,9 @@ const PRICING = [
   { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
   { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", engagement: 150, success: 200, external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
   { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", engagement: 150, success: 200, external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
-  { code: "ma", name: "Visa Maroc", types: "E-Visa (si visa USA/Schengen), Sticker", engagement: 150, success: 200, external: "77-110 USD (e-Visa)", delay: "24-72h", href: "/visa-maroc-kinshasa", alert: null },
-  { code: "eg", name: "Visa Égypte", types: "Touriste (ambassade)", engagement: 150, success: 200, external: "~60 USD (consulat)", delay: "24-72h", href: "/e-visa-egypte-kinshasa", alert: null },
+  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
+  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 180, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
   { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
 ];
 

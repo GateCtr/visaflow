@@ -132,6 +132,36 @@ const DESTINATIONS = [
     note: "Frais consulaires (75-80€) non inclus",
     badge: "Nouveau",
   },
+  {
+    code: "ma",
+    name: "Maroc",
+    visaTypes: ["E-Visa portail officiel", "Consulaire sans RDV", "Transit Ebola 21j"],
+    engagement: 150,
+    success: 200,
+    model: "hybrid",
+    note: "E-Visa 77-110$ ou consulaire 15-25$ non inclus",
+    badge: "Nouveau",
+  },
+  {
+    code: "eg",
+    name: "Égypte",
+    visaTypes: ["E-Visa en ligne (visa2.egypt.gov.eg)", "Consulaire sans RDV", "Transit Ebola 21j"],
+    engagement: 150,
+    success: 200,
+    model: "hybrid",
+    note: "E-Visa 25-60$ ou consulaire ~60$ non inclus",
+    badge: "Nouveau",
+  },
+  {
+    code: "cn",
+    name: "Chine",
+    visaTypes: ["E-Visa court séjour ≤15j", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
+    engagement: 120,
+    success: 180,
+    model: "hybrid",
+    note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
+    badge: "Nouveau",
+  },
 ];
 
 const STEPS = [

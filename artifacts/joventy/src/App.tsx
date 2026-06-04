@@ -132,6 +132,7 @@ function Router() {
       <Route path="/e-visa-inde-kinshasa" component={DestinationPage} />
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
+      <Route path="/visa-chine-kinshasa" component={DestinationPage} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />

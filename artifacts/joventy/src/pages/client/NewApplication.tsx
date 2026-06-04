@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany"]),
+  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany", "morocco", "egypt", "china"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -40,6 +40,9 @@ const DESTINATIONS = [
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
   { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",  processType: "evisa" as const },
   { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
+  { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa portail officiel (24-72h) ou consulaire sans rendez-vous — transit Ebola 21j", processType: "hybrid" as const },
+  { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne (visa2.egypt.gov.eg) ou consulaire sans rendez-vous — transit Ebola 21j", processType: "hybrid" as const },
+  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F via VFS Global sans rendez-vous",     processType: "hybrid" as const },
 ];
 
 const CEV_COUNTRIES = [
@@ -97,9 +100,12 @@ function getPackageInfo(
   if (pkgKey === "full_service") {
     if (isEvisa) {
       const name =
-        destination === "turkey" ? "e-Visa Turquie" :
-        destination === "dubai"  ? "visa électronique EAU (GDRFA)" :
-                                   "e-Visa Inde";
+        destination === "turkey"  ? "e-Visa Turquie" :
+        destination === "dubai"   ? "visa électronique EAU (GDRFA)" :
+        destination === "morocco" ? "visa Maroc (e-Visa ou consulaire sans rendez-vous)" :
+        destination === "egypt"   ? "visa Égypte (e-Visa ou consulaire sans rendez-vous)" :
+        destination === "china"   ? "visa Chine (e-Visa ou dépôt VFS sans rendez-vous)" :
+                                    "e-Visa Inde";
       return {
         label: base.label,
         tagline: "Clé en main",
