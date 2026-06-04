@@ -280,6 +280,7 @@ async function performScan(
     userAgent?: string;
     validUntil?: number;
   },
+  _hcaptchaRetry = 0,
 ): Promise<ScanResult> {
 
   try {
@@ -296,6 +297,14 @@ async function performScan(
       if (result.error?.includes("RATE_LIMIT")) {
         pool.markRateLimited(dossier);
         return { status: "rate_limited" };
+      }
+      // Retry automatique sur HCAPTCHA_FAILED (max 2 fois, délai 5s)
+      // Invalide le cache clé Anti-Captcha avant de réessayer → force relecture env + botConfig
+      if (result.error === "HCAPTCHA_FAILED" && _hcaptchaRetry < 2) {
+        log("WARN", `  ⟳ HCAPTCHA_FAILED — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
+        invalidateAnticaptchaCache();
+        await sleep(5_000);
+        return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1);
       }
       log("WARN", `  Erreur setup: ${result.error}`);
       return { status: "error" };

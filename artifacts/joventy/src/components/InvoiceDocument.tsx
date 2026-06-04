@@ -115,6 +115,38 @@ function restoreImages(restored: Map<HTMLImageElement, string>) {
   });
 }
 
+/**
+ * html2canvas ne supporte pas oklch() (CSS Color Level 4, utilisé par Tailwind v4 / shadcn).
+ * On utilise le moteur de rendu du navigateur pour convertir chaque occurrence oklch → rgb,
+ * puis on patch tous les <style> et attributs style du document cloné.
+ */
+function convertOklchValue(oklchStr: string): string {
+  try {
+    const tmp = document.createElement("div");
+    tmp.style.setProperty("color", oklchStr, "important");
+    document.documentElement.appendChild(tmp);
+    const rgb = window.getComputedStyle(tmp).color;
+    document.documentElement.removeChild(tmp);
+    return rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+  } catch {
+    return "rgb(0,0,0)";
+  }
+}
+
+function patchOklchInDoc(clonedDoc: Document): void {
+  const oklchRe = /oklch\([^)]*\)/g;
+  const convert = (val: string) => val.replace(oklchRe, (m) => convertOklchValue(m));
+  // Patch tous les blocs <style>
+  clonedDoc.querySelectorAll("style").forEach((s) => {
+    if (s.textContent?.includes("oklch")) s.textContent = convert(s.textContent);
+  });
+  // Patch les attributs style inline
+  clonedDoc.querySelectorAll("[style]").forEach((el) => {
+    const v = el.getAttribute("style") ?? "";
+    if (v.includes("oklch")) el.setAttribute("style", convert(v));
+  });
+}
+
 /* ─── Génère le PDF en capturant uniquement le div document ─── */
 async function generatePdf(el: HTMLElement, filename: string) {
   const restored = await preloadImages(el);
@@ -129,6 +161,7 @@ async function generatePdf(el: HTMLElement, filename: string) {
       backgroundColor: "#ffffff",
       logging: false,
       imageTimeout: 0,
+      onclone: (clonedDoc) => patchOklchInDoc(clonedDoc),
     });
   } finally {
     restoreImages(restored);
@@ -354,7 +387,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
                   ["Package", packageLabel],
                   urgencyLabel ? ["Urgence", urgencyLabel] : null,
                   successModel === "evisa" ? ["Mode", "E-Visa / Sans rendez-vous"] : null,
-                ].filter(Boolean).map(([label, value]) => (
+                ].filter((r): r is [string, string] => r !== null).map(([label, value]) => (
                   <div key={label as string} className="flex items-start gap-2">
                     <span className="text-xs text-slate-400 w-20 flex-shrink-0">{label}</span>
                     <span className={`text-xs font-semibold ${label === "Mode" ? "text-amber-700" : "text-slate-800"}`}>

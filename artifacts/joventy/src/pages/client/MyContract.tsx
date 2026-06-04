@@ -236,6 +236,31 @@ export default function MyContract() {
     try {
       const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
+
+      // html2canvas ne supporte pas oklch() (Tailwind v4 / shadcn CSS Color Level 4).
+      // On convertit oklch → rgb via le moteur de rendu du navigateur dans onclone.
+      function convertOklchValue(oklchStr: string): string {
+        try {
+          const tmp = document.createElement("div");
+          tmp.style.setProperty("color", oklchStr, "important");
+          document.documentElement.appendChild(tmp);
+          const rgb = window.getComputedStyle(tmp).color;
+          document.documentElement.removeChild(tmp);
+          return rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+        } catch { return "rgb(0,0,0)"; }
+      }
+      function patchOklch(clonedDoc: Document): void {
+        const re = /oklch\([^)]*\)/g;
+        const conv = (v: string) => v.replace(re, (m) => convertOklchValue(m));
+        clonedDoc.querySelectorAll("style").forEach((s) => {
+          if (s.textContent?.includes("oklch")) s.textContent = conv(s.textContent);
+        });
+        clonedDoc.querySelectorAll("[style]").forEach((e) => {
+          const v = e.getAttribute("style") ?? "";
+          if (v.includes("oklch")) e.setAttribute("style", conv(v));
+        });
+      }
+
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
@@ -243,6 +268,7 @@ export default function MyContract() {
         backgroundColor: "#ffffff",
         logging: false,
         imageTimeout: 0,
+        onclone: (clonedDoc) => patchOklch(clonedDoc),
       });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });

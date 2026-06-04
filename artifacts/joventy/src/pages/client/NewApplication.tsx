@@ -30,19 +30,19 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine",                         processType: "appointment" as const },
-  { id: "canada",      name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique VFS IRCC — centre collecte Kinshasa",           processType: "appointment" as const },
-  { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Rendez-vous VFS UKVI — visa standard, étudiant, travail, famille",      processType: "appointment" as const },
-  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous VFS Global — visa Schengen court séjour (Visa C)",          processType: "appointment" as const },
+  { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine de Kinshasa",              processType: "appointment" as const },
+  { id: "canada",      name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique IRCC — centre de collecte Kinshasa",             processType: "appointment" as const },
+  { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Rendez-vous consulaire — visa standard, étudiant, travail, famille",     processType: "appointment" as const },
   { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
-  { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne (citaconsular.es)",        processType: "appointment" as const },
-  { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Rendez-vous RK-Termin — ambassade d'Allemagne (visa national & Schengen)", processType: "appointment" as const },
+  { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Rendez-vous ambassade d'Allemagne — visa national & Schengen",           processType: "appointment" as const },
+  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous consulaire — visa Schengen court séjour ou long séjour",    processType: "appointment" as const },
+  { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne à Kinshasa",               processType: "appointment" as const },
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
   { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",  processType: "evisa" as const },
   { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
-  { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa portail officiel (24-72h) ou consulaire sans rendez-vous — transit Ebola 21j", processType: "hybrid" as const },
-  { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne (visa2.egypt.gov.eg) ou consulaire sans rendez-vous — transit Ebola 21j", processType: "hybrid" as const },
-  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F via VFS Global sans rendez-vous",     processType: "hybrid" as const },
+  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F — dépôt sans rendez-vous",            processType: "hybrid" as const },
+  { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou consulaire sans rendez-vous",               processType: "hybrid" as const },
+  { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou consulaire sans rendez-vous",                        processType: "hybrid" as const },
 ];
 
 const CEV_COUNTRIES = [
