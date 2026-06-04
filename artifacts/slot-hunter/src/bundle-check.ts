@@ -111,7 +111,6 @@ export async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<voi
 
     if (bundleText.includes(USA_ENC_SEC_KEY)) {
       log("INFO", `🔍 Bundle check ✅ — clé AES inchangée (bundle: ${bundleName})`);
-      await sendBundleReport(activeJobs, bundleName, true, false, USA_ENC_SEC_KEY);
       return;
     }
 

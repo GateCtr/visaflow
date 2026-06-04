@@ -1,6 +1,20 @@
 // Build trigger 25/05/2026 03:15 — CEV Dossier v3 + getActiveCevSessions fix
 import * as dotenv from "dotenv";
+import * as path from "path";
+import * as fs from "fs";
+
 dotenv.config();
+if (fs.existsSync(".env.local")) {
+  dotenv.config({ path: ".env.local", override: true });
+}
+const subEnv = path.join("artifacts", "slot-hunter", ".env");
+if (fs.existsSync(subEnv)) {
+  dotenv.config({ path: subEnv, override: true });
+}
+const subEnvLocal = path.join("artifacts", "slot-hunter", ".env.local");
+if (fs.existsSync(subEnvLocal)) {
+  dotenv.config({ path: subEnvLocal, override: true });
+}
 
 import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, loadCevBookingConfig, getBotConfigValue, uploadFile, reportSlotFound, reportSlotDiscovery } from "./convexClient.js";
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";

@@ -1,5 +1,19 @@
 import * as dotenv from "dotenv";
+import * as path from "path";
+import * as fs from "fs";
+
 dotenv.config();
+if (fs.existsSync(".env.local")) {
+  dotenv.config({ path: ".env.local", override: true });
+}
+const subEnv = path.join("artifacts", "slot-hunter", ".env");
+if (fs.existsSync(subEnv)) {
+  dotenv.config({ path: subEnv, override: true });
+}
+const subEnvLocal = path.join("artifacts", "slot-hunter", ".env.local");
+if (fs.existsSync(subEnvLocal)) {
+  dotenv.config({ path: subEnvLocal, override: true });
+}
 
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "";
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY ?? "";

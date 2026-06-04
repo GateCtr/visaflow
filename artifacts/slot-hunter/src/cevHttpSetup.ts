@@ -32,6 +32,7 @@ const CEV_BASE = "https://appointment.cloud.diplomatie.be";
 const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
+const TWOCAPTCHA_API_KEY = process.env.TWOCAPTCHA_API_KEY?.trim() ?? "";
 
 /** Fetch CEV via impit partagé (setup + polling = même instance TLS → session stable) */
 function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
@@ -858,9 +859,9 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   // Use a realistic user agent for Anti-Captcha
   const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-  // Extract proxy info from current environment (used by cevImpitFetch)
   const useProxy = await shouldUseProxy();
-  const proxyUrl = useProxy ? (process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL) : null;
+  const rawProxyUrl = useProxy ? (process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || null) : null;
+  const proxyUrl = rawProxyUrl ? (rawProxyUrl.startsWith("http") ? rawProxyUrl : `http://${rawProxyUrl}`) : null;
   let proxyConfig: any = null;
   let proxyDnsResolved: string | null = null;
   
@@ -971,14 +972,22 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       }
       
       if (createData.errorId === 0 && createData.taskId) {
-        for (let i = 0; i < 60; i++) {
+        // Polling de maximum 90 secondes (18 tentatives de 5s) pour éviter de bloquer le bot
+        for (let i = 0; i < 18; i++) {
           await new Promise(r => setTimeout(r, 5000));
-          const pollRes = await fetch("https://api.anti-captcha.com/getTaskResult", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
-          });
-          const pollData = await pollRes.json() as { errorId: number; status: string; solution?: { gRecaptchaResponse?: string; token?: string }; errorCode?: string; errorDescription?: string };
+          let pollData: any;
+          try {
+            const pollRes = await fetch("https://api.anti-captcha.com/getTaskResult", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
+              signal: AbortSignal.timeout(10000),
+            });
+            pollData = await pollRes.json();
+          } catch (fetchErr) {
+            console.warn(`[CEV-SETUP] Anti-Captcha poll connection error: ${fetchErr}`);
+            continue; // Réessayer au prochain tick
+          }
           
           if (pollData.status === "ready") {
             const token = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;

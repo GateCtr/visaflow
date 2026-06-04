@@ -38,7 +38,8 @@
     "usa:capture:cookies": "tsx scripts/usa-capture-with-cookies.ts",
     "usa:portal:capture": "tsx scripts/usa-portal-capture.ts",
     "usa:test:jwt-ip": "tsx src/test-usa-jwt-ip-binding.ts",
-    "test:anticaptcha": "tsx test-anticaptcha-soax.ts"
+    "test:anticaptcha": "tsx test-anticaptcha-soax.ts",
+    "test:cev:anticaptcha": "tsx test-cev-anticaptcha-proxyless.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
