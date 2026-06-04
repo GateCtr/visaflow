@@ -1,6 +1,8 @@
+import { useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { CheckCircle2, FileText, ShieldCheck, User, Clock, Hash } from "lucide-react";
+import { CheckCircle2, FileText, ShieldCheck, User, Clock, Hash, Download, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const CONTRACT_SECTIONS = [
   {
@@ -175,6 +177,8 @@ const CONTRACT_SECTIONS = [
 
 export default function MyContract() {
   const sig = useQuery(api.contracts.getContractSignature);
+  const contractRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const signedDate = sig
     ? new Date(sig.signedAt).toLocaleDateString("fr-FR", {
@@ -192,23 +196,109 @@ export default function MyContract() {
       })
     : null;
 
+  const filename = sig
+    ? `Contrat-Joventy-${sig.signedName.replace(/\s+/g, "-")}-${sig.contractVersion}.pdf`
+    : "Contrat-Joventy.pdf";
+
+  const handleDownload = async () => {
+    if (!contractRef.current) return;
+    setIsGenerating(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+      const el = contractRef.current;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        imageTimeout: 15000,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pageW) / canvas.width;
+      let heightLeft = imgH;
+      let position = 0;
+      pdf.addImage(imgData, "PNG", 0, position, pageW, imgH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        position = heightLeft - imgH;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pageW, imgH);
+        heightLeft -= pageH;
+      }
+      pdf.save(filename);
+    } catch (err) {
+      console.error("PDF error:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handlePrint = () => {
+    const el = contractRef.current;
+    if (!el) return;
+    const cssTexts = Array.from(document.styleSheets)
+      .flatMap((sheet) => {
+        try { return Array.from(sheet.cssRules).map((r) => r.cssText); }
+        catch { return []; }
+      })
+      .join("\n");
+    const win = window.open("", "_blank", "width=960,height=700");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"/><title>${filename}</title>
+<style>${cssTexts}</style>
+<style>@page{margin:10mm}body{background:white;margin:0;padding:16px;font-family:'Georgia','Times New Roman',serif}</style>
+</head><body>${el.outerHTML}</body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); win.close(); }, 800);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
 
       {/* ── EN-TÊTE ── */}
       <div className="rounded-2xl bg-[#0B111E] p-6 sm:p-8">
-        <div className="flex items-start gap-4 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[#F59E0B] flex items-center justify-center flex-shrink-0">
-            <ShieldCheck className="w-6 h-6 text-[#0B111E]" strokeWidth={2.5} />
-          </div>
-          <div>
-            <div className="text-[#F59E0B] text-[10px] font-bold tracking-widest uppercase mb-1">
-              Document archivé · Akollad Groupe
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-[#F59E0B] flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-6 h-6 text-[#0B111E]" strokeWidth={2.5} />
             </div>
-            <h1 className="text-white text-xl sm:text-2xl font-bold">
-              Contrat d'Accompagnement Visa
-            </h1>
-            <p className="text-white/50 text-sm mt-0.5">Version 1.1</p>
+            <div>
+              <div className="text-[#F59E0B] text-[10px] font-bold tracking-widest uppercase mb-1">
+                Document archivé · Akollad Groupe
+              </div>
+              <h1 className="text-white text-xl sm:text-2xl font-bold">
+                Contrat d'Accompagnement Visa
+              </h1>
+              <p className="text-white/50 text-sm mt-0.5">Version 1.1</p>
+            </div>
+          </div>
+          {/* Boutons d'action */}
+          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              className="gap-1.5 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Imprimer</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleDownload}
+              disabled={isGenerating || !sig}
+              className="gap-1.5 text-xs bg-[#F59E0B] hover:bg-[#d97706] text-[#0B111E] font-bold disabled:opacity-40"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {isGenerating ? "Génération…" : <><span className="hidden sm:inline">Télécharger </span>PDF</>}
+            </Button>
           </div>
         </div>
 
@@ -252,7 +342,7 @@ export default function MyContract() {
       </div>
 
       {/* ── CONTENU DU CONTRAT ── */}
-      <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div ref={contractRef} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
         {/* En-tête document */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-border">
           <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
