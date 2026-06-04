@@ -41,6 +41,7 @@ export interface SerializablePoolState {
     rateLimitCount: number;
   }>;
   savedAt: number; // timestamp de la dernière sauvegarde
+  scanCount?: number; // compteur global de scans (persisté pour survivre aux redémarrages)
 }
 
 export interface SerializableVowintSession {

@@ -21,7 +21,7 @@
  * IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-stealth-loop (v2 IP pool).
  */
 
-import { setupCevSessionHttp, invalidateVowintCache } from "../cevHttpSetup.js";
+import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache } from "../cevHttpSetup.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
@@ -518,6 +518,11 @@ export async function startCevDossierLoop(): Promise<void> {
   const savedPoolState = await restorePoolStateFromRedis();
   if (savedPoolState) {
     pool.restoreState(savedPoolState);
+    // Restaurer le compteur de scans global pour ne pas repartir de 0 après un redémarrage
+    if (savedPoolState.scanCount && savedPoolState.scanCount > 0) {
+      state.scanCount = savedPoolState.scanCount;
+      log("INFO", `scanCount restauré depuis Redis: ${state.scanCount} scans`);
+    }
     log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}`);
   } else {
     log("INFO", "Pas de pool state en Redis — démarrage frais");
@@ -842,6 +847,9 @@ export async function startCevDossierLoop(): Promise<void> {
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
+          // Invalider le cache de la clé Anti-Captcha pour que le prochain scan
+          // relise process.env ET botConfig Convex — corrige anticaptcha_not_configured en cascade
+          invalidateAnticaptchaCache();
           break;
       }
 
@@ -860,7 +868,7 @@ export async function startCevDossierLoop(): Promise<void> {
       }
 
       // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
-      syncPoolStateToRedis(pool.exportState());
+      syncPoolStateToRedis({ ...pool.exportState(), scanCount: state.scanCount });
 
       // Pause entre les scans (intervalle dynamique)
       // Jitter important de ±30s (anti-shadow ban)

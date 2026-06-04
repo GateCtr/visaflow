@@ -18,7 +18,7 @@
  * Coût : 1 hCaptcha (~$0.003) par check, ZERO Playwright
  */
 
-import { botLog } from "./convexClient.js";
+import { botLog, getBotConfigValue } from "./convexClient.js";
 import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, shouldUseProxy } from "./cev-shared-impit.js";
 import { lookup } from "node:dns/promises";
 import {
@@ -30,7 +30,41 @@ import {
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 const CEV_BASE = "https://appointment.cloud.diplomatie.be";
 const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
-const ANTICAPTCHA_KEY = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
+
+// ─── Clé Anti-Captcha : lecture DYNAMIQUE (pas de constante module-level) ────
+// Problème résolu : si la clé n'est pas dans l'env au démarrage du bot (ex: git pull
+// en cours de route, ou clé stockée dans botConfig Convex), le bot ne la voyait jamais.
+// Solution : lecture depuis process.env à chaque appel + fallback getBotConfigValue.
+let _anticaptchaKeyCache: string | null = null; // null = jamais chargé, "" = chargé mais vide, "key" = valide
+
+async function resolveAnticaptchaKey(): Promise<string> {
+  // 1. Lire process.env dynamiquement (capte les changements post-démarrage)
+  const envKey = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
+  if (envKey) {
+    _anticaptchaKeyCache = envKey;
+    return envKey;
+  }
+  // 2. Si déjà en cache mémoire (chargé depuis botConfig), l'utiliser
+  if (_anticaptchaKeyCache) return _anticaptchaKeyCache;
+  // 3. Fallback : lire depuis botConfig Convex (permet de configurer sans variable d'env)
+  try {
+    const botKey = await getBotConfigValue("anticaptcha_api_key");
+    if (botKey?.trim()) {
+      _anticaptchaKeyCache = botKey.trim();
+      console.log(`[CEV-SETUP] ✅ ANTICAPTCHA_KEY chargé depuis botConfig Convex (longueur: ${_anticaptchaKeyCache.length})`);
+      return _anticaptchaKeyCache;
+    }
+  } catch { /* graceful */ }
+  _anticaptchaKeyCache = ""; // marquer "chargé, mais vide"
+  return "";
+}
+
+/** Vide le cache de la clé Anti-Captcha — à appeler sur erreur anticaptcha_not_configured. */
+export function invalidateAnticaptchaCache(): void {
+  _anticaptchaKeyCache = null; // force une relecture env + botConfig au prochain scan
+  console.log("[CEV-SETUP] 🔄 Cache clé Anti-Captcha invalidé — prochaine tentative relira env + botConfig");
+}
+
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
 const TWOCAPTCHA_API_KEY = process.env.TWOCAPTCHA_API_KEY?.trim() ?? "";
 
@@ -915,6 +949,8 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   }
 
   // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
+  // Résolution dynamique : env var + fallback botConfig Convex
+  const ANTICAPTCHA_KEY = await resolveAnticaptchaKey();
   if (ANTICAPTCHA_KEY) {
     botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
     try {
