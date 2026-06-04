@@ -120,14 +120,22 @@ function restoreImages(restored: Map<HTMLImageElement, string>) {
  * On utilise le moteur de rendu du navigateur pour convertir chaque occurrence oklch → rgb,
  * puis on patch tous les <style> et attributs style du document cloné.
  */
+const oklchCache = new Map<string, string>();
+
 function convertOklchValue(oklchStr: string): string {
+  const trimmed = oklchStr.trim();
+  if (oklchCache.has(trimmed)) {
+    return oklchCache.get(trimmed)!;
+  }
   try {
     const tmp = document.createElement("div");
-    tmp.style.setProperty("color", oklchStr, "important");
+    tmp.style.setProperty("color", trimmed, "important");
     document.documentElement.appendChild(tmp);
     const rgb = window.getComputedStyle(tmp).color;
     document.documentElement.removeChild(tmp);
-    return rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+    const result = rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+    oklchCache.set(trimmed, result);
+    return result;
   } catch {
     return "rgb(0,0,0)";
   }
@@ -136,11 +144,37 @@ function convertOklchValue(oklchStr: string): string {
 function patchOklchInDoc(clonedDoc: Document): void {
   const oklchRe = /oklch\([^)]*\)/g;
   const convert = (val: string) => val.replace(oklchRe, (m) => convertOklchValue(m));
-  // Patch tous les blocs <style>
+  
+  // 1. Patch tous les blocs <style>
   clonedDoc.querySelectorAll("style").forEach((s) => {
     if (s.textContent?.includes("oklch")) s.textContent = convert(s.textContent);
   });
-  // Patch les attributs style inline
+  
+  // 2. Convertir les feuilles de style <link> en balises <style> en ligne pour patcher leurs règles
+  const links = Array.from(clonedDoc.querySelectorAll("link[rel='stylesheet']"));
+  for (const link of links) {
+    try {
+      const href = link.getAttribute("href");
+      if (href) {
+        const origSheet = Array.from(document.styleSheets).find(
+          s => s.href?.endsWith(href) || s.href === href
+        );
+        if (origSheet && origSheet.cssRules) {
+          const rules = Array.from(origSheet.cssRules);
+          const cssText = rules.map(r => r.cssText).join("\n");
+          const patchedCss = convert(cssText);
+          const style = clonedDoc.createElement("style");
+          style.textContent = patchedCss;
+          link.parentNode?.replaceChild(style, link);
+        }
+      }
+    } catch (e) {
+      // Ignorer si cross-origin (CORS) ou non disponible
+      console.warn("Could not inline stylesheet rule for html2canvas:", e);
+    }
+  }
+
+  // 3. Patch les attributs style inline
   clonedDoc.querySelectorAll("[style]").forEach((el) => {
     const v = el.getAttribute("style") ?? "";
     if (v.includes("oklch")) el.setAttribute("style", convert(v));

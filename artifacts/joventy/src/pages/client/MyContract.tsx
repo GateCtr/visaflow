@@ -237,24 +237,60 @@ export default function MyContract() {
       const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
 
+      const oklchCache = new Map<string, string>();
+
       // html2canvas ne supporte pas oklch() (Tailwind v4 / shadcn CSS Color Level 4).
       // On convertit oklch → rgb via le moteur de rendu du navigateur dans onclone.
       function convertOklchValue(oklchStr: string): string {
+        const trimmed = oklchStr.trim();
+        if (oklchCache.has(trimmed)) {
+          return oklchCache.get(trimmed)!;
+        }
         try {
           const tmp = document.createElement("div");
-          tmp.style.setProperty("color", oklchStr, "important");
+          tmp.style.setProperty("color", trimmed, "important");
           document.documentElement.appendChild(tmp);
           const rgb = window.getComputedStyle(tmp).color;
           document.documentElement.removeChild(tmp);
-          return rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+          const result = rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+          oklchCache.set(trimmed, result);
+          return result;
         } catch { return "rgb(0,0,0)"; }
       }
       function patchOklch(clonedDoc: Document): void {
         const re = /oklch\([^)]*\)/g;
         const conv = (v: string) => v.replace(re, (m) => convertOklchValue(m));
+        
+        // 1. Convertir les balises <style>
         clonedDoc.querySelectorAll("style").forEach((s) => {
           if (s.textContent?.includes("oklch")) s.textContent = conv(s.textContent);
         });
+        
+        // 2. Convertir les feuilles de style <link> en balises <style> en ligne pour patcher leurs règles
+        const links = Array.from(clonedDoc.querySelectorAll("link[rel='stylesheet']"));
+        for (const link of links) {
+          try {
+            const href = link.getAttribute("href");
+            if (href) {
+              const origSheet = Array.from(document.styleSheets).find(
+                s => s.href?.endsWith(href) || s.href === href
+              );
+              if (origSheet && origSheet.cssRules) {
+                const rules = Array.from(origSheet.cssRules);
+                const cssText = rules.map(r => r.cssText).join("\n");
+                const patchedCss = conv(cssText);
+                const style = clonedDoc.createElement("style");
+                style.textContent = patchedCss;
+                link.parentNode?.replaceChild(style, link);
+              }
+            }
+          } catch (e) {
+            // Ignorer si cross-origin (CORS) ou non disponible
+            console.warn("Could not inline stylesheet rule for html2canvas:", e);
+          }
+        }
+
+        // 3. Convertir les attributs style en ligne
         clonedDoc.querySelectorAll("[style]").forEach((e) => {
           const v = e.getAttribute("style") ?? "";
           if (v.includes("oklch")) e.setAttribute("style", conv(v));

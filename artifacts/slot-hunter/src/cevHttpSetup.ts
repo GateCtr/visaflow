@@ -37,7 +37,7 @@ const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 // Solution : lecture depuis process.env à chaque appel + fallback getBotConfigValue.
 let _anticaptchaKeyCache: string | null = null; // null = jamais chargé, "" = chargé mais vide, "key" = valide
 
-async function resolveAnticaptchaKey(): Promise<string> {
+export async function resolveAnticaptchaKey(): Promise<string> {
   // 1. Lire process.env dynamiquement (capte les changements post-démarrage)
   const envKey = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
   if (envKey) {
@@ -463,7 +463,7 @@ export async function setupCevSessionHttp(
         ];
         const isRateLimited = rateLimitPatterns.some(p => p.test(eText));
         if (isRateLimited) {
-          invalidateVowintCache(vowintEmail);
+          // On ne vide plus le cache VOWINT global ici car la session reste valide pour les autres dossiers du pool.
           botLog({ applicationId: clientId, step: "cev_http_rate_limit_detected", status: "warn", data: { responsePreview: eText.slice(0, 300) } });
           return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
         }
@@ -478,7 +478,7 @@ export async function setupCevSessionHttp(
           if (typeof eData === "object" && eData?.error) {
             const errStr = eData.error;
             if (rateLimitPatterns.some(p => p.test(errStr))) {
-              invalidateVowintCache(vowintEmail);
+              // Idem, pas d'invalidation
               botLog({ applicationId: clientId, step: "cev_http_rate_limit_json", status: "warn", data: { error: errStr } });
               return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
             }
@@ -495,8 +495,7 @@ export async function setupCevSessionHttp(
           }
         }
       } else if (eRes.status === 429) {
-        // HTTP 429 explicite = rate-limit
-        invalidateVowintCache(vowintEmail);
+        // HTTP 429 explicite = rate-limit sur ce dossier/requête (pas d'invalidation session globale)
         botLog({ applicationId: clientId, step: "cev_http_rate_limit_429", status: "warn", data: { status: eRes.status } });
         return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS" };
       }
@@ -511,9 +510,13 @@ export async function setupCevSessionHttp(
         if (!integrationUrl && loc) {
           const locLower = loc.toLowerCase();
           if (locLower.includes("error") || locLower.includes("login") || locLower.includes("account")) {
+            if (locLower.includes("toomanyattempts")) {
+              // C'est un rate limit sur le dossier, la session VOWINT reste valide
+              botLog({ applicationId: clientId, step: "cev_http_redirect_rate_limit", status: "warn", data: { redirectTo: loc } });
+              return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS_REDIRECT" };
+            }
             invalidateVowintCache(vowintEmail);
             botLog({ applicationId: clientId, step: "cev_http_redirect_error", status: "warn", data: { redirectTo: loc } });
-            // Possiblement un rate-limit déguisé en redirection vers erreur
             return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS_REDIRECT" };
           }
         }
@@ -1008,8 +1011,9 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       }
       
       if (createData.errorId === 0 && createData.taskId) {
-        // Polling de maximum 90 secondes (18 tentatives de 5s) pour éviter de bloquer le bot
-        for (let i = 0; i < 18; i++) {
+        // Polling de maximum 180 secondes (36 tentatives de 5s) car hCaptcha est lent
+        let solved = false;
+        for (let i = 0; i < 36; i++) {
           await new Promise(r => setTimeout(r, 5000));
           let pollData: any;
           try {
@@ -1028,9 +1032,11 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
           if (pollData.status === "ready") {
             const token = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;
             if (token) {
+              solved = true;
               botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { service: "anticaptcha", seconds: (i + 1) * 5 } });
               return token;
             }
+            errors.push("anticaptcha_ready_but_no_token");
             break;
           }
           if (pollData.errorId !== 0) {
@@ -1054,6 +1060,9 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
             }
             break;
           }
+        }
+        if (!solved) {
+          errors.push("anticaptcha_timeout_180s");
         }
       } else {
         errors.push(`anticaptcha_create_error: ${createData.errorCode} - ${createData.errorDescription}`);

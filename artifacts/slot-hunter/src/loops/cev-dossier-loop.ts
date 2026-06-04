@@ -505,6 +505,19 @@ export async function startCevDossierLoop(): Promise<void> {
     }
   }
 
+  // Vérification de la configuration Anti-Captcha
+  try {
+    const { resolveAnticaptchaKey } = await import("../cevHttpSetup.js");
+    const anticaptchaKey = await resolveAnticaptchaKey();
+    if (!anticaptchaKey) {
+      log("WARN", "⚠️ Anti-Captcha n'est PAS configuré ! (Clé absente dans process.env et botConfig Convex)");
+    } else {
+      log("INFO", `✅ Anti-Captcha configuré (Clé: ${anticaptchaKey.slice(0, 5)}...${anticaptchaKey.slice(-5)})`);
+    }
+  } catch (err) {
+    log("ERROR", `Impossible de valider la configuration Anti-Captcha: ${err}`);
+  }
+
   // Charger la liste de dossiers
   const dossierPoolStr = await getBotConfigValue("cev_dossier_pool");
   if (!dossierPoolStr || !dossierPoolStr.trim()) {
@@ -697,9 +710,18 @@ export async function startCevDossierLoop(): Promise<void> {
 
   state.isRunning = true;
   state.startedAt = Date.now();
+  let nextScanAllowedAt = 0;
 
   while (state.isRunning) {
     try {
+      // Respecter le calendrier de scan planifié (anti-spam même en cas de reconnexion/exception)
+      const now = Date.now();
+      if (now < nextScanAllowedAt) {
+        const waitMs = nextScanAllowedAt - now;
+        log("INFO", `Attente planifiée / de sécurité : ${Math.round(waitMs / 1000)}s restantes...`);
+        await sleep(waitMs);
+      }
+
       // Re-check mode toutes les 50 scans
       if (state.scanCount > 0 && state.scanCount % 50 === 0) {
         const stillEnabled = await getBotConfigValue("cev_dossier_mode");
@@ -883,13 +905,17 @@ export async function startCevDossierLoop(): Promise<void> {
       // Jitter important de ±30s (anti-shadow ban)
       const jitter = (Math.random() * 60 - 30) * 1000; // ±30s aléatoires
       const finalSleepMs = Math.max(10_000, effectiveIntervalMs + jitter); // Garder au moins 10s
-      log("INFO", `Pause de ${Math.round(finalSleepMs / 1000)}s avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
-      await sleep(finalSleepMs);
+      nextScanAllowedAt = Date.now() + finalSleepMs;
+      log("INFO", `Pause de ${Math.round(finalSleepMs / 1000)}s planifiée avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
 
     } catch (loopErr) {
       log("ERROR", `Erreur loop: ${loopErr}`);
       state.errors++;
-      await sleep(10_000); // Réduit de 30s → 10s
+      
+      // Sécurité anti-spam en cas d'erreur consécutive ou de crash (évite de marteler le serveur)
+      const safetyPauseMs = 45000;
+      nextScanAllowedAt = Math.max(nextScanAllowedAt, Date.now() + safetyPauseMs);
+      log("INFO", `Erreur détectée. Prochain scan planifié au plus tôt dans ${Math.round((nextScanAllowedAt - Date.now()) / 1000)}s.`);
     }
   }
 
