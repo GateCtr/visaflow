@@ -641,11 +641,59 @@ export async function setupCevSessionHttp(
         redirectUrlRaw: captchaData.redirectUrl,
         now: new Date().toISOString(),
         nowLocal: new Date().toString(),
+        fullResponse: JSON.stringify(captchaData),
       },
     });
     
     if (!captchaData.validUntil) {
-      return { success: false, error: "CAPTCHA_NO_VALID_UNTIL" };
+      // RETRY: Si validUntil absent, réessayer une fois (peut être un timeout temporaire du serveur CEV)
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_captcha_no_valid_until_retry",
+        status: "warn",
+        data: { message: "validUntil absent - retry immédiat" },
+      });
+      
+      // Attendre 2s et réessayer
+      await new Promise(r => setTimeout(r, 2000));
+      
+      const retryRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
+        method: "POST",
+        headers: getCevBrowserHeaders({
+          referer: `${CEV_BASE}/Captcha`,
+          origin: CEV_BASE,
+          cookie: fullCevCookie,
+          contentType: "application/x-www-form-urlencoded",
+          xRequestedWith: true,
+          accept: "application/json, text/javascript, */*; q=0.01",
+        }),
+        body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
+        signal: AbortSignal.timeout(30_000),
+      });
+      
+      if (retryRes.ok) {
+        const retryData = await retryRes.json() as { validUntil?: string; redirectUrl?: string };
+        botLog({
+          applicationId: clientId,
+          step: "cev_http_captcha_retry_response",
+          status: "ok",
+          data: {
+            validUntilRaw: retryData.validUntil,
+            redirectUrlRaw: retryData.redirectUrl,
+          },
+        });
+        
+        if (retryData.validUntil) {
+          // Retry réussi - utiliser les nouvelles valeurs
+          captchaData.validUntil = retryData.validUntil;
+          captchaData.redirectUrl = retryData.redirectUrl;
+        } else {
+          // Retry échoué aussi - retourner erreur
+          return { success: false, error: "CAPTCHA_NO_VALID_UNTIL_RETRY_FAILED" };
+        }
+      } else {
+        return { success: false, error: `CAPTCHA_RETRY_FAILED_${retryRes.status}` };
+      }
     }
 
     // validUntil parsing

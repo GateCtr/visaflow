@@ -283,67 +283,64 @@ async function performScan(
   _hcaptchaRetry = 0,
 ): Promise<ScanResult> {
 
-  try {
-    const result = await setupCevSessionHttp(
-      vowintEmail,
-      vowintPassword,
-      applicationId,
-      applicationId,
-      dossier.vowintRef, // Le numéro VOWINT sera résolu via MyList
+  const result = await setupCevSessionHttp(
+    vowintEmail,
+    vowintPassword,
+    applicationId,
+    applicationId,
+    dossier.vowintRef, // Le numéro VOWINT sera résolu via MyList
+    siphoned,
+  );
+
+  if (!result.success) {
+    if (result.error?.includes("RATE_LIMIT")) {
+      pool.markRateLimited(dossier);
+      return { status: "rate_limited" };
+    }
+    // Retry automatique sur erreurs captcha (HCAPTCHA_FAILED, CAPTCHA_NO_VALID_UNTIL, etc.)
+    // Invalide le cache clé Anti-Captcha avant de réessayer → force relecture env + botConfig
+    const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
+                           result.error?.includes("CAPTCHA") ||
+                           result.error?.includes("CAPTCHA_RETRY");
+    if (isCaptchaError && _hcaptchaRetry < 2) {
+      log("WARN", `  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
+      invalidateAnticaptchaCache();
+      await sleep(5_000);
+      return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1);
+    }
+    log("WARN", `  Erreur setup: ${result.error}`);
+    return { status: "error" };
+  }
+
+  // Clic réussi — enregistrer
+  pool.recordClick(dossier);
+  globalSessionClicks++;
+
+  if (result.slotsAvailable) {
+    return {
+      status: "slot_found",
+      sessionCookie: result.sessionCookie,
+      integrationUrl: result.integrationUrl,
+    };
+  }
+
+  // Poll rapide si on a un cookie de session
+  if (result.sessionCookie) {
+    const pollResult = await pollCevSlot(
+      result.integrationUrl ?? "",
+      result.sessionCookie,
       siphoned,
     );
-
-    if (!result.success) {
-      if (result.error?.includes("RATE_LIMIT")) {
-        pool.markRateLimited(dossier);
-        return { status: "rate_limited" };
-      }
-      // Retry automatique sur HCAPTCHA_FAILED (max 2 fois, délai 5s)
-      // Invalide le cache clé Anti-Captcha avant de réessayer → force relecture env + botConfig
-      if (result.error === "HCAPTCHA_FAILED" && _hcaptchaRetry < 2) {
-        log("WARN", `  ⟳ HCAPTCHA_FAILED — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
-        invalidateAnticaptchaCache();
-        await sleep(5_000);
-        return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1);
-      }
-      log("WARN", `  Erreur setup: ${result.error}`);
-      return { status: "error" };
-    }
-
-    // Clic réussi — enregistrer
-    pool.recordClick(dossier);
-    globalSessionClicks++;
-
-    if (result.slotsAvailable) {
+    if (pollResult.status === "slot_found") {
       return {
         status: "slot_found",
         sessionCookie: result.sessionCookie,
         integrationUrl: result.integrationUrl,
       };
     }
-
-    // Poll rapide si on a un cookie de session
-    if (result.sessionCookie) {
-      const pollResult = await pollCevSlot(
-        result.integrationUrl ?? "",
-        result.sessionCookie,
-        siphoned,
-      );
-      if (pollResult.status === "slot_found") {
-        return {
-          status: "slot_found",
-          sessionCookie: result.sessionCookie,
-          integrationUrl: result.integrationUrl,
-        };
-      }
-    }
-
-    return { status: "no_slot" };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log("ERROR", `  Exception: ${msg.slice(0, 100)}`);
-    return { status: "error" };
   }
+
+  return { status: "no_slot" };
 }
 
 // ─── Booking ────────────────────────────────────────────────────────────────

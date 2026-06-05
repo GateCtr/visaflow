@@ -26,6 +26,8 @@ import {
   restoreSoaxRotationFromRedis,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
+import { cookieManager } from "./cookie-manager.js";
+import { solveWithLocalPlaywright } from "./local-playwright-solver.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -398,6 +400,43 @@ export async function ensureSpainCfSession(
     return existing;
   }
 
+  // 1. Tenter de récupérer un cookie valide depuis le pool
+  const domain = new URL(targetUrl).hostname;
+  const bestCookie = cookieManager.getBestCookie(domain);
+  if (bestCookie) {
+    const remainMin = Math.round((bestCookie.expires * 1000 - Date.now()) / 60_000);
+    console.log(`[spain-soax] ♻️ Cookie valide trouvé dans le pool (source: ${bestCookie.source}, reste ${remainMin}min)`);
+    
+    const isLocalStealth = process.env.USE_LOCAL_STEALTH === "true";
+    const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+    const soaxProxyUrl = (!isLocalStealth && soaxBaseUrl) 
+      ? makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf")
+      : "";
+
+    const session: SpainCfSession = {
+      cfClearance: bestCookie.value,
+      cfDomain: bestCookie.domain,
+      soaxProxyUrl,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      createdAt: Date.now() - (7200 - (bestCookie.expires - Math.floor(Date.now() / 1000))) * 1000,
+      expiresAt: bestCookie.expires * 1000,
+      allCookies: [{ name: bestCookie.name, value: bestCookie.value }],
+      extraHeaders: {}
+    };
+    _activeCfSession = session;
+    return session;
+  }
+
+  // 2. Tenter de résoudre via Local Playwright Stealth (si activé dans l'environnement)
+  if (process.env.USE_LOCAL_STEALTH === "true") {
+    console.log("[spain-soax] 🔍 Mode local stealth activé. Tentative de résolution gratuite...");
+    const localSolved = await solveWithLocalPlaywright(targetUrl);
+    if (localSolved) {
+      return ensureSpainCfSession(targetUrl);
+    }
+    console.warn("[spain-soax] ⚠️ Échec de la résolution locale stealth. Fallback sur la méthode cloud/payante...");
+  }
+
   // Tenter restauration depuis Redis (survit aux redéploiements)
   try {
     const cached = await restoreSpainCfSessionFromRedis();
@@ -504,12 +543,16 @@ export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impi
   _spainImpit = new Impit({
     browser: "chrome",
     ignoreTlsErrors: true,
-    proxyUrl: session.soaxProxyUrl,
+    proxyUrl: session.soaxProxyUrl || undefined,
   } as any);
   _spainImpitProxyUrl = session.soaxProxyUrl;
 
-  const masked = session.soaxProxyUrl.replace(/:([^:@]+)@/, ":***@");
-  console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + SOAX: ${masked.slice(0, 60)}…)`);
+  if (session.soaxProxyUrl) {
+    const masked = session.soaxProxyUrl.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + SOAX: ${masked.slice(0, 60)}…)`);
+  } else {
+    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS en direct / sans proxy)`);
+  }
   return _spainImpit;
 }
 
