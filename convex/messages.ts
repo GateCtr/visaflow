@@ -174,10 +174,27 @@ export const getUnreadTotal = query({
     if (isAdmin) {
       apps = await ctx.db.query("applications").collect();
     } else {
-      apps = await ctx.db
-        .query("applications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
+      const getClerkId = (subject: string) => {
+        if (subject.includes("|")) {
+          return subject.split("|").pop()!;
+        }
+        return subject;
+      };
+      const clerkId = getClerkId(userId);
+      const variations = [
+        clerkId,
+        `https://clerk.joventy.cd|${clerkId}`,
+        `https://active-midge-3.clerk.accounts.dev|${clerkId}`
+      ];
+      const allApps = [];
+      for (const v of variations) {
+        const appsForVar = await ctx.db
+          .query("applications")
+          .withIndex("by_user", (q) => q.eq("userId", v))
+          .collect();
+        allApps.push(...appsForVar);
+      }
+      apps = allApps;
     }
 
     let total = 0;
@@ -214,11 +231,27 @@ export const listConversations = query({
     if (isAdmin) {
       apps = await ctx.db.query("applications").order("desc").collect();
     } else {
-      apps = await ctx.db
-        .query("applications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .collect();
+      const getClerkId = (subject: string) => {
+        if (subject.includes("|")) {
+          return subject.split("|").pop()!;
+        }
+        return subject;
+      };
+      const clerkId = getClerkId(userId);
+      const variations = [
+        clerkId,
+        `https://clerk.joventy.cd|${clerkId}`,
+        `https://active-midge-3.clerk.accounts.dev|${clerkId}`
+      ];
+      const allApps = [];
+      for (const v of variations) {
+        const appsForVar = await ctx.db
+          .query("applications")
+          .withIndex("by_user", (q) => q.eq("userId", v))
+          .collect();
+        allApps.push(...appsForVar);
+      }
+      apps = allApps.sort((a, b) => b.updatedAt - a.updatedAt);
     }
 
     const result = [];

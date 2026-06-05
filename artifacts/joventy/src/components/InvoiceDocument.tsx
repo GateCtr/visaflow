@@ -75,6 +75,9 @@ function StatusGlobal({ status }: { status: string }) {
   );
 }
 
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+
 /* ─── Pré-convertit les images externes en data URL pour éviter le blocage html2canvas ─── */
 async function preloadImages(el: HTMLElement): Promise<Map<HTMLImageElement, string>> {
   const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
@@ -117,67 +120,29 @@ function restoreImages(restored: Map<HTMLImageElement, string>) {
 
 /**
  * html2canvas ne supporte pas oklch() (CSS Color Level 4, utilisé par Tailwind v4 / shadcn).
- * On utilise le moteur de rendu du navigateur pour convertir chaque occurrence oklch → rgb,
- * puis on patch tous les <style> et attributs style du document cloné.
+ * On utilise le moteur de rendu du navigateur pour convertir chaque occurrence oklch → rgb.
  */
 const oklchCache = new Map<string, string>();
 
-function convertOklchValue(oklchStr: string): string {
-  const trimmed = oklchStr.trim();
-  if (oklchCache.has(trimmed)) {
-    return oklchCache.get(trimmed)!;
-  }
-  try {
-    const tmp = document.createElement("div");
-    tmp.style.setProperty("color", trimmed, "important");
-    document.documentElement.appendChild(tmp);
-    const rgb = window.getComputedStyle(tmp).color;
-    document.documentElement.removeChild(tmp);
-    const result = rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
-    oklchCache.set(trimmed, result);
-    return result;
-  } catch {
-    return "rgb(0,0,0)";
-  }
-}
-
-function patchOklchInDoc(clonedDoc: Document): void {
+function convertOklchValue(oklchStr: string, originalGetComputedStyle: typeof window.getComputedStyle): string {
   const oklchRe = /oklch\([^)]*\)/g;
-  const convert = (val: string) => val.replace(oklchRe, (m) => convertOklchValue(m));
-  
-  // 1. Patch tous les blocs <style>
-  clonedDoc.querySelectorAll("style").forEach((s) => {
-    if (s.textContent?.includes("oklch")) s.textContent = convert(s.textContent);
-  });
-  
-  // 2. Convertir les feuilles de style <link> en balises <style> en ligne pour patcher leurs règles
-  const links = Array.from(clonedDoc.querySelectorAll("link[rel='stylesheet']"));
-  for (const link of links) {
-    try {
-      const href = link.getAttribute("href");
-      if (href) {
-        const origSheet = Array.from(document.styleSheets).find(
-          s => s.href?.endsWith(href) || s.href === href
-        );
-        if (origSheet && origSheet.cssRules) {
-          const rules = Array.from(origSheet.cssRules);
-          const cssText = rules.map(r => r.cssText).join("\n");
-          const patchedCss = convert(cssText);
-          const style = clonedDoc.createElement("style");
-          style.textContent = patchedCss;
-          link.parentNode?.replaceChild(style, link);
-        }
-      }
-    } catch (e) {
-      // Ignorer si cross-origin (CORS) ou non disponible
-      console.warn("Could not inline stylesheet rule for html2canvas:", e);
+  return oklchStr.replace(oklchRe, (m) => {
+    const trimmed = m.trim();
+    if (oklchCache.has(trimmed)) {
+      return oklchCache.get(trimmed)!;
     }
-  }
-
-  // 3. Patch les attributs style inline
-  clonedDoc.querySelectorAll("[style]").forEach((el) => {
-    const v = el.getAttribute("style") ?? "";
-    if (v.includes("oklch")) el.setAttribute("style", convert(v));
+    try {
+      const tmp = document.createElement("div");
+      tmp.style.color = trimmed;
+      document.documentElement.appendChild(tmp);
+      const rgb = originalGetComputedStyle(tmp).color;
+      document.documentElement.removeChild(tmp);
+      const result = rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+      oklchCache.set(trimmed, result);
+      return result;
+    } catch {
+      return "rgb(0,0,0)";
+    }
   });
 }
 
@@ -186,8 +151,35 @@ async function generatePdf(el: HTMLElement, filename: string) {
   const restored = await preloadImages(el);
 
   let canvas: HTMLCanvasElement;
+  const originalGetComputedStyle = window.getComputedStyle;
+
+  // Proxy getComputedStyle pour intercepter et patcher les couleurs oklch retournées à html2canvas
+  window.getComputedStyle = (elt, pseudoElt) => {
+    const style = originalGetComputedStyle(elt, pseudoElt);
+    return new Proxy(style, {
+      get(target, prop) {
+        if (prop === "getPropertyValue") {
+          return (propertyName: string) => {
+            const val = target.getPropertyValue(propertyName);
+            if (val && val.includes("oklch")) {
+              return convertOklchValue(val, originalGetComputedStyle);
+            }
+            return val;
+          };
+        }
+        const val = (target as any)[prop];
+        if (typeof val === "string" && val.includes("oklch")) {
+          return convertOklchValue(val, originalGetComputedStyle);
+        }
+        if (typeof val === "function") {
+          return val.bind(target);
+        }
+        return val;
+      }
+    });
+  };
+
   try {
-    const html2canvas = (await import("html2canvas")).default;
     canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
@@ -195,13 +187,12 @@ async function generatePdf(el: HTMLElement, filename: string) {
       backgroundColor: "#ffffff",
       logging: false,
       imageTimeout: 0,
-      onclone: (clonedDoc) => patchOklchInDoc(clonedDoc),
     });
   } finally {
+    window.getComputedStyle = originalGetComputedStyle;
     restoreImages(restored);
   }
 
-  const { jsPDF } = await import("jspdf");
   const imgData = canvas!.toDataURL("image/png");
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();

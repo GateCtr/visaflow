@@ -100,6 +100,13 @@ export const listClients = query({
 
     const all = await ctx.db.query("applications").collect();
 
+    const getClerkId = (subject: string) => {
+      if (subject.includes("|")) {
+        return subject.split("|").pop()!;
+      }
+      return subject;
+    };
+
     const clientMap = new Map<
       string,
       {
@@ -115,8 +122,9 @@ export const listClients = query({
     >();
 
     for (const app of all) {
-      if (!clientMap.has(app.userId)) {
-        clientMap.set(app.userId, {
+      const clerkId = getClerkId(app.userId);
+      if (!clientMap.has(clerkId)) {
+        clientMap.set(clerkId, {
           userId: app.userId,
           firstName: app.userFirstName || "",
           lastName: app.userLastName || "",
@@ -127,7 +135,7 @@ export const listClients = query({
           contractSignedName: null,
         });
       } else {
-        const existing = clientMap.get(app.userId)!;
+        const existing = clientMap.get(clerkId)!;
         existing.applicationCount += 1;
         if (app._creationTime < existing.firstSeen) {
           existing.firstSeen = app._creationTime;
@@ -136,15 +144,27 @@ export const listClients = query({
     }
 
     // Enrich with contract signature data
-    const userIds = Array.from(clientMap.keys());
-    for (const userId of userIds) {
-      const sig = await ctx.db
-        .query("contractSignatures")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .first();
+    const clerkIds = Array.from(clientMap.keys());
+    for (const clerkId of clerkIds) {
+      const variations = [
+        clerkId,
+        `https://clerk.joventy.cd|${clerkId}`,
+        `https://active-midge-3.clerk.accounts.dev|${clerkId}`
+      ];
+      let sig = null;
+      for (const v of variations) {
+        const found = await ctx.db
+          .query("contractSignatures")
+          .withIndex("by_user", (q: any) => q.eq("userId", v))
+          .order("desc")
+          .first();
+        if (found) {
+          sig = found;
+          break;
+        }
+      }
       if (sig) {
-        const entry = clientMap.get(userId)!;
+        const entry = clientMap.get(clerkId)!;
         entry.contractSignedAt = sig.signedAt;
         entry.contractSignedName = sig.signedName;
       }
