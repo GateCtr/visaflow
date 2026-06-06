@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
 import {
   X,
   FileText,
@@ -39,10 +41,10 @@ const STEPS = [
     icon: FileText,
     color: "bg-blue-600",
     iconColor: "text-white",
-    tag: "Étape 1 sur 3",
-    title: "Créez votre dossier\net réglez les arrhes.",
+    tag: "ÉTAPE CLÉ",
+    title: "Créez votre dossier\nmaintenant",
     description:
-      "Remplissez votre demande en ligne en quelques minutes. Des arrhes sont demandées pour réserver votre place et lancer le traitement.",
+      "C'est le moment de commencer ! Remplissez votre demande en quelques minutes et lancez votre processus de visa.",
     visual: (
       <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20">
         <div className="flex items-center gap-3 mb-3">
@@ -69,10 +71,10 @@ const STEPS = [
     icon: Search,
     color: "bg-indigo-600",
     iconColor: "text-white",
-    tag: "Étape 2 sur 3",
-    title: "Envoyez vos documents.\nLe bot chasse votre créneau.",
+    tag: "AUTOMATISATION",
+    title: "Notre bot chasse\nvotre créneau 24/7",
     description:
-      "Notre équipe analyse votre dossier et notre bot surveille en continu les portails officiels pour saisir un rendez-vous dès qu'il est disponible.",
+      "Une fois votre dossier créé, notre bot surveille en continu les portails officiels pour saisir un rendez-vous dès qu'il est disponible.",
     visual: (
       <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20">
         <div className="flex items-center justify-between mb-3">
@@ -101,7 +103,7 @@ const STEPS = [
     icon: CheckCircle2,
     color: "bg-emerald-600",
     iconColor: "text-white",
-    tag: "Étape 3 sur 3",
+    tag: "RÉSULTAT",
     title: "Créneau trouvé.\nVotre visa arrive.",
     description:
       "Dès qu'un créneau est réservé, vous êtes notifié en urgence. Après confirmation de votre rendez-vous, réglez les honoraires et recevez votre visa.",
@@ -132,6 +134,7 @@ export function OnboardingModal() {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const storageKey = user ? `${STORAGE_KEY_PREFIX}${user.id}` : null;
 
@@ -141,13 +144,18 @@ export function OnboardingModal() {
     if (!done) setVisible(true);
   }, [storageKey]);
 
-  const dismiss = () => {
+  const dismiss = async () => {
     if (storageKey) localStorage.setItem(storageKey, "1");
+    try {
+      await completeOnboarding();
+    } catch (error) {
+      console.error("Erreur lors de la completion du onboarding:", error);
+    }
     setVisible(false);
   };
 
-  const finish = () => {
-    dismiss();
+  const finish = async () => {
+    await dismiss();
     setLocation("/dashboard/applications/new");
   };
 

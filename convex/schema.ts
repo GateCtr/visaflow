@@ -108,6 +108,7 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     role: v.string(),
     createdAt: v.number(),
+    onboardingCompletedAt: v.optional(v.number()),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"]),

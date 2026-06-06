@@ -12,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ClientContractGate } from "@/components/ClientContractGate";
+import { OnboardingContractGate } from "@/components/OnboardingContractGate";
 
 import Landing from "@/pages/Landing";
 import Login from "@/pages/auth/Login";
@@ -92,11 +92,11 @@ const ProtectedRoute = ({
 
   if (!adminOnly) {
     return (
-      <ClientContractGate>
+      <OnboardingContractGate>
         <DashboardLayout isAdmin={false}>
           <Component {...rest} />
         </DashboardLayout>
-      </ClientContractGate>
+      </OnboardingContractGate>
     );
   }
 

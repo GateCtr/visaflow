@@ -1,4 +1,4 @@
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const upsert = internalMutation({
@@ -81,5 +81,47 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("users").order("desc").collect();
+  },
+});
+
+export const completeOnboarding = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Non authentifié");
+    
+    const clerkId = identity.subject.includes("|") 
+      ? identity.subject.split("|").pop()! 
+      : identity.subject;
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .first();
+    
+    if (user) {
+      await ctx.db.patch(user._id, {
+        onboardingCompletedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const getOnboardingStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return false;
+    
+    const clerkId = identity.subject.includes("|") 
+      ? identity.subject.split("|").pop()! 
+      : identity.subject;
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .first();
+    
+    return user?.onboardingCompletedAt !== undefined;
   },
 });

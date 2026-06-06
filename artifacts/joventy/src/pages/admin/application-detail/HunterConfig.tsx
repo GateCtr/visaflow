@@ -167,6 +167,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           usVisaCode: visaClassInput,
         });
       }
+      // Activer le mode dossier CEV si on configure un pool de dossiers Schengen
+      if (destination === "schengen" && cevDossierPool && cevDossierPool.trim()) {
+        await setBotConfig({ key: "cev_dossier_mode", value: "1" });
+      }
       toast({ title: "Hunter sauvegardé", description: active ? "Robot actif." : "Robot en pause." });
     } catch (err: unknown) { toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Échec" }); }
     finally { setSaving(false); }

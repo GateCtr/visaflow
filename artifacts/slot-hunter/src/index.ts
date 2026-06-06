@@ -797,14 +797,22 @@ async function main(): Promise<void> {
       ? jobs.filter(j => j.destination !== "usa")
       : jobs;
 
-    const due = findNextDueJob(legacyJobs);
+    // Exclure les jobs Schengen si le mode dossier CEV est activé (éviter conflit)
+    const cevDossierModeEnabled = await getBotConfigValue("cev_dossier_mode").catch(() => "0") === "1";
+    const filteredLegacyJobs = cevDossierModeEnabled
+      ? legacyJobs.filter(j => j.destination !== "schengen")
+      : legacyJobs;
+
+    const due = findNextDueJob(filteredLegacyJobs);
 
     if (!due) {
       const waitMs = getTimeUntilNextDue(jobs);
       const usaExcluded = isParallelMode || isV3Mode;
+      const schengenExcluded = cevDossierModeEnabled;
       const activeCount = jobs.filter((j) =>
         !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-        !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === "")))
+        !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
+        !(schengenExcluded && j.destination === "schengen")
       ).length;
 
       if (activeCount === 0) {
@@ -812,6 +820,8 @@ async function main(): Promise<void> {
           log("INFO", "Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s");
         } else if (isParallelMode) {
           log("INFO", "Scheduler séquentiel idle — jobs USA gérés par OFC Watcher — polling dans 90s");
+        } else if (cevDossierModeEnabled) {
+          log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop — polling dans 90s");
         } else {
           log("INFO", "Aucun dossier actif — polling dans 90s");
         }
@@ -819,7 +829,8 @@ async function main(): Promise<void> {
         const tierCounts = jobs
           .filter((j) =>
             !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-            !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === "")))
+            !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
+            !(schengenExcluded && j.destination === "schengen")
           )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;

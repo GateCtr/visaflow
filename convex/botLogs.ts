@@ -1,8 +1,8 @@
-import { mutation, query, internalQuery } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc } from "./_generated/dataModel";
 
-export const add = mutation({
+export const add = internalMutation({
   args: {
     applicationId: v.id("applications"),
     step: v.string(),

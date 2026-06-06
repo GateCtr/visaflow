@@ -38,13 +38,13 @@ interface InvoiceDocumentProps {
 function StatusBadge({ paid }: { paid: boolean }) {
   if (paid) {
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "4px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 700, background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", whiteSpace: "nowrap" }}>
         ✓ PAYÉ
       </span>
     );
   }
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "4px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", whiteSpace: "nowrap" }}>
       ⏳ EN ATTENTE
     </span>
   );
@@ -53,24 +53,24 @@ function StatusBadge({ paid }: { paid: boolean }) {
 function StatusGlobal({ status }: { status: string }) {
   if (status === "completed") {
     return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
-        <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-        <span className="text-sm font-bold text-emerald-700">DOSSIER CLÔTURÉ — PAYÉ INTÉGRALEMENT</span>
+      <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
+        <span className="text-xs sm:text-sm font-bold text-emerald-700 leading-tight">DOSSIER CLÔTURÉ — PAYÉ INTÉGRALEMENT</span>
       </div>
     );
   }
   if (status === "rejected") {
     return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
-        <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-        <span className="text-sm font-bold text-red-700">DOSSIER REJETÉ</span>
+      <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-red-50 border border-red-200">
+        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" />
+        <span className="text-xs sm:text-sm font-bold text-red-700 leading-tight">DOSSIER REJETÉ</span>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
-      <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-      <span className="text-sm font-bold text-amber-700">PAIEMENT PARTIEL — SOLDE EN ATTENTE</span>
+    <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-amber-50 border border-amber-200">
+      <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0" />
+      <span className="text-xs sm:text-sm font-bold text-amber-700 leading-tight">PAIEMENT PARTIEL — SOLDE EN ATTENTE</span>
     </div>
   );
 }
@@ -529,7 +529,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
             </div>
             <div className="text-right flex-shrink-0">
               <div
-                className="text-xs font-bold tracking-widest uppercase px-3 py-1 rounded-lg mb-2 inline-block"
+                className="text-[10px] sm:text-xs font-bold tracking-widest uppercase px-2.5 sm:px-3 py-1 rounded-lg mb-2 inline-block"
                 style={{ background: "#F59E0B", color: "#0B111E" }}
               >
                 {type === "recu" ? "REÇU" : "FACTURE"}
