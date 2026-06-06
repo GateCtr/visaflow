@@ -575,6 +575,10 @@ async function runAccountLoop(job: any): Promise<void> {
   const applicantName = job.applicantName;
   const hunterConfig = job.hunterConfig;
   
+  // Récupérer les credentials VOWINT depuis hunterConfig
+  let vowintEmail = hunterConfig.embassyUsername;
+  let vowintPassword = hunterConfig.embassyPassword;
+  
   // Déterminer le pool de dossiers
   let dossierPoolStr = hunterConfig.cevDossierPool;
   let dossiers: string[];
@@ -583,9 +587,9 @@ async function runAccountLoop(job: any): Promise<void> {
     // Mode automatique: naviguer vers My Applications pour trouver les dossiers
     log("INFO", "  → Aucun dossier fourni, navigation automatique vers My Applications...");
     try {
-      const authCookies = await setupCevSessionHttp(vowintEmail, vowintPassword, false);
-      if (authCookies) {
-        const firstDossier = await resolveFirstAppIdFromMyList(authCookies);
+      const authResult = await setupCevSessionHttp(vowintEmail, vowintPassword, accountId, accountId);
+      if (authResult.success && authResult.sessionCookie) {
+        const firstDossier = await resolveFirstAppIdFromMyList(authResult.sessionCookie);
         if (firstDossier) {
           dossiers = [firstDossier];
           log("INFO", `  → Dossier automatique trouvé: ${firstDossier}`);
@@ -601,9 +605,6 @@ async function runAccountLoop(job: any): Promise<void> {
       log("ERROR", `  → Erreur navigation automatique: ${err}`);
       dossiers = [];
     }
-  } else {
-    dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
-  }
   } else {
     dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
   }
@@ -667,10 +668,6 @@ async function runAccountLoop(job: any): Promise<void> {
     resetCevImpitInstances();
   }
 
-  // Récupérer les credentials VOWINT depuis hunterConfig
-  let vowintEmail = hunterConfig.embassyUsername;
-  let vowintPassword = hunterConfig.embassyPassword;
-  
   // applicationId pour les botLogs
   const logApplicationId = accountId;
 
