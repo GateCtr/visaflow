@@ -288,6 +288,15 @@ function BotLogsTab() {
   const [clearProgress, setClearProgress] = useState("");
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [clearTarget, setClearTarget]   = useState<"usa" | "cev" | "other" | "all">("all");
+  const [timeUpdate, setTimeUpdate]    = useState(0);
+
+  // Auto-update relative time every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeUpdate(Date.now());
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const clearAllLogs = useMutation(api.botLogs.clearAll);
   const clearByFlow = useMutation(api.botLogs.clearByFlow);
