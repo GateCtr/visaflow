@@ -251,10 +251,12 @@ class CevDossierPool {
       this.currentIndex = saved.currentIndex;
     }
 
-    // Restaurer les dossiers en pause
-    saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
+    // Restaurer les dossiers en pause (backward compatibility: champ peut être undefined)
+    if (saved.pausedDossiers) {
+      saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
+    }
 
-    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers.length})`);
+    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers?.length || 0})`);
   }
 }
 
@@ -641,9 +643,11 @@ async function runAccountLoop(job: any): Promise<void> {
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    // Restaurer les dossiers en pause depuis Redis
-    savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
-    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers.length}`);
+    // Restaurer les dossiers en pause depuis Redis (backward compatibility: champ peut être undefined)
+    if (savedPoolState.pausedDossiers) {
+      savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
+    }
+    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers?.length || 0}`);
   } else {
     log("INFO", "Pas de pool state en Redis — démarrage frais");
   }
