@@ -245,40 +245,40 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
 
         {/* Destination-specific */}
         {destination === "schengen" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/80">
-            <Field label="URL VOWINT"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder="https://visaonweb..." className="h-9 bg-white text-sm font-mono" /></Field>
-            <Field label="Pays Schengen"><Input value={cevCountry} onChange={(e) => setCevCountry(e.target.value)} placeholder="France, Belgique..." className="h-9 bg-white text-sm" /></Field>
-          </div>
-        )}
-        {destination === "schengen" && (
-          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100/60 space-y-3">
-            <p className="text-[11px] text-emerald-700 uppercase font-bold tracking-wide">CEV Dossier Loop v3 — Multi-comptes</p>
-            <Field label="Pool de dossiers">
-              <Input 
-                value={cevDossierPool} 
-                onChange={(e) => setCevDossierPool(e.target.value)} 
-                placeholder="VOWINT1,VOWINT2,VOWINT3 (vide = utilise vowintAppId)" 
-                className="h-9 bg-white text-sm font-mono" 
-              />
-            </Field>
+          <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100/60 space-y-4">
+            <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">Configuration CEV Schengen</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Intervalle scan (sec)">
+              <Field label="ID Dossier VOWINT"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder="VOWINT6085888 (optionnel)" className="h-9 bg-white text-sm font-mono" /></Field>
+            </div>
+            <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100/60 space-y-3">
+              <p className="text-[10px] text-emerald-700 uppercase font-bold tracking-wide">CEV Dossier Loop — Multi-comptes</p>
+              <Field label="Pool de dossiers">
                 <Input 
-                  type="number" 
-                  min={60} 
-                  max={3600} 
-                  value={cevScanIntervalSec} 
-                  onChange={(e) => setCevScanIntervalSec(e.target.value)} 
-                  placeholder="225" 
+                  value={cevDossierPool} 
+                  onChange={(e) => setCevDossierPool(e.target.value)} 
+                  placeholder="VOWINT1,VOWINT2,VOWINT3 (vide = utilise vowintAppId)" 
                   className="h-9 bg-white text-sm font-mono" 
                 />
               </Field>
-              <div className="flex items-center gap-2 py-1">
-                <button type="button" onClick={() => setCevUseProxy(v => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cevUseProxy ? "bg-emerald-500" : "bg-slate-300"}`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${cevUseProxy ? "translate-x-4" : "translate-x-0.5"}`} />
-                </button>
-                <span className="text-xs text-slate-700 font-medium">Proxy résidentiel</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Intervalle scan (sec)">
+                  <Input 
+                    type="number" 
+                    min={60} 
+                    max={3600} 
+                    value={cevScanIntervalSec} 
+                    onChange={(e) => setCevScanIntervalSec(e.target.value)} 
+                    placeholder="225" 
+                    className="h-9 bg-white text-sm font-mono" 
+                  />
+                </Field>
+                <div className="flex items-center gap-2 py-1">
+                  <button type="button" onClick={() => setCevUseProxy(v => !v)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cevUseProxy ? "bg-emerald-500" : "bg-slate-300"}`}>
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${cevUseProxy ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </button>
+                  <span className="text-xs text-slate-700 font-medium">Proxy résidentiel</span>
+                </div>
               </div>
             </div>
           </div>
@@ -300,36 +300,38 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           </>
         )}
 
-        {/* V3 Strategy */}
-        <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100/60 space-y-3">
-          <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">V3 Stratégie Multi-Compte</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Field label="Rôle">
-              <select value={accountRole} onChange={(e) => setAccountRole(e.target.value as any)} className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200">
-                <option value="hybride">Hybride</option>
-                <option value="eclaireur">Éclaireur</option>
-                <option value="confine">Confiné</option>
-              </select>
-            </Field>
-            <Field label="Date RDV actuel"><Input type="date" value={currentApptDate} onChange={(e) => setCurrentApptDate(e.target.value)} className="h-9 bg-white text-sm" /></Field>
-            <Field label="Logins/jour"><Input type="number" min={1} max={10} value={maxLogins} onChange={(e) => setMaxLogins(e.target.value)} className="h-9 bg-white text-sm font-mono" /></Field>
-            <Field label="Mois à scanner"><Input type="number" min={1} max={12} value={maxMonths} onChange={(e) => setMaxMonths(e.target.value)} className="h-9 bg-white text-sm font-mono" /></Field>
-            <Field label="Dates prioritaires"><Input value={priorityDates} onChange={(e) => setPriorityDates(e.target.value)} placeholder="2026-09-*,2026-10-15" className="h-9 bg-white text-sm font-mono" /></Field>
-            <Field label="Proxy préféré">
-              <select value={preferredProxy} onChange={(e) => setPreferredProxy(e.target.value)} className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200">
-                <option value="">Défaut</option>
-                <option value="iproyal">iProyal</option>
-                <option value="brightdata">BrightData</option>
-                <option value="2captcha">2captcha</option>
-              </select>
-            </Field>
+        {/* V3 Strategy (USA only) */}
+        {destination === "usa" && (
+          <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100/60 space-y-3">
+            <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">V3 Stratégie Multi-Compte</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Field label="Rôle">
+                <select value={accountRole} onChange={(e) => setAccountRole(e.target.value as any)} className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200">
+                  <option value="hybride">Hybride</option>
+                  <option value="eclaireur">Éclaireur</option>
+                  <option value="confine">Confiné</option>
+                </select>
+              </Field>
+              <Field label="Date RDV actuel"><Input type="date" value={currentApptDate} onChange={(e) => setCurrentApptDate(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Logins/jour"><Input type="number" min={1} max={10} value={maxLogins} onChange={(e) => setMaxLogins(e.target.value)} className="h-9 bg-white text-sm font-mono" /></Field>
+              <Field label="Mois à scanner"><Input type="number" min={1} max={12} value={maxMonths} onChange={(e) => setMaxMonths(e.target.value)} className="h-9 bg-white text-sm font-mono" /></Field>
+              <Field label="Dates prioritaires"><Input value={priorityDates} onChange={(e) => setPriorityDates(e.target.value)} placeholder="2026-09-*,2026-10-15" className="h-9 bg-white text-sm font-mono" /></Field>
+              <Field label="Proxy préféré">
+                <select value={preferredProxy} onChange={(e) => setPreferredProxy(e.target.value)} className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200">
+                  <option value="">Défaut</option>
+                  <option value="iproyal">iProyal</option>
+                  <option value="brightdata">BrightData</option>
+                  <option value="2captcha">2captcha</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Rush windows (JSON)"><Input value={rushWindows} onChange={(e) => setRushWindows(e.target.value)} placeholder='[{"start":0,"end":2}]' className="h-9 bg-white text-sm font-mono" /></Field>
+            <div className="flex flex-wrap gap-4 pt-1">
+              <Toggle label="Blind Booking" checked={blindBooking} onChange={setBlindBooking} compact />
+              <Toggle label="Mode Nuit" checked={nightMode} onChange={setNightMode} compact />
+            </div>
           </div>
-          <Field label="Rush windows (JSON)"><Input value={rushWindows} onChange={(e) => setRushWindows(e.target.value)} placeholder='[{"start":0,"end":2}]' className="h-9 bg-white text-sm font-mono" /></Field>
-          <div className="flex flex-wrap gap-4 pt-1">
-            <Toggle label="Blind Booking" checked={blindBooking} onChange={setBlindBooking} compact />
-            <Toggle label="Mode Nuit" checked={nightMode} onChange={setNightMode} compact />
-          </div>
-        </div>
+        )}
 
         {/* Canal Visa — assignation meute homogène (USA uniquement) */}
         {destination === "usa" && (
