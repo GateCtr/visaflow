@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CEV Dossier Loop v3 — Pool de DOSSIERS (pas d'IPs)
  *
  * STRATÉGIE :
@@ -21,7 +21,7 @@
  * IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-stealth-loop (v2 IP pool).
  */
 
-import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache } from "../cevHttpSetup.js";
+import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache, resolveFirstAppIdFromMyList } from "../cevHttpSetup.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
@@ -531,7 +531,7 @@ export async function startCevDossierLoop(): Promise<void> {
   const cevJobs = jobs.filter((j: any) => 
     j.destination === "schengen" && 
     j.hunterConfig?.isActive === true &&
-    (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
+    (true)
   );
 
   if (cevJobs.length === 0) {
@@ -543,7 +543,7 @@ export async function startCevDossierLoop(): Promise<void> {
       const checkCevJobs = checkJobs.filter((j: any) => 
         j.destination === "schengen" && 
         j.hunterConfig?.isActive === true &&
-        (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
+        (true)
       );
       if (checkCevJobs.length > 0) {
         log("INFO", `Applications CEV trouvées: ${checkCevJobs.length}`);
@@ -576,8 +576,37 @@ async function runAccountLoop(job: any): Promise<void> {
   const hunterConfig = job.hunterConfig;
   
   // Déterminer le pool de dossiers
-  const dossierPoolStr = hunterConfig.cevDossierPool || hunterConfig.vowintAppId;
-  const dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+  let dossierPoolStr = hunterConfig.cevDossierPool;
+  let dossiers: string[];
+  
+  if (!dossierPoolStr) {
+    // Mode automatique: naviguer vers My Applications pour trouver les dossiers
+    log("INFO", "  → Aucun dossier fourni, navigation automatique vers My Applications...");
+    try {
+      const authCookies = await setupCevSessionHttp(vowintEmail, vowintPassword, false);
+      if (authCookies) {
+        const firstDossier = await resolveFirstAppIdFromMyList(authCookies);
+        if (firstDossier) {
+          dossiers = [firstDossier];
+          log("INFO", `  → Dossier automatique trouvé: ${firstDossier}`);
+        } else {
+          log("WARN", "  → Aucun dossier trouvé via navigation automatique");
+          dossiers = [];
+        }
+      } else {
+        log("WARN", "  → Échec de l'authentification pour navigation automatique");
+        dossiers = [];
+      }
+    } catch (err) {
+      log("ERROR", `  → Erreur navigation automatique: ${err}`);
+      dossiers = [];
+    }
+  } else {
+    dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+  }
+  } else {
+    dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+  }
   
   // Créer un pool local pour ce compte
   const localPool = new CevDossierPool();
@@ -820,7 +849,12 @@ async function runAccountLoop(job: any): Promise<void> {
 }
 
 
-/** Expose l'�tat pour monitoring */
+/** Expose l'�tat pour monitoring */
 export function getCevDossierState() {
   return { state: null, pool: null };
 }
+
+
+
+
+

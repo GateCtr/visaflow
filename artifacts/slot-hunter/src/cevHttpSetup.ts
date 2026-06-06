@@ -1,4 +1,4 @@
-/**
+﻿/**
  * cevHttpSetup.ts — Setup CEV session en HTTP pur (sans Playwright)
  *
  * Flux complet :
@@ -327,7 +327,7 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
 /**
  * Résout le premier appId disponible (mode non-pool / fallback).
  */
-async function resolveFirstAppIdFromMyList(cookies: string): Promise<string | null> {
+export async function resolveFirstAppIdFromMyList(cookies: string): Promise<string | null> {
   // GET IndexByUserId
   const pageRes = await cevSetupFetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
     method: "GET",
@@ -1144,3 +1144,4 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   console.log(`[CEV-SETUP] hCaptcha failed. Errors:`, errors);
   return null;
 }
+

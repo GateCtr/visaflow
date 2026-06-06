@@ -273,17 +273,14 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         {destination === "schengen" && (
           <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100/60 space-y-4">
             <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">Configuration CEV Schengen</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="ID Dossier VOWINT"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder="VOWINT6085888 (optionnel)" className="h-9 bg-white text-sm font-mono" /></Field>
-            </div>
+            <p className="text-[10px] text-slate-600">Laissez vide pour navigation automatique (premier dossier trouvé)</p>
             <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100/60 space-y-3">
-              <p className="text-[10px] text-emerald-700 uppercase font-bold tracking-wide">CEV Dossier Loop — Multi-comptes</p>
-              <Field label="Pool de dossiers">
-                <Input 
-                  value={cevDossierPool} 
-                  onChange={(e) => setCevDossierPool(e.target.value)} 
-                  placeholder="VOWINT1,VOWINT2,VOWINT3 (vide = utilise vowintAppId)" 
-                  className="h-9 bg-white text-sm font-mono" 
+              <Field label="Dossiers (optionnel)">
+                <Input
+                  value={cevDossierPool}
+                  onChange={(e) => setCevDossierPool(e.target.value)}
+                  placeholder="VOWINT6085888 ou VOWINT1,VOWINT2,VOWINT3 (vide = auto)"
+                  className="h-9 bg-white text-sm font-mono"
                 />
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
