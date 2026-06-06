@@ -41,6 +41,7 @@ export interface SerializablePoolState {
     rateLimitCount: number;
     lastDailyReset?: number;
   }>;
+  pausedDossiers: string[]; // Dossiers en pause (après slot trouvé)
   savedAt: number; // timestamp de la dernière sauvegarde
   scanCount?: number; // compteur global de scans (persisté pour survivre aux redémarrages)
 }

@@ -224,7 +224,9 @@ class CevDossierPool {
         clickTimestamps: [...s.clickTimestamps],
         totalScans: s.totalScans,
         rateLimitCount: s.rateLimitCount,
+        lastDailyReset: s.lastDailyReset,
       })),
+      pausedDossiers: Array.from(pausedDossiers),
       savedAt: Date.now(),
     };
   }
@@ -240,6 +242,7 @@ class CevDossierPool {
         slot.clickTimestamps = savedSlot.clickTimestamps;
         slot.totalScans = savedSlot.totalScans;
         slot.rateLimitCount = savedSlot.rateLimitCount;
+        slot.lastDailyReset = savedSlot.lastDailyReset;
       }
     }
 
@@ -248,7 +251,10 @@ class CevDossierPool {
       this.currentIndex = saved.currentIndex;
     }
 
-    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex})`);
+    // Restaurer les dossiers en pause
+    saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
+
+    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers.length})`);
   }
 }
 
@@ -513,26 +519,6 @@ async function handleSlotFound(
 export async function startCevDossierLoop(): Promise<void> {
   log("INFO", "═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══");
 
-  // Vider les dossiers en pause au démarrage (pour éviter les pauses persistantes)
-  pausedDossiers.clear();
-  log("INFO", "🔄 Dossiers en pause réinitialisés");
-
-  // Réinitialiser les compteurs de clics CEV dans Convex au démarrage
-  try {
-    const jobs = await getActiveJobs();
-    const cevJobs = jobs.filter((j: any) => 
-      j.destination === "schengen" && 
-      j.hunterConfig?.isActive === true &&
-      (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
-    );
-    for (const job of cevJobs) {
-      resetCevClickCount(job.id);
-    }
-    log("INFO", `🔄 Compteurs de clics CEV réinitialisés pour ${cevJobs.length} application(s)`);
-  } catch (err) {
-    log("WARN", `⚠️ Erreur réinitialisation compteurs CEV: ${err}`);
-  }
-
   // Vérifier si le mode est activé
   const enabled = await getBotConfigValue("cev_dossier_mode");
   if (enabled !== "1") {
@@ -650,12 +636,14 @@ async function runAccountLoop(job: any): Promise<void> {
   
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
-  const savedPoolState = await restorePoolStateFromRedis(redisKey, true); // freshStart=true pour vider les clics
+  const savedPoolState = await restorePoolStateFromRedis(redisKey, false); // freshStart=false pour préserver les clics
   let savedScanCount = 0;
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}`);
+    // Restaurer les dossiers en pause depuis Redis
+    savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
+    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers.length}`);
   } else {
     log("INFO", "Pas de pool state en Redis — démarrage frais");
   }

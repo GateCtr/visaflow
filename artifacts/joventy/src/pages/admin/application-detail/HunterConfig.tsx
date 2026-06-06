@@ -148,13 +148,13 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         applicationId: appId, embassyUsername: username, embassyPassword: password, isActive: active,
         twoCaptchaApiKey: captchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
         vowintAppId: vowintAppId || undefined, scheduleUrl: scheduleUrl || undefined,
-        rescheduleMode: rescheduleMode || undefined, rescheduleExistingDate: rescheduleDate || undefined, useResidentialProxy: useProxy || undefined,
+        rescheduleMode: rescheduleMode, rescheduleExistingDate: rescheduleDate || undefined, useResidentialProxy: useProxy,
         accountRole: accountRole || undefined, currentAppointmentDate: currentApptDate || undefined,
         maxLoginsPerDay: maxLogins ? Number(maxLogins) : undefined, rushWindows: rushWindows || undefined,
-        blindBookingEnabled: blindBooking || undefined, slotPriorityDates: priorityDates || undefined,
+        blindBookingEnabled: blindBooking, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy || undefined,
+        cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
