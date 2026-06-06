@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-06-06T11:31:07.409Z",
+  "results": [
+    {
+      "strategy": "Stealth Browser",
+      "success": true,
+      "timeMs": 5148,
+      "details": "Accès autorisé"
+    },
+    {
+      "strategy": "Cookie Manuel",
+      "success": false,
+      "timeMs": 2466,
+      "details": "Cookie expiré ou invalide"
+    },
+    {
+      "strategy": "Session Persistence",
+      "success": true,
+      "timeMs": 6541,
+      "details": "Session réutilisée avec succès"
+    },
+    {
+      "strategy": "User-Agent Rotation",
+      "success": true,
+      "timeMs": 4771,
+      "details": "UA fonctionnel: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb"
+    },
+    {
+      "strategy": "Timing Strategy",
+      "success": true,
+      "timeMs": 5378,
+      "details": "Délai fonctionnel: 0ms"
+    },
+    {
+      "strategy": "Referer Strategy",
+      "success": true,
+      "timeMs": 6698,
+      "details": "Navigation avec référent réussie"
+    },
+    {
+      "strategy": "Stealth + Cookie",
+      "success": true,
+      "timeMs": 4509,
+      "details": "Combinaison réussie"
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "successful": 6,
+    "failed": 1,
+    "bestStrategy": "Stealth + Cookie"
+  }
+}

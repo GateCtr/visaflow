@@ -17,8 +17,8 @@ const STEPS = [
     icon: Search,
     color: "bg-violet-100 text-violet-600",
     number: "02",
-    title: "Le bot chasse",
-    desc: "Notre bot surveille les portails officiels 24h/24 pour vous.",
+    title: "Le service chasse",
+    desc: "Notre service surveille les portails officiels 24h/24 pour vous.",
   },
   {
     icon: CheckCircle2,

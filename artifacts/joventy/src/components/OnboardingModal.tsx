@@ -71,14 +71,14 @@ const STEPS = [
     icon: Search,
     color: "bg-indigo-600",
     iconColor: "text-white",
-    tag: "AUTOMATISATION",
-    title: "Notre bot chasse\nvotre créneau 24/7",
+    tag: "SERVICE",
+    title: "Notre service chasse\nvotre créneau 24/7",
     description:
-      "Une fois votre dossier créé, notre bot surveille en continu les portails officiels pour saisir un rendez-vous dès qu'il est disponible.",
+      "Une fois votre dossier créé, notre service surveille en continu les portails officiels pour saisir un rendez-vous dès qu'il est disponible.",
     visual: (
       <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-white/70 font-medium">Bot actif</span>
+          <span className="text-xs text-white/70 font-medium">Service actif</span>
           <span className="flex items-center gap-1.5 text-[10px] text-green-300 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             En ligne

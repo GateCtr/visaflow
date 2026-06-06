@@ -24,14 +24,13 @@
       "httpOnly": true,
       "secure": true,
       "sameSite": "None",
-      "source": "manual",
+      "source": "automatic",
       "validFor": [
-        "citaconsular.es",
-        "www.citaconsular.es"
+        ".citaconsular.es"
       ],
-      "capturedAt": 1778473229659
+      "capturedAt": 1780746651098
     }
   ],
-  "lastUpdated": 1778473229659,
+  "lastUpdated": 1780746651098,
   "version": 1
 }
