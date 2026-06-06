@@ -38,7 +38,6 @@ export const setHunterConfig = mutation({
     slotDateDeadline: v.optional(v.string()),
     // CEV / Schengen
     vowintAppId: v.optional(v.string()),
-    cevCountry: v.optional(v.string()),
     // Mode reporter USA
     rescheduleMode: v.optional(v.boolean()),
     rescheduleExistingDate: v.optional(v.string()),
@@ -54,6 +53,10 @@ export const setHunterConfig = mutation({
     maxMonthsToScan: v.optional(v.number()),
     nightModeEnabled: v.optional(v.boolean()),
     preferredProxy: v.optional(v.string()),
+    // CEV Dossier Loop v3 - Multi-comptes
+    cevDossierPool: v.optional(v.string()),
+    cevUseProxy: v.optional(v.boolean()),
+    cevScanIntervalSec: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -72,7 +75,6 @@ export const setHunterConfig = mutation({
       slotDateFrom?: string; 
       slotDateDeadline?: string; 
       vowintAppId?: string; 
-      cevCountry?: string; 
       cevClickCount?: number; 
       cevClickWindowStart?: number;
       // V3 Chasseur fields
@@ -85,6 +87,10 @@ export const setHunterConfig = mutation({
       maxMonthsToScan?: number;
       nightModeEnabled?: boolean;
       preferredProxy?: string;
+      // CEV Dossier Loop v3 - Multi-comptes
+      cevDossierPool?: string;
+      cevUseProxy?: boolean;
+      cevScanIntervalSec?: number;
     } }).hunterConfig;
 
     const existingFull = existing as (typeof existing & {
@@ -107,7 +113,6 @@ export const setHunterConfig = mutation({
         checkCount: existing?.checkCount ?? 0,
         lastResult: existing?.lastResult,
         vowintAppId: args.vowintAppId || existing?.vowintAppId,
-        cevCountry: args.cevCountry || existing?.cevCountry,
         cevClickCount: existing?.cevClickCount,
         cevClickWindowStart: existing?.cevClickWindowStart,
         // Préserver la session CEV active — ne pas l'écraser lors des mises à jour admin
@@ -131,6 +136,10 @@ export const setHunterConfig = mutation({
         maxMonthsToScan: args.maxMonthsToScan ?? existing?.maxMonthsToScan ?? undefined,
         nightModeEnabled: args.nightModeEnabled ?? existing?.nightModeEnabled ?? undefined,
         preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
+        // CEV Dossier Loop v3 - Multi-comptes
+        cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
+        cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
+        cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
       },
       updatedAt: Date.now(),
     });
@@ -617,7 +626,7 @@ export const consumeOtpCode = internalMutation({
   },
 });
 
-export const checkTwoCaptchaBalance = action({
+export const checkTwoCaptchaBalance: ReturnType<typeof action> = action({
   args: { applicationId: v.id("applications") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

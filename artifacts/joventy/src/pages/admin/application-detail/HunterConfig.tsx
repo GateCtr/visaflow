@@ -61,13 +61,15 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const setHunterConfig = useMutation(api.hunter.setHunterConfig);
   const resetHunterConfig = useMutation(api.hunter.resetHunterConfig);
   const setBotConfig = useMutation(api.hunter.setBotConfig);
-  const checkCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
+  const checkTwoCaptchaBalance = useAction(api.hunter.checkTwoCaptchaBalance);
+  const checkCapsolverBalance = useAction(api.hunter.checkCapsolverBalanceRaw);
+  const checkAntiCaptchaBalance = useAction(api.hunter.checkAntiCaptchaBalanceRaw);
   const assignVisaClass = useMutation(api.applications.assignVisaClass);
 
   // ── State ──
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [twoCaptchaKey, setTwoCaptchaKey] = useState("");
+  const [captchaKey, setCaptchaKey] = useState("");
   const [slotDateFrom, setSlotDateFrom] = useState("");
   const [slotDateDeadline, setSlotDateDeadline] = useState("");
   const [vowintAppId, setVowintAppId] = useState("");
@@ -107,7 +109,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setUsername(hc.embassyUsername ?? "");
       setPassword(hc.embassyPassword ?? "");
       setActive(hc.isActive ?? false);
-      setTwoCaptchaKey(hc.twoCaptchaApiKey ?? "");
+      setCaptchaKey(hc.twoCaptchaApiKey ?? "");
       setSlotDateFrom(hc.slotDateFrom ?? "");
       setSlotDateDeadline(hc.slotDateDeadline ?? "");
       setVowintAppId(hc.vowintAppId ?? "");
@@ -144,7 +146,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
     try {
       await setHunterConfig({
         applicationId: appId, embassyUsername: username, embassyPassword: password, isActive: active,
-        twoCaptchaApiKey: twoCaptchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
+        twoCaptchaApiKey: captchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
         vowintAppId: vowintAppId || undefined, scheduleUrl: scheduleUrl || undefined,
         rescheduleMode: rescheduleMode || undefined, rescheduleExistingDate: rescheduleDate || undefined, useResidentialProxy: useProxy || undefined,
         accountRole: accountRole || undefined, currentAppointmentDate: currentApptDate || undefined,
@@ -223,17 +225,43 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           </Field>
         </div>
 
-        {/* 2captcha */}
-        <Field label="Clé 2captcha">
-          <div className="flex gap-2">
-            <Input value={twoCaptchaKey} onChange={(e) => { setTwoCaptchaKey(e.target.value); setCaptchaBalance(null); }} placeholder="Optionnel" className="h-9 bg-slate-50/80 text-sm font-mono flex-1" />
-            <Button size="sm" variant="outline" className="h-9 text-xs" disabled={captchaChecking}
-              onClick={async () => { setCaptchaChecking(true); try { const r = await checkCaptchaBalance({ applicationId: appId }); setCaptchaBalance(r.balance); } catch {} finally { setCaptchaChecking(false); } }}>
-              {captchaChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : "Solde"}
-            </Button>
-          </div>
-          {captchaBalance !== null && <p className={`text-xs mt-1 font-medium ${captchaBalance >= 5 ? "text-emerald-600" : captchaBalance >= 1 ? "text-amber-600" : "text-red-600"}`}>${captchaBalance.toFixed(2)}</p>}
-        </Field>
+        {/* Captcha service - destination-specific */}
+        {destination === "usa" && (
+          <Field label="Clé 2captcha">
+            <div className="flex gap-2">
+              <Input value={captchaKey} onChange={(e) => { setCaptchaKey(e.target.value); setCaptchaBalance(null); }} placeholder="Optionnel" className="h-9 bg-slate-50/80 text-sm font-mono flex-1" />
+              <Button size="sm" variant="outline" className="h-9 text-xs" disabled={captchaChecking}
+                onClick={async () => { setCaptchaChecking(true); try { const r = await checkTwoCaptchaBalance({ applicationId: appId }); setCaptchaBalance(r.balance); } catch {} finally { setCaptchaChecking(false); } }}>
+                {captchaChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : "Solde"}
+              </Button>
+            </div>
+            {captchaBalance !== null && <p className={`text-xs mt-1 font-medium ${captchaBalance >= 5 ? "text-emerald-600" : captchaBalance >= 1 ? "text-amber-600" : "text-red-600"}`}>${captchaBalance.toFixed(2)}</p>}
+          </Field>
+        )}
+        {destination === "schengen" && (
+          <Field label="Clé Anti-Captcha">
+            <div className="flex gap-2">
+              <Input value={captchaKey} onChange={(e) => { setCaptchaKey(e.target.value); setCaptchaBalance(null); }} placeholder="Optionnel" className="h-9 bg-slate-50/80 text-sm font-mono flex-1" />
+              <Button size="sm" variant="outline" className="h-9 text-xs" disabled={captchaChecking}
+                onClick={async () => { setCaptchaChecking(true); try { const r = await checkAntiCaptchaBalance({ apiKey: captchaKey }); setCaptchaBalance(r.balance); } catch {} finally { setCaptchaChecking(false); } }}>
+                {captchaChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : "Solde"}
+              </Button>
+            </div>
+            {captchaBalance !== null && <p className={`text-xs mt-1 font-medium ${captchaBalance >= 5 ? "text-emerald-600" : captchaBalance >= 1 ? "text-amber-600" : "text-red-600"}`}>${captchaBalance.toFixed(2)}</p>}
+          </Field>
+        )}
+        {destination === "spain" && (
+          <Field label="Clé CapSolver">
+            <div className="flex gap-2">
+              <Input value={captchaKey} onChange={(e) => { setCaptchaKey(e.target.value); setCaptchaBalance(null); }} placeholder="Optionnel" className="h-9 bg-slate-50/80 text-sm font-mono flex-1" />
+              <Button size="sm" variant="outline" className="h-9 text-xs" disabled={captchaChecking}
+                onClick={async () => { setCaptchaChecking(true); try { const r = await checkCapsolverBalance({ apiKey: captchaKey }); setCaptchaBalance(r.balance); } catch {} finally { setCaptchaChecking(false); } }}>
+                {captchaChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : "Solde"}
+              </Button>
+            </div>
+            {captchaBalance !== null && <p className={`text-xs mt-1 font-medium ${captchaBalance >= 5 ? "text-emerald-600" : captchaBalance >= 1 ? "text-amber-600" : "text-red-600"}`}>${captchaBalance.toFixed(2)}</p>}
+          </Field>
+        )}
 
         {/* Date range */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
