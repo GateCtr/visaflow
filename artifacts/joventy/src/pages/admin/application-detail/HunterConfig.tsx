@@ -71,7 +71,6 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [slotDateFrom, setSlotDateFrom] = useState("");
   const [slotDateDeadline, setSlotDateDeadline] = useState("");
   const [vowintAppId, setVowintAppId] = useState("");
-  const [cevCountry, setCevCountry] = useState("");
   const [scheduleUrl, setScheduleUrl] = useState("");
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -112,7 +111,6 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setSlotDateFrom(hc.slotDateFrom ?? "");
       setSlotDateDeadline(hc.slotDateDeadline ?? "");
       setVowintAppId(hc.vowintAppId ?? "");
-      setCevCountry(hc.cevCountry ?? "");
       setScheduleUrl(hc.scheduleUrl ?? "");
       setRescheduleMode(hc.rescheduleMode ?? false);
       setRescheduleDate(hc.rescheduleExistingDate ?? "");
@@ -147,7 +145,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       await setHunterConfig({
         applicationId: appId, embassyUsername: username, embassyPassword: password, isActive: active,
         twoCaptchaApiKey: twoCaptchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
-        vowintAppId: vowintAppId || undefined, cevCountry: cevCountry || undefined, scheduleUrl: scheduleUrl || undefined,
+        vowintAppId: vowintAppId || undefined, scheduleUrl: scheduleUrl || undefined,
         rescheduleMode: rescheduleMode || undefined, rescheduleExistingDate: rescheduleDate || undefined, useResidentialProxy: useProxy || undefined,
         accountRole: accountRole || undefined, currentAppointmentDate: currentApptDate || undefined,
         maxLoginsPerDay: maxLogins ? Number(maxLogins) : undefined, rushWindows: rushWindows || undefined,
