@@ -38,13 +38,13 @@ interface InvoiceDocumentProps {
 function StatusBadge({ paid }: { paid: boolean }) {
   if (paid) {
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "4px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 700, background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", whiteSpace: "nowrap" }}>
+      <span style={{ display: "inline-block", height: "24px", lineHeight: "24px", padding: "0 12px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", whiteSpace: "nowrap", textAlign: "center" }}>
         ✓ PAYÉ
       </span>
     );
   }
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "4px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", whiteSpace: "nowrap" }}>
+    <span style={{ display: "inline-block", height: "24px", lineHeight: "24px", padding: "0 12px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", whiteSpace: "nowrap", textAlign: "center" }}>
       ⏳ EN ATTENTE
     </span>
   );
@@ -53,24 +53,59 @@ function StatusBadge({ paid }: { paid: boolean }) {
 function StatusGlobal({ status }: { status: string }) {
   if (status === "completed") {
     return (
-      <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-emerald-50 border border-emerald-200">
-        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
-        <span className="text-xs sm:text-sm font-bold text-emerald-700 leading-tight">DOSSIER CLÔTURÉ — PAYÉ INTÉGRALEMENT</span>
+      <div style={{ padding: "12px 16px", borderRadius: "12px", background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
+        <table cellPadding="0" cellSpacing="0" style={{ width: "100%" }}>
+          <tr>
+            <td style={{ width: "24px", verticalAlign: "middle" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </td>
+            <td style={{ verticalAlign: "middle", paddingLeft: "8px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#047857", lineHeight: "1.4" }}>DOSSIER CLÔTURÉ — PAYÉ INTÉGRALEMENT</span>
+            </td>
+          </tr>
+        </table>
       </div>
     );
   }
   if (status === "rejected") {
     return (
-      <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-red-50 border border-red-200">
-        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" />
-        <span className="text-xs sm:text-sm font-bold text-red-700 leading-tight">DOSSIER REJETÉ</span>
+      <div style={{ padding: "12px 16px", borderRadius: "12px", background: "#fef2f2", border: "1px solid #fecaca" }}>
+        <table cellPadding="0" cellSpacing="0" style={{ width: "100%" }}>
+          <tr>
+            <td style={{ width: "24px", verticalAlign: "middle" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </td>
+            <td style={{ verticalAlign: "middle", paddingLeft: "8px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#b91c1c", lineHeight: "1.4" }}>DOSSIER REJETÉ</span>
+            </td>
+          </tr>
+        </table>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-amber-50 border border-amber-200">
-      <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0" />
-      <span className="text-xs sm:text-sm font-bold text-amber-700 leading-tight">PAIEMENT PARTIEL — SOLDE EN ATTENTE</span>
+    <div style={{ padding: "12px 16px", borderRadius: "12px", background: "#fffbeb", border: "1px solid #fde68a" }}>
+      <table cellPadding="0" cellSpacing="0" style={{ width: "100%" }}>
+        <tr>
+          <td style={{ width: "24px", verticalAlign: "middle" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </td>
+          <td style={{ verticalAlign: "middle", paddingLeft: "8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#b45309", lineHeight: "1.4" }}>PAIEMENT PARTIEL — SOLDE EN ATTENTE</span>
+          </td>
+        </tr>
+      </table>
     </div>
   );
 }
@@ -529,8 +564,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
             </div>
             <div className="text-right flex-shrink-0">
               <div
-                className="text-[10px] sm:text-xs font-bold tracking-widest uppercase px-2.5 sm:px-3 py-1 rounded-lg mb-2 inline-block"
-                style={{ background: "#F59E0B", color: "#0B111E" }}
+                style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", padding: "6px 12px", borderRadius: "8px", marginBottom: "8px", display: "inline-block", background: "#F59E0B", color: "#0B111E", lineHeight: "1.2" }}
               >
                 {type === "recu" ? "REÇU" : "FACTURE"}
               </div>
