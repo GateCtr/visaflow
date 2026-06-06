@@ -531,7 +531,7 @@ export async function startCevDossierLoop(): Promise<void> {
   const cevJobs = jobs.filter((j: any) => 
     j.destination === "schengen" && 
     j.hunterConfig?.isActive === true &&
-    (true)
+    (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
   );
 
   if (cevJobs.length === 0) {
@@ -543,7 +543,7 @@ export async function startCevDossierLoop(): Promise<void> {
       const checkCevJobs = checkJobs.filter((j: any) => 
         j.destination === "schengen" && 
         j.hunterConfig?.isActive === true &&
-        (true)
+        (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
       );
       if (checkCevJobs.length > 0) {
         log("INFO", `Applications CEV trouvées: ${checkCevJobs.length}`);
@@ -630,9 +630,11 @@ async function runAccountLoop(job: any): Promise<void> {
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
   const savedPoolState = await restorePoolStateFromRedis(redisKey);
+  let savedScanCount = 0;
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
-    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}`);
+    savedScanCount = savedPoolState.scanCount || 0;
+    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}`);
   } else {
     log("INFO", "Pas de pool state en Redis — démarrage frais");
   }
@@ -678,7 +680,7 @@ async function runAccountLoop(job: any): Promise<void> {
 
   // ─── Boucle principale de scan pour ce compte ─────────────────────────────
   const state: LoopState = {
-    scanCount: 0,
+    scanCount: savedScanCount,
     slotsFound: 0,
     rateLimits: 0,
     errors: 0,
@@ -728,6 +730,30 @@ async function runAccountLoop(job: any): Promise<void> {
           log("INFO", "🛑 Signal d'arrêt reçu (cev_session_stop=1) → arrêt gracieux");
           state.isRunning = false;
           break;
+        }
+      }
+
+      // Récupérer les credentials siphonnés depuis Convex (mise à jour périodique)
+      if (state.scanCount % 10 === 0) {
+        try {
+          const newCreds = await getCevCredentials();
+          if (newCreds?.siphonedF5CookieValue) {
+            siphonedCreds = {
+              f5CookieValue: newCreds.siphonedF5CookieValue,
+              f5CookieName: newCreds.siphonedF5CookieName,
+              aspNetSessionId: newCreds.siphonedAspNetSessionId,
+              userAgent: newCreds.siphonedUserAgent,
+              validUntil: newCreds.siphonedValidUntil,
+              siphonedAt: newCreds.siphonedAt,
+            };
+            log("INFO", `  🔄 Cookies siphonnés actualisés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+            
+            if (siphonedCreds.userAgent && siphonedCreds.userAgent !== getCevExternalUserAgent()) {
+              setCevExternalUserAgent(siphonedCreds.userAgent);
+            }
+          }
+        } catch (err) {
+          log("WARN", `  ⚠️ Erreur récupération credentials siphonnés: ${err}`);
         }
       }
 
@@ -806,19 +832,47 @@ async function runAccountLoop(job: any): Promise<void> {
         case "rate_limited":
           state.rateLimits++;
           recordScan(uniqueJobId, dossier.vowintRef);
-          recordRateLimit(uniqueJobId, dossier.vowintRef);
+          recordRateLimit(uniqueJobId, dossier.vowintRef, "CEV 5 clics/h");
           localPool.markRateLimited(dossier);
+          // Le rate-limit vient du serveur → session grillée, reset le compteur
+          globalSessionClicks = 0;
+          log("WARN", `  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
           break;
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
+          // Invalider le cache de la clé Anti-Captcha pour que le prochain scan
+          // relise process.env ET botConfig Convex — corrige anticaptcha_not_configured en cascade
+          invalidateAnticaptchaCache();
           break;
         case "no_slot":
+          log("INFO", `  — Pas de créneau`);
           recordScan(uniqueJobId, dossier.vowintRef);
-          // Clic réussi — enregistrer
+          // Clic réussi — enregistrer (déjà fait dans performScan, mais on enregistre ici aussi pour comptage pool)
           localPool.recordClick(dossier);
           globalSessionClicks++;
+          // Re-login préventif après MAX_CLICKS_PER_SESSION clics GLOBAUX
+          if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
+            log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
+            invalidateVowintCache(vowintEmail);
+            globalSessionClicks = 0;
+            recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
+          }
           break;
+      }
+
+      // Stats périodiques
+      if (state.scanCount % 25 === 0) {
+        const uptimeMin = Math.round((Date.now() - state.startedAt) / 60_000);
+        const scansPerHour = uptimeMin > 0 ? Math.round(state.scanCount / (uptimeMin / 60)) : 0;
+        const poolStats = localPool.getStats();
+        log("INFO", `📊 Stats: ${state.scanCount} scans en ${uptimeMin}min (${scansPerHour}/h) | Slots: ${state.slotsFound} | RL: ${state.rateLimits} | Pool: ${poolStats.available}/${poolStats.total}`);
+        botLog({
+          applicationId: logApplicationId,
+          step: "cev_dossier_v3_stats",
+          status: "ok",
+          data: { scanCount: state.scanCount, slotsFound: state.slotsFound, rateLimits: state.rateLimits, scansPerHour, uptimeMin },
+        });
       }
 
       // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
@@ -848,7 +902,7 @@ async function runAccountLoop(job: any): Promise<void> {
 
 /** Expose l'�tat pour monitoring */
 export function getCevDossierState() {
-  return { state: null, pool: null };
+  return { ...state, pool: null };
 }
 
 

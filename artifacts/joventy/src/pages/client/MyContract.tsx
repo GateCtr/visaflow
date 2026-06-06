@@ -180,7 +180,72 @@ import { jsPDF } from "jspdf";
 
 const oklchCache = new Map<string, string>();
 
-function convertOklchValue(oklchStr: string, originalGetComputedStyle: typeof window.getComputedStyle): string {
+/**
+ * Convertit oklch en rgb directement (sans dépendre du navigateur)
+ * Basé sur la spécification CSS Color Level 4
+ */
+function oklchToRgb(oklch: string): string {
+  // Parser oklch(l c h / alpha)
+  const match = oklch.match(/oklch\s*\(\s*([\d.]+%?)\s+([\d.]+%?)\s+([\d.]+%?)(?:\s*\/\s*([\d.]+%?))?\s*\)/i);
+  if (!match) return "rgb(0,0,0)";
+
+  let l = parseFloat(match[1]);
+  let c = parseFloat(match[2]);
+  let h = parseFloat(match[3]);
+  const alpha = match[4] ? parseFloat(match[4]) : 1;
+
+  // Convertir les pourcentages en valeurs décimales
+  if (match[1].includes("%")) l /= 100;
+  if (match[2].includes("%")) c /= 100;
+  if (match[3].includes("%")) h /= 100;
+
+  // Convertir oklch en oklab
+  const hRad = (h * Math.PI) / 180;
+  const a = c * Math.cos(hRad);
+  const b = c * Math.sin(hRad);
+
+  // Convertir oklab en XYZ (D65)
+  const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l__ = l_ * l_ * l_;
+  const m__ = m_ * m_ * m_;
+  const s__ = s_ * s_ * s_;
+
+  const x = +4.0767416621 * l__ - 3.3077335964 * m__ + 0.2309699292 * s__;
+  const y = -1.2684380046 * l__ + 2.6097574011 * m__ - 0.3413193965 * s__;
+  const z = -0.0041960863 * l__ - 0.7034186147 * m__ + 1.7076147010 * s__;
+
+  // Convertir XYZ en sRGB (D65)
+  const r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
+  const g = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z;
+  const b_ = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
+
+  // Gamma correction sRGB
+  const toLinear = (v: number) => v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+  const toGamma = (v: number) => v > 0.0031308 ? 1.055 * Math.pow(v, 1 / 2.4) - 0.055 : 12.92 * v;
+
+  const rLinear = toLinear(r);
+  const gLinear = toLinear(g);
+  const bLinear = toLinear(b_);
+
+  const rGamma = toGamma(rLinear);
+  const gGamma = toGamma(gLinear);
+  const bGamma = toGamma(bLinear);
+
+  // Clip et convertir en 0-255
+  const r255 = Math.max(0, Math.min(255, Math.round(rGamma * 255)));
+  const g255 = Math.max(0, Math.min(255, Math.round(gGamma * 255)));
+  const b255 = Math.max(0, Math.min(255, Math.round(bGamma * 255)));
+
+  if (alpha < 1) {
+    return `rgba(${r255}, ${g255}, ${b255}, ${alpha})`;
+  }
+  return `rgb(${r255}, ${g255}, ${b255})`;
+}
+
+function convertOklchValue(oklchStr: string): string {
   const oklchRe = /oklch\([^)]*\)/g;
   return oklchStr.replace(oklchRe, (m) => {
     const trimmed = m.trim();
@@ -188,12 +253,7 @@ function convertOklchValue(oklchStr: string, originalGetComputedStyle: typeof wi
       return oklchCache.get(trimmed)!;
     }
     try {
-      const tmp = document.createElement("div");
-      tmp.style.color = trimmed;
-      document.documentElement.appendChild(tmp);
-      const rgb = originalGetComputedStyle(tmp).color;
-      document.documentElement.removeChild(tmp);
-      const result = rgb && rgb !== "rgba(0, 0, 0, 0)" ? rgb : "rgb(0,0,0)";
+      const result = oklchToRgb(trimmed);
       oklchCache.set(trimmed, result);
       return result;
     } catch {
@@ -206,7 +266,7 @@ function convertOklchValue(oklchStr: string, originalGetComputedStyle: typeof wi
  * Pré-traite toutes les règles CSS pour convertir oklch → rgb.
  * html2canvas lit parfois les CSS directement sans passer par getComputedStyle.
  */
-function patchAllCssRules(originalGetComputedStyle: typeof window.getComputedStyle): void {
+function patchAllCssRules(): void {
   try {
     const sheets = Array.from(document.styleSheets);
     for (const sheet of sheets) {
@@ -220,7 +280,7 @@ function patchAllCssRules(originalGetComputedStyle: typeof window.getComputedSty
               const prop = styleRule.style[i];
               const val = styleRule.style.getPropertyValue(prop);
               if (val && val.includes("oklch")) {
-                const converted = convertOklchValue(val, originalGetComputedStyle);
+                const converted = convertOklchValue(val);
                 styleRule.style.setProperty(prop, converted);
               }
             }
@@ -296,7 +356,7 @@ export default function MyContract() {
     const originalGetComputedStyle = window.getComputedStyle;
 
     // Pré-traite toutes les règles CSS pour convertir oklch → rgb
-    patchAllCssRules(originalGetComputedStyle);
+    patchAllCssRules();
 
     // Proxy getComputedStyle pour intercepter et patcher les couleurs oklch retournées à html2canvas
     window.getComputedStyle = (elt, pseudoElt) => {
@@ -307,20 +367,20 @@ export default function MyContract() {
             return (propertyName: string) => {
               const val = target.getPropertyValue(propertyName);
               if (val && val.includes("oklch")) {
-                return convertOklchValue(val, originalGetComputedStyle);
+                return convertOklchValue(val);
               }
               return val;
             };
           }
           const val = (target as any)[prop];
           if (typeof val === "string" && val.includes("oklch")) {
-            return convertOklchValue(val, originalGetComputedStyle);
+            return convertOklchValue(val);
           }
           if (typeof val === "function") {
             return val.bind(target);
           }
           return val;
-        }
+        },
       });
     };
 

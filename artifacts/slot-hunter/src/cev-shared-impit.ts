@@ -62,10 +62,10 @@ export async function shouldUseProxy(): Promise<boolean> {
       return true;
     }
   } catch (error) {
-    // En cas d'erreur (Convex inaccessible), utiliser la valeur cache ou true par défaut
+    // En cas d'erreur (Convex inaccessible), utiliser la valeur cache ou false par défaut
     console.warn(`[CEV-PROXY-CONFIG] ⚠️ Erreur lecture botConfig cev_use_proxy: ${error}`);
     if (_cevUseProxyCache === null) {
-      _cevUseProxyCache = true; // Par défaut, utiliser le proxy
+      _cevUseProxyCache = false; // Par défaut, NE PAS utiliser le proxy si Convex inaccessible
     }
     return _cevUseProxyCache;
   }
