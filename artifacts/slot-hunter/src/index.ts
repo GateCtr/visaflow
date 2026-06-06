@@ -95,53 +95,31 @@ async function main(): Promise<void> {
     }
   } catch { /* Convex inaccessible — fallback normal */ }
 
-  // ─── SESSION WORKER (F5 Cookie Siphon) : lancer si mode CEV actif
+  // ─── SESSION WORKER (F5 Cookie Siphon) : DESACTIVÉ, capturé par chaque compte!
   if (cevDossierMode || cevStealthMode) {
-    // Démarrer le sessionWorker et ATTENDRE qu'il capture les cookies
-    log("INFO", "═══ DÉMARRAGE SESSION WORKER (capture cookies) ═══");
-    log("INFO", "   → Le worker va capturer les cookies F5/ASP.NET");
-    log("INFO", "   → ATTENTE: Les dossiers ne démarrent qu'après capture COMPLÈTE");
+    // PAS DE SESSION WORKER — chaque compte capture ses propres cookies!
+    log("INFO", "═══ PAS DE SESSION WORKER (cookies par compte) ═══");
+    log("INFO", "   → Chaque compte capture ses propres cookies F5");
+    log("INFO", "   → Cookies stockés dans hunterConfig de chaque application");
     
-    // Créer une promesse pour synchroniser
-    const sessionWorkerPromise = startSessionWorker().catch(err => {
-      console.error("[SESSION-WORKER] Crash fatal:", err);
-      return null;
-    });
-    
-    // Attendre que le sessionWorker ait terminé SA PREMIÈRE CAPTURE
-    // (il tourne en background après, mais on attend la première)
-    setTimeout(async () => {
-      try {
-        await sessionWorkerPromise;
-        log("INFO", "✅ SessionWorker: première capture TERMINÉE");
-        log("INFO", "   → Cookies injectés dans Convex");
-        log("INFO", "   → Dossiers peuvent démarrer MAINTENANT");
-      } catch (err) {
-        log("ERROR", "❌ SessionWorker échoué, mais dossiers démarrent quand même");
-      }
-      
-      if (cevDossierMode) {
-        log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF (cookies capturés) ═══");
-        log("INFO", "   → Multi-comptes via Applications ");
-        log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
-        log("INFO", "   → Cookies frais injectés dans Convex");
-        log("INFO", "   → Rafraîchissement auto optimisé: toutes les 45min");
-        log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
-        startCevDossierLoop().catch((err) => {
-          console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
-        });
-      } else if (cevStealthMode) {
-        log("INFO", "═══ CEV STEALTH MODE v2 ACTIF (cookies capturés) ═══");
-        log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
-        log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
-        log("INFO", "   → Cookies frais injectés dans Convex");
-        log("INFO", "   → Rafraîchissement auto optimisé: toutes les 45min");
-        log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
-        startCevStealthLoop().catch((err) => {
-          console.error("[CEV-STEALTH] Boucle crashée:", err);
-        });
-      }
-    }, 60000); // 60 secondes d'attente (augmenté pour capture complète)
+    if (cevDossierMode) {
+      log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF ═══");
+      log("INFO", "   → Multi-comptes via Applications ");
+      log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
+      log("INFO", "   → Cookies frais capturés par chaque compte, toutes les 30min");
+      log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
+      startCevDossierLoop().catch((err) => {
+        console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
+      });
+    } else if (cevStealthMode) {
+      log("INFO", "═══ CEV STEALTH MODE v2 ACTIF ═══");
+      log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
+      log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
+      log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
+      startCevStealthLoop().catch((err) => {
+        console.error("[CEV-STEALTH] Boucle crashée:", err);
+      });
+    }
   } else {
     // Mode classique (pas de sessionWorker)
     startCevSetupLoop().catch((err) => {

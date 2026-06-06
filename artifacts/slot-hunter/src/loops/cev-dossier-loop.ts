@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CEV Dossier Loop v3 — Pool de DOSSIERS (pas d'IPs)
  *
  * STRATÉGIE :
@@ -36,6 +36,9 @@ import {
   setCevExternalUserAgent,
   getCevExternalUserAgent,
   shouldUseProxy,
+  getCevBrowserHeaders,
+  getCevSessionUa,
+  cevImpitFetch,
 } from "../cev-shared-impit.js";
 import {
   getPendingCevSetups,
@@ -47,6 +50,7 @@ import {
   getBotConfigValue,
   getActiveJobs,
   resetCevClickCount,
+  injectApplicationF5Cookies,
 } from "../convexClient.js";
 import {
   initCevRedis,
@@ -55,6 +59,113 @@ import {
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
+import { createLogger } from "../logger.js";
+
+// ─── Fonction pour capturer le cookie F5 (TS01) ──────────────────────────────
+
+async function captureF5CookieForAccount(
+  accountId: string, 
+  logger: ReturnType<typeof createLogger>
+): Promise<{ f5CookieValue: string, f5CookieName: string, userAgent: string } | null> {
+  let puppeteer: any;
+  try {
+    puppeteer = await import("puppeteer-extra");
+    const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
+    puppeteer.default.use(StealthPlugin());
+  } catch (err) {
+    logger.error(`puppeteer-extra or puppeteer-extra-plugin-stealth not installed: ${err}`);
+    return null;
+  }
+
+  const launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+  ];
+
+  const PROXY_URL = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
+  let proxyHost = "";
+  let proxyPort = "";
+
+  if (PROXY_URL) {
+    try {
+      const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
+      proxyHost = parsed.hostname;
+      proxyPort = parsed.port;
+      launchArgs.push(`--proxy-server=${parsed.hostname}:${parsed.port}`);
+      logger.info(`Proxy configuré pour capture cookie F5: ${proxyHost}:${proxyPort}`);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      logger.warn(`Erreur config proxy: ${errMsg}`);
+    }
+  }
+
+  let browser: any = null;
+
+  try {
+    logger.info(`Lancement du navigateur pour capture cookie F5...`);
+    browser = await puppeteer.default.launch({
+      headless: "new",
+      args: launchArgs,
+    });
+    logger.info("Navigateur lancé avec succès");
+
+    const page = await browser.newPage();
+
+    if (PROXY_URL) {
+      try {
+        const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
+        if (parsed.username) {
+          await page.authenticate({
+            username: decodeURIComponent(parsed.username),
+            password: decodeURIComponent(parsed.password),
+          });
+        }
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        logger.warn(`Erreur auth proxy: ${errMsg}`);
+      }
+    }
+
+    const userAgent = await browser.userAgent();
+
+    // Navigate to VOWINT homepage
+    const VOWINT_URL = "https://visaonweb.diplomatie.be";
+    await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
+    const waitVowintSec = 8 + Math.random() * 4;
+    await new Promise(r => setTimeout(r, waitVowintSec * 1000));
+
+    // Get cookies
+    const cookies = await page.cookies();
+    logger.info(`${cookies.length} cookie(s) capturés: ${cookies.map((c: any) => c.name).join(", ")}`);
+
+    const f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
+    if (!f5Cookie) {
+      logger.warn(`F5 cookie (TS*) introuvable!`);
+      return null;
+    }
+
+    logger.success(`✅ Cookie F5 capturé: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}...`);
+    return { 
+      f5CookieValue: f5Cookie.value, 
+      f5CookieName: f5Cookie.name,
+      userAgent: userAgent,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`Erreur Puppeteer capture cookie F5: ${msg}`);
+    return null;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        logger.warn(`Erreur fermeture navigateur: ${e}`);
+      }
+    }
+  }
+}
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -86,19 +197,26 @@ interface DossierSlot {
 class CevDossierPool {
   private slots: DossierSlot[] = [];
   private currentIndex = 0;
+  private logger: ReturnType<typeof createLogger>;
+
+  constructor(logger: ReturnType<typeof createLogger>) {
+    this.logger = logger;
+  }
 
   /** Initialise le pool avec les numéros VOWINT */
   initialize(vowintRefs: string[]): void {
+    const now = Date.now();
     this.slots = vowintRefs.map((ref, i) => ({
       index: i,
       vowintRef: ref.trim().toUpperCase(),
       clickTimestamps: [],
       totalScans: 0,
       rateLimitCount: 0,
+      lastDailyReset: now,
     }));
     this.currentIndex = 0;
-    log("INFO", `Pool initialisé: ${this.slots.length} dossiers`);
-    this.slots.forEach((s, i) => log("INFO", `  #${i}: ${s.vowintRef}`));
+    this.logger.info(`Pool initialisé: ${this.slots.length} dossiers`);
+    this.slots.forEach((s, i) => this.logger.info(`  #${i}: ${s.vowintRef}`));
   }
 
   /** Retourne le prochain dossier disponible (quota non épuisé) */
@@ -118,7 +236,7 @@ class CevDossierPool {
       if (slot.clickTimestamps.length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) {
         // Vérifier si le dossier est en pause (slot trouvé précédemment)
         if (pausedDossiers.has(slot.vowintRef)) {
-          log("INFO", `  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
+          this.logger.info(`  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
           continue;
         }
         this.currentIndex = (idx + 1) % this.slots.length;
@@ -129,7 +247,7 @@ class CevDossierPool {
       if (attempts === 0 || this.slots.length <= 3) {
         const oldestClick = slot.clickTimestamps[0];
         const availableInMin = Math.ceil((oldestClick + CLICK_WINDOW_MS - now) / 60_000);
-        log("INFO", `  ⏭️ #${slot.index} ${slot.vowintRef} épuisé (${slot.clickTimestamps.length}/${MAX_CLICKS_PER_DOSSIER_PER_HOUR}) — dispo dans ${availableInMin}min`);
+        this.logger.info(`  ⏭️ #${slot.index} ${slot.vowintRef} épuisé (${slot.clickTimestamps.length}/${MAX_CLICKS_PER_DOSSIER_PER_HOUR}) — dispo dans ${availableInMin}min`);
       }
     }
 
@@ -150,7 +268,7 @@ class CevDossierPool {
       slot.clickTimestamps.push(now);
     }
     slot.rateLimitCount++;
-    log("WARN", `Dossier #${slot.index} ${slot.vowintRef} rate-limité (${slot.rateLimitCount}x)`);
+    this.logger.warn(`Dossier #${slot.index} ${slot.vowintRef} rate-limité (${slot.rateLimitCount}x)`);
   }
 
   /** Temps d'attente avant qu'un dossier soit disponible */
@@ -204,12 +322,12 @@ class CevDossierPool {
         slot.totalScans = 0;
         slot.lastDailyReset = now;
         resetCount++;
-        log("INFO", `📅 Reset quotidien ${slot.vowintRef}: ${oldTotal} scans → 0`);
+        this.logger.info(`📅 Reset quotidien ${slot.vowintRef}: ${oldTotal} scans → 0`);
       }
     }
 
     if (resetCount > 0) {
-      log("INFO", `📅 Reset quotidien terminé: ${resetCount} dossier(s) réinitialisé(s)`);
+      this.logger.info(`📅 Reset quotidien terminé: ${resetCount} dossier(s) réinitialisé(s)`);
     }
   }
 
@@ -235,6 +353,7 @@ class CevDossierPool {
   restoreState(saved: SerializablePoolState): void {
     // Créer un index rapide par vowintRef
     const savedMap = new Map(saved.slots.map(s => [s.vowintRef, s]));
+    const now = Date.now();
 
     for (const slot of this.slots) {
       const savedSlot = savedMap.get(slot.vowintRef);
@@ -242,7 +361,9 @@ class CevDossierPool {
         slot.clickTimestamps = savedSlot.clickTimestamps;
         slot.totalScans = savedSlot.totalScans;
         slot.rateLimitCount = savedSlot.rateLimitCount;
-        slot.lastDailyReset = savedSlot.lastDailyReset;
+        slot.lastDailyReset = savedSlot.lastDailyReset || now;
+      } else {
+        slot.lastDailyReset = now;
       }
     }
 
@@ -256,7 +377,7 @@ class CevDossierPool {
       saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
     }
 
-    log("INFO", `Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers?.length || 0})`);
+    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers?.length || 0})`);
   }
 }
 
@@ -280,17 +401,16 @@ const state: LoopState = {
   startedAt: 0,
 };
 
-const pool = new CevDossierPool();
+// Temporary log function for legacy use
+function log(level: "INFO" | "WARN" | "ERROR", msg: string) {
+  const timestamp = new Date().toISOString().slice(11, 19);
+  console.log(`[${timestamp}] [CEV-DOSSIER-LEGACY] [${level}] ${msg}`);
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
-}
-
-function log(level: "INFO" | "WARN" | "ERROR", msg: string): void {
-  const ts = new Date().toISOString().slice(11, 19);
-  console.log(`[${ts}] [CEV-DOSSIER-v3] [${level}] ${msg}`);
 }
 
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
@@ -314,7 +434,13 @@ async function performScan(
     validUntil?: number;
   },
   _hcaptchaRetry = 0,
+  logger?: ReturnType<typeof createLogger>,
 ): Promise<ScanResult> {
+  const logFn = logger || { 
+    info: (msg: string) => log("INFO", msg), 
+    warn: (msg: string) => log("WARN", msg), 
+    error: (msg: string) => log("ERROR", msg) 
+  };
 
   const result = await setupCevSessionHttp(
     vowintEmail,
@@ -327,7 +453,6 @@ async function performScan(
 
   if (!result.success) {
     if (result.error?.includes("RATE_LIMIT")) {
-      pool.markRateLimited(dossier);
       return { status: "rate_limited" };
     }
     // Retry automatique sur erreurs captcha (HCAPTCHA_FAILED, CAPTCHA_NO_VALID_UNTIL, etc.)
@@ -336,17 +461,16 @@ async function performScan(
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
     if (isCaptchaError && _hcaptchaRetry < 2) {
-      log("WARN", `  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
+      logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
       invalidateAnticaptchaCache();
       await sleep(5_000);
-      return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1);
+      return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
     }
-    log("WARN", `  Erreur setup: ${result.error}`);
+    logFn.warn(`  Erreur setup: ${result.error}`);
     return { status: "error" };
   }
 
   // Clic réussi — enregistrer
-  pool.recordClick(dossier);
   globalSessionClicks++;
 
   if (result.slotsAvailable) {
@@ -397,13 +521,19 @@ async function handleSlotFound(
     userAgent?: string;
     validUntil?: number;
   },
+  logger?: ReturnType<typeof createLogger>,
 ): Promise<void> {
-  log("INFO", `🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
+  const logFn = logger || { 
+    info: (msg: string) => log("INFO", msg), 
+    warn: (msg: string) => log("WARN", msg), 
+    error: (msg: string) => log("ERROR", msg) 
+  };
+  logFn.info(`🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
   state.slotsFound++;
 
   // ── PAUSE immédiate du dossier (ne plus le re-scanner) ──
   pausedDossiers.add(dossier.vowintRef);
-  log("INFO", `  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE`);
+  logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE`);
 
   botLog({
     applicationId,
@@ -426,7 +556,7 @@ async function handleSlotFound(
   const integrationUrl = existingIntegrationUrl;
 
   if (sessionCookie && integrationUrl) {
-    log("INFO", `  🔬 Discovery avec session existante (pas de re-login)...`);
+    logFn.info(`  🔬 Discovery avec session existante (pas de re-login)...`);
 
     const discovery = await discoverSlotBookingFlow(
       sessionCookie,
@@ -436,15 +566,15 @@ async function handleSlotFound(
     );
 
     // Envoyer email admin
-    log("INFO", `  📧 Envoi email admin...`);
+    logFn.info(`  📧 Envoi email admin...`);
     await sendSlotDetectedEmail(dossier.vowintRef, discovery);
 
     // Tenter le booking HTTP avec la session existante
-    log("INFO", `  🎯 Tentative booking HTTP avec session existante...`);
+    logFn.info(`  🎯 Tentative booking HTTP avec session existante...`);
     try {
       const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie!, applicationId, siphoned);
       if (httpResult.success) {
-        log("INFO", `  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
+        logFn.info(`  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
         await reportSlotFound({
           applicationId,
           date: httpResult.bookedDate ?? "",
@@ -454,14 +584,14 @@ async function handleSlotFound(
         });
         return;
       }
-      log("INFO", `  ⚠️ Booking HTTP échoué: ${httpResult.error} — tentative avec re-login...`);
+      logFn.info(`  ⚠️ Booking HTTP échoué: ${httpResult.error} — tentative avec re-login...`);
     } catch (err) {
-      log("WARN", `  ⚠️ Booking HTTP crash: ${err} — tentative avec re-login...`);
+      logFn.warn(`  ⚠️ Booking HTTP crash: ${err} — tentative avec re-login...`);
     }
   }
 
   // ── FALLBACK : re-login + nouveau setup (si session existante a échoué) ──
-    log("INFO", `  🔄 Re-login pour tentative fallback...`);
+    logFn.info(`  🔄 Re-login pour tentative fallback...`);
     const session = await setupCevSessionHttp(
       vowintEmail,
       vowintPassword,
@@ -472,7 +602,7 @@ async function handleSlotFound(
     );
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
-    log("ERROR", `  Session re-setup échoué pour booking fallback`);
+    logFn.error(`  Session re-setup échoué pour booking fallback`);
     return;
   }
 
@@ -480,7 +610,7 @@ async function handleSlotFound(
   try {
     const httpResult = await bookCevViaHttp(session.integrationUrl!, session.sessionCookie!, applicationId, siphoned);
     if (httpResult.success) {
-      log("INFO", `  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
+      logFn.info(`  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
       await reportSlotFound({
         applicationId,
         date: httpResult.bookedDate ?? "",
@@ -492,14 +622,14 @@ async function handleSlotFound(
     }
 
     // Fallback Playwright
-    log("INFO", `  HTTP insuffisant — fallback Playwright...`);
+    logFn.info(`  HTTP insuffisant — fallback Playwright...`);
     const pwResult = await bookWithExistingSession(
       session.integrationUrl,
       session.sessionCookie,
       applicationId,
     );
     if (pwResult.success) {
-      log("INFO", `  ✅ BOOKING PLAYWRIGHT RÉUSSI! code=${pwResult.confirmationCode}`);
+      logFn.info(`  ✅ BOOKING PLAYWRIGHT RÉUSSI! code=${pwResult.confirmationCode}`);
       await reportSlotFound({
         applicationId,
         date: pwResult.bookedDate ?? "",
@@ -509,27 +639,28 @@ async function handleSlotFound(
         screenshotStorageId: pwResult.screenshotStorageId,
       });
     } else {
-      log("ERROR", `  ❌ Booking échoué: ${pwResult.error}`);
+      logFn.error(`  ❌ Booking échoué: ${pwResult.error}`);
     }
   } catch (err) {
-    log("ERROR", `  💥 Crash booking: ${err}`);
+    logFn.error(`  💥 Crash booking: ${err}`);
   }
 }
 
 // ─── Loop Principal v3 ──────────────────────────────────────────────────────
 
 export async function startCevDossierLoop(): Promise<void> {
-  log("INFO", "═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══");
+  const logger = createLogger("CEV-DOSSIER-v3");
+  logger.info("═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══");
 
   // Vérifier si le mode est activé
   const enabled = await getBotConfigValue("cev_dossier_mode");
   if (enabled !== "1") {
-    log("INFO", "Mode dossier désactivé (cev_dossier_mode != 1) — attente...");
+    logger.info("Mode dossier désactivé (cev_dossier_mode != 1) — attente...");
     while (true) {
       await sleep(60_000);
       const check = await getBotConfigValue("cev_dossier_mode");
       if (check === "1") {
-        log("INFO", "Mode dossier activé → démarrage!");
+        logger.info("Mode dossier activé → démarrage!");
         break;
       }
     }
@@ -544,8 +675,8 @@ export async function startCevDossierLoop(): Promise<void> {
   );
 
   if (cevJobs.length === 0) {
-    log("WARN", "Aucune application CEV active trouvée (destination=schengen + hunterConfig.isActive=true)");
-    log("INFO", "Attente configuration...");
+    logger.warn("Aucune application CEV active trouvée (destination=schengen + hunterConfig.isActive=true)");
+    logger.info("Attente configuration...");
     while (true) {
       await sleep(60_000);
       const checkJobs = await getActiveJobs();
@@ -555,18 +686,18 @@ export async function startCevDossierLoop(): Promise<void> {
         (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
       );
       if (checkCevJobs.length > 0) {
-        log("INFO", `Applications CEV trouvées: ${checkCevJobs.length}`);
+        logger.info(`Applications CEV trouvées: ${checkCevJobs.length}`);
         break;
       }
     }
   }
 
-  log("INFO", `═══ ${cevJobs.length} compte(s) CEV actif(s) ═══`);
+  logger.info(`═══ ${cevJobs.length} compte(s) CEV actif(s) ═══`);
   cevJobs.forEach((job: any, i: number) => {
     const dossierPool = job.hunterConfig.cevDossierPool || job.hunterConfig.vowintAppId;
-    log("INFO", `  Compte #${i + 1}: ${job.applicantName} (${job.id})`);
-    log("INFO", `    Dossiers: ${dossierPool}`);
-    log("INFO", `    Proxy: ${job.hunterConfig.cevUseProxy ? 'activé' : 'désactivé'}`);
+    logger.info(`  Compte #${i + 1}: ${job.applicantName} (${job.id})`);
+    logger.info(`    Dossiers: ${dossierPool}`);
+    logger.info(`    Proxy: ${job.hunterConfig.cevUseProxy ? 'activé' : 'désactivé'}`);
   });
 
   // Lancer une loop par compte (application)
@@ -583,6 +714,7 @@ async function runAccountLoop(job: any): Promise<void> {
   const accountId = job.id;
   const applicantName = job.applicantName;
   const hunterConfig = job.hunterConfig;
+  const logger = createLogger(`CEV-Account:${applicantName}`);
   
   // Récupérer les credentials VOWINT depuis hunterConfig
   let vowintEmail = hunterConfig.embassyUsername;
@@ -594,24 +726,24 @@ async function runAccountLoop(job: any): Promise<void> {
   
   if (!dossierPoolStr) {
     // Mode automatique: naviguer vers My Applications pour trouver les dossiers
-    log("INFO", "  → Aucun dossier fourni, navigation automatique vers My Applications...");
+    logger.info( "  → Aucun dossier fourni, navigation automatique vers My Applications...");
     try {
       const authResult = await setupCevSessionHttp(vowintEmail, vowintPassword, accountId, accountId);
       if (authResult.success && authResult.sessionCookie) {
         const firstDossier = await resolveFirstAppIdFromMyList(authResult.sessionCookie);
         if (firstDossier) {
           dossiers = [firstDossier];
-          log("INFO", `  → Dossier automatique trouvé: ${firstDossier}`);
+          logger.info(`  → Dossier automatique trouvé: ${firstDossier}`);
         } else {
-          log("WARN", "  → Aucun dossier trouvé via navigation automatique");
+          logger.warn( "  → Aucun dossier trouvé via navigation automatique");
           dossiers = [];
         }
       } else {
-        log("WARN", "  → Échec de l'authentification pour navigation automatique");
+        logger.warn( "  → Échec de l'authentification pour navigation automatique");
         dossiers = [];
       }
     } catch (err) {
-      log("ERROR", `  → Erreur navigation automatique: ${err}`);
+      logger.error(`  → Erreur navigation automatique: ${err}`);
       dossiers = [];
     }
   } else {
@@ -619,7 +751,7 @@ async function runAccountLoop(job: any): Promise<void> {
   }
   
   // Créer un pool local pour ce compte
-  const localPool = new CevDossierPool();
+  const localPool = new CevDossierPool(logger);
   localPool.initialize(dossiers);
   
   // Clé Redis spécifique à ce compte
@@ -632,9 +764,9 @@ async function runAccountLoop(job: any): Promise<void> {
   // Proxy config
   const useProxy = hunterConfig.cevUseProxy ?? await shouldUseProxy();
   
-  log("INFO", `═══ Compte: ${applicantName} (${dossiers.length} dossiers) ═══`);
-  log("INFO", `  Intervalle: ${intervalSec}s`);
-  log("INFO", `  Proxy: ${useProxy ? 'activé' : 'désactivé'}`);
+  logger.info(`═══ Compte: ${applicantName} (${dossiers.length} dossiers) ═══`);
+  logger.info(`  Intervalle: ${intervalSec}s`);
+  logger.info(`  Proxy: ${useProxy ? 'activé' : 'désactivé'}`);
   
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
@@ -647,38 +779,38 @@ async function runAccountLoop(job: any): Promise<void> {
     if (savedPoolState.pausedDossiers) {
       savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
     }
-    log("INFO", `Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers?.length || 0}`);
+    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers?.length || 0}`);
   } else {
-    log("INFO", "Pas de pool state en Redis — démarrage frais");
+    logger.info( "Pas de pool state en Redis — démarrage frais");
   }
 
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
   let proxyExitIp: string | null = null;
 
-  log("INFO", `Config:`);
-  log("INFO", `  • Dossiers: ${localPool.size}`);
-  log("INFO", `  • Clics/h total: ${localPool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR}`);
-  log("INFO", `  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
+  logger.info(`Config:`);
+  logger.info(`  • Dossiers: ${localPool.size}`);
+  logger.info(`  • Clics/h total: ${localPool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR}`);
+  logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
 
   if (useProxy) {
-    log("INFO", `  • Proxy: SOAX (1 IP fixe Kinshasa)`);
+    logger.info(`  • Proxy: SOAX (1 IP fixe Kinshasa)`);
 
     // ─── Configure SOAX proxy ─────────────────────────────────────────────────
     if (soaxBaseUrl) {
       const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
       process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
       resetCevImpitInstances(); // Force impit to recreate with new proxy URL
-      log("INFO", `  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+      logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
       // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
       proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
     } else if (process.env.IPROYAL_PROXY_URL) {
       // Si on utilise iProyal, aussi initialiser le guard
       proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
     } else {
-      log("WARN", `  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+      logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
     }
   } else {
-    log("INFO", `  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
+    logger.info(`  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
     delete process.env.IPROYAL_PROXY_URL;
     resetCevImpitInstances();
   }
@@ -687,7 +819,7 @@ async function runAccountLoop(job: any): Promise<void> {
   const logApplicationId = accountId;
 
   if (!vowintEmail || !vowintPassword) {
-    log("ERROR", "Credentials VOWINT manquants dans hunterConfig");
+    logger.error( "Credentials VOWINT manquants dans hunterConfig");
     return;
   }
 
@@ -711,34 +843,33 @@ async function runAccountLoop(job: any): Promise<void> {
     validUntil?: number;
     siphonedAt?: number;
   } | undefined = undefined;
+  
+  let lastF5CookieCapturedAt = 0;
+  const F5_COOKIE_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // Refresh every 30 minutes
 
-  // Récupérer les credentials siphonnés depuis Convex au démarrage
-  try {
-    const initialCreds = await getCevCredentials();
-    if (initialCreds?.siphonedF5CookieValue) {
-      siphonedCreds = {
-        f5CookieValue: initialCreds.siphonedF5CookieValue,
-        f5CookieName: initialCreds.siphonedF5CookieName,
-        aspNetSessionId: initialCreds.siphonedAspNetSessionId,
-        userAgent: initialCreds.siphonedUserAgent,
-        validUntil: initialCreds.siphonedValidUntil,
-        siphonedAt: initialCreds.siphonedAt,
-      };
-      log("INFO", `🍪 Cookies siphonnés chargés au démarrage: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
-      
-      if (siphonedCreds.userAgent) {
-        setCevExternalUserAgent(siphonedCreds.userAgent);
-      }
-    } else {
-      log("INFO", "🍪 Pas de cookies siphonnés disponibles au démarrage");
+  // Récupérer les credentials siphonnés depuis le job's hunterConfig
+  const hc = job.hunterConfig as any;
+  if (hc?.cevSiphonedF5CookieValue) {
+    siphonedCreds = {
+      f5CookieValue: hc.cevSiphonedF5CookieValue,
+      f5CookieName: hc.cevSiphonedF5CookieName,
+      aspNetSessionId: hc.cevSiphonedAspNetSessionId,
+      userAgent: hc.cevSiphonedUserAgent,
+      validUntil: hc.cevSiphonedValidUntil,
+      siphonedAt: hc.cevSiphonedAt,
+    };
+    logger.info(`🍪 Cookies siphonnés chargés depuis hunterConfig: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+    
+    if (siphonedCreds.userAgent) {
+      setCevExternalUserAgent(siphonedCreds.userAgent);
     }
-  } catch (err) {
-    log("WARN", `⚠️ Erreur récupération cookies siphonnés au démarrage: ${err}`);
+  } else {
+    logger.info( "🍪 Pas de cookies siphonnés dans hunterConfig");
   }
 
   state.isRunning = true;
   state.startedAt = Date.now();
-  log("INFO", "Boucle de scan démarrée");
+  logger.info( "Boucle de scan démarrée");
 
   while (state.isRunning) {
     try {
@@ -746,7 +877,7 @@ async function runAccountLoop(job: any): Promise<void> {
       const now = Date.now();
       if (now < nextScanAllowedAt) {
         const waitMs = nextScanAllowedAt - now;
-        log("INFO", `Attente planifiée / de sécurité : ${Math.round(waitMs / 1000)}s restantes...`);
+        logger.info(`Attente planifiée / de sécurité : ${Math.round(waitMs / 1000)}s restantes...`);
         await sleep(waitMs);
       }
 
@@ -754,7 +885,18 @@ async function runAccountLoop(job: any): Promise<void> {
       if (state.scanCount > 0 && state.scanCount % 50 === 0) {
         const stillEnabled = await getBotConfigValue("cev_dossier_mode");
         if (stillEnabled !== "1") {
-          log("INFO", "Mode dossier désactivé → arrêt");
+          logger.info( "Mode dossier désactivé → arrêt");
+          state.isRunning = false;
+          break;
+        }
+      }
+
+      // ─── Vérifier si le job est toujours actif toutes les 5 scans ───
+      if (state.scanCount % 5 === 0) {
+        const latestJobs = await getActiveJobs();
+        const currentJobStillActive = latestJobs.some(j => j.id === accountId);
+        if (!currentJobStillActive) {
+          logger.info(`🛑 Job ${accountId} (${applicantName}) n'est plus actif → arrêt`);
           state.isRunning = false;
           break;
         }
@@ -764,34 +906,63 @@ async function runAccountLoop(job: any): Promise<void> {
       if (state.scanCount > 0 && state.scanCount % 10 === 0) {
         const stopSignal = await getBotConfigValue("cev_session_stop");
         if (stopSignal === "1") {
-          log("INFO", "🛑 Signal d'arrêt reçu (cev_session_stop=1) → arrêt gracieux");
+          logger.info( "🛑 Signal d'arrêt reçu (cev_session_stop=1) → arrêt gracieux");
           state.isRunning = false;
           break;
         }
       }
 
-      // Récupérer les credentials siphonnés depuis Convex (mise à jour périodique)
-      if (state.scanCount % 10 === 0) {
-        try {
-          const newCreds = await getCevCredentials();
-          if (newCreds?.siphonedF5CookieValue) {
-            siphonedCreds = {
-              f5CookieValue: newCreds.siphonedF5CookieValue,
-              f5CookieName: newCreds.siphonedF5CookieName,
-              aspNetSessionId: newCreds.siphonedAspNetSessionId,
-              userAgent: newCreds.siphonedUserAgent,
-              validUntil: newCreds.siphonedValidUntil,
-              siphonedAt: newCreds.siphonedAt,
-            };
-            log("INFO", `  🔄 Cookies siphonnés actualisés: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
-            
-            if (siphonedCreds.userAgent && siphonedCreds.userAgent !== getCevExternalUserAgent()) {
-              setCevExternalUserAgent(siphonedCreds.userAgent);
+      // ─── Capturer et injecter le cookie F5 si nécessaire ────────────────────
+      const nowTime = Date.now();
+      if (!siphonedCreds || nowTime - lastF5CookieCapturedAt > F5_COOKIE_REFRESH_INTERVAL_MS) {
+        logger.info(`🍪 Capture du cookie F5 pour le compte ${applicantName}...`);
+        
+        const f5Cookie = await captureF5CookieForAccount(accountId, logger);
+        
+        if (f5Cookie) {
+          // Inject the cookie into the job's hunterConfig
+          const injectSuccess = await injectApplicationF5Cookies(
+            accountId,
+            f5Cookie.f5CookieValue,
+            undefined, // ASP.NET SessionId will be obtained naturally
+            f5Cookie.userAgent,
+            {
+              f5CookieName: f5Cookie.f5CookieName,
+              validityMinutes: 60, // Valid for 1 hour
             }
+          );
+          
+          if (injectSuccess) {
+            // Update our local siphonedCreds
+            siphonedCreds = {
+              f5CookieValue: f5Cookie.f5CookieValue,
+              f5CookieName: f5Cookie.f5CookieName,
+              userAgent: f5Cookie.userAgent,
+              validUntil: nowTime + 60 * 60 * 1000,
+              siphonedAt: nowTime,
+            };
+            
+            lastF5CookieCapturedAt = nowTime;
+            
+            // Set external user agent
+            setCevExternalUserAgent(f5Cookie.userAgent);
+            
+            logger.success(`🍪 Cookie F5 capturé et injecté avec succès pour le compte ${applicantName}`);
+          } else {
+            logger.warn(`❌ Échec de l'injection du cookie F5 dans Convex`);
           }
-        } catch (err) {
-          log("WARN", `  ⚠️ Erreur récupération credentials siphonnés: ${err}`);
+        } else {
+          logger.warn(`❌ Échec de la capture du cookie F5 — réessaie dans 2min...`);
+          await sleep(2 * 60 * 1000); // Wait 2 minutes before retrying capture
+          continue; // Skip this loop iteration, no scan without cookies!
         }
+      }
+      
+      // Double check we have cookies before scanning
+      if (!siphonedCreds) {
+        logger.warn(`❌ Toujours pas de cookies F5 — réessaie dans 2min...`);
+        await sleep(2 * 60 * 1000);
+        continue;
       }
 
       // Récupérer le prochain dossier disponible
@@ -800,7 +971,7 @@ async function runAccountLoop(job: any): Promise<void> {
         const waitMs = localPool.getNextAvailableIn();
         const waitMin = Math.ceil(waitMs / 60_000);
         const stats = localPool.getStats();
-        log("INFO", `⏳ Tous les dossiers épuisés (${stats.exhausted}/${stats.total}) — attente ${waitMin} min`);
+        logger.info(`⏳ Tous les dossiers épuisés (${stats.exhausted}/${stats.total}) — attente ${waitMin} min`);
         // Attente réduite: max 2 min au lieu de 5 min
         await sleep(Math.min(waitMs + 5000, 2 * 60_000));
         continue;
@@ -822,7 +993,7 @@ async function runAccountLoop(job: any): Promise<void> {
       // Utiliser le max entre l'intervalle configuré et le dynamique
       const effectiveIntervalMs = Math.max(intervalMs, dynamicIntervalMs);
 
-      log("INFO", `[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
+      logger.info(`[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
 
       const result = await performScan(
         vowintEmail,
@@ -830,6 +1001,8 @@ async function runAccountLoop(job: any): Promise<void> {
         dossier,
         logApplicationId,
         siphonedCreds,
+        0,
+        logger,
       );
 
       // Log chaque scan dans Convex avec le dossier concerné
@@ -850,12 +1023,12 @@ async function runAccountLoop(job: any): Promise<void> {
       const uniqueJobId = `cev-dossier-${dossier.vowintRef}`;
       switch (result.status) {
         case "slot_found":
-          log("INFO", `  🚨 SLOT TROUVÉ!`);
+          logger.info(`  🚨 SLOT TROUVÉ!`);
           recordScan(uniqueJobId, dossier.vowintRef);
           recordSlotFound(uniqueJobId, dossier.vowintRef);
           // Re-login préventif si on atteint la limite (avant le booking)
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
-            log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
+            logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
             invalidateVowintCache(vowintEmail);
             globalSessionClicks = 0;
             recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
@@ -864,6 +1037,7 @@ async function runAccountLoop(job: any): Promise<void> {
             vowintEmail, vowintPassword, dossier, logApplicationId,
             result.sessionCookie, result.integrationUrl,
             siphonedCreds,
+            logger,
           );
           break;
         case "rate_limited":
@@ -873,7 +1047,7 @@ async function runAccountLoop(job: any): Promise<void> {
           localPool.markRateLimited(dossier);
           // Le rate-limit vient du serveur → session grillée, reset le compteur
           globalSessionClicks = 0;
-          log("WARN", `  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
+          logger.warn(`  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
           break;
         case "error":
           state.errors++;
@@ -883,14 +1057,14 @@ async function runAccountLoop(job: any): Promise<void> {
           invalidateAnticaptchaCache();
           break;
         case "no_slot":
-          log("INFO", `  — Pas de créneau`);
+          logger.info(`  — Pas de créneau`);
           recordScan(uniqueJobId, dossier.vowintRef);
           // Clic réussi — enregistrer (déjà fait dans performScan, mais on enregistre ici aussi pour comptage pool)
           localPool.recordClick(dossier);
           globalSessionClicks++;
           // Re-login préventif après MAX_CLICKS_PER_SESSION clics GLOBAUX
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
-            log("INFO", `  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
+            logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
             invalidateVowintCache(vowintEmail);
             globalSessionClicks = 0;
             recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
@@ -903,7 +1077,7 @@ async function runAccountLoop(job: any): Promise<void> {
         const uptimeMin = Math.round((Date.now() - state.startedAt) / 60_000);
         const scansPerHour = uptimeMin > 0 ? Math.round(state.scanCount / (uptimeMin / 60)) : 0;
         const poolStats = localPool.getStats();
-        log("INFO", `📊 Stats: ${state.scanCount} scans en ${uptimeMin}min (${scansPerHour}/h) | Slots: ${state.slotsFound} | RL: ${state.rateLimits} | Pool: ${poolStats.available}/${poolStats.total}`);
+        logger.info(`📊 Stats: ${state.scanCount} scans en ${uptimeMin}min (${scansPerHour}/h) | Slots: ${state.slotsFound} | RL: ${state.rateLimits} | Pool: ${poolStats.available}/${poolStats.total}`);
         botLog({
           applicationId: logApplicationId,
           step: "cev_dossier_v3_stats",
@@ -920,20 +1094,20 @@ async function runAccountLoop(job: any): Promise<void> {
       const jitter = (Math.random() * 60 - 30) * 1000; // ±30s aléatoires
       const finalSleepMs = Math.max(10_000, effectiveIntervalMs + jitter); // Garder au moins 10s
       nextScanAllowedAt = Date.now() + finalSleepMs;
-      log("INFO", `Pause de ${Math.round(finalSleepMs / 1000)}s planifiée avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
+      logger.info(`Pause de ${Math.round(finalSleepMs / 1000)}s planifiée avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
 
     } catch (loopErr) {
-      log("ERROR", `Erreur loop: ${loopErr}`);
+      logger.error(`Erreur loop: ${loopErr}`);
       state.errors++;
       
       // Sécurité anti-spam en cas d'erreur consécutive ou de crash (évite de marteler le serveur)
       const safetyPauseMs = 45000;
       nextScanAllowedAt = Math.max(nextScanAllowedAt, Date.now() + safetyPauseMs);
-      log("INFO", `Erreur détectée. Prochain scan planifié au plus tôt dans ${Math.round((nextScanAllowedAt - Date.now()) / 1000)}s.`);
+      logger.info(`Erreur détectée. Prochain scan planifié au plus tôt dans ${Math.round((nextScanAllowedAt - Date.now()) / 1000)}s.`);
     }
   }
 
-  log("INFO", "═══ CEV Dossier Loop v3 arrêté ═══");
+  logger.info( "═══ CEV Dossier Loop v3 arrêté ═══");
 }
 
 

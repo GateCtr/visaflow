@@ -6,6 +6,7 @@ interface CapturedCookies {
 }
 
 import { makeCevProxyStickyUrl, getCevProxyUrl } from "./cev-shared-impit.js";
+import { getActiveJobs, injectApplicationF5Cookies } from "./convexClient.js";
 
 const VOWINT_URL = "https://visaonweb.diplomatie.be";
 const CEV_URL = "https://appointment.cloud.diplomatie.be/Captcha";
@@ -265,48 +266,67 @@ async function captureCookiesFromBrowser(): Promise<CapturedCookies | null> {
   }
 }
 
-async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean> {
-  const endpoint = `${CONVEX_SITE_URL}/hunter/cev-sessions/inject-f5`;
+// Helper function to get all active CEV jobs
+async function getAllActiveCevJobs(): Promise<any[]> {
+  try {
+    const jobs = await getActiveJobs();
+    return jobs.filter((j: any) => 
+      j.destination === "schengen" && 
+      j.hunterConfig?.isActive === true &&
+      (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
+    );
+  } catch {
+    return [];
+  }
+}
 
+async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean> {
   try {
     // CORRECTION : ASP.NET_SessionId vide est NORMAL - obtenu par les dossiers via flux naturel
     const aspNetSessionId = captured.aspNetSessionId;
     const hasAspNet = !!aspNetSessionId;
     
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Hunter-Key": HUNTER_API_KEY,
-      },
-      body: JSON.stringify({
-        sessionId: CEV_SESSION_ID,
-        f5CookieValue: captured.f5CookieValue,
-        f5CookieName: captured.f5CookieName,
-        aspNetSessionId: aspNetSessionId,
-        userAgent: captured.userAgent,
-        validityMinutes: REFRESH_INTERVAL_MIN + 2,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      log("ERROR", `Convex inject failed: HTTP ${res.status} - ${body.slice(0, 200)}`);
+    const cevJobs = await getAllActiveCevJobs();
+    
+    if (cevJobs.length === 0) {
+      log("WARN", "Aucun job CEV actif trouvé — pas d'injection");
       return false;
     }
-
-    const data = await res.json() as { ok?: boolean };
-    if (data.ok) {
-      log("INFO", `  ✅ Cookies injectés dans Convex (session: ${CEV_SESSION_ID.slice(0, 10)}...)`);
-      if (!hasAspNet) {
-        log("INFO", `  ⚠️ ASP.NET_SessionId vide - NORMAL, sera obtenu par les dossiers via flux VOWINT → CEV`);
+    
+    log("INFO", `🔄 Injecting cookies dans ${cevJobs.length} job(s) CEV actif(s)...`);
+    
+    let successCount = 0;
+    for (const job of cevJobs) {
+      const result = await injectApplicationF5Cookies(
+        job.id,
+        captured.f5CookieValue,
+        aspNetSessionId,
+        captured.userAgent,
+        {
+          f5CookieName: captured.f5CookieName,
+          validityMinutes: REFRESH_INTERVAL_MIN + 2,
+        }
+      );
+      
+      if (result) {
+        successCount++;
+        log("INFO", `  ✅ Application ${job.id.slice(0, 15)}... (${job.applicantName || "sans nom"})`);
+      } else {
+        log("WARN", `  ❌ Échec injection pour ${job.id.slice(0, 15)}...`);
       }
-      return true;
     }
-
-    log("WARN", `Unexpected Convex response: ${JSON.stringify(data)}`);
-    return false;
+    
+    if (!hasAspNet) {
+      log("INFO", `  ⚠️ ASP.NET_SessionId vide - NORMAL, sera obtenu par les dossiers via flux VOWINT → CEV`);
+    }
+    
+    if (successCount === cevJobs.length) {
+      log("INFO", `✅ Tous les ${successCount} jobs ont reçu les cookies!`);
+      return true;
+    } else {
+      log("WARN", `Injection terminée: ${successCount}/${cevJobs.length} réussis`);
+      return successCount > 0;
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log("ERROR", `Convex injection error: ${msg}`);
@@ -316,15 +336,10 @@ async function injectCookiesToConvex(captured: CapturedCookies): Promise<boolean
 
 async function fetchActiveSession(): Promise<string | null> {
   try {
-    const res = await fetch(`${CONVEX_SITE_URL}/hunter/cev-credentials`, {
-      headers: {
-        "X-Hunter-Key": HUNTER_API_KEY,
-      },
-    });
-    if (!res.ok) return null;
-    const creds = await res.json();
-    if (creds && creds.sessionId) {
-      return creds.sessionId;
+    const cevJobs = await getAllActiveCevJobs();
+    
+    if (cevJobs.length > 0) {
+      return cevJobs[0].id;
     }
     return null;
   } catch {
@@ -351,7 +366,7 @@ async function refreshCycle(): Promise<boolean> {
 
     const injected = await injectCookiesToConvex(captured);
     log("INFO", `=== Cycle done — next in ${REFRESH_INTERVAL_MIN} min ===`);
-    return injected; // Retourne true si injecté avec succès
+    return injected; // Retourne true si au moins un injecté avec succès
   } catch (err) {
     log("ERROR", `Unexpected error during cycle: ${err}`);
     return false;

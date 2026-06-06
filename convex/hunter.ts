@@ -223,6 +223,7 @@ export const getActiveJobs = internalQuery({
       })
       .map((app) => {
         const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
+        const hc = (app as { hunterConfig?: any }).hunterConfig;
         return {
           id: app._id,
           destination: app.destination,
@@ -231,7 +232,16 @@ export const getActiveJobs = internalQuery({
           travelDate: app.travelDate,
           urgencyTier: (app as { slotUrgencyTier?: string }).slotUrgencyTier ?? "standard",
           slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
-          hunterConfig: (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string } }).hunterConfig,
+          hunterConfig: {
+            ...hc,
+            // Include siphoned cookie fields
+            cevSiphonedF5CookieValue: hc?.cevSiphonedF5CookieValue,
+            cevSiphonedF5CookieName: hc?.cevSiphonedF5CookieName,
+            cevSiphonedAspNetSessionId: hc?.cevSiphonedAspNetSessionId,
+            cevSiphonedUserAgent: hc?.cevSiphonedUserAgent,
+            cevSiphonedAt: hc?.cevSiphonedAt,
+            cevSiphonedValidUntil: hc?.cevSiphonedValidUntil,
+          },
           // Segmentation visa class pour micro-meutes homogènes
           broadcastVisaClass: (app as { broadcastVisaClass?: string }).broadcastVisaClass ?? null,
           portalUrl: (pricing as { portalUrl?: string } | undefined)?.portalUrl ?? null,
@@ -906,6 +916,51 @@ export const internalSaveBotConfig = internalMutation({
     } else {
       await ctx.db.insert("botConfig", { key, value, updatedAt: Date.now() });
     }
+  },
+});
+
+// ─── INTERNAL: injecter des cookies F5 siphonnés dans un dossier (application) ───────────────
+export const internalInjectF5CookiesToApplication = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    f5CookieValue: v.string(),
+    f5CookieName: v.string(),
+    aspNetSessionId: v.optional(v.string()),
+    userAgent: v.string(),
+    validityMinutes: v.optional(v.number()),
+    // Also support original name for backwards compatibility
+    f5TsCookieValue: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return { ok: false, error: "Application not found" };
+
+    const now = Date.now();
+    const actualF5Value = args.f5CookieValue ?? args.f5TsCookieValue;
+    const actualF5Name = args.f5CookieName ?? "TS0110ceb4";
+    const validityMs = (args.validityMinutes ?? 480) * 60 * 1000; // default 8h = 480 min
+
+    if (!actualF5Value) {
+      return { ok: false, error: "f5CookieValue or f5TsCookieValue is required" };
+    }
+
+    const existingHunterConfig = (app as any).hunterConfig || {};
+    const updatedHunterConfig = {
+      ...existingHunterConfig,
+      cevSiphonedF5CookieValue: actualF5Value,
+      cevSiphonedF5CookieName: actualF5Name,
+      cevSiphonedAspNetSessionId: args.aspNetSessionId,
+      cevSiphonedUserAgent: args.userAgent,
+      cevSiphonedAt: now,
+      cevSiphonedValidUntil: now + validityMs,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: updatedHunterConfig,
+      updatedAt: now,
+    });
+
+    return { ok: true };
   },
 });
 

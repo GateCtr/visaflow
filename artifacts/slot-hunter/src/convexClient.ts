@@ -77,6 +77,26 @@ export interface HunterJob {
     cevDossierPool?: string;
     cevUseProxy?: boolean;
     cevScanIntervalSec?: number;
+    // Session CEV active
+    cevActiveSessionCookie?: string;
+    cevActiveSessionValidUntil?: string;
+    cevActiveSessionRedirectUrl?: string;
+    // V3 Chasseur fields
+    accountRole?: "eclaireur" | "confine" | "hybride";
+    currentAppointmentDate?: string;
+    maxLoginsPerDay?: number;
+    rushWindows?: string;
+    blindBookingEnabled?: boolean;
+    slotPriorityDates?: string[];
+    maxMonthsToScan?: number;
+    preferredProxy?: string;
+    // Siphonned F5 cookies
+    cevSiphonedF5CookieValue?: string;
+    cevSiphonedF5CookieName?: string;
+    cevSiphonedAspNetSessionId?: string;
+    cevSiphonedUserAgent?: string;
+    cevSiphonedAt?: number;
+    cevSiphonedValidUntil?: number;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";
@@ -575,6 +595,46 @@ export async function injectCevF5Cookies(
     return data.ok === true;
   } catch (err) {
     console.warn('[convexClient] injectCevF5Cookies error:', err);
+    return false;
+  }
+}
+
+export async function injectApplicationF5Cookies(
+  applicationId: string,
+  f5CookieValue: string,
+  aspNetSessionId?: string,
+  userAgent?: string,
+  options?: {
+    f5CookieName?: string;
+    validityMinutes?: number;
+  }
+): Promise<boolean> {
+  const url = `${CONVEX_SITE_URL}/hunter/applications/inject-f5`;
+  try {
+    const body = {
+      applicationId,
+      f5CookieValue,
+      aspNetSessionId,
+      userAgent,
+      f5CookieName: options?.f5CookieName,
+      validityMinutes: options?.validityMinutes,
+    };
+    const res = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'X-Hunter-Key': HUNTER_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn('[convexClient] injectApplicationF5Cookies failed:', res.status);
+      return false;
+    }
+    const data = await res.json();
+    return data.ok === true;
+  } catch (err) {
+    console.warn('[convexClient] injectApplicationF5Cookies error:', err);
     return false;
   }
 }
