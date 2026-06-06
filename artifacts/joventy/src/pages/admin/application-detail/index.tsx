@@ -326,7 +326,7 @@ function TabBot({
       )}
 
       {/* Hunter Config */}
-      {isSlotOnly && isSlotHunting && (
+      {(isSlotOnly || (app.destination === "schengen" && isSlotHunting)) && (
         <HunterConfig
           appId={appId}
           hunterConfig={hunterConfig}
