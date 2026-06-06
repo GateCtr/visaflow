@@ -646,17 +646,35 @@ export async function setupCevSessionHttp(
     });
     
     if (!captchaData.validUntil) {
-      // RETRY: Si validUntil absent, réessayer une fois (peut être un timeout temporaire du serveur CEV)
+      // RETRY: Si validUntil absent, résoudre un NOUVEAU captcha et réessayer
       botLog({
         applicationId: clientId,
         step: "cev_http_captcha_no_valid_until_retry",
         status: "warn",
-        data: { message: "validUntil absent - retry immédiat" },
+        data: { message: "validUntil absent - résolution nouveau captcha pour retry" },
       });
       
-      // Attendre 2s et réessayer
+      // Invalider le cache Anti-Captcha pour forcer une nouvelle résolution
+      invalidateAnticaptchaCache();
+      
+      // Attendre 2s avant de résoudre le nouveau captcha
       await new Promise(r => setTimeout(r, 2000));
       
+      // Résoudre un NOUVEAU captcha
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_captcha_retry_solve",
+        status: "ok",
+        data: { message: "Résolution nouveau captcha pour retry" },
+      });
+      
+      const retryHcaptchaToken = await solveHcaptcha(clientId);
+      
+      if (!retryHcaptchaToken) {
+        return { success: false, error: "HCAPTCHA_RETRY_FAILED" };
+      }
+      
+      // Réessayer SetCaptchaToken avec le NOUVEAU token
       const retryRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
         method: "POST",
         headers: getCevBrowserHeaders({
@@ -667,7 +685,7 @@ export async function setupCevSessionHttp(
           xRequestedWith: true,
           accept: "application/json, text/javascript, */*; q=0.01",
         }),
-        body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
+        body: new URLSearchParams({ captcha: retryHcaptchaToken }).toString(),
         signal: AbortSignal.timeout(30_000),
       });
       

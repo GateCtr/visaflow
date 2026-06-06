@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { formatDate } from "@/lib/format";
+import { useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Clock } from "lucide-react";
@@ -8,9 +9,17 @@ import { CheckCircle2, Clock } from "lucide-react";
 export default function AdminClients() {
   const clients = useQuery(api.admin.listClients) ?? [];
   const isLoading = clients === undefined;
+  const [, setLocation] = useLocation();
 
   const signedCount = clients.filter((c) => c.contractSignedAt !== null).length;
   const unsignedCount = clients.filter((c) => c.contractSignedAt === null).length;
+
+  const getClerkId = (userId: string) => {
+    if (userId.includes("|")) {
+      return userId.split("|").pop()!;
+    }
+    return userId;
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -60,7 +69,11 @@ export default function AdminClients() {
               </TableHeader>
               <TableBody>
                 {clients.map((client) => (
-                  <TableRow key={client.userId}>
+                  <TableRow 
+                    key={client.userId}
+                    className="cursor-pointer hover:bg-slate-50"
+                    onClick={() => setLocation(`/admin/clients/${getClerkId(client.userId)}`)}
+                  >
                     <TableCell className="font-medium text-primary py-4">
                       {client.firstName} {client.lastName}
                       {(!client.firstName && !client.lastName) && (

@@ -116,6 +116,7 @@ export const listClients = query({
         email: string;
         applicationCount: number;
         firstSeen: number;
+        lastSeen: number;
         contractSignedAt: number | null;
         contractSignedName: string | null;
       }
@@ -131,6 +132,7 @@ export const listClients = query({
           email: app.userEmail || "",
           applicationCount: 1,
           firstSeen: app._creationTime,
+          lastSeen: app.updatedAt,
           contractSignedAt: null,
           contractSignedName: null,
         });
@@ -139,6 +141,9 @@ export const listClients = query({
         existing.applicationCount += 1;
         if (app._creationTime < existing.firstSeen) {
           existing.firstSeen = app._creationTime;
+        }
+        if (app.updatedAt > existing.lastSeen) {
+          existing.lastSeen = app.updatedAt;
         }
       }
     }
@@ -155,8 +160,9 @@ export const listClients = query({
       for (const v of variations) {
         const found = await ctx.db
           .query("contractSignatures")
-          .withIndex("by_user", (q: any) => q.eq("userId", v))
-          .order("desc")
+          .withIndex("by_user_version", (q: any) =>
+            q.eq("userId", v).eq("contractVersion", "v1.1-2025")
+          )
           .first();
         if (found) {
           sig = found;
@@ -173,6 +179,154 @@ export const listClients = query({
     return Array.from(clientMap.values()).sort(
       (a, b) => a.firstSeen - b.firstSeen
     );
+  },
+});
+
+export const getClientDetail = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") {
+      return null;
+    }
+
+    const all = await ctx.db.query("applications").collect();
+    
+    const getClerkId = (subject: string) => {
+      if (subject.includes("|")) {
+        return subject.split("|").pop()!;
+      }
+      return subject;
+    };
+
+    let clientData: {
+      userId: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      applicationCount: number;
+      firstSeen: number;
+      lastSeen: number;
+      contractSignedAt: number | null;
+      contractSignedName: string | null;
+    } | null = null;
+
+    for (const app of all) {
+      const clerkId = getClerkId(app.userId);
+      if (clerkId === args.clerkId) {
+        if (!clientData) {
+          clientData = {
+            userId: app.userId,
+            firstName: app.userFirstName || "",
+            lastName: app.userLastName || "",
+            email: app.userEmail || "",
+            applicationCount: 1,
+            firstSeen: app._creationTime,
+            lastSeen: app.updatedAt,
+            contractSignedAt: null,
+            contractSignedName: null,
+          };
+        } else {
+          clientData.applicationCount += 1;
+          if (app._creationTime < clientData.firstSeen) {
+            clientData.firstSeen = app._creationTime;
+          }
+          if (app.updatedAt > clientData.lastSeen) {
+            clientData.lastSeen = app.updatedAt;
+          }
+        }
+      }
+    }
+
+    if (!clientData) return null;
+
+    // Enrich with contract signature data
+    const variations = [
+      args.clerkId,
+      `https://clerk.joventy.cd|${args.clerkId}`,
+      `https://active-midge-3.clerk.accounts.dev|${args.clerkId}`
+    ];
+    let sig = null;
+    for (const v of variations) {
+      const found = await ctx.db
+        .query("contractSignatures")
+        .withIndex("by_user_version", (q: any) =>
+          q.eq("userId", v).eq("contractVersion", "v1.1-2025")
+        )
+        .first();
+      if (found) {
+        sig = found;
+        break;
+      }
+    }
+    if (sig) {
+      clientData.contractSignedAt = sig.signedAt;
+      clientData.contractSignedName = sig.signedName;
+    }
+
+    return clientData;
+  },
+});
+
+export const getClientApplications = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") {
+      return [];
+    }
+
+    const all = await ctx.db.query("applications").collect();
+    
+    const getClerkId = (subject: string) => {
+      if (subject.includes("|")) {
+        return subject.split("|").pop()!;
+      }
+      return subject;
+    };
+
+    return all
+      .filter(app => getClerkId(app.userId) === args.clerkId)
+      .map(app => ({
+        _id: app._id,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        visaType: app.visaType,
+        status: app.status,
+        _creationTime: app._creationTime,
+      }))
+      .sort((a, b) => b._creationTime - a._creationTime);
+  },
+});
+
+export const getClientContracts = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") {
+      return [];
+    }
+
+    const variations = [
+      args.clerkId,
+      `https://clerk.joventy.cd|${args.clerkId}`,
+      `https://active-midge-3.clerk.accounts.dev|${args.clerkId}`
+    ];
+
+    for (const v of variations) {
+      const signatures = await ctx.db
+        .query("contractSignatures")
+        .withIndex("by_user_version", (q: any) =>
+          q.eq("userId", v).eq("contractVersion", "v1.1-2025")
+        )
+        .collect();
+      
+      if (signatures.length > 0) {
+        return signatures;
+      }
+    }
+
+    return [];
   },
 });
 

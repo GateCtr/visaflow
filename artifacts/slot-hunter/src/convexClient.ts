@@ -73,6 +73,10 @@ export interface HunterJob {
     useResidentialProxy?: boolean;
     // Mode nuit
     nightModeEnabled?: boolean;
+    // CEV Dossier Loop v3
+    cevDossierPool?: string;
+    cevUseProxy?: boolean;
+    cevScanIntervalSec?: number;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";

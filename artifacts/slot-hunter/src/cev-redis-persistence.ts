@@ -24,7 +24,7 @@ import { createClient, type RedisClientType } from "redis";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const REDIS_CEV_POOL_KEY = "visaflow:cev-pool:state";
+export const REDIS_CEV_POOL_KEY = "visaflow:cev-pool:state";
 const REDIS_CEV_POOL_TTL_SEC = 2 * 60 * 60; // 2h (la fenêtre de clics est 1h, on garde de la marge)
 
 const REDIS_CEV_VOWINT_PREFIX = "visaflow:cev-vowint:";
@@ -39,6 +39,7 @@ export interface SerializablePoolState {
     clickTimestamps: number[];
     totalScans: number;
     rateLimitCount: number;
+    lastDailyReset?: number;
   }>;
   savedAt: number; // timestamp de la dernière sauvegarde
   scanCount?: number; // compteur global de scans (persisté pour survivre aux redémarrages)
@@ -125,11 +126,12 @@ export async function initCevRedis(): Promise<boolean> {
  * Sauvegarde l'état complet du pool dans Redis.
  * Fire-and-forget — n'interrompt pas le loop en cas d'erreur.
  */
-export function syncPoolStateToRedis(state: SerializablePoolState): void {
+export function syncPoolStateToRedis(state: SerializablePoolState, customKey?: string): void {
   if (!redisReady || !redisClient) return;
 
+  const key = customKey || REDIS_CEV_POOL_KEY;
   const data = JSON.stringify({ ...state, savedAt: Date.now() });
-  redisClient.set(REDIS_CEV_POOL_KEY, data, { EX: REDIS_CEV_POOL_TTL_SEC }).catch((err: Error) => {
+  redisClient.set(key, data, { EX: REDIS_CEV_POOL_TTL_SEC }).catch((err: Error) => {
     console.warn(`[cev-redis] Pool sync échouée: ${err.message}`);
   });
 }
@@ -139,11 +141,12 @@ export function syncPoolStateToRedis(state: SerializablePoolState): void {
  * Retourne null si rien en cache ou si Redis est indisponible.
  * Filtre automatiquement les clickTimestamps > 1h (expirés).
  */
-export async function restorePoolStateFromRedis(): Promise<SerializablePoolState | null> {
+export async function restorePoolStateFromRedis(customKey?: string): Promise<SerializablePoolState | null> {
   if (!redisReady || !redisClient) return null;
 
   try {
-    const data = await redisClient.get(REDIS_CEV_POOL_KEY);
+    const key = customKey || REDIS_CEV_POOL_KEY;
+    const data = await redisClient.get(key);
     if (!data) return null;
 
     const parsed = JSON.parse(data) as SerializablePoolState;

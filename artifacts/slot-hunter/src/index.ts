@@ -122,7 +122,7 @@ async function main(): Promise<void> {
       
       if (cevDossierMode) {
         log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF (cookies capturés) ═══");
-        log("INFO", "   → Pool de DOSSIERS en round-robin (1 IP, N compteurs)");
+        log("INFO", "   → Multi-comptes via Applications ");
         log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
         log("INFO", "   → Cookies frais injectés dans Convex");
         log("INFO", "   → Rafraîchissement auto optimisé: toutes les 45min");

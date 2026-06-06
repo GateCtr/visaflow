@@ -38,6 +38,10 @@ interface HunterConfigData {
   maxMonthsToScan?: number;
   nightModeEnabled?: boolean;
   preferredProxy?: string;
+  // CEV Dossier Loop v3 - Multi-comptes
+  cevDossierPool?: string;
+  cevUseProxy?: boolean;
+  cevScanIntervalSec?: number;
 }
 
 interface Props {
@@ -83,6 +87,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [maxMonths, setMaxMonths] = useState("3");
   const [nightMode, setNightMode] = useState(true);
   const [preferredProxy, setPreferredProxy] = useState("");
+  // CEV Dossier Loop v3 - Multi-comptes
+  const [cevDossierPool, setCevDossierPool] = useState("");
+  const [cevUseProxy, setCevUseProxy] = useState(false);
+  const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -118,6 +126,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setMaxMonths(String(hc.maxMonthsToScan ?? 3));
       setNightMode(hc.nightModeEnabled ?? true);
       setPreferredProxy(hc.preferredProxy ?? "");
+      // CEV Dossier Loop v3 - Multi-comptes
+      setCevDossierPool(hc.cevDossierPool ?? "");
+      setCevUseProxy(hc.cevUseProxy ?? false);
+      setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
     }
   }, [hc]);
 
@@ -141,6 +153,9 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         maxLoginsPerDay: maxLogins ? Number(maxLogins) : undefined, rushWindows: rushWindows || undefined,
         blindBookingEnabled: blindBooking || undefined, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
+        // CEV Dossier Loop v3 - Multi-comptes
+        cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy || undefined,
+        cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -233,6 +248,39 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/80">
             <Field label="URL VOWINT"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder="https://visaonweb..." className="h-9 bg-white text-sm font-mono" /></Field>
             <Field label="Pays Schengen"><Input value={cevCountry} onChange={(e) => setCevCountry(e.target.value)} placeholder="France, Belgique..." className="h-9 bg-white text-sm" /></Field>
+          </div>
+        )}
+        {destination === "schengen" && (
+          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100/60 space-y-3">
+            <p className="text-[11px] text-emerald-700 uppercase font-bold tracking-wide">CEV Dossier Loop v3 — Multi-comptes</p>
+            <Field label="Pool de dossiers">
+              <Input 
+                value={cevDossierPool} 
+                onChange={(e) => setCevDossierPool(e.target.value)} 
+                placeholder="VOWINT1,VOWINT2,VOWINT3 (vide = utilise vowintAppId)" 
+                className="h-9 bg-white text-sm font-mono" 
+              />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Intervalle scan (sec)">
+                <Input 
+                  type="number" 
+                  min={60} 
+                  max={3600} 
+                  value={cevScanIntervalSec} 
+                  onChange={(e) => setCevScanIntervalSec(e.target.value)} 
+                  placeholder="225" 
+                  className="h-9 bg-white text-sm font-mono" 
+                />
+              </Field>
+              <div className="flex items-center gap-2 py-1">
+                <button type="button" onClick={() => setCevUseProxy(v => !v)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cevUseProxy ? "bg-emerald-500" : "bg-slate-300"}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${cevUseProxy ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <span className="text-xs text-slate-700 font-medium">Proxy résidentiel</span>
+              </div>
+            </div>
           </div>
         )}
         {destination === "spain" && (

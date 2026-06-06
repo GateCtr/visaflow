@@ -146,12 +146,48 @@ function convertOklchValue(oklchStr: string, originalGetComputedStyle: typeof wi
   });
 }
 
+/**
+ * Pré-traite toutes les règles CSS pour convertir oklch → rgb.
+ * html2canvas lit parfois les CSS directement sans passer par getComputedStyle.
+ */
+function patchAllCssRules(originalGetComputedStyle: typeof window.getComputedStyle): void {
+  try {
+    const sheets = Array.from(document.styleSheets);
+    for (const sheet of sheets) {
+      try {
+        const rules = Array.from(sheet.cssRules);
+        for (const rule of rules) {
+          // Seuls CSSStyleRule ont une propriété style
+          if ((rule as CSSStyleRule).style) {
+            const styleRule = rule as CSSStyleRule;
+            for (let i = 0; i < styleRule.style.length; i++) {
+              const prop = styleRule.style[i];
+              const val = styleRule.style.getPropertyValue(prop);
+              if (val && val.includes("oklch")) {
+                const converted = convertOklchValue(val, originalGetComputedStyle);
+                styleRule.style.setProperty(prop, converted);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore CORS errors on stylesheets
+      }
+    }
+  } catch (e) {
+    // Ignore errors accessing stylesheets
+  }
+}
+
 /* ─── Génère le PDF en capturant uniquement le div document ─── */
 async function generatePdf(el: HTMLElement, filename: string) {
   const restored = await preloadImages(el);
 
   let canvas: HTMLCanvasElement;
   const originalGetComputedStyle = window.getComputedStyle;
+
+  // Pré-traite toutes les règles CSS pour convertir oklch → rgb
+  patchAllCssRules(originalGetComputedStyle);
 
   // Proxy getComputedStyle pour intercepter et patcher les couleurs oklch retournées à html2canvas
   window.getComputedStyle = (elt, pseudoElt) => {

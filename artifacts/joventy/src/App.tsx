@@ -46,6 +46,7 @@ import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
 import AdminApplicationDetail from "@/pages/admin/application-detail/index";
 import AdminClients from "@/pages/admin/Clients";
+import ClientDetail from "@/pages/admin/ClientDetail";
 import AdminMessages from "@/pages/admin/Messages";
 import AdminReviews from "@/pages/admin/Reviews";
 import AdminBotTest from "@/pages/admin/BotTest";
@@ -179,6 +180,9 @@ function Router() {
       </Route>
       <Route path="/admin/clients">
         {() => <ProtectedRoute adminOnly component={AdminClients} />}
+      </Route>
+      <Route path="/admin/clients/:clerkId">
+        {() => <ProtectedRoute adminOnly component={ClientDetail} />}
       </Route>
       <Route path="/admin/messages">
         {() => <ProtectedRoute adminOnly component={AdminMessages} />}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
@@ -660,6 +660,16 @@ export default function CevSessions() {
   const [resetSession, setResetSession] = useState<ResetSession | null>(null);
   const [restartSessionId, setRestartSessionId] = useState<Id<"cevSessions"> | null>(null);
   const [deleteSessionId, setDeleteSessionId] = useState<Id<"cevSessions"> | null>(null);
+  const [, setTick] = useState(0);
+
+  // Force re-render every minute to update relative timestamps
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 60_000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRestartSession = (sessionId: Id<"cevSessions">, applicantName: string) => {
     setRestartSessionId(sessionId);

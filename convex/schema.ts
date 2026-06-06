@@ -89,6 +89,14 @@ const hunterConfig = v.object({
   nightModeEnabled: v.optional(v.boolean()),
   // Proxy préféré pour ce dossier ("iproyal" | "brightdata" | "2captcha")
   preferredProxy: v.optional(v.string()),
+  // ═══ CEV Dossier Loop v3 — Multi-comptes ═══
+  // Pool de dossiers VOWINT pour ce compte (ex: "VOWINT1,VOWINT2,VOWINT3")
+  // Si vide, utilise vowintAppId comme seul dossier
+  cevDossierPool: v.optional(v.string()),
+  // Activer/désactiver proxy pour ce compte (hérite de la config globale si null)
+  cevUseProxy: v.optional(v.boolean()),
+  // Intervalle de scan personnalisé (secondes, défaut: 225 = 3min45)
+  cevScanIntervalSec: v.optional(v.number()),
 });
 
 export default defineSchema({
