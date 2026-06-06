@@ -46,6 +46,7 @@ import {
   botLog,
   getBotConfigValue,
   getActiveJobs,
+  resetCevClickCount,
 } from "../convexClient.js";
 import {
   initCevRedis,
@@ -512,6 +513,26 @@ async function handleSlotFound(
 export async function startCevDossierLoop(): Promise<void> {
   log("INFO", "═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══");
 
+  // Vider les dossiers en pause au démarrage (pour éviter les pauses persistantes)
+  pausedDossiers.clear();
+  log("INFO", "🔄 Dossiers en pause réinitialisés");
+
+  // Réinitialiser les compteurs de clics CEV dans Convex au démarrage
+  try {
+    const jobs = await getActiveJobs();
+    const cevJobs = jobs.filter((j: any) => 
+      j.destination === "schengen" && 
+      j.hunterConfig?.isActive === true &&
+      (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
+    );
+    for (const job of cevJobs) {
+      resetCevClickCount(job.id);
+    }
+    log("INFO", `🔄 Compteurs de clics CEV réinitialisés pour ${cevJobs.length} application(s)`);
+  } catch (err) {
+    log("WARN", `⚠️ Erreur réinitialisation compteurs CEV: ${err}`);
+  }
+
   // Vérifier si le mode est activé
   const enabled = await getBotConfigValue("cev_dossier_mode");
   if (enabled !== "1") {
@@ -629,7 +650,7 @@ async function runAccountLoop(job: any): Promise<void> {
   
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
-  const savedPoolState = await restorePoolStateFromRedis(redisKey);
+  const savedPoolState = await restorePoolStateFromRedis(redisKey, true); // freshStart=true pour vider les clics
   let savedScanCount = 0;
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
@@ -698,6 +719,30 @@ async function runAccountLoop(job: any): Promise<void> {
     validUntil?: number;
     siphonedAt?: number;
   } | undefined = undefined;
+
+  // Récupérer les credentials siphonnés depuis Convex au démarrage
+  try {
+    const initialCreds = await getCevCredentials();
+    if (initialCreds?.siphonedF5CookieValue) {
+      siphonedCreds = {
+        f5CookieValue: initialCreds.siphonedF5CookieValue,
+        f5CookieName: initialCreds.siphonedF5CookieName,
+        aspNetSessionId: initialCreds.siphonedAspNetSessionId,
+        userAgent: initialCreds.siphonedUserAgent,
+        validUntil: initialCreds.siphonedValidUntil,
+        siphonedAt: initialCreds.siphonedAt,
+      };
+      log("INFO", `🍪 Cookies siphonnés chargés au démarrage: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
+      
+      if (siphonedCreds.userAgent) {
+        setCevExternalUserAgent(siphonedCreds.userAgent);
+      }
+    } else {
+      log("INFO", "🍪 Pas de cookies siphonnés disponibles au démarrage");
+    }
+  } catch (err) {
+    log("WARN", `⚠️ Erreur récupération cookies siphonnés au démarrage: ${err}`);
+  }
 
   state.isRunning = true;
   state.startedAt = Date.now();

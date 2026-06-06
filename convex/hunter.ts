@@ -420,6 +420,31 @@ export const recordCevClick = internalMutation({
   },
 });
 
+export const resetCevClickCount = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const existing = (app as { hunterConfig?: { 
+      embassyUsername: string; 
+      embassyPassword: string; 
+      isActive: boolean;
+      [key: string]: unknown;
+    } }).hunterConfig;
+    if (!existing) return;
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        cevClickWindowStart: 0,
+        cevClickCount: 0,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 /**
  * Extrait un code OTP depuis un texte brut (corps d'email ou SMS).
  * Essaie les patterns du plus spécifique au plus générique.

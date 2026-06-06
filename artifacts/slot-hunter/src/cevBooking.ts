@@ -1432,7 +1432,9 @@ export async function runCevCheck(job: HunterJob): Promise<SchengenSessionResult
   const now = Date.now();
   const WINDOW_MS = 60 * 60 * 1000;
   const windowStart = hc.cevClickWindowStart ?? 0;
-  const clickCount = (now - windowStart < WINDOW_MS) ? (hc.cevClickCount ?? 0) : 0;
+  
+  // Réinitialiser le compteur si la fenêtre est expirée (> 1h)
+  const clickCount = (now - windowStart >= WINDOW_MS) ? 0 : (hc.cevClickCount ?? 0);
 
   if (clickCount >= 4) {
     const waitRemaining = WINDOW_MS - (now - windowStart);

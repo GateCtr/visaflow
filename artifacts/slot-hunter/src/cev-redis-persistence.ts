@@ -140,8 +140,9 @@ export function syncPoolStateToRedis(state: SerializablePoolState, customKey?: s
  * Restaure l'état du pool depuis Redis.
  * Retourne null si rien en cache ou si Redis est indisponible.
  * Filtre automatiquement les clickTimestamps > 1h (expirés).
+ * AU DÉMARRAGE FRAIS: vide tous les clics pour éviter les pauses persistantes.
  */
-export async function restorePoolStateFromRedis(customKey?: string): Promise<SerializablePoolState | null> {
+export async function restorePoolStateFromRedis(customKey?: string, freshStart: boolean = false): Promise<SerializablePoolState | null> {
   if (!redisReady || !redisClient) return null;
 
   try {
@@ -153,9 +154,17 @@ export async function restorePoolStateFromRedis(customKey?: string): Promise<Ser
     const now = Date.now();
     const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1h — même valeur que dans le dossier loop
 
-    // Purger les clickTimestamps expirés (> 1h)
-    for (const slot of parsed.slots) {
-      slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
+    // Si freshStart=true, vider tous les clics (démarrage frais)
+    if (freshStart) {
+      for (const slot of parsed.slots) {
+        slot.clickTimestamps = [];
+      }
+      console.log(`[cev-redis] 🔄 Démarrage frais — tous les clics vidés`);
+    } else {
+      // Sinon, purger seulement les clickTimestamps expirés (> 1h)
+      for (const slot of parsed.slots) {
+        slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
+      }
     }
 
     const age = now - parsed.savedAt;

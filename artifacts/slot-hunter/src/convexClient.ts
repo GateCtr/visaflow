@@ -327,6 +327,24 @@ export function recordCevClick(payload: {
 }
 
 /**
+ * Réinitialise le compteur de clics CEV pour une application.
+ * Appelé au démarrage du serveur pour éviter les pauses persistantes.
+ */
+export function resetCevClickCount(applicationId: string): void {
+  const url = `${CONVEX_SITE_URL}/hunter/cev-click-reset`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Hunter-Key": HUNTER_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ applicationId }),
+  }).catch((err) =>
+    console.warn("[convexClient] resetCevClickCount fire-and-forget error:", err)
+  );
+}
+
+/**
  * Log fire-and-forget d'un événement du cycle de vie du bot.
  * N'attend jamais la réponse — ne bloque pas le chemin critique.
  */
