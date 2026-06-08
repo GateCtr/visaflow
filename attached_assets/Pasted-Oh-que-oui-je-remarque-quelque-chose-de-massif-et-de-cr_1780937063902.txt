@@ -1,0 +1,35 @@
+Oh que oui, je remarque quelque chose de **massif** et de **critique** dans cet extrait. Tu viens de trouver exactement la pièce manquante du puzzle.
+
+Regarde attentivement la transition entre le premier bloc et le dernier bloc (la requête pour le `favicon.png` juste après que l'application a basculé vers `/en`).
+
+---
+
+### 1. La bombe : L'apparition du cookie `OSOnline`
+
+Dans les premières requêtes, tu as tes cookies habituels : `ServerId`, `__RequestVerificationToken`, et ton fameux `TS0110ceb4`.
+
+Mais dès que la redirection vers `/en` se produit, un monstre surgit de nulle part dans les `requestCookies` : **`OSOnline`**.
+
+Et regarde sa valeur... C'est une chaîne gigantesque, ultra-dense et chiffrée :
+
+> `DhMI3NMTpRgmB0toXg4sZdvIHLq0l1MhMmYkNFX9moR8IdluFdJAPaUcx0vZ0pZVwLlw0jZIgEeR6JZEtRML9rbqsqRMSt-kZK22rYApuupBkXe_Z5-LixPOjtKoLmHLX1TNxK3Bc4msNNnapdPWCYTni2wcbCD9_P0MD5DWWwGaB4KcxcQCvNz0ZPCbgWjeUF81E5ziVV05BzKy4YkH8wPiuun3pxifvX...` (et ça continue sur des dizaines de lignes !)
+
+### 2. Qu'est-ce que cela signifie ?
+
+1. **Le TS01 n'a PAS changé :** Si tu regardes la valeur du `TS0110ceb4`, elle reste strictement identique du début à la fin : `01f258f401a325e92036...ad2`. Le WAF F5 a donc gardé la même session d'attachement.
+2. **Le serveur a validé ton identité au niveau applicatif :** Ce site est développé avec **OutSystems** (d'où le préfixe `OS` dans `OSOnline`). Le cookie `OSOnline` est le cookie de session principale d'OutSystems qui maintient l'état connecté ou validé de l'utilisateur.
+3. **Le scénario du saut invisible :** Lorsque tu as soumis ton Captcha via le `POST`, le serveur applicatif a validé le hCaptcha, s'est dit *"OK, c'est un humain"*, a généré ce cookie `OSOnline` énorme (qui contient l'empreinte de ta validation et de ta session), et te l'a renvoyé dans le `Set-Cookie` de la réponse de redirection.
+
+---
+
+### Pourquoi ton script HTTP pur échouait ?
+
+Si ton code TypeScript (`fetch` ou `axios`) suivait la redirection automatiquement sans extraire les en-têtes `Set-Cookie` du `POST` intermédiaire, **il ratait complètement l'arrivée de ce cookie `OSOnline**`.
+
+Et sans ce cookie `OSOnline` attaché aux requêtes suivantes, le serveur applicatif te considérait comme une session anonyme/bloquée ou non-validée, et te jetait ou te faisait tourner en bourrique.
+
+### Ce que tu dois faire dans ton code maintenant :
+
+C'est la confirmation qu'il te faut intercepter la réponse du `POST` du captcha. Tu dois absolument capturer ce cookie `OSOnline` dès qu'il est émis par le serveur et l'ajouter à ton Jar de cookies pour toutes les requêtes suivantes (`/SelectSlot`, images, etc.).
+
+Tu vois l'énorme différence de taille entre les deux états de cookies ? C'est flagrant !
