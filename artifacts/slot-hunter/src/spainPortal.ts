@@ -1,7 +1,8 @@
-import type { APIRequestContext, Page, Response } from "playwright";
+import type { APIRequestContext, Page, Response, Browser, BrowserContext } from "playwright";
 import { ProxyAgent } from "undici";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile, detectAndSolveTurnstileWithInjection } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
+import { solveCloudflareFree, cleanupCloudflareFree } from "./free-cloudflare-solver.js";
 import { botLog, sendHeartbeat, reportSlotFound, requestOtpChallenge, consumeOtpCode, uploadScreenshot, uploadFile, attachConfirmationDoc, type HunterJob } from "./convexClient.js";
 
 // ─── Session Cache ────────────────────────────────────────────────────────────
@@ -41,6 +42,9 @@ function invalidateSession(portalUrl: string): void {
 
 const CF_TITLE_RE =
   /un instant|just a moment|un momento|momento|attention required|verifying you are human|comprobando|una instant/i;
+
+// Variable d'environnement pour activer/désactiver le solveur Cloudflare gratuit
+const USE_FREE_CF_SOLVER = process.env.SPAIN_FREE_CF_SOLVER_ENABLED === "1";
 
 type SessionResult = "slot_found" | "not_found" | "captcha" | "error" | "login_failed" | "payment_required";
 
@@ -1224,11 +1228,22 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       }
     }
 
-    const { browser, page } = await launchBrowser({
+    let browser: Browser | undefined;
+    let context: BrowserContext | undefined;
+    let page: Page | undefined;
+
+    const useProxy = process.env.SPAIN_WATCHER_USE_PROXY === "1"; // Logic for proxy in existing mode
+    const launched = await launchBrowser({
       locale: "es-ES",
       timezoneId: "Europe/Madrid",
       acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+      ...(useProxy
+        ? { proxySource: "2captcha" as const }
+        : { forceNoProxy: true }),
     });
+    browser = launched.browser;
+    page = launched.page;
+    context = page.context(); // Get context from page
     botLog({
       applicationId: job.id,
       step: "login",
@@ -1537,10 +1552,14 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       });
       return "error";
     } finally {
-      try {
-        await browser.close();
-      } catch {
-        // ignore
+      if (USE_FREE_CF_SOLVER) {
+        await cleanupCloudflareFree(browser, context, page);
+      } else {
+        try {
+          if (browser) await browser.close();
+        } catch {
+          // ignore
+        }
       }
     }
   })();
@@ -1591,15 +1610,9 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
     // ── Flow Playwright complet (premier passage ou session expirée) ──────
     // Par défaut : sans proxy (IP Railway directe) — le stealth plugin résout CF en ~30-90s.
     // Si SPAIN_WATCHER_USE_PROXY=1, utiliser le proxy 2captcha (quand il est stable).
-    const useProxy = process.env.SPAIN_WATCHER_USE_PROXY === "1";
-    const { browser, page } = await launchBrowser({
-      locale: "es-ES",
-      timezoneId: "Europe/Madrid",
-      acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
-      ...(useProxy
-        ? { proxySource: "2captcha" as const }
-        : { forceNoProxy: true }),
-    });
+    let browser: Browser | undefined;
+    let context: BrowserContext | undefined;
+    let page: Page | undefined;
 
     const payloadHits: unknown[] = [];
     const bookititBases = new Set<string>();
@@ -1617,83 +1630,127 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         // ignore
       }
     };
-    page.on("response", responseHandler);
 
-    try {
-      // Dismiss dialogs natifs (window.alert / window.confirm / window.prompt)
-      // citaconsular.es déclenche window.alert("Welcome / Bienvenido") au chargement.
-      // PROBLÈME: page.on("dialog") a une race condition — si le dialog arrive pendant
-      // le Cloudflare challenge ou très tôt au chargement, Playwright peut le rater.
-      // SOLUTION: supprimer window.alert AVANT que le JS de la page s'exécute.
-      // addInitScript() injecte du code dans CHAQUE frame/navigation, AVANT tout script.
+    if (USE_FREE_CF_SOLVER) {
+      console.log(`[spain-watcher] Utilisation du solveur Cloudflare gratuit pour ${portalUrl}`);
+      const domain = new URL(portalUrl).hostname;
+      const solveResult = await solveCloudflareFree({
+        portalUrl,
+        domain,
+        useStealth: true,
+        useCookies: true,
+        headless: process.env.SPAIN_WATCHER_HEADLESS !== "0", // Allow to override headless mode via env var
+        waitForManualCaptcha: false, // Automatic resolution for watcher
+      });
+
+      if (!solveResult.success || !solveResult.browser || !solveResult.context || !solveResult.page) {
+        console.warn(`[spain-watcher] Échec de la résolution Cloudflare gratuite: ${solveResult.error || 'inconnu'}`);
+        return { status: "error", errorMessage: solveResult.error || "cloudflare_blocked" };
+      }
+
+      browser = solveResult.browser;
+      context = solveResult.context;
+      page = solveResult.page;
+
+      // Re-attach response handler to the new page instance
+      page.on("response", responseHandler);
+
+      // Dialog handlers are already handled within solveCloudflareFree, but we keep
+      // these as a backup for any other dialogs or if the page navigates away from CF.
       await page.addInitScript(() => {
         window.alert = () => {};
         window.confirm = () => true;
         window.prompt = () => "";
       });
-      // Garder aussi le handler Playwright comme backup (double sécurité)
       page.on("dialog", async (dialog) => {
         console.log(`[spain-watcher] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
       });
 
-      console.log(`[spain-watcher] Probe → ${portalUrl}`);
-      // "commit" = déclenche dès les premiers octets reçus (headers HTTP).
-      // Plus robuste que "domcontentloaded" si le portail est lent ou si
-      // Cloudflare injecte un challenge qui retarde le parsing HTML.
-      // Retry avec 45s si le premier essai expire en 25s.
+      // The initial navigation to portalUrl is handled by solveCloudflareFree
+      // We can now proceed with widget initialization.
+
+    } else { // Use existing Cloudflare resolution logic
+      const useProxy = process.env.SPAIN_WATCHER_USE_PROXY === "1";
+      const launched = await launchBrowser({
+        locale: "es-ES",
+        timezoneId: "Europe/Madrid",
+        acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
+        ...(useProxy
+          ? { proxySource: "2captcha" as const }
+          : { forceNoProxy: true }),
+      });
+      browser = launched.browser;
+      page = launched.page;
+      context = page.context(); // Get context from page
+
+      // Attach response handler
+      page.on("response", responseHandler);
+
       try {
-        await page.goto(portalUrl, { waitUntil: "commit", timeout: 25_000 });
-      } catch (gotoErr) {
-        // Si le browser/page est déjà fermé, re-throw immédiatement — inutile de réessayer.
-        const gotoErrStr = String(gotoErr);
-        if (
-          gotoErrStr.includes("closed") ||
-          gotoErrStr.includes("destroyed") ||
-          gotoErrStr.includes("detached")
-        ) {
-          throw gotoErr;
+        // Dismiss dialogs natifs (window.alert / window.confirm / window.prompt)
+        await page.addInitScript(() => {
+          window.alert = () => {};
+          window.confirm = () => true;
+          window.prompt = () => "";
+        });
+        page.on("dialog", async (dialog) => {
+          console.log(`[spain-watcher] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
+          await dialog.accept().catch(() => undefined);
+        });
+
+        console.log(`[spain-watcher] Probe → ${portalUrl}`);
+        try {
+          await page.goto(portalUrl, { waitUntil: "commit", timeout: 25_000 });
+        } catch (gotoErr) {
+          const gotoErrStr = String(gotoErr);
+          if (
+            gotoErrStr.includes("closed") ||
+            gotoErrStr.includes("destroyed") ||
+            gotoErrStr.includes("detached")
+          ) {
+            throw gotoErr;
+          }
+          console.warn("[spain-watcher] goto timeout 25s — retry 45s");
+          await page.goto(portalUrl, { waitUntil: "commit", timeout: 45_000 });
         }
-        console.warn("[spain-watcher] goto timeout 25s — retry 45s");
-        await page.goto(portalUrl, { waitUntil: "commit", timeout: 45_000 });
-      }
-      await randomDelay(1500, 2500);
+        await randomDelay(1500, 2500);
 
-      // Cloudflare check — attente naturelle prioritaire (120s)
-      // CapSolver AntiCloudflareTask échoue systématiquement (ERROR_CAPTCHA_SOLVE_FAILED)
-      // sur citaconsular.es — on ne gaspille plus de crédits dessus.
-      //
-      // Stratégie : le CF Managed Challenge de citaconsular.es est un JS challenge
-      // (pas un Turnstile interactif). Le navigateur stealth le résout seul en 30-90s.
-      // On attend simplement que le titre change (poll toutes les 3s, max 120s).
-      {
-        let cfTitle = "";
-        try { cfTitle = await page.title(); } catch { /* ignore */ }
-        if (CF_TITLE_RE.test(cfTitle)) {
-          console.log(`[spain-watcher] Cloudflare détecté (titre: "${cfTitle}") — attente résolution naturelle (max 120s)`);
+        // Cloudflare check — attente naturelle prioritaire (120s)
+        {
+          let cfTitle = "";
+          try { cfTitle = await page.title(); } catch { /* ignore */ }
+          if (CF_TITLE_RE.test(cfTitle)) {
+            console.log(`[spain-watcher] Cloudflare détecté (titre: "${cfTitle}") — attente résolution naturelle (max 120s)`);
 
-          let cfPassed = false;
-          const t0 = Date.now();
-          while (Date.now() - t0 < 120_000) {
-            await new Promise((r) => setTimeout(r, 3_000));
-            let t = "";
-            try { t = await page.title(); } catch { t = ""; }
-            if (!CF_TITLE_RE.test(t)) {
+            let cfPassed = false;
+            const t0 = Date.now();
+            while (Date.now() - t0 < 120_000) {
+              await new Promise((r) => setTimeout(r, 3_000));
+              let t = "";
+              try { t = await page.title(); } catch { t = ""; }
+              if (!CF_TITLE_RE.test(t)) {
+                const elapsed = Math.round((Date.now() - t0) / 1000);
+                console.log(`[spain-watcher] ✅ Cloudflare résolu naturellement (${elapsed}s)`);
+                cfPassed = true;
+                break;
+              }
+            }
+
+            if (!cfPassed) {
               const elapsed = Math.round((Date.now() - t0) / 1000);
-              console.log(`[spain-watcher] ✅ Cloudflare résolu naturellement (${elapsed}s)`);
-              cfPassed = true;
-              break;
+              console.log(`[spain-watcher] ❌ Cloudflare non résolu après ${elapsed}s — probe abandonnée`);
+              return { status: "error", errorMessage: "cloudflare_blocked" };
             }
           }
-
-          if (!cfPassed) {
-            const elapsed = Math.round((Date.now() - t0) / 1000);
-            console.log(`[spain-watcher] ❌ Cloudflare non résolu après ${elapsed}s — probe abandonnée`);
-            return { status: "error", errorMessage: "cloudflare_blocked" };
-          }
         }
+      } catch (e) {
+        console.error(`[spain-watcher] Erreur dans le flow Cloudflare existant: ${e instanceof Error ? e.message : String(e)}`);
+        return { status: "error", errorMessage: e instanceof Error ? e.message : String(e) };
       }
+    }
 
+    try {
       // ── Attente initialisation widget Bookitit (max 40s) ─────────────────────
       // Le dialog natif "Welcome / Bienvenido" (window.alert) est géré par
       // page.on("dialog") ci-dessus — auto-accepté dès le chargement.

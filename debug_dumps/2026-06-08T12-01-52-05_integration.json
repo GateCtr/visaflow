@@ -1,0 +1,190 @@
+{
+  "stepName": "05_integration",
+  "timestamp": 1780920112937,
+  "requestCount": 1,
+  "requests": [
+    {
+      "id": "req_1780920102437_256",
+      "timestamp": 1780920102636,
+      "url": "https://appointment.cloud.diplomatie.be/Integration/Error/NoAvailability",
+      "method": "GET",
+      "resourceType": "document",
+      "frameUrl": "https://appointment.cloud.diplomatie.be/Captcha",
+      "isIframe": false,
+      "isPopup": false,
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=bh5vtbkzblzvh4jtcjruxslq; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "requestCookies": [
+        {
+          "name": "__RequestVerificationToken",
+          "value": "aUctNb1eWAALqOy4k-lDN1etAG_6ne5dCaaGitnZcSy3Ut3ljXEz-DRMstWEo3Bi9492f0-l57ns5qyh2hm4AdKl9XoWq4HR2uiY0neZY-81",
+          "domain": "visaonweb.diplomatie.be",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": true,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "ServerId",
+          "value": "dccfd37d58572639",
+          "domain": "visaonweb.diplomatie.be",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": true,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "TS0110ceb4",
+          "value": "01f258f40105ad7c10c1eb5903014d1c53f447a53b86f651b0968a02a72fda3ec65ddd62d6e32d58cf2bfa4590fe28464e04184fe3",
+          "domain": ".visaonweb.diplomatie.be",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "__cf_bm",
+          "value": "7HtQIIAUAdJ.2uBBy5a454VhoRhCG3pXpb0v9UNz5YY-1780920026.087577-1.0.1.1-v.fnPbc3z7eZ2MGgcZQVRuIJW2E2ENZUHIKf6myeDuY1AW9XltZCrCnWCbjKACgsyVhwbUcwTuxhzibAl_eUeva_WSY1ZcPbTboavDvZpmod3AYHSwtbP1PhNYUxYXev",
+          "domain": ".hcaptcha.com",
+          "path": "/",
+          "expires": 1780921826.077028,
+          "httpOnly": true,
+          "secure": true,
+          "sameSite": "None"
+        },
+        {
+          "name": "OSOnline",
+          "value": "IrA3LNeIYxECB3EGMbyyZkGLNU2HoIpDeTqeK49kOcfZogQiYOAy9Rvy9leavb98Fl8MF3G2gSoA-o1y15W-aHQhQDMBenZVHPCjSKgFAKx5RrdqZkUC7Ql__HUoQAWhh3aMwNphFXTyHl-mgJOKL5tdinr_LxNopNkRUjR1mCVS5dH4o8FWF3RfECFe6-Qj2JUYlKiPI3Zu1CaKGdZ2d3XRhAs_nssMlBktZI6lR6mIjSMsYiF8aN-u9MjlH6VJ2ukzRf-8EihPE2v8RAc2ZNQkjqi0Tq-wRVoO5kV3clepIViNU4NJN_VjDwfuWzqUtN9VUhnaBycf5nEYgw_OrCs5-lvEsKGElbsWCe6EPMXlWnzksBb4Ydn6GXEw-ijdKpdNtDPtbxDJzpPlTsaLfPmY0RqeYsW-tfI6DdYZEY5qX1zOcC9_3S2MlC4jH1OD679k3B_cc97YlJEsfI4iXtZshx0EiuIgMf99rKIyWJYpKYE4UCo9rqQWJth_A8zwwNtW_Tb-w-0zpphsjxnCdcSN_LUMIjt6i5f1eig_R4QljkTsLfEOR-dqg3uFX9hFbI0rOwOcv-6k5oHD34ANRnyH6ZlaV_OnZB7s7ICVS8TULeAwJiJwHY8hZtZkn7UbqhpQiJrTzuFU-AOYMRq-7T3javbc4aWoFrIeKkgk2-BHJNrFRAWhHbG1TOLIeEf2imM6wga-rD6jZPkQVADtGAFTx3qosT51sWunHvGZeMT3g_wLD-a_6VbBV6FNicfaPjBWNCkKX032knaosnlqZdt4MLYEicRT82q_3pdx1C0",
+          "domain": "visaonweb.diplomatie.be",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": true,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "_culture",
+          "value": "en-US",
+          "domain": "visaonweb.diplomatie.be",
+          "path": "/",
+          "expires": 1783512076.308258,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "bh5vtbkzblzvh4jtcjruxslq",
+          "domain": "appointment.cloud.diplomatie.be",
+          "path": "/",
+          "expires": -1,
+          "httpOnly": true,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US",
+          "domain": "appointment.cloud.diplomatie.be",
+          "path": "/",
+          "expires": 1783512101.121313,
+          "httpOnly": false,
+          "secure": false,
+          "sameSite": "Lax"
+        },
+        {
+          "name": "hmt_id",
+          "value": "81b3d410-845d-4c23-a556-e8280eaae210",
+          "domain": "api.hcaptcha.com",
+          "path": "/",
+          "expires": 1783512088.110998,
+          "httpOnly": false,
+          "secure": true,
+          "sameSite": "None"
+        }
+      ],
+      "responseStatus": 302,
+      "responseStatusText": "302",
+      "responseHeaders": {
+        "access-control-expose-headers": "Request-Context",
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "connection": "keep-alive",
+        "content-length": "150",
+        "content-security-policy": "default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Mon, 08 Jun 2026 12:01:45 GMT",
+        "expires": "-1",
+        "location": "/Integration/Error/SessionExpired",
+        "pragma": "no-cache",
+        "referrer-policy": "no-referrer",
+        "request-context": "appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-download-options": "noopen",
+        "x-frame-options": "Deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "responseHeadersOrder": [
+        "Access-Control-Expose-Headers",
+        "Cache-Control",
+        "Connection",
+        "Content-Length",
+        "Content-Security-Policy",
+        "Content-Type",
+        "Date",
+        "Expires",
+        "Location",
+        "Pragma",
+        "Referrer-Policy",
+        "Request-Context",
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "X-Download-Options",
+        "X-Frame-Options",
+        "X-XSS-Protection"
+      ],
+      "responseHeadersText": "{\n  \"access-control-expose-headers\": \"Request-Context\",\n  \"cache-control\": \"no-cache, no-store, must-revalidate\",\n  \"connection\": \"keep-alive\",\n  \"content-length\": \"150\",\n  \"content-security-policy\": \"default-src 'self';script-src 'self' https://*.google.com/ https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/ https://remote.captcha.com https://*.googletagmanager.com/;object-src 'none';style-src 'self' 'unsafe-inline' https://www.google.com https://*.googleapis.com/ https://*.hcaptcha.com/;img-src 'self' data: https://*.gstatic.com/ https://*.googleapis.com/ https://*.hcaptcha.com/;media-src 'self';frame-src https://www.google.com https://*.hcaptcha.com/;font-src 'self' https://*.googleapis.com/ https://*.gstatic.com/ https://*.hcaptcha.com/;connect-src 'self' https://*.hcaptcha.com/;frame-ancestors 'none';report-uri /WebResource.axd?cspReport=true\",\n  \"content-type\": \"text/html; charset=utf-8\",\n  \"date\": \"Mon, 08 Jun 2026 12:01:45 GMT\",\n  \"expires\": \"-1\",\n  \"location\": \"/Integration/Error/SessionExpired\",\n  \"pragma\": \"no-cache\",\n  \"referrer-policy\": \"no-referrer\",\n  \"request-context\": \"appId=cid-v1:c92daf0f-3428-4d31-8871-eef6a4ea415f\",\n  \"strict-transport-security\": \"max-age=31536000; includeSubDomains\",\n  \"x-content-type-options\": \"nosniff\",\n  \"x-download-options\": \"noopen\",\n  \"x-frame-options\": \"Deny\",\n  \"x-xss-protection\": \"1; mode=block\"\n}",
+      "timing": {
+        "requestStartTime": 1780920102636,
+        "responseStartTime": 1780920105845,
+        "endTime": 1780920105845,
+        "duration": 3209
+      }
+    }
+  ]
+}

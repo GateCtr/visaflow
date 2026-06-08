@@ -565,11 +565,10 @@ export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impi
 export async function spainCfFetch(
   url: string,
   session: SpainCfSession,
-  extraHeaders?: Record<string, string>,
+  fetchOptions?: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
 ): Promise<Response | null> {
   const impit = getSpainImpit(session);
 
-  // Construire le cookie header
   const cookieParts = [`cf_clearance=${session.cfClearance}`];
   for (const c of session.allCookies) {
     if (c.name !== "cf_clearance") {
@@ -577,7 +576,8 @@ export async function spainCfFetch(
     }
   }
 
-  const headers: Record<string, string> = {
+  // Base headers, can be overridden by session.extraHeaders and fetchOptions.headers
+  const baseHeaders: Record<string, string> = {
     "User-Agent": session.userAgent,
     "Accept": "*/*",
     "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -586,15 +586,16 @@ export async function spainCfFetch(
     "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
     "Sec-CH-UA-Mobile": "?0",
     "Sec-CH-UA-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "script",
-    "Sec-Fetch-Mode": "no-cors",
-    "Sec-Fetch-Site": "cross-site",
+  };
+
+  const finalHeaders = {
+    ...baseHeaders,
     ...session.extraHeaders,
-    ...extraHeaders,
+    ...fetchOptions?.headers,
   };
 
   try {
-    const res = await impit.fetch(url, { headers } as any) as unknown as Response;
+    const res = await impit.fetch(url, { ...fetchOptions, headers: finalHeaders } as any) as unknown as Response;
     return res;
   } catch (err) {
     console.error(`[spain-soax] ❌ Fetch error: ${err instanceof Error ? err.message : err}`);

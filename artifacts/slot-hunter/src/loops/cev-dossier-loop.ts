@@ -65,7 +65,8 @@ import { createLogger } from "../logger.js";
 
 async function captureF5CookieForAccount(
   accountId: string, 
-  logger: ReturnType<typeof createLogger>
+  logger: ReturnType<typeof createLogger>,
+  hunterConfig?: { cevUseProxy?: boolean }
 ): Promise<{ f5CookieValue: string, f5CookieName: string, userAgent: string } | null> {
   let puppeteer: any;
   try {
@@ -84,7 +85,20 @@ async function captureF5CookieForAccount(
     "--disable-blink-features=AutomationControlled",
   ];
 
-  const PROXY_URL = process.env.IPROYAL_PROXY_URL || process.env.SOAX_PROXY_URL;
+  // Check if proxy should be used
+  const useProxy = hunterConfig?.cevUseProxy ?? true;
+  let PROXY_URL = "";
+  if (useProxy) {
+    // First try SOAX with accountId as identifier (same as the loop)
+    if (process.env.SOAX_PROXY_URL) {
+      PROXY_URL = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
+    } else if (process.env.IPROYAL_PROXY_URL) {
+      PROXY_URL = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
+    } else {
+      PROXY_URL = process.env.PROXY_URL ?? "";
+    }
+  }
+
   let proxyHost = "";
   let proxyPort = "";
 
@@ -102,6 +116,7 @@ async function captureF5CookieForAccount(
   }
 
   let browser: any = null;
+  const VOWINT_URL = "https://visaonweb.diplomatie.be";
 
   try {
     logger.info(`Lancement du navigateur pour capture cookie F5...`);
@@ -117,6 +132,7 @@ async function captureF5CookieForAccount(
       try {
         const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
         if (parsed.username) {
+          logger.info(`Authentification proxy avec username: ${decodeURIComponent(parsed.username).slice(0, 30)}…`);
           await page.authenticate({
             username: decodeURIComponent(parsed.username),
             password: decodeURIComponent(parsed.password),
@@ -124,26 +140,38 @@ async function captureF5CookieForAccount(
         }
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
-        logger.warn(`Erreur auth proxy: ${errMsg}`);
+        logger.error(`Erreur lors de l'authentification proxy: ${errMsg}`);
+        return null;
       }
     }
 
     const userAgent = await browser.userAgent();
+    logger.info(`User-Agent: ${userAgent.slice(0, 80)}...`);
 
-    // Navigate to VOWINT homepage
-    const VOWINT_URL = "https://visaonweb.diplomatie.be";
+    // Step 1: Go to VOWINT homepage
+    logger.info(`Navigating to VOWINT homepage pour TS cookie: ${VOWINT_URL}`);
     await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
     const waitVowintSec = 8 + Math.random() * 4;
+    logger.info(`Waiting ${waitVowintSec.toFixed(1)}s sur VOWINT pour TS cookie...`);
     await new Promise(r => setTimeout(r, waitVowintSec * 1000));
 
-    // Get cookies
-    const cookies = await page.cookies();
+    let cookies = await page.cookies();
     logger.info(`${cookies.length} cookie(s) capturés: ${cookies.map((c: any) => c.name).join(", ")}`);
 
-    const f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
+    let f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
     if (!f5Cookie) {
-      logger.warn(`F5 cookie (TS*) introuvable!`);
-      return null;
+      logger.warn(`F5 cookie (TS*) introuvable! Essai rechargement...`);
+      // Retry like session worker
+      await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
+      await new Promise(r => setTimeout(r, 10000));
+
+      const cookies2 = await page.cookies();
+      f5Cookie = cookies2.find((c: any) => c.name.startsWith("TS"));
+
+      if (!f5Cookie) {
+        logger.error("F5 cookie toujours manquant après reload!");
+        return null;
+      }
     }
 
     logger.success(`✅ Cookie F5 capturé: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}...`);
@@ -154,14 +182,18 @@ async function captureF5CookieForAccount(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(`Erreur Puppeteer capture cookie F5: ${msg}`);
+    const stack = err instanceof Error ? err.stack : "";
+    logger.error(`Erreur Puppeteer capture cookie F5: ${msg}`);
+    if (stack) logger.error(`Stack trace: ${stack}`);
     return null;
   } finally {
     if (browser) {
       try {
+        logger.info("Fermeture du navigateur");
         await browser.close();
       } catch (e) {
-        logger.warn(`Erreur fermeture navigateur: ${e}`);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        logger.warn(`Erreur lors de la fermeture du navigateur: ${errMsg}`);
       }
     }
   }
@@ -917,7 +949,7 @@ async function runAccountLoop(job: any): Promise<void> {
       if (!siphonedCreds || nowTime - lastF5CookieCapturedAt > F5_COOKIE_REFRESH_INTERVAL_MS) {
         logger.info(`🍪 Capture du cookie F5 pour le compte ${applicantName}...`);
         
-        const f5Cookie = await captureF5CookieForAccount(accountId, logger);
+        const f5Cookie = await captureF5CookieForAccount(accountId, logger, job.hunterConfig);
         
         if (f5Cookie) {
           // Inject the cookie into the job's hunterConfig

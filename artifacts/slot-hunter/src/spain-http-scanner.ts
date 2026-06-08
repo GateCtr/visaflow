@@ -206,9 +206,14 @@ async function callBookititJsonp(
   const url = `${baseUrl}${endpoint}?${q.toString()}`;
 
   const res = await spainCfFetch(url, session, {
-    Referer: referer,
-    Origin: new URL(referer).origin,
-    "X-Requested-With": "XMLHttpRequest",
+    headers: {
+      Referer: referer,
+      Origin: new URL(referer).origin,
+      "X-Requested-With": "XMLHttpRequest",
+      "Sec-Fetch-Dest": "script",
+      "Sec-Fetch-Mode": "no-cors",
+      "Sec-Fetch-Site": "cross-site",
+    },
   });
 
   if (!res) return null;
@@ -369,11 +374,13 @@ async function fetchBookititConfig(
 
   // Step 1: GET la page d'entrée (bouton Continue + token)
   const entryRes = await spainCfFetch(portalUrl, session, {
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Upgrade-Insecure-Requests": "1",
+    headers: {
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Upgrade-Insecure-Requests": "1",
+    },
   });
 
   if (!entryRes) {
@@ -409,40 +416,31 @@ async function fetchBookititConfig(
 
     console.log(`[spain-http] 🔘 Bouton "Continue" détecté — POST avec token vers ${postUrl}`);
 
-    // Soumettre le formulaire
-    const { getSpainImpit } = await import("./spain-soax-solver.js");
-    const impit = getSpainImpit(session);
-
-    // Construire le cookie header
-    const cookieParts = [`cf_clearance=${session.cfClearance}`];
-    for (const c of session.allCookies) {
-      if (c.name !== "cf_clearance") cookieParts.push(`${c.name}=${c.value}`);
-    }
-
-    const postHeaders: Record<string, string> = {
-      "User-Agent": session.userAgent,
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Cookie": cookieParts.join("; "),
-      "Origin": "https://www.citaconsular.es",
-      "Referer": portalUrl,
-      "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
-      "Sec-CH-UA-Mobile": "?0",
-      "Sec-CH-UA-Platform": '"Windows"',
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-    };
+    console.log(`[spain-http] 🔘 Bouton "Continue" détecté — POST avec token vers ${postUrl}`);
 
     try {
-      const postRes = await impit.fetch(postUrl, {
+      const postRes = await spainCfFetch(postUrl, session, {
         method: "POST",
-        headers: postHeaders,
+        headers: {
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Origin": "https://www.citaconsular.es",
+          "Referer": portalUrl,
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "same-origin",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
         body: `token=${encodeURIComponent(token)}`,
-      } as any) as unknown as Response;
+      });
+
+      if (!postRes) {
+        console.warn(`[spain-http] ⚠️ POST retourné null — possible CF cookie expiré`);
+        invalidateSpainCfSession();
+        return null;
+      }
 
       if (postRes.ok || postRes.status === 302 || postRes.status === 301) {
         html = await postRes.text();
@@ -587,36 +585,23 @@ async function scanViaMainEndpoint(
   portalUrl: string,
 ): Promise<SpainHttpScanResult | null> {
   const t0 = Date.now();
-  const { getSpainImpit } = await import("./spain-soax-solver.js");
-  const impit = getSpainImpit(session);
-
-  // Build cookie jar
-  const cookieParts = [`cf_clearance=${session.cfClearance}`];
-  for (const c of session.allCookies) {
-    if (c.name !== "cf_clearance") cookieParts.push(`${c.name}=${c.value}`);
-  }
-
+  const cookieParts: string[] = [];
+  
   // Step 1: GET entry page → PHPSESSID + token
   // IMPORTANT: Use full Chrome header set — Cloudflare validates the fingerprint
   // (missing sec-ch-ua headers was causing immediate 403 → session invalidation)
-  const entryRes = await impit.fetch(portalUrl, {
+  const entryRes = await spainCfFetch(portalUrl, session, {
     headers: {
-      "User-Agent": session.userAgent,
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
       "Accept-Encoding": "gzip, deflate, br, zstd",
-      "Cookie": cookieParts.join("; "),
-      "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
-      "Sec-CH-UA-Mobile": "?0",
-      "Sec-CH-UA-Platform": '"Windows"',
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "none",
       "Sec-Fetch-User": "?1",
       "Upgrade-Insecure-Requests": "1",
-      ...session.extraHeaders,
     },
-  } as any) as any;
+  });
 
   if (!entryRes || entryRes.status === 403) {
     invalidateSpainCfSession();
@@ -674,29 +659,23 @@ async function scanViaMainEndpoint(
   }
 
   // Step 2: POST Continue
-  const postRes = await impit.fetch(portalUrl.replace(/\/?$/, "/"), {
+  const postRes = await spainCfFetch(portalUrl.replace(/\/?$/, "/"), session, {
     method: "POST",
     headers: {
-      "User-Agent": session.userAgent,
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
       "Accept-Encoding": "gzip, deflate, br, zstd",
       "Content-Type": "application/x-www-form-urlencoded",
-      "Cookie": cookieParts.join("; "),
       "Origin": "https://www.citaconsular.es",
       "Referer": portalUrl,
-      "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
-      "Sec-CH-UA-Mobile": "?0",
-      "Sec-CH-UA-Platform": '"Windows"',
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "same-origin",
       "Sec-Fetch-User": "?1",
       "Upgrade-Insecure-Requests": "1",
-      ...session.extraHeaders,
     },
     body: `token=${encodeURIComponent(tokenMatch[1])}`,
-  } as any) as any;
+  });
 
   // Monitor POST response for structural changes
   if (postRes && postRes.status !== 200) {
@@ -720,24 +699,18 @@ async function scanViaMainEndpoint(
   if (pkMatch) params.set("publickey", pkMatch[1]);
 
   const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${params}`;
-  const mainRes = await impit.fetch(mainUrl, {
+  const mainRes = await spainCfFetch(mainUrl, session, {
     headers: {
-      "User-Agent": session.userAgent,
       "Accept": "*/*",
       "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
       "Accept-Encoding": "gzip, deflate, br, zstd",
-      "Cookie": cookieParts.join("; "),
       "Referer": portalUrl.replace(/\/?$/, "/"),
       "X-Requested-With": "XMLHttpRequest",
-      "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
-      "Sec-CH-UA-Mobile": "?0",
-      "Sec-CH-UA-Platform": '"Windows"',
       "Sec-Fetch-Dest": "script",
       "Sec-Fetch-Mode": "no-cors",
       "Sec-Fetch-Site": "same-origin",
-      ...session.extraHeaders,
     },
-  } as any) as any;
+  });
 
   if (!mainRes || mainRes.status !== 200) {
     console.warn(`[spain-http] ⚠️ /onlinebookings/main/ status: ${mainRes?.status ?? "no response"}`);
