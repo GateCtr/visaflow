@@ -102,8 +102,9 @@ interface UaProfile {
 
 const CEV_UA_POOL: UaProfile[] = [
   {
+    // FIX #6: Trois brands Chrome officiel stable Windows — "Google Chrome";v="148" ajouté
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
-    chUa: '"Not/A)Brand";v="99", "Chromium";v="148"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Google Chrome";v="148"',
     platform: '"Windows"',
   },
   {
@@ -112,8 +113,9 @@ const CEV_UA_POOL: UaProfile[] = [
     platform: '"Windows"',
   },
   {
+    // FIX #6: Trois brands Chrome officiel stable macOS — "Google Chrome";v="148" ajouté
     ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
-    chUa: '"Not/A)Brand";v="99", "Chromium";v="148"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Google Chrome";v="148"',
     platform: '"macOS"',
   },
   {
@@ -185,11 +187,19 @@ function parseUserAgentForSecCh(ua: string): {
   }
 
   // Build all client hints
+  // FIX #6: Include "Google Chrome" brand for official stable Chrome builds
+  const isEdge = ua.includes("Edg/");
+  const chUaReduced = isEdge
+    ? `"Not/A)Brand";v="99", "Chromium";v="${majorVersion}", "Microsoft Edge";v="${majorVersion}"`
+    : `"Not/A)Brand";v="99", "Chromium";v="${majorVersion}", "Google Chrome";v="${majorVersion}"`;
+  const chUaFullVersionListVal = isEdge
+    ? `"Not/A)Brand";v="99.0.0.0", "Chromium";v="${fullVersion}", "Microsoft Edge";v="${fullVersion}"`
+    : `"Not/A)Brand";v="99.0.0.0", "Chromium";v="${fullVersion}", "Google Chrome";v="${fullVersion}"`;
   return {
-    chUa: `"Not/A)Brand";v="99", "Chromium";v="${majorVersion}"`,
+    chUa: chUaReduced,
     platform,
     chUaMobile: "?0",
-    chUaFullVersionList: `"Not/A)Brand";v="99.0.0.0", "Chromium";v="${fullVersion}"`,
+    chUaFullVersionList: chUaFullVersionListVal,
     chUaPlatformVersion: platformVersion,
     chUaArch: arch,
     chUaBitness: bitness
@@ -272,8 +282,12 @@ export function getCevSessionUa(): string {
  *
  * Corrections brand :
  *   - "Not/A)Brand" (slash+parenthèse) au lieu de "Not:A-Brand"
- *   - "Google Chrome" absent du champ réduit (uniquement dans Full-Version-List)
+ *   - "Google Chrome";v="X" présent dans sec-ch-ua pour les builds Chrome officiels stables
  *   - clés sec-ch-ua* en LOWERCASE (ordre réseau réel)
+ *
+ * FIX #2 : isFormPost=true force le mode "document navigate" (Sec-Fetch-Mode: navigate,
+ *   Sec-Fetch-Dest: document, Sec-Fetch-User: ?1) même quand contentType est fourni.
+ *   À utiliser pour les soumissions de formulaire HTML (POST login), pas pour les XHR.
  */
 export function getCevBrowserHeaders(overrides?: {
   referer?: string;
@@ -292,13 +306,22 @@ export function getCevBrowserHeaders(overrides?: {
    *     pour les sauts inter-domaines, ex: VOWINT → CEV)
    */
   fetchSite?: "none" | "same-origin" | "same-site" | "cross-site";
+  /**
+   * FIX #2 : Forcer le mode "document navigate" pour les soumissions de formulaire HTML.
+   * Quand true : Sec-Fetch-Mode=navigate, Sec-Fetch-Dest=document, Sec-Fetch-User=?1,
+   * Sec-Fetch-* positionnés APRÈS sec-ch-ua* (ordre Chrome réel pour form POST).
+   * Incompatible avec xRequestedWith (XHR).
+   */
+  isFormPost?: boolean;
 }): Record<string, string> {
   const chUa = _externalSiphonedChUa ?? _sessionUa.chUa;
   const chUaPlatform = _externalSiphonedPlatform ?? _sessionUa.platform;
   const chUaMobile = _externalSiphonedChUaMobile;
   const ua = overrides?.userAgent ?? _externalSiphonedUa ?? _sessionUa.ua;
 
-  const isAjax = !!(overrides?.contentType || overrides?.xRequestedWith);
+  // FIX #2: isFormPost=true → document navigate, même si contentType est fourni
+  const isFormPost = !!(overrides?.isFormPost);
+  const isAjax = !isFormPost && !!(overrides?.contentType || overrides?.xRequestedWith);
 
   // ── Ordre DÉFINITIF calqué sur captures réseau Chrome 148 (2026-06-08) ────────
   //
@@ -321,7 +344,43 @@ export function getCevBrowserHeaders(overrides?: {
 
   let headers: Record<string, string>;
 
-  if (!isAjax) {
+  if (isFormPost) {
+    // ── FIX #2 : Soumission de formulaire HTML (POST login) ─────────────────
+    // Ordre Chrome réel pour form POST :
+    //   Accept → Accept-Encoding → Accept-Language
+    //   → [Content-Type] → [Origin] → [Referer]
+    //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
+    //   → Sec-Fetch-Dest: document → Sec-Fetch-Mode: navigate
+    //   → Sec-Fetch-Site → Sec-Fetch-User: ?1 → Upgrade-Insecure-Requests: 1
+    //   → User-Agent → [Cookie]
+    const secFetchSite = overrides?.fetchSite
+      ?? (overrides?.referer ? "same-origin" : "none");
+    let ct: string | undefined;
+    if (overrides?.contentType) {
+      ct = overrides.contentType.toLowerCase() === "application/x-www-form-urlencoded"
+        ? "application/x-www-form-urlencoded"
+        : overrides.contentType;
+    }
+    headers = {
+      "Accept": overrides?.accept
+        ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "Accept-Encoding": _sessionAcceptEnc,
+      "Accept-Language": _sessionAcceptLang,
+      ...(ct                 ? { "Content-Type": ct                } : {}),
+      ...(overrides?.origin  ? { "Origin":  overrides.origin  } : {}),
+      ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": secFetchSite,
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+      "User-Agent": ua,
+      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
+    };
+  } else if (!isAjax) {
     // ── Requête document (navigation GET) ──────────────────────────────────
     const secFetchSite = overrides?.fetchSite
       ?? (overrides?.referer ? "same-origin" : "none");

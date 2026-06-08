@@ -51,6 +51,13 @@ export interface SerializableVowintSession {
   appId: string;
   ua: string;
   lastUsedAt: number;
+  /**
+   * FIX #3 : Version du schéma de session.
+   * v2 : inclut le cookie F5 TS0110ceb4 (ajouté 2026-06-08).
+   * Tout enregistrement sans version ou version < 2 est invalidé à la restauration
+   * pour forcer une reconnexion complète avec un jar propre.
+   */
+  version?: number;
 }
 
 // ─── État Redis ─────────────────────────────────────────────────────────────
@@ -200,7 +207,8 @@ export function syncVowintSessionToRedis(email: string, session: SerializableVow
   if (!redisReady || !redisClient) return;
 
   const key = `${REDIS_CEV_VOWINT_PREFIX}${email.toLowerCase()}`;
-  const data = JSON.stringify(session);
+  // FIX #3: Toujours écrire version: 2 pour invalider les anciens enregistrements sans cookie F5.
+  const data = JSON.stringify({ ...session, version: 2 });
   redisClient.set(key, data, { EX: REDIS_CEV_VOWINT_TTL_SEC }).catch((err: Error) => {
     console.warn(`[cev-redis] Vowint session sync échouée: ${err.message}`);
   });
@@ -219,6 +227,14 @@ export async function restoreVowintSessionFromRedis(email: string): Promise<Seri
     if (!data) return null;
 
     const parsed = JSON.parse(data) as SerializableVowintSession;
+
+    // FIX #3: Invalider les sessions sans version ou version < 2 (antérieures au cookie F5 TS0110ceb4).
+    // Ces enregistrements corrompent les requêtes actives — forcer une reconnexion complète.
+    if (!parsed.version || parsed.version < 2) {
+      console.log(`[cev-redis] Session VOWINT ${email.slice(0, 8)}… invalidée (version=${parsed.version ?? "absente"} < 2, antérieure au cookie F5) — reconnexion requise`);
+      await redisClient.del(key);
+      return null;
+    }
 
     // Vérifier que la session n'est pas trop vieille (24h max)
     const age = Date.now() - parsed.lastUsedAt;

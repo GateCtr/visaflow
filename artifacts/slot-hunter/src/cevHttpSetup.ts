@@ -236,7 +236,8 @@ async function getVowintSession(
     const csrfToken = tokenMatch[1];
     if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
 
-    // 2. POST login
+    // 2. POST login — FIX #2: isFormPost=true force Sec-Fetch-Mode:navigate / Sec-Fetch-Dest:document
+    //    afin de correspondre à une soumission de formulaire HTML et non à une requête AJAX.
     const loginRes = await cevSetupFetch(`${VOWINT_BASE}/en/Account/Login`, {
       method: "POST",
       headers: {
@@ -245,6 +246,7 @@ async function getVowintSession(
           origin: VOWINT_BASE,
           contentType: "application/x-www-form-urlencoded",
           cookie: vowintCookies,
+          isFormPost: true,
         }),
       },
       body: new URLSearchParams({
@@ -367,15 +369,32 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
  * Résout le premier appId disponible (mode non-pool / fallback).
  */
 export async function resolveFirstAppIdFromMyList(cookies: string): Promise<string | null> {
-  // GET IndexByUserId
-  const pageRes = await cevSetupFetch(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, {
-    method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: cookies }),
-    redirect: "follow",
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (pageRes.ok) {
-    const html = await pageRes.text();
+  // GET IndexByUserId — FIX #5: redirect:"manual" + boucle cumulative pour ne perdre
+  // aucun cookie de session ou F5 lors des sauts de redirection.
+  let currentUrl = `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`;
+  let currentCookies = cookies;
+  let finalRes: Response | null = null;
+
+  for (let i = 0; i < 6; i++) {
+    const r = await cevSetupFetch(currentUrl, {
+      method: "GET",
+      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: currentCookies }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    currentCookies = mergeCookies(currentCookies, r);
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get("location");
+      if (!loc) break;
+      currentUrl = loc.startsWith("http") ? loc : `${VOWINT_BASE}${loc}`;
+    } else {
+      finalRes = r;
+      break;
+    }
+  }
+
+  if (finalRes?.ok) {
+    const html = await finalRes.text();
     const m = html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i);
     if (m) return m[1];
   }
@@ -673,7 +692,13 @@ export async function setupCevSessionHttp(
       return { success: false, error: `CAPTCHA_SUBMIT_${captchaRes.status}` };
     }
 
-    const captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string };
+    const captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean };
+
+    // FIX #4: Le serveur peut renvoyer HTTP 200 avec captchaSolved:false — vérifier explicitement.
+    if (captchaData.captchaSolved === false) {
+      botLog({ applicationId: clientId, step: "cev_http_captcha_rejected", status: "fail", data: { fullResponse: JSON.stringify(captchaData) } });
+      throw new Error("Captcha validation rejected by server");
+    }
     
     // DEBUG: Loguer la réponse brute pour comprendre le format du validUntil
     botLog({
