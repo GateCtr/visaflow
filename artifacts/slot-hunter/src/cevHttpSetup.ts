@@ -603,12 +603,14 @@ export async function setupCevSessionHttp(
       cevSessionCookie = siphoned.aspNetSessionId;
       botLog({ applicationId: clientId, step: "cev_http_using_siphoned_asp_net", status: "ok" });
     } else {
-      // VOWINT → CEV = saut cross-site → Sec-Fetch-Site: cross-site
+      // VOWINT → CEV : visaonweb.diplomatie.be → appointment.cloud.diplomatie.be
+      // même eTLD+1 (diplomatie.be), sous-domaines différents → Sec-Fetch-Site: same-site
+      // HAR réel (2026-06-08) confirme : "sec-fetch-site": "same-site" sur ce saut.
       const cevRes = await cevSetupFetch(integrationUrl, {
         method: "GET",
         headers: getCevBrowserHeaders({
           referer: `${VOWINT_BASE}/`,
-          fetchSite: "cross-site",
+          fetchSite: "same-site",
           userAgent: siphoned?.userAgent,
         }),
         redirect: "manual",
@@ -673,15 +675,14 @@ export async function setupCevSessionHttp(
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 6 : POST /Captcha/SetCaptchaToken → validUntil
     // ══════════════════════════════════════════════════════════════════════════
+    // HAR réel (2026-06-08) : Accept=* /* (pas la valeur jQuery dataType:"json") — pas de Referer
     const captchaRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: "POST",
       headers: getCevBrowserHeaders({
-        referer: `${CEV_BASE}/Captcha`,
         origin: CEV_BASE,
         cookie: fullCevCookie,
         contentType: "application/x-www-form-urlencoded",
         xRequestedWith: true,
-        accept: "application/json, text/javascript, */*; q=0.01",
       }),
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
       redirect: "manual",

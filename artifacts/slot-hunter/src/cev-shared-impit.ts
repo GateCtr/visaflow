@@ -407,10 +407,18 @@ export function getCevBrowserHeaders(overrides?: {
       ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
     };
   } else {
-    // ── Requête fetch/XHR (AJAX, form POST, sub-resource) ──────────────────
-    // sec-ch-ua* AVANT Sec-Fetch-* (confirmé Chrome 148 sub-resource)
-    // Sec-Fetch-Storage-Access : présent UNIQUEMENT pour cross-site
-    // X-Requested-With, Origin, Content-Type : en fin (jQuery XHR behavior)
+    // ── Requête fetch/XHR (AJAX, form POST) ────────────────────────────────
+    //
+    // Ordre confirmé par HAR réel Chrome 148 (2026-06-08) — POST SetCaptchaToken same-origin :
+    //   Accept → Accept-Encoding → Accept-Language
+    //   → [Content-Type]                      ← avant Cookie/Origin
+    //   → [Cookie] → [Referer]
+    //   → [Origin]
+    //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site
+    //   → User-Agent → [X-Requested-With]
+    //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform  ← APRÈS User-Agent
+    //
+    // Note: Sec-Fetch-Storage-Access présent UNIQUEMENT sur cross-site (js.hcaptcha.com etc.)
     let ct: string | undefined;
     if (overrides?.contentType) {
       ct = overrides.contentType.toLowerCase() === "application/x-www-form-urlencoded"
@@ -425,19 +433,19 @@ export function getCevBrowserHeaders(overrides?: {
       "Accept": overrides?.accept ?? "*/*",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      ...(overrides?.cookie  ? { "Cookie":  overrides.cookie  } : {}),
-      ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
-      "sec-ch-ua": chUa,
-      "sec-ch-ua-mobile": chUaMobile,
-      "sec-ch-ua-platform": chUaPlatform,
+      ...(ct                 ? { "Content-Type": ct                } : {}),
+      ...(overrides?.cookie  ? { "Cookie":       overrides.cookie  } : {}),
+      ...(overrides?.referer ? { "Referer":      overrides.referer } : {}),
+      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": secFetchSite,
       ...(isCrossSite ? { "Sec-Fetch-Storage-Access": "active" } : {}),
       "User-Agent": ua,
       ...(overrides?.xRequestedWith ? { "X-Requested-With": "XMLHttpRequest" } : {}),
-      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
-      ...(ct                 ? { "Content-Type": ct                } : {}),
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
     };
   }
 
