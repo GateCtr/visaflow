@@ -181,21 +181,59 @@ async function getVowintSession(
     rotateCevUaProfile();
 
     // 1. GET page login → CSRF token + cookies
-    // Premier atterrissage direct (pas de referer) → Sec-Fetch-Site: none
-    const loginPageRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
+    //
+    // ⚠️ PIÈGE CRITIQUE : redirect:"follow" perd le Set-Cookie des réponses 302
+    // intermédiaires. Le cookie F5 BIG-IP ASM (TS0110ceb4) est posé UNIQUEMENT
+    // sur le 302 de GET /  → Location: /en. Avec redirect:"follow" ce cookie
+    // disparaît et le bot envoie toutes les requêtes VOWINT sans lui.
+    //
+    // Fix : redirect:"manual" + suivi manuel des redirects, cookie-jar cumulatif.
+    let vowintCookies = "";
+    let loginHtml = "";
+
+    // Premier hop GET / — peut répondre 302 (TS0110ceb4 posé ici) ou directement 200
+    const initRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
       method: "GET",
       headers: getCevBrowserHeaders({ fetchSite: "none" }),
-      redirect: "follow",
+      redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
-    if (!loginPageRes.ok) {
-      return { success: false, error: `VOWINT_GET_FAILED_${loginPageRes.status}` };
+    const initCookies = extractCookies(initRes);
+    if (initCookies) vowintCookies = initCookies;
+
+    if (initRes.status < 300) {
+      // Rare : réponse directe 200
+      loginHtml = await initRes.text();
+    } else {
+      // Suivre les redirects manuellement, accumuler tous les Set-Cookie
+      let nextUrl = initRes.headers.get("location");
+      for (let hop = 0; hop < 5 && nextUrl; hop++) {
+        const fullUrl = nextUrl.startsWith("http") ? nextUrl : `${VOWINT_BASE}${nextUrl}`;
+        const hopRes = await cevSetupFetch(fullUrl, {
+          method: "GET",
+          headers: getCevBrowserHeaders({
+            referer: `${VOWINT_BASE}/`,
+            ...(vowintCookies ? { cookie: vowintCookies } : {}),
+          }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(20_000),
+        });
+        vowintCookies = mergeCookies(vowintCookies, hopRes);
+        if (hopRes.status < 300) {
+          loginHtml = await hopRes.text();
+          break;
+        }
+        nextUrl = hopRes.headers.get("location");
+      }
     }
-    const loginHtml = await loginPageRes.text();
+
+    if (!loginHtml) {
+      return { success: false, error: "VOWINT_GET_FAILED_NO_LOGIN_PAGE" };
+    }
+
     const tokenMatch = loginHtml.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
     if (!tokenMatch) return { success: false, error: "CSRF_TOKEN_NOT_FOUND" };
     const csrfToken = tokenMatch[1];
-    const vowintCookies = extractCookies(loginPageRes);
     if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
 
     // 2. POST login
@@ -929,44 +967,65 @@ export async function setupCevSessionHttp(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Parse une chaîne "k1=v1; k2=v2" en Map.
+ * FIX : utilise indexOf("=") au lieu de split("=") pour préserver les
+ * valeurs contenant des "=" (base64 paddé, tokens, etc.)
+ */
+function parseCookieStr(cookieStr: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!cookieStr.trim()) return map;
+  for (const part of cookieStr.split(";")) {
+    const trimmed = part.trim();
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx > 0) {
+      const k = trimmed.slice(0, eqIdx).trim();
+      const v = trimmed.slice(eqIdx + 1); // préserve tout, y compris "=" dans la valeur
+      if (k) map.set(k, v);
+    }
+  }
+  return map;
+}
+
+/**
+ * Extrait les cookies "nom=valeur" depuis les headers Set-Cookie d'une Response.
+ * Utilise getSetCookie() (API correcte) avec fallback raw header.
+ */
 function extractCookies(res: Response): string | null {
   const setCookies = res.headers.getSetCookie?.() ?? [];
   if (setCookies.length > 0) {
-    return setCookies.map(c => c.split(";")[0]).join("; ");
+    // Chaque Set-Cookie : "nom=valeur; Path=/; HttpOnly" → on garde "nom=valeur"
+    return setCookies.map(c => c.split(";")[0].trim()).join("; ");
   }
-  // Fallback: raw header
+  // Fallback : header Set-Cookie brut (certains HTTP clients fusionnent les lignes)
   const raw = res.headers.get("set-cookie");
   if (raw) {
-    return raw.split(",").map(c => c.split(";")[0].trim()).join("; ");
+    // Cas "Set-Cookie: a=1, b=2" (fusionné) → split par ", " est risqué si la valeur
+    // contient des virgules (ex: Expires), mais split(";")[0] nous protège.
+    return raw.split(/,(?=[^;]+=[^;]+)/).map(c => c.split(";")[0].trim()).join("; ");
   }
   return null;
 }
 
+/**
+ * Fusionne le jar de cookies existant avec les nouveaux cookies d'une Response.
+ * Préserve l'ordre d'insertion (anciens d'abord, nouveaux/mis à jour ensuite).
+ */
 function mergeCookies(existing: string, res: Response): string {
   const newCookies = extractCookies(res);
-  if (!newCookies) return existing;
-
-  // Parse existing into map
-  const map = new Map<string, string>();
-  existing.split(";").forEach(c => {
-    const [k, v] = c.trim().split("=");
-    if (k && v) map.set(k, v);
-  });
-
-  // Override with new
-  newCookies.split(";").forEach(c => {
-    const [k, v] = c.trim().split("=");
-    if (k && v) map.set(k, v);
-  });
-
+  const map = parseCookieStr(existing);
+  if (newCookies) {
+    parseCookieStr(newCookies).forEach((v, k) => map.set(k, v));
+  }
   return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 async function solveHcaptcha(clientId: string): Promise<string | null> {
   const pageUrl = `${CEV_BASE}/Captcha`;
   const errors: string[] = [];
-  // Use a realistic user agent for Anti-Captcha
-  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+  // UA aligné sur la session HTTP courante (Chrome 147/148) — pas Chrome 125 codé en dur.
+  // Si hCaptcha lie le token au UA du solveur, un mismatch → token rejeté à la soumission.
+  const userAgent = getCevSessionUa();
 
   const useProxy = await shouldUseProxy();
   const rawProxyUrl = useProxy ? (process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || null) : null;
