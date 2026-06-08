@@ -494,14 +494,22 @@ export async function setupCevSessionHttp(
     let integrationUrl: string | null = null;
 
     if (eAppointmentUrl.includes("GetEAppointmentUrl")) {
+      // HAR réel (2026-06-08T17-14-59) : AngularJS $http envoie 3 headers absents dans la version précédente :
+      //   1. Accept: "application/json, text/plain, */*"  (pas "text/html" — défaut AngularJS)
+      //   2. Cache-Control: max-age=0                      ($http désactive le cache navigateur)
+      //   3. If-Modified-Since: 0                          ($http anti-304 cache IE)
       const eRes = await cevSetupFetch(eAppointmentUrl, {
         method: "GET",
-        headers: getCevBrowserHeaders({
-          referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-          cookie: postLoginCookies,
-          xRequestedWith: true,
-          accept: "application/json, text/html, */*",
-        }),
+        headers: {
+          ...getCevBrowserHeaders({
+            referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            cookie: postLoginCookies,
+            xRequestedWith: true,
+            accept: "application/json, text/plain, */*",
+          }),
+          "Cache-Control": "max-age=0",
+          "If-Modified-Since": "0",
+        },
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
@@ -750,15 +758,15 @@ export async function setupCevSessionHttp(
       }
       
       // Réessayer SetCaptchaToken avec le NOUVEAU token
+      // HAR réel (2026-06-08T17-14-59) : SetCaptchaToken n'a PAS de Referer — supprimé du retry.
       const retryRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
         method: "POST",
         headers: getCevBrowserHeaders({
-          referer: `${CEV_BASE}/Captcha`,
           origin: CEV_BASE,
           cookie: fullCevCookie,
           contentType: "application/x-www-form-urlencoded",
           xRequestedWith: true,
-          accept: "application/json, text/javascript, */*; q=0.01",
+          accept: "*/*",
         }),
         body: new URLSearchParams({ captcha: retryHcaptchaToken }).toString(),
         redirect: "manual",
@@ -844,8 +852,10 @@ export async function setupCevSessionHttp(
 
     try {
       // FIX #9 : boucle redirect:"manual" — on trace chaque hop
+      // HAR réel (2026-06-08T17-14-59) : aucune des requêtes de la chaîne navigate
+      // (Integration/VOW → SelectSlot → NoAvailability) n'envoie de Referer.
+      // sec-fetch-site=same-origin est forcé explicitement (toujours même domaine CEV).
       let currentUrl = fullRedirectUrl;
-      let currentReferer = `${CEV_BASE}/Captcha`;
       let finalRes: Response | null = null;
 
       for (let hop = 0; hop < 10; hop++) {
@@ -853,7 +863,7 @@ export async function setupCevSessionHttp(
           method: "GET",
           redirect: "manual",
           headers: getCevBrowserHeaders({
-            referer: currentReferer,
+            fetchSite: "same-origin",
             cookie: fullCevCookie,
           }),
           signal: AbortSignal.timeout(30_000),
@@ -872,7 +882,6 @@ export async function setupCevSessionHttp(
           // (on veut aussi activer le SelectSlot si présent plus tôt dans la chaîne)
           const nextUrl = loc.startsWith("http") ? loc : `${CEV_BASE}${loc}`;
           redirectChain.push(nextUrl);
-          currentReferer = currentUrl;
           currentUrl = nextUrl;
         } else {
           // Réponse finale (200, 4xx, 5xx)
