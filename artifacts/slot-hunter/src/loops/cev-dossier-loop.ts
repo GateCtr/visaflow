@@ -201,10 +201,10 @@ async function captureF5CookieForAccount(
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const MAX_CLICKS_PER_SESSION = 4; // Limite GLOBALE par session VOWINT (serveur bloque au 5ème)
-const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 4; // Limite par dossier par heure (pour éviter rate-limit)
+const MAX_CLICKS_PER_SESSION = 5; // Limite GLOBALE par session VOWINT (serveur bloque au 6ème)
+const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 5; // Vraie limite serveur CEV (vérifiée)
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
-const DEFAULT_INTERVAL_SEC = 225; // Pause par défaut entre scans (3 min 45 s)
+const DEFAULT_INTERVAL_SEC = 150; // Pause par défaut — calibrée pour 3 dossiers × 5 clics × 80% = 150s
 
 // Compteur GLOBAL de clics sur la session VOWINT courante
 let globalSessionClicks = 0;
@@ -1018,11 +1018,15 @@ async function runAccountLoop(job: any): Promise<void> {
       const stats = localPool.getStats();
 
       // ─── Intervalle DYNAMIQUE basé sur les dossiers réellement actifs ──────
+      // Formule : capacité max (s/scan) divisée par 0.8 pour utiliser 80% du quota
+      // → jamais de burst, jamais d'épuisement, jamais de pause forcée
+      // Exemple : 6 dossiers × 5 clics/h → max=120s → safe=150s → 24 scans/h uniforme
       const activeDossiers = stats.available - pausedDossiers.size;
       const dynamicIntervalMs = activeDossiers > 0
-        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) * 1000 * 0.6) // 60% du max théorique
+        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) / 0.8 * 1000)
         : intervalMs;
-      // Utiliser le max entre l'intervalle configuré et le dynamique
+      // Utiliser le PLUS GRAND des deux : dynamique est un plancher de sécurité,
+      // l'utilisateur peut configurer un intervalle plus long via cevScanIntervalSec
       const effectiveIntervalMs = Math.max(intervalMs, dynamicIntervalMs);
 
       logger.info(`[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
