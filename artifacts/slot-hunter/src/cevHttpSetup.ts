@@ -796,10 +796,14 @@ export async function setupCevSessionHttp(
     //   /Integration/VOW/{orgId}/{appId}/{sessionGuid}/{tokenGuid}/{lang}
     // La page finale est déterminée APRÈS navigation :
     //   → GET redirectUrl → 302 → /Integration/VOW/SelectSlot
-    //     → 302 → /Integration/Error/NoAvailability   (pas de créneaux)
+    //     → 302 → /Integration/Error/NoAvailability → 302 → SessionExpired (serveur expire la session)
     //     → 200  page calendrier                      (créneaux dispo → session activée pour polling)
-    // On suit les redirections via fetch(redirect: 'follow') pour obtenir le verdict final.
-    // Cela ACTIVE aussi la session côté serveur — après ça, POST /Home/AvailableTimeSlots fonctionne.
+    //
+    // FIX #9 : redirect:"manual" avec boucle cumulative.
+    //   Problème avec redirect:"follow" : la chaîne NoAvailability → SessionExpired fait atterrir
+    //   le bot sur SessionExpired, qui était classifié comme SESSION_EXPIRED_AFTER_REDIRECT.
+    //   Résultat : chaque check "pas de créneaux" invalidait le cache VOWINT et gaspillait 1 clic/5h.
+    //   Fix : tracer CHAQUE URL intermédiaire → NoAvailability détecté avant SessionExpired.
     const captchaRedirectUrl = captchaData.redirectUrl ?? "";
 
     if (!captchaRedirectUrl) {
@@ -816,19 +820,54 @@ export async function setupCevSessionHttp(
     let probeBodyRaw = "";
     let probeBodyPreview = "";
     let probeHttpStatus = 0;
+    // Historique de toutes les URLs visitées (pour détecter NoAvailability même si suivi de SessionExpired)
+    const redirectChain: string[] = [fullRedirectUrl];
 
     try {
-      const probe = await cevSetupFetch(fullRedirectUrl, {
-        method: "GET",
-        redirect: "follow",
-        headers: getCevBrowserHeaders({ referer: `${CEV_BASE}/Captcha`, cookie: fullCevCookie }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      finalUrl = probe.url; // URL après tous les 302
-      probeHttpStatus = probe.status;
+      // FIX #9 : boucle redirect:"manual" — on trace chaque hop
+      let currentUrl = fullRedirectUrl;
+      let currentReferer = `${CEV_BASE}/Captcha`;
+      let finalRes: Response | null = null;
+
+      for (let hop = 0; hop < 10; hop++) {
+        const hopRes = await cevSetupFetch(currentUrl, {
+          method: "GET",
+          redirect: "manual",
+          headers: getCevBrowserHeaders({
+            referer: currentReferer,
+            cookie: fullCevCookie,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+
+        probeHttpStatus = hopRes.status;
+
+        if (hopRes.status >= 300 && hopRes.status < 400) {
+          const loc = hopRes.headers.get("location");
+          if (!loc) break;
+          // Arrêt anticipé : si on passe par NoAvailability, noter et continuer
+          // (on veut aussi activer le SelectSlot si présent plus tôt dans la chaîne)
+          const nextUrl = loc.startsWith("http") ? loc : `${CEV_BASE}${loc}`;
+          redirectChain.push(nextUrl);
+          currentReferer = currentUrl;
+          currentUrl = nextUrl;
+        } else {
+          // Réponse finale (200, 4xx, 5xx)
+          finalRes = hopRes;
+          finalUrl = currentUrl;
+          break;
+        }
+      }
+
+      // Si on n'a jamais obtenu de réponse finale (que des 3xx), finalUrl = dernière URL tentée
+      if (!finalRes) {
+        finalUrl = currentUrl;
+      }
 
       // Capturer le body pour diagnostiquer
-      try { probeBodyRaw = await probe.text(); } catch { /* ignore */ }
+      if (finalRes) {
+        try { probeBodyRaw = await finalRes.text(); } catch { /* ignore */ }
+      }
       // Extraire le texte visible (sans scripts/styles/tags)
       probeBodyPreview = probeBodyRaw
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
@@ -842,7 +881,12 @@ export async function setupCevSessionHttp(
         applicationId: clientId,
         step: "cev_http_redirect_probe",
         status: "ok",
-        data: { httpStatus: probeHttpStatus, finalUrl, bodyPreview: probeBodyPreview || "(vide)" },
+        data: {
+          httpStatus: probeHttpStatus,
+          finalUrl,
+          redirectChain,
+          bodyPreview: probeBodyPreview || "(vide)",
+        },
       });
     } catch (probeErr) {
       const errMsg = probeErr instanceof Error ? probeErr.message : String(probeErr);
@@ -864,15 +908,24 @@ export async function setupCevSessionHttp(
       };
     }
 
+    // FIX #9 : vérifier toute la chaîne de redirections, pas seulement l'URL finale
+    const chainPassedThrough = (keyword: string) =>
+      redirectChain.some(u => u.includes(keyword)) || finalUrl.includes(keyword);
+
     // ── Classifier le verdict final ──────────────────────────────────────────
+    // FIX #9 : utiliser chainPassedThrough() au lieu de finalUrl.includes() pour
+    // détecter NoAvailability même quand il est suivi d'un 302 → SessionExpired.
 
     // Cas 1 : NoAvailability — pas de créneaux, mais session correctement établie
-    if (finalUrl.includes("NoAvailability")) {
+    // Priorité sur SessionExpired : si on est passé par NoAvailability, c'est un
+    // résultat normal (pas d'erreur de session — le serveur expire la session après
+    // avoir montré le message "pas de créneau").
+    if (chainPassedThrough("NoAvailability")) {
       botLog({
         applicationId: clientId,
         step: "cev_http_verdict_no_availability",
         status: "ok",
-        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+        data: { finalUrl, redirectChain, bodyPreview: probeBodyPreview.slice(0, 300) },
       });
       return {
         success: true,
@@ -886,34 +939,34 @@ export async function setupCevSessionHttp(
     }
 
     // Cas 2 : MultiSessionNotAllowed — URL d'intégration déjà utilisée dans une autre session
-    if (finalUrl.includes("MultiSessionNotAllowed")) {
+    if (chainPassedThrough("MultiSessionNotAllowed")) {
       botLog({
         applicationId: clientId,
         step: "cev_http_verdict_multi_session",
         status: "fail",
-        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+        data: { finalUrl, redirectChain, bodyPreview: probeBodyPreview.slice(0, 300) },
       });
       return { success: false, error: "MULTI_SESSION_NOT_ALLOWED" };
     }
 
-    // Cas 3 : Session expirée / re-captcha demandé
-    if (finalUrl.includes("SessionExpired") || finalUrl.includes("/Captcha")) {
+    // Cas 3 : Session expirée / re-captcha demandé (sans passer par NoAvailability)
+    if (chainPassedThrough("SessionExpired") || chainPassedThrough("/Captcha")) {
       botLog({
         applicationId: clientId,
         step: "cev_http_verdict_session_expired",
         status: "warn",
-        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+        data: { finalUrl, redirectChain, bodyPreview: probeBodyPreview.slice(0, 300) },
       });
       return { success: false, error: "SESSION_EXPIRED_AFTER_REDIRECT" };
     }
 
     // Cas 4 : Page d'erreur générique CEV (/Error/Default, /Error/*)
-    if (finalUrl.includes("/Error/")) {
+    if (chainPassedThrough("/Error/")) {
       botLog({
         applicationId: clientId,
         step: "cev_http_verdict_error_page",
         status: "warn",
-        data: { finalUrl, bodyPreview: probeBodyPreview.slice(0, 300) },
+        data: { finalUrl, redirectChain, bodyPreview: probeBodyPreview.slice(0, 300) },
       });
       return {
         success: true,
@@ -926,7 +979,7 @@ export async function setupCevSessionHttp(
       };
     }
 
-    // Cas 4 : Page calendrier / SelectSlot → SESSION ACTIVÉE, slots potentiellement disponibles
+    // Cas 5 : Page calendrier / SelectSlot → SESSION ACTIVÉE, slots potentiellement disponibles
     // Vérifier les marqueurs positifs dans le body pour confirmer
     const bodyLower = probeBodyRaw.toLowerCase();
     const hasCalendarMarkers = (
@@ -937,13 +990,14 @@ export async function setupCevSessionHttp(
       bodyLower.includes("calendar")
     );
 
-    if (finalUrl.includes("SelectSlot") || hasCalendarMarkers) {
+    if (chainPassedThrough("SelectSlot") || hasCalendarMarkers) {
       botLog({
         applicationId: clientId,
         step: "cev_http_verdict_slots_available",
         status: "ok",
         data: {
           finalUrl,
+          redirectChain,
           hasCalendarMarkers,
           validUntil: captchaData.validUntil,
           bodyPreview: probeBodyPreview.slice(0, 500),
