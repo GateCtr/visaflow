@@ -289,68 +289,69 @@ export function getCevBrowserHeaders(overrides?: {
 
   const isAjax = !!(overrides?.contentType || overrides?.xRequestedWith);
 
-  // ── Ordre strict calqué sur le dump réseau humain Chrome 148 ──────────────
+  // ── Ordre strict calqué sur dump réseau humain Chrome 148 (capture 2026-06-08) ──
   // JavaScript préserve l'ordre d'insertion des clés → chaque branche construit
-  // l'objet dans l'ordre exact qui sera transmis par impit sur le fil réseau.
+  // l'objet dans l'ordre exact transmis par impit sur le fil réseau.
+  //
+  // Ordre Chrome 148 vérifié (GET script cross-site + POST XHR same-origin) :
+  //   accept → accept-encoding → accept-language
+  //   → [origin] → [referer] → [content-type]
+  //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
+  //   → sec-fetch-dest → sec-fetch-mode → sec-fetch-site → sec-fetch-storage-access  ← Chrome 148
+  //   → [sec-fetch-user] → [upgrade-insecure-requests]
+  //   → user-agent
+  //   → [x-requested-with] → [cookie]
   let headers: Record<string, string>;
 
   if (!isAjax) {
-    // ── Requête document (navigation) ──────────────────────────────────────
-    // Ordre: Accept / Accept-Encoding / Accept-Language /
-    //        [Connection + Host gérés par impit] /
-    //        Sec-Fetch-Dest / Sec-Fetch-Mode / Sec-Fetch-Site /
-    //        Sec-Fetch-User / Upgrade-Insecure-Requests /
-    //        User-Agent / sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform
+    // ── Requête document (navigation GET) ──────────────────────────────────
     headers = {
       "Accept": overrides?.accept
         ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-      "User-Agent": ua,
+      ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
+      ...(overrides?.origin  ? { "Origin":  overrides.origin  } : {}),
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": overrides?.referer ? "same-origin" : "none",
+      "Sec-Fetch-Storage-Access": "active",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+      "User-Agent": ua,
+      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
     };
   } else {
     // ── Requête fetch/XHR (AJAX, form POST…) ───────────────────────────────
-    // Ordre: Accept / Accept-Encoding / Accept-Language /
-    //        [Connection + Content-Length + Host gérés par impit] /
-    //        Sec-Fetch-Dest / Sec-Fetch-Mode / Sec-Fetch-Site /
-    //        User-Agent / sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform
+    // Content-Type et Origin/Referer avant sec-ch-ua* (ordre Chrome 148).
+    // X-Requested-With après User-Agent (jQuery XHR, Chrome 148).
+    let ct: string | undefined;
+    if (overrides?.contentType) {
+      ct = overrides.contentType.toLowerCase() === "application/x-www-form-urlencoded"
+        ? "application/x-www-form-urlencoded; charset=UTF-8"
+        : overrides.contentType;
+    }
     headers = {
       "Accept": overrides?.accept ?? "*/*",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-      "User-Agent": ua,
+      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
+      ...(overrides?.referer ? { "Referer":      overrides.referer } : {}),
+      ...(ct                 ? { "Content-Type": ct                } : {}),
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-Storage-Access": "active",
+      "User-Agent": ua,
+      ...(overrides?.xRequestedWith ? { "X-Requested-With": "XMLHttpRequest" } : {}),
+      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
     };
-  }
-
-  // Overrides optionnels — appendés en fin (Referer, Origin, Cookie, Content-Type)
-  if (overrides?.referer)     headers["Referer"] = overrides.referer;
-  if (overrides?.origin)      headers["Origin"]  = overrides.origin;
-  if (overrides?.cookie)      headers["Cookie"]  = overrides.cookie;
-
-  if (overrides?.contentType) {
-    let ct = overrides.contentType;
-    if (ct.toLowerCase() === "application/x-www-form-urlencoded") {
-      ct = "application/x-www-form-urlencoded; charset=UTF-8";
-    }
-    headers["Content-Type"] = ct;
-  }
-
-  if (overrides?.xRequestedWith) {
-    headers["X-Requested-With"] = "XMLHttpRequest";
   }
 
   return headers;
