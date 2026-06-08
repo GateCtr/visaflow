@@ -181,9 +181,10 @@ async function getVowintSession(
     rotateCevUaProfile();
 
     // 1. GET page login → CSRF token + cookies
+    // Premier atterrissage direct (pas de referer) → Sec-Fetch-Site: none
     const loginPageRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
       method: "GET",
-      headers: getCevBrowserHeaders({ referer: "https://www.google.com/" }),
+      headers: getCevBrowserHeaders({ fetchSite: "none" }),
       redirect: "follow",
       signal: AbortSignal.timeout(30_000),
     });
@@ -545,9 +546,14 @@ export async function setupCevSessionHttp(
       cevSessionCookie = siphoned.aspNetSessionId;
       botLog({ applicationId: clientId, step: "cev_http_using_siphoned_asp_net", status: "ok" });
     } else {
+      // VOWINT → CEV = saut cross-site → Sec-Fetch-Site: cross-site
       const cevRes = await cevSetupFetch(integrationUrl, {
         method: "GET",
-        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, userAgent: siphoned?.userAgent }),
+        headers: getCevBrowserHeaders({
+          referer: `${VOWINT_BASE}/`,
+          fetchSite: "cross-site",
+          userAgent: siphoned?.userAgent,
+        }),
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });

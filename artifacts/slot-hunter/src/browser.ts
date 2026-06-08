@@ -21,28 +21,26 @@ export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 // ─── User-Agents desktop uniquement ─────────────────────────────────────────
 // Règle : UA desktop exclusivement. UA mobile + viewport desktop = détection bot
 // immédiate par fingerprinting UA+viewport.
-// Versions alignées sur avril 2026 : Chrome 134-136, Edge 134, Firefox 136,
-// Safari 18, Opera 120. Profils variés : Windows/macOS/Linux, navigateurs différents.
-// ⚠️ À mettre à jour environ tous les 6 mois quand Chrome dépasse +10 versions.
+// Versions alignées sur juin 2026 : Chrome 147-148 (stable), Edge 148, Firefox 138,
+// Safari 18, Opera 120. Profils variés : Windows/macOS/Linux.
+// ⚠️ À mettre à jour environ tous les 3 mois quand Chrome dépasse +10 versions.
 const USER_AGENTS = [
-  // Chrome sur Windows 10/11
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-  // Edge sur Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0",
-  // Chrome sur macOS (Chromium rapporte toujours 10_15_7 sur toutes versions macOS — comportement normal)
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+  // Chrome 148 sur Windows 10/11 (version dominante juin 2026)
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+  // Chrome 147 sur Windows
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  // Edge 148 sur Windows
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0",
+  // Chrome 148 sur macOS (Chromium rapporte toujours 10_15_7 — comportement normal)
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
   // Safari sur macOS Sequoia
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
   // Firefox sur Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
-  // Opera sur Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/120.0.0.0",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
   // Chrome sur Linux (type bureau Ubuntu)
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
 ];
 
 const VIEWPORTS = [
@@ -145,7 +143,13 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
 
   const locale         = overrides?.locale         ?? "fr-FR";
   const timezoneId     = overrides?.timezoneId     ?? "Africa/Kinshasa";
-  const acceptLanguage = overrides?.acceptLanguage ?? "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
+  // acceptLanguage dérivé du locale si non fourni explicitement (évite fr-FR par défaut quand locale=fr-BE)
+  const defaultAcceptLang = (() => {
+    const [lang, region] = locale.split("-");
+    if (region) return `${locale},${lang};q=0.9,en-US;q=0.8,en;q=0.7`;
+    return `${locale};q=0.9,en-US;q=0.8,en;q=0.7`;
+  })();
+  const acceptLanguage = overrides?.acceptLanguage ?? defaultAcceptLang;
 
   const langParts = locale.split("-");
   const navLanguages = overrides?.locale
@@ -186,7 +190,49 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
   await context.addInitScript((langs: string[]) => {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     Object.defineProperty(navigator, "languages", { get: () => langs });
-    (window as unknown as Record<string, unknown>).chrome = { runtime: {} };
+
+    // window.chrome enrichi — Chrome 148 expose app, csi, loadTimes, runtime complet.
+    // Un { runtime: {} } nu est détecté instantanément par les WAF modernes.
+    const noop = () => undefined;
+    const noopObj = () => ({});
+    (window as unknown as Record<string, unknown>).chrome = {
+      app: {
+        isInstalled: false,
+        InstallState: { DISABLED: "disabled", INSTALLED: "installed", NOT_INSTALLED: "not_installed" },
+        RunningState: { CANNOT_RUN: "cannot_run", READY_TO_RUN: "ready_to_run", RUNNING: "running" },
+        getDetails: noop,
+        getIsInstalled: noop,
+        runningState: noop,
+      },
+      csi: () => ({ startE: Date.now(), onloadT: Date.now(), pageT: Math.random() * 1000 + 200, tran: 15 }),
+      loadTimes: () => ({
+        requestTime: Date.now() / 1000 - Math.random() * 0.5,
+        startLoadTime: Date.now() / 1000 - Math.random() * 0.4,
+        commitLoadTime: Date.now() / 1000 - Math.random() * 0.3,
+        finishDocumentLoadTime: Date.now() / 1000 - Math.random() * 0.2,
+        finishLoadTime: Date.now() / 1000 - Math.random() * 0.1,
+        firstPaintTime: 0,
+        firstPaintAfterLoadTime: 0,
+        navigationType: "Other",
+        wasFetchedViaSpdy: true,
+        wasNpnNegotiated: true,
+        npnNegotiatedProtocol: "h2",
+        wasAlternateProtocolAvailable: false,
+        connectionInfo: "h2",
+      }),
+      runtime: {
+        PlatformOs: { MAC: "mac", WIN: "win", ANDROID: "android", CROS: "cros", LINUX: "linux", OPENBSD: "openbsd" },
+        PlatformArch: { ARM: "arm", ARM64: "arm64", X86_32: "x86-32", X86_64: "x86-64", MIPS: "mips", MIPS64: "mips64" },
+        PlatformNaclArch: { ARM: "arm", X86_32: "x86-32", X86_64: "x86-64", MIPS: "mips", MIPS64: "mips64" },
+        RequestUpdateCheckStatus: { THROTTLED: "throttled", NO_UPDATE: "no_update", UPDATE_AVAILABLE: "update_available" },
+        OnInstalledReason: { INSTALL: "install", UPDATE: "update", CHROME_UPDATE: "chrome_update", SHARED_MODULE_UPDATE: "shared_module_update" },
+        OnRestartRequiredReason: { APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic" },
+        connect: noop,
+        sendMessage: noop,
+        id: undefined,
+      },
+      _: noopObj,
+    };
   }, navLanguages);
 
   const page = await context.newPage();

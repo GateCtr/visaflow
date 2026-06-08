@@ -281,6 +281,15 @@ export function getCevBrowserHeaders(overrides?: {
   cookie?: string;
   xRequestedWith?: boolean;
   userAgent?: string;
+  /**
+   * Valeur explicite de Sec-Fetch-Site.
+   * Si absent, calculé automatiquement :
+   *   - AJAX sans referer → "same-origin"
+   *   - document sans referer → "none"
+   *   - avec referer → "same-origin" (par défaut — passer "cross-site" explicitement
+   *     pour les sauts inter-domaines, ex: VOWINT → CEV)
+   */
+  fetchSite?: "none" | "same-origin" | "same-site" | "cross-site";
 }): Record<string, string> {
   const chUa = _externalSiphonedChUa ?? _sessionUa.chUa;
   const chUaPlatform = _externalSiphonedPlatform ?? _sessionUa.platform;
@@ -289,22 +298,32 @@ export function getCevBrowserHeaders(overrides?: {
 
   const isAjax = !!(overrides?.contentType || overrides?.xRequestedWith);
 
-  // ── Ordre strict calqué sur dump réseau humain Chrome 148 (capture 2026-06-08) ──
-  // JavaScript préserve l'ordre d'insertion des clés → chaque branche construit
-  // l'objet dans l'ordre exact transmis par impit sur le fil réseau.
+  // ── Ordre DÉFINITIF calqué sur captures réseau Chrome 148 (2026-06-08) ────────
   //
-  // Ordre Chrome 148 vérifié (GET script cross-site + POST XHR same-origin) :
-  //   accept → accept-encoding → accept-language
-  //   → [origin] → [referer] → [content-type]
+  // DOCUMENT navigation (GET visaonweb.diplomatie.be/, confirmé) :
+  //   Accept → Accept-Encoding → Accept-Language
+  //   → [Referer] → [Origin]
+  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → Sec-Fetch-User → Upgrade-Insecure-Requests
+  //   → User-Agent
   //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
-  //   → sec-fetch-dest → sec-fetch-mode → sec-fetch-site → sec-fetch-storage-access  ← Chrome 148
-  //   → [sec-fetch-user] → [upgrade-insecure-requests]
-  //   → user-agent
-  //   → [x-requested-with] → [cookie]
+  //   → [Cookie]
+  //   NB: Sec-Fetch-Storage-Access ABSENT des navigations document.
+  //
+  // SUB-RESOURCE / XHR (GET js.hcaptcha.com cross-site, confirmé) :
+  //   Accept → Accept-Encoding → Accept-Language
+  //   → [Cookie] → [Referer]
+  //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
+  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → [Sec-Fetch-Storage-Access si cross-site]
+  //   → User-Agent
+  //   → [X-Requested-With] → [Origin] → [Content-Type]
+
   let headers: Record<string, string>;
 
   if (!isAjax) {
     // ── Requête document (navigation GET) ──────────────────────────────────
+    const secFetchSite = overrides?.fetchSite
+      ?? (overrides?.referer ? "same-origin" : "none");
+
     headers = {
       "Accept": overrides?.accept
         ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -312,45 +331,49 @@ export function getCevBrowserHeaders(overrides?: {
       "Accept-Language": _sessionAcceptLang,
       ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
       ...(overrides?.origin  ? { "Origin":  overrides.origin  } : {}),
-      "sec-ch-ua": chUa,
-      "sec-ch-ua-mobile": chUaMobile,
-      "sec-ch-ua-platform": chUaPlatform,
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": overrides?.referer ? "same-origin" : "none",
-      "Sec-Fetch-Storage-Access": "active",
+      "Sec-Fetch-Site": secFetchSite,
       "Sec-Fetch-User": "?1",
       "Upgrade-Insecure-Requests": "1",
       "User-Agent": ua,
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
       ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
     };
   } else {
-    // ── Requête fetch/XHR (AJAX, form POST…) ───────────────────────────────
-    // Content-Type et Origin/Referer avant sec-ch-ua* (ordre Chrome 148).
-    // X-Requested-With après User-Agent (jQuery XHR, Chrome 148).
+    // ── Requête fetch/XHR (AJAX, form POST, sub-resource) ──────────────────
+    // sec-ch-ua* AVANT Sec-Fetch-* (confirmé Chrome 148 sub-resource)
+    // Sec-Fetch-Storage-Access : présent UNIQUEMENT pour cross-site
+    // X-Requested-With, Origin, Content-Type : en fin (jQuery XHR behavior)
     let ct: string | undefined;
     if (overrides?.contentType) {
       ct = overrides.contentType.toLowerCase() === "application/x-www-form-urlencoded"
         ? "application/x-www-form-urlencoded; charset=UTF-8"
         : overrides.contentType;
     }
+
+    const secFetchSite = overrides?.fetchSite ?? "same-origin";
+    const isCrossSite  = secFetchSite === "cross-site" || secFetchSite === "same-site";
+
     headers = {
       "Accept": overrides?.accept ?? "*/*",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
-      ...(overrides?.referer ? { "Referer":      overrides.referer } : {}),
-      ...(ct                 ? { "Content-Type": ct                } : {}),
+      ...(overrides?.cookie  ? { "Cookie":  overrides.cookie  } : {}),
+      ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-Storage-Access": "active",
+      "Sec-Fetch-Site": secFetchSite,
+      ...(isCrossSite ? { "Sec-Fetch-Storage-Access": "active" } : {}),
       "User-Agent": ua,
       ...(overrides?.xRequestedWith ? { "X-Requested-With": "XMLHttpRequest" } : {}),
-      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
+      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
+      ...(ct                 ? { "Content-Type": ct                } : {}),
     };
   }
 
