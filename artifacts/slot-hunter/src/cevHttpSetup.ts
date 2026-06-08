@@ -684,6 +684,7 @@ export async function setupCevSessionHttp(
         accept: "application/json, text/javascript, */*; q=0.01",
       }),
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
+      redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
 
@@ -691,6 +692,10 @@ export async function setupCevSessionHttp(
       botLog({ applicationId: clientId, step: "cev_http_captcha_submit_failed", status: "fail", data: { status: captchaRes.status } });
       return { success: false, error: `CAPTCHA_SUBMIT_${captchaRes.status}` };
     }
+
+    // FIX OSOnline : capturer tout Set-Cookie posé par le serveur OutSystems lors de la
+    // validation du captcha (le cookie OSOnline arrive ici, avant la chaîne de redirects).
+    fullCevCookie = mergeCookies(fullCevCookie, captchaRes);
 
     const captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean };
 
@@ -755,10 +760,13 @@ export async function setupCevSessionHttp(
           accept: "application/json, text/javascript, */*; q=0.01",
         }),
         body: new URLSearchParams({ captcha: retryHcaptchaToken }).toString(),
+        redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
       
       if (retryRes.ok) {
+        // FIX OSOnline : même logique que le premier POST — capturer Set-Cookie du retry
+        fullCevCookie = mergeCookies(fullCevCookie, retryRes);
         const retryData = await retryRes.json() as { validUntil?: string; redirectUrl?: string };
         botLog({
           applicationId: clientId,
@@ -841,6 +849,10 @@ export async function setupCevSessionHttp(
         });
 
         probeHttpStatus = hopRes.status;
+
+        // FIX OSOnline : accumuler les Set-Cookie de CHAQUE hop (302 ou 200)
+        // Le serveur OutSystems peut rafraîchir OSOnline ou TS01* à n'importe quel saut.
+        fullCevCookie = mergeCookies(fullCevCookie, hopRes);
 
         if (hopRes.status >= 300 && hopRes.status < 400) {
           const loc = hopRes.headers.get("location");
