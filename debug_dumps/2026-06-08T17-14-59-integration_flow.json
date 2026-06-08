@@ -1,0 +1,98 @@
+{
+  "description": "Flux integration CEV reconstruit depuis HAR (v2 — enregistrement natif Playwright)",
+  "generatedAt": "2026-06-08T17:14:59.086Z",
+  "flow": {
+    "getEAppointmentUrl": {
+      "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=57f49a76-dc56-f111-a3ae-00505691de06",
+      "responseBody": "{\"url\":\"https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US\"}",
+      "integrationUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US",
+      "timestamp": "2026-06-08T17:14:20.954Z"
+    },
+    "integrationVowFetch": {
+      "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US",
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "host": "appointment.cloud.diplomatie.be",
+        "referer": "https://visaonweb.diplomatie.be/",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestCookies": [],
+      "responseStatus": 302,
+      "locationHeader": "/Captcha",
+      "timestamp": "2026-06-08T17:14:21.337Z"
+    },
+    "captchaPageLoad": {
+      "url": "https://appointment.cloud.diplomatie.be/Captcha",
+      "responseStatus": 200,
+      "aspNetSessionId": "py0e0q31ilye0wlz3rogryir",
+      "timestamp": "2026-06-08T17:14:22.083Z"
+    },
+    "setCaptchaToken": {
+      "url": "https://appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken",
+      "requestHeaders": {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "content-length": "2035",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "origin": "https://appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Content-Length",
+        "Content-Type",
+        "Cookie",
+        "Host",
+        "Origin",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "X-Requested-With",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestBody": "captcha=P1_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.haJwZACjZXhwzmom-QKncGFzc2tlecUFgPaXgfhRTb1NlbveUSCZVslcCLPTTVhEBTnJ8aVbWa179-cNgz0UqVig_xc8ONbtF6s4vDDMf1FBM0sXDXTAexQLNqBi1ikMDuRDK_ojvmMr-ot4v2AhoRc5e1t_wKTKZk9zuk48gx5363jCVTC1ej7fHznrdEYTv5nKwCw3K8Ca2Kz5Ns1BDE2DmnPt5fm8sxNkqqdTQEEpqYsfGFYEQ4JLoEzj3Zdd5QFutSToGEpX3U4hb6Kf0Sbjx8LbDr9_zu_U1nexHHLEQqfFNsfIF7r-rKtLkA4H0oNazPCAk7Hq53K2C2lEM6-Ys6RQ5sDrWZHmwHl8Qdce0ge0KEnH8iO3Ak_bINpFAlM7LksWFTOWUK7B6JV5GdSU-92shobz3lsEYIewGyHPpO0REEIhSWd74yE86j4HLCX6pVwGSCpYrHl2tm1j_heUFCWq3ig4MMfnmM96tsLLSOkq8iRjtBnWoULClWt3DnBA8RLf8ALfapSO-IFqoOwf-jjkgZgcTzL_5j-bxyUvNPqeFTrBn5cXN7B0yMdWyzky0Z2TElXpZYgbKh3kx84aP_g3qc38ajS2CCXZPl5rFP3ZxDlgZo8yqDEZA2OOCy98CkjVRqcQGL6t866KLK2iMZEQU3FwW8CBI2euaBlO-gDoiYFwgSIvYbdm3r7lwYYDEohceSQABqnq8azURrtCj4QaK0WvGdwYcFRbS8xzth4KyNQNOVvkHxjaZ-Nvz6Wjzo1DY6LlH8XBVs6KcLYBA4jM7Z5GdYvJMB85mvggUwksN7epYl60_5-7aowlbDisxxU4EjhbkzxCLpk3TEm3ANIY1xsZF1eXu2i0Xn8sEK-HIF4QePhdVos2xrXmYXL3pHRmZEvQw-sLrQ8Zb0qz5WiO6W_jgki_C4sDOZ8P3btZlbpA4mVB6AipO4pmATtEjI3Ix1PGc2wkB65YA_qOe8Et1FMoID-8O0mubYy1mGwzSaArM7mxZ2pkr-3_IFdmZ1Nd1ECEng_qFyvs7GnWOzzQomV2rOXWkN6WPBy4L1dZi_RSEiB88C_KNYriDhPo-CqqA6YEUSrBwo96HVrvxfzXi4VZBjSd6cN50jA86WaAmTJxHMrPYfef7QxUrcxbe8YYSGIcM56OreKDIdlQUnW1yquR9Pyc8JWnL0lhsN_M4ckyLaPccI-7b7J5TNMmy1RefPljk-mbAlMOqqIlmoPPi6z2r_ZcNEe26R6oUWyaEcwW4cQN_C25ei0jVEfuZtnRrubgQCmTBuxZ6t24BQpgbzzyfc4ec0rdxqw75iGKJkTYziypMDsg_wsWqjHgfWNUiQEEX2ETCjuXqscRJNIgA0Ad9w7-uwv6h8nAk_ggQFB4AgS_WqjXh-YyigHJCSwIz11kfdtUwuMsdUZe2_JUBJhISHLBYb5RtghdeJ5vk9Rv9pxxcZ80Jupf18fhciYY9aMLY8kkeo5CHGdA-v6mTPjFaDCZl6iwIlj3FXPraJUN0iHq6i1YncHxkuV-nSfABHkTPaGYiVJeROdQRN5ffpGja5E_1huobdnCILC1tywO88BUR8EHDUoJefurv2ivGuhzH9W1Hb6o-33jXeorwj3-vFH6RiKSoonug4kUsk37NuqLyfUkE2b_9MxhpkPFK6RIDN9EoB06E5nhYm5spV_P7N3yB7j7nthxEmo6dWbfTXW-xMG1FR4g8P6oSuh-Zj8AKJ1PNtIU4eZM8XhYO7NF4s9yTso2ONH8qLTloscdC4SySMnC8aUCBpdlxf9SP0plBp3mAt3u4ccEOeN6_mOnhLMFwgBdvDxkBmvn2Ap7_TYc97P3FVueYP2jZikFjxH8GvebltW_mh98bdrkNNHIEWBM6zgSY0t8vz-vc3MxN42ia3KmNGM1OWRiqHNoYXJkX2lkzhQ8hB8.8CL00SKYDT6hvq2QIY1hgZ8Bcjl2Ps--0j4JxbT13IA",
+      "responseStatus": 200,
+      "responseBody": "",
+      "responseSetCookies": [],
+      "timestamp": "2026-06-08T17:14:50.291Z"
+    }
+  }
+}

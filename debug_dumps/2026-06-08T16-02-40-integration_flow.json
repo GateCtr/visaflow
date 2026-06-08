@@ -1,0 +1,8 @@
+{
+  "description": "Flux integration CEV reconstruit : GetEAppointmentUrl → Integration/VOW → Captcha → SetCaptchaToken → redirections → verdict",
+  "generatedAt": "2026-06-08T16:02:40.854Z",
+  "flow": {},
+  "redirectChainMap": {
+    "https://visaonweb.diplomatie.be/": "/en"
+  }
+}

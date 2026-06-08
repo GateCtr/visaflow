@@ -1,0 +1,878 @@
+{
+  "description": "Requêtes cibles CEV extraites du HAR",
+  "count": 20,
+  "entries": [
+    {
+      "timestamp": "2026-06-08T17:14:20.954Z",
+      "method": "GET",
+      "url": "https://visaonweb.diplomatie.be/Common/GetEAppointmentUrl?id=57f49a76-dc56-f111-a3ae-00505691de06",
+      "requestCookies": [
+        {
+          "name": "__RequestVerificationToken",
+          "value": "4taDPvsNfTzKFRofLB1e8NJH6nG16XMwFG4aRGcE-bT_q2nOtvHrfmz1dTFhmUAr0r5w59h5udzd57mjFCHd2GUtIPnDzqp7aJUvY5HOklM1"
+        },
+        {
+          "name": "ServerId",
+          "value": "eb66856f90f0d6ab"
+        },
+        {
+          "name": "TS0110ceb4",
+          "value": "01f258f40143fbe5482707e35774cfb2dc4468ac677146b4c82dc8f558ef2ee25d8a84ba1deda3acf80684f797f2f918910ecc1521"
+        },
+        {
+          "name": "OSOnline",
+          "value": "cVEczRcsRyq_Tx7JfN4mpAv8u_q5XwwJKg7Tb3BxMmwxaAwUO4P-Mu4z5S9h9fSkk6yYRXeZfVwOZ9WAj2RqYxWxkZWp8kd4lwjMTwz-rqvpLX1mBTTUiilZfgw_9Ub6juQMHUnXtTNYvM0E2AYEcBCB5ZMUp5lU-axOd-YcYcj05zQSknSpHnr6yko8e-VauHAeKCzokyTCaundgxCRKZtVgYi3uqIilhBMfsHWK8RFAbqvhbtczLLWV_xHz5-vPwuAU5d9eABnR_j1fqSNvhoSTjendNa19cmudFMB0T4BgaK53Tj06pSnaE_phQVviaSeIrNt0TmvOoTI7ZGCCXGgYD4PcBXRGSMXdX2cukRvcd1dRdZgSyPrlxfmVLTQ6P4LkjDxmswT0WMTvsj8ckp_bGwdHyVnjll8sCHVf-1TJ9veGWJdQG4dOFKlsBkWEPAD0K1iaWbW-imoDDPVZoM_axNyRTn20dAT1xQTHrZCPJmST5-2uT14BYI3cqbzz_suGUrRmzmZRMdt8N0KFBH6nQ50-nr2E0Y0u9fkJJwe1rrdf9Ww3xThGwVFwbolLP9SCcgNbjVQRIsKLXHi-ol-IQ2dkmxJL9UncMXlc-356uF1sxsCLjod6QKNcpJerfpsqArvtLYhdZTn7Bt_3SQi3LcYYUceHI7SY5OHwb6mH6xrSiKjwkqVhSbg3WvoTDbHpU8PVTODtfdD8KJLegGUMJps05W9vMw99EYtoIc5imQdSdDiCKBX0hHeHPYSgkyNR79FdZjxTHRb6StLFoDZmIJkzM3w6dTW6PzieCQ"
+        },
+        {
+          "name": "_culture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "application/json, text/plain, */*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "cache-control": "max-age=0",
+        "connection": "keep-alive",
+        "cookie": "__RequestVerificationToken=4taDPvsNfTzKFRofLB1e8NJH6nG16XMwFG4aRGcE-bT_q2nOtvHrfmz1dTFhmUAr0r5w59h5udzd57mjFCHd2GUtIPnDzqp7aJUvY5HOklM1; ServerId=eb66856f90f0d6ab; TS0110ceb4=01f258f40143fbe5482707e35774cfb2dc4468ac677146b4c82dc8f558ef2ee25d8a84ba1deda3acf80684f797f2f918910ecc1521; OSOnline=cVEczRcsRyq_Tx7JfN4mpAv8u_q5XwwJKg7Tb3BxMmwxaAwUO4P-Mu4z5S9h9fSkk6yYRXeZfVwOZ9WAj2RqYxWxkZWp8kd4lwjMTwz-rqvpLX1mBTTUiilZfgw_9Ub6juQMHUnXtTNYvM0E2AYEcBCB5ZMUp5lU-axOd-YcYcj05zQSknSpHnr6yko8e-VauHAeKCzokyTCaundgxCRKZtVgYi3uqIilhBMfsHWK8RFAbqvhbtczLLWV_xHz5-vPwuAU5d9eABnR_j1fqSNvhoSTjendNa19cmudFMB0T4BgaK53Tj06pSnaE_phQVviaSeIrNt0TmvOoTI7ZGCCXGgYD4PcBXRGSMXdX2cukRvcd1dRdZgSyPrlxfmVLTQ6P4LkjDxmswT0WMTvsj8ckp_bGwdHyVnjll8sCHVf-1TJ9veGWJdQG4dOFKlsBkWEPAD0K1iaWbW-imoDDPVZoM_axNyRTn20dAT1xQTHrZCPJmST5-2uT14BYI3cqbzz_suGUrRmzmZRMdt8N0KFBH6nQ50-nr2E0Y0u9fkJJwe1rrdf9Ww3xThGwVFwbolLP9SCcgNbjVQRIsKLXHi-ol-IQ2dkmxJL9UncMXlc-356uF1sxsCLjod6QKNcpJerfpsqArvtLYhdZTn7Bt_3SQi3LcYYUceHI7SY5OHwb6mH6xrSiKjwkqVhSbg3WvoTDbHpU8PVTODtfdD8KJLegGUMJps05W9vMw99EYtoIc5imQdSdDiCKBX0hHeHPYSgkyNR79FdZjxTHRb6StLFoDZmIJkzM3w6dTW6PzieCQ; _culture=en-US",
+        "host": "visaonweb.diplomatie.be",
+        "if-modified-since": "0",
+        "referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Cache-Control",
+        "Connection",
+        "Cookie",
+        "Host",
+        "If-Modified-Since",
+        "Referer",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "X-Requested-With",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [
+        "_culture=en-US; expires=Sat, 06-Jun-2026 17:14:24 GMT; path=/",
+        "_culture=en-US; expires=Wed, 08-Jul-2026 17:14:24 GMT; path=/",
+        "TS0110ceb4=01f258f40143fbe5482707e35774cfb2dc4468ac677146b4c82dc8f558ef2ee25d8a84ba1deda3acf80684f797f2f918910ecc1521; Path=/; Domain=.visaonweb.diplomatie.be"
+      ],
+      "responseBody": "{\"url\":\"https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US\"}"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:21.337Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US",
+      "requestCookies": [],
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "host": "appointment.cloud.diplomatie.be",
+        "referer": "https://visaonweb.diplomatie.be/",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Host",
+        "Referer",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 302,
+      "responseSetCookies": [
+        "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; path=/; HttpOnly; SameSite=Lax",
+        "PreferredCulture=en-US; expires=Wed, 08-Jul-2026 17:14:22 GMT; path=/"
+      ],
+      "responseLocation": "/Captcha"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.083Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Captcha",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "\r\n<!DOCTYPE html>\r\n<html lang=\"en-US\">\r\n<head>\r\n    <title>e-Appointment</title>\r\n    <link href=\"/favicon.ico?v1\" rel=\"shortcut icon\" type=\"image/x-icon\"/>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EDGE\"/>\r\n    <meta charset=\"utf-8\"/>\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <script src=\"https://js.hcaptcha.com/1/api.js?hl=en-US\" nonce=\"UkqeWMby23Gjd5UoluU3EpFo\" async defer></script>\r\n    <link href=\"/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1\" rel=\"stylesheet\"/>\r\n\r\n\r\n    \r\n</head>\r\n<body>\r\n\r\n\r\n<header class=\"container-fluid containerpaddding\">\r\n    <nav class=\"navbar row navbarcontent\" role=\"navigation\">\r\n        <div id=\"ofed-federal-header-logo\" class=\"pull-right\">\r\n            <img src=\"/Content/Images/logos/federalheader_logo.png\" width=\"32\" height=\"23\" alt=\"Logo of the Belgian Federal Authorities\">\r\n        </div>\r\n        <div id=\"federalmobileheader-left\">\r\n            <ul class=\"navphone nav navbar-nav\">\r\n                <li class=\"dropdown\" id=\"dropdownheader\">\r\n                    <a href=\"#\" class=\"dropdown-toggle\"\r\n                       data-toggle=\"dropdown\" role=\"button\" aria-haspopup=\"true\" aria-expanded=\"false\" style=\"width: 40px\">\r\n                        en&nbsp;&nbsp;<span class=\"caret\"></span>\r\n                    </a>\r\n                    <ul class=\"dropdown-menu\" role=\"menu\">\r\n                        \r\n\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n    <li class=\"active\"><a href=\"/Culture/SetCulture/en-US\">EN</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/de-DE\">DE</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/es-ES\">ES</a></li>\r\n\r\n                    </ul>\r\n                </li>\r\n            </ul>\r\n        </div>\r\n        <div id=\"federalheader-left\" style=\"min-height: 24px;\">\r\n            <ul class=\"navweb nav\">\r\n                \r\n\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n    <li class=\"active\"><a href=\"/Culture/SetCulture/en-US\">EN</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/de-DE\">DE</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/es-ES\">ES</a></li>\r\n\r\n            </ul>\r\n            <div id=\"ofed-federal-header-link\" class=\"pull-right hidden-xs\">\r\n                Other official information and services:&nbsp;<a href=\"http://www.belgium.be/en\">www.belgium.be</a>\r\n            </div>\r\n        </div>\r\n    </nav>\r\n    \r\n    <div class=\"row\">\r\n        <div class=\"col-sm-1\" id=\"embassyIcon\">\r\n            <img id=\"embassyImage\" class=\"pull-left\" src=\"/Content/Images/logos/logo.png\" alt=\"\">\r\n        </div>\r\n\r\n    </div>\r\n</header>\r\n\r\n<div class=\"container-fluid body-content\">\r\n    <div id=\"ContentComplete\">\r\n        <div class=\"hidden-print\">\r\n            <noscript>\r\n                <div class=\"alert alert-danger alert-block\">\r\n                    <h4>Warning</h4>\r\n                    This application requires JavaScript to be enabled\r\n                </div>\r\n            </noscript>\r\n        </div>\r\n        <section>\r\n                        \r\n            \r\n\r\n<style>\r\n    #captchaParentWindow {\r\n        display: grid;\r\n        grid-template-columns: auto 303px auto;\r\n    }\r\n\r\n    .captchaRows {\r\n        display: grid;\r\n        grid-template-rows: auto auto auto;\r\n    }\r\n\r\n    .captchaVisible {\r\n        display: grid;\r\n    }\r\n\r\n    .captchaHidden {\r\n        display: none !important;\r\n    }\r\n</style>\r\n\r\n<div id=\"captchaParentWindow\">\r\n    <div></div>\r\n    <div class=\"captchaRows\">\r\n        <div></div>\r\n        <div>\r\n            <div class=\"alert alert-info\" role=\"alert\">\r\n                <p id=\"captchaText\">Please follow the directions of the captcha.</p>\r\n                <p id=\"loaderText\" style=\"display:none;\">Loading...</p>\r\n            </div>\r\n            <div id=\"captchaDiv\"\r\n                 class=\"h-captcha\"\r\n                 data-sitekey=\"5f64399c-14a8-415e-ad1a-7ebccdc4943a\"\r\n                 data-callback=\"successfullCaptcha\"\r\n                 data-error-callback=\"onError\"></div>\r\n            <div id=\"loader\" class=\"loader\" style=\"display:none;\"></div>\r\n        </div>\r\n        <div></div>\r\n    </div>\r\n    <div></div>\r\n</div>\r\n        </section>\r\n    </div>\r\n</div>\r\n\r\n<footer id=\"footer\">\r\n  <div class=\"container-fluid\">\r\n    <div class=\"row\">\r\n      <a href=\"/Privacy\" target=\"_blank\">Privacy</a>\r\n      | <a href=\"/Disclaimer\" target=\"_blank\">Disclaimer</a>\r\n      | <a href=\"/Cookies\" target=\"_blank\">Cookies</a>\r\n      | © FPS Foreign Affairs, Foreign Trade and Development Cooperation\r\n      <div data-bs-toggle=\"tooltip\" data-bs-placement=\"bottom\" title=\"1.0.249_CommitDate:2026-01-20\">\r\n        Version: 1.0.249.0\r\n      </div>\r\n    </div>\r\n  </div>\r\n</footer>\r\n\r\n<script src=\"/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1\"></script>\r\n\r\n\r\n<script type=\"text/ja"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.346Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "text/css,*/*;q=0.1",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "style",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "html{font-family:sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}body{margin:0}article,aside,details,figcaption,figure,footer,header,hgroup,main,menu,nav,section,summary{display:block}audio,canvas,progress,video{display:inline-block;vertical-align:baseline}audio:not([controls]){display:none;height:0}[hidden],template{display:none}a{background-color:transparent}a:active,a:hover{outline:0}abbr[title]{border-bottom:1px dotted}b,strong{font-weight:700}dfn{font-style:italic}h1{margin:.67em 0;font-size:2em}mark{color:#000;background:#ff0}small{font-size:80%}sub,sup{position:relative;font-size:75%;line-height:0;vertical-align:baseline}sup{top:-.5em}sub{bottom:-.25em}img{border:0}svg:not(:root){overflow:hidden}figure{margin:1em 40px}hr{height:0;-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box}pre{overflow:auto}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}button,input,optgroup,select,textarea{margin:0;font:inherit;color:inherit}button{overflow:visible}button,select{text-transform:none}button,html input[type=button],input[type=reset],input[type=submit]{-webkit-appearance:button;cursor:pointer}button[disabled],html input[disabled]{cursor:default}button::-moz-focus-inner,input::-moz-focus-inner{padding:0;border:0}input{line-height:normal}input[type=checkbox],input[type=radio]{-webkit-box-sizing:border-box;-moz-box-sizing:border-box;box-sizing:border-box;padding:0}input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{height:auto}input[type=search]{-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;-webkit-appearance:textfield}input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none}fieldset{padding:.35em .625em .75em;margin:0 2px;border:1px solid silver}legend{padding:0;border:0}textarea{overflow:auto}optgroup{font-weight:700}table{border-spacing:0;border-collapse:collapse}td,th{padding:0}@media print{*,:after,:before{color:#000!important;text-shadow:none!important;background:0 0!important;-webkit-box-shadow:none!important;box-shadow:none!important}a,a:visited{text-decoration:underline}a[href]:after{content:\" (\" attr(href) \")\"}abbr[title]:after{content:\" (\" attr(title) \")\"}a[href^=\"javascript:\"]:after,a[href^=\"#\"]:after{content:\"\"}blockquote,pre{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}img,tr{page-break-inside:avoid}img{max-width:100%!important}h2,h3,p{orphans:3;widows:3}h2,h3{page-break-after:avoid}.navbar{display:none}.btn>.caret,.dropup>.btn>.caret{border-top-color:#000!important}.label{border:1px solid #000}.table{border-collapse:collapse!important}.table td,.table th{background-color:#fff!important}.table-bordered td,.table-bordered th{border:1px solid #ddd!important}}@font-face{font-family:'Glyphicons Halflings';src:url(../fonts/glyphicons-halflings-regular.eot);src:url(../fonts/glyphicons-halflings-regular.eot?#iefix) format('embedded-opentype'),url(../fonts/glyphicons-halflings-regular.woff2) format('woff2'),url(../fonts/glyphicons-halflings-regular.woff) format('woff'),url(../fonts/glyphicons-halflings-regular.ttf) format('truetype'),url(../fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular) format('svg')}.glyphicon{position:relative;top:1px;display:inline-block;font-family:'Glyphicons Halflings';font-style:normal;font-weight:400;line-height:1;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.glyphicon-asterisk:before{content:\"*\"}.glyphicon-plus:before{content:\"+\"}.glyphicon-eur:before,.glyphicon-euro:before{content:\"€\"}.glyphicon-minus:before{content:\"−\"}.glyphicon-cloud:before{content:\"☁\"}.glyphicon-envelope:before{content:\"✉\"}.glyphicon-pencil:before{content:\"✏\"}.glyphicon-glass:before{content:\"\"}.glyphicon-music:before{content:\"\"}.glyphicon-search:before{content:\"\"}.glyphicon-heart:before{content:\"\"}.glyphicon-star:before{content:\"\"}.glyphicon-star-empty:before{content:\"\"}.glyphicon-user:before{content:\"\"}.glyphicon-film:before{content:\"\"}.glyphicon-th-large:before{content:\"\"}.glyphicon-th:before{content:\"\"}.glyphicon-th-list:before{content:\"\"}.glyphicon-ok:before{content:\"\"}.glyphicon-remove:before{content:\"\"}.glyphicon-zoom-in:before{content:\"\"}.glyphicon-zoom-out:before{content:\"\"}.glyphicon-off:before{content:\"\"}.glyphicon-signal:before{content:\"\"}.glyphicon-cog:before{content:\"\"}.glyphicon-trash:before{content:\"\"}.glyphicon-home:before{content:\"\"}.glyphicon-file:before{content:\"\"}.glyphicon-time:before{content:\"\"}.glyphicon-road:before{content:\"\"}.glyphicon-download-alt:before{content:\"\"}.glyphicon-download:before{content:\"\"}.glyphicon-upload:before{content:\"\"}.glyphicon-inbox:before{content:\"\"}.glyphicon-play-circle:before{content:\"\"}.glyphicon-repeat:before{content:\"\"}.glyphicon-refresh:before{content:\"\"}.glyphicon-list-alt:before{content:\"\"}.glyphicon-lock:before{content:\"\"}.glyphicon-flag:before{"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.347Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/logos/federalheader_logo.png",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "image",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAXCAYAAABqBU3hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo0NzQ2RkFEQ0ZEM0VFMjExOUU1RkE0RDNFOUJFN0RFRiIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxQUVGOTkxQzQyRDkxMUUyOTEyRTk5N0I4NEQ4MDE1NiIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxQUVGOTkxQjQyRDkxMUUyOTEyRTk5N0I4NEQ4MDE1NiIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1LjEgV2luZG93cyI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkM1RkU4QjM1QjI0MkUyMTFBQzA1QUEyMkVEMkY3Qzg1IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ3NDZGQURDRkQzRUUyMTE5RTVGQTREM0U5QkU3REVGIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+6rO/fwAAAhdJREFUeNpiZMAClOUVEoCUApLQgrsPHzxgoBD8//8fQ4wFh9p4IHZA4h8AYoodgA0wMQwwGHXAqANYiFTnAMyaDmhiB4BZ8wCObCwApALQsvIDFQXFDUA9H5DVMuIwYD9aNsQFQFkzEdkhQL0gi+cDsQAW9SDLJwLVN1ArCkA+3A8tuGAF2HocljNAxeuB6uaTFAKaar8YXO2/gdnXb7Ex7D7IhU2bI8gxMI7Gr18MmR8/MPD++8fwmYmJYTq/AMMNNjYU9aCQIyoNbF78DIUPckRZswiYRgJwy0GWznv5AkwjOyhEUgrsGCioB6UjsqIAFCJdtW9wyvt/+YJiOQhI/fnD4PTtG3rCVmAhN/JBjgBhtFAAA5AvT3NwEJWGWChJgaB0gc0BG3l4wJgYBwx0QURZCJw8y4G3fCCmHCHbAU+fszCcPMeBr3x4QEwjhgma70EpsgFWoBACnz4zMWSUiRFSth5aJGMrZwzgBRG0jN+PJN8IxPbIBRGoHACleJDFIF9PmiOAnvhARfFEaCmIHhUg8QtQvgG0tQWiFUEhxIKlzLdHd7FvrBQ+n4IMDwRVMkDPLACyE9Cioh+HPpC6BiYsbT1S2n4ToEUquIYD0qCEt4BIvWA9zO8/frggJCDAiBSUhUC8E4gfAjEHtALhQAvuhdBacCVQ/w9kU4H8jUDzDiJVPgJIFp6ARkkmUO8OkCBAgAEAeRK7V51wl8wAAAAASUVORK5CYII="
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.347Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/logos/logo.png",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "image",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "iVBORw0KGgoAAAANSUhEUgAAAFkAAABgCAYAAAB2ft7KAAAACXBIWXMAAAsTAAALEwEAmpwYAAA9xGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMwMTQgNzkuMTU2Nzk3LCAyMDE0LzA4LzIwLTA5OjUzOjAyICAgICAgICAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIgogICAgICAgICAgICB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIKICAgICAgICAgICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgICAgICAgICAgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDx4bXA6Q3JlYXRvclRvb2w+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKFdpbmRvd3MpPC94bXA6Q3JlYXRvclRvb2w+CiAgICAgICAgIDx4bXA6Q3JlYXRlRGF0ZT4yMDE1LTAxLTMwVDE1OjI4OjQzKzAxOjAwPC94bXA6Q3JlYXRlRGF0ZT4KICAgICAgICAgPHhtcDpNb2RpZnlEYXRlPjIwMTUtMDYtMjRUMTI6NTI6MDIrMDI6MDA8L3htcDpNb2RpZnlEYXRlPgogICAgICAgICA8eG1wOk1ldGFkYXRhRGF0ZT4yMDE1LTA2LTI0VDEyOjUyOjAyKzAyOjAwPC94bXA6TWV0YWRhdGFEYXRlPgogICAgICAgICA8ZGM6Zm9ybWF0PmltYWdlL3BuZzwvZGM6Zm9ybWF0PgogICAgICAgICA8cGhvdG9zaG9wOkNvbG9yTW9kZT4zPC9waG90b3Nob3A6Q29sb3JNb2RlPgogICAgICAgICA8eG1wTU06SGlzdG9yeT4KICAgICAgICAgICAgPHJkZjpTZXE+CiAgICAgICAgICAgICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0iUmVzb3VyY2UiPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6YWN0aW9uPmNvbnZlcnRlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6cGFyYW1ldGVycz5mcm9tIGltYWdlL3BuZyB0byBhcHBsaWNhdGlvbi92bmQuYWRvYmUucGhvdG9zaG9wPC9zdEV2dDpwYXJhbWV0ZXJzPgogICAgICAgICAgICAgICA8L3JkZjpsaT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+c2F2ZWQ8L3N0RXZ0OmFjdGlvbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0Omluc3RhbmNlSUQ+eG1wLmlpZDo1YjM2NTE0NC0xMTI1LTdiNDctYTUxNy04YjdkYWYzMmY3ZWI8L3N0RXZ0Omluc3RhbmNlSUQ+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDp3aGVuPjIwMTUtMDYtMjRUMTI6NTI6MDIrMDI6MDA8L3N0RXZ0OndoZW4+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDpzb2Z0d2FyZUFnZW50PkFkb2JlIFBob3Rvc2hvcCBDQyAyMDE0IChXaW5kb3dzKTwvc3RFdnQ6c29mdHdhcmVBZ2VudD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmNoYW5nZWQ+Lzwvc3RFdnQ6Y2hhbmdlZD4KICAgICAgICAgICAgICAgPC9yZGY6bGk+CiAgICAgICAgICAgICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0iUmVzb3VyY2UiPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6YWN0aW9uPmRlcml2ZWQ8L3N0RXZ0OmFjdGlvbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnBhcmFtZXRlcnM+Y29udmVydGVkIGZyb20gYXBwbGljYXRpb24vdm5kLmFkb2JlLnBob3Rvc2hvcCB0byBpbWFnZS9wbmc8L3N0RXZ0OnBhcmFtZXRlcnM+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICAgICA8cmRmOmxpIHJkZjpwYXJzZVR5cGU9IlJlc291cmNlIj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmFjdGlvbj5zYXZlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOmVkMTNjN2I4LTFkZDQtOTY0NC1iMjlhLWNlNzNmZTJhNmNiNzwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNS0wNi0yNFQxMjo1MjowMiswMjowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKFdpbmRvd3MpPC9zdEV2dDpzb2Z0d2FyZUFnZW50PgogICAgICAgICAgICAgICAgICA8c3RFdnQ6Y2hhbmdlZD4vPC9zdEV2dDpjaGFuZ2VkPgogICAgICAgICAgICAgICA8L3JkZjpsaT4KICAgICAgICAgICAgPC9yZGY6U2VxPgogICAgICAgICA8L3htcE1NOkhpc3Rvcnk+CiAgICAgICAgIDx4bXBNTTpEZXJpdmVkRnJvbSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgIDxzdFJlZjppbnN0YW5jZUlEPnhtcC5paWQ6NWIzNjUxNDQtMTEyNS03YjQ3LWE1MTctOGI3ZGFmMzJmN2ViPC9zdFJlZjppbnN0YW5jZUlEPgogICAgICAgICAgICA8c3RSZWY6ZG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwvc3RSZWY6ZG9jdW1lbnRJRD4KICAgICAgICAgICAgPHN0UmVmOm9yaWdpbmFsRG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwvc3RSZWY6b3JpZ2luYWxEb2N1bWVudElEPgogICAgICAgICA8L3htcE1NOkRlcml2ZWRGcm9tPgogICAgICAgICA8eG1wTU06RG9jdW1lbnRJRD5hZG9iZTpkb2NpZDpwaG90b3Nob3A6ZmQ4NDE2ZjItMWE1ZS0xMWU1LWFhMTgtOTkwODQwMzBhMmI1PC94bXBNTTpEb2N1bWVudElEPgogICAgICAgICA8eG1wTU06SW5zdGFuY2VJRD54bXAuaWlkOmVkMTNjN2I4LTFkZDQtOTY0NC1iMjlhLWNlNzNmZTJhNmNiNzwveG1wTU06SW5zdGFuY2VJRD4KICAgICAgICAgPHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwveG1wTU06T3JpZ2luYWxEb2N1bWVudElEPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj43MjAwMDAvMTAwMDA8L3RpZmY6WFJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyMDAwMC8xMDAwMDwvdGlmZjpZUmVzb2x1dGlvbj4KICAgICAgICAgPHRpZmY6UmVzb2x1dGlvblVuaXQ+MjwvdGlmZjpSZXNvbHV0aW9uVW5pdD4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT42NTUzNTwvZXhpZjpDb2xvclNwYWNlPgogICAgICAgICA8ZXhpZjpQaXhlbFhEaW1lbnNpb24+ODk8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+OTY8L2V4aWY6UGl4ZWxZRGltZW5z"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.347Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "script",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "function callPost(n,t,i,r){$.ajax({url:n,type:\"Post\",cache:!1,contentType:\"application/json\",dataType:\"json\",data:JSON.stringify(t),success:i,error:r})}function getAvailableTimeSlotsForPublic(n,t,i){callPost(\"/Home/AvailableTimeSlots\",n,t,i)}function FilterOutDuplicates(n){const t={},i=[],r=n.length;var u=0;for(let f=0;f<r;f++){const r=n[f];t[r]!==1&&(t[r]=1,i[u++]=r)}return i}function resetValidation(){$(this).each(function(n,t){$(t).trigger(\"reset.unobtrusiveValidation\");$(t).next().is(\"span\")&&$(t).next().empty()})}function showModal(n,t,i){return getModal(n,t,i)}function showModalToSendCancelLink(n,t,i,r){const u=n.data(\"id\");if(u){var f=getModal(t,i,r);$(\".btnConfirm\",f).off().click(()=>{f.modal(\"hide\"),SharedAjaxService.appointmentCancelRequest(ajaxUrl,{uniqueToken:u,cultureCode:lang},function(t){if(t.succeeded){const i=n.children(\"#cancelFeedback\"),r=n.children(\".fa-close\");$(i).html(t.message);$(i).show();n.addClass(\"disabled\");$(n).prop(\"disabled\",!0);isDisabled=!0;$(r).remove()}},function(){window.location.reload()})})}}function getModal(n,t,i){var r=$(\"#confirmationModal\");return $(\".modal-title\",r).html(n),setModalBody(r,t),toggleModalMenu(r,i),r.modal(\"show\"),r}function setModalBody(n,t,i){var r=i?$('<div class=\"alert\">').addClass(i).html(t):t;$(\".modal-body\",n).html(r)}function toggleModalMenu(n,t){$(\".menuDefault\",n).toggle(!t);$(\".menuConfirm\",n).toggle(t)}function convertLocalTimeToUTC(){const n=new Date;return new Date(n.getTime()+n.getTimezoneOffset()*6e4)}function getValidUntilMilliseconds(n){const t=convertLocalTimeToUTC(),i=new Date(n);return i.getTime()-t.getTime()}function setupSessionTimeout(n,t){const i=getValidUntilMilliseconds(n);setTimeout(function(){location.href=t?t:location.href},i)}function successfullCaptcha(n){const t=document.querySelector(\"#captchaText\"),i=document.querySelector(\"#captchaDiv\");t.style.display=\"none\";i.style.display=\"none\";const r=document.querySelector(\"#loader\"),u=document.querySelector(\"#loaderText\");r.style.display=\"block\";u.style.display=\"block\";SharedAjaxService.setCaptchaToken(ajaxUrl,{captcha:n},function(n){setupSessionTimeout(n.validUntil,n.redirectUrl);location.href=n.redirectUrl})}var foolproof,ValidationConfiguration,SharedAjaxService,JQueryHelper,StringHelper;if(!function(n,t){\"object\"==typeof module&&\"object\"==typeof module.exports?module.exports=n.document?t(n,!0):function(n){if(!n.document)throw new Error(\"jQuery requires a window with a document\");return t(n)}:t(n)}(\"undefined\"!=typeof window?window:this,function(n,t){function ii(n){var t=!!n&&\"length\"in n&&n.length,r=i.type(n);return\"function\"===r||i.isWindow(n)?!1:\"array\"===r||0===t||\"number\"==typeof t&&t>0&&t-1 in n}function ri(n,t,r){if(i.isFunction(t))return i.grep(n,function(n,i){return!!t.call(n,i,n)!==r});if(t.nodeType)return i.grep(n,function(n){return n===t!==r});if(\"string\"==typeof t){if(bf.test(t))return i.filter(t,n,r);t=i.filter(t,n)}return i.grep(n,function(n){return lt.call(t,n)>-1!==r})}function hr(n,t){while((n=n[t])&&1!==n.nodeType);return n}function kf(n){var t={};return i.each(n.match(h)||[],function(n,i){t[i]=!0}),t}function yt(){u.removeEventListener(\"DOMContentLoaded\",yt);n.removeEventListener(\"load\",yt);i.ready()}function et(){this.expando=i.expando+et.uid++}function lr(n,t,r){var u;if(void 0===r&&1===n.nodeType)if(u=\"data-\"+t.replace(cr,\"-$&\").toLowerCase(),r=n.getAttribute(u),\"string\"==typeof r){try{r=\"true\"===r?!0:\"false\"===r?!1:\"null\"===r?null:+r+\"\"===r?+r:df.test(r)?i.parseJSON(r):r}catch(f){}e.set(n,t,r)}else r=void 0;return r}function vr(n,t,r,u){var h,e=1,l=20,c=u?function(){return u.cur()}:function(){return i.css(n,t,\"\")},s=c(),o=r&&r[3]||(i.cssNumber[t]?\"\":\"px\"),f=(i.cssNumber[t]||\"px\"!==o&&+s)&&ot.exec(i.css(n,t));if(f&&f[3]!==o){o=o||f[3];r=r||[];f=+s||1;do e=e||\".5\",f/=e,i.style(n,t,f+o);while(e!==(e=c()/s)&&1!==e&&--l)}return r&&(f=+f||+s||0,h=r[1]?f+(r[1]+1)*r[2]:+r[2],u&&(u.unit=o,u.start=f,u.end=h)),h}function o(n,t){var r=\"undefined\"!=typeof n.getElementsByTagName?n.getElementsByTagName(t||\"*\"):\"undefined\"!=typeof n.querySelectorAll?n.querySelectorAll(t||\"*\"):[];return void 0===t||t&&i.nodeName(n,t)?i.merge([n],r):r}function ui(n,t){for(var i=0,u=n.length;u>i;i++)r.set(n[i],\"globalEval\",!t||r.get(t[i],\"globalEval\"))}function kr(n,t,r,u,f){for(var e,s,p,a,w,v,h=t.createDocumentFragment(),y=[],l=0,b=n.length;b>l;l++)if(e=n[l],e||0===e)if(\"object\"===i.type(e))i.merge(y,e.nodeType?[e]:e);else if(br.test(e)){for(s=s||h.appendChild(t.createElement(\"div\")),p=(pr.exec(e)||[\"\",\"\"])[1].toLowerCase(),a=c[p]||c._default,s.innerHTML=a[1]+i.htmlPrefilter(e)+a[2],v=a[0];v--;)s=s.lastChild;i.merge(y,s.childNodes);s=h.firstChild;s.textContent=\"\"}else y.push(t.createTextNode(e));for(h.textContent=\"\",l=0;e=y[l++];)if(u&&i.inArray(e,u)>-1)f&&f.push(e);else if(w=i.contains(e.ownerDocument,e),s=o(h.appendChild(e),\"script\"),w&&ui(s),r)for(v=0;e=s[v++];)wr.test(e.type||\"\")&&r.push(e);return h}function pt(){return!0}function nt(){return!1}function gr(){try{return u.activ"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:22.782Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/background/bg-lang-site.jpg",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "image",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "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"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:25.351Z",
+      "method": "POST",
+      "url": "https://api.hcaptcha.com/checksiteconfig?v=129151648d8e764ed2e9d497a94e4b90b8f6fc5f&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1",
+      "requestCookies": [
+        {
+          "name": "__cf_bm",
+          "value": "o.Qyxv.djIFS.RvKwjePUx30QTjAipl3zZTin_KEUl4-1780938815.9069781-1.0.1.1-LShEBPz1f1y9Zm5SiBiIQ0Oayfk2w43yQb7Jwg60Q1kL65kd.hNVH3P6.mxTGi6xmIicgMlfSPja6Cq4zzPf_IWPPTonFqs2WmKVWh7jRbZGHCN_g3oFMKIFJ8X5gFZz"
+        }
+      ],
+      "requestHeaders": {
+        ":authority": "api.hcaptcha.com",
+        ":method": "POST",
+        ":path": "/checksiteconfig?v=129151648d8e764ed2e9d497a94e4b90b8f6fc5f&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a&sc=1&swa=1&spst=1",
+        ":scheme": "https",
+        "accept": "application/json",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "content-length": "0",
+        "content-type": "text/plain",
+        "cookie": "__cf_bm=o.Qyxv.djIFS.RvKwjePUx30QTjAipl3zZTin_KEUl4-1780938815.9069781-1.0.1.1-LShEBPz1f1y9Zm5SiBiIQ0Oayfk2w43yQb7Jwg60Q1kL65kd.hNVH3P6.mxTGi6xmIicgMlfSPja6Cq4zzPf_IWPPTonFqs2WmKVWh7jRbZGHCN_g3oFMKIFJ8X5gFZz",
+        "origin": "https://newassets.hcaptcha.com",
+        "priority": "u=1, i",
+        "referer": "https://newassets.hcaptcha.com/",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-storage-access": "active",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+      },
+      "requestHeadersOrder": [
+        ":authority",
+        ":method",
+        ":path",
+        ":scheme",
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "content-length",
+        "content-type",
+        "cookie",
+        "origin",
+        "priority",
+        "referer",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "sec-fetch-dest",
+        "sec-fetch-mode",
+        "sec-fetch-site",
+        "sec-fetch-storage-access",
+        "user-agent"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "{\"features\":{\"enc_get_req\":true},\"c\":{\"type\":\"hsw\",\"req\":\"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJmIjowLCJzIjoyLCJ0IjoidyIsImQiOiJGN21pdytUODRhOGhNMWxqNytkZWc4SHhaR1F0eUZuWFJ6QTU5U3lwdFM5cTlIeWtnYXdYUHpkUDdzU2JlMVZwV2g3bFRUUjJMcUozS2lKaDk5bkxWNXY0SDdaazF0YjljcFVpQTBxNWpjcXl3ZERQU1Q1cG9ONWJIQ3NLUGppVStiN3JrblowL2t2Z0luUzBXT044MzF2N2c5N0lYZXkvanZQOXF0N01OOHhzMTUrV2hMSEYxaC92VVZHcUxDWDdXaDJNdmVBYW5wVlRVUWlxN3R0NlRrUEFZUEFuYTJFUlYyTVk3cDFPcDhNOVFhczNZTVZtUXhFRGkyN0M4RHIrdXVMTnhnLzcrdFdxMDMyaElXS1BXQT09QmQrM1k5anRoNVBjRDBGZiIsImwiOiIvYy9jNGFjMTg3NGI3YjVjMmI3ZWExYzI4YmU3NjVlN2YxYzZmYzg5NDE5YmRmNmZjM2U1NmFlZWMyOTY0YzMzODIxIiwiaSI6InNoYTI1Ni1tTmI1cEd6ZExUTU00T0RvNUFCTE5KNVVPYUNWSmZOcnlGc1NTUWd5WjlRPSIsImUiOjE3ODA5NDI0NjYsIm4iOiJoc3ciLCJjIjoxMDAwfQ.X5RRUZ00qBKrZ34HJD5VkZN23LCfxZplECriiC1wmLQ\"},\"pass\":true}"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:25.431Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/favicon.ico?v1",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "image",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "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"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:50.291Z",
+      "method": "POST",
+      "url": "https://appointment.cloud.diplomatie.be/Captcha/SetCaptchaToken",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "content-length": "2035",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "origin": "https://appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Content-Length",
+        "Content-Type",
+        "Cookie",
+        "Host",
+        "Origin",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "User-Agent",
+        "X-Requested-With",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "requestBody": "captcha=P1_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.haJwZACjZXhwzmom-QKncGFzc2tlecUFgPaXgfhRTb1NlbveUSCZVslcCLPTTVhEBTnJ8aVbWa179-cNgz0UqVig_xc8ONbtF6s4vDDMf1FBM0sXDXTAexQLNqBi1ikMDuRDK_ojvmMr-ot4v2AhoRc5e1t_wKTKZk9zuk48gx5363jCVTC1ej7fHznrdEYTv5nKwCw3K8Ca2Kz5Ns1BDE2DmnPt5fm8sxNkqqdTQEEpqYsfGFYEQ4JLoEzj3Zdd5QFutSToGEpX3U4hb6Kf0Sbjx8LbDr9_zu_U1nexHHLEQqfFNsfIF7r-rKtLkA4H0oNazPCAk7Hq53K2C2lEM6-Ys6RQ5sDrWZHmwHl8Qdce0ge0KEnH8iO3Ak_bINpFAlM7LksWFTOWUK7B6JV5GdSU-92shobz3lsEYIewGyHPpO0REEIhSWd74yE86j4HLCX6pVwGSCpYrHl2tm1j_heUFCWq3ig4MMfnmM96tsLLSOkq8iRjtBnWoULClWt3DnBA8RLf8ALfapSO-IFqoOwf-jjkgZgcTzL_5j-bxyUvNPqeFTrBn5cXN7B0yMdWyzky0Z2TElXpZYgbKh3kx84aP_g3qc38ajS2CCXZPl5rFP3ZxDlgZo8yqDEZA2OOCy98CkjVRqcQGL6t866KLK2iMZEQU3FwW8CBI2euaBlO-gDoiYFwgSIvYbdm3r7lwYYDEohceSQABqnq8azURrtCj4QaK0WvGdwYcFRbS8xzth4KyNQNOVvkHxjaZ-Nvz6Wjzo1DY6LlH8XBVs6KcLYBA4jM7Z5GdYvJMB85mvggUwksN7epYl60_5-7aowlbDisxxU4EjhbkzxCLpk3TEm3ANIY1xsZF1eXu2i0Xn8sEK-HIF4QePhdVos2xrXmYXL3pHRmZEvQw-sLrQ8Zb0qz5WiO6W_jgki_C4sDOZ8P3btZlbpA4mVB6AipO4pmATtEjI3Ix1PGc2wkB65YA_qOe8Et1FMoID-8O0mubYy1mGwzSaArM7mxZ2pkr-3_IFdmZ1Nd1ECEng_qFyvs7GnWOzzQomV2rOXWkN6WPBy4L1dZi_RSEiB88C_KNYriDhPo-CqqA6YEUSrBwo96HVrvxfzXi4VZBjSd6cN50jA86WaAmTJxHMrPYfef7QxUrcxbe8YYSGIcM56OreKDIdlQUnW1yquR9Pyc8JWnL0lhsN_M4ckyLaPccI-7b7J5TNMmy1RefPljk-mbAlMOqqIlmoPPi6z2r_ZcNEe26R6oUWyaEcwW4cQN_C25ei0jVEfuZtnRrubgQCmTBuxZ6t24BQpgbzzyfc4ec0rdxqw75iGKJkTYziypMDsg_wsWqjHgfWNUiQEEX2ETCjuXqscRJNIgA0Ad9w7-uwv6h8nAk_ggQFB4AgS_WqjXh-YyigHJCSwIz11kfdtUwuMsdUZe2_JUBJhISHLBYb5RtghdeJ5vk9Rv9pxxcZ80Jupf18fhciYY9aMLY8kkeo5CHGdA-v6mTPjFaDCZl6iwIlj3FXPraJUN0iHq6i1YncHxkuV-nSfABHkTPaGYiVJeROdQRN5ffpGja5E_1huobdnCILC1tywO88BUR8EHDUoJefurv2ivGuhzH9W1Hb6o-33jXeorwj3-vFH6RiKSoonug4kUsk37NuqLyfUkE2b_9MxhpkPFK6RIDN9EoB06E5nhYm5spV_P7N3yB7j7nthxEmo6dWbfTXW-xMG1FR4g8P6oSuh-Zj8AKJ1PNtIU4eZM8XhYO7NF4s9yTso2ONH8qLTloscdC4SySMnC8aUCBpdlxf9SP0plBp3mAt3u4ccEOeN6_mOnhLMFwgBdvDxkBmvn2Ap7_TYc97P3FVueYP2jZikFjxH8GvebltW_mh98bdrkNNHIEWBM6zgSY0t8vz-vc3MxN42ia3KmNGM1OWRiqHNoYXJkX2lkzhQ8hB8.8CL00SKYDT6hvq2QIY1hgZ8Bcjl2Ps--0j4JxbT13IA",
+      "responseStatus": 200,
+      "responseSetCookies": []
+    },
+    {
+      "timestamp": "2026-06-08T17:14:51.624Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/15f30c82-3645-48d0-b19f-cc4c8e6e5a0a/57f49a76-dc56-f111-a3ae-00505691de06/59eba882-4cc3-4ede-ba31-935d81f9393c/46027afe-2637-4b4d-97b9-259c14384da0/en-US",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 302,
+      "responseSetCookies": [
+        "PreferredCulture=en-US; expires=Wed, 08-Jul-2026 17:14:51 GMT; path=/"
+      ],
+      "responseLocation": "/Integration/VOW/SelectSlot"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.247Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Integration/VOW/SelectSlot",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 302,
+      "responseSetCookies": [],
+      "responseLocation": "/Integration/Error/NoAvailability"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.543Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Integration/Error/NoAvailability",
+      "requestCookies": [
+        {
+          "name": "ASP.NET_SessionId",
+          "value": "py0e0q31ilye0wlz3rogryir"
+        },
+        {
+          "name": "PreferredCulture",
+          "value": "en-US"
+        }
+      ],
+      "requestHeaders": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "fr-BE",
+        "connection": "keep-alive",
+        "cookie": "ASP.NET_SessionId=py0e0q31ilye0wlz3rogryir; PreferredCulture=en-US",
+        "host": "appointment.cloud.diplomatie.be",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\""
+      },
+      "requestHeadersOrder": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Connection",
+        "Cookie",
+        "Host",
+        "Sec-Fetch-Dest",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-User",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "\r\n<!DOCTYPE html>\r\n<html lang=\"en-US\">\r\n<head>\r\n    <title>e-Appointment</title>\r\n    <link href=\"/favicon.ico?v1\" rel=\"shortcut icon\" type=\"image/x-icon\"/>\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EDGE\"/>\r\n    <meta charset=\"utf-8\"/>\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <script src=\"https://js.hcaptcha.com/1/api.js?hl=en-US\" nonce=\"Z+zuQl8ZOZSouWEs/J1/vKxc\" async defer></script>\r\n    <link href=\"/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1\" rel=\"stylesheet\"/>\r\n\r\n\r\n    \r\n</head>\r\n<body>\r\n\r\n\r\n<header class=\"container-fluid containerpaddding\">\r\n    <nav class=\"navbar row navbarcontent\" role=\"navigation\">\r\n        <div id=\"ofed-federal-header-logo\" class=\"pull-right\">\r\n            <img src=\"/Content/Images/logos/federalheader_logo.png\" width=\"32\" height=\"23\" alt=\"Logo of the Belgian Federal Authorities\">\r\n        </div>\r\n        <div id=\"federalmobileheader-left\">\r\n            <ul class=\"navphone nav navbar-nav\">\r\n                <li class=\"dropdown\" id=\"dropdownheader\">\r\n                    <a href=\"#\" class=\"dropdown-toggle\"\r\n                       data-toggle=\"dropdown\" role=\"button\" aria-haspopup=\"true\" aria-expanded=\"false\" style=\"width: 40px\">\r\n                        en&nbsp;&nbsp;<span class=\"caret\"></span>\r\n                    </a>\r\n                    <ul class=\"dropdown-menu\" role=\"menu\">\r\n                        \r\n\r\n    <li class=\"active\"><a href=\"/Culture/SetCulture/en-US\">EN</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n\r\n                    </ul>\r\n                </li>\r\n            </ul>\r\n        </div>\r\n        <div id=\"federalheader-left\" style=\"min-height: 24px;\">\r\n            <ul class=\"navweb nav\">\r\n                \r\n\r\n    <li class=\"active\"><a href=\"/Culture/SetCulture/en-US\">EN</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/nl-BE\">NL</a></li>\r\n    <li class=\"\"><a href=\"/Culture/SetCulture/fr-BE\">FR</a></li>\r\n\r\n            </ul>\r\n            <div id=\"ofed-federal-header-link\" class=\"pull-right hidden-xs\">\r\n                Other official information and services:&nbsp;<a href=\"http://www.belgium.be/en\">www.belgium.be</a>\r\n            </div>\r\n        </div>\r\n    </nav>\r\n    \r\n    <div class=\"row\">\r\n        <div class=\"col-sm-1\" id=\"embassyIcon\">\r\n            <img id=\"embassyImage\" class=\"pull-left\" src=\"/Content/Images/logos/logo.png\" alt=\"\">\r\n        </div>\r\n\r\n            <div class=\"col-sm-11\" id=\"embassyText\">\r\n                Online Appointment system Diplomacy Belgium<br />\r\n                 EVC - European Visa center in Kinshasa\r\n            </div>\r\n    </div>\r\n</header>\r\n\r\n<div class=\"container-fluid body-content\">\r\n    <div id=\"ContentComplete\">\r\n        <div class=\"hidden-print\">\r\n            <noscript>\r\n                <div class=\"alert alert-danger alert-block\">\r\n                    <h4>Warning</h4>\r\n                    This application requires JavaScript to be enabled\r\n                </div>\r\n            </noscript>\r\n        </div>\r\n        <section>\r\n                        \r\n            <div class=\"row\">\r\n    <div class=\"col-xs-12\">\r\n        <h1>Make an appointment</h1>\r\n    </div>\r\n</div>\r\n    <div class=\"row\">\r\n        <div class=\"col-xs-12\">\r\n            <div class=\"alert alert-warning\" style=\"margin-bottom:0px\">\r\n                There are no free time slots available. Try again later.\r\n            </div>\r\n        </div>\r\n    </div>\r\n\r\n        </section>\r\n    </div>\r\n</div>\r\n\r\n<footer id=\"footer\">\r\n  <div class=\"container-fluid\">\r\n    <div class=\"row\">\r\n      <a href=\"/Privacy\" target=\"_blank\">Privacy</a>\r\n      | <a href=\"/Disclaimer\" target=\"_blank\">Disclaimer</a>\r\n      | <a href=\"/Cookies\" target=\"_blank\">Cookies</a>\r\n      | © FPS Foreign Affairs, Foreign Trade and Development Cooperation\r\n      <div data-bs-toggle=\"tooltip\" data-bs-placement=\"bottom\" title=\"1.0.249_CommitDate:2026-01-20\">\r\n        Version: 1.0.249.0\r\n      </div>\r\n    </div>\r\n  </div>\r\n</footer>\r\n\r\n<script src=\"/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1\"></script>\r\n\r\n\r\n<script type=\"text/javascript\" nonce=\"Z+zuQl8ZOZSouWEs/J1/vKxc\">\r\n    var POST_FIRSTDAY_WEEK = null;\r\n    var currentLocation = window.location;\r\n    var ajaxUrl = currentLocation.protocol + '//' + 'appointment.cloud.diplomatie.be' + '/';\r\n</script>\r\n\r\n\r\n</body>\r\n</html>"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.832Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1",
+      "requestCookies": [],
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "requestHeadersOrder": [
+        "sec-ch-ua-platform",
+        "Referer",
+        "User-Agent",
+        "sec-ch-ua",
+        "Accept-Language",
+        "sec-ch-ua-mobile"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "html{font-family:sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}body{margin:0}article,aside,details,figcaption,figure,footer,header,hgroup,main,menu,nav,section,summary{display:block}audio,canvas,progress,video{display:inline-block;vertical-align:baseline}audio:not([controls]){display:none;height:0}[hidden],template{display:none}a{background-color:transparent}a:active,a:hover{outline:0}abbr[title]{border-bottom:1px dotted}b,strong{font-weight:700}dfn{font-style:italic}h1{margin:.67em 0;font-size:2em}mark{color:#000;background:#ff0}small{font-size:80%}sub,sup{position:relative;font-size:75%;line-height:0;vertical-align:baseline}sup{top:-.5em}sub{bottom:-.25em}img{border:0}svg:not(:root){overflow:hidden}figure{margin:1em 40px}hr{height:0;-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box}pre{overflow:auto}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}button,input,optgroup,select,textarea{margin:0;font:inherit;color:inherit}button{overflow:visible}button,select{text-transform:none}button,html input[type=button],input[type=reset],input[type=submit]{-webkit-appearance:button;cursor:pointer}button[disabled],html input[disabled]{cursor:default}button::-moz-focus-inner,input::-moz-focus-inner{padding:0;border:0}input{line-height:normal}input[type=checkbox],input[type=radio]{-webkit-box-sizing:border-box;-moz-box-sizing:border-box;box-sizing:border-box;padding:0}input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{height:auto}input[type=search]{-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;-webkit-appearance:textfield}input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none}fieldset{padding:.35em .625em .75em;margin:0 2px;border:1px solid silver}legend{padding:0;border:0}textarea{overflow:auto}optgroup{font-weight:700}table{border-spacing:0;border-collapse:collapse}td,th{padding:0}@media print{*,:after,:before{color:#000!important;text-shadow:none!important;background:0 0!important;-webkit-box-shadow:none!important;box-shadow:none!important}a,a:visited{text-decoration:underline}a[href]:after{content:\" (\" attr(href) \")\"}abbr[title]:after{content:\" (\" attr(title) \")\"}a[href^=\"javascript:\"]:after,a[href^=\"#\"]:after{content:\"\"}blockquote,pre{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}img,tr{page-break-inside:avoid}img{max-width:100%!important}h2,h3,p{orphans:3;widows:3}h2,h3{page-break-after:avoid}.navbar{display:none}.btn>.caret,.dropup>.btn>.caret{border-top-color:#000!important}.label{border:1px solid #000}.table{border-collapse:collapse!important}.table td,.table th{background-color:#fff!important}.table-bordered td,.table-bordered th{border:1px solid #ddd!important}}@font-face{font-family:'Glyphicons Halflings';src:url(../fonts/glyphicons-halflings-regular.eot);src:url(../fonts/glyphicons-halflings-regular.eot?#iefix) format('embedded-opentype'),url(../fonts/glyphicons-halflings-regular.woff2) format('woff2'),url(../fonts/glyphicons-halflings-regular.woff) format('woff'),url(../fonts/glyphicons-halflings-regular.ttf) format('truetype'),url(../fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular) format('svg')}.glyphicon{position:relative;top:1px;display:inline-block;font-family:'Glyphicons Halflings';font-style:normal;font-weight:400;line-height:1;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.glyphicon-asterisk:before{content:\"*\"}.glyphicon-plus:before{content:\"+\"}.glyphicon-eur:before,.glyphicon-euro:before{content:\"€\"}.glyphicon-minus:before{content:\"−\"}.glyphicon-cloud:before{content:\"☁\"}.glyphicon-envelope:before{content:\"✉\"}.glyphicon-pencil:before{content:\"✏\"}.glyphicon-glass:before{content:\"\"}.glyphicon-music:before{content:\"\"}.glyphicon-search:before{content:\"\"}.glyphicon-heart:before{content:\"\"}.glyphicon-star:before{content:\"\"}.glyphicon-star-empty:before{content:\"\"}.glyphicon-user:before{content:\"\"}.glyphicon-film:before{content:\"\"}.glyphicon-th-large:before{content:\"\"}.glyphicon-th:before{content:\"\"}.glyphicon-th-list:before{content:\"\"}.glyphicon-ok:before{content:\"\"}.glyphicon-remove:before{content:\"\"}.glyphicon-zoom-in:before{content:\"\"}.glyphicon-zoom-out:before{content:\"\"}.glyphicon-off:before{content:\"\"}.glyphicon-signal:before{content:\"\"}.glyphicon-cog:before{content:\"\"}.glyphicon-trash:before{content:\"\"}.glyphicon-home:before{content:\"\"}.glyphicon-file:before{content:\"\"}.glyphicon-time:before{content:\"\"}.glyphicon-road:before{content:\"\"}.glyphicon-download-alt:before{content:\"\"}.glyphicon-download:before{content:\"\"}.glyphicon-upload:before{content:\"\"}.glyphicon-inbox:before{content:\"\"}.glyphicon-play-circle:before{content:\"\"}.glyphicon-repeat:before{content:\"\"}.glyphicon-refresh:before{content:\"\"}.glyphicon-list-alt:before{content:\"\"}.glyphicon-lock:before{content:\"\"}.glyphicon-flag:before{"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.836Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/logos/federalheader_logo.png",
+      "requestCookies": [],
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "requestHeadersOrder": [
+        "sec-ch-ua-platform",
+        "Referer",
+        "User-Agent",
+        "sec-ch-ua",
+        "Accept-Language",
+        "sec-ch-ua-mobile"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAXCAYAAABqBU3hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo0NzQ2RkFEQ0ZEM0VFMjExOUU1RkE0RDNFOUJFN0RFRiIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxQUVGOTkxQzQyRDkxMUUyOTEyRTk5N0I4NEQ4MDE1NiIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxQUVGOTkxQjQyRDkxMUUyOTEyRTk5N0I4NEQ4MDE1NiIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1LjEgV2luZG93cyI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkM1RkU4QjM1QjI0MkUyMTFBQzA1QUEyMkVEMkY3Qzg1IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ3NDZGQURDRkQzRUUyMTE5RTVGQTREM0U5QkU3REVGIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+6rO/fwAAAhdJREFUeNpiZMAClOUVEoCUApLQgrsPHzxgoBD8//8fQ4wFh9p4IHZA4h8AYoodgA0wMQwwGHXAqANYiFTnAMyaDmhiB4BZ8wCObCwApALQsvIDFQXFDUA9H5DVMuIwYD9aNsQFQFkzEdkhQL0gi+cDsQAW9SDLJwLVN1ArCkA+3A8tuGAF2HocljNAxeuB6uaTFAKaar8YXO2/gdnXb7Ex7D7IhU2bI8gxMI7Gr18MmR8/MPD++8fwmYmJYTq/AMMNNjYU9aCQIyoNbF78DIUPckRZswiYRgJwy0GWznv5AkwjOyhEUgrsGCioB6UjsqIAFCJdtW9wyvt/+YJiOQhI/fnD4PTtG3rCVmAhN/JBjgBhtFAAA5AvT3NwEJWGWChJgaB0gc0BG3l4wJgYBwx0QURZCJw8y4G3fCCmHCHbAU+fszCcPMeBr3x4QEwjhgma70EpsgFWoBACnz4zMWSUiRFSth5aJGMrZwzgBRG0jN+PJN8IxPbIBRGoHACleJDFIF9PmiOAnvhARfFEaCmIHhUg8QtQvgG0tQWiFUEhxIKlzLdHd7FvrBQ+n4IMDwRVMkDPLACyE9Cioh+HPpC6BiYsbT1S2n4ToEUquIYD0qCEt4BIvWA9zO8/frggJCDAiBSUhUC8E4gfAjEHtALhQAvuhdBacCVQ/w9kU4H8jUDzDiJVPgJIFp6ARkkmUO8OkCBAgAEAeRK7V51wl8wAAAAASUVORK5CYII="
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.842Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/logos/logo.png",
+      "requestCookies": [],
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "requestHeadersOrder": [
+        "sec-ch-ua-platform",
+        "Referer",
+        "User-Agent",
+        "sec-ch-ua",
+        "Accept-Language",
+        "sec-ch-ua-mobile"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "iVBORw0KGgoAAAANSUhEUgAAAFkAAABgCAYAAAB2ft7KAAAACXBIWXMAAAsTAAALEwEAmpwYAAA9xGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMwMTQgNzkuMTU2Nzk3LCAyMDE0LzA4LzIwLTA5OjUzOjAyICAgICAgICAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIgogICAgICAgICAgICB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIKICAgICAgICAgICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgICAgICAgICAgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDx4bXA6Q3JlYXRvclRvb2w+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKFdpbmRvd3MpPC94bXA6Q3JlYXRvclRvb2w+CiAgICAgICAgIDx4bXA6Q3JlYXRlRGF0ZT4yMDE1LTAxLTMwVDE1OjI4OjQzKzAxOjAwPC94bXA6Q3JlYXRlRGF0ZT4KICAgICAgICAgPHhtcDpNb2RpZnlEYXRlPjIwMTUtMDYtMjRUMTI6NTI6MDIrMDI6MDA8L3htcDpNb2RpZnlEYXRlPgogICAgICAgICA8eG1wOk1ldGFkYXRhRGF0ZT4yMDE1LTA2LTI0VDEyOjUyOjAyKzAyOjAwPC94bXA6TWV0YWRhdGFEYXRlPgogICAgICAgICA8ZGM6Zm9ybWF0PmltYWdlL3BuZzwvZGM6Zm9ybWF0PgogICAgICAgICA8cGhvdG9zaG9wOkNvbG9yTW9kZT4zPC9waG90b3Nob3A6Q29sb3JNb2RlPgogICAgICAgICA8eG1wTU06SGlzdG9yeT4KICAgICAgICAgICAgPHJkZjpTZXE+CiAgICAgICAgICAgICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0iUmVzb3VyY2UiPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6YWN0aW9uPmNvbnZlcnRlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6cGFyYW1ldGVycz5mcm9tIGltYWdlL3BuZyB0byBhcHBsaWNhdGlvbi92bmQuYWRvYmUucGhvdG9zaG9wPC9zdEV2dDpwYXJhbWV0ZXJzPgogICAgICAgICAgICAgICA8L3JkZjpsaT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+c2F2ZWQ8L3N0RXZ0OmFjdGlvbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0Omluc3RhbmNlSUQ+eG1wLmlpZDo1YjM2NTE0NC0xMTI1LTdiNDctYTUxNy04YjdkYWYzMmY3ZWI8L3N0RXZ0Omluc3RhbmNlSUQ+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDp3aGVuPjIwMTUtMDYtMjRUMTI6NTI6MDIrMDI6MDA8L3N0RXZ0OndoZW4+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDpzb2Z0d2FyZUFnZW50PkFkb2JlIFBob3Rvc2hvcCBDQyAyMDE0IChXaW5kb3dzKTwvc3RFdnQ6c29mdHdhcmVBZ2VudD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmNoYW5nZWQ+Lzwvc3RFdnQ6Y2hhbmdlZD4KICAgICAgICAgICAgICAgPC9yZGY6bGk+CiAgICAgICAgICAgICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0iUmVzb3VyY2UiPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6YWN0aW9uPmRlcml2ZWQ8L3N0RXZ0OmFjdGlvbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnBhcmFtZXRlcnM+Y29udmVydGVkIGZyb20gYXBwbGljYXRpb24vdm5kLmFkb2JlLnBob3Rvc2hvcCB0byBpbWFnZS9wbmc8L3N0RXZ0OnBhcmFtZXRlcnM+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICAgICA8cmRmOmxpIHJkZjpwYXJzZVR5cGU9IlJlc291cmNlIj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmFjdGlvbj5zYXZlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOmVkMTNjN2I4LTFkZDQtOTY0NC1iMjlhLWNlNzNmZTJhNmNiNzwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNS0wNi0yNFQxMjo1MjowMiswMjowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKFdpbmRvd3MpPC9zdEV2dDpzb2Z0d2FyZUFnZW50PgogICAgICAgICAgICAgICAgICA8c3RFdnQ6Y2hhbmdlZD4vPC9zdEV2dDpjaGFuZ2VkPgogICAgICAgICAgICAgICA8L3JkZjpsaT4KICAgICAgICAgICAgPC9yZGY6U2VxPgogICAgICAgICA8L3htcE1NOkhpc3Rvcnk+CiAgICAgICAgIDx4bXBNTTpEZXJpdmVkRnJvbSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgIDxzdFJlZjppbnN0YW5jZUlEPnhtcC5paWQ6NWIzNjUxNDQtMTEyNS03YjQ3LWE1MTctOGI3ZGFmMzJmN2ViPC9zdFJlZjppbnN0YW5jZUlEPgogICAgICAgICAgICA8c3RSZWY6ZG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwvc3RSZWY6ZG9jdW1lbnRJRD4KICAgICAgICAgICAgPHN0UmVmOm9yaWdpbmFsRG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwvc3RSZWY6b3JpZ2luYWxEb2N1bWVudElEPgogICAgICAgICA8L3htcE1NOkRlcml2ZWRGcm9tPgogICAgICAgICA8eG1wTU06RG9jdW1lbnRJRD5hZG9iZTpkb2NpZDpwaG90b3Nob3A6ZmQ4NDE2ZjItMWE1ZS0xMWU1LWFhMTgtOTkwODQwMzBhMmI1PC94bXBNTTpEb2N1bWVudElEPgogICAgICAgICA8eG1wTU06SW5zdGFuY2VJRD54bXAuaWlkOmVkMTNjN2I4LTFkZDQtOTY0NC1iMjlhLWNlNzNmZTJhNmNiNzwveG1wTU06SW5zdGFuY2VJRD4KICAgICAgICAgPHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD54bXAuZGlkOjViMzY1MTQ0LTExMjUtN2I0Ny1hNTE3LThiN2RhZjMyZjdlYjwveG1wTU06T3JpZ2luYWxEb2N1bWVudElEPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj43MjAwMDAvMTAwMDA8L3RpZmY6WFJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyMDAwMC8xMDAwMDwvdGlmZjpZUmVzb2x1dGlvbj4KICAgICAgICAgPHRpZmY6UmVzb2x1dGlvblVuaXQ+MjwvdGlmZjpSZXNvbHV0aW9uVW5pdD4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT42NTUzNTwvZXhpZjpDb2xvclNwYWNlPgogICAgICAgICA8ZXhpZjpQaXhlbFhEaW1lbnNpb24+ODk8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+OTY8L2V4aWY6UGl4ZWxZRGltZW5z"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.845Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1",
+      "requestCookies": [],
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "requestHeadersOrder": [
+        "sec-ch-ua-platform",
+        "Referer",
+        "User-Agent",
+        "sec-ch-ua",
+        "Accept-Language",
+        "sec-ch-ua-mobile"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "function callPost(n,t,i,r){$.ajax({url:n,type:\"Post\",cache:!1,contentType:\"application/json\",dataType:\"json\",data:JSON.stringify(t),success:i,error:r})}function getAvailableTimeSlotsForPublic(n,t,i){callPost(\"/Home/AvailableTimeSlots\",n,t,i)}function FilterOutDuplicates(n){const t={},i=[],r=n.length;var u=0;for(let f=0;f<r;f++){const r=n[f];t[r]!==1&&(t[r]=1,i[u++]=r)}return i}function resetValidation(){$(this).each(function(n,t){$(t).trigger(\"reset.unobtrusiveValidation\");$(t).next().is(\"span\")&&$(t).next().empty()})}function showModal(n,t,i){return getModal(n,t,i)}function showModalToSendCancelLink(n,t,i,r){const u=n.data(\"id\");if(u){var f=getModal(t,i,r);$(\".btnConfirm\",f).off().click(()=>{f.modal(\"hide\"),SharedAjaxService.appointmentCancelRequest(ajaxUrl,{uniqueToken:u,cultureCode:lang},function(t){if(t.succeeded){const i=n.children(\"#cancelFeedback\"),r=n.children(\".fa-close\");$(i).html(t.message);$(i).show();n.addClass(\"disabled\");$(n).prop(\"disabled\",!0);isDisabled=!0;$(r).remove()}},function(){window.location.reload()})})}}function getModal(n,t,i){var r=$(\"#confirmationModal\");return $(\".modal-title\",r).html(n),setModalBody(r,t),toggleModalMenu(r,i),r.modal(\"show\"),r}function setModalBody(n,t,i){var r=i?$('<div class=\"alert\">').addClass(i).html(t):t;$(\".modal-body\",n).html(r)}function toggleModalMenu(n,t){$(\".menuDefault\",n).toggle(!t);$(\".menuConfirm\",n).toggle(t)}function convertLocalTimeToUTC(){const n=new Date;return new Date(n.getTime()+n.getTimezoneOffset()*6e4)}function getValidUntilMilliseconds(n){const t=convertLocalTimeToUTC(),i=new Date(n);return i.getTime()-t.getTime()}function setupSessionTimeout(n,t){const i=getValidUntilMilliseconds(n);setTimeout(function(){location.href=t?t:location.href},i)}function successfullCaptcha(n){const t=document.querySelector(\"#captchaText\"),i=document.querySelector(\"#captchaDiv\");t.style.display=\"none\";i.style.display=\"none\";const r=document.querySelector(\"#loader\"),u=document.querySelector(\"#loaderText\");r.style.display=\"block\";u.style.display=\"block\";SharedAjaxService.setCaptchaToken(ajaxUrl,{captcha:n},function(n){setupSessionTimeout(n.validUntil,n.redirectUrl);location.href=n.redirectUrl})}var foolproof,ValidationConfiguration,SharedAjaxService,JQueryHelper,StringHelper;if(!function(n,t){\"object\"==typeof module&&\"object\"==typeof module.exports?module.exports=n.document?t(n,!0):function(n){if(!n.document)throw new Error(\"jQuery requires a window with a document\");return t(n)}:t(n)}(\"undefined\"!=typeof window?window:this,function(n,t){function ii(n){var t=!!n&&\"length\"in n&&n.length,r=i.type(n);return\"function\"===r||i.isWindow(n)?!1:\"array\"===r||0===t||\"number\"==typeof t&&t>0&&t-1 in n}function ri(n,t,r){if(i.isFunction(t))return i.grep(n,function(n,i){return!!t.call(n,i,n)!==r});if(t.nodeType)return i.grep(n,function(n){return n===t!==r});if(\"string\"==typeof t){if(bf.test(t))return i.filter(t,n,r);t=i.filter(t,n)}return i.grep(n,function(n){return lt.call(t,n)>-1!==r})}function hr(n,t){while((n=n[t])&&1!==n.nodeType);return n}function kf(n){var t={};return i.each(n.match(h)||[],function(n,i){t[i]=!0}),t}function yt(){u.removeEventListener(\"DOMContentLoaded\",yt);n.removeEventListener(\"load\",yt);i.ready()}function et(){this.expando=i.expando+et.uid++}function lr(n,t,r){var u;if(void 0===r&&1===n.nodeType)if(u=\"data-\"+t.replace(cr,\"-$&\").toLowerCase(),r=n.getAttribute(u),\"string\"==typeof r){try{r=\"true\"===r?!0:\"false\"===r?!1:\"null\"===r?null:+r+\"\"===r?+r:df.test(r)?i.parseJSON(r):r}catch(f){}e.set(n,t,r)}else r=void 0;return r}function vr(n,t,r,u){var h,e=1,l=20,c=u?function(){return u.cur()}:function(){return i.css(n,t,\"\")},s=c(),o=r&&r[3]||(i.cssNumber[t]?\"\":\"px\"),f=(i.cssNumber[t]||\"px\"!==o&&+s)&&ot.exec(i.css(n,t));if(f&&f[3]!==o){o=o||f[3];r=r||[];f=+s||1;do e=e||\".5\",f/=e,i.style(n,t,f+o);while(e!==(e=c()/s)&&1!==e&&--l)}return r&&(f=+f||+s||0,h=r[1]?f+(r[1]+1)*r[2]:+r[2],u&&(u.unit=o,u.start=f,u.end=h)),h}function o(n,t){var r=\"undefined\"!=typeof n.getElementsByTagName?n.getElementsByTagName(t||\"*\"):\"undefined\"!=typeof n.querySelectorAll?n.querySelectorAll(t||\"*\"):[];return void 0===t||t&&i.nodeName(n,t)?i.merge([n],r):r}function ui(n,t){for(var i=0,u=n.length;u>i;i++)r.set(n[i],\"globalEval\",!t||r.get(t[i],\"globalEval\"))}function kr(n,t,r,u,f){for(var e,s,p,a,w,v,h=t.createDocumentFragment(),y=[],l=0,b=n.length;b>l;l++)if(e=n[l],e||0===e)if(\"object\"===i.type(e))i.merge(y,e.nodeType?[e]:e);else if(br.test(e)){for(s=s||h.appendChild(t.createElement(\"div\")),p=(pr.exec(e)||[\"\",\"\"])[1].toLowerCase(),a=c[p]||c._default,s.innerHTML=a[1]+i.htmlPrefilter(e)+a[2],v=a[0];v--;)s=s.lastChild;i.merge(y,s.childNodes);s=h.firstChild;s.textContent=\"\"}else y.push(t.createTextNode(e));for(h.textContent=\"\",l=0;e=y[l++];)if(u&&i.inArray(e,u)>-1)f&&f.push(e);else if(w=i.contains(e.ownerDocument,e),s=o(h.appendChild(e),\"script\"),w&&ui(s),r)for(v=0;e=s[v++];)wr.test(e.type||\"\")&&r.push(e);return h}function pt(){return!0}function nt(){return!1}function gr(){try{return u.activ"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:52.868Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/Content/Images/background/bg-lang-site.jpg",
+      "requestCookies": [],
+      "requestHeaders": {
+        "referer": ""
+      },
+      "requestHeadersOrder": [
+        "Referer"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "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"
+    },
+    {
+      "timestamp": "2026-06-08T17:14:53.048Z",
+      "method": "GET",
+      "url": "https://appointment.cloud.diplomatie.be/favicon.ico?v1",
+      "requestCookies": [],
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Chromium\";v=\"148\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "requestHeadersOrder": [
+        "sec-ch-ua-platform",
+        "Referer",
+        "User-Agent",
+        "sec-ch-ua",
+        "Accept-Language",
+        "sec-ch-ua-mobile"
+      ],
+      "responseStatus": 200,
+      "responseSetCookies": [],
+      "responseBody": "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"
+    }
+  ]
+}
