@@ -108,8 +108,9 @@ const CEV_UA_POOL: UaProfile[] = [
     platform: '"Windows"',
   },
   {
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    chUa: '"Not/A)Brand";v="99", "Chromium";v="147"',
+    // FIX #7: Build réel 147.0.7231.96 (au lieu de 147.0.0.0 fictif) + "Google Chrome" brand ajouté
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="147", "Google Chrome";v="147"',
     platform: '"Windows"',
   },
   {
@@ -119,14 +120,16 @@ const CEV_UA_POOL: UaProfile[] = [
     platform: '"macOS"',
   },
   {
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.0.0",
+    // FIX #8: Build réel Edge 148.0.2849.68 (au lieu de Edg/148.0.0.0 fictif)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.2849.68",
     chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Microsoft Edge";v="148"',
     platform: '"Windows"',
   },
   {
-    ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    chUa: '"Not/A)Brand";v="99", "Chromium";v="147"',
-    platform: '"Linux"',
+    // FIX #7: macOS Chrome 147 stable (remplace l'entrée Linux détectable) — build réel + 3 brands
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="147", "Google Chrome";v="147"',
+    platform: '"macOS"',
   },
 ];
 

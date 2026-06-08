@@ -1,0 +1,2 @@
+- [CEV bot detection audit](cev-detection-audit.md) — full analysis of real Chrome 148 traffic dumps vs. bot; fixes #2-#8 applied; what's confirmed safe vs. remaining risks.
+- [CEV UA pool rules](cev-ua-pool-rules.md) — rules for maintaining the UA pool: always use real build numbers, always include "Google Chrome" brand for stable Chrome, no Linux profiles.
