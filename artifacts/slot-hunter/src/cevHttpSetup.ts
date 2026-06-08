@@ -812,17 +812,27 @@ export async function setupCevSessionHttp(
     //   le bot sur SessionExpired, qui était classifié comme SESSION_EXPIRED_AFTER_REDIRECT.
     //   Résultat : chaque check "pas de créneaux" invalidait le cache VOWINT et gaspillait 1 clic/5h.
     //   Fix : tracer CHAQUE URL intermédiaire → NoAvailability détecté avant SessionExpired.
+    // HAR réel (capture 2026-06-08) : le serveur retourne parfois un body vide sur SetCaptchaToken
+    // (HTTP 200, body="", Set-Cookie=[]).  Le navigateur navigue alors vers l'URL d'intégration
+    // originale (step 2) stockée côté JS.  Le bot doit faire pareil : fallback sur integrationUrl.
     const captchaRedirectUrl = captchaData.redirectUrl ?? "";
 
     if (!captchaRedirectUrl) {
-      botLog({ applicationId: clientId, step: "cev_http_no_redirect_url", status: "fail" });
-      return { success: false, error: "CAPTCHA_NO_REDIRECT_URL" };
+      // Fallback : ré-utiliser l'URL d'intégration originale — comportement identique au navigateur réel
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_no_redirect_url_fallback",
+        status: "warn",
+        data: { fallback: integrationUrl.slice(0, 100) },
+      });
     }
 
-    // Construire l'URL absolue si relative
-    const fullRedirectUrl = captchaRedirectUrl.startsWith("http")
-      ? captchaRedirectUrl
-      : `${CEV_BASE}${captchaRedirectUrl}`;
+    // Construire l'URL absolue : préférer redirectUrl du JSON, sinon l'URL d'intégration originale
+    const resolvedRedirect = captchaRedirectUrl
+      ? (captchaRedirectUrl.startsWith("http") ? captchaRedirectUrl : `${CEV_BASE}${captchaRedirectUrl}`)
+      : integrationUrl;
+
+    const fullRedirectUrl = resolvedRedirect;
 
     let finalUrl = fullRedirectUrl;
     let probeBodyRaw = "";
