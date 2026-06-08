@@ -19,7 +19,7 @@
  *   -> Les données sont sauvegardées dans artifacts/slot-hunter/debug_dumps/
  */
 
-import { chromium, type Browser, type Page, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type Page, type BrowserContext, type Request, type Response } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -178,201 +178,221 @@ function isAspNetSessionCookie(cookieName: string): boolean {
   return cookieName === 'ASP.NET_SessionId';
 }
 
-// ─── Capture des requêtes réseau (CORRIGÉE) ───────────────────────────────────────
+// ─── Handlers partagés requête / réponse ────────────────────────────────────────
+
+/**
+ * Traite une requête entrante (appelé depuis context OU page listener).
+ * La déduplication est assurée par __captureId attaché à l'objet request.
+ */
+async function handleRequest(request: Request, sourcePage?: Page): Promise<void> {
+  // Déduplication : si cet objet request a déjà été traité, on skip
+  if ((request as any).__captureId) return;
+
+  try {
+    const requestId = generateRequestId();
+    const url = request.url();
+    const method = request.method();
+    const resourceType = request.resourceType();
+
+    console.log(`[REQUEST] [${resourceType.toUpperCase()}] ${method} ${url.slice(0, 80)}`);
+
+    let headersOrder: string[] = [];
+    let headersMap: Record<string, string> = {};
+    try {
+      const headersArray = await request.headersArray();
+      headersOrder = headersArray.map((h: any) => h.name);
+      headersArray.forEach((h: any) => { headersMap[h.name.toLowerCase()] = h.value; });
+    } catch {
+      try {
+        const fallbackHeaders = request.headers();
+        headersOrder = Object.keys(fallbackHeaders);
+        Object.keys(fallbackHeaders).forEach(k => { headersMap[k.toLowerCase()] = fallbackHeaders[k]; });
+      } catch { /* page morte */ }
+    }
+
+    let requestCookies: NetworkRequest['requestCookies'] = [];
+    try {
+      const cookies = await context?.cookies() || [];
+      requestCookies = cookies.map((c: any) => ({
+        name: c.name, value: c.value, domain: c.domain, path: c.path,
+        expires: c.expires, httpOnly: c.httpOnly, secure: c.secure, sameSite: c.sameSite as any,
+      }));
+    } catch { /* navigateur fermé */ }
+
+    let requestBody: string | undefined;
+    let requestBodyType: 'string' | 'formData' | 'json' | undefined;
+    try {
+      const postData = request.postData();
+      if (postData) {
+        requestBody = postData;
+        requestBodyType = 'string';
+        try { JSON.parse(postData); requestBodyType = 'json'; } catch {}
+        if (postData.includes('=') && postData.includes('&') || postData.includes('captcha=')) requestBodyType = 'formData';
+      }
+    } catch { /* postData indisponible */ }
+
+    const frame = request.frame();
+    const networkRequest: NetworkRequest = {
+      id: requestId,
+      timestamp: Date.now(),
+      url, method, resourceType,
+      frameUrl: frame?.url(),
+      parentFrameUrl: frame?.parentFrame()?.url(),
+      isIframe: (frame?.parentFrame() ?? null) !== null,
+      isPopup: sourcePage ? sourcePage.mainFrame() !== frame && !frame?.parentFrame() : false,
+      requestHeaders: headersMap,
+      requestHeadersOrder: headersOrder,
+      requestCookies,
+      requestBody,
+      requestBodyType,
+      responseStatus: 0,
+      responseStatusText: 'pending',
+      responseHeaders: {},
+      responseHeadersOrder: [],
+    } as any;
+
+    requestCaptureMap.set(requestId, networkRequest);
+    (request as any).__captureId = requestId;
+
+    // Log prioritaire pour les requêtes cibles (diff analyse)
+    if (url.includes('SetCaptchaToken') || url.includes('Integration/VOW') || url.includes('Integration/Error')) {
+      console.log(`\n🎯 [CIBLE] ${method} ${url}`);
+      console.log(`   Headers order: ${headersOrder.join(', ')}`);
+      if (requestBody) console.log(`   Body: ${requestBody.slice(0, 200)}`);
+    }
+  } catch (error) {
+    console.log(`[REQUEST-ERROR] ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Traite une réponse (appelé depuis context OU page listener).
+ */
+async function handleResponse(response: Response): Promise<void> {
+  try {
+    const request = response.request();
+    const captureId = (request as any).__captureId;
+    let captureData: NetworkRequest | undefined;
+
+    if (captureId) {
+      captureData = requestCaptureMap.get(captureId);
+    }
+    if (!captureData) {
+      const url = response.url();
+      const method = request.method();
+      for (const [, req] of requestCaptureMap) {
+        if (req.url === url && req.method === method && req.responseStatus === 0) {
+          captureData = req;
+          break;
+        }
+      }
+    }
+    if (!captureData) return;
+
+    const url = response.url();
+    const status = response.status();
+
+    let responseHeadersOrder: string[] = [];
+    let responseHeadersMap: Record<string, string> = {};
+    try {
+      const arr = await response.headersArray();
+      responseHeadersOrder = arr.map((h: any) => h.name);
+      arr.forEach((h: any) => { responseHeadersMap[h.name.toLowerCase()] = h.value; });
+    } catch {
+      try {
+        const fb = response.headers();
+        responseHeadersOrder = Object.keys(fb);
+        Object.keys(fb).forEach(k => { responseHeadersMap[k.toLowerCase()] = fb[k]; });
+      } catch {}
+    }
+
+    let responseBody: string | undefined;
+    let responseSize: number | undefined;
+    try {
+      const buffer = await response.body();
+      responseSize = buffer.length;
+      const ct = responseHeadersMap['content-type'] || '';
+      if (ct.includes('json') || ct.includes('text') || ct.includes('form')) {
+        responseBody = buffer.toString('utf-8');
+      }
+    } catch { /* buffer indisponible */ }
+
+    captureData.responseStatus = status;
+    captureData.responseStatusText = status.toString();
+    captureData.responseHeaders = responseHeadersMap;
+    captureData.responseHeadersOrder = responseHeadersOrder;
+    captureData.responseHeadersText = JSON.stringify(responseHeadersMap, null, 2);
+    captureData.responseBody = responseBody;
+    captureData.responseSize = responseSize;
+    captureData.timing = {
+      requestStartTime: captureData.timestamp,
+      responseStartTime: Date.now(),
+      endTime: Date.now(),
+      duration: Date.now() - captureData.timestamp,
+    };
+
+    captureSession.requests.push(captureData);
+    captureSession.summary.totalRequests++;
+    captureSession.summary.byMethod[captureData.method] = (captureSession.summary.byMethod[captureData.method] || 0) + 1;
+    captureSession.summary.byResourceType[captureData.resourceType] = (captureSession.summary.byResourceType[captureData.resourceType] || 0) + 1;
+
+    const domain = extractDomain(url);
+    captureSession.summary.byDomain[domain] = (captureSession.summary.byDomain[domain] || 0) + 1;
+    if (isCaptchaRequest(url)) captureSession.summary.captchaRequests.push(url);
+
+    captureData.requestCookies.forEach(cookie => {
+      if (isF5Cookie(cookie.name) && !captureSession.summary.f5Cookies.includes(cookie.name))
+        captureSession.summary.f5Cookies.push(cookie.name);
+      if (isAspNetSessionCookie(cookie.name) && !captureSession.summary.aspNetSessionCookies.includes(cookie.value))
+        captureSession.summary.aspNetSessionCookies.push(cookie.value);
+    });
+
+    if (captureId) requestCaptureMap.delete(captureId);
+
+    // Log prioritaire pour les requêtes cibles
+    if (url.includes('SetCaptchaToken') || url.includes('Integration/VOW') || url.includes('Integration/Error')) {
+      console.log(`\n✅ [CIBLE RÉPONSE] ${status} ${url}`);
+      if (responseBody) console.log(`   Body: ${responseBody.slice(0, 300)}`);
+    }
+
+    console.log(`[RESPONSE] ${status} ${url.slice(0, 80)} (${captureData.timing?.duration || 0}ms)`);
+  } catch (error) {
+    console.log(`[RESPONSE-ERROR] ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// ─── Capture au niveau CONTEXT (attrape toutes les pages + popups) ───────────────
+
+/**
+ * Attache les listeners request/response au niveau du BrowserContext.
+ * Cela garantit que SetCaptchaToken, Integration/VOW et toutes les requêtes
+ * émises depuis les popups AVANT setupNetworkInterception sont capturées.
+ */
+function setupContextInterception(ctx: BrowserContext): void {
+  console.log('[DEBUG] Attachement listeners context-level (toutes pages + popups)');
+
+  ctx.on('request', async (request: Request) => {
+    await handleRequest(request);
+  });
+
+  ctx.on('response', async (response: Response) => {
+    await handleResponse(response);
+  });
+}
+
+// ─── Capture par page (fallback / logs page-level) ──────────────────────────────
 
 async function setupNetworkInterception(page: Page): Promise<void> {
-  console.log(`[DEBUG] Setup Network Interception pour page: ${page.url() || 'new page'}`);
-  
-  // Intercepter toutes les requêtes de cette page
-  page.on('request', async (request) => {
-    try {
-      const requestId = generateRequestId();
-      const url = request.url();
-      const method = request.method();
-      const resourceType = request.resourceType();
-      
-      console.log(`[DEBUG] Request listener déclenché: ${method} ${url}`);
-      
-      // SECURE PATCH : On entoure l'appel car la page peut mourir à tout moment
-      let headersOrder: string[] = [];
-      let headersMap: Record<string, string> = {};
-      try {
-        const headersArray = await request.headersArray();
-        headersOrder = headersArray.map(h => h.name);
-        headersArray.forEach(h => { headersMap[h.name.toLowerCase()] = h.value; });
-      } catch (e) {
-        // Si la page a été fermée, on récupère les headers standards non-ordonnés en secours
-        try {
-          const fallbackHeaders = request.headers();
-          headersOrder = Object.keys(fallbackHeaders);
-          Object.keys(fallbackHeaders).forEach(k => { headersMap[k.toLowerCase()] = fallbackHeaders[k]; });
-        } catch (err) {
-          // Vraiment mort, on laisse vide
-        }
-      }
-      
-      let requestCookies = [];
-      try {
-        const cookies = await context?.cookies() || [];
-        requestCookies = cookies.map(c => ({
-          name: c.name, value: c.value, domain: c.domain, path: c.path,
-          expires: c.expires, httpOnly: c.httpOnly, secure: c.secure, sameSite: c.sameSite as any
-        }));
-      } catch (error) {
-        // Ignorer les erreurs de cookies si le navigateur est fermé
-      }
-      
-      let requestBody: string | undefined;
-      let requestBodyType: 'string' | 'formData' | 'json' | undefined;
-      try {
-        const postData = request.postData();
-        if (postData) {
-          requestBody = postData;
-          requestBodyType = 'string';
-          try { JSON.parse(postData); requestBodyType = 'json'; } catch {}
-          if (postData.includes('&')) requestBodyType = 'formData';
-        }
-      } catch (e) {}
-      
-      const frame = request.frame();
-      const networkRequest: NetworkRequest = {
-        id: requestId,
-        timestamp: Date.now(),
-        url, method, resourceType,
-        frameUrl: frame?.url(),
-        parentFrameUrl: frame?.parentFrame()?.url(),
-        isIframe: frame?.parentFrame() !== null,
-        isPopup: page.mainFrame() !== frame && !frame?.parentFrame(),
-        requestHeaders: headersMap,
-        requestHeadersOrder: headersOrder, // ORDRE RÉEL DU RÉSEAU
-        requestCookies,
-        requestBody,
-        requestBodyType,
-        responseStatus: 0,
-        responseStatusText: 'pending',
-        responseHeaders: {},
-        responseHeadersOrder: [],
-      } as any;
-      
-      // Stocker la requête dans la Map globale (CORRECTION CRITIQUE)
-      requestCaptureMap.set(requestId, networkRequest);
-      
-      // Attacher l'ID à la requête pour référence croisée (optionnel)
-      (request as any).__captureId = requestId;
-      
-      console.log(`[REQUEST] [${resourceType.toUpperCase()}] ${method} ${url.slice(0, 60)}...`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`[REQUEST-ERROR] Erreur lors de la capture de la requête: ${errorMessage}`);
-    }
+  console.log(`[DEBUG] Setup page-level interception: ${page.url() || 'new page'}`);
+
+  // Les listeners context-level capturent déjà tout — on ajoute ici uniquement
+  // les listeners page-level pour éviter les doublons via la déduplication __captureId.
+  page.on('request', async (request: Request) => {
+    await handleRequest(request, page);
   });
-  
-  // Intercepter les réponses de cette page
-  page.on('response', async (response) => {
-    try {
-      console.log(`[DEBUG] Response listener déclenché: ${response.url()}`);
-      const request = response.request();
-      
-      // CORRECTION CRITIQUE : Récupérer l'ID depuis la requête ou chercher dans la Map
-      const captureId = (request as any).__captureId;
-      let captureData: NetworkRequest | undefined;
-      
-      if (captureId) {
-        captureData = requestCaptureMap.get(captureId);
-      }
-      
-      // Si pas trouvé par ID, chercher par URL et méthode (fallback)
-      if (!captureData) {
-        const url = response.url();
-        const method = request.method();
-        // Chercher la première requête correspondante non traitée
-        for (const entry of Array.from(requestCaptureMap.entries())) {
-          const [reqId, req] = entry;
-          if (req.url === url && req.method === method && req.responseStatus === 0) {
-            captureData = req;
-            break;
-          }
-        }
-      }
-      
-      if (!captureData) {
-        console.log(`[DEBUG] Pas de captureData pour cette requête`);
-        return;
-      }
-      
-      const url = response.url();
-      const status = response.status();
-      
-      // SECURE PATCH : Sécuriser les headers de réponse
-      let responseHeadersOrder: string[] = [];
-      let responseHeadersMap: Record<string, string> = {};
-      try {
-        const responseHeadersArray = await response.headersArray();
-        responseHeadersOrder = responseHeadersArray.map(h => h.name);
-        responseHeadersArray.forEach(h => { responseHeadersMap[h.name.toLowerCase()] = h.value; });
-      } catch (e) {
-        try {
-          const fallbackRespHeaders = response.headers();
-          responseHeadersOrder = Object.keys(fallbackRespHeaders);
-          Object.keys(fallbackRespHeaders).forEach(k => { responseHeadersMap[k.toLowerCase()] = fallbackRespHeaders[k]; });
-        } catch (err) {}
-      }
-      
-      let responseBody: string | undefined;
-      let responseSize: number | undefined;
-      
-      try {
-        // SECURE PATCH : La lecture du body échoue souvent si la page se ferme
-        const buffer = await response.body();
-        responseSize = buffer.length;
-        const contentType = responseHeadersMap['content-type'] || '';
-        if (contentType.includes('json') || contentType.includes('text') || contentType.includes('form')) {
-          responseBody = buffer.toString('utf-8');
-        }
-      } catch (e) {
-        // Échec silencieux si le buffer n'est plus dispo
-      }
-      
-      // Mettre à jour les données de capture
-      captureData.responseStatus = status;
-      captureData.responseStatusText = status.toString();
-      captureData.responseHeaders = responseHeadersMap;
-      captureData.responseHeadersOrder = responseHeadersOrder;
-      captureData.responseHeadersText = JSON.stringify(responseHeadersMap, null, 2);
-      captureData.responseBody = responseBody;
-      captureData.responseSize = responseSize;
-      captureData.timing = { 
-        requestStartTime: captureData.timestamp, 
-        responseStartTime: Date.now(), 
-        endTime: Date.now(), 
-        duration: Date.now() - captureData.timestamp 
-      };
-      
-      // Ajouter à la session (après mise à jour complète)
-      captureSession.requests.push(captureData);
-      captureSession.summary.totalRequests++;
-      captureSession.summary.byMethod[captureData.method] = (captureSession.summary.byMethod[captureData.method] || 0) + 1;
-      captureSession.summary.byResourceType[captureData.resourceType] = (captureSession.summary.byResourceType[captureData.resourceType] || 0) + 1;
-      
-      const domain = extractDomain(url);
-      captureSession.summary.byDomain[domain] = (captureSession.summary.byDomain[domain] || 0) + 1;
-      if (isCaptchaRequest(url)) captureSession.summary.captchaRequests.push(url);
-      
-      captureData.requestCookies.forEach(cookie => {
-        if (isF5Cookie(cookie.name) && !captureSession.summary.f5Cookies.includes(cookie.name)) captureSession.summary.f5Cookies.push(cookie.name);
-        if (isAspNetSessionCookie(cookie.name) && !captureSession.summary.aspNetSessionCookies.includes(cookie.value)) captureSession.summary.aspNetSessionCookies.push(cookie.value);
-      });
-      
-      // Retirer de la Map pour éviter les doublons
-      if (captureId) {
-        requestCaptureMap.delete(captureId);
-      }
-      
-      console.log(`[RESPONSE] ${status} ${url.slice(0, 60)}... (${captureData.timing?.duration || 0}ms)`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`[RESPONSE-ERROR] Erreur lors de la capture de la réponse: ${errorMessage}`);
-    }
+
+  page.on('response', async (response: Response) => {
+    await handleResponse(response);
   });
 }
 
@@ -556,23 +576,27 @@ async function main(): Promise<void> {
       args: ['--start-maximized'], // Pas de Blink-features pour l'humain
     });
     
-    // CORRECTION : Définir un viewport explicite pour éviter les problèmes
     context = await browser.newContext({
       viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
       locale: 'fr-BE',
       timezoneId: 'Europe/Brussels',
     });
-    
-    // 💥 CORRECTION MAJEURE : Écouter l'ouverture de TOUS les nouveaux onglets (Popups / Captcha)
-    context.on('page', async (newPage) => {
-      console.log(`\n🚨 [POPUP DETECTÉ] Interception du nouvel onglet actif : ${newPage.url()}`);
+
+    // ── Context-level interception (prioritaire) ──────────────────────────────
+    // Attrape TOUTES les requêtes de toutes les pages/popups dès leur création,
+    // y compris le POST /Captcha/SetCaptchaToken qui est émis avant que les
+    // listeners page-level aient le temps de s'attacher sur le nouvel onglet.
+    setupContextInterception(context);
+
+    // Écouter les nouveaux onglets pour les logs page-level (déduplication via __captureId)
+    context.on('page', async (newPage: Page) => {
+      console.log(`\n🚨 [POPUP] Nouvel onglet : ${newPage.url() || '(en cours de chargement)'}`);
       await setupNetworkInterception(newPage);
     });
 
     const page = await context.newPage();
-    
-    // Attacher les listeners AVANT toute navigation
-    console.log('[DEBUG] Attachement des listeners réseau sur la page principale...');
+
+    console.log('[DEBUG] Attachement listeners page principale...');
     await setupNetworkInterception(page);
     
     // Récupérer l'user-agent après avoir attaché les listeners

@@ -103,27 +103,27 @@ interface UaProfile {
 const CEV_UA_POOL: UaProfile[] = [
   {
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
-    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Google Chrome";v="148"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="148"',
     platform: '"Windows"',
   },
   {
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="147", "Not:A-Brand";v="99", "Google Chrome";v="147"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="147"',
     platform: '"Windows"',
   },
   {
     ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
-    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Google Chrome";v="148"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="148"',
     platform: '"macOS"',
   },
   {
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.0.0",
-    chUa: '"Chromium";v="148", "Not:A-Brand";v="99", "Microsoft Edge";v="148"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Microsoft Edge";v="148"',
     platform: '"Windows"',
   },
   {
     ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    chUa: '"Chromium";v="147", "Not:A-Brand";v="99", "Google Chrome";v="147"',
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="147"',
     platform: '"Linux"',
   },
 ];
@@ -186,10 +186,10 @@ function parseUserAgentForSecCh(ua: string): {
 
   // Build all client hints
   return {
-    chUa: `"Not:A-Brand";v="99", "Chromium";v="${majorVersion}", "Google Chrome";v="${majorVersion}"`,
+    chUa: `"Not/A)Brand";v="99", "Chromium";v="${majorVersion}"`,
     platform,
     chUaMobile: "?0",
-    chUaFullVersionList: `"Not:A-Brand";v="99.0.0.0", "Chromium";v="${fullVersion}", "Google Chrome";v="${fullVersion}"`,
+    chUaFullVersionList: `"Not/A)Brand";v="99.0.0.0", "Chromium";v="${fullVersion}"`,
     chUaPlatformVersion: platformVersion,
     chUaArch: arch,
     chUaBitness: bitness
@@ -252,8 +252,26 @@ export function getCevSessionUa(): string {
 }
 
 /**
- * Génère les headers Chrome complets pour les requêtes CEV.
- * Aligné sur le niveau anti-détection de usa-http.ts getBrowserHeaders().
+ * Génère les headers Chrome pour les requêtes CEV.
+ *
+ * Ordre calqué sur le dump réseau humain Chrome 148 (2026-06-08) :
+ *   document  → Accept / Accept-Encoding / Accept-Language /
+ *               Sec-Fetch-Dest / Sec-Fetch-Mode / Sec-Fetch-Site /
+ *               Sec-Fetch-User / Upgrade-Insecure-Requests /
+ *               User-Agent / sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform
+ *   fetch/xhr → même ordre, Sec-Fetch-Dest=empty, Sec-Fetch-Mode=cors,
+ *               pas de Sec-Fetch-User / Upgrade-Insecure-Requests,
+ *               + Content-Type / Origin / Referer selon override
+ *
+ * Suppressions (signaux bot confirmés par diff dump) :
+ *   - Cache-Control / Pragma        (absents en navigation fluide Chrome)
+ *   - Sec-CH-UA-Arch / Bitness / Full-Version-List / Platform-Version
+ *     (high-entropy hints — Chrome ne les envoie que si Accept-CH le demande)
+ *
+ * Corrections brand :
+ *   - "Not/A)Brand" (slash+parenthèse) au lieu de "Not:A-Brand"
+ *   - "Google Chrome" absent du champ réduit (uniquement dans Full-Version-List)
+ *   - clés sec-ch-ua* en LOWERCASE (ordre réseau réel)
  */
 export function getCevBrowserHeaders(overrides?: {
   referer?: string;
@@ -264,62 +282,75 @@ export function getCevBrowserHeaders(overrides?: {
   xRequestedWith?: boolean;
   userAgent?: string;
 }): Record<string, string> {
-  // Determine which client hints to use
   const chUa = _externalSiphonedChUa ?? _sessionUa.chUa;
   const chUaPlatform = _externalSiphonedPlatform ?? _sessionUa.platform;
   const chUaMobile = _externalSiphonedChUaMobile;
-  const chUaFullVersionList = _externalSiphonedChUaFullVersionList 
-    ? _externalSiphonedChUaFullVersionList 
-    // For internal pool, parse the major version from chUa and build full version list
-    : (() => {
-        const poolMatch = _sessionUa.chUa.match(/"Google Chrome";v="(\d+)"/);
-        const poolMajor = poolMatch?.[1] || "148";
-        return `"Not:A-Brand";v="99.0.0.0", "Chromium";v="${poolMajor}.0.0.0", "Google Chrome";v="${poolMajor}.0.0.0"`;
-      })();
-  
-  const headers: Record<string, string> = {
-    "Accept": overrides?.accept ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Encoding": _sessionAcceptEnc,
-    "Accept-Language": _sessionAcceptLang,
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-    "Sec-CH-UA": chUa,
-    "Sec-CH-UA-Arch": _externalSiphonedChUaArch ?? '"x86"',
-    "Sec-CH-UA-Bitness": _externalSiphonedChUaBitness ?? '"64"',
-    "Sec-CH-UA-Full-Version-List": chUaFullVersionList,
-    "Sec-CH-UA-Mobile": chUaMobile,
-    "Sec-CH-UA-Platform": chUaPlatform,
-    "Sec-CH-UA-Platform-Version": _externalSiphonedChUaPlatformVersion ?? '"10.0"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
-    "User-Agent": overrides?.userAgent ?? _externalSiphonedUa ?? _sessionUa.ua,
-  };
+  const ua = overrides?.userAgent ?? _externalSiphonedUa ?? _sessionUa.ua;
 
-  if (overrides?.referer) headers["Referer"] = overrides.referer;
-  if (overrides?.origin) headers["Origin"] = overrides.origin;
-  if (overrides?.cookie) headers["Cookie"] = overrides.cookie;
-  if (overrides?.contentType) {
-    let contentType = overrides.contentType;
-    // Auto-add charset=UTF-8 to application/x-www-form-urlencoded (like real browsers)
-    if (contentType.toLowerCase() === "application/x-www-form-urlencoded") {
-      contentType = "application/x-www-form-urlencoded; charset=UTF-8";
-    }
-    headers["Content-Type"] = contentType;
-    // AJAX requests have different Sec-Fetch values
-    headers["Sec-Fetch-Dest"] = "empty";
-    headers["Sec-Fetch-Mode"] = "cors";
-    delete headers["Sec-Fetch-User"];
-    delete headers["Upgrade-Insecure-Requests"];
+  const isAjax = !!(overrides?.contentType || overrides?.xRequestedWith);
+
+  // ── Ordre strict calqué sur le dump réseau humain Chrome 148 ──────────────
+  // JavaScript préserve l'ordre d'insertion des clés → chaque branche construit
+  // l'objet dans l'ordre exact qui sera transmis par impit sur le fil réseau.
+  let headers: Record<string, string>;
+
+  if (!isAjax) {
+    // ── Requête document (navigation) ──────────────────────────────────────
+    // Ordre: Accept / Accept-Encoding / Accept-Language /
+    //        [Connection + Host gérés par impit] /
+    //        Sec-Fetch-Dest / Sec-Fetch-Mode / Sec-Fetch-Site /
+    //        Sec-Fetch-User / Upgrade-Insecure-Requests /
+    //        User-Agent / sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform
+    headers = {
+      "Accept": overrides?.accept
+        ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "Accept-Encoding": _sessionAcceptEnc,
+      "Accept-Language": _sessionAcceptLang,
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
+      "User-Agent": ua,
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
+    };
+  } else {
+    // ── Requête fetch/XHR (AJAX, form POST…) ───────────────────────────────
+    // Ordre: Accept / Accept-Encoding / Accept-Language /
+    //        [Connection + Content-Length + Host gérés par impit] /
+    //        Sec-Fetch-Dest / Sec-Fetch-Mode / Sec-Fetch-Site /
+    //        User-Agent / sec-ch-ua / sec-ch-ua-mobile / sec-ch-ua-platform
+    headers = {
+      "Accept": overrides?.accept ?? "*/*",
+      "Accept-Encoding": _sessionAcceptEnc,
+      "Accept-Language": _sessionAcceptLang,
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
+      "User-Agent": ua,
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
+    };
   }
+
+  // Overrides optionnels — appendés en fin (Referer, Origin, Cookie, Content-Type)
+  if (overrides?.referer)     headers["Referer"] = overrides.referer;
+  if (overrides?.origin)      headers["Origin"]  = overrides.origin;
+  if (overrides?.cookie)      headers["Cookie"]  = overrides.cookie;
+
+  if (overrides?.contentType) {
+    let ct = overrides.contentType;
+    if (ct.toLowerCase() === "application/x-www-form-urlencoded") {
+      ct = "application/x-www-form-urlencoded; charset=UTF-8";
+    }
+    headers["Content-Type"] = ct;
+  }
+
   if (overrides?.xRequestedWith) {
     headers["X-Requested-With"] = "XMLHttpRequest";
-    headers["Sec-Fetch-Dest"] = "empty";
-    headers["Sec-Fetch-Mode"] = "cors";
-    delete headers["Sec-Fetch-User"];
-    delete headers["Upgrade-Insecure-Requests"];
   }
 
   return headers;
