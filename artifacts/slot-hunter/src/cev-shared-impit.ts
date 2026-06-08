@@ -228,13 +228,15 @@ export function getCevExternalUserAgent(): string | null {
 /** Régénère le profil UA (appelé quand on change d'IP / nouvelle session) */
 export function rotateCevUaProfile(): void {
   _sessionUa = CEV_UA_POOL[Math.floor(Math.random() * CEV_UA_POOL.length)];
-  // Varier légèrement Accept-Language
+  // Varier légèrement Accept-Language — uniquement des profils francophones réalistes
+  // pour le portail belge. L'anglais comme langue primaire = signal bot évident.
+  // La valeur courte "fr-BE" correspond au profil Chrome 148 capturé (01_initial.json).
   const langVariants = [
-    "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "fr-BE,fr;q=0.9,en;q=0.8",
-    "fr,en-US;q=0.9,en;q=0.8",
-    "en-US,en;q=0.9,fr-BE;q=0.8,fr;q=0.7",
+    "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",  // fr-BE primaire, long form classique
+    "fr-BE,fr;q=0.9,en;q=0.8",               // fr-BE primaire, sans en-US
+    "fr-BE",                                   // fr-BE court — capturé sur Chrome 148 réel
+    "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",  // Ressortissant depuis France (légitime)
+    "fr,fr-BE;q=0.9,en-US;q=0.8,en;q=0.7",  // fr générique primaire
   ];
   _sessionAcceptLang = langVariants[Math.floor(Math.random() * langVariants.length)];
   // Varier Accept-Encoding (tous valides pour Chrome)
