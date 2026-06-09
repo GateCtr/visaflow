@@ -205,9 +205,9 @@ export default function Login() {
             <p className="text-secondary text-sm font-semibold tracking-widest uppercase mb-4">
               Espace Sécurisé
             </p>
-            <h1 className="text-4xl xl:text-5xl font-serif font-bold text-white leading-tight">
+            <h1 className="text-4xl xl:text-5xl font-serif font-semibold text-white leading-[1.08] tracking-tight">
               Votre visa,<br />
-              <span className="text-secondary">notre expertise.</span>
+              <span className="italic text-secondary">notre expertise.</span>
             </h1>
             <p className="mt-4 text-white/70 text-lg leading-relaxed">
               Accédez à votre espace personnel pour suivre vos dossiers en temps réel.
@@ -290,7 +290,7 @@ export default function Login() {
                   <div className="w-full border-t border-slate-200" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
+                  <span className="px-3 bg-background text-xs text-slate-400 uppercase tracking-wider">
                     ou continuer avec
                   </span>
                 </div>

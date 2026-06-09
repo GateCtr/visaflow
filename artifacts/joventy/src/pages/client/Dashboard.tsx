@@ -32,12 +32,16 @@ export default function ClientDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="rounded-2xl bg-primary p-6 sm:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <p className="text-secondary text-sm font-semibold uppercase tracking-widest mb-1">
+      <div className="relative overflow-hidden rounded-3xl bg-brand-gradient p-6 sm:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-premium-lg">
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
+          <div className="absolute -top-16 -right-10 w-72 h-72 rounded-full border border-white/40" />
+          <div className="absolute -bottom-24 right-24 w-80 h-80 rounded-full border border-white/30" />
+        </div>
+        <div className="relative z-10">
+          <p className="text-secondary text-xs font-semibold uppercase tracking-[0.18em] mb-2">
             Bienvenue
           </p>
-          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+          <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-white">
             {user?.firstName} {user?.lastName}
           </h1>
           <p className="text-slate-300 mt-1 text-sm">
@@ -58,8 +62,8 @@ export default function ClientDashboard() {
             </div>
           )}
         </div>
-        <Link href="/dashboard/applications/new">
-          <Button className="gap-2 bg-secondary text-primary hover:bg-yellow-400 font-bold h-11 px-6">
+        <Link href="/dashboard/applications/new" className="relative z-10">
+          <Button className="gap-2 bg-secondary text-primary hover:bg-secondary/90 font-bold h-11 px-6 shadow-lg">
             <Plus className="w-4 h-4" /> Nouveau Dossier
           </Button>
         </Link>
@@ -67,33 +71,33 @@ export default function ClientDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-border shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-6 h-6 text-blue-600" />
+        <div className="bg-card p-6 rounded-2xl border border-border shadow-premium hover-lift flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-6 h-6 text-primary" />
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Dossiers Totaux</p>
-            <h3 className="text-2xl font-bold text-primary">{applications.length}</h3>
+            <h3 className="text-3xl font-bold text-primary">{applications.length}</h3>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-border shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Clock className="w-6 h-6 text-amber-600" />
+        <div className="bg-card p-6 rounded-2xl border border-border shadow-premium hover-lift flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
+            <Clock className="w-6 h-6 text-secondary" />
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">En Cours</p>
-            <h3 className="text-2xl font-bold text-primary">
+            <h3 className="text-3xl font-bold text-primary">
               {applications.filter((a) => ["documents_pending", "in_review", "slot_hunting", "slot_found_awaiting_success_fee", "submitted"].includes(a.status)).length}
             </h3>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-border shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="w-6 h-6 text-green-600" />
+        <div className="bg-card p-6 rounded-2xl border border-border shadow-premium hover-lift flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Approuvés</p>
-            <h3 className="text-2xl font-bold text-primary">
+            <h3 className="text-3xl font-bold text-primary">
               {applications.filter((a) => a.status === "completed" || a.status === "approved").length}
             </h3>
           </div>
@@ -127,7 +131,7 @@ export default function ClientDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Recent applications */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="lg:col-span-3 bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
           <div className="p-5 sm:p-6 border-b border-border flex justify-between items-center">
             <h2 className="text-lg font-bold text-primary">Dossiers Récents</h2>
             <Link href="/dashboard/applications" className="text-sm font-medium text-secondary hover:underline">
@@ -181,7 +185,7 @@ export default function ClientDashboard() {
         </div>
 
         {/* Conversations preview */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
           <div className="p-5 sm:p-6 border-b border-border flex justify-between items-center">
             <h2 className="text-lg font-bold text-primary flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-secondary" />
