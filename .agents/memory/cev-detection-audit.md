@@ -39,6 +39,11 @@ description: Complete analysis of real Chrome 148 traffic dumps (2026-06-08) vs.
 - **FIX 4**: Redirect chain post-captcha: removed `currentReferer` variable, now uses `fetchSite: "same-origin"` explicit without Referer (real capture: none of Integration/VOW / SelectSlot / NoAvailability navigate requests have a Referer header)
 - **FIX A-F** (`cevPolling.ts`): ALL 4 polling functions (`fetchManual`, `pollViaApi`, `captureSelectSlotWithoutRedirect`, `resolveEntryUrl`) migrated from raw header objects to `getCevBrowserHeaders()` calls — eliminates missing `sec-ch-ua*`, wrong Accept, spurious `Cache-Control/Pragma`.
 
+## Fixes applied (session 2026-06-09) — cevHttpSetup.ts (HTTP-pur VOWINT path)
+- **FIX H1** (`cevHttpSetup.ts`): DataTables + MyList + resolveFirstAppIdFromMyList (3 occurrences): `accept: "application/json, */*"` → `"application/json, text/javascript, */*; q=0.01"`. Ground truth HAR `17-14-59-raw.har` : `/VisaApplication/DataTables` et `/VisaApplication/MyList` envoient l'Accept jQuery-DataTables natif. Différent de AngularJS `$http` (`text/plain, */*`) — ces 2 endpoints sont appelés par jQuery DataTables qui hard-code `text/javascript`.
+- **FIX H2** (`cevHttpSetup.ts` login redirect hops): Boucle GET `/` → GET `/en` après login POST : ajout `"Cache-Control": "max-age=0"` dans les headers. HAR : Chrome propage ce header sur toute la chaîne de redirections d'un form-submit.
+- **FIX H3** (`cevHttpSetup.ts` login POST): POST `/en/Account/Login` : ajout `"Cache-Control": "max-age=0"`. HAR : Chrome l'envoie sur le form-submit lui-même.
+
 ## Fixes applied (session 2026-06-09) — cevPortal.ts
 - **FIX P1** (`cevPortal.ts` `completeCevCaptcha`): Removed `referer: ${CEV_BASE}/Captcha` on SetCaptchaToken POST — ground truth `17-14-59-integration_flow.json` confirms NO Referer on this call (Referrer-Policy: no-referrer on all appointment.cloud.diplomatie.be responses).
 - **FIX P2** (`cevPortal.ts` `completeCevCaptcha`): Removed `accept: 'application/json, text/javascript, */*; q=0.01'` override on SetCaptchaToken POST — real capture confirms `accept: "*/*"` (plain jQuery without dataType:"json"). Default XHR mode of `getCevBrowserHeaders` is already correct.
