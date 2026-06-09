@@ -218,7 +218,7 @@ export default function AdminApplications() {
         <>
           {/* TABLE VIEW */}
           {viewMode === "table" && (
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -305,7 +305,7 @@ export default function AdminApplications() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {pageSlice.map((app: any) => (
                 <Link key={app._id} href={`/admin/applications/${app._id}`}>
-                  <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 hover:shadow-md hover:border-blue-200/60 transition-all cursor-pointer group">
+                  <div className="bg-card rounded-2xl border border-border shadow-premium p-4 hover:shadow-premium-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all cursor-pointer group">
                     {/* Top: Avatar + Name + Arrow */}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200/80 flex items-center justify-center shrink-0">
@@ -367,7 +367,7 @@ export default function AdminApplications() {
 /* ═══ Loading skeleton ═══ */
 function LoadingSkeleton() {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
       <div className="p-1">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-3">
@@ -388,7 +388,7 @@ function LoadingSkeleton() {
 /* ═══ Empty state ═══ */
 function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-12 text-center">
+    <div className="bg-card rounded-2xl border border-border shadow-premium p-12 text-center">
       <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
         <Inbox className="w-5 h-5 text-slate-400" />
       </div>

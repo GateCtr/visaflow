@@ -24,7 +24,7 @@ export default function ClientApplications() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Chargement...</div>
       ) : applications.length === 0 ? (
-        <div className="bg-white border border-border rounded-2xl p-12 text-center">
+        <div className="bg-card border border-border rounded-2xl p-12 text-center shadow-premium">
           <p className="text-lg text-muted-foreground mb-4">Aucun dossier trouvé.</p>
           <Link href="/dashboard/applications/new">
             <Button>Démarrer un dossier</Button>
@@ -34,7 +34,7 @@ export default function ClientApplications() {
         <div className="grid grid-cols-1 gap-4">
           {applications.map((app) => (
             <Link key={app._id} href={`/dashboard/applications/${app._id}`}>
-              <div className="bg-white rounded-2xl border border-border p-6 hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="bg-card rounded-2xl border border-border p-6 shadow-premium hover-lift cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center border border-primary/10">
                     <Plane className="w-6 h-6 text-primary" />

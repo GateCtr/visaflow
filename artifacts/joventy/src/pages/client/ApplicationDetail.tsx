@@ -508,7 +508,7 @@ function RequiredDocsList({ destination }: { destination: string }) {
   if (!pricing) return null;
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-border shadow-sm">
+    <div className="bg-card p-6 rounded-2xl border border-border shadow-premium">
       <h2 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">
         <FileText className="w-4 h-4 text-secondary" /> Documents requis pour {pricing.label}
       </h2>
@@ -758,7 +758,7 @@ export default function ClientApplicationDetail() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-primary flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-primary flex items-center gap-3">
             <Plane className="w-6 h-6 text-secondary" />
             {app.destination.toUpperCase()} — {app.visaType}
           </h1>
@@ -796,7 +796,7 @@ export default function ClientApplicationDetail() {
 
       {/* Progress bar */}
       {!isRejected && (
-        <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Avancement du dossier</h2>
           <div className="relative">
             <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-100" />
@@ -1037,7 +1037,7 @@ export default function ClientApplicationDetail() {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-3 space-y-6">
           {/* Info card */}
-          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-border shadow-sm">
+          <div className="bg-card p-6 sm:p-8 rounded-2xl border border-border shadow-premium">
             <h2 className="text-lg font-bold text-primary mb-4">Détails du dossier</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
@@ -1133,7 +1133,7 @@ export default function ClientApplicationDetail() {
 
           {/* Documents vault */}
           {pricing && isEngagementPaid && (
-            <div className="bg-white p-6 rounded-2xl border border-border shadow-sm">
+            <div className="bg-card p-6 rounded-2xl border border-border shadow-premium">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-primary flex items-center gap-2">
                   <FileText className="w-4 h-4 text-secondary" /> Mes Documents
@@ -1202,7 +1202,7 @@ export default function ClientApplicationDetail() {
 
           {/* Guide complet des documents (avant paiement et toujours accessible) */}
           {!isEngagementPaid && (
-            <div className="bg-white p-6 rounded-2xl border border-border shadow-sm">
+            <div className="bg-card p-6 rounded-2xl border border-border shadow-premium">
               <h2 className="text-lg font-bold text-primary mb-1 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-secondary" /> Guide des documents — {app.visaType}
               </h2>
@@ -1215,7 +1215,7 @@ export default function ClientApplicationDetail() {
 
           {/* Activity log */}
           {app.logs && app.logs.length > 0 && (
-            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-border shadow-sm">
+            <div className="bg-card p-6 sm:p-8 rounded-2xl border border-border shadow-premium">
               <h2 className="text-lg font-bold text-primary mb-4">Journal d'activité</h2>
               <div className="relative border-l-2 border-slate-100 ml-3 space-y-6 pb-2">
                 {[...app.logs].reverse().map((log: LogEntry, idx: number) => {
@@ -1258,8 +1258,8 @@ export default function ClientApplicationDetail() {
         </div>
 
         {/* Chat */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-border shadow-sm flex flex-col h-[500px] xl:h-[calc(100vh-200px)] xl:sticky xl:top-24">
-          <div className="p-4 border-b border-border bg-slate-50 rounded-t-2xl flex items-center gap-3">
+            <div className="xl:col-span-2 bg-card rounded-2xl border border-border shadow-premium flex flex-col h-[500px] xl:h-[calc(100vh-200px)] xl:sticky xl:top-24">
+              <div className="p-4 border-b border-border bg-muted/50 rounded-t-2xl flex items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-secondary" />
             <div>
               <h3 className="font-bold text-primary">Assistance Joventy</h3>
@@ -1291,7 +1291,7 @@ export default function ClientApplicationDetail() {
             })}
           </div>
 
-          <form onSubmit={handleSend} className="p-4 border-t border-border bg-white rounded-b-2xl">
+            <form onSubmit={handleSend} className="p-4 border-t border-border bg-card rounded-b-2xl">
             <div className="relative">
               <Input
                 value={msgText}
