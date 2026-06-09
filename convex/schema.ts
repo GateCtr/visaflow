@@ -227,7 +227,9 @@ export default defineSchema({
     content: v.string(),
     isFromAdmin: v.boolean(),
     readBy: v.optional(v.array(v.string())),
-  }).index("by_application", ["applicationId"]),
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_is_from_admin", ["isFromAdmin"]),
 
   botTests: defineTable({
     destination: v.string(),

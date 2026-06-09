@@ -170,48 +170,52 @@ export const getUnreadTotal = query({
     const userId = identity.subject;
     const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
 
-    let apps;
     if (isAdmin) {
-      apps = await ctx.db.query("applications").collect();
-    } else {
-      const getClerkId = (subject: string) => {
-        if (subject.includes("|")) {
-          return subject.split("|").pop()!;
-        }
-        return subject;
-      };
-      const clerkId = getClerkId(userId);
-      const variations = [
-        clerkId,
-        `https://clerk.joventy.cd|${clerkId}`,
-        `https://active-midge-3.clerk.accounts.dev|${clerkId}`
-      ];
-      const allApps = [];
-      for (const v of variations) {
-        const appsForVar = await ctx.db
-          .query("applications")
-          .withIndex("by_user", (q) => q.eq("userId", v))
-          .collect();
-        allApps.push(...appsForVar);
+      // Admin: query only client messages (isFromAdmin=false) directly — avoids scanning all applications
+      const clientMsgs = await ctx.db
+        .query("messages")
+        .withIndex("by_is_from_admin", (q) => q.eq("isFromAdmin", false))
+        .collect();
+
+      return clientMsgs.filter((m) => {
+        const readBy = m.readBy || [];
+        return !readBy.includes(userId) && m.senderId !== userId;
+      }).length;
+    }
+
+    // Client: find their applications first, then count unread admin messages
+    const getClerkId = (subject: string) => {
+      if (subject.includes("|")) {
+        return subject.split("|").pop()!;
       }
-      apps = allApps;
+      return subject;
+    };
+    const clerkId = getClerkId(userId);
+    const variations = [
+      clerkId,
+      `https://clerk.joventy.cd|${clerkId}`,
+      `https://active-midge-3.clerk.accounts.dev|${clerkId}`,
+    ];
+
+    const appIds: string[] = [];
+    for (const variant of variations) {
+      const found = await ctx.db
+        .query("applications")
+        .withIndex("by_user", (q) => q.eq("userId", variant))
+        .collect();
+      for (const a of found) appIds.push(a._id);
     }
 
     let total = 0;
-    for (const app of apps) {
+    for (const appId of appIds) {
       const msgs = await ctx.db
         .query("messages")
-        .withIndex("by_application", (q) =>
-          q.eq("applicationId", app._id)
-        )
+        .withIndex("by_application", (q) => q.eq("applicationId", appId as any))
         .collect();
 
       total += msgs.filter((m) => {
         const readBy = m.readBy || [];
-        const notRead = !readBy.includes(userId);
-        const notMine = m.senderId !== userId;
-        const relevantSide = isAdmin ? !m.isFromAdmin : m.isFromAdmin;
-        return notRead && notMine && relevantSide;
+        return m.isFromAdmin && !readBy.includes(userId) && m.senderId !== userId;
       }).length;
     }
 
