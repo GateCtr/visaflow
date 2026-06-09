@@ -658,14 +658,14 @@ export default function Landing() {
       <section id="destinations" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Tarifs transparents</p>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Destinations & Tarifs</h2>
+            <p className="section-label justify-center">Tarifs transparents</p>
+            <h2 className="section-title">Destinations & Tarifs</h2>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">Tout est affiché. Pas de frais cachés — vous connaissez exactement le coût avant de commencer.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {DESTINATIONS.map((dest) => (
-              <div key={dest.name} className="bg-white border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col">
+              <div key={dest.name} className="bg-card border border-border rounded-2xl overflow-hidden shadow-premium hover-lift flex flex-col">
                 <div className="bg-muted px-6 py-5 border-b border-border relative">
                   {dest.badge && (
                     <span className="absolute top-3 right-3 bg-secondary text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
@@ -723,15 +723,15 @@ export default function Landing() {
       <section className="py-24 bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Notre engagement</p>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Pourquoi choisir Joventy</h2>
+            <p className="section-label justify-center">Notre engagement</p>
+            <h2 className="section-title">Pourquoi choisir Joventy</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {GUARANTEES.map((g) => {
               const Icon = g.icon;
               return (
-                <div key={g.title} className="bg-white rounded-2xl p-7 border border-border shadow-sm text-center flex flex-col items-center">
+                <div key={g.title} className="bg-card rounded-2xl p-7 border border-border shadow-premium hover-lift text-center flex flex-col items-center">
                   <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-5">
                     <Icon className="w-7 h-7 text-secondary" />
                   </div>
@@ -748,8 +748,8 @@ export default function Landing() {
       <section className="py-24 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <p className="text-secondary font-semibold text-sm uppercase tracking-widest mb-3">Ce qu'ils disent</p>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-4">Clients satisfaits</h2>
+            <p className="section-label justify-center">Ce qu'ils disent</p>
+            <h2 className="section-title">Clients satisfaits</h2>
             <div className="flex items-center justify-center gap-1 mt-4">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-5 h-5 text-secondary fill-secondary" />
