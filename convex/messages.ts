@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
   if (!identity) return "client";
@@ -164,62 +165,59 @@ export const markAsRead = mutation({
 
 export const getUnreadTotal = query({
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return 0;
+    try {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) return 0;
 
-    const userId = identity.subject;
-    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+      const userId = identity.subject;
+      const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
 
-    if (isAdmin) {
-      // Admin: query only client messages (isFromAdmin=false) directly — avoids scanning all applications
-      const clientMsgs = await ctx.db
-        .query("messages")
-        .withIndex("by_is_from_admin", (q) => q.eq("isFromAdmin", false))
-        .collect();
-
-      return clientMsgs.filter((m) => {
-        const readBy = m.readBy || [];
-        return !readBy.includes(userId) && m.senderId !== userId;
-      }).length;
-    }
-
-    // Client: find their applications first, then count unread admin messages
-    const getClerkId = (subject: string) => {
-      if (subject.includes("|")) {
-        return subject.split("|").pop()!;
+      if (isAdmin) {
+        // Admin: scan messages directly via the isFromAdmin index
+        const clientMsgs = await ctx.db
+          .query("messages")
+          .withIndex("by_is_from_admin", (q) => q.eq("isFromAdmin", false))
+          .collect();
+        return clientMsgs.filter((m) => {
+          const readBy = m.readBy ?? [];
+          return !readBy.includes(userId) && m.senderId !== userId;
+        }).length;
       }
-      return subject;
-    };
-    const clerkId = getClerkId(userId);
-    const variations = [
-      clerkId,
-      `https://clerk.joventy.cd|${clerkId}`,
-      `https://active-midge-3.clerk.accounts.dev|${clerkId}`,
-    ];
 
-    const appIds: string[] = [];
-    for (const variant of variations) {
-      const found = await ctx.db
-        .query("applications")
-        .withIndex("by_user", (q) => q.eq("userId", variant))
-        .collect();
-      for (const a of found) appIds.push(a._id);
+      // Client: find their own applications first
+      const getClerkId = (subject: string) =>
+        subject.includes("|") ? subject.split("|").pop()! : subject;
+      const clerkId = getClerkId(userId);
+      const variations = [
+        clerkId,
+        `https://clerk.joventy.cd|${clerkId}`,
+        `https://active-midge-3.clerk.accounts.dev|${clerkId}`,
+      ];
+
+      const appIds: Id<"applications">[] = [];
+      for (const variant of variations) {
+        const found = await ctx.db
+          .query("applications")
+          .withIndex("by_user", (q) => q.eq("userId", variant))
+          .collect();
+        for (const a of found) appIds.push(a._id);
+      }
+
+      let total = 0;
+      for (const appId of appIds) {
+        const msgs = await ctx.db
+          .query("messages")
+          .withIndex("by_application", (q) => q.eq("applicationId", appId))
+          .collect();
+        total += msgs.filter((m) => {
+          const readBy = m.readBy ?? [];
+          return m.isFromAdmin && !readBy.includes(userId) && m.senderId !== userId;
+        }).length;
+      }
+      return total;
+    } catch {
+      return 0;
     }
-
-    let total = 0;
-    for (const appId of appIds) {
-      const msgs = await ctx.db
-        .query("messages")
-        .withIndex("by_application", (q) => q.eq("applicationId", appId as any))
-        .collect();
-
-      total += msgs.filter((m) => {
-        const readBy = m.readBy || [];
-        return m.isFromAdmin && !readBy.includes(userId) && m.senderId !== userId;
-      }).length;
-    }
-
-    return total;
   },
 });
 
