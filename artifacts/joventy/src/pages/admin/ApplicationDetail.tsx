@@ -720,10 +720,10 @@ export default function AdminApplicationDetail() {
       <div className="w-full xl:w-2/3 space-y-6">
 
         {/* Header card */}
-        <div className="bg-white p-6 sm:p-8 rounded-2xl border border-border shadow-sm">
+        <div className="bg-card p-6 sm:p-8 rounded-2xl border border-border shadow-premium">
           <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-primary">
+              <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-primary">
                 {app.destination.toUpperCase()} — {app.visaType}
               </h1>
               <p className="text-muted-foreground text-sm mt-0.5">
@@ -872,8 +872,8 @@ export default function AdminApplicationDetail() {
         </div>
 
         {/* ===== PAYMENT PANEL ===== */}
-        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-border bg-slate-50 flex items-center gap-2">
+              <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+              <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-secondary" />
             <h2 className="font-bold text-primary text-base">Validation des Paiements</h2>
           </div>
@@ -1170,8 +1170,8 @@ export default function AdminApplicationDetail() {
 
         {/* ===== QUICK ACTIONS ===== */}
         {!isCompleted && !isRejected && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-border bg-slate-50 flex items-center gap-2">
+                <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+                <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-secondary" />
               <h2 className="font-bold text-primary text-base">Actions rapides</h2>
             </div>
@@ -1306,8 +1306,8 @@ export default function AdminApplicationDetail() {
 
         {/* ===== RESULT PANEL — Appointment model (USA, Turquie) ===== */}
         {!isEvisaModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-border bg-slate-50 flex items-center gap-2">
+                <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+                <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-secondary" />
               <h2 className="font-bold text-primary text-base">
                 {isCompleted ? "Rendez-vous Confirmé" : isSlotFound ? "Créneau Enregistré" : "Enregistrer un Créneau"}
@@ -1474,7 +1474,7 @@ export default function AdminApplicationDetail() {
             payment_required: "💳 Paiement MRV requis",
           };
           return (
-            <div className="bg-white rounded-2xl border border-purple-200 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-purple-200 shadow-premium overflow-hidden">
               <div className="p-5 border-b border-purple-100 bg-purple-50 flex items-center gap-2">
                 <Bot className="w-4 h-4 text-purple-600" />
                 <h2 className="font-bold text-purple-800 text-base">Joventy Hunter</h2>
@@ -1959,8 +1959,8 @@ export default function AdminApplicationDetail() {
 
         {/* ===== RESULT PANEL — E-Visa model (Dubaï, Inde) ===== */}
         {isEvisaModel && (isSlotHunting || isSlotFound) && !isCompleted && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-border bg-slate-50 flex items-center gap-2">
+                <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+                <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
               <FileText className="w-4 h-4 text-secondary" />
               <h2 className="font-bold text-primary text-base">
                 {isSlotFound ? "Visa Enregistré" : "Enregistrer le Visa Obtenu"}
@@ -2020,8 +2020,8 @@ export default function AdminApplicationDetail() {
 
         {/* ===== DOCUMENT VAULT ===== */}
         {pricing && isEngagementPaid && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-border bg-slate-50 flex items-center justify-between">
+                <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+              <div className="p-5 border-b border-border bg-muted/50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-secondary" />
                 <h2 className="font-bold text-primary text-base">Coffre-fort Documents</h2>
@@ -2095,7 +2095,7 @@ export default function AdminApplicationDetail() {
 
         {/* ===== ACTIVITY LOG ===== */}
         {app.logs && app.logs.length > 0 && (
-          <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+          <div className="bg-card rounded-2xl border border-border shadow-premium p-6">
             <h2 className="font-bold text-primary mb-4 text-base">Journal d'activité</h2>
             <div className="relative border-l-2 border-slate-100 ml-3 space-y-5 pb-2">
               {[...app.logs].reverse().map((log, idx) => {
@@ -2222,7 +2222,7 @@ export default function AdminApplicationDetail() {
           };
 
           return (
-            <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+            <div className="bg-card rounded-2xl border border-border shadow-premium p-6">
               {/* Header */}
               <div className="flex items-center gap-2 mb-4 flex-wrap">
                 <Bot className="w-4 h-4 text-purple-600" />
@@ -2461,8 +2461,8 @@ export default function AdminApplicationDetail() {
       </div>
 
       {/* ===== RIGHT PANEL — Chat ===== */}
-      <div className="w-full xl:w-1/3 bg-white rounded-2xl border border-border shadow-sm flex flex-col h-[600px] xl:h-[calc(100vh-120px)] xl:sticky xl:top-24">
-        <div className="p-4 border-b border-border bg-slate-50 rounded-t-2xl flex items-center gap-3">
+            <div className="w-full xl:w-1/3 bg-card rounded-2xl border border-border shadow-premium flex flex-col h-[600px] xl:h-[calc(100vh-120px)] xl:sticky xl:top-24">
+              <div className="p-4 border-b border-border bg-muted/50 rounded-t-2xl flex items-center gap-3">
           <ShieldCheck className="w-5 h-5 text-secondary" />
           <div>
             <h3 className="font-bold text-primary">Messagerie Client</h3>
@@ -2503,7 +2503,7 @@ export default function AdminApplicationDetail() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="p-4 border-t border-border bg-white rounded-b-2xl">
+            <form onSubmit={handleSend} className="p-4 border-t border-border bg-card rounded-b-2xl">
           <div className="relative">
             <Input
               value={msgText}
