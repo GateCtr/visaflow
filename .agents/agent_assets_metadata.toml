@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "qYmr8jGByDuCtynJiypen"
@@ -18,3 +17,9 @@ id = "6UG-pecsGilNxausWoxvN"
 uri = "file://artifacts/mockup-sandbox/public/images/ad-schengen-hero.png"
 type = "image"
 title = "generated_image"
+
+[[outputs]]
+id = "N80qOowk_JB7ASf7dYHpR"
+uri = "file://debug_dumps/bundles/cev-bundles.zip"
+type = "unspecified"
+title = "CEV Bundles — sharedScripts.js + layoutBundle.css (265 KB)"
