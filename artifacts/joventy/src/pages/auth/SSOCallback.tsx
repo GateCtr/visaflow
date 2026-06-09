@@ -1,21 +1,7 @@
-import { AuthenticateWithRedirectCallback, useAuth } from "@clerk/react";
-import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { AuthenticateWithRedirectCallback } from "@clerk/react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
 export default function SSOCallback() {
-  const { isSignedIn, isLoaded } = useAuth();
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    // Already signed in → dashboard
-    if (isSignedIn) { setLocation("/dashboard"); return; }
-    // No OAuth params in URL (direct visit or stale URL) → login
-    const hasParams = window.location.search.length > 1 || window.location.hash.length > 1;
-    if (!hasParams) { setLocation("/login"); return; }
-  }, [isLoaded, isSignedIn]);
-
   return (
     <>
       <AuthenticateWithRedirectCallback
