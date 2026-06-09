@@ -33,6 +33,7 @@ import {
   isCevSessionFrozen,
   checkCevProxyLiveness,
   resetCevImpitInstances,
+  getCevSessionUa,
 } from "../cev-shared-impit.js";
 import {
   getActiveCevSessions,
@@ -432,7 +433,8 @@ async function handleSlotFound(
   // Tentative 1 : HTTP pur (rapide, ~5s)
   log("INFO", "  Tentative booking HTTP...");
   try {
-    const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie, applicationId);
+    // Passer le UA de session pour cohérence avec la phase setup (anti-UA-mismatch WAF audit)
+    const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie, applicationId, undefined, getCevSessionUa());
 
     if (httpResult.success) {
       booked = true;

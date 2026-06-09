@@ -19,7 +19,7 @@
 
 import { botLog, saveCevBookingConfig, type CevDiscoveredConfig } from './convexClient.js';
 import { randomUserAgent } from './browser.js';
-import { cevImpitFetch } from './cev-shared-impit.js';
+import { cevImpitFetch, getCevBrowserHeaders } from './cev-shared-impit.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 
@@ -61,7 +61,11 @@ interface SiphonedCookies {
 
 // ─── Helpers réseau ───────────────────────────────────────────────────────────
 
-function makeCevHeaders(sessionCookie: string, ua: string, siphoned?: SiphonedCookies, extra?: Record<string, string>): Record<string, string> {
+/**
+ * Construit la chaîne Cookie pour les appels CEV booking.
+ * Gère : F5 BIG-IP (TS01*) en tête si valide, puis ASP.NET_SessionId + PreferredCulture.
+ */
+function buildCevCookieStr(sessionCookie: string, siphoned?: SiphonedCookies): string {
   const aspCookie = siphoned?.aspNetSessionId ?? sessionCookie;
   let cookieStr = `ASP.NET_SessionId=${aspCookie}; PreferredCulture=en-US`;
   if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
@@ -69,13 +73,7 @@ function makeCevHeaders(sessionCookie: string, ua: string, siphoned?: SiphonedCo
       cookieStr = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${cookieStr}`;
     }
   }
-  const actualUa = siphoned?.userAgent ?? ua;
-  return {
-    'Cookie': cookieStr,
-    'User-Agent': actualUa,
-    'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-    ...extra,
-  };
+  return cookieStr;
 }
 
 async function fetchFollowRedirects(
@@ -89,10 +87,13 @@ async function fetchFollowRedirects(
   for (let hop = 0; hop < maxHops; hop++) {
     const res = await cevImpitFetch(url, {
       method: 'GET',
-      headers: makeCevHeaders(sessionCookie, ua, siphoned, {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Cache-Control': 'no-cache',
-        'Upgrade-Insecure-Requests': '1',
+      // Document navigate — ordre exact Chrome 148 (getCevBrowserHeaders !isAjax branch)
+      // Cache-Control: max-age=0 (pas no-cache), Upgrade-Insecure-Requests: 1 ✓
+      headers: getCevBrowserHeaders({
+        cookie: buildCevCookieStr(sessionCookie, siphoned),
+        userAgent: siphoned?.userAgent ?? ua,
+        cacheControl: 'max-age=0',
+        fetchSite: 'same-origin',
       }),
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
@@ -270,12 +271,17 @@ async function fetchAvailableTimeSlots(
   try {
     const res = await cevImpitFetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
       method: 'POST',
-      headers: makeCevHeaders(sessionCookie, ua, siphoned, {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': referer,
-        'Origin': CEV_BASE,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
+      // AJAX POST JSON — jQuery $.ajax({contentType:"application/json"}) — ordre Chrome 148
+      // Accept: jQuery $.ajax default, X-Requested-With: XMLHttpRequest ✓
+      headers: getCevBrowserHeaders({
+        cookie: buildCevCookieStr(sessionCookie, siphoned),
+        userAgent: siphoned?.userAgent ?? ua,
+        contentType: 'application/json',
+        xRequestedWith: true,
+        referer: referer,
+        origin: CEV_BASE,
+        accept: 'application/json, text/javascript, */*; q=0.01',
+        fetchSite: 'same-origin',
       }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
@@ -379,12 +385,17 @@ async function submitSlotSelection(
       const body = new URLSearchParams(formFields).toString();
       const res = await cevImpitFetch(endpoint, {
         method: 'POST',
-        headers: makeCevHeaders(sessionCookie, ua, siphoned, {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Referer': referer,
-          'Origin': CEV_BASE,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        // Form POST (navigate → page confirmation) — ordre exact Chrome 148 isFormPost branch.
+        // Cache-Control: max-age=0 ✓, Sec-Fetch-Mode: navigate ✓, Sec-Fetch-Dest: document ✓
+        // X-Requested-With ABSENT — un vrai browser ne l'envoie pas sur un form navigate.
+        headers: getCevBrowserHeaders({
+          cookie: buildCevCookieStr(sessionCookie, siphoned),
+          userAgent: siphoned?.userAgent ?? ua,
+          contentType: 'application/x-www-form-urlencoded',
+          origin: CEV_BASE,
+          referer: referer,
+          isFormPost: true,
+          fetchSite: 'same-origin',
         }),
         body,
         redirect: 'follow',
@@ -474,8 +485,11 @@ export async function bookCevViaHttp(
   sessionCookie: string,
   clientId: string,
   siphoned?: SiphonedCookies,
+  sessionUa?: string,
 ): Promise<HttpBookingResult> {
-  const ua = randomUserAgent();
+  // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
+  // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
+  const ua = siphoned?.userAgent ?? sessionUa ?? randomUserAgent();
 
   botLog({
     applicationId: clientId,
