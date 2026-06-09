@@ -1,0 +1,358 @@
+{
+  "1": [
+    {
+      "Description": "Transit through the international zone of a Schengen airport to a non-Schengen country",
+      "Value": "11",
+      "Text": "Airport transit"
+    }
+  ],
+  "2": [
+    {
+      "Description": "Short-term commercial travel, either on one's own behalf or on behalf of an employer (prospecting, contract, invitation by a business partner, etc.) ",
+      "Value": "1",
+      "Text": "Business travel"
+    },
+    {
+      "Description": "Short-term travel to an artistic or cultural event, as a spectator, participant or companion",
+      "Value": "2",
+      "Text": "Cultural event"
+    },
+    {
+      "Description": "Short-term private travel within a family context ",
+      "Value": "3",
+      "Text": "Family visit"
+    },
+    {
+      "Description": "Short-term private travel within a non-family context (friend, acquaintance, non-professional relationship)",
+      "Value": "4",
+      "Text": "Friendship visit"
+    },
+    {
+      "Description": "Short-term travel on official business (travel order, note verbale)",
+      "Value": "5",
+      "Text": "Official travel"
+    },
+    {
+      "Description": "Short-term business travel, either on own account or on behalf of an employer (travel order, invitation)  ",
+      "Value": "6",
+      "Text": "Business trip"
+    },
+    {
+      "Description": "Short-term travel to a sporting event, as a spectator, participant or companion",
+      "Value": "7",
+      "Text": "Sporting event"
+    },
+    {
+      "Description": "Travel for an internship or training in the context of a profession or studies abroad (outside the European Economic Area and Switzerland)",
+      "Value": "8",
+      "Text": "Internship or training"
+    },
+    {
+      "Description": "Short-term private travel within a leisure context",
+      "Value": "9",
+      "Text": "Tourist travel"
+    },
+    {
+      "Description": "Short-term travel for medical reasons (diagnosis, treatment, operation, etc.). For a long-term trip, tick the \"Humanitarian reasons (miscellaneous)\" box.",
+      "Value": "10",
+      "Text": "Medical reasons"
+    },
+    {
+      "Description": "Sailor/seagoing personnel joining their vessel",
+      "Value": "12",
+      "Text": "Sailor"
+    },
+    {
+      "Description": "Holder of an Annex 35 (appeal pending before the Council for Alien Law Litigation) who wishes to return to Belgium ",
+      "Value": "18",
+      "Text": "Return/Annex 35"
+    },
+    {
+      "Description": "Spouse/legal partner/descendant under 21 years of age or dependent of a Luxembourg citizen /father or mother of a Luxembourg or EU minor, who wishes to accompany or join this one in Luxembourg",
+      "Value": "20",
+      "Text": "Family reunification for Luxembourg with EU citizen"
+    },
+    {
+      "Description": "Researcher with a signed hosting agreement with an organisation approved by Belspo (Belgian Science Policy) ",
+      "Value": "22",
+      "Text": "Research"
+    },
+    {
+      "Description": "Authorisation to stay in Belgium for more than 90 days for reasons other than work, study, family reunification or handing over a child (guardianship, kefala, etc.).",
+      "Value": "26",
+      "Text": "Humanitarian reasons (various)"
+    },
+    {
+      "Description": "Short-term scientific or academic travel ",
+      "Value": "27",
+      "Text": "Conference/seminar/symposium"
+    },
+    {
+      "Description": "Short-term travel to a trade fair (organiser, exhibitor, public)",
+      "Value": "28",
+      "Text": "Trade Fair"
+    },
+    {
+      "Description": "Press card/accreditation holder",
+      "Value": "29",
+      "Text": "Journalism"
+    },
+    {
+      "Description": "Person belonging to the congregation of a recognised religion travelling in a religious or philosophical context  ",
+      "Value": "30",
+      "Text": "Activity of a religious or philosophical nature"
+    },
+    {
+      "Description": "Holder of a work permit for a salaried activity (work permit, single permit or proof of exemption) ",
+      "Value": "32",
+      "Text": "Salaried work "
+    },
+    {
+      "Description": "Holder of a work permit for a self-employed activity (professional card or proof of exemption)",
+      "Value": "33",
+      "Text": "Self-employment "
+    },
+    {
+      "Description": "Transfer of a child to Belgium when the adoption procedure abroad has been completed or transfer of a child under 18 years of age for adoption in Belgium with the agreement of the Belgian central community authority ",
+      "Value": "36",
+      "Text": "Adoption"
+    },
+    {
+      "Description": "Holder of an invalid residence permit and/or who left Belgium more than one year ago (card A, B, C, D or H) or more than two years ago (card F or F+)",
+      "Value": "38",
+      "Text": "Return/valid A, B, C, D, H, F or F+ card"
+    },
+    {
+      "Description": "Common-law partner/dependent family member or member of the family unit/family member dependent due to a serious health problem, who wishes to accompany or join a national of a European Union State or an associated State (Iceland, Lichtenstein, Norway, Switzerland)  ",
+      "Value": "39",
+      "Text": "Directive 2004-38/EC/distant family of an EU citizen (Article 47/1)"
+    },
+    {
+      "Description": "Spouse/legal partner/descendant under 21 years of age or dependent/dependent ascendant, who wishes to accompany or join a national of a European Union State or an Associated State (Iceland, Lichtenstein, Norway, Switzerland)",
+      "Value": "40",
+      "Text": "Directive 2004-38/EC/close family of an EU citizen (Article 40bis)"
+    },
+    {
+      "Description": "Spouse/partner/descendant under 21 years of age or dependent/dependent ascendant who wishes to accompany or join a British M or M+ card holder",
+      "Value": "41",
+      "Text": "Family reunification with a British beneficiary of the withdrawal agreement "
+    },
+    {
+      "Description": "Movement of a person residing outside the European Union for the purpose of employment as a seasonal worker ",
+      "Value": "46",
+      "Text": "Seasonal work"
+    },
+    {
+      "Description": "Travel for research purposes under a European Union programme or a multilateral programme involving mobility measures or an agreement between two or more higher education institutions when Belgium is the first European host country",
+      "Value": "47",
+      "Text": "Mobility/researcher"
+    },
+    {
+      "Description": "Travel for study purposes under a European Union programme or a multilateral programme involving mobility measures or an agreement between two or more higher education institutions when Belgium is the first European host country",
+      "Value": "48",
+      "Text": "Mobility/student"
+    },
+    {
+      "Description": "Holder of a certificate of registration issued in the context of family reunification who wishes to return to Belgium ",
+      "Value": "49",
+      "Text": "Return/certificate of registration "
+    },
+    {
+      "Description": "Holder of a valid F or F+ card who left Belgium less than two years ago (right of return) ",
+      "Value": "50",
+      "Text": "Return/valid F or F+ card"
+    }
+  ],
+  "3": [
+    {
+      "Description": "Short-term travel on official business (travel order, note verbale)",
+      "Value": "5",
+      "Text": "Official travel"
+    },
+    {
+      "Description": "Travel for an internship or training in the context of a profession or studies abroad (outside the European Economic Area and Switzerland)",
+      "Value": "8",
+      "Text": "Internship or training"
+    },
+    {
+      "Description": "Legal cohabitation project in Belgium",
+      "Value": "13",
+      "Text": "Legal cohabitation in Belgium (visa for)"
+    },
+    {
+      "Description": "Preparatory year or enrolment in a public higher education institution ",
+      "Value": "14",
+      "Text": "Higher education at a public institution (Article 58)"
+    },
+    {
+      "Description": "Training/courses in a private educational institution",
+      "Value": "15",
+      "Text": "Training in a private institution (Article 9)"
+    },
+    {
+      "Description": "Spouse/legal partner/descendant under 21 years of age or dependent of a settled Belgian citizen/father or mother of a Belgian minor, who wishes to accompany or join this Belgian citizen",
+      "Value": "16",
+      "Text": "Family reunification with a Belgian (Article 40ter)"
+    },
+    {
+      "Description": "Spouse/legal partner/minor child of a foreigner legally residing in Belgium for an unlimited period (card B, C, D, F or F+), who wishes to join this foreigner",
+      "Value": "17",
+      "Text": "Family reunification with a foreigner staying indefinitely (Article 10)"
+    },
+    {
+      "Description": "Holder of an Annex 35 (appeal pending before the Council for Alien Law Litigation) who wishes to return to Belgium ",
+      "Value": "18",
+      "Text": "Return/Annex 35"
+    },
+    {
+      "Description": "Holder of a valid residence permit who left Belgium less than one year ago (right of return)",
+      "Value": "19",
+      "Text": "Return/valid A, B, C, D or H card "
+    },
+    {
+      "Description": "Spouse/legal partner/descendant under 21 years of age or dependent of a Luxembourg citizen /father or mother of a Luxembourg or EU minor, who wishes to accompany or join this one in Luxembourg",
+      "Value": "20",
+      "Text": "Family reunification for Luxembourg with EU citizen"
+    },
+    {
+      "Description": "Wedding plan in Luxembourg  ",
+      "Value": "21",
+      "Text": "Marriage Luxembourg (visa for)"
+    },
+    {
+      "Description": "Researcher with a signed hosting agreement with an organisation approved by Belspo (Belgian Science Policy) ",
+      "Value": "22",
+      "Text": "Research"
+    },
+    {
+      "Description": "Spouse/legal partner/minor child of a foreigner legally residing or authorised to legally reside in Belgium for a limited period (Appendix 46 or Appendix 47, card A or H), who wishes to accompany or join this foreigner",
+      "Value": "23",
+      "Text": "Family reunification with a foreigner staying for a limited period (Article 10bis §2)"
+    },
+    {
+      "Description": "Spouse/legal partner/minor child of a foreign student legally residing in Belgium for a limited period (card A), who wishes to accompany or join this student",
+      "Value": "24",
+      "Text": "Family reunification with a student (Article 10bis §1)"
+    },
+    {
+      "Description": "National of a country with which Belgium has an agreement on the Working Holiday Programme ",
+      "Value": "25",
+      "Text": "Working Holiday Programme"
+    },
+    {
+      "Description": "Authorisation to stay in Belgium for more than 90 days for reasons other than work, study, family reunification or handing over a child (guardianship, kefala, etc.).",
+      "Value": "26",
+      "Text": "Humanitarian reasons (various)"
+    },
+    {
+      "Description": "Press card/accreditation holder",
+      "Value": "29",
+      "Text": "Journalism"
+    },
+    {
+      "Description": "Person belonging to the congregation of a recognised religion travelling in a religious or philosophical context  ",
+      "Value": "30",
+      "Text": "Activity of a religious or philosophical nature"
+    },
+    {
+      "Description": "Holder of an au pair work permit",
+      "Value": "31",
+      "Text": "Au pair"
+    },
+    {
+      "Description": "Holder of a work permit for a salaried activity (work permit, single permit or proof of exemption) ",
+      "Value": "32",
+      "Text": "Salaried work "
+    },
+    {
+      "Description": "Holder of a work permit for a self-employed activity (professional card or proof of exemption)",
+      "Value": "33",
+      "Text": "Self-employment "
+    },
+    {
+      "Description": "Person with a regular and sufficient income (annuity pension) who wishes to stay in Belgium without working",
+      "Value": "34",
+      "Text": "Annuitant"
+    },
+    {
+      "Description": "Plans to marry in Belgium ",
+      "Value": "35",
+      "Text": "Marriage in Belgium (visa for)"
+    },
+    {
+      "Description": "Transfer of a child to Belgium when the adoption procedure abroad has been completed or transfer of a child under 18 years of age for adoption in Belgium with the agreement of the Belgian central community authority ",
+      "Value": "36",
+      "Text": "Adoption"
+    },
+    {
+      "Description": "Person staying in Belgium for an unlimited period at the time of departure (card B, C, D, F or F+) and whose absence is longer than one year and less than five years (Royal Decree of 07/08/1995)",
+      "Value": "37",
+      "Text": "Return/long-term absence "
+    },
+    {
+      "Description": "Holder of an invalid residence permit and/or who left Belgium more than one year ago (card A, B, C, D or H) or more than two years ago (card F or F+)",
+      "Value": "38",
+      "Text": "Return/valid A, B, C, D, H, F or F+ card"
+    },
+    {
+      "Description": "Spouse/legal partner/minor child of a foreigner recognised as a refugee or beneficiary of subsidiary protection in Belgium + father/mother of a minor foreigner recognised as a refugee or beneficiary of subsidiary protection in Belgium",
+      "Value": "42",
+      "Text": "Family reunification with a protected foreigner (refugee/subsidiary protection) (Article 10)"
+    },
+    {
+      "Description": "Child entrusted to a third party outside an international adoption and who, for humanitarian reasons, wishes to accompany or join this third party in Belgium ",
+      "Value": "44",
+      "Text": "Humanitarian reasons/handing over of a child (guardianship, kefala) "
+    },
+    {
+      "Description": "Person selected in the Belgian resettlement programme ",
+      "Value": "45",
+      "Text": "Relocation"
+    },
+    {
+      "Description": "Movement of a person residing outside the European Union for the purpose of employment as a seasonal worker ",
+      "Value": "46",
+      "Text": "Seasonal work"
+    },
+    {
+      "Description": "Travel for research purposes under a European Union programme or a multilateral programme involving mobility measures or an agreement between two or more higher education institutions when Belgium is the first European host country",
+      "Value": "47",
+      "Text": "Mobility/researcher"
+    },
+    {
+      "Description": "Travel for study purposes under a European Union programme or a multilateral programme involving mobility measures or an agreement between two or more higher education institutions when Belgium is the first European host country",
+      "Value": "48",
+      "Text": "Mobility/student"
+    },
+    {
+      "Description": "Holder of a certificate of registration issued in the context of family reunification who wishes to return to Belgium ",
+      "Value": "49",
+      "Text": "Return/certificate of registration "
+    },
+    {
+      "Description": "Holder of a valid F or F+ card who left Belgium less than two years ago (right of return) ",
+      "Value": "50",
+      "Text": "Return/valid F or F+ card"
+    },
+    {
+      "Description": "Exchange programme for secondary, tertiary university and non-university students  ",
+      "Value": "51",
+      "Text": "Student exchange (secondary education)"
+    },
+    {
+      "Description": "Activity carried out without payment or obligation as part of a European Voluntary Service (EVS) project ",
+      "Value": "52",
+      "Text": "Volunteering (EVS)"
+    },
+    {
+      "Description": "Activity carried out without payment or obligation outside a European Voluntary Service (EVS) project ",
+      "Value": "53",
+      "Text": "Volunteering (other)"
+    },
+    {
+      "Description": "Spouse/legal partner/minor child of a foreigner legally residing in Luxembourg and who wishes to join this foreigner",
+      "Value": "54",
+      "Text": "Family reunification for Luxembourg with non-EU citizen"
+    }
+  ]
+}

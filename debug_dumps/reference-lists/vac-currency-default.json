@@ -1,0 +1,122 @@
+{
+  "1": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "2": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "3": {
+    "ExchangeRate": 2800,
+    "Code": "CDF"
+  },
+  "4": {
+    "ExchangeRate": 3.5,
+    "Code": "TND"
+  },
+  "5": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "6": {
+    "ExchangeRate": 660,
+    "Code": "XOF"
+  },
+  "7": {
+    "ExchangeRate": 1103,
+    "Code": "AOA"
+  },
+  "8": {
+    "ExchangeRate": 3600,
+    "Code": "BIF"
+  },
+  "9": {
+    "ExchangeRate": 660,
+    "Code": "XOF"
+  },
+  "10": {
+    "ExchangeRate": 1750,
+    "Code": "RWF"
+  },
+  "11": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "12": {
+    "ExchangeRate": 660,
+    "Code": "XAF"
+  },
+  "13": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "14": {
+    "ExchangeRate": 62,
+    "Code": "EGP"
+  },
+  "15": {
+    "ExchangeRate": 95,
+    "Code": "RUB"
+  },
+  "16": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "17": {
+    "ExchangeRate": 95,
+    "Code": "RUB"
+  },
+  "18": {
+    "ExchangeRate": 38,
+    "Code": "THB"
+  },
+  "19": {
+    "ExchangeRate": 156,
+    "Code": "DZD"
+  },
+  "20": {
+    "ExchangeRate": 19.62,
+    "Code": "ZAR"
+  },
+  "21": {
+    "ExchangeRate": 11.1,
+    "Code": "MAD"
+  },
+  "22": {
+    "ExchangeRate": 19.62,
+    "Code": "ZAR"
+  },
+  "23": {
+    "ExchangeRate": 155,
+    "Code": "KES"
+  },
+  "24": {
+    "ExchangeRate": 4.6,
+    "Code": "SAR"
+  },
+  "25": {
+    "ExchangeRate": 4.5,
+    "Code": "AED"
+  },
+  "26": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "27": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  },
+  "28": {
+    "ExchangeRate": 1665,
+    "Code": "NGN"
+  },
+  "29": {
+    "ExchangeRate": 1665,
+    "Code": "NGN"
+  },
+  "30": {
+    "ExchangeRate": 1,
+    "Code": "EUR"
+  }
+}

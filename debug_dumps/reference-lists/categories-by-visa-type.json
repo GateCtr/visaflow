@@ -1,0 +1,60 @@
+{
+  "1": [
+    {
+      "Value": "7",
+      "Text": "Transit"
+    }
+  ],
+  "2": [
+    {
+      "Value": "1",
+      "Text": "Leisure"
+    },
+    {
+      "Value": "2",
+      "Text": "Academic travel"
+    },
+    {
+      "Value": "3",
+      "Text": "Family travel"
+    },
+    {
+      "Value": "4",
+      "Text": "Humanitarian displacement"
+    },
+    {
+      "Value": "5",
+      "Text": "Business travel"
+    },
+    {
+      "Value": "6",
+      "Text": "Return"
+    }
+  ],
+  "3": [
+    {
+      "Value": "1",
+      "Text": "Leisure"
+    },
+    {
+      "Value": "2",
+      "Text": "Academic travel"
+    },
+    {
+      "Value": "3",
+      "Text": "Family travel"
+    },
+    {
+      "Value": "4",
+      "Text": "Humanitarian displacement"
+    },
+    {
+      "Value": "5",
+      "Text": "Business travel"
+    },
+    {
+      "Value": "6",
+      "Text": "Return"
+    }
+  ]
+}

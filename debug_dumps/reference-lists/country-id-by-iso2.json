@@ -1,0 +1,122 @@
+{
+  "CD": {
+    "Value": "58",
+    "Text": "CONGO (Rep Dem)"
+  },
+  "BE": {
+    "Value": "32",
+    "Text": "BELGIUM"
+  },
+  "FR": {
+    "Value": "86",
+    "Text": "FRANCE"
+  },
+  "US": {
+    "Value": "242",
+    "Text": "UNITED STATES OF AMERICA"
+  },
+  "GB": {
+    "Value": "91",
+    "Text": "UNITED KINGDOM"
+  },
+  "DE": {
+    "Value": "70",
+    "Text": "GERMANY FEDERAL REPUBLIC"
+  },
+  "IT": {
+    "Value": "121",
+    "Text": "ITALY"
+  },
+  "ES": {
+    "Value": "80",
+    "Text": "SPAIN"
+  },
+  "NL": {
+    "Value": "174",
+    "Text": "NETHERLANDS"
+  },
+  "PT": {
+    "Value": "191",
+    "Text": "PORTUGAL"
+  },
+  "CN": {
+    "Value": "55",
+    "Text": "CHINA"
+  },
+  "JP": {
+    "Value": "124",
+    "Text": "JAPAN"
+  },
+  "IN": {
+    "Value": "114",
+    "Text": "INDIA"
+  },
+  "BR": {
+    "Value": "44",
+    "Text": "BRAZIL"
+  },
+  "CA": {
+    "Value": "51",
+    "Text": "CANADA"
+  },
+  "AU": {
+    "Value": "28",
+    "Text": "AUSTRALIA"
+  },
+  "ZA": {
+    "Value": "256",
+    "Text": "SOUTH AFRICA"
+  },
+  "NG": {
+    "Value": "171",
+    "Text": "NIGERIA"
+  },
+  "KE": {
+    "Value": "126",
+    "Text": "KENYA"
+  },
+  "MA": {
+    "Value": "145",
+    "Text": "MOROCCO"
+  },
+  "DZ": {
+    "Value": "75",
+    "Text": "ALGERIA"
+  },
+  "TN": {
+    "Value": "233",
+    "Text": "TUNISIA"
+  },
+  "SN": {
+    "Value": "203",
+    "Text": "SENEGAL"
+  },
+  "CM": {
+    "Value": "57",
+    "Text": "CAMEROON"
+  },
+  "CI": {
+    "Value": "56",
+    "Text": "IVORY COAST"
+  },
+  "GH": {
+    "Value": "93",
+    "Text": "GHANA"
+  },
+  "AO": {
+    "Value": "16",
+    "Text": "ANGOLA"
+  },
+  "RW": {
+    "Value": "200",
+    "Text": "RWANDA"
+  },
+  "ET": {
+    "Value": "82",
+    "Text": "ETHIOPIA"
+  },
+  "MZ": {
+    "Value": "159",
+    "Text": "MOZAMBIQUE"
+  }
+}
