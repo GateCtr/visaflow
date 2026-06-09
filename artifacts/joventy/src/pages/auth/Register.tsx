@@ -219,9 +219,9 @@ export default function Register() {
             <p className="text-accent text-sm font-semibold tracking-widest uppercase mb-4">
               Nouveau Dossier
             </p>
-            <h1 className="text-4xl xl:text-5xl font-serif font-bold text-white leading-tight">
+            <h1 className="text-4xl xl:text-5xl font-serif font-semibold text-white leading-[1.08] tracking-tight">
               Commencez votre<br />
-              <span className="text-accent">voyage simplement.</span>
+              <span className="italic text-accent">voyage simplement.</span>
             </h1>
             <p className="mt-4 text-white/70 text-lg leading-relaxed">
               Créez votre dossier en quelques minutes et laissez nos experts s'occuper du reste.
@@ -321,7 +321,7 @@ export default function Register() {
                   <div className="w-full border-t border-slate-200" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
+                  <span className="px-3 bg-background text-xs text-slate-400 uppercase tracking-wider">
                     ou continuer avec
                   </span>
                 </div>

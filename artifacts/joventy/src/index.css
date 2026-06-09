@@ -4,8 +4,8 @@
 
 @theme inline {
   --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-serif: 'Plus Jakarta Sans', sans-serif;
-  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-display: 'Fraunces', Georgia, serif;
 
   /* Force HSL au lieu de oklch pour html2canvas compatibility */
   --color-background: hsl(var(--background));
@@ -42,10 +42,10 @@
 }
 
 :root {
-  /* ── Joventy Brand Palette ────────────────────────────────── */
+  /* ── Joventy Brand Palette — Premium ──────────────────────── */
 
-  /* PRIMARY : Bleu marine riche #1A3F96 */
-  --primary: 222 72% 34%;
+  /* PRIMARY : Bleu marine profond #16306F */
+  --primary: 222 65% 26%;
   --primary-foreground: 0 0% 100%;
 
   /* SECONDARY : Orange chaleureux #F97316 */
@@ -54,30 +54,36 @@
 
   /* ACCENT : Bleu ciel #38BDF8 — badges, highlights */
   --accent: 199 89% 60%;
-  --accent-foreground: 222 72% 20%;
+  --accent-foreground: 222 65% 22%;
 
-  /* BACKGROUND : Blanc légèrement bleuté */
-  --background: 210 40% 98%;
-  --foreground: 222 47% 13%;
+  /* BACKGROUND : Ivoire légèrement chaud (premium) */
+  --background: 40 30% 98%;
+  --foreground: 222 47% 12%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 13%;
+  --card-foreground: 222 47% 12%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 13%;
+  --popover-foreground: 222 47% 12%;
 
-  /* MUTED : Gris bleuté très doux */
-  --muted: 214 32% 94%;
-  --muted-foreground: 215 16% 48%;
+  /* MUTED : Beige bleuté très doux */
+  --muted: 40 18% 94%;
+  --muted-foreground: 222 12% 46%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 214 32% 89%;
-  --input: 214 32% 89%;
-  --ring: 222 72% 34%;
+  --border: 40 16% 89%;
+  --input: 40 16% 89%;
+  --ring: 222 65% 34%;
 
-  --radius: 0.75rem;
+  --radius: 0.875rem;
+
+  /* ── Premium shadows ──────────────────────────────────────── */
+  --shadow-soft: 0 1px 2px -1px hsl(222 47% 12% / 0.06), 0 2px 6px -1px hsl(222 47% 12% / 0.05);
+  --shadow-card: 0 1px 3px hsl(222 47% 12% / 0.04), 0 8px 24px -8px hsl(222 47% 12% / 0.10);
+  --shadow-elevated: 0 2px 6px hsl(222 47% 12% / 0.05), 0 18px 40px -12px hsl(222 47% 12% / 0.16);
+  --shadow-brand: 0 12px 32px -10px hsl(var(--primary) / 0.40);
 }
 
 @layer base {
@@ -94,8 +100,9 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-bold text-primary;
-    letter-spacing: -0.015em;
-    line-height: 1.2;
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
   }
   ::selection {
     background: hsl(var(--primary) / 0.15);
@@ -130,15 +137,27 @@
 
   /* ── Cards ────────────────────────────────────────────────── */
   .card-elevated {
-    @apply bg-card rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200;
+    @apply bg-card rounded-2xl border border-border transition-all duration-300;
+    box-shadow: var(--shadow-card);
+  }
+  .card-elevated:hover {
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px);
   }
   .card-flat {
     @apply bg-muted rounded-2xl border border-border;
   }
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-premium { box-shadow: var(--shadow-card); }
+  .shadow-premium-lg { box-shadow: var(--shadow-elevated); }
 
   /* ── Interaction ──────────────────────────────────────────── */
   .hover-lift {
-    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/10;
+    @apply transition-all duration-300;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
   }
 
   /* ── Badges / Labels ──────────────────────────────────────── */
@@ -148,10 +167,12 @@
     color: hsl(var(--primary));
   }
   .section-label {
-    @apply block text-secondary font-semibold text-xs uppercase tracking-widest mb-3;
+    @apply inline-flex items-center gap-2 text-secondary font-semibold text-xs uppercase tracking-[0.18em] mb-4;
   }
   .section-title {
-    @apply text-3xl md:text-4xl font-bold text-primary mb-4;
-    letter-spacing: -0.02em;
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold text-primary mb-4;
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+    line-height: 1.05;
   }
 }

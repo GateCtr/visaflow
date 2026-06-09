@@ -19,8 +19,8 @@ export default function ClientMessages() {
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-border bg-slate-50">
+        <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+          <div className="p-6 border-b border-border bg-muted/50">
           <h2 className="text-lg font-bold text-primary flex items-center gap-2">
             <MessageCircle className="w-5 h-5 text-secondary" />
             Conversations actives
@@ -43,7 +43,7 @@ export default function ClientMessages() {
           <div className="divide-y divide-border">
             {conversations.map((conv) => (
               <Link key={conv._id} href={`/dashboard/applications/${conv._id}`}>
-                <div className="p-4 sm:p-5 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-4">
+                <div className="p-4 sm:p-5 hover:bg-muted/50 transition-colors cursor-pointer flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 relative">
                     <Plane className="w-5 h-5 text-primary" />
                     {conv.unreadCount > 0 && (

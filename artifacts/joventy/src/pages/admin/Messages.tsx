@@ -32,11 +32,11 @@ export default function AdminMessages() {
       </div>
 
       {isLoading ? (
-        <div className="bg-white rounded-2xl border border-border shadow-sm p-12 text-center text-muted-foreground">
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-12 text-center text-muted-foreground">
           Chargement...
         </div>
       ) : withMessages.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-border shadow-sm p-12 flex flex-col items-center text-center">
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-12 flex flex-col items-center text-center">
           <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
             <MessageCircle className="w-8 h-8 text-slate-300" />
           </div>
@@ -48,7 +48,7 @@ export default function AdminMessages() {
       ) : (
         <>
           {pending.length > 0 && (
-            <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
               <div className="p-5 border-b border-border bg-red-50 flex items-center gap-2">
                 <span className="w-2 h-2 bg-red-500 rounded-full" />
                 <h2 className="text-base font-bold text-red-700">
@@ -64,8 +64,8 @@ export default function AdminMessages() {
           )}
 
           {read.length > 0 && (
-            <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-border bg-slate-50">
+            <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
+              <div className="p-5 border-b border-border bg-muted/50">
                 <h2 className="text-base font-bold text-primary">
                   Conversations lues ({read.length})
                 </h2>
@@ -107,7 +107,7 @@ function ConversationRow({
 }) {
   return (
     <Link href={`/admin/applications/${conv._id}`}>
-      <div className="p-4 sm:p-5 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-4">
+      <div className="p-4 sm:p-5 hover:bg-muted/50 transition-colors cursor-pointer flex items-center gap-4">
         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 relative">
           <User className="w-5 h-5 text-primary" />
           {conv.unreadCount > 0 && (

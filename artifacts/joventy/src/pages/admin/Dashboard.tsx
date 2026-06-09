@@ -52,16 +52,22 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="rounded-2xl bg-primary p-6 sm:p-8">
-        <p className="text-secondary text-sm font-semibold uppercase tracking-widest mb-1">
-          Administration
-        </p>
-        <h1 className="text-2xl sm:text-3xl font-serif font-bold text-white">
-          Vue d'ensemble
-        </h1>
-        <p className="text-slate-300 mt-1 text-sm">
-          Contrôlez les opérations et les dossiers en temps réel.
-        </p>
+      <div className="relative overflow-hidden rounded-3xl bg-brand-gradient p-6 sm:p-8 shadow-premium-lg">
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
+          <div className="absolute -top-16 -right-10 w-72 h-72 rounded-full border border-white/40" />
+          <div className="absolute -bottom-24 right-24 w-80 h-80 rounded-full border border-white/30" />
+        </div>
+        <div className="relative z-10">
+          <p className="text-secondary text-xs font-semibold uppercase tracking-[0.18em] mb-2">
+            Administration
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-white">
+            Vue d'ensemble
+          </h1>
+          <p className="text-slate-300 mt-1 text-sm">
+            Contrôlez les opérations et les dossiers en temps réel.
+          </p>
+        </div>
       </div>
 
       {/* Stats */}
@@ -71,34 +77,34 @@ export default function AdminDashboard() {
             label: "Total Dossiers",
             value: stats.totalApplications,
             icon: FileText,
-            bg: "bg-blue-50",
-            color: "text-blue-600",
+            bg: "bg-primary/10",
+            color: "text-primary",
           },
           {
             label: "En Révision",
             value: stats.pendingReview,
             icon: Clock,
-            bg: "bg-sky-50",
-            color: "text-amber-600",
+            bg: "bg-secondary/10",
+            color: "text-secondary",
           },
           {
             label: "Approuvés (Mois)",
             value: stats.approvedThisMonth,
             icon: CheckCircle2,
-            bg: "bg-green-50",
-            color: "text-green-600",
+            bg: "bg-emerald-50",
+            color: "text-emerald-600",
           },
           {
             label: "Clients Actifs",
             value: stats.totalClients,
             icon: Users,
-            bg: "bg-purple-50",
-            color: "text-purple-600",
+            bg: "bg-accent/15",
+            color: "text-accent-foreground",
           },
         ].map((stat, i) => (
           <div
             key={i}
-            className="bg-white p-6 rounded-2xl border border-border shadow-sm flex items-center gap-4"
+            className="bg-card p-6 rounded-2xl border border-border shadow-premium hover-lift flex items-center gap-4"
           >
             <div
               className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg} flex-shrink-0`}
@@ -107,7 +113,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-              <h3 className="text-2xl font-bold text-primary">{stat.value}</h3>
+              <h3 className="text-3xl font-bold text-primary">{stat.value}</h3>
             </div>
           </div>
         ))}
@@ -137,7 +143,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-border shadow-sm p-6">
+        <div className="lg:col-span-2 bg-card rounded-2xl border border-border shadow-premium p-6">
           <h2 className="text-lg font-bold text-primary mb-6">
             Demandes par destination
           </h2>
@@ -181,7 +187,7 @@ export default function AdminDashboard() {
         <div className="space-y-6">
           {/* Pending messages section */}
           {pendingConversations.length > 0 && (
-            <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
               <div className="p-5 border-b border-border flex justify-between items-center bg-red-50">
                 <h2 className="text-sm font-bold text-red-700 flex items-center gap-2">
                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -228,8 +234,8 @@ export default function AdminDashboard() {
           )}
 
           {/* Recent applications */}
-          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-border bg-slate-50">
+          <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-border bg-muted/50">
               <h2 className="text-sm font-bold text-primary">Activités récentes</h2>
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-border">
