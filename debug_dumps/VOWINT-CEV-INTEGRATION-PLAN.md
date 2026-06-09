@@ -1,5 +1,5 @@
 # Plan d'intégration — Automatisation VOWINT + CEV avec IA
-> Version: 1.0 — 2026-06-09  
+> Version: 1.1 — 2026-06-09 (MàJ : flux GDPR → CreateGdprNewWithAutoNumber → Edit/{VACoreId} confirmé)
 > Contexte: Bot slot-hunter (Railway) — HTTP pure + Playwright fallback
 
 ---
@@ -59,21 +59,39 @@ const { data } = await myList.json();
 
 > Cette phase n'est pas encore implémentée. Elle est nécessaire quand le client n'a pas encore de dossier VOWINT.
 
-### 2.1 Flux de création (observé côté browser)
+### 2.1 Flux de création (confirmé par capture live 2026-06-09)
 
 ```
-GET  /en/VisaApplication/IndexByUserId       → page liste dossiers
-[clic "Nouvelle demande"]
-GET  /en/VisaApplication/Create              → formulaire multi-étapes AngularJS
-POST /common/GetNewGuidAsync                 → GUID unique pour OSUniqueId
-GET  /Common/GetAllCountryTypes              → liste pays (pour dropdown)
-GET  /Common/GetAllNationalityTypes          → liste nationalités
-GET  /Common/GetAllSexTypes                  → sexes
-GET  /Common/GetPurposeOfTravelCategoryByVisaTypeId → motifs selon type visa
-GET  /Common/GetApplicationFee              → calcul frais
-[user remplit formulaire]
-POST /VisaApplication/Save (ou Submit)       → soumission finale
+GET  /en/VisaApplication/IndexByUserId
+  → page liste dossiers (DataTables)
+  → Bouton "New application" → href="/en/VisaApplication/Gdpr"
+
+GET  /en/VisaApplication/Gdpr
+  → Chargement gdprController.js (5KB) + hCaptcha (sitekey: 5f64399c-14a8-415e-ad1a-7ebccdc4943a)
+  → Sélect type visa : 1=Court séjour ≤90j, 2=Long séjour >90j
+  → Checkbox GDPR approval
+  → Résolution hCaptcha si $scope.ActivateCaptcha === true (pas toujours actif)
+
+POST /en/VisaApplication/CreateGdprNewWithAutoNumber
+  Content-Type: application/x-www-form-urlencoded
+  body: Approval=1&RecaptchaResponse={hcaptcha_token}
+  → 200 { Success: true, VACoreId: "d9c54635-...", }   ← GUID du dossier créé
+  → 200 { Success: false, ErrorMessage: "Invalid captcha challenge" }
+
+GET  /en/VisaApplication/Edit/{VACoreId}     ← PAGE FORMULAIRE RÉELLE
+  → visaApplicationController.js (131KB) + codeTypeService.js (12KB)
+  → 80 champs AngularJS (confirmés en live)
+  → Appels /Common/* pour popuplate les dropdowns
+
+[user/bot remplit formulaire]
+POST /VisaApplication/Save (endpoint exact — à capturer)  ← ENCORE À DOCUMENTER
+  → body contient l'objet VA complet + __RequestVerificationToken
 ```
+
+> **⚠️ Note hCaptcha** : Le flag `ActivateCaptcha` dans `gdprController.js` vient du HTML
+> template serveur. En pratique, la capture live a montré `{"Success":false,"ErrorMessage":"Invalid captcha challenge"}`
+> ce qui confirme que hCaptcha est **toujours requis** pour la création.
+> Solution : Anti-Captcha `HCaptchaTaskProxyless` (CapSolver blacklisté pour ce sitekey depuis 2026-04).
 
 ### 2.2 Données requises depuis Convex
 
@@ -232,11 +250,18 @@ Ces mappings sont déterministes (pas besoin d'IA) :
 ### 4.2 Capture requise pour HTTP pur
 
 Pour implémenter la création en HTTP pur, il faut capturer :
-1. L'URL et le body exact du `POST` de soumission finale
-2. Le `__RequestVerificationToken` (anti-CSRF) — généré à chaque page
-3. L'ordre exact des champs dans le multipart/form-data
+1. L'URL et le body exact du `POST /VisaApplication/Save` (ou `Submit`) soumission finale
+2. Le `__RequestVerificationToken` (anti-CSRF) — généré à chaque page GDPR
+3. La résolution hCaptcha avant `POST CreateGdprNewWithAutoNumber`
 
-**Action requise :** Lancer le sniffer `vowint-bundle-sniffer.ts` en mode manuel, créer un dossier de test, capturer le POST de soumission dans le HAR.
+**✅ FAIT (2026-06-09)** : 
+- Flux GDPR → CreateGdprNewWithAutoNumber → Edit/{VACoreId} capturé
+- 80 champs formulaire confirmés
+- 16 endpoints `/Common/*` documentés (codeTypeService.js)
+- Bundles Create/Edit téléchargés (visaApplicationController.js 131KB)
+
+**📌 RESTE À CAPTURER** : Le `POST /VisaApplication/Save` (soumission finale) — body exact + tous les champs.
+→ Lancer le sniffer en mode manuel, créer un dossier de test minimal, capturer le POST de soumission dans le HAR.
 
 ### 4.3 Approche Playwright recommandée (court terme)
 
@@ -423,10 +448,23 @@ if (mapping.confidence < 0.8) {
 
 ## Actions immédiates requises
 
-1. **Capturer le POST de soumission** — Lancer `vowint-bundle-sniffer.ts` en mode manuel, créer un dossier de test pour capturer l'endpoint et le body exact de soumission.
+### ✅ Terminé
 
-2. **Récupérer les listes de référence complètes** — Appeler `/Common/GetAllNationalityTypes`, `/Common/GetAllCountryTypes`, `/Common/GetAllSexTypes` une fois authentifié et sauvegarder les JSONs dans `debug_dumps/`.
+- [x] Capture bundles IndexByUserId (2026-06-08)
+- [x] Capture bundles + champs Create/Edit page (2026-06-09) — 70 bundles, 80 champs, 16 endpoints /Common/*
+- [x] Flux GDPR → CreateGdprNewWithAutoNumber → Edit/{VACoreId} documenté
+- [x] `codeTypeService.js` analysé — 16 endpoints `/Common/*` confirmés
+- [x] `gdprController.js` analysé — flow GDPR complet
+- [x] `references.js` analysé — directives `<referenceperson>`, `<referenceorganisation>`
 
-3. **Identifier les IDs visaType CEV Belgique** — Appeler `/Common/GetAllVisaStatusTypes` et l'endpoint des types visa (non encore capturé) pour construire la table de mapping.
+### 📌 À faire (par priorité)
 
-4. **Prototyper le mapping IA** — Créer un script de test `test-ai-mapping.ts` qui prend une application Convex et retourne le payload VOWINT.
+1. **[P0] Capturer `POST /VisaApplication/Save`** — Lancer le sniffer en mode manuel (`HEADLESS=false`), aller jusqu'à la soumission d'un dossier de test, capturer le body exact + `__RequestVerificationToken` dans le HAR.
+
+2. **[P1] Récupérer les listes de référence complètes** — Script HTTP authentifié pour appeler `/Common/GetAllNationalityTypes`, `/Common/GetAllCountryTypes`, `/Common/GetAllSexTypes`, `/Common/GetPurposeOfTravelCategoryByVisaTypeId?visaTypeId=1` et sauvegarder les JSONs dans `debug_dumps/reference-lists/`.
+
+3. **[P1] Identifier l'endpoint des types de visa** — Chercher dans `visaApplicationController.js.js` (131KB) l'appel qui charge les types de visa disponibles (pas encore trouvé dans la capture).
+
+4. **[P2] Prototyper le mapping IA** — Créer `test-ai-mapping.ts` qui prend une application Convex et retourne le payload VOWINT complet.
+
+5. **[P2] Implémenter `createVowintApplication()`** dans `cevHttpSetup.ts` — HTTP pur avec hCaptcha Anti-Captcha pour `CreateGdprNewWithAutoNumber`, puis navigation vers `Edit/{VACoreId}`, remplissage $scope via Playwright, et `POST /VisaApplication/Save`.

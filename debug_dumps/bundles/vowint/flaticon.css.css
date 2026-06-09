@@ -1,0 +1,49 @@
+@font-face {
+	font-family: "Flaticon";
+	src: url("flaticon.eot");
+	src: url("flaticon.eot#iefix") format("embedded-opentype"),
+	url("flaticon.woff") format("woff"),
+	url("flaticon.ttf") format("truetype"),
+	url("flaticon.svg") format("svg");
+	font-weight: normal;
+	font-style: normal;
+}
+[class^="flaticon-"]:before, [class*=" flaticon-"]:before,
+[class^="flaticon-"]:after, [class*=" flaticon-"]:after {   
+	font-family: Flaticon;
+        /*font-size: 20px;*/
+font-style: normal;
+/*margin-left: 20px;*/
+}.flaticon-apple35:before {
+	content: "\e000";
+}
+.flaticon-apple54:before {
+	content: "\e001";
+}
+.flaticon-apple55:before {
+	content: "\e002";
+}
+.flaticon-cocktails1:before {
+	content: "\e003";
+}
+.flaticon-company3:before {
+	content: "\e004";
+}
+.flaticon-fruit42:before {
+	content: "\e005";
+}
+.flaticon-fruit72:before {
+	content: "\e006";
+}
+.flaticon-fruits7:before {
+	content: "\e007";
+}
+.flaticon-healthy-food4:before {
+	content: "\e008";
+}
+.flaticon-healthy-food5:before {
+	content: "\e009";
+}
+.flaticon-new70:before {
+	content: "\e00a";
+}

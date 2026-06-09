@@ -263,7 +263,7 @@ async function runSniffer(): Promise<void> {
     recordHar: {
       path: harPath,
       mode: 'full',
-      content: 'body',
+      content: 'embed',
     },
   });
 
@@ -416,7 +416,7 @@ async function runSniffer(): Promise<void> {
     if (AUTO_MODE) {
       // Mode automatique : login + navigation
       console.log(`🤖 Login automatique avec : ${VOWINT_EMAIL}`);
-      await page.goto(`${VOWINT_BASE}/`, { waitUntil: 'networkidle' });
+      await page.goto(`${VOWINT_BASE}/`, { waitUntil: 'networkidle', timeout: 30_000 });
 
       // Remplir le formulaire de login
       await page.fill('#UserName', VOWINT_EMAIL);
@@ -424,49 +424,102 @@ async function runSniffer(): Promise<void> {
       await page.fill('#Password', VOWINT_PASSWORD);
       await page.waitForTimeout(300 + Math.random() * 400);
 
-      // Chercher le bouton submit
+      // FIX: Promise.all évite la race condition "navigation déjà terminée avant waitForNavigation"
       const submitBtn = page.locator('button[type="submit"], input[type="submit"]').first();
-      await submitBtn.click();
-
-      // Attendre la navigation post-login
-      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30_000 });
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30_000 }),
+        submitBtn.click(),
+      ]);
       console.log(`   → Connecté : ${page.url()}`);
 
       // Naviguer vers IndexByUserId
-      await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: 'networkidle' });
+      await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: 'networkidle', timeout: 30_000 });
       await page.waitForTimeout(2000);
       console.log(`   → IndexByUserId chargé`);
 
-      // Chercher le bouton "Nouvelle demande" / "New application"
-      const newAppBtn = page.locator([
-        'a[href*="Create"]',
-        'a[href*="/New"]',
-        'button:has-text("New")',
-        'button:has-text("Nouvelle")',
-        'a:has-text("New application")',
-        'a:has-text("Nouvelle demande")',
-        '[ng-click*="create"]',
-        '[ng-click*="new"]',
-        '[ng-click*="Create"]',
-        '[ng-click*="New"]',
-      ].join(', ')).first();
+      // Dump HTML pour debug sélecteurs
+      const indexHtml = await page.content();
+      console.log(`   → HTML IndexByUserId (500 chars) : ${indexHtml.slice(0, 500).replace(/\n/g, ' ')}`);
 
-      if (await newAppBtn.count() > 0) {
-        console.log(`   → Clic sur "Nouvelle demande"`);
-        await newAppBtn.click();
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20_000 }).catch(() => {
-          // SPA — pas de navigation classique
+      // Chemin réel HAR : IndexByUserId → "New application" → /en/VisaApplication/Gdpr → /en/VisaApplication/Create
+      // Le bouton "New application" est un lien AngularJS rendu hors viewport (invisible au clic Playwright).
+      // Navigation directe vers /en/VisaApplication/Gdpr — plus robuste que le clic SPA.
+      console.log(`   → Navigation directe vers GDPR…`);
+      // networkidle ne se termine jamais à cause de hCaptcha (connexions permanentes) — domcontentloaded suffit
+      await page.goto(`${VOWINT_BASE}/en/VisaApplication/Gdpr`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      console.log(`   → URL GDPR : ${page.url()}`);
+      await page.waitForTimeout(3000); // laisser AngularJS rendre le formulaire
+
+      // ── GDPR → CreateGdprNewWithAutoNumber → Edit/{VACoreId} ─────────────────
+      // Flow découvert depuis gdprController.js :
+      //   1. POST /en/VisaApplication/CreateGdprNewWithAutoNumber  { Approval: 1, RecaptchaResponse: "" }
+      //   2. Réponse JSON { Success: true, VACoreId: "xxx" }
+      //   3. Redirection vers /en/VisaApplication/Edit/{VACoreId}
+      //
+      // On POST directement depuis page.evaluate() pour utiliser les cookies authentifiés du browser.
+      // On extrait aussi le __RequestVerificationToken depuis la page GDPR.
+      console.log(`   → POST CreateGdprNewWithAutoNumber via page.evaluate()…`);
+
+      const gdprResult = await page.evaluate(async () => {
+        // Chercher le token CSRF si présent dans le DOM
+        const tokenEl = document.querySelector('input[name="__RequestVerificationToken"]') as HTMLInputElement | null;
+        const token = tokenEl?.value ?? '';
+
+        const params = new URLSearchParams({
+          Approval: '1',
+          RecaptchaResponse: '',
+          ...(token ? { __RequestVerificationToken: token } : {}),
         });
-        await page.waitForTimeout(3000);
-        console.log(`   → Page : ${page.url()}`);
-      } else {
-        console.log(`   ⚠️  Bouton "Nouvelle demande" non trouvé — sauvegarde des bundles IndexByUserId`);
-        console.log(`   URL actuelle : ${page.url()}`);
-        // Sauvegarder quand même
-        await page.waitForTimeout(5000);
-        await save();
-        return;
+
+        const resp = await fetch('/en/VisaApplication/CreateGdprNewWithAutoNumber', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+
+        const text = await resp.text();
+        let json: Record<string, unknown> | null = null;
+        try { json = JSON.parse(text); } catch { /* pas du JSON */ }
+
+        return {
+          status: resp.status,
+          url: resp.url,
+          text: text.slice(0, 500),
+          json,
+          redirected: resp.redirected,
+        };
+      });
+
+      console.log(`   → Réponse GDPR POST: status=${gdprResult.status} redirected=${gdprResult.redirected}`);
+      console.log(`   → JSON: ${JSON.stringify(gdprResult.json)}`);
+      if (gdprResult.text && !gdprResult.json) {
+        console.log(`   → text: ${gdprResult.text.slice(0, 200)}`);
       }
+
+      // Extraire le VACoreId et naviguer vers Edit
+      const vaCoreId = (gdprResult.json as any)?.VACoreId ?? (gdprResult.json as any)?.vaCoreId ?? null;
+      if (vaCoreId) {
+        const editUrl = `${VOWINT_BASE}/en/VisaApplication/Edit/${vaCoreId}`;
+        console.log(`   → VACoreId=${vaCoreId} — navigation vers ${editUrl}`);
+        await page.goto(editUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.waitForTimeout(4000); // laisser AngularJS rendre le formulaire
+        console.log(`   → URL Edit : ${page.url()}`);
+      } else if (gdprResult.redirected && gdprResult.url.includes('Edit')) {
+        // Le fetch a suivi une redirection vers Edit
+        const redirectUrl = gdprResult.url;
+        console.log(`   → Redirection directe vers : ${redirectUrl}`);
+        await page.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.waitForTimeout(4000);
+        console.log(`   → URL : ${page.url()}`);
+      } else {
+        // Fallback : tenter navigation directe vers Create
+        console.log(`   ⚠️  VACoreId absent — tentative navigation directe vers Create`);
+        await page.goto(`${VOWINT_BASE}/en/VisaApplication/Create`, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(() => {});
+        await page.waitForTimeout(3000);
+        console.log(`   → URL fallback : ${page.url()}`);
+      }
+
+      console.log(`   → Page finale : ${page.url()}`);
 
       // Attendre que les bundles de la page de création se chargent
       await page.waitForTimeout(CREATE_PAGE_SAVE_DELAY_MS);

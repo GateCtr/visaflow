@@ -1,0 +1,1171 @@
+{
+  "capturedAt": "2026-06-09T03:56:06.079Z",
+  "mode": "auto",
+  "pagesVisited": [
+    "https://visaonweb.diplomatie.be/",
+    "https://visaonweb.diplomatie.be/fr/Account/Login",
+    "https://visaonweb.diplomatie.be/en",
+    "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+    "https://visaonweb.diplomatie.be/en/VisaApplication/Gdpr",
+    "https://newassets.hcaptcha.com/captcha/v1/129151648d8e764ed2e9d497a94e4b90b8f6fc5f/static/hcaptcha.html",
+    "https://visaonweb.diplomatie.be/en/VisaApplication/Create"
+  ],
+  "bundles": [
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1",
+      "filename": "css-J7VZwISN.css",
+      "type": "css",
+      "size": 28172,
+      "savedAt": "2026-06-09T03:56:07.482Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/Punt-BE-logo_50.png",
+      "filename": "Punt-BE-logo_50.png.css",
+      "type": "css",
+      "size": 2372,
+      "savedAt": "2026-06-09T03:56:07.863Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1",
+      "filename": "minimalcss-88sqS0Qg.css",
+      "type": "css",
+      "size": 252032,
+      "savedAt": "2026-06-09T03:56:08.159Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1",
+      "filename": "bootstrapcore-jy509y7V.js",
+      "type": "js",
+      "size": 75106,
+      "savedAt": "2026-06-09T03:56:08.252Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/logo.png",
+      "filename": "logo.png.css",
+      "type": "css",
+      "size": 2471,
+      "savedAt": "2026-06-09T03:56:08.256Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/bg.jpg",
+      "filename": "bg.jpg.css",
+      "type": "css",
+      "size": 15857,
+      "savedAt": "2026-06-09T03:56:08.266Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1",
+      "filename": "minimaljs-j2_19J3L.js",
+      "type": "js",
+      "size": 113307,
+      "savedAt": "2026-06-09T03:56:08.287Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/jqueryval?v=mugRfWFK4wgnGqQ2-RcIJ-5hy5mROPq-xXnW6Doymsk1",
+      "filename": "jqueryval-mugRfWFK.js",
+      "type": "js",
+      "size": 204957,
+      "savedAt": "2026-06-09T03:56:08.489Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/DXI1ORHCpsQm3Vp6mXoaTXhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "DXI1ORHCpsQm3Vp6mXoaTXhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21744,
+      "savedAt": "2026-06-09T03:56:08.532Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/cJZKeOuBrn4kERxqtaUH3T8E0i7KZn-EPnyo3HZu7kw.woff",
+      "filename": "cJZKeOuBrn4kERxqtaUH3T8E0i7KZn-EPnyo3HZu7kw.woff.bin",
+      "type": "other",
+      "size": 20544,
+      "savedAt": "2026-06-09T03:56:08.539Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/font-awesome-4/fonts/fontawesome-webfont.woff2?v=4.4.0",
+      "filename": "fontawesome-webfont.woff2-4.4.0.bin",
+      "type": "other",
+      "size": 64464,
+      "savedAt": "2026-06-09T03:56:08.689Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-table/ng-table.css",
+      "filename": "ng-table.css.js",
+      "type": "js",
+      "size": 3248,
+      "savedAt": "2026-06-09T03:56:11.354Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-multi-select/angular-multi-select.css",
+      "filename": "angular-multi-select.css.js",
+      "type": "js",
+      "size": 6406,
+      "savedAt": "2026-06-09T03:56:11.361Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.datetimepicker/css/bootstrap-datetimepicker.css",
+      "filename": "bootstrap-datetimepicker.css.js",
+      "type": "js",
+      "size": 12289,
+      "savedAt": "2026-06-09T03:56:11.363Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.multiselect/css/bootstrap-multiselect.css",
+      "filename": "bootstrap-multiselect.css.js",
+      "type": "js",
+      "size": 710,
+      "savedAt": "2026-06-09T03:56:11.363Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.multiselect/css/multi-select.css",
+      "filename": "multi-select.css.js",
+      "type": "js",
+      "size": 2347,
+      "savedAt": "2026-06-09T03:56:11.364Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.daterangepicker/daterangepicker-bs3.css",
+      "filename": "daterangepicker-bs3.css.js",
+      "type": "js",
+      "size": 5065,
+      "savedAt": "2026-06-09T03:56:11.367Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/flaticon/flaticon.css",
+      "filename": "flaticon.css.css",
+      "type": "css",
+      "size": 1046,
+      "savedAt": "2026-06-09T03:56:11.463Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.upload/js/jquery.fileupload-angular.js",
+      "filename": "jquery.fileupload-angular.js.js",
+      "type": "js",
+      "size": 16658,
+      "savedAt": "2026-06-09T03:56:11.479Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-multi-select/angular-multi-select.js",
+      "filename": "angular-multi-select.js.js",
+      "type": "js",
+      "size": 48524,
+      "savedAt": "2026-06-09T03:56:11.482Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/angular-resource.js",
+      "filename": "angular-resource.js.js",
+      "type": "js",
+      "size": 26777,
+      "savedAt": "2026-06-09T03:56:11.637Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-bs-daterangepicker-master/src/ng-bs-daterangepicker.js",
+      "filename": "ng-bs-daterangepicker.js.js",
+      "type": "js",
+      "size": 2459,
+      "savedAt": "2026-06-09T03:56:11.638Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/jquery?v=M6dmVkrHVhoZ1gfOtvVDZbgBcQTsbWxoLsRizcGkbPk1",
+      "filename": "jquery-M6dmVkrH.js",
+      "type": "js",
+      "size": 93072,
+      "savedAt": "2026-06-09T03:56:11.738Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/app.js",
+      "filename": "app.js.js",
+      "type": "js",
+      "size": 9288,
+      "savedAt": "2026-06-09T03:56:11.786Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/commonController.js",
+      "filename": "commonController.js.js",
+      "type": "js",
+      "size": 1852,
+      "savedAt": "2026-06-09T03:56:11.940Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/css?v=oL0KqSHZC9-FRMl_bhR8FJ8roMwZ_TV4H0VK5rdBTQA1",
+      "filename": "css-oL0KqSHZ.css",
+      "type": "css",
+      "size": 318896,
+      "savedAt": "2026-06-09T03:56:12.036Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/changePasswordController.js",
+      "filename": "changePasswordController.js.js",
+      "type": "js",
+      "size": 2316,
+      "savedAt": "2026-06-09T03:56:12.092Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/bundles/angularjs?v=QawmBhgrm2Z8MjEe7uSCRuCty5pj00x0094nlk-PNOY1",
+      "filename": "angularjs-QawmBhgr.bin",
+      "type": "other",
+      "size": 221987,
+      "savedAt": "2026-06-09T03:56:12.184Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/messageService.js",
+      "filename": "messageService.js.js",
+      "type": "js",
+      "size": 1095,
+      "savedAt": "2026-06-09T03:56:12.338Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-table/ng-table.js",
+      "filename": "ng-table.js.js",
+      "type": "js",
+      "size": 30146,
+      "savedAt": "2026-06-09T03:56:12.356Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/angular-flot/angular-flot.js",
+      "filename": "angular-flot.js.js",
+      "type": "js",
+      "size": 1454,
+      "savedAt": "2026-06-09T03:56:12.360Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.pie.js",
+      "filename": "jquery.flot.pie.js.js",
+      "type": "js",
+      "size": 23405,
+      "savedAt": "2026-06-09T03:56:12.363Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.resize.js",
+      "filename": "jquery.flot.resize.js.js",
+      "type": "js",
+      "size": 2504,
+      "savedAt": "2026-06-09T03:56:12.395Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/js?v=Jj_Q1wwpvYce_SoEkyaEVW-KNklcsMAmgsFgfQ0f5aY1",
+      "filename": "js-Jj_Q1wwp.js",
+      "type": "js",
+      "size": 312452,
+      "savedAt": "2026-06-09T03:56:12.509Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/loadingContainer.js",
+      "filename": "loadingContainer.js.js",
+      "type": "js",
+      "size": 1390,
+      "savedAt": "2026-06-09T03:56:12.520Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/initApp.js",
+      "filename": "initApp.js.js",
+      "type": "js",
+      "size": 126,
+      "savedAt": "2026-06-09T03:56:12.520Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/accentRemoveService.js",
+      "filename": "accentRemoveService.js.js",
+      "type": "js",
+      "size": 9481,
+      "savedAt": "2026-06-09T03:56:12.521Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/mask.js",
+      "filename": "mask.js.js",
+      "type": "js",
+      "size": 35082,
+      "savedAt": "2026-06-09T03:56:12.548Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.js",
+      "filename": "jquery.flot.js.js",
+      "type": "js",
+      "size": 110008,
+      "savedAt": "2026-06-09T03:56:12.854Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/k3k702ZOKiLJc3WVjuplzHhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "k3k702ZOKiLJc3WVjuplzHhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21272,
+      "savedAt": "2026-06-09T03:56:13.208Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/xjAJXh38I15wypJXxuGMBobN6UDyHWBl620a-IRfuBk.woff",
+      "filename": "xjAJXh38I15wypJXxuGMBobN6UDyHWBl620a-IRfuBk.woff.bin",
+      "type": "other",
+      "size": 20224,
+      "savedAt": "2026-06-09T03:56:13.209Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/MTP_ySUJH_bn48VBG8sNSnhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "MTP_ySUJH_bn48VBG8sNSnhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21704,
+      "savedAt": "2026-06-09T03:56:13.210Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/8KhZd3VQBtXTAznvKjw-kxsxEYwM7FgeyaSgU71cLG0.woff",
+      "filename": "8KhZd3VQBtXTAznvKjw-kxsxEYwM7FgeyaSgU71cLG0.woff.bin",
+      "type": "other",
+      "size": 26464,
+      "savedAt": "2026-06-09T03:56:13.211Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/bootstrap/dataTables.bootstrap.css",
+      "filename": "dataTables.bootstrap.css.js",
+      "type": "js",
+      "size": 7555,
+      "savedAt": "2026-06-09T03:56:14.776Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/bundles/visaApplicationController?v=gdJF3W7axLlW6Hk7CsbrLzerjSWaNBIvJocse_C91A81",
+      "filename": "visaApplicationController-gdJF3W7a.bin",
+      "type": "other",
+      "size": 209758,
+      "savedAt": "2026-06-09T03:56:15.400Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_both.png",
+      "filename": "sort_both.png.js",
+      "type": "js",
+      "size": 1136,
+      "savedAt": "2026-06-09T03:56:15.661Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.datatables/images/sort_desc.png",
+      "filename": "sort_desc.png.js",
+      "type": "js",
+      "size": 1127,
+      "savedAt": "2026-06-09T03:56:15.946Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap/dist/fonts/glyphicons-halflings-regular.woff",
+      "filename": "glyphicons-halflings-regular.woff.js",
+      "type": "js",
+      "size": 23320,
+      "savedAt": "2026-06-09T03:56:16.100Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/gdprController.js",
+      "filename": "gdprController.js.js",
+      "type": "js",
+      "size": 4857,
+      "savedAt": "2026-06-09T03:56:19.850Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/scripts/CleanZone/jquery.icheck/skins/square/blue.css",
+      "filename": "blue.css.js",
+      "type": "js",
+      "size": 1611,
+      "savedAt": "2026-06-09T03:56:24.500Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/scripts/CleanZone/jquery.icheck/icheck.min.js",
+      "filename": "icheck.min.js.js",
+      "type": "js",
+      "size": 4501,
+      "savedAt": "2026-06-09T03:56:24.613Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/scripts/visaApplicationForm.js",
+      "filename": "visaApplicationForm.js.js",
+      "type": "js",
+      "size": 1218,
+      "savedAt": "2026-06-09T03:56:24.614Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/addressService.js",
+      "filename": "addressService.js.js",
+      "type": "js",
+      "size": 491,
+      "savedAt": "2026-06-09T03:56:24.614Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/codeTypeService.js",
+      "filename": "codeTypeService.js.js",
+      "type": "js",
+      "size": 12147,
+      "savedAt": "2026-06-09T03:56:24.615Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/uiErrorService.js",
+      "filename": "uiErrorService.js.js",
+      "type": "js",
+      "size": 1989,
+      "savedAt": "2026-06-09T03:56:24.616Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/referenceController.js",
+      "filename": "referenceController.js.js",
+      "type": "js",
+      "size": 738,
+      "savedAt": "2026-06-09T03:56:24.942Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/references.js",
+      "filename": "references.js.js",
+      "type": "js",
+      "size": 4580,
+      "savedAt": "2026-06-09T03:56:24.944Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/guardian.js",
+      "filename": "guardian.js.js",
+      "type": "js",
+      "size": 372,
+      "savedAt": "2026-06-09T03:56:24.948Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/ngAutoComplete.js",
+      "filename": "ngAutoComplete.js.js",
+      "type": "js",
+      "size": 14366,
+      "savedAt": "2026-06-09T03:56:24.954Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/scrollSpyRefList.js",
+      "filename": "scrollSpyRefList.js.js",
+      "type": "js",
+      "size": 794,
+      "savedAt": "2026-06-09T03:56:24.955Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/visaApplicationController.js",
+      "filename": "visaApplicationController.js.js",
+      "type": "js",
+      "size": 133969,
+      "savedAt": "2026-06-09T03:56:24.960Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/autocompleteController.js",
+      "filename": "autocompleteController.js.js",
+      "type": "js",
+      "size": 3674,
+      "savedAt": "2026-06-09T03:56:25.406Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/clearDropdownvalue.js",
+      "filename": "clearDropdownvalue.js.js",
+      "type": "js",
+      "size": 771,
+      "savedAt": "2026-06-09T03:56:25.410Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.select2/select2.png",
+      "filename": "select2.png.js",
+      "type": "js",
+      "size": 3902,
+      "savedAt": "2026-06-09T03:56:25.426Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1&_=1780977383979",
+      "filename": "minimaljs-j2_19J3L.js",
+      "type": "js",
+      "size": 113307,
+      "savedAt": "2026-06-09T03:56:28.095Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1&_=1780977383980",
+      "filename": "bootstrapcore-jy509y7V.js",
+      "type": "js",
+      "size": 75106,
+      "savedAt": "2026-06-09T03:56:28.097Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1&_=1780977383981",
+      "filename": "minimaljs-j2_19J3L.js",
+      "type": "js",
+      "size": 113307,
+      "savedAt": "2026-06-09T03:56:28.111Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1&_=1780977383982",
+      "filename": "bootstrapcore-jy509y7V.js",
+      "type": "js",
+      "size": 75106,
+      "savedAt": "2026-06-09T03:56:28.116Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1&_=1780977383983",
+      "filename": "minimaljs-j2_19J3L.js",
+      "type": "js",
+      "size": 113307,
+      "savedAt": "2026-06-09T03:56:28.132Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1&_=1780977383984",
+      "filename": "bootstrapcore-jy509y7V.js",
+      "type": "js",
+      "size": 75106,
+      "savedAt": "2026-06-09T03:56:28.134Z"
+    }
+  ],
+  "apiCalls": [
+    {
+      "timestamp": "2026-06-09T03:56:15.507Z",
+      "method": "GET",
+      "url": "https://visaonweb.diplomatie.be/VisaApplication/DataTables",
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+        "accept-language": "fr-BE",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0",
+        "x-requested-with": "XMLHttpRequest",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "accept": "application/json, text/javascript, */*; q=0.01"
+      },
+      "responseStatus": 200,
+      "responseBody": "{\r\n\t\"sEmptyTable\":     \"No data available in table\",\r\n\t\"sInfo\":           \"Showing _START_ to _END_ of _TOTAL_ entries\",\r\n\t\"sInfoEmpty\":      \"Showing 0 to 0 of 0 entries\",\r\n\t\"sInfoFiltered\":   \"(filtered from _MAX_ total entries)\",\r\n\t\"sInfoPostFix\":    \"\",\r\n\t\"sInfoThousands\":  \",\",\r\n\t\"sLengthMenu\":     \"Show _MENU_ entries\",\r\n\t\"sLoadingRecords\": \"Loading...\",\r\n\t\"sProcessing\":     \"Processing...\",\r\n\t\"sSearch\":         \"Search:\",\r\n\t\"sZeroRecords\":    \"No matching records found\",\r\n\t\"oPaginate\": {\r\n\t\t\"sFirst\":    \"First\",\r\n\t\t\"sLast\":     \"Last\",\r\n\t\t\"sNext\":     \"Next\",\r\n\t\t\"sPrevious\": \"Previous\"\r\n\t},\r\n\t\"oAria\": {\r\n\t\t\"sSortAscending\":  \": activate to sort column ascending\",\r\n\t\t\"sSortDescending\": \": activate to sort column descending\"\r\n\t}\r\n}",
+      "responseHeaders": {
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "cache-control": "private, s-maxage=0",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-content-type-options": "nosniff",
+        "content-length": "746",
+        "x-xss-protection": "1; mode=block",
+        "date": "Tue, 09 Jun 2026 03:56:18 GMT",
+        "content-type": "application/json; charset=utf-8"
+      }
+    },
+    {
+      "timestamp": "2026-06-09T03:56:15.805Z",
+      "method": "GET",
+      "url": "https://visaonweb.diplomatie.be/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=AppNum&columns%5B1%5D%5Bname%5D=ApplicationNumber&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=2&columns%5B2%5D%5Bname%5D=&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=false&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=false&columns%5B3%5D%5Borderable%5D=false&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B4%5D%5Bdata%5D%5BId%5D=Id&columns%5B4%5D%5Bname%5D=&columns%5B4%5D%5Bsearchable%5D=false&columns%5B4%5D%5Borderable%5D=false&columns%5B4%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B4%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=desc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false&_=1780977374209",
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId",
+        "accept-language": "fr-BE",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0",
+        "x-requested-with": "XMLHttpRequest",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "accept": "application/json, text/javascript, */*; q=0.01"
+      },
+      "responseStatus": 200,
+      "responseBody": "{\"draw\":1,\"data\":[{\"Id\":\"d9c54635-715e-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6115499\",\"OSId\":\"MSHKIN006115499\",\"FName\":\"ONYEME\",\"LName\":\"RACHEL\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"7df28958-61e2-430c-bb7e-35a45bd9846c\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"4084ce04-d857-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6088211\",\"OSId\":\"MSHKIN006088211\",\"FName\":\"KASONGO\",\"LName\":\"RACHEL\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"e5712c71-2645-4fb4-9c51-10d115f8acef\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"d58e7ca9-d657-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6088201\",\"OSId\":\"MSHKIN006088201\",\"FName\":\"KISITA\",\"LName\":\"JACQUES\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"71cd8714-cc45-448d-91d3-0ca37a257a93\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"3c7f4dae-d257-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6088189\",\"OSId\":\"MSHKIN006088189\",\"FName\":\"MATINGA\",\"LName\":\"JIZREL\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"c34ea23c-1bef-4618-8d7e-05abb3093be4\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"d501376b-cf57-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6088178\",\"OSId\":\"MSHKIN006088178\",\"FName\":\"KASONGO\",\"LName\":\"JEAN\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"0025a5a1-7798-49c0-8110-d1476df95e52\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"57f49a76-dc56-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT6085888\",\"OSId\":\"MSHKIN006085888\",\"FName\":\"ANGEL\",\"LName\":\"KABOBI\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"15f30c82-3645-48d0-b19f-cc4c8e6e5a0a\",\"EAppointmentReady\":true,\"EappointmentUrl\":\"ExistEappointmentUrl\",\"ShowAppointementSystemOutsourcerUrl\":true,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"},{\"Id\":\"e978b2fd-472f-f111-a3ae-00505691de06\",\"AppNum\":null,\"VOWId\":\"VOWINT5903406\",\"OSId\":\"MSHKIN005903406\",\"FName\":\"ESTHER\",\"LName\":\"NGOBI\",\"St\":\"Submitted\",\"StId\":2,\"Hb\":false,\"Vac\":\"CEV Kinshasa\",\"GroupId\":\"NA\",\"SubGroupId\":\"df171b6f-871b-48d2-b6ac-7352d37cd13b\",\"EAppointmentReady\":false,\"EappointmentUrl\":\"\",\"ShowAppointementSystemOutsourcerUrl\":false,\"AppointementSystemOutsourcerUrl\":\"cloud\",\"CompanyPrefix\":\"MSH\"}],\"recordsTotal\":7,\"recordsFiltered\":7}",
+      "responseHeaders": {
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "cache-control": "private, s-maxage=0",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-content-type-options": "nosniff",
+        "content-length": "3125",
+        "x-xss-protection": "1; mode=block",
+        "date": "Tue, 09 Jun 2026 03:56:18 GMT",
+        "content-type": "application/json; charset=utf-8"
+      }
+    },
+    {
+      "timestamp": "2026-06-09T03:56:25.405Z",
+      "method": "GET",
+      "url": "https://maps.googleapis.com/maps/api/mapsjs/gen_204?csp_test=true",
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "https://visaonweb.diplomatie.be/",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "accept-language": "fr-BE",
+        "sec-ch-ua-mobile": "?0"
+      },
+      "responseStatus": 200,
+      "responseBody": "{}\n",
+      "responseHeaders": {
+        "access-control-expose-headers": "vary,vary,vary,content-encoding,date,server,content-length",
+        "content-encoding": "gzip",
+        "x-content-type-options": "nosniff",
+        "access-control-allow-origin": "https://visaonweb.diplomatie.be",
+        "server-timing": "gfet4t7; dur=5",
+        "content-length": "23",
+        "date": "Tue, 09 Jun 2026 03:56:24 GMT",
+        "x-xss-protection": "0",
+        "content-type": "application/json; charset=UTF-8",
+        "vary": "Origin, X-Origin, Referer",
+        "server": "scaffolding on HTTPServer2",
+        "x-frame-options": "SAMEORIGIN"
+      }
+    },
+    {
+      "timestamp": "2026-06-09T03:56:27.176Z",
+      "method": "POST",
+      "url": "https://visaonweb.diplomatie.be/Common/LogRenderingClientTime?actionName=getVisaApplication&time=334",
+      "requestHeaders": {
+        "sec-ch-ua-platform": "\"Windows\"",
+        "referer": "https://visaonweb.diplomatie.be/en/VisaApplication/Create",
+        "accept-language": "fr-BE",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0",
+        "x-requested-with": "XMLHttpRequest",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "accept": "application/json, text/plain, */*"
+      },
+      "responseStatus": 200,
+      "responseBody": "[0 chars — truncated]",
+      "responseHeaders": {
+        "strict-transport-security": "max-age=16070400; includeSubDomains",
+        "cache-control": "private, s-maxage=0",
+        "x-permitted-cross-domain-policies": "master-only",
+        "x-content-type-options": "nosniff",
+        "x-responded-json": "{\"status\":401,\"headers\":{\"location\":\"http:\\/\\/visaonweb.diplomatie.be\\/Account\\/Login?ReturnUrl=%2FCommon%2FLogRenderingClientTime%3FactionName%3DgetVisaApplication%26time%3D334\"}}",
+        "content-length": "0",
+        "x-xss-protection": "1; mode=block",
+        "date": "Tue, 09 Jun 2026 03:56:28 GMT"
+      }
+    }
+  ],
+  "createPageDetected": true,
+  "createPageUrl": "https://visaonweb.diplomatie.be/en/VisaApplication/Create",
+  "formFields": [
+    {
+      "name": "VA.VacId",
+      "type": "select",
+      "required": false,
+      "ngModel": "VA.VacId"
+    },
+    {
+      "name": "OSUniqueId",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.OsUniqueId"
+    },
+    {
+      "name": "VA.VacId",
+      "type": "select",
+      "required": false,
+      "ngModel": "VA.VacId"
+    },
+    {
+      "name": "VOWId",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VOWId",
+      "label": "Internet number"
+    },
+    {
+      "name": "FreeMovement",
+      "type": "checkbox",
+      "required": false,
+      "ngModel": "VA.Application_FreeMovement"
+    },
+    {
+      "name": "Personal_Data_LastName",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_LastName"
+    },
+    {
+      "name": "Personal_Data_BirthLastName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_BirthLastName",
+      "label": "2. Surname at birth"
+    },
+    {
+      "name": "Personal_Data_FirstName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_FirstName"
+    },
+    {
+      "name": "DateOfBirth_Day",
+      "type": "select",
+      "required": true,
+      "ngModel": "Day",
+      "apiSource": "c as c for c in getRange(0,daysInMonth,2,Month === '00') | filter:c"
+    },
+    {
+      "name": "DateOfBirth_Month",
+      "type": "select",
+      "required": true,
+      "ngModel": "Month",
+      "apiSource": "c as c for c in getRange(0,months,2)"
+    },
+    {
+      "name": "DateOfBirth_Year",
+      "type": "select",
+      "required": true,
+      "ngModel": "Year",
+      "apiSource": "c as c for c in getRange(yearsFrom,yearsTo,4)"
+    },
+    {
+      "name": "Personal_Data_BirthDate",
+      "type": "text",
+      "required": true,
+      "ngModel": "dateOfBirth"
+    },
+    {
+      "name": "ExtendedMinor",
+      "type": "checkbox",
+      "required": true,
+      "ngModel": "VA.Personal_Data_ExtendedMinor"
+    },
+    {
+      "name": "Personal_Data_BirthCity",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_BirthCity"
+    },
+    {
+      "name": "VA.Personal_Data_BirthCountryId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Personal_Data_BirthCountryId",
+      "apiSource": "country.Value as country.Text for country in Lists.CountryTypes | orderBy:'Text'"
+    },
+    {
+      "name": "VA.Personal_Data_NationalityId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Personal_Data_NationalityId",
+      "apiSource": "country.Value as country.Text for country in Lists.NationalityNonEUTypes | orderBy:'Text'"
+    },
+    {
+      "name": "VA.Personal_Data_BirthNationalityId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Personal_Data_BirthNationalityId",
+      "apiSource": "country.Value as country.Text for country in Lists.NationalityTypes | orderBy:'Text'"
+    },
+    {
+      "name": "Personal_Data_GenderId",
+      "type": "radio",
+      "required": false,
+      "ngModel": "VA.Personal_Data_GenderId"
+    },
+    {
+      "name": "Personal_Data_PersonNumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_PersonNumber"
+    },
+    {
+      "name": "VA.Personal_Data_Other_Nationalities[$index]",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Personal_Data_Other_Nationalities[$index]",
+      "apiSource": "country.Value as country.Text for country in Lists.NationalityTypesOtherNationality | filter:filterOtherNationalities(VA.Personal_Data_Other_Nationalities[$index]) | orderBy:'Text'"
+    },
+    {
+      "name": "ShowParent2",
+      "type": "checkbox",
+      "required": true,
+      "ngModel": "VA.ShowParent2"
+    },
+    {
+      "name": "TravelDocument_DocumentNumber",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.TravelDocument_DocumentNumber"
+    },
+    {
+      "name": "TravelDocument_DateOfIssue",
+      "type": "text",
+      "required": true,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.TravelDocument_DateOfIssue"
+    },
+    {
+      "name": "TravelDocument_ValidUntil",
+      "type": "text",
+      "required": true,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.TravelDocument_ValidUntil"
+    },
+    {
+      "name": "TravelDocument_IssuingAuthorityPlace",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.TravelDocument_IssuingAuthorityPlace"
+    },
+    {
+      "name": "VA.TravelDocument_IssuingAuthorityCountryId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.TravelDocument_IssuingAuthorityCountryId",
+      "apiSource": "country.Value as country.Text for country in TravelDocumentCountryList | filter:filterBrexit() |   orderBy:'Text'"
+    },
+    {
+      "name": "Personal_Data_Telephonenumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "+xxx...xxx",
+      "ngModel": "VA.Personal_Data_Telephonenumber"
+    },
+    {
+      "name": "Personal_Data_Mobilenumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "+xxx...xxx",
+      "ngModel": "VA.Personal_Data_Mobilenumber"
+    },
+    {
+      "name": "Personal_Data_Email",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_Email"
+    },
+    {
+      "name": "confirmEmail",
+      "type": "text",
+      "required": true,
+      "ngModel": "confirmEmail"
+    },
+    {
+      "name": "PermitForResidenceCountry_DocumentNumber",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.PermitForResidenceCountry_DocumentNumber"
+    },
+    {
+      "name": "PermitForResidenceCountry_PermitValidUntil",
+      "type": "text",
+      "required": true,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PermitForResidenceCountry_PermitValidUntil"
+    },
+    {
+      "name": "Personal_Occupation.Name",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Occupation.Name"
+    },
+    {
+      "name": "Personal_Occupation.Email",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Occupation.Email"
+    },
+    {
+      "name": "Personal_Occupation.Telephonenumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "+xxx...xxx",
+      "ngModel": "VA.Personal_Occupation.Telephonenumber"
+    },
+    {
+      "name": "Application_PurposeOfTravelInfo",
+      "type": "text",
+      "required": false,
+      "ngModel": "VA.Application_PurposeOfTravelInfo"
+    },
+    {
+      "name": "VA.Application_MemberStateOfDestinationId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Application_MemberStateOfDestinationId",
+      "apiSource": "country.Value as country.Text for country in selectedCountriesShengen | orderBy:'Text'"
+    },
+    {
+      "name": "VA.Application_MemberStateOfFirstEntryId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.Application_MemberStateOfFirstEntryId",
+      "apiSource": "country.Value as country.Text for country in Lists.CountrySchengenTypes | orderBy:'Text'"
+    },
+    {
+      "name": "Application_NumberOfEntriesRequestedId",
+      "type": "radio",
+      "required": false,
+      "ngModel": "VA.Application_NumberOfEntriesRequestedId"
+    },
+    {
+      "name": "Application_DurationOfIntendedStay",
+      "type": "text",
+      "required": true,
+      "placeholder": "Enter",
+      "ngModel": "VA.Application_DurationOfIntendedStay"
+    },
+    {
+      "name": "Application_IntendedDateOfArrival",
+      "type": "text",
+      "required": true,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.Application_IntendedDateOfArrival"
+    },
+    {
+      "name": "Application_IntendedDateOfDeparture",
+      "type": "text",
+      "required": true,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.Application_IntendedDateOfDeparture"
+    },
+    {
+      "name": "VA.PermitForDestinationCountry_CountryId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.PermitForDestinationCountry_CountryId",
+      "apiSource": "country.Value as country.Text for country in Lists.CountryTypes | orderBy:'Text'"
+    },
+    {
+      "name": "PermitForDestinationCountry_PermitValidFrom",
+      "type": "text",
+      "required": false,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PermitForDestinationCountry_PermitValidFrom"
+    },
+    {
+      "name": "PermitForDestinationCountry_PermitValidUntil",
+      "type": "text",
+      "required": false,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PermitForDestinationCountry_PermitValidUntil"
+    },
+    {
+      "name": "PreviousSchengenVisa_VisaNumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.PreviousSchengenVisa_VisaNumber"
+    },
+    {
+      "name": "VA.PreviousSchengenVisa_DeliveredByCountryId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.PreviousSchengenVisa_DeliveredByCountryId",
+      "apiSource": "country.Value as country.Text for country in Lists.CountrySchengenTypes | orderBy:'Text'"
+    },
+    {
+      "name": "PreviousSchengenVisa_DateOfIssue",
+      "type": "text",
+      "required": false,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PreviousSchengenVisa_DateOfIssue"
+    },
+    {
+      "name": "PreviousSchengenVisa_ValidUntil",
+      "type": "text",
+      "required": false,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PreviousSchengenVisa_ValidUntil"
+    },
+    {
+      "name": "VA.PreviousFingerPrint",
+      "type": "checkbox",
+      "required": false,
+      "ngModel": "VA.PreviousFingerPrint"
+    },
+    {
+      "name": "PreviousFingerprint_CaptureDate",
+      "type": "text",
+      "required": false,
+      "placeholder": "dd/mm/yyyy",
+      "ngModel": "VA.PreviousFingerprint_CaptureDate"
+    },
+    {
+      "name": "PreviousFingerprint_VisaNumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.PreviousFingerprint_VisaNumber"
+    },
+    {
+      "name": "EUFamilyMember.LastName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.EUFamilyMember.LastName",
+      "label": "17. Surname"
+    },
+    {
+      "name": "EUFamilyMember.FirstName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.EUFamilyMember.FirstName",
+      "label": "17. First name"
+    },
+    {
+      "name": "VA.EUFamilyMember.NationalityId",
+      "type": "select",
+      "required": true,
+      "ngModel": "VA.EUFamilyMember.NationalityId",
+      "label": "17. Nationality",
+      "apiSource": "country.Value as country.Text for country in Lists.NationalityEUTypes"
+    },
+    {
+      "name": "EU_FamilyMember_DateOfBirth_Day",
+      "type": "select",
+      "required": false,
+      "ngModel": "VA.EUFamilyMember.BirthDate.Day",
+      "apiSource": "c as c for c in getRange(0,daysInMonth,2,VA.EUFamilyMember.BirthDate.Month === '00') | filter:c"
+    },
+    {
+      "name": "EU_FamilyMember_DateOfBirth_Month",
+      "type": "select",
+      "required": false,
+      "ngModel": "VA.EUFamilyMember.BirthDate.Month",
+      "apiSource": "c as c for c in getRange(0,months,2)"
+    },
+    {
+      "name": "EU_FamilyMember_DateOfBirth_Year",
+      "type": "select",
+      "required": false,
+      "ngModel": "VA.EUFamilyMember.BirthDate.Year",
+      "apiSource": "c as c for c in getRange(yearsFrom,yearsTo,4)"
+    },
+    {
+      "name": "EUFamilyMember.BirthDate",
+      "type": "text",
+      "required": false,
+      "ngModel": "dateOfBirthEU"
+    },
+    {
+      "name": "EUFamilyMember.IdentityDocumentNumber",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.EUFamilyMember.IdentityDocumentNumber",
+      "label": "17. Number of travel document or ID card"
+    },
+    {
+      "name": "Personal_Data_LastName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_LastName"
+    },
+    {
+      "name": "Personal_Data_FirstName",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Data_FirstName"
+    },
+    {
+      "name": "Personal_Occupation.Name",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Personal_Occupation.Name"
+    },
+    {
+      "name": "Guardian_Parent1.Lastname",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Guardian_Parent1.Lastname"
+    },
+    {
+      "name": "Guardian_Parent1.Firstname",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Guardian_Parent1.Firstname"
+    },
+    {
+      "name": "Guardian_Parent2.Lastname",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Guardian_Parent2.Lastname"
+    },
+    {
+      "name": "Guardian_Parent2.Firstname",
+      "type": "text",
+      "required": false,
+      "placeholder": "Enter",
+      "ngModel": "VA.Guardian_Parent2.Firstname"
+    },
+    {
+      "name": "referencePerson[{{$index}}].Id",
+      "type": "text",
+      "required": false,
+      "ngModel": "ref.Id"
+    },
+    {
+      "name": "Application_AddComment",
+      "type": "textarea",
+      "required": false,
+      "ngModel": "VA.Application_AddComment",
+      "label": "Add comment"
+    },
+    {
+      "name": "autocomplete",
+      "type": "text",
+      "required": false,
+      "ngModel": "autocomplete"
+    },
+    {
+      "name": "Street",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.street",
+      "label": "Street"
+    },
+    {
+      "name": "HouseNumber",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.houseNumber"
+    },
+    {
+      "name": "PostalCode",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.postalCode"
+    },
+    {
+      "name": "City",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.city",
+      "label": "City"
+    },
+    {
+      "name": "Country",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.country",
+      "label": "Country"
+    },
+    {
+      "name": "Telephone",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.telephone",
+      "label": "Telephone"
+    },
+    {
+      "name": "Place name",
+      "type": "text",
+      "required": false,
+      "ngModel": "details.placeName",
+      "label": "Place name"
+    },
+    {
+      "name": "formData.OldPassword",
+      "type": "password",
+      "required": false,
+      "placeholder": "Old password",
+      "ngModel": "formData.OldPassword"
+    },
+    {
+      "name": "formData.NewPassword",
+      "type": "password",
+      "required": false,
+      "placeholder": "New password",
+      "ngModel": "formData.NewPassword"
+    },
+    {
+      "name": "formData.ConfirmPassword",
+      "type": "password",
+      "required": false,
+      "placeholder": "Confirm password",
+      "ngModel": "formData.ConfirmPassword"
+    }
+  ]
+}

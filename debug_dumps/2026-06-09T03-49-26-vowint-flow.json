@@ -1,0 +1,314 @@
+{
+  "capturedAt": "2026-06-09T03:49:27.356Z",
+  "mode": "auto",
+  "pagesVisited": [
+    "https://visaonweb.diplomatie.be/",
+    "https://visaonweb.diplomatie.be/fr/Account/Login",
+    "https://visaonweb.diplomatie.be/en"
+  ],
+  "bundles": [
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/css?v=J7VZwISNVKAICsmO2H9cNg3FFm675l_IM7EMt4qHesM1",
+      "filename": "css-J7VZwISN.css",
+      "type": "css",
+      "size": 28172,
+      "savedAt": "2026-06-09T03:49:29.311Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/Punt-BE-logo_50.png",
+      "filename": "Punt-BE-logo_50.png.css",
+      "type": "css",
+      "size": 2372,
+      "savedAt": "2026-06-09T03:49:29.636Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/minimalcss?v=88sqS0Qg5QvuxNVF6Of4mlJUBCRA6ZkYHx9jK4SlvNA1",
+      "filename": "minimalcss-88sqS0Qg.css",
+      "type": "css",
+      "size": 252032,
+      "savedAt": "2026-06-09T03:49:29.896Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/bootstrapcore?v=jy509y7VAoor-vYNhupdLlZE7PTJCIMnUzy_bB1hqbY1",
+      "filename": "bootstrapcore-jy509y7V.js",
+      "type": "js",
+      "size": 75106,
+      "savedAt": "2026-06-09T03:49:30.024Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/logo.png",
+      "filename": "logo.png.css",
+      "type": "css",
+      "size": 2471,
+      "savedAt": "2026-06-09T03:49:30.027Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/Images/bg.jpg",
+      "filename": "bg.jpg.css",
+      "type": "css",
+      "size": 15857,
+      "savedAt": "2026-06-09T03:49:30.040Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/minimaljs?v=j2_19J3LtiEGNmvvHH527yV3sn1HJhK3e06cEhwFlFI1",
+      "filename": "minimaljs-j2_19J3L.js",
+      "type": "js",
+      "size": 113307,
+      "savedAt": "2026-06-09T03:49:30.092Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/jqueryval?v=mugRfWFK4wgnGqQ2-RcIJ-5hy5mROPq-xXnW6Doymsk1",
+      "filename": "jqueryval-mugRfWFK.js",
+      "type": "js",
+      "size": 204957,
+      "savedAt": "2026-06-09T03:49:30.323Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/DXI1ORHCpsQm3Vp6mXoaTXhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "DXI1ORHCpsQm3Vp6mXoaTXhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21744,
+      "savedAt": "2026-06-09T03:49:30.328Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/cJZKeOuBrn4kERxqtaUH3T8E0i7KZn-EPnyo3HZu7kw.woff",
+      "filename": "cJZKeOuBrn4kERxqtaUH3T8E0i7KZn-EPnyo3HZu7kw.woff.bin",
+      "type": "other",
+      "size": 20544,
+      "savedAt": "2026-06-09T03:49:30.330Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/font-awesome-4/fonts/fontawesome-webfont.woff2?v=4.4.0",
+      "filename": "fontawesome-webfont.woff2-4.4.0.bin",
+      "type": "other",
+      "size": 64464,
+      "savedAt": "2026-06-09T03:49:30.457Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-table/ng-table.css",
+      "filename": "ng-table.css.js",
+      "type": "js",
+      "size": 3248,
+      "savedAt": "2026-06-09T03:49:33.209Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-multi-select/angular-multi-select.css",
+      "filename": "angular-multi-select.css.js",
+      "type": "js",
+      "size": 6406,
+      "savedAt": "2026-06-09T03:49:33.211Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.datetimepicker/css/bootstrap-datetimepicker.css",
+      "filename": "bootstrap-datetimepicker.css.js",
+      "type": "js",
+      "size": 12289,
+      "savedAt": "2026-06-09T03:49:33.212Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.multiselect/css/multi-select.css",
+      "filename": "multi-select.css.js",
+      "type": "js",
+      "size": 2347,
+      "savedAt": "2026-06-09T03:49:33.212Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.daterangepicker/daterangepicker-bs3.css",
+      "filename": "daterangepicker-bs3.css.js",
+      "type": "js",
+      "size": 5065,
+      "savedAt": "2026-06-09T03:49:33.213Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/bootstrap.multiselect/css/bootstrap-multiselect.css",
+      "filename": "bootstrap-multiselect.css.js",
+      "type": "js",
+      "size": 710,
+      "savedAt": "2026-06-09T03:49:33.214Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/flaticon/flaticon.css",
+      "filename": "flaticon.css.css",
+      "type": "css",
+      "size": 1046,
+      "savedAt": "2026-06-09T03:49:33.308Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/CleanZone/jquery.upload/js/jquery.fileupload-angular.js",
+      "filename": "jquery.fileupload-angular.js.js",
+      "type": "js",
+      "size": 16658,
+      "savedAt": "2026-06-09T03:49:33.394Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-multi-select/angular-multi-select.js",
+      "filename": "angular-multi-select.js.js",
+      "type": "js",
+      "size": 48524,
+      "savedAt": "2026-06-09T03:49:33.397Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/angular-resource.js",
+      "filename": "angular-resource.js.js",
+      "type": "js",
+      "size": 26777,
+      "savedAt": "2026-06-09T03:49:33.478Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-bs-daterangepicker-master/src/ng-bs-daterangepicker.js",
+      "filename": "ng-bs-daterangepicker.js.js",
+      "type": "js",
+      "size": 2459,
+      "savedAt": "2026-06-09T03:49:33.512Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/jquery?v=M6dmVkrHVhoZ1gfOtvVDZbgBcQTsbWxoLsRizcGkbPk1",
+      "filename": "jquery-M6dmVkrH.js",
+      "type": "js",
+      "size": 93072,
+      "savedAt": "2026-06-09T03:49:33.626Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/app.js",
+      "filename": "app.js.js",
+      "type": "js",
+      "size": 9288,
+      "savedAt": "2026-06-09T03:49:33.673Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/commonController.js",
+      "filename": "commonController.js.js",
+      "type": "js",
+      "size": 1852,
+      "savedAt": "2026-06-09T03:49:33.826Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Content/css?v=oL0KqSHZC9-FRMl_bhR8FJ8roMwZ_TV4H0VK5rdBTQA1",
+      "filename": "css-oL0KqSHZ.css",
+      "type": "css",
+      "size": 318896,
+      "savedAt": "2026-06-09T03:49:33.904Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Controllers/changePasswordController.js",
+      "filename": "changePasswordController.js.js",
+      "type": "js",
+      "size": 2316,
+      "savedAt": "2026-06-09T03:49:33.979Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/bundles/angularjs?v=QawmBhgrm2Z8MjEe7uSCRuCty5pj00x0094nlk-PNOY1",
+      "filename": "angularjs-QawmBhgr.bin",
+      "type": "other",
+      "size": 221987,
+      "savedAt": "2026-06-09T03:49:34.063Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/messageService.js",
+      "filename": "messageService.js.js",
+      "type": "js",
+      "size": 1095,
+      "savedAt": "2026-06-09T03:49:34.176Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/angular-flot/angular-flot.js",
+      "filename": "angular-flot.js.js",
+      "type": "js",
+      "size": 1454,
+      "savedAt": "2026-06-09T03:49:34.233Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/ng-table/ng-table.js",
+      "filename": "ng-table.js.js",
+      "type": "js",
+      "size": 30146,
+      "savedAt": "2026-06-09T03:49:34.234Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.pie.js",
+      "filename": "jquery.flot.pie.js.js",
+      "type": "js",
+      "size": 23405,
+      "savedAt": "2026-06-09T03:49:34.237Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.resize.js",
+      "filename": "jquery.flot.resize.js.js",
+      "type": "js",
+      "size": 2504,
+      "savedAt": "2026-06-09T03:49:34.280Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/js?v=Jj_Q1wwpvYce_SoEkyaEVW-KNklcsMAmgsFgfQ0f5aY1",
+      "filename": "js-Jj_Q1wwp.js",
+      "type": "js",
+      "size": 312452,
+      "savedAt": "2026-06-09T03:49:34.320Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Directives/loadingContainer.js",
+      "filename": "loadingContainer.js.js",
+      "type": "js",
+      "size": 1390,
+      "savedAt": "2026-06-09T03:49:34.388Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/initApp.js",
+      "filename": "initApp.js.js",
+      "type": "js",
+      "size": 126,
+      "savedAt": "2026-06-09T03:49:34.389Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/accentRemoveService.js",
+      "filename": "accentRemoveService.js.js",
+      "type": "js",
+      "size": 9481,
+      "savedAt": "2026-06-09T03:49:34.391Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/AngularJs/Services/mask.js",
+      "filename": "mask.js.js",
+      "type": "js",
+      "size": 35082,
+      "savedAt": "2026-06-09T03:49:34.426Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Scripts/flot/jquery.flot.js",
+      "filename": "jquery.flot.js.js",
+      "type": "js",
+      "size": 110008,
+      "savedAt": "2026-06-09T03:49:34.719Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/k3k702ZOKiLJc3WVjuplzHhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "k3k702ZOKiLJc3WVjuplzHhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21272,
+      "savedAt": "2026-06-09T03:49:35.057Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/xjAJXh38I15wypJXxuGMBobN6UDyHWBl620a-IRfuBk.woff",
+      "filename": "xjAJXh38I15wypJXxuGMBobN6UDyHWBl620a-IRfuBk.woff.bin",
+      "type": "other",
+      "size": 20224,
+      "savedAt": "2026-06-09T03:49:35.058Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/MTP_ySUJH_bn48VBG8sNSnhCUOGz7vYGh680lGh-uXM.woff",
+      "filename": "MTP_ySUJH_bn48VBG8sNSnhCUOGz7vYGh680lGh-uXM.woff.bin",
+      "type": "other",
+      "size": 21704,
+      "savedAt": "2026-06-09T03:49:35.060Z"
+    },
+    {
+      "url": "https://visaonweb.diplomatie.be/Fonts/8KhZd3VQBtXTAznvKjw-kxsxEYwM7FgeyaSgU71cLG0.woff",
+      "filename": "8KhZd3VQBtXTAznvKjw-kxsxEYwM7FgeyaSgU71cLG0.woff.bin",
+      "type": "other",
+      "size": 26464,
+      "savedAt": "2026-06-09T03:49:35.061Z"
+    }
+  ],
+  "apiCalls": [],
+  "createPageDetected": false
+}

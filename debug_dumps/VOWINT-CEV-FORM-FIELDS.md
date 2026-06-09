@@ -1,8 +1,8 @@
 # VOWINT — Champs du formulaire de dossier CEV
-> Extrait par rétro-ingénierie du bundle `visaApplicationController.js` (204KB)
+> Extrait par rétro-ingénierie des bundles `visaApplicationController.js` (131KB), `codeTypeService.js` (12KB), `gdprController.js` (5KB)
 > Source: `https://visaonweb.diplomatie.be`
-> Capturé: 2026-06-08 via HAR Playwright  
-> Analysé: 2026-06-09
+> Capturé: 2026-06-08 (IndexByUserId) + **2026-06-09 (Create/Edit page — capture complète)**
+> 80 champs de formulaire confirmés en live • 70 bundles téléchargés
 
 ---
 
@@ -298,11 +298,58 @@ Ces partials sont chargés dynamiquement selon le type de demandeur :
 
 ---
 
-## Bundles capturés
+## Flux de création d'application (découvert 2026-06-09)
+
+```
+GET  /en/VisaApplication/IndexByUserId
+  → Tableau DataTables des dossiers existants
+  → Bouton "New application" → href="/en/VisaApplication/Gdpr"
+
+GET  /en/VisaApplication/Gdpr
+  → Chargement gdprController.js + hCaptcha (sitekey 5f64399c-...)
+  → Sélection type visa (1=Court séjour ≤90j, 2=Long séjour >90j)
+  → Checkbox GDPR approval + résolution hCaptcha (si ActivateCaptcha=true)
+
+POST /en/VisaApplication/CreateGdprNewWithAutoNumber
+  body: Approval=1&RecaptchaResponse={token}
+  → 200 { Success: true, VACoreId: "{uuid}" }      ← ID réel du dossier créé
+
+GET  /en/VisaApplication/Edit/{VACoreId}            ← PAGE FORMULAIRE RÉELLE
+  → Chargement visaApplicationController.js (131KB) + 15 autres bundles spécifiques
+  → 80 champs de formulaire AngularJS
+  → Appels API référentiels (CountryTypes, NationalityTypes, SexTypes, etc.)
+```
+
+> **Note** : `/en/VisaApplication/Create` redirige vers `Edit/{VACoreId}` une fois le GDPR validé.
+> La page `/Create` est la vue AngularJS routée dynamiquement — même HTML que `/Edit/{id}`.
+
+---
+
+## Bundles page Create/Edit (nouveaux — capturés 2026-06-09)
 
 | Fichier | Taille | Rôle |
 |---|---|---|
-| `bundles-visaApplicationController.js` | 204KB | **Controller principal** — form, validation, API calls |
+| `visaApplicationController.js.js` | **131KB** | **Controller formulaire création/édition** |
+| `codeTypeService.js.js` | **12KB** | **Service 16 endpoints /Common/*** |
+| `ngAutoComplete.js.js` | 14KB | Autocomplétion adresse Google Maps |
+| `icheck.min.js.js` | 4KB | Checkboxes UI stylisées |
+| `autocompleteController.js.js` | 4KB | Controller autocomplete adresse |
+| `references.js.js` | 4KB | Directives `<referenceperson>`, `<referenceorganisation>` |
+| `gdprController.js.js` | 5KB | Flux GDPR + CreateGdprNewWithAutoNumber |
+| `uiErrorService.js.js` | 2KB | Service d'affichage erreurs formulaire |
+| `visaApplicationForm.js.js` | 1KB | Helpers formulaire |
+| `referenceController.js.js` | 1KB | Controller références (sponsors, tuteurs) |
+| `guardian.js.js` | <1KB | Directive tuteur légal |
+| `addressService.js.js` | <1KB | Service adresse Google Maps |
+| `scrollSpyRefList.js.js` | 1KB | Spy scroll liste références |
+| `clearDropdownvalue.js.js` | 1KB | Helper reset dropdowns |
+| `blue.css.js` | 2KB | Thème icheck blue |
+
+## Bundles page IndexByUserId / layout authentifié
+
+| Fichier | Taille | Rôle |
+|---|---|---|
+| `visaApplicationController-gdJF3W7a.bin` | 204KB | Controller IndexByUserId (ancien bundle) |
 | `bundles-angularjs.js` | 216KB | Framework AngularJS + plugins |
 | `Scripts-js.js` | 305KB | jQuery + Bootstrap + utilitaires |
 | `Content-css.css` | 311KB | CSS principal app authentifiée |
