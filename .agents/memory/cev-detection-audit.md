@@ -35,8 +35,14 @@ description: Complete analysis of real Chrome 148 traffic dumps (2026-06-08) vs.
 ## Fixes applied (session 2026-06-08)
 - **FIX 1**: `GetEAppointmentUrl` Accept header: `"application/json, text/html, */*"` → `"application/json, text/plain, */*"` (AngularJS `$http` default)
 - **FIX 2**: `GetEAppointmentUrl` missing headers: added `"Cache-Control": "max-age=0"` + `"If-Modified-Since": "0"` (AngularJS anti-304-cache headers, confirmed in real capture)
-- **FIX 3**: SetCaptchaToken retry: removed erroneous `referer: ${CEV_BASE}/Captcha` (real capture has NO Referer on SetCaptchaToken)
+- **FIX 3**: SetCaptchaToken retry in `cevHttpSetup.ts`: removed erroneous `referer: ${CEV_BASE}/Captcha` (real capture has NO Referer on SetCaptchaToken)
 - **FIX 4**: Redirect chain post-captcha: removed `currentReferer` variable, now uses `fetchSite: "same-origin"` explicit without Referer (real capture: none of Integration/VOW / SelectSlot / NoAvailability navigate requests have a Referer header)
+- **FIX A-F** (`cevPolling.ts`): ALL 4 polling functions (`fetchManual`, `pollViaApi`, `captureSelectSlotWithoutRedirect`, `resolveEntryUrl`) migrated from raw header objects to `getCevBrowserHeaders()` calls — eliminates missing `sec-ch-ua*`, wrong Accept, spurious `Cache-Control/Pragma`.
+
+## Fixes applied (session 2026-06-09) — cevPortal.ts
+- **FIX P1** (`cevPortal.ts` `completeCevCaptcha`): Removed `referer: ${CEV_BASE}/Captcha` on SetCaptchaToken POST — ground truth `17-14-59-integration_flow.json` confirms NO Referer on this call (Referrer-Policy: no-referrer on all appointment.cloud.diplomatie.be responses).
+- **FIX P2** (`cevPortal.ts` `completeCevCaptcha`): Removed `accept: 'application/json, text/javascript, */*; q=0.01'` override on SetCaptchaToken POST — real capture confirms `accept: "*/*"` (plain jQuery without dataType:"json"). Default XHR mode of `getCevBrowserHeaders` is already correct.
+- **FIX P3** (`cevPortal.ts` `completeCevCaptcha`): Redirect probe GET: removed truncated Accept string `'text/html,application/xhtml+xml,*/*'` (was missing `image/avif, image/webp, ...` Chrome 148 tail) — now uses default document Accept from `getCevBrowserHeaders`. Added `fetchSite: "same-origin"` (probe navigates within appointment.cloud.diplomatie.be).
 
 ## Earlier fixes (previous sessions)
 - **FIX #2**: isFormPost flag for login POST headers

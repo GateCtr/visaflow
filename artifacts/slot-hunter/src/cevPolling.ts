@@ -13,7 +13,7 @@
 // Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
 import { randomUserAgent } from "./browser.js";
-import { cevImpitFetch, setCevExternalUserAgent, getCevExternalUserAgent } from "./cev-shared-impit.js";
+import { cevImpitFetch, setCevExternalUserAgent, getCevExternalUserAgent, getCevBrowserHeaders } from "./cev-shared-impit.js";
 import { F5CookieManager } from "./cev-f5-cookie-manager.js";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
@@ -80,21 +80,16 @@ function fetchManual(
   siphoned?: SiphonedCookies
 ): Promise<Response> {
   const cookieHeader = buildEnrichedCookieHeader(cookie, siphoned);
+  // FIX polling-A/B/C : utiliser getCevBrowserHeaders (mode document navigate) pour
+  // aligner sec-ch-ua*, Accept Chrome complet, absence Cache-Control/Pragma — confirmés
+  // par capture réelle 05_integration.json (NoAvailability GET, Chrome 148).
   return cevFetch(url, {
     method: "GET",
-    headers: {
-      Cookie: cookieHeader,
-      "User-Agent": userAgent,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Upgrade-Insecure-Requests": "1",
-    },
+    headers: getCevBrowserHeaders({
+      fetchSite: "same-origin",
+      cookie: cookieHeader,
+      userAgent,
+    }),
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
   });
@@ -115,15 +110,16 @@ async function resolveEntryUrl(entryUrl: string, cookie: string, ua: string, sip
   if (isVowintEAppointmentUrl(entryUrl)) {
     try {
       const cookieHeader = buildEnrichedCookieHeader(cookie, siphoned);
+      // FIX polling-F : getCevBrowserHeaders pour aligner sec-ch-ua*, Accept Chrome complet.
+      // Referer = VOWINT_BASE/ (même domaine diplomatie.be = same-origin depuis VOWINT).
       const r = await cevFetch(entryUrl, {
         method: "GET",
-        headers: {
-          Cookie: cookieHeader,
-          "User-Agent": ua,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          Referer: `${VOWINT_BASE}/`,
-        },
+        headers: getCevBrowserHeaders({
+          fetchSite: "same-origin",
+          referer: `${VOWINT_BASE}/`,
+          cookie: cookieHeader,
+          userAgent: ua,
+        }),
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
@@ -219,20 +215,21 @@ async function pollViaApi(
     const body = { month: d.getMonth() + 1, year: d.getFullYear() };
 
     try {
+      // FIX polling-D : getCevBrowserHeaders (mode XHR/AJAX) pour aligner
+      // sec-ch-ua*, Sec-Fetch-Dest/Mode/Site, absence Cache-Control/Pragma.
+      // Origin + Referer + X-Requested-With conservés (jQuery AJAX same-origin).
       const res = await cevFetch(`${BASE}/Home/AvailableTimeSlots`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cookie": cookieHeader,
-          "User-Agent": ua,
-          "X-Requested-With": "XMLHttpRequest",
-          "Accept": "application/json, text/javascript, */*; q=0.01",
-          "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Referer": `${BASE}/Integration/VOW/SelectSlot`,
-          "Origin": BASE,
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache",
-        },
+        headers: getCevBrowserHeaders({
+          fetchSite: "same-origin",
+          origin: BASE,
+          referer: `${BASE}/Integration/VOW/SelectSlot`,
+          cookie: cookieHeader,
+          userAgent: ua,
+          contentType: "application/json",
+          xRequestedWith: true,
+          accept: "application/json, text/javascript, */*; q=0.01",
+        }),
         body: JSON.stringify(body),
         redirect: "manual",
         signal: AbortSignal.timeout(20_000),
@@ -477,20 +474,15 @@ export async function captureSelectSlotWithoutRedirect(
     const entryUrl = resolved.url;
     
     // Faire la requête avec redirect: 'manual' pour capturer la 302
+    // FIX polling-E : getCevBrowserHeaders (mode navigate) — aligne sec-ch-ua*,
+    // Accept Chrome complet, supprime Cache-Control/Pragma parasites.
     const response = await cevFetch(entryUrl, {
       method: "GET",
-      headers: {
-        Cookie: cookieHeader,
-        "User-Agent": ua,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-        "Upgrade-Insecure-Requests": "1",
-      },
+      headers: getCevBrowserHeaders({
+        fetchSite: "same-origin",
+        cookie: cookieHeader,
+        userAgent: ua,
+      }),
       redirect: "manual", // IMPORTANT: ne pas suivre automatiquement
       signal: AbortSignal.timeout(30_000),
     });

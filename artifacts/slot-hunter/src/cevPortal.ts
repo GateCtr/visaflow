@@ -89,16 +89,17 @@ export async function completeCevCaptcha(
     // Utiliser le User-Agent spécifié ou un aléatoire
     const userAgent = options?.userAgent || randomUserAgent();
 
+    // FIX P1/P2 : capture réelle Chrome 148 (17-14-59) confirme :
+    //   - Aucun Referer sur SetCaptchaToken (Referrer-Policy: no-referrer sur /Captcha)
+    //   - Accept = "*/*" (jQuery sans dataType — PAS 'application/json, text/javascript…')
     const res = await cevImpitFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: 'POST',
       headers: getCevBrowserHeaders({
-        referer: `${CEV_BASE}/Captcha`,
         origin: CEV_BASE,
         cookie: cookieHeader,
         userAgent: userAgent,
         xRequestedWith: true,
         contentType: 'application/x-www-form-urlencoded',
-        accept: 'application/json, text/javascript, */*; q=0.01',
       }),
       body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
     }, "[CEV-PORTAL]");
@@ -128,13 +129,15 @@ export async function completeCevCaptcha(
     let probeBodyRaw = '';
     try {
       const fullProbeUrl = data.redirectUrl.startsWith('http') ? data.redirectUrl : `${CEV_BASE}${data.redirectUrl}`;
+      // FIX P3 : Accept tronqué supprimé (défaut document Chrome 148 correct),
+      // fetchSite: "same-origin" (navigation depuis appointment.cloud.diplomatie.be)
       const probe = await cevImpitFetch(fullProbeUrl, {
         method: 'GET',
         redirect: 'follow',
         headers: getCevBrowserHeaders({
+          fetchSite: 'same-origin',
           cookie: cookieHeader,
           userAgent: userAgent,
-          accept: 'text/html,application/xhtml+xml,*/*',
         }),
       }, "[CEV-PORTAL]");
       finalUrl = probe.url; // URL après tous les 302
