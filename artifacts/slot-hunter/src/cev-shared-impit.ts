@@ -312,10 +312,24 @@ export function getCevBrowserHeaders(overrides?: {
   /**
    * FIX #2 : Forcer le mode "document navigate" pour les soumissions de formulaire HTML.
    * Quand true : Sec-Fetch-Mode=navigate, Sec-Fetch-Dest=document, Sec-Fetch-User=?1,
-   * Sec-Fetch-* positionnés APRÈS sec-ch-ua* (ordre Chrome réel pour form POST).
+   * Cache-Control: max-age=0 toujours présent (Chrome l'ajoute systématiquement),
+   * Cookie avant Origin, sec-ch-ua* après User-Agent (ordre Chrome réel pour form POST).
    * Incompatible avec xRequestedWith (XHR).
    */
   isFormPost?: boolean;
+  /**
+   * Valeur de Cache-Control à injecter en position 4 (après Accept-Language, avant Cookie/CT).
+   * Ex : "max-age=0" pour les redirections post-form-submit (GET /en, GET /IndexByUserId) et
+   * pour les appels AngularJS $http (GetEAppointmentUrl, DataTables, MyList).
+   * Ignoré si isFormPost=true (Cache-Control: max-age=0 est toujours ajouté dans ce cas).
+   */
+  cacheControl?: string;
+  /**
+   * Valeur de If-Modified-Since à injecter après Cookie (position 8 dans le HAR réel).
+   * Ex : "0" — anti-304 cache IE, envoyé par AngularJS $http sur tous les GET AJAX.
+   * Présent sur GetEAppointmentUrl, DataTables, MyList (confirmé HAR 2026-06-08).
+   */
+  ifModifiedSince?: string;
 }): Record<string, string> {
   const chUa = _externalSiphonedChUa ?? _sessionUa.chUa;
   const chUaPlatform = _externalSiphonedPlatform ?? _sessionUa.platform;
@@ -326,36 +340,52 @@ export function getCevBrowserHeaders(overrides?: {
   const isFormPost = !!(overrides?.isFormPost);
   const isAjax = !isFormPost && !!(overrides?.contentType || overrides?.xRequestedWith);
 
-  // ── Ordre DÉFINITIF calqué sur captures réseau Chrome 148 (2026-06-08) ────────
+  // ── Ordre DÉFINITIF confirmé par HAR Chrome 148 (2026-06-08) ─────────────────
   //
-  // DOCUMENT navigation (GET visaonweb.diplomatie.be/, confirmé) :
-  //   Accept → Accept-Encoding → Accept-Language
-  //   → [Referer] → [Origin]
-  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → Sec-Fetch-User → Upgrade-Insecure-Requests
-  //   → User-Agent
-  //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
-  //   → [Cookie]
+  // FORM POST (POST /fr/Account/Login) :
+  //   Accept → Accept-Encoding → Accept-Language → Cache-Control: max-age=0
+  //   → [CT] → [Cookie] → [Origin] → [Referer]
+  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → Sec-Fetch-User → UIR
+  //   → User-Agent → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
+  //
+  // DOCUMENT navigate (GET /en, GET /IndexByUserId, GET Integration/VOW) :
+  //   Accept → Accept-Encoding → Accept-Language → [Cache-Control]
+  //   → [Cookie] → [Referer] → [Origin]
+  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → Sec-Fetch-User → UIR
+  //   → User-Agent → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
   //   NB: Sec-Fetch-Storage-Access ABSENT des navigations document.
   //
-  // SUB-RESOURCE / XHR (GET js.hcaptcha.com cross-site, confirmé) :
-  //   Accept → Accept-Encoding → Accept-Language
-  //   → [Cookie] → [Referer]
+  // XHR / AJAX (POST SetCaptchaToken, GET GetEAppointmentUrl, GET MyList) :
+  //   Accept → Accept-Encoding → Accept-Language → [Cache-Control]
+  //   → [CT] → [Cookie] → [If-Modified-Since] → [Referer] → [Origin]
+  //   → Sec-Fetch-Dest: empty → Sec-Fetch-Mode: cors → Sec-Fetch-Site
+  //   → [Sec-Fetch-Storage-Access si cross-site]
+  //   → User-Agent → [X-Requested-With]
   //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
-  //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site → [Sec-Fetch-Storage-Access si cross-site]
-  //   → User-Agent
-  //   → [X-Requested-With] → [Origin] → [Content-Type]
 
   let headers: Record<string, string>;
 
   if (isFormPost) {
-    // ── FIX #2 : Soumission de formulaire HTML (POST login) ─────────────────
-    // Ordre Chrome réel pour form POST :
-    //   Accept → Accept-Encoding → Accept-Language
-    //   → [Content-Type] → [Origin] → [Referer]
-    //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform
-    //   → Sec-Fetch-Dest: document → Sec-Fetch-Mode: navigate
-    //   → Sec-Fetch-Site → Sec-Fetch-User: ?1 → Upgrade-Insecure-Requests: 1
-    //   → User-Agent → [Cookie]
+    // ── FIX #2 + #3 : Soumission de formulaire HTML (POST login) ───────────
+    //
+    // Ordre EXACT confirmé par HAR Chrome 148 (2026-06-08) — POST /fr/Account/Login :
+    //   1. Accept
+    //   2. Accept-Encoding
+    //   3. Accept-Language
+    //   4. Cache-Control: max-age=0    ← Chrome l'ajoute TOUJOURS sur form-submit POST
+    //   5. [Content-Type]              ← avant Cookie
+    //   6. [Cookie]                    ← avant Origin (FIX: était à la fin)
+    //   7. [Origin]
+    //   8. [Referer]
+    //   9. Sec-Fetch-Dest: document
+    //  10. Sec-Fetch-Mode: navigate
+    //  11. Sec-Fetch-Site
+    //  12. Sec-Fetch-User: ?1
+    //  13. Upgrade-Insecure-Requests: 1
+    //  14. User-Agent
+    //  15. sec-ch-ua                   ← APRÈS User-Agent (FIX: était avant Sec-Fetch-*)
+    //  16. sec-ch-ua-mobile
+    //  17. sec-ch-ua-platform
     const secFetchSite = overrides?.fetchSite
       ?? (overrides?.referer ? "same-origin" : "none");
     let ct: string | undefined;
@@ -369,22 +399,41 @@ export function getCevBrowserHeaders(overrides?: {
         ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      ...(ct                 ? { "Content-Type": ct                } : {}),
+      "Cache-Control": "max-age=0",
+      ...(ct                 ? { "Content-Type": ct               } : {}),
+      ...(overrides?.cookie  ? { "Cookie":  overrides.cookie  } : {}),
       ...(overrides?.origin  ? { "Origin":  overrides.origin  } : {}),
       ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
-      "sec-ch-ua": chUa,
-      "sec-ch-ua-mobile": chUaMobile,
-      "sec-ch-ua-platform": chUaPlatform,
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": secFetchSite,
       "Sec-Fetch-User": "?1",
       "Upgrade-Insecure-Requests": "1",
       "User-Agent": ua,
-      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
+      "sec-ch-ua": chUa,
+      "sec-ch-ua-mobile": chUaMobile,
+      "sec-ch-ua-platform": chUaPlatform,
     };
   } else if (!isAjax) {
     // ── Requête document (navigation GET) ──────────────────────────────────
+    //
+    // Ordre EXACT confirmé par HAR Chrome 148 (2026-06-08) — GET /en, GET /IndexByUserId :
+    //   1. Accept
+    //   2. Accept-Encoding
+    //   3. Accept-Language
+    //   4. [Cache-Control: max-age=0]  ← présent sur redirections post-form-submit (optionnel)
+    //   5. [Cookie]                    ← avant Referer (FIX: était à la fin)
+    //   6. [Referer]
+    //   7. [Origin]
+    //   8. Sec-Fetch-Dest: document
+    //   9. Sec-Fetch-Mode: navigate
+    //  10. Sec-Fetch-Site
+    //  11. Sec-Fetch-User: ?1
+    //  12. Upgrade-Insecure-Requests: 1
+    //  13. User-Agent
+    //  14. sec-ch-ua
+    //  15. sec-ch-ua-mobile
+    //  16. sec-ch-ua-platform
     const secFetchSite = overrides?.fetchSite
       ?? (overrides?.referer ? "same-origin" : "none");
 
@@ -393,6 +442,8 @@ export function getCevBrowserHeaders(overrides?: {
         ?? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
+      ...(overrides?.cacheControl ? { "Cache-Control": overrides.cacheControl } : {}),
+      ...(overrides?.cookie  ? { "Cookie":  overrides.cookie  } : {}),
       ...(overrides?.referer ? { "Referer": overrides.referer } : {}),
       ...(overrides?.origin  ? { "Origin":  overrides.origin  } : {}),
       "Sec-Fetch-Dest": "document",
@@ -404,21 +455,30 @@ export function getCevBrowserHeaders(overrides?: {
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
-      ...(overrides?.cookie ? { "Cookie": overrides.cookie } : {}),
     };
   } else {
-    // ── Requête fetch/XHR (AJAX, form POST) ────────────────────────────────
+    // ── Requête fetch/XHR (AJAX) ────────────────────────────────────────────
     //
-    // Ordre confirmé par HAR réel Chrome 148 (2026-06-08) — POST SetCaptchaToken same-origin :
-    //   Accept → Accept-Encoding → Accept-Language
-    //   → [Content-Type]                      ← avant Cookie/Origin
-    //   → [Cookie] → [Referer]
-    //   → [Origin]
-    //   → Sec-Fetch-Dest → Sec-Fetch-Mode → Sec-Fetch-Site
-    //   → User-Agent → [X-Requested-With]
-    //   → sec-ch-ua → sec-ch-ua-mobile → sec-ch-ua-platform  ← APRÈS User-Agent
-    //
-    // Note: Sec-Fetch-Storage-Access présent UNIQUEMENT sur cross-site (js.hcaptcha.com etc.)
+    // Ordre EXACT confirmé par HAR Chrome 148 (2026-06-08) :
+    //   POST SetCaptchaToken same-origin + GET GetEAppointmentUrl (AngularJS $http) :
+    //   1. Accept
+    //   2. Accept-Encoding
+    //   3. Accept-Language
+    //   4. [Cache-Control: max-age=0]  ← AngularJS $http sur GET (optionnel, paramètre cacheControl)
+    //   5. [Content-Type]
+    //   6. [Cookie]
+    //   7. [If-Modified-Since: 0]      ← AngularJS $http anti-304 (optionnel, paramètre ifModifiedSince)
+    //   8. [Referer]
+    //   9. [Origin]
+    //  10. Sec-Fetch-Dest: empty
+    //  11. Sec-Fetch-Mode: cors
+    //  12. Sec-Fetch-Site
+    //  13. [Sec-Fetch-Storage-Access: active]  ← uniquement cross-site
+    //  14. User-Agent
+    //  15. [X-Requested-With: XMLHttpRequest]
+    //  16. sec-ch-ua
+    //  17. sec-ch-ua-mobile
+    //  18. sec-ch-ua-platform
     let ct: string | undefined;
     if (overrides?.contentType) {
       ct = overrides.contentType.toLowerCase() === "application/x-www-form-urlencoded"
@@ -433,10 +493,12 @@ export function getCevBrowserHeaders(overrides?: {
       "Accept": overrides?.accept ?? "*/*",
       "Accept-Encoding": _sessionAcceptEnc,
       "Accept-Language": _sessionAcceptLang,
-      ...(ct                 ? { "Content-Type": ct                } : {}),
-      ...(overrides?.cookie  ? { "Cookie":       overrides.cookie  } : {}),
-      ...(overrides?.referer ? { "Referer":      overrides.referer } : {}),
-      ...(overrides?.origin  ? { "Origin":       overrides.origin  } : {}),
+      ...(overrides?.cacheControl   ? { "Cache-Control":    overrides.cacheControl   } : {}),
+      ...(ct                        ? { "Content-Type":     ct                        } : {}),
+      ...(overrides?.cookie         ? { "Cookie":           overrides.cookie          } : {}),
+      ...(overrides?.ifModifiedSince ? { "If-Modified-Since": overrides.ifModifiedSince } : {}),
+      ...(overrides?.referer        ? { "Referer":          overrides.referer         } : {}),
+      ...(overrides?.origin         ? { "Origin":           overrides.origin          } : {}),
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": secFetchSite,

@@ -236,21 +236,23 @@ async function getVowintSession(
     const csrfToken = tokenMatch[1];
     if (!vowintCookies) return { success: false, error: "VOWINT_COOKIES_NOT_FOUND" };
 
-    // 2. POST login — FIX #2: isFormPost=true force Sec-Fetch-Mode:navigate / Sec-Fetch-Dest:document
-    //    afin de correspondre à une soumission de formulaire HTML et non à une requête AJAX.
-    // FIX H3 (HAR réel 2026-06-08) : Chrome ajoute Cache-Control: max-age=0 sur les form-submit POST.
-    const loginRes = await cevSetupFetch(`${VOWINT_BASE}/en/Account/Login`, {
+    // FIX E (HAR réel 2026-06-08) : extraire l'action du formulaire plutôt que hardcoder /en/Account/Login.
+    // Le serveur redirige vers /fr/ quand _culture=fr-BE — la form action reflète la locale active.
+    const formActionMatch = loginHtml.match(/action="([^"]*Account\/Login[^"]*)"/i);
+    const loginPath = formActionMatch?.[1] ?? "/en/Account/Login";
+    const loginUrl = loginPath.startsWith("http") ? loginPath : `${VOWINT_BASE}${loginPath}`;
+
+    // 2. POST login — Cache-Control: max-age=0 maintenant intégré dans isFormPost (getCevBrowserHeaders).
+    //    sec-ch-ua* APRÈS User-Agent, Cookie AVANT Origin — ordre Chrome réel (HAR 2026-06-08).
+    const loginRes = await cevSetupFetch(loginUrl, {
       method: "POST",
-      headers: {
-        ...getCevBrowserHeaders({
-          referer: `${VOWINT_BASE}/`,
-          origin: VOWINT_BASE,
-          contentType: "application/x-www-form-urlencoded",
-          cookie: vowintCookies,
-          isFormPost: true,
-        }),
-        "Cache-Control": "max-age=0",
-      },
+      headers: getCevBrowserHeaders({
+        referer: `${VOWINT_BASE}/`,
+        origin: VOWINT_BASE,
+        contentType: "application/x-www-form-urlencoded",
+        cookie: vowintCookies,
+        isFormPost: true,
+      }),
       body: new URLSearchParams({
         __RequestVerificationToken: csrfToken,
         UserName: vowintEmail,
@@ -264,19 +266,15 @@ async function getVowintSession(
       return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
     }
 
-    // Suivre les redirections post-login
-    // FIX H2 (HAR réel 2026-06-08) : Chrome maintient Cache-Control: max-age=0 sur toute la
-    // chaîne de redirections issue d'un form-submit (GET / → GET /en).
+    // Suivre les redirections post-login — Cache-Control: max-age=0 via paramètre cacheControl
+    // (position 4, après Accept-Language) — Chrome maintient ce header sur toute la chaîne de redirects.
     let cookies = mergeCookies(vowintCookies, loginRes);
     let redirectUrl = loginRes.headers.get("location");
     for (let i = 0; i < 5 && redirectUrl; i++) {
       const fullUrl = redirectUrl.startsWith("http") ? redirectUrl : `${VOWINT_BASE}${redirectUrl}`;
       const r = await cevSetupFetch(fullUrl, {
         method: "GET",
-        headers: {
-          ...getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies }),
-          "Cache-Control": "max-age=0",
-        },
+        headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies, cacheControl: "max-age=0" }),
         redirect: "manual",
         signal: AbortSignal.timeout(20_000),
       });
@@ -344,18 +342,18 @@ async function getVowintSession(
  * Ne consomme PAS de clic GetEAppointmentUrl — c'est une simple lecture.
  */
 async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: string): Promise<string | null> {
-  // GET DataTables init
+  // GET DataTables init (AngularJS $http — Cache-Control + If-Modified-Since en position native)
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
     signal: AbortSignal.timeout(20_000),
   }).then(r => r.text()).catch(() => {});
 
-  // GET MyList — length=50 pour voir tous les dossiers
+  // GET MyList — length=50 pour voir tous les dossiers (AngularJS $http)
   const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=50&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes = await cevSetupFetch(dtUrl, {
     method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
     signal: AbortSignal.timeout(30_000),
   });
   if (!listRes.ok) return null;
@@ -410,7 +408,7 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
   const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes = await cevSetupFetch(dtUrl, {
     method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
     signal: AbortSignal.timeout(30_000),
   });
   if (listRes.ok) {
@@ -503,20 +501,19 @@ export async function setupCevSessionHttp(
     if (eAppointmentUrl.includes("GetEAppointmentUrl")) {
       // HAR réel (2026-06-08T17-14-59) : AngularJS $http envoie 3 headers absents dans la version précédente :
       //   1. Accept: "application/json, text/plain, */*"  (pas "text/html" — défaut AngularJS)
-      //   2. Cache-Control: max-age=0                      ($http désactive le cache navigateur)
-      //   3. If-Modified-Since: 0                          ($http anti-304 cache IE)
+      //   2. Cache-Control: max-age=0                      ($http désactive le cache navigateur, position 4)
+      //   3. If-Modified-Since: 0                          ($http anti-304 cache IE, position après Cookie)
+      // cacheControl + ifModifiedSince injectés aux bonnes positions par getCevBrowserHeaders (isAjax branch).
       const eRes = await cevSetupFetch(eAppointmentUrl, {
         method: "GET",
-        headers: {
-          ...getCevBrowserHeaders({
-            referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-            cookie: postLoginCookies,
-            xRequestedWith: true,
-            accept: "application/json, text/plain, */*",
-          }),
-          "Cache-Control": "max-age=0",
-          "If-Modified-Since": "0",
-        },
+        headers: getCevBrowserHeaders({
+          referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+          cookie: postLoginCookies,
+          xRequestedWith: true,
+          accept: "application/json, text/plain, */*",
+          cacheControl: "max-age=0",
+          ifModifiedSince: "0",
+        }),
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
