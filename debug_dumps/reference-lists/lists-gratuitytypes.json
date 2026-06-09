@@ -1,0 +1,66 @@
+[
+  {
+    "Value": 1,
+    "Text": "None"
+  },
+  {
+    "Value": 2,
+    "Text": "Diplomatic or service passport"
+  },
+  {
+    "Value": 3,
+    "Text": "Indigence Justified"
+  },
+  {
+    "Value": 4,
+    "Text": "Ecclesiastical"
+  },
+  {
+    "Value": 5,
+    "Text": "Grant Holder"
+  },
+  {
+    "Value": 6,
+    "Text": "Public Or Administrative Interest"
+  },
+  {
+    "Value": 7,
+    "Text": "Family member of EU national"
+  },
+  {
+    "Value": 8,
+    "Text": "Special Autorization"
+  },
+  {
+    "Value": 9,
+    "Text": "Visa Younger Than 6 Years"
+  },
+  {
+    "Value": 10,
+    "Text": "Cultural Exception"
+  },
+  {
+    "Value": 11,
+    "Text": "Student"
+  },
+  {
+    "Value": 12,
+    "Text": "Researcher"
+  },
+  {
+    "Value": 13,
+    "Text": "Non Profit"
+  },
+  {
+    "Value": 14,
+    "Text": "VC art.8 §2 (Free representation)"
+  },
+  {
+    "Value": 15,
+    "Text": "Family member of EU national (Art.40)"
+  },
+  {
+    "Value": 16,
+    "Text": "Visa Younger Than 12 Years (facility)"
+  }
+]

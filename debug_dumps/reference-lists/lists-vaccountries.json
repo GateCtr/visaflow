@@ -1,0 +1,318 @@
+[
+  {
+    "Country": "ALGERIA",
+    "CountryId": 75
+  },
+  {
+    "Country": "ANGOLA",
+    "CountryId": 16
+  },
+  {
+    "Country": "ARGENTINA",
+    "CountryId": 22
+  },
+  {
+    "Country": "ARMENIA",
+    "CountryId": 23
+  },
+  {
+    "Country": "AUSTRALIA",
+    "CountryId": 28
+  },
+  {
+    "Country": "AUSTRIA",
+    "CountryId": 29
+  },
+  {
+    "Country": "BANGLADESH",
+    "CountryId": 35
+  },
+  {
+    "Country": "BHUTAN",
+    "CountryId": 47
+  },
+  {
+    "Country": "BRAZIL",
+    "CountryId": 44
+  },
+  {
+    "Country": "BULGARIA",
+    "CountryId": 36
+  },
+  {
+    "Country": "BURKINA FASO",
+    "CountryId": 34
+  },
+  {
+    "Country": "BURUNDI",
+    "CountryId": 31
+  },
+  {
+    "Country": "CAMEROON",
+    "CountryId": 57
+  },
+  {
+    "Country": "CANADA",
+    "CountryId": 51
+  },
+  {
+    "Country": "CHILE",
+    "CountryId": 54
+  },
+  {
+    "Country": "CHINA",
+    "CountryId": 55
+  },
+  {
+    "Country": "COLOMBIA",
+    "CountryId": 61
+  },
+  {
+    "Country": "CONGO (REP DEM)",
+    "CountryId": 58
+  },
+  {
+    "Country": "CROATIA",
+    "CountryId": 110
+  },
+  {
+    "Country": "CUBA",
+    "CountryId": 65
+  },
+  {
+    "Country": "CZECH  REPUBLIC",
+    "CountryId": 69
+  },
+  {
+    "Country": "EGYPT",
+    "CountryId": 77
+  },
+  {
+    "Country": "ETHIOPIA",
+    "CountryId": 82
+  },
+  {
+    "Country": "FINLAND",
+    "CountryId": 83
+  },
+  {
+    "Country": "FRANCE",
+    "CountryId": 86
+  },
+  {
+    "Country": "GERMANY FEDERAL REPUBLIC",
+    "CountryId": 70
+  },
+  {
+    "Country": "GREECE",
+    "CountryId": 100
+  },
+  {
+    "Country": "HONG -KONG",
+    "CountryId": 107
+  },
+  {
+    "Country": "HUNGARY",
+    "CountryId": 112
+  },
+  {
+    "Country": "INDIA",
+    "CountryId": 114
+  },
+  {
+    "Country": "INDONESIA",
+    "CountryId": 113
+  },
+  {
+    "Country": "IRAN",
+    "CountryId": 117
+  },
+  {
+    "Country": "IRAQ",
+    "CountryId": 118
+  },
+  {
+    "Country": "IRELAND",
+    "CountryId": 116
+  },
+  {
+    "Country": "ISRAEL",
+    "CountryId": 120
+  },
+  {
+    "Country": "ITALY",
+    "CountryId": 121
+  },
+  {
+    "Country": "IVORY COAST",
+    "CountryId": 56
+  },
+  {
+    "Country": "JAMAICA",
+    "CountryId": 122
+  },
+  {
+    "Country": "JAPAN",
+    "CountryId": 124
+  },
+  {
+    "Country": "JORDAN",
+    "CountryId": 123
+  },
+  {
+    "Country": "KENYA",
+    "CountryId": 126
+  },
+  {
+    "Country": "KOREA, REPUBLIC OF -- (SOUTH KOREA)",
+    "CountryId": 131
+  },
+  {
+    "Country": "KUWAIT",
+    "CountryId": 132
+  },
+  {
+    "Country": "LEBANON",
+    "CountryId": 134
+  },
+  {
+    "Country": "MALAYSIA",
+    "CountryId": 165
+  },
+  {
+    "Country": "MEXICO",
+    "CountryId": 150
+  },
+  {
+    "Country": "MOROCCO",
+    "CountryId": 145
+  },
+  {
+    "Country": "NETHERLANDS",
+    "CountryId": 174
+  },
+  {
+    "Country": "NEW ZEALAND",
+    "CountryId": 179
+  },
+  {
+    "Country": "NIGERIA",
+    "CountryId": 171
+  },
+  {
+    "Country": "PAKISTAN",
+    "CountryId": 181
+  },
+  {
+    "Country": "PALESTINIAN TERRITORY",
+    "CountryId": 193
+  },
+  {
+    "Country": "PANAMA",
+    "CountryId": 182
+  },
+  {
+    "Country": "PERU",
+    "CountryId": 184
+  },
+  {
+    "Country": "PHILIPPINES",
+    "CountryId": 185
+  },
+  {
+    "Country": "POLAND",
+    "CountryId": 188
+  },
+  {
+    "Country": "PORTUGAL",
+    "CountryId": 191
+  },
+  {
+    "Country": "QATAR",
+    "CountryId": 195
+  },
+  {
+    "Country": "ROUMANIA",
+    "CountryId": 198
+  },
+  {
+    "Country": "RUSSIAN FEDERATION",
+    "CountryId": 199
+  },
+  {
+    "Country": "RWANDA",
+    "CountryId": 200
+  },
+  {
+    "Country": "SAUDI ARABIA",
+    "CountryId": 201
+  },
+  {
+    "Country": "SENEGAL",
+    "CountryId": 203
+  },
+  {
+    "Country": "SERBIA",
+    "CountryId": 214
+  },
+  {
+    "Country": "SINGAPORE",
+    "CountryId": 204
+  },
+  {
+    "Country": "SOUTH AFRICA",
+    "CountryId": 256
+  },
+  {
+    "Country": "SPAIN",
+    "CountryId": 80
+  },
+  {
+    "Country": "SWITZERLAND",
+    "CountryId": 53
+  },
+  {
+    "Country": "TAIWAN",
+    "CountryId": 236
+  },
+  {
+    "Country": "THAILAND",
+    "CountryId": 226
+  },
+  {
+    "Country": "TUNISIA",
+    "CountryId": 233
+  },
+  {
+    "Country": "TURKIYE",
+    "CountryId": 234
+  },
+  {
+    "Country": "UGANDA",
+    "CountryId": 238
+  },
+  {
+    "Country": "UKRAINE",
+    "CountryId": 239
+  },
+  {
+    "Country": "UNITED ARAB EMIRATES",
+    "CountryId": 21
+  },
+  {
+    "Country": "UNITED KINGDOM",
+    "CountryId": 91
+  },
+  {
+    "Country": "UNITED REPUBLIC OF TANZANIA",
+    "CountryId": 237
+  },
+  {
+    "Country": "UNITED STATES OF AMERICA",
+    "CountryId": 242
+  },
+  {
+    "Country": "VIET NAM",
+    "CountryId": 249
+  }
+]

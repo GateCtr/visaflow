@@ -1,1 +1,99 @@
-{}
+{
+  "visaType_1": [
+    {
+      "Value": 7,
+      "Text": "Heads of State or government",
+      "ExemptionReasonRequired": false,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 8,
+      "Text": "Sovereigns and other senior members of a royal family",
+      "ExemptionReasonRequired": false,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 9,
+      "Text": "Fingerprinting is physically not possible - temporarily",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 10,
+      "Text": "Fingerprinting is physically not possible - permanently",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    }
+  ],
+  "visaType_2": [
+    {
+      "Value": 7,
+      "Text": "Heads of State or government",
+      "ExemptionReasonRequired": false,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 8,
+      "Text": "Sovereigns and other senior members of a royal family",
+      "ExemptionReasonRequired": false,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 9,
+      "Text": "Fingerprinting is physically not possible - temporarily",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 10,
+      "Text": "Fingerprinting is physically not possible - permanently",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    }
+  ],
+  "visaType_3": [
+    {
+      "Value": 9,
+      "Text": "Fingerprinting is physically not possible - temporarily",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 10,
+      "Text": "Fingerprinting is physically not possible - permanently",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 13,
+      "Text": "Diplomatic and consular staff coming to his posting",
+      "ExemptionReasonRequired": false,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 14,
+      "Text": "Reasons of national interest",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    },
+    {
+      "Value": 15,
+      "Text": "Humanitarian grounds",
+      "ExemptionReasonRequired": true,
+      "CanBeManuallySelected": true,
+      "Age": null
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "ActorSubType": null,
+    "Value": 1,
+    "Text": "Farmer"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 2,
+    "Text": "Legal professions"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 3,
+    "Text": "Artist"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 4,
+    "Text": "Trader, Self-employed"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 5,
+    "Text": "Clergy"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 6,
+    "Text": "Driver, heavy goods vehicle driver"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 7,
+    "Text": "Teacher"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 8,
+    "Text": "Employee (private business)"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 9,
+    "Text": "Civil servant"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 10,
+    "Text": "Politician"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 11,
+    "Text": "Technician"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 12,
+    "Text": "Journalist"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 13,
+    "Text": "Medical profession"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 14,
+    "Text": "Seaman"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 15,
+    "Text": "Worker"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 16,
+    "Text": "Professional classes"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 17,
+    "Text": "Police; Military"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 18,
+    "Text": "Retired person"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 19,
+    "Text": "Professional sportsman/woman"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 20,
+    "Text": "No occupation"
+  },
+  {
+    "ActorSubType": 5,
+    "Value": 21,
+    "Text": "Student"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 22,
+    "Text": "Diplomat"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 23,
+    "Text": "Company executive"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 24,
+    "Text": "Unaccompanied housewife/partner"
+  },
+  {
+    "ActorSubType": 4,
+    "Value": 25,
+    "Text": "House staff"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 26,
+    "Text": "Accompanied Housewife, Partner"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 27,
+    "Text": "Accompanied minor"
+  },
+  {
+    "ActorSubType": null,
+    "Value": 28,
+    "Text": "Minor travelling alone"
+  }
+]

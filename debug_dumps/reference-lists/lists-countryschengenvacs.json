@@ -1,0 +1,1612 @@
+[
+  {
+    "VacId": 19,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 7,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 83,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 83,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 83,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 83,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 83,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 86,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 217,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 12,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 12,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 12,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 12,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 70,
+    "OnlyNationals": true
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 86,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 217,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 86,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 6,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 6,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 6,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 6,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 14,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 84,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 11,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 13,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 21,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 28,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 28,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 28,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 28,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 29,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 29,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 29,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 26,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 27,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 30,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 37,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 37,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 10,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 24,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 9,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 20,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 22,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 4,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 79,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 16,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 38,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 35,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 36,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 98,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 99,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 99,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 105,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 105,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 105,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 105,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 106,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 106,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 106,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 106,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 107,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 108,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 109,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 110,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 110,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 110,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 110,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 111,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 112,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 113,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 114,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 115,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 104,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 70,
+    "OnlyNationals": true
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 86,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 217,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 39,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 120,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 122,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 123,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 124,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 125,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 127,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 129,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 133,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 135,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 136,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 138,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 140,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 140,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 140,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 141,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 141,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 142,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 143,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 143,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 144,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 148,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 149,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 150,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 151,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 153,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 154,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 155,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 134,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 140,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 188,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 188,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 163,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 163,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 163,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 163,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 164,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 164,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 164,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 164,
+    "ctCountryId": 176,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 165,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 166,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 167,
+    "ctCountryId": 219,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 168,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 169,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 172,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 174,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 174,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 174,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 174,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 175,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 175,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 175,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 176,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 177,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 177,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 178,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 179,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 180,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 181,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 182,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 191,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 192,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 140,
+    "ctCountryId": 73,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 188,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 170,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 171,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 197,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 197,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 197,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 197,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 197,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 97,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 199,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 206,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 207,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 207,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 210,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 213,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 214,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 215,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 218,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 219,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 220,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 221,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 223,
+    "ctCountryId": 112,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 223,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 223,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 223,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 223,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 224,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 227,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 228,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 2,
+    "ctCountryId": 198,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 3,
+    "ctCountryId": 198,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 118,
+    "ctCountryId": 198,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 230,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 230,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 230,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 230,
+    "ctCountryId": 174,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 225,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 29,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 53,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 69,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 70,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 80,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 81,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 83,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 100,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 121,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 141,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 143,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 154,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 191,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 23,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 232,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 235,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 236,
+    "ctCountryId": 142,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 123,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  },
+  {
+    "VacId": 8,
+    "ctCountryId": 218,
+    "OnlyNationals": false
+  }
+]

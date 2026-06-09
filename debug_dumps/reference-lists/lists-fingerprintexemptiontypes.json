@@ -1,0 +1,107 @@
+[
+  {
+    "Value": 1,
+    "Text": "No biometric installation",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 2,
+    "Text": "National visa for which fingerprints are not necessary",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 3,
+    "Text": "National visa with fingerprints required, but exemption",
+    "ExemptionReasonRequired": true,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 4,
+    "Text": "Before VIS go-live ( &lt; 11/10/2011) ",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 6,
+    "Text": "Children under the age of 12",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 7,
+    "Text": "Heads of State or government",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 8,
+    "Text": "Sovereigns and other senior members of a royal family",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 9,
+    "Text": "Fingerprinting is physically not possible - temporarily",
+    "ExemptionReasonRequired": true,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 10,
+    "Text": "Fingerprinting is physically not possible - permanently",
+    "ExemptionReasonRequired": true,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 11,
+    "Text": "Fingerprinting is physically not possible",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 12,
+    "Text": "Children under the age of 6",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 13,
+    "Text": "Diplomatic and consular staff coming to his posting",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 14,
+    "Text": "Reasons of national interest",
+    "ExemptionReasonRequired": true,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 15,
+    "Text": "Humanitarian grounds",
+    "ExemptionReasonRequired": true,
+    "CanBeManuallySelected": null,
+    "Age": null
+  },
+  {
+    "Value": 16,
+    "Text": "Representation of Luxembourg for long-stay visa",
+    "ExemptionReasonRequired": false,
+    "CanBeManuallySelected": null,
+    "Age": null
+  }
+]

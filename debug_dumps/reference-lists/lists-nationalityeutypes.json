@@ -1,0 +1,130 @@
+[
+  {
+    "Value": 0,
+    "Text": ""
+  },
+  {
+    "Value": 87,
+    "Text": "AUSTRIA"
+  },
+  {
+    "Value": 90,
+    "Text": "BELGIUM"
+  },
+  {
+    "Value": 94,
+    "Text": "BULGARIA"
+  },
+  {
+    "Value": 173,
+    "Text": "CROATIA"
+  },
+  {
+    "Value": 126,
+    "Text": "CYPRUS"
+  },
+  {
+    "Value": 127,
+    "Text": "CZECH  REPUBLIC"
+  },
+  {
+    "Value": 134,
+    "Text": "DENMARK"
+  },
+  {
+    "Value": 142,
+    "Text": "ESTONIA"
+  },
+  {
+    "Value": 145,
+    "Text": "FINLAND"
+  },
+  {
+    "Value": 148,
+    "Text": "FRANCE"
+  },
+  {
+    "Value": 129,
+    "Text": "GERMANY FEDERAL REPUBLIC"
+  },
+  {
+    "Value": 163,
+    "Text": "GREECE"
+  },
+  {
+    "Value": 175,
+    "Text": "HUNGARY"
+  },
+  {
+    "Value": 182,
+    "Text": "ICELAND"
+  },
+  {
+    "Value": 179,
+    "Text": "IRELAND"
+  },
+  {
+    "Value": 184,
+    "Text": "ITALY"
+  },
+  {
+    "Value": 207,
+    "Text": "LATVIA"
+  },
+  {
+    "Value": 202,
+    "Text": "LIECHTENSTEIN"
+  },
+  {
+    "Value": 205,
+    "Text": "LITHUANIA"
+  },
+  {
+    "Value": 206,
+    "Text": "LUXEMBOURG"
+  },
+  {
+    "Value": 218,
+    "Text": "MALTA"
+  },
+  {
+    "Value": 238,
+    "Text": "NETHERLANDS"
+  },
+  {
+    "Value": 239,
+    "Text": "NORWAY"
+  },
+  {
+    "Value": 253,
+    "Text": "POLAND"
+  },
+  {
+    "Value": 256,
+    "Text": "PORTUGAL"
+  },
+  {
+    "Value": 264,
+    "Text": "ROUMANIA"
+  },
+  {
+    "Value": 283,
+    "Text": "SLOVAKIA"
+  },
+  {
+    "Value": 284,
+    "Text": "SLOVENIA"
+  },
+  {
+    "Value": 141,
+    "Text": "SPAIN"
+  },
+  {
+    "Value": 285,
+    "Text": "SWEDEN"
+  },
+  {
+    "Value": 111,
+    "Text": "SWITZERLAND"
+  }
+]

@@ -1,0 +1,996 @@
+[
+  {
+    "CountryId": 236,
+    "Country": "TAIWAN ",
+    "Text": "Belgian office in Taipei",
+    "Value": 154,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 34,
+    "Country": "BURKINA FASO",
+    "Text": "Capago Ouagadougou",
+    "Value": 197,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 58,
+    "Country": "RÉPLUBLIQUE DÉMOCRATIQUE DU CONGO",
+    "Text": "CEV Kinshasa",
+    "Value": 3,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 242,
+    "Country": "UNITED STATES",
+    "Text": "Consulate General Atlanta",
+    "Value": 119,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 107,
+    "Country": "CHINA",
+    "Text": "Consulate General Hong Kong and Macau",
+    "Value": 138,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 242,
+    "Country": "UNITED STATES",
+    "Text": "Consulate General Los Angeles",
+    "Value": 122,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 58,
+    "Country": "CONGO",
+    "Text": "Consulate General Lubumbashi",
+    "Value": 2,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 51,
+    "Country": "CANADA",
+    "Text": "Consulate General Montreal",
+    "Value": 144,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 242,
+    "Country": "UNITED STATES",
+    "Text": "Consulate General New York",
+    "Value": 88,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 44,
+    "Country": "BRAZIL",
+    "Text": "Consulate General Sao Paulo",
+    "Value": 148,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 100,
+    "Country": "GREECE",
+    "Text": "Embassy Athens",
+    "Value": 128,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 214,
+    "Country": "SERBIA",
+    "Text": "Embassy Belgrade",
+    "Value": 129,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 70,
+    "Country": "GERMANY",
+    "Text": "Embassy Berlin",
+    "Value": 130,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 53,
+    "Country": "SWITZERLAND",
+    "Text": "Embassy Berne",
+    "Value": 131,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 61,
+    "Country": "COLOMBIA",
+    "Text": "Embassy Bogota DC",
+    "Value": 127,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 198,
+    "Country": "ROMANIA",
+    "Text": "Embassy Bucharest",
+    "Value": 98,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 112,
+    "Country": "HUNGARY",
+    "Text": "Embassy Budapest",
+    "Value": 134,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 22,
+    "Country": "ARGENTINA",
+    "Text": "Embassy Buenos Aires",
+    "Value": 133,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 31,
+    "Country": "BURUNDI",
+    "Text": "Embassy Bujumbura",
+    "Value": 8,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 116,
+    "Country": "IRELAND",
+    "Text": "Embassy Dublin",
+    "Value": 13,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 65,
+    "Country": "CUBA",
+    "Text": "Embassy Havana",
+    "Value": 136,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 83,
+    "Country": "FINLAND",
+    "Text": "Embassy Helsinki",
+    "Value": 137,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 113,
+    "Country": "INDONESIA",
+    "Text": "Embassy Jakarta",
+    "Value": 139,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 122,
+    "Country": "JAMAICA",
+    "Text": "Embassy Kingston",
+    "Value": 140,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 165,
+    "Country": "MALAYSIA",
+    "Text": "Embassy Kuala Lumpur",
+    "Value": 141,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 239,
+    "Country": "UKRAINE",
+    "Text": "Embassy Kyiv",
+    "Value": 192,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 184,
+    "Country": "PERU",
+    "Text": "Embassy Lima",
+    "Value": 142,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 191,
+    "Country": "PORTUGAL",
+    "Text": "Embassy Lisbon",
+    "Value": 132,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 80,
+    "Country": "SPAIN",
+    "Text": "Embassy Madrid",
+    "Value": 126,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 150,
+    "Country": "MEXICO",
+    "Text": "Embassy Mexico City",
+    "Value": 143,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 182,
+    "Country": "PANAMA",
+    "Text": "Embassy Panama",
+    "Value": 146,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 86,
+    "Country": "FRANCE",
+    "Text": "Embassy Paris",
+    "Value": 5,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 69,
+    "Country": "CZECH REPUBLIC",
+    "Text": "Embassy Prague",
+    "Value": 145,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 121,
+    "Country": "ITALY",
+    "Text": "Embassy Rome",
+    "Value": 147,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 54,
+    "Country": "CHILE",
+    "Text": "Embassy Santiago",
+    "Value": 150,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 131,
+    "Country": "REPUBLIC OF KOREA",
+    "Text": "Embassy Seoul",
+    "Value": 104,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 204,
+    "Country": "SINGAPORE",
+    "Text": "Embassy Singapore",
+    "Value": 123,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 36,
+    "Country": "BULGARIA",
+    "Text": "Embassy Sofia",
+    "Value": 149,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 120,
+    "Country": "ISRAEL",
+    "Text": "Embassy Tel Aviv",
+    "Value": 151,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 174,
+    "Country": "NETHERLANDS",
+    "Text": "Embassy The Hague",
+    "Value": 101,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 124,
+    "Country": "JAPAN",
+    "Text": "Embassy Tokyo",
+    "Value": 97,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 29,
+    "Country": "AUSTRIA",
+    "Text": "Embassy Vienna",
+    "Value": 152,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 188,
+    "Country": "POLAND",
+    "Text": "Embassy Warsaw",
+    "Value": 121,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 242,
+    "Country": "UNITED STATES",
+    "Text": "Embassy Washington",
+    "Value": 103,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 23,
+    "Country": "ARMENIA",
+    "Text": "Embassy Yerevan",
+    "Value": 237,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 110,
+    "Country": "CROATIA",
+    "Text": "Embassy Zagreb",
+    "Value": 153,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 171,
+    "Country": "NIGERIA",
+    "Text": "TLS Abuja",
+    "Value": 174,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 82,
+    "Country": "ETHIOPIA",
+    "Text": "TLS Addis Ababa",
+    "Value": 166,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 75,
+    "Country": "ALGERIA",
+    "Text": "TLS Algiers",
+    "Value": 19,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 123,
+    "Country": "JORDAN",
+    "Text": "TLS Amman",
+    "Value": 169,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 118,
+    "Country": "IRAQ",
+    "Text": "TLS Bagdad",
+    "Value": 170,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 226,
+    "Country": "THAILAND",
+    "Text": "TLS Bangkok",
+    "Value": 173,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 134,
+    "Country": "LIBAN",
+    "Text": "TLS Beyrouth",
+    "Value": 172,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 256,
+    "Country": "SOUTH AFRICA",
+    "Text": "TLS Bloemfontein",
+    "Value": 236,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 77,
+    "Country": "EGYPTE",
+    "Text": "TLS Cairo",
+    "Value": 14,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 256,
+    "Country": "SOUTH AFRICA",
+    "Text": "TLS Cape Town",
+    "Value": 20,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 145,
+    "Country": "MAROC",
+    "Text": "TLS Casablanca",
+    "Value": 21,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 203,
+    "Country": "SENEGAL",
+    "Text": "TLS Dakar",
+    "Value": 165,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 57,
+    "Country": "CAMEROUN",
+    "Text": "TLS Douala",
+    "Value": 164,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 256,
+    "Country": "SOUTH AFRICA",
+    "Text": "TLS Durban",
+    "Value": 176,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 91,
+    "Country": "UNITED KINGDOM",
+    "Text": "TLS Edinburgh",
+    "Value": 96,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 118,
+    "Country": "IRAQ",
+    "Text": "TLS Erbil",
+    "Value": 171,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 256,
+    "Country": "SOUTH AFRICA",
+    "Text": "TLS Johannesburg",
+    "Value": 22,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 238,
+    "Country": "UGANDA",
+    "Text": "TLS Kampala",
+    "Value": 168,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 200,
+    "Country": "RWANDA",
+    "Text": "TLS Kigali",
+    "Value": 167,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 171,
+    "Country": "NIGERIA",
+    "Text": "TLS Lagos",
+    "Value": 175,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 91,
+    "Country": "UNITED KINGDOM",
+    "Text": "TLS London",
+    "Value": 31,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 91,
+    "Country": "UNITED KINGDOM",
+    "Text": "TLS Manchester",
+    "Value": 100,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 126,
+    "Country": "KENYA",
+    "Text": "TLS Nairobi",
+    "Value": 23,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 256,
+    "Country": "SOUTH AFRICA",
+    "Text": "TLS Port Elisabeth",
+    "Value": 235,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 145,
+    "Country": "MAROC",
+    "Text": "TLS Rabat",
+    "Value": 232,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 233,
+    "Country": "TUNISIA",
+    "Text": "TLS Tunis",
+    "Value": 4,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 57,
+    "Country": "CAMEROUN",
+    "Text": "TLS Yaounde",
+    "Value": 163,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 56,
+    "Country": "CÔTE D'IVOIRE",
+    "Text": "VFS Abidjan",
+    "Value": 110,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 21,
+    "Country": "UAE",
+    "Text": "VFS Abu Dhabi",
+    "Value": 25,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Ahmedabad",
+    "Value": 60,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 201,
+    "Country": "SAUDI ARABIA",
+    "Text": "VFS Al-Khobar",
+    "Value": 125,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Ankara",
+    "Value": 34,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Antalya",
+    "Value": 80,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 179,
+    "Country": "NEW ZEALAND",
+    "Text": "VFS Auckland",
+    "Value": 184,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Bangalore",
+    "Value": 61,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Beijing",
+    "Value": 55,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 28,
+    "Country": "AUSTRALIA",
+    "Text": "VFS Canberra",
+    "Value": 179,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Chandigarh",
+    "Value": 58,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Changsha",
+    "Value": 45,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Chengdu",
+    "Value": 47,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Chennai",
+    "Value": 42,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Chongqing",
+    "Value": 46,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Cochin",
+    "Value": 91,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 249,
+    "Country": " VIETNAM",
+    "Text": "VFS Da Nang",
+    "Value": 155,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 237,
+    "Country": "TANZANIA",
+    "Text": "VFS Dar ES Salaam",
+    "Value": 177,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 35,
+    "Country": "BANGLADESH",
+    "Text": "VFS Dhaka",
+    "Value": 233,
+    "ScanReady": false
+  },
+  {
+    "CountryId": 195,
+    "Country": "QATAR",
+    "Text": "VFS Doha",
+    "Value": 114,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 21,
+    "Country": "UNITED ARAB EMIRATES",
+    "Text": "VFS Dubai",
+    "Value": 89,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 199,
+    "Country": "RUSSIA",
+    "Text": "VFS Ekaterinberg",
+    "Value": 187,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Fuzhou",
+    "Value": 49,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 193,
+    "Country": "PALESTINE",
+    "Text": "VFS Gaza",
+    "Value": 35,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Gaziantep",
+    "Value": 82,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Goa",
+    "Value": 90,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Guangzhou",
+    "Value": 51,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Hangzhou",
+    "Value": 52,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 249,
+    "Country": "VIETNAM",
+    "Text": "VFS Hanoi",
+    "Value": 38,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 249,
+    "Country": "VIETNAM",
+    "Text": "VFS Ho Chi Min City",
+    "Value": 39,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Hyderabad",
+    "Value": 63,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 181,
+    "Country": "PAKISTAN",
+    "Text": "VFS Islamabad",
+    "Value": 26,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Istanbul Altunizade",
+    "Value": 33,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Istanbul Beyoglu",
+    "Value": 32,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 234,
+    "Country": "TÜRKIYE",
+    "Text": "VFS Izmir",
+    "Value": 234,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Jalandhar",
+    "Value": 94,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 201,
+    "Country": "SAUDI ARABIA",
+    "Text": "VFS Jeddah",
+    "Value": 124,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 193,
+    "Country": "PALESTINE TERRITORIES",
+    "Text": "VFS Jerusalem",
+    "Value": 191,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Jinan",
+    "Value": 57,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 181,
+    "Country": "PAKISTAN",
+    "Text": "VFS Karachi",
+    "Value": 27,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Kolkata",
+    "Value": 59,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Kunming",
+    "Value": 50,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 132,
+    "Country": "KUWAIT",
+    "Text": "VFS Kuwait",
+    "Value": 113,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 181,
+    "Country": " PAKISTAN",
+    "Text": "VFS Lahore",
+    "Value": 30,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 16,
+    "Country": "ANGOLA",
+    "Text": "VFS Luanda",
+    "Value": 178,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Lucknow",
+    "Value": 198,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 185,
+    "Country": "PHILIPPINES",
+    "Text": "VFS Manila",
+    "Value": 37,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 28,
+    "Country": "AUSTRALIA",
+    "Text": "VFS Melbourne",
+    "Value": 181,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 199,
+    "Country": "RUSSIA",
+    "Text": "VFS Moscow",
+    "Value": 185,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Mumbai",
+    "Value": 41,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Nanjing",
+    "Value": 53,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS New Delhi",
+    "Value": 40,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 199,
+    "Country": "RUSSIA",
+    "Text": "VFS Novosibirsk",
+    "Value": 189,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 28,
+    "Country": "AUSTRALIA",
+    "Text": "VFS Perth",
+    "Value": 182,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Puducherry",
+    "Value": 92,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 114,
+    "Country": "INDIA",
+    "Text": "VFS Pune",
+    "Value": 62,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 193,
+    "Country": "PALESTINE",
+    "Text": "VFS Ramallah",
+    "Value": 36,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 201,
+    "Country": "KINGDOM OF SAUDI ARABIA",
+    "Text": "VFS Riyadh",
+    "Value": 24,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 199,
+    "Country": "RUSSIA",
+    "Text": "VFS Rostov on Don",
+    "Value": 186,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Shanghai",
+    "Value": 54,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Shenyang",
+    "Value": 43,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Shenzhen",
+    "Value": 48,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 199,
+    "Country": "RUSSIA",
+    "Text": "VFS St. Petersburgh",
+    "Value": 188,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 28,
+    "Country": "AUSTRALIA",
+    "Text": "VFS Sydney",
+    "Value": 180,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 117,
+    "Country": "IRAN",
+    "Text": "VFS Tehran",
+    "Value": 109,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 47,
+    "Country": "KINGDOM OF BHUTAN",
+    "Text": "VFS Thimphu",
+    "Value": 190,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 179,
+    "Country": "NEW ZEALAND",
+    "Text": "VFS Wellington",
+    "Value": 183,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Wuhan",
+    "Value": 56,
+    "ScanReady": true
+  },
+  {
+    "CountryId": 55,
+    "Country": "CHINA",
+    "Text": "VFS Xi'an",
+    "Value": 44,
+    "ScanReady": true
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "Value": 1,
+    "Text": "Single"
+  },
+  {
+    "Value": 2,
+    "Text": "Married"
+  },
+  {
+    "Value": 3,
+    "Text": "Separated"
+  },
+  {
+    "Value": 4,
+    "Text": "Divorced"
+  },
+  {
+    "Value": 5,
+    "Text": "Widow/er"
+  },
+  {
+    "Value": 6,
+    "Text": "Cohabitant"
+  },
+  {
+    "Value": 7,
+    "Text": "Registered partnership"
+  }
+]

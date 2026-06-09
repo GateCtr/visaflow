@@ -1,0 +1,26 @@
+[
+  {
+    "Value": 22,
+    "Text": "Spouse"
+  },
+  {
+    "Value": 23,
+    "Text": "Child"
+  },
+  {
+    "Value": 24,
+    "Text": "Grandchild"
+  },
+  {
+    "Value": 25,
+    "Text": "Dependant ascendant"
+  },
+  {
+    "Value": 26,
+    "Text": "Registered partnership"
+  },
+  {
+    "Value": 27,
+    "Text": "Other"
+  }
+]

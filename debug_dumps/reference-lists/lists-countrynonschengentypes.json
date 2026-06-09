@@ -1,0 +1,1292 @@
+[
+  {
+    "Iso": "",
+    "Vfa": null,
+    "Value": 0,
+    "Text": ""
+  },
+  {
+    "Iso": "SSD",
+    "Vfa": null,
+    "Value": 4,
+    "Text": "SOUTH SUDAN"
+  },
+  {
+    "Iso": "ABW",
+    "Vfa": null,
+    "Value": 14,
+    "Text": "ARUBA"
+  },
+  {
+    "Iso": "AFG",
+    "Vfa": null,
+    "Value": 15,
+    "Text": "AFGHANISTAN"
+  },
+  {
+    "Iso": "AGO",
+    "Vfa": null,
+    "Value": 16,
+    "Text": "ANGOLA"
+  },
+  {
+    "Iso": "AIA",
+    "Vfa": null,
+    "Value": 17,
+    "Text": "ANGUILLA"
+  },
+  {
+    "Iso": "ALB",
+    "Vfa": null,
+    "Value": 18,
+    "Text": "ALBANIA"
+  },
+  {
+    "Iso": "AND",
+    "Vfa": null,
+    "Value": 19,
+    "Text": "ANDORRA"
+  },
+  {
+    "Iso": "ANT",
+    "Vfa": null,
+    "Value": 20,
+    "Text": "NETHERLANDS ANTILLES"
+  },
+  {
+    "Iso": "ARE",
+    "Vfa": null,
+    "Value": 21,
+    "Text": "UNITED ARAB EMIRATES"
+  },
+  {
+    "Iso": "ARG",
+    "Vfa": null,
+    "Value": 22,
+    "Text": "ARGENTINA"
+  },
+  {
+    "Iso": "ARM",
+    "Vfa": null,
+    "Value": 23,
+    "Text": "ARMENIA"
+  },
+  {
+    "Iso": "ASM",
+    "Vfa": null,
+    "Value": 24,
+    "Text": "AMERICAN SAMOA"
+  },
+  {
+    "Iso": "ATA",
+    "Vfa": null,
+    "Value": 25,
+    "Text": "ANTARCTICA"
+  },
+  {
+    "Iso": "ATF",
+    "Vfa": null,
+    "Value": 26,
+    "Text": "THE FRENCH SOUTHERN AND ANTARCTIC TERRITORIES"
+  },
+  {
+    "Iso": "ATG",
+    "Vfa": null,
+    "Value": 27,
+    "Text": "ANTIGUA AND BARBUDA"
+  },
+  {
+    "Iso": "AUS",
+    "Vfa": null,
+    "Value": 28,
+    "Text": "AUSTRALIA"
+  },
+  {
+    "Iso": "AZE",
+    "Vfa": null,
+    "Value": 30,
+    "Text": "AZERBAIJAN"
+  },
+  {
+    "Iso": "BDI",
+    "Vfa": null,
+    "Value": 31,
+    "Text": "BURUNDI"
+  },
+  {
+    "Iso": "BEN",
+    "Vfa": null,
+    "Value": 33,
+    "Text": "BENIN"
+  },
+  {
+    "Iso": "BFA",
+    "Vfa": null,
+    "Value": 34,
+    "Text": "BURKINA FASO"
+  },
+  {
+    "Iso": "BGD",
+    "Vfa": null,
+    "Value": 35,
+    "Text": "BANGLADESH"
+  },
+  {
+    "Iso": "BHR",
+    "Vfa": null,
+    "Value": 37,
+    "Text": "BAHRAIN"
+  },
+  {
+    "Iso": "BHS",
+    "Vfa": null,
+    "Value": 38,
+    "Text": "BAHAMAS"
+  },
+  {
+    "Iso": "BIH",
+    "Vfa": null,
+    "Value": 39,
+    "Text": "BOSNIA AND HERZGOVINA"
+  },
+  {
+    "Iso": "BLR",
+    "Vfa": null,
+    "Value": 40,
+    "Text": "BELARUS"
+  },
+  {
+    "Iso": "BLZ",
+    "Vfa": null,
+    "Value": 41,
+    "Text": "BELIZE"
+  },
+  {
+    "Iso": "BMU",
+    "Vfa": null,
+    "Value": 42,
+    "Text": "BERMUDA"
+  },
+  {
+    "Iso": "BOL",
+    "Vfa": null,
+    "Value": 43,
+    "Text": "BOLIVIA"
+  },
+  {
+    "Iso": "BRA",
+    "Vfa": null,
+    "Value": 44,
+    "Text": "BRAZIL"
+  },
+  {
+    "Iso": "BRB",
+    "Vfa": null,
+    "Value": 45,
+    "Text": "BARBADOS"
+  },
+  {
+    "Iso": "BRN",
+    "Vfa": null,
+    "Value": 46,
+    "Text": "BRUNEI DARUSSALAM"
+  },
+  {
+    "Iso": "BTN",
+    "Vfa": null,
+    "Value": 47,
+    "Text": "BHUTAN"
+  },
+  {
+    "Iso": "BVT",
+    "Vfa": null,
+    "Value": 48,
+    "Text": "BOUVET ISLAND"
+  },
+  {
+    "Iso": "BWA",
+    "Vfa": null,
+    "Value": 49,
+    "Text": "BOTSWANA"
+  },
+  {
+    "Iso": "CAF",
+    "Vfa": null,
+    "Value": 50,
+    "Text": "CENTRAL AFRICA"
+  },
+  {
+    "Iso": "CAN",
+    "Vfa": null,
+    "Value": 51,
+    "Text": "CANADA"
+  },
+  {
+    "Iso": "CCK",
+    "Vfa": null,
+    "Value": 52,
+    "Text": "COCOS  ISLANDS (KEELING ISLANDS)"
+  },
+  {
+    "Iso": "CHL",
+    "Vfa": null,
+    "Value": 54,
+    "Text": "CHILE"
+  },
+  {
+    "Iso": "CHN",
+    "Vfa": null,
+    "Value": 55,
+    "Text": "CHINA"
+  },
+  {
+    "Iso": "CIV",
+    "Vfa": null,
+    "Value": 56,
+    "Text": "IVORY COAST"
+  },
+  {
+    "Iso": "CMR",
+    "Vfa": null,
+    "Value": 57,
+    "Text": "CAMEROON"
+  },
+  {
+    "Iso": "COD",
+    "Vfa": null,
+    "Value": 58,
+    "Text": "CONGO (Rep Dem)"
+  },
+  {
+    "Iso": "COG",
+    "Vfa": null,
+    "Value": 59,
+    "Text": "CONGO (Brazzaville)"
+  },
+  {
+    "Iso": "COK",
+    "Vfa": null,
+    "Value": 60,
+    "Text": "COOK ISLANDS"
+  },
+  {
+    "Iso": "COL",
+    "Vfa": null,
+    "Value": 61,
+    "Text": "COLOMBIA"
+  },
+  {
+    "Iso": "COM",
+    "Vfa": null,
+    "Value": 62,
+    "Text": "COMOROS"
+  },
+  {
+    "Iso": "CPV",
+    "Vfa": null,
+    "Value": 63,
+    "Text": "CAPE VERDE"
+  },
+  {
+    "Iso": "CRI",
+    "Vfa": null,
+    "Value": 64,
+    "Text": "COSTA RICA"
+  },
+  {
+    "Iso": "CUB",
+    "Vfa": null,
+    "Value": 65,
+    "Text": "CUBA"
+  },
+  {
+    "Iso": "CXR",
+    "Vfa": null,
+    "Value": 66,
+    "Text": "CHRISTMAS ISLAND"
+  },
+  {
+    "Iso": "CYM",
+    "Vfa": null,
+    "Value": 67,
+    "Text": "CAYMAN ISLANDS"
+  },
+  {
+    "Iso": "CYP",
+    "Vfa": null,
+    "Value": 68,
+    "Text": "CYPRUS"
+  },
+  {
+    "Iso": "DJI",
+    "Vfa": null,
+    "Value": 71,
+    "Text": "DJIBOUTI"
+  },
+  {
+    "Iso": "DMA",
+    "Vfa": null,
+    "Value": 72,
+    "Text": "DOMINICA"
+  },
+  {
+    "Iso": "DOM",
+    "Vfa": null,
+    "Value": 74,
+    "Text": "DOMINICAN REPUBLIC"
+  },
+  {
+    "Iso": "DZA",
+    "Vfa": null,
+    "Value": 75,
+    "Text": "ALGERIA"
+  },
+  {
+    "Iso": "ECU",
+    "Vfa": null,
+    "Value": 76,
+    "Text": "ECUADOR"
+  },
+  {
+    "Iso": "EGY",
+    "Vfa": null,
+    "Value": 77,
+    "Text": "EGYPT"
+  },
+  {
+    "Iso": "ERI",
+    "Vfa": null,
+    "Value": 78,
+    "Text": "ERITREA"
+  },
+  {
+    "Iso": "ESH",
+    "Vfa": null,
+    "Value": 79,
+    "Text": "WESTERN SAHARA"
+  },
+  {
+    "Iso": "ETH",
+    "Vfa": null,
+    "Value": 82,
+    "Text": "ETHIOPIA"
+  },
+  {
+    "Iso": "FJI",
+    "Vfa": null,
+    "Value": 84,
+    "Text": "FIJI"
+  },
+  {
+    "Iso": "FLK",
+    "Vfa": null,
+    "Value": 85,
+    "Text": "FALKLAND ISLANDS (ISLAS MALVINAS)"
+  },
+  {
+    "Iso": "FRO",
+    "Vfa": null,
+    "Value": 87,
+    "Text": "FAROE ISLANDS"
+  },
+  {
+    "Iso": "FSM",
+    "Vfa": null,
+    "Value": 88,
+    "Text": "MICRONESIA (FEDERATED STATES OF)"
+  },
+  {
+    "Iso": "GAB",
+    "Vfa": null,
+    "Value": 89,
+    "Text": "GABON"
+  },
+  {
+    "Iso": "GBR",
+    "Vfa": null,
+    "Value": 91,
+    "Text": "UNITED KINGDOM"
+  },
+  {
+    "Iso": "GEO",
+    "Vfa": null,
+    "Value": 92,
+    "Text": "GEORGIA"
+  },
+  {
+    "Iso": "GHA",
+    "Vfa": null,
+    "Value": 93,
+    "Text": "GHANA"
+  },
+  {
+    "Iso": "GIB",
+    "Vfa": null,
+    "Value": 94,
+    "Text": "GIBRALTAR"
+  },
+  {
+    "Iso": "GIN",
+    "Vfa": null,
+    "Value": 95,
+    "Text": "GUINEA"
+  },
+  {
+    "Iso": "GLP",
+    "Vfa": null,
+    "Value": 96,
+    "Text": "GUADELOUPE"
+  },
+  {
+    "Iso": "GMB",
+    "Vfa": null,
+    "Value": 97,
+    "Text": "GAMBIA"
+  },
+  {
+    "Iso": "GNB",
+    "Vfa": null,
+    "Value": 98,
+    "Text": "GUINEA-BISSAU"
+  },
+  {
+    "Iso": "GNQ",
+    "Vfa": null,
+    "Value": 99,
+    "Text": "EQUATORIAL  GUINEA"
+  },
+  {
+    "Iso": "GRD",
+    "Vfa": null,
+    "Value": 101,
+    "Text": "GRENADA"
+  },
+  {
+    "Iso": "GRL",
+    "Vfa": null,
+    "Value": 102,
+    "Text": "GREENLAND"
+  },
+  {
+    "Iso": "GTM",
+    "Vfa": null,
+    "Value": 103,
+    "Text": "GUATEMALA"
+  },
+  {
+    "Iso": "GUF",
+    "Vfa": null,
+    "Value": 104,
+    "Text": "FRENCH GUYANA"
+  },
+  {
+    "Iso": "GUM",
+    "Vfa": null,
+    "Value": 105,
+    "Text": "GUAM"
+  },
+  {
+    "Iso": "GUY",
+    "Vfa": null,
+    "Value": 106,
+    "Text": "GUYANA"
+  },
+  {
+    "Iso": "HKG",
+    "Vfa": null,
+    "Value": 107,
+    "Text": "HONG -KONG"
+  },
+  {
+    "Iso": "HMD",
+    "Vfa": null,
+    "Value": 108,
+    "Text": "HEARD AND  MCDONALD ISLANDS"
+  },
+  {
+    "Iso": "HND",
+    "Vfa": null,
+    "Value": 109,
+    "Text": "HONDURAS"
+  },
+  {
+    "Iso": "HTI",
+    "Vfa": null,
+    "Value": 111,
+    "Text": "HAITI"
+  },
+  {
+    "Iso": "IDN",
+    "Vfa": null,
+    "Value": 113,
+    "Text": "INDONESIA"
+  },
+  {
+    "Iso": "IND",
+    "Vfa": null,
+    "Value": 114,
+    "Text": "INDIA"
+  },
+  {
+    "Iso": "IOT",
+    "Vfa": null,
+    "Value": 115,
+    "Text": "BRITISH INDIAN OCEAN TERRITORY"
+  },
+  {
+    "Iso": "IRL",
+    "Vfa": null,
+    "Value": 116,
+    "Text": "IRELAND"
+  },
+  {
+    "Iso": "IRN",
+    "Vfa": null,
+    "Value": 117,
+    "Text": "IRAN"
+  },
+  {
+    "Iso": "IRQ",
+    "Vfa": null,
+    "Value": 118,
+    "Text": "IRAQ"
+  },
+  {
+    "Iso": "ISR",
+    "Vfa": null,
+    "Value": 120,
+    "Text": "ISRAEL"
+  },
+  {
+    "Iso": "JAM",
+    "Vfa": null,
+    "Value": 122,
+    "Text": "JAMAICA"
+  },
+  {
+    "Iso": "JOR",
+    "Vfa": null,
+    "Value": 123,
+    "Text": "JORDAN"
+  },
+  {
+    "Iso": "JPN",
+    "Vfa": null,
+    "Value": 124,
+    "Text": "JAPAN"
+  },
+  {
+    "Iso": "KAZ",
+    "Vfa": null,
+    "Value": 125,
+    "Text": "KAZAKHSTAN"
+  },
+  {
+    "Iso": "KEN",
+    "Vfa": null,
+    "Value": 126,
+    "Text": "KENYA"
+  },
+  {
+    "Iso": "KGZ",
+    "Vfa": null,
+    "Value": 127,
+    "Text": "KYRGYZSTAN"
+  },
+  {
+    "Iso": "KHM",
+    "Vfa": null,
+    "Value": 128,
+    "Text": "CAMBODIA"
+  },
+  {
+    "Iso": "KIR",
+    "Vfa": null,
+    "Value": 129,
+    "Text": "KIRIBATI"
+  },
+  {
+    "Iso": "KNA",
+    "Vfa": null,
+    "Value": 130,
+    "Text": "SAINT KITTS AND NEVIS"
+  },
+  {
+    "Iso": "KOR",
+    "Vfa": null,
+    "Value": 131,
+    "Text": "KOREA, Republic of -- (South Korea)"
+  },
+  {
+    "Iso": "KWT",
+    "Vfa": null,
+    "Value": 132,
+    "Text": "KUWAIT"
+  },
+  {
+    "Iso": "LAO",
+    "Vfa": null,
+    "Value": 133,
+    "Text": "LAOS"
+  },
+  {
+    "Iso": "LBN",
+    "Vfa": null,
+    "Value": 134,
+    "Text": "LEBANON"
+  },
+  {
+    "Iso": "LBR",
+    "Vfa": null,
+    "Value": 135,
+    "Text": "LIBERIA"
+  },
+  {
+    "Iso": "LBY",
+    "Vfa": null,
+    "Value": 136,
+    "Text": "LIBYA"
+  },
+  {
+    "Iso": "LCA",
+    "Vfa": null,
+    "Value": 137,
+    "Text": "SAINT LUCIA"
+  },
+  {
+    "Iso": "LKA",
+    "Vfa": null,
+    "Value": 139,
+    "Text": "SRI LANKA"
+  },
+  {
+    "Iso": "LSO",
+    "Vfa": null,
+    "Value": 140,
+    "Text": "LESOTHO"
+  },
+  {
+    "Iso": "MAC",
+    "Vfa": null,
+    "Value": 144,
+    "Text": "MACAO"
+  },
+  {
+    "Iso": "MAR",
+    "Vfa": null,
+    "Value": 145,
+    "Text": "MOROCCO"
+  },
+  {
+    "Iso": "MCO",
+    "Vfa": null,
+    "Value": 146,
+    "Text": "MONACO"
+  },
+  {
+    "Iso": "MDA",
+    "Vfa": null,
+    "Value": 147,
+    "Text": "MOLDOVA"
+  },
+  {
+    "Iso": "MDG",
+    "Vfa": null,
+    "Value": 148,
+    "Text": "MADAGASCAR"
+  },
+  {
+    "Iso": "MDV",
+    "Vfa": null,
+    "Value": 149,
+    "Text": "MALDIVES"
+  },
+  {
+    "Iso": "MEX",
+    "Vfa": null,
+    "Value": 150,
+    "Text": "MEXICO"
+  },
+  {
+    "Iso": "MHL",
+    "Vfa": null,
+    "Value": 151,
+    "Text": "MARSHALL ISLANDS"
+  },
+  {
+    "Iso": "MKD",
+    "Vfa": null,
+    "Value": 152,
+    "Text": "MACEDONIA"
+  },
+  {
+    "Iso": "MLI",
+    "Vfa": null,
+    "Value": 153,
+    "Text": "MALI"
+  },
+  {
+    "Iso": "MMR",
+    "Vfa": null,
+    "Value": 155,
+    "Text": "MYANMAR"
+  },
+  {
+    "Iso": "MNE",
+    "Vfa": null,
+    "Value": 156,
+    "Text": "MONTENEGRO"
+  },
+  {
+    "Iso": "MNG",
+    "Vfa": null,
+    "Value": 157,
+    "Text": "MONGOLIA"
+  },
+  {
+    "Iso": "MNP",
+    "Vfa": null,
+    "Value": 158,
+    "Text": "NORTHERN MARIANA ISLANDS"
+  },
+  {
+    "Iso": "MOZ",
+    "Vfa": null,
+    "Value": 159,
+    "Text": "MOZAMBIQUE"
+  },
+  {
+    "Iso": "MRT",
+    "Vfa": null,
+    "Value": 160,
+    "Text": "MAURITANIA"
+  },
+  {
+    "Iso": "MSR",
+    "Vfa": null,
+    "Value": 161,
+    "Text": "MONTSERRAT"
+  },
+  {
+    "Iso": "MTQ",
+    "Vfa": null,
+    "Value": 162,
+    "Text": "MARTINIQUE"
+  },
+  {
+    "Iso": "MUS",
+    "Vfa": null,
+    "Value": 163,
+    "Text": "MAURITIUS"
+  },
+  {
+    "Iso": "MWI",
+    "Vfa": null,
+    "Value": 164,
+    "Text": "MALAWI"
+  },
+  {
+    "Iso": "MYS",
+    "Vfa": null,
+    "Value": 165,
+    "Text": "MALAYSIA"
+  },
+  {
+    "Iso": "MYT",
+    "Vfa": null,
+    "Value": 166,
+    "Text": "MAYOTTE"
+  },
+  {
+    "Iso": "NAM",
+    "Vfa": null,
+    "Value": 167,
+    "Text": "NAMIBIA"
+  },
+  {
+    "Iso": "NCL",
+    "Vfa": null,
+    "Value": 168,
+    "Text": "NEW CALEDONIA"
+  },
+  {
+    "Iso": "NER",
+    "Vfa": null,
+    "Value": 169,
+    "Text": "NIGER"
+  },
+  {
+    "Iso": "NFK",
+    "Vfa": null,
+    "Value": 170,
+    "Text": "NORFOLK ISLAND"
+  },
+  {
+    "Iso": "NGA",
+    "Vfa": null,
+    "Value": 171,
+    "Text": "NIGERIA"
+  },
+  {
+    "Iso": "NIC",
+    "Vfa": null,
+    "Value": 172,
+    "Text": "NICARAGUA"
+  },
+  {
+    "Iso": "NIU",
+    "Vfa": null,
+    "Value": 173,
+    "Text": "NIUE"
+  },
+  {
+    "Iso": "NPL",
+    "Vfa": null,
+    "Value": 177,
+    "Text": "NEPAL"
+  },
+  {
+    "Iso": "NRU",
+    "Vfa": null,
+    "Value": 178,
+    "Text": "NAURU"
+  },
+  {
+    "Iso": "NZL",
+    "Vfa": null,
+    "Value": 179,
+    "Text": "NEW ZEALAND"
+  },
+  {
+    "Iso": "OMN",
+    "Vfa": null,
+    "Value": 180,
+    "Text": "OMAN"
+  },
+  {
+    "Iso": "PAK",
+    "Vfa": null,
+    "Value": 181,
+    "Text": "PAKISTAN"
+  },
+  {
+    "Iso": "PAN",
+    "Vfa": null,
+    "Value": 182,
+    "Text": "PANAMA"
+  },
+  {
+    "Iso": "PCN",
+    "Vfa": null,
+    "Value": 183,
+    "Text": "PITCAIRN ISLANDS"
+  },
+  {
+    "Iso": "PER",
+    "Vfa": null,
+    "Value": 184,
+    "Text": "PERU"
+  },
+  {
+    "Iso": "PHL",
+    "Vfa": null,
+    "Value": 185,
+    "Text": "PHILIPPINES"
+  },
+  {
+    "Iso": "PLW",
+    "Vfa": null,
+    "Value": 186,
+    "Text": "PALAU"
+  },
+  {
+    "Iso": "PNG",
+    "Vfa": null,
+    "Value": 187,
+    "Text": "PAPUA NEW GUINEA"
+  },
+  {
+    "Iso": "PRI",
+    "Vfa": null,
+    "Value": 189,
+    "Text": "PUERTO RICO"
+  },
+  {
+    "Iso": "PRK",
+    "Vfa": null,
+    "Value": 190,
+    "Text": "KOREA, PEOPLE REPUBLIC (North)"
+  },
+  {
+    "Iso": "PRY",
+    "Vfa": null,
+    "Value": 192,
+    "Text": "PARAGUAY"
+  },
+  {
+    "Iso": "XXP",
+    "Vfa": null,
+    "Value": 193,
+    "Text": "Palestinian Territory"
+  },
+  {
+    "Iso": "PYF",
+    "Vfa": null,
+    "Value": 194,
+    "Text": "FRENCH POLYNESIA"
+  },
+  {
+    "Iso": "QAT",
+    "Vfa": null,
+    "Value": 195,
+    "Text": "QATAR"
+  },
+  {
+    "Iso": "REU",
+    "Vfa": null,
+    "Value": 197,
+    "Text": "REUNION"
+  },
+  {
+    "Iso": "RUS",
+    "Vfa": null,
+    "Value": 199,
+    "Text": "RUSSIAN FEDERATION"
+  },
+  {
+    "Iso": "RWA",
+    "Vfa": null,
+    "Value": 200,
+    "Text": "RWANDA"
+  },
+  {
+    "Iso": "SAU",
+    "Vfa": null,
+    "Value": 201,
+    "Text": "SAUDI ARABIA"
+  },
+  {
+    "Iso": "SDN",
+    "Vfa": null,
+    "Value": 202,
+    "Text": "SUDAN"
+  },
+  {
+    "Iso": "SEN",
+    "Vfa": null,
+    "Value": 203,
+    "Text": "SENEGAL"
+  },
+  {
+    "Iso": "SGP",
+    "Vfa": null,
+    "Value": 204,
+    "Text": "SINGAPORE"
+  },
+  {
+    "Iso": "SGS",
+    "Vfa": null,
+    "Value": 205,
+    "Text": "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS"
+  },
+  {
+    "Iso": "SHN",
+    "Vfa": null,
+    "Value": 206,
+    "Text": "SAINT HELENA"
+  },
+  {
+    "Iso": "SJM",
+    "Vfa": null,
+    "Value": 207,
+    "Text": "SVALBARD AND JAN MAYEN (ISLAND)"
+  },
+  {
+    "Iso": "SLB",
+    "Vfa": null,
+    "Value": 208,
+    "Text": "SOLOMON ISLANDS"
+  },
+  {
+    "Iso": "SLE",
+    "Vfa": null,
+    "Value": 209,
+    "Text": "SIERRA LEONE"
+  },
+  {
+    "Iso": "SLV",
+    "Vfa": null,
+    "Value": 210,
+    "Text": "EL SALVADOR"
+  },
+  {
+    "Iso": "SMR",
+    "Vfa": null,
+    "Value": 211,
+    "Text": "SAN MARINO"
+  },
+  {
+    "Iso": "SOM",
+    "Vfa": null,
+    "Value": 212,
+    "Text": "SOMALIA"
+  },
+  {
+    "Iso": "SPM",
+    "Vfa": null,
+    "Value": 213,
+    "Text": "SAINT PIERRE AND MIQUELON"
+  },
+  {
+    "Iso": "SRB",
+    "Vfa": null,
+    "Value": 214,
+    "Text": "SERBIA"
+  },
+  {
+    "Iso": "STP",
+    "Vfa": null,
+    "Value": 215,
+    "Text": "SAO TOME AND PRINCIPE"
+  },
+  {
+    "Iso": "SUR",
+    "Vfa": null,
+    "Value": 216,
+    "Text": "SURINAME"
+  },
+  {
+    "Iso": "SWZ",
+    "Vfa": null,
+    "Value": 220,
+    "Text": "ESWATINI"
+  },
+  {
+    "Iso": "SYC",
+    "Vfa": null,
+    "Value": 221,
+    "Text": "SEYCHELLES"
+  },
+  {
+    "Iso": "SYR",
+    "Vfa": null,
+    "Value": 222,
+    "Text": "SYRIA"
+  },
+  {
+    "Iso": "TCA",
+    "Vfa": null,
+    "Value": 223,
+    "Text": "TURKS AND CAICOS ISLANDS"
+  },
+  {
+    "Iso": "TCD",
+    "Vfa": null,
+    "Value": 224,
+    "Text": "CHAD"
+  },
+  {
+    "Iso": "TGO",
+    "Vfa": null,
+    "Value": 225,
+    "Text": "TOGO"
+  },
+  {
+    "Iso": "THA",
+    "Vfa": null,
+    "Value": 226,
+    "Text": "THAILAND"
+  },
+  {
+    "Iso": "TJK",
+    "Vfa": null,
+    "Value": 227,
+    "Text": "TAJIKISTAN"
+  },
+  {
+    "Iso": "TKL",
+    "Vfa": null,
+    "Value": 228,
+    "Text": "TOKELAU"
+  },
+  {
+    "Iso": "TKM",
+    "Vfa": null,
+    "Value": 229,
+    "Text": "TURKMENISTAN"
+  },
+  {
+    "Iso": "TMP",
+    "Vfa": null,
+    "Value": 230,
+    "Text": "EAST TIMOR"
+  },
+  {
+    "Iso": "TON",
+    "Vfa": null,
+    "Value": 231,
+    "Text": "TONGA"
+  },
+  {
+    "Iso": "TTO",
+    "Vfa": null,
+    "Value": 232,
+    "Text": "TRINIDAD AND TOBAGO"
+  },
+  {
+    "Iso": "TUN",
+    "Vfa": null,
+    "Value": 233,
+    "Text": "TUNISIA"
+  },
+  {
+    "Iso": "TUR",
+    "Vfa": null,
+    "Value": 234,
+    "Text": "TURKIYE"
+  },
+  {
+    "Iso": "TUV",
+    "Vfa": null,
+    "Value": 235,
+    "Text": "TUVALU"
+  },
+  {
+    "Iso": "TWN",
+    "Vfa": null,
+    "Value": 236,
+    "Text": "TAIWAN"
+  },
+  {
+    "Iso": "TZA",
+    "Vfa": null,
+    "Value": 237,
+    "Text": "UNITED REPUBLIC OF TANZANIA"
+  },
+  {
+    "Iso": "UGA",
+    "Vfa": null,
+    "Value": 238,
+    "Text": "UGANDA"
+  },
+  {
+    "Iso": "UKR",
+    "Vfa": null,
+    "Value": 239,
+    "Text": "UKRAINE"
+  },
+  {
+    "Iso": "UMI",
+    "Vfa": null,
+    "Value": 240,
+    "Text": "UNITED STATES OUTLYING TERRITORIES   A VERIFIER XX"
+  },
+  {
+    "Iso": "URY",
+    "Vfa": null,
+    "Value": 241,
+    "Text": "URUGUAY"
+  },
+  {
+    "Iso": "USA",
+    "Vfa": null,
+    "Value": 242,
+    "Text": "UNITED STATES OF AMERICA"
+  },
+  {
+    "Iso": "UZB",
+    "Vfa": null,
+    "Value": 243,
+    "Text": "UZBEKISTAN"
+  },
+  {
+    "Iso": "VAT",
+    "Vfa": null,
+    "Value": 244,
+    "Text": "VATICAN CITY"
+  },
+  {
+    "Iso": "VCT",
+    "Vfa": null,
+    "Value": 245,
+    "Text": "SAINT VINCENT AND THE GRENADINES"
+  },
+  {
+    "Iso": "VEN",
+    "Vfa": null,
+    "Value": 246,
+    "Text": "VENEZUELA"
+  },
+  {
+    "Iso": "VGB",
+    "Vfa": null,
+    "Value": 247,
+    "Text": "BRITISH VIRGIN ISLANDS"
+  },
+  {
+    "Iso": "VIR",
+    "Vfa": null,
+    "Value": 248,
+    "Text": "U.S.  VIRGIN ISLANDS"
+  },
+  {
+    "Iso": "VNM",
+    "Vfa": null,
+    "Value": 249,
+    "Text": "VIET NAM"
+  },
+  {
+    "Iso": "VUT",
+    "Vfa": null,
+    "Value": 250,
+    "Text": "VANUATU"
+  },
+  {
+    "Iso": "WLF",
+    "Vfa": null,
+    "Value": 251,
+    "Text": "WALLIS AND FUTUNA ISLANDS"
+  },
+  {
+    "Iso": "WSM",
+    "Vfa": null,
+    "Value": 252,
+    "Text": "WESTERN SAMOA"
+  },
+  {
+    "Iso": "XXD",
+    "Vfa": null,
+    "Value": 253,
+    "Text": "KOSOVO"
+  },
+  {
+    "Iso": "XXX",
+    "Vfa": null,
+    "Value": 254,
+    "Text": "INDETERMINE"
+  },
+  {
+    "Iso": "YEM",
+    "Vfa": null,
+    "Value": 255,
+    "Text": "YEMEN"
+  },
+  {
+    "Iso": "ZAF",
+    "Vfa": null,
+    "Value": 256,
+    "Text": "SOUTH AFRICA"
+  },
+  {
+    "Iso": "ZMB",
+    "Vfa": null,
+    "Value": 257,
+    "Text": "ZAMBIA"
+  },
+  {
+    "Iso": "ZWE",
+    "Vfa": null,
+    "Value": 258,
+    "Text": "ZIMBABWE"
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "Value": 1,
+    "Text": "Visa applicant"
+  },
+  {
+    "Value": 2,
+    "Text": "Parental authority"
+  },
+  {
+    "Value": 3,
+    "Text": "Legal guardian"
+  },
+  {
+    "Value": 4,
+    "Text": "Employer"
+  },
+  {
+    "Value": 5,
+    "Text": "Educational establishement"
+  },
+  {
+    "Value": 6,
+    "Text": "Hotel or temporary accomodation"
+  },
+  {
+    "Value": 7,
+    "Text": "Person"
+  },
+  {
+    "Value": 8,
+    "Text": "Company"
+  },
+  {
+    "Value": 9,
+    "Text": "School"
+  },
+  {
+    "Value": 10,
+    "Text": "EU, EEA or CH citizen"
+  }
+]

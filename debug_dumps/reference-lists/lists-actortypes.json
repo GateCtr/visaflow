@@ -1,0 +1,30 @@
+[
+  {
+    "Value": 1,
+    "Text": "Applicant"
+  },
+  {
+    "Value": 2,
+    "Text": "Guardian"
+  },
+  {
+    "Value": 3,
+    "Text": "Occupation"
+  },
+  {
+    "Value": 4,
+    "Text": "Accomodation"
+  },
+  {
+    "Value": 5,
+    "Text": "Reference Person"
+  },
+  {
+    "Value": 6,
+    "Text": "Reference Organisation"
+  },
+  {
+    "Value": 7,
+    "Text": "EU Family Member"
+  }
+]

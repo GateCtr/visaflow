@@ -1,0 +1,70 @@
+[
+  {
+    "Value": 1,
+    "Text": "Ordinary passport"
+  },
+  {
+    "Value": 2,
+    "Text": "Collective passport"
+  },
+  {
+    "Value": 3,
+    "Text": "Protection passport"
+  },
+  {
+    "Value": 4,
+    "Text": "Diplomatic passport"
+  },
+  {
+    "Value": 5,
+    "Text": "Service passport"
+  },
+  {
+    "Value": 6,
+    "Text": "Official licence"
+  },
+  {
+    "Value": 7,
+    "Text": "Special passport"
+  },
+  {
+    "Value": 8,
+    "Text": "Foreigner's passport"
+  },
+  {
+    "Value": 9,
+    "Text": "National laissez-passer"
+  },
+  {
+    "Value": 10,
+    "Text": "United Nations laissez-passer"
+  },
+  {
+    "Value": 11,
+    "Text": "Travel document for refugees(1951)"
+  },
+  {
+    "Value": 12,
+    "Text": "Travel document for stateless(1954)"
+  },
+  {
+    "Value": 13,
+    "Text": "Laissez-passer for stateless or refugees(1946)"
+  },
+  {
+    "Value": 14,
+    "Text": "Identity and travel document for stateless person"
+  },
+  {
+    "Value": 15,
+    "Text": "Seaman's book"
+  },
+  {
+    "Value": 16,
+    "Text": "Identity and travel document for refugee"
+  },
+  {
+    "Value": 17,
+    "Text": "Miscellaneous"
+  }
+]

@@ -1,0 +1,78 @@
+[
+  {
+    "Value": 1,
+    "Text": "Spouse"
+  },
+  {
+    "Value": 2,
+    "Text": "Son / Daughter"
+  },
+  {
+    "Value": 3,
+    "Text": "Son-in-law / Daughter-in-law"
+  },
+  {
+    "Value": 4,
+    "Text": "Grandson / Granddaughter"
+  },
+  {
+    "Value": 5,
+    "Text": "Father / Mother"
+  },
+  {
+    "Value": 6,
+    "Text": "Father-in-law / Mother-in-law"
+  },
+  {
+    "Value": 7,
+    "Text": "Grandfather / Grandmother"
+  },
+  {
+    "Value": 8,
+    "Text": "Brother / Sister"
+  },
+  {
+    "Value": 9,
+    "Text": "Brother-in-law  / Sister-in-law"
+  },
+  {
+    "Value": 10,
+    "Text": "Relative"
+  },
+  {
+    "Value": 11,
+    "Text": "No family relationship"
+  },
+  {
+    "Value": 12,
+    "Text": "Business relation"
+  },
+  {
+    "Value": 15,
+    "Text": "Partner"
+  },
+  {
+    "Value": 16,
+    "Text": "Engaged with a view to marriage"
+  },
+  {
+    "Value": 17,
+    "Text": "No family relationship (3bis from BE)"
+  },
+  {
+    "Value": 18,
+    "Text": "No family relationship (3bis not from BE)"
+  },
+  {
+    "Value": 19,
+    "Text": "Relative &gt; 3d degree"
+  },
+  {
+    "Value": 20,
+    "Text": "Tutor"
+  },
+  {
+    "Value": 21,
+    "Text": "Legal partner"
+  }
+]
