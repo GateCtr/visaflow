@@ -381,14 +381,14 @@ export default function Landing() {
         </div>
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-semibold mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-semibold mb-8 shadow-lg">
             <Star className="w-4 h-4 text-secondary fill-secondary" />
             <span>Assistance visa premium · Kinshasa, RDC</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-bold text-white tracking-tight leading-tight mb-6">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-semibold text-white tracking-tight leading-[1.05] mb-6 text-balance">
             Votre visa, géré par des experts.{" "}
-            <span className="text-secondary drop-shadow-md">Vous payez si ça marche.</span>
+            <span className="italic text-secondary drop-shadow-md">Vous payez si ça marche.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
@@ -901,7 +901,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ═══ DRC E-VISA / VISA VOLANT — INTERNATIONAL CLIENTS ═══ */}
+      {/* ═══ DRC E-VISA / VISA VOLANT — INTERNATIONAL CLIENTS ��══ */}
       <section className="py-24 bg-white border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
