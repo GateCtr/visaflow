@@ -18,8 +18,7 @@
  */
 
 import { botLog, saveCevBookingConfig, type CevDiscoveredConfig } from './convexClient.js';
-import { randomUserAgent } from './browser.js';
-import { cevImpitFetch, getCevBrowserHeaders } from './cev-shared-impit.js';
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa } from './cev-shared-impit.js';
 
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 
@@ -489,7 +488,7 @@ export async function bookCevViaHttp(
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
-  const ua = siphoned?.userAgent ?? sessionUa ?? randomUserAgent();
+  const ua = siphoned?.userAgent ?? sessionUa ?? getCevSessionUa();
 
   botLog({
     applicationId: clientId,

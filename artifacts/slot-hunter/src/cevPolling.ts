@@ -12,8 +12,7 @@
 //
 // Coût total : ~50ms par check, zéro captcha, zéro Playwright.
 
-import { randomUserAgent } from "./browser.js";
-import { cevImpitFetch, setCevExternalUserAgent, getCevExternalUserAgent, getCevBrowserHeaders } from "./cev-shared-impit.js";
+import { cevImpitFetch, setCevExternalUserAgent, getCevExternalUserAgent, getCevBrowserHeaders, getCevSessionUa } from "./cev-shared-impit.js";
 import { F5CookieManager } from "./cev-f5-cookie-manager.js";
 
 const BASE = "https://appointment.cloud.diplomatie.be";
@@ -62,7 +61,7 @@ function buildEnrichedCookieHeader(
 
 /** Retourne le UA effectif (siphonné > external > random) */
 function getEffectiveUa(siphoned?: SiphonedCookies): string {
-  return siphoned?.userAgent ?? getCevExternalUserAgent() ?? randomUserAgent();
+  return siphoned?.userAgent ?? getCevExternalUserAgent() ?? getCevSessionUa();
 }
 
 export type CevPollResult =
@@ -453,7 +452,7 @@ export async function captureSelectSlotWithoutRedirect(
   error?: string;
 }> {
   try {
-    const ua = randomUserAgent();
+    const ua = getCevSessionUa();
     const cookieHeader = sessionCookie.includes("ASP.NET_SessionId")
       ? sessionCookie
       : `ASP.NET_SessionId=${sessionCookie}; PreferredCulture=en-US`;

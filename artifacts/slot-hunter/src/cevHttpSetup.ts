@@ -504,6 +504,13 @@ export async function setupCevSessionHttp(
     //           (= 1 clic VOWINT comptabilisé, limite 5/heure)
     // ══════════════════════════════════════════════════════════════════════════
 
+    // Délai "lecture de liste" : un utilisateur réel prend 1-4 secondes pour
+    // repérer son dossier dans la liste MyList avant de cliquer sur "Get Appointment".
+    // Sans ce délai, MyList → GetEAppointmentUrl arrive en ~0ms — signal bot détectable
+    // par les systèmes d'analyse comportementale (F5 WAF, OutSystems APM).
+    const listReadDelayMs = 1000 + Math.random() * 3000; // 1-4 secondes
+    await new Promise(r => setTimeout(r, listReadDelayMs));
+
     // Appeler GetEAppointmentUrl avec l'appId
     const eAppointmentUrl = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${vowintAppId}`;
     let integrationUrl: string | null = null;

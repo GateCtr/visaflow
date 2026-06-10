@@ -24,23 +24,29 @@ export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 // Versions alignées sur juin 2026 : Chrome 147-148 (stable), Edge 148, Firefox 138,
 // Safari 18, Opera 120. Profils variés : Windows/macOS/Linux.
 // ⚠️ À mettre à jour environ tous les 3 mois quand Chrome dépasse +10 versions.
+// UA Playwright — portails non-CEV (USA, Dubaï, Schengen, etc.)
+// Règle : builds réels uniquement — le WAF détecte les .0.0.0 fictifs.
+// Chrome 149 (stable juin 2026) en tête, Chrome 148 secondaire.
+// Pas utilisé pour les appels HTTP CEV (qui ont leur propre pool dans cev-shared-impit.ts).
 const USER_AGENTS = [
-  // Chrome 148 sur Windows 10/11 (version dominante juin 2026)
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+  // Chrome 149 stable Windows — version courante (juin 2026)
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+  // Chrome 149 stable macOS
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+  // Chrome 149 build patch variant
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.103 Safari/537.36",
+  // Chrome 148 stable Windows — encore très répandu
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
-  // Chrome 147 sur Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-  // Edge 148 sur Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0",
-  // Chrome 148 sur macOS (Chromium rapporte toujours 10_15_7 — comportement normal)
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-  // Safari sur macOS Sequoia
+  // Chrome 148 stable macOS
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+  // Edge 148 stable Windows
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.2849.68",
+  // Chrome 147 stable Windows — utilisateurs lents à mettre à jour
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
+  // Safari sur macOS Sequoia — diversité navigateur sur portails non-CEV
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
-  // Firefox sur Windows
+  // Firefox sur Windows — diversité sur portails non-CEV
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
-  // Chrome sur Linux (type bureau Ubuntu)
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
 ];
 
 const VIEWPORTS = [
