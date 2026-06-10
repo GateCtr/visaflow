@@ -102,34 +102,46 @@ interface UaProfile {
 
 const CEV_UA_POOL: UaProfile[] = [
   {
-    // FIX #6: Trois brands Chrome officiel stable Windows — "Google Chrome";v="148" ajouté
+    // Chrome 149 stable Windows — version courante (juin 2026), build réel
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="149", "Google Chrome";v="149"',
+    platform: '"Windows"',
+  },
+  {
+    // Chrome 149 stable macOS — version courante, diversité OS
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="149", "Google Chrome";v="149"',
+    platform: '"macOS"',
+  },
+  {
+    // Chrome 149 stable Windows — build patch .103 (coexiste avec .55 en déploiement progressif)
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.103 Safari/537.36",
+    chUa: '"Not/A)Brand";v="99", "Chromium";v="149", "Google Chrome";v="149"',
+    platform: '"Windows"',
+  },
+  {
+    // FIX #6: Chrome 148 stable Windows — encore très répandu (update progressif)
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
     chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Google Chrome";v="148"',
     platform: '"Windows"',
   },
   {
-    // FIX #7: Build réel 147.0.7231.96 (au lieu de 147.0.0.0 fictif) + "Google Chrome" brand ajouté
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
-    chUa: '"Not/A)Brand";v="99", "Chromium";v="147", "Google Chrome";v="147"',
-    platform: '"Windows"',
-  },
-  {
-    // FIX #6: Trois brands Chrome officiel stable macOS — "Google Chrome";v="148" ajouté
+    // FIX #6: Chrome 148 stable macOS — encore très répandu
     ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
     chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Google Chrome";v="148"',
     platform: '"macOS"',
   },
   {
-    // FIX #8: Build réel Edge 148.0.2849.68 (au lieu de Edg/148.0.0.0 fictif)
+    // FIX #8: Edge 148 stable Windows — build réel
     ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.2849.68",
     chUa: '"Not/A)Brand";v="99", "Chromium";v="148", "Microsoft Edge";v="148"',
     platform: '"Windows"',
   },
   {
-    // FIX #7: macOS Chrome 147 stable (remplace l'entrée Linux détectable) — build réel + 3 brands
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
+    // FIX #7: Chrome 147 stable Windows — utilisateurs lents à mettre à jour
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
     chUa: '"Not/A)Brand";v="99", "Chromium";v="147", "Google Chrome";v="147"',
-    platform: '"macOS"',
+    platform: '"Windows"',
   },
 ];
 

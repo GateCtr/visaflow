@@ -242,6 +242,11 @@ async function getVowintSession(
     const loginPath = formActionMatch?.[1] ?? "/en/Account/Login";
     const loginUrl = loginPath.startsWith("http") ? loginPath : `${VOWINT_BASE}${loginPath}`;
 
+    // Délai humain simulé : un vrai utilisateur prend 2-8 secondes pour taper ses identifiants.
+    // Sans ce délai, le POST arrive ~100ms après le GET → signal bot évident pour F5 WAF.
+    const loginTypingDelayMs = 2000 + Math.random() * 6000; // 2-8 secondes
+    await new Promise(r => setTimeout(r, loginTypingDelayMs));
+
     // 2. POST login — Cache-Control: max-age=0 maintenant intégré dans isFormPost (getCevBrowserHeaders).
     //    sec-ch-ua* APRÈS User-Agent, Cookie AVANT Origin — ordre Chrome réel (HAR 2026-06-08).
     const loginRes = await cevSetupFetch(loginUrl, {
