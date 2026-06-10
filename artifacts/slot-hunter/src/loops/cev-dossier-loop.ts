@@ -924,13 +924,23 @@ async function runAccountLoop(job: any): Promise<void> {
       }
 
       // ─── Vérifier si le job est toujours actif toutes les 5 scans ───
+      // ET recharger les credentials (ils peuvent avoir changé dans Convex)
       if (state.scanCount % 5 === 0) {
         const latestJobs = await getActiveJobs();
-        const currentJobStillActive = latestJobs.some(j => j.id === accountId);
-        if (!currentJobStillActive) {
+        const latestJob = latestJobs.find((j: any) => j.id === accountId);
+        if (!latestJob) {
           logger.info(`🛑 Job ${accountId} (${applicantName}) n'est plus actif → arrêt`);
           state.isRunning = false;
           break;
+        }
+        // Recharger les credentials si ils ont changé
+        const freshEmail = latestJob.hunterConfig?.embassyUsername;
+        const freshPassword = latestJob.hunterConfig?.embassyPassword;
+        if (freshEmail && freshPassword && (freshEmail !== vowintEmail || freshPassword !== vowintPassword)) {
+          logger.info(`🔑 Credentials VOWINT mis à jour depuis Convex (email: ${freshEmail.slice(0, 20)}…)`);
+          invalidateVowintCache(vowintEmail); // invalider l'ancien cache
+          vowintEmail = freshEmail;
+          vowintPassword = freshPassword;
         }
       }
 
@@ -1088,9 +1098,12 @@ async function runAccountLoop(job: any): Promise<void> {
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
-          // Invalider le cache de la clé Anti-Captcha pour que le prochain scan
-          // relise process.env ET botConfig Convex — corrige anticaptcha_not_configured en cascade
+          // Invalider le cache Anti-Captcha ET le cache VOWINT pour forcer
+          // un re-login complet au prochain scan (credentials frais depuis Convex)
           invalidateAnticaptchaCache();
+          invalidateVowintCache(vowintEmail);
+          globalSessionClicks = 0;
+          logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain scan utilisera des credentials frais`);
           break;
         case "no_slot":
           logger.info(`  — Pas de créneau`);
