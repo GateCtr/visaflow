@@ -170,9 +170,9 @@ function parseUserAgentForSecCh(ua: string): {
   chUaArch: string;
   chUaBitness: string;
 } {
-  // Default values based on our internal pool
-  let majorVersion = "148";
-  let fullVersion = "148.0.7778.96";
+  // Default values based on our internal pool (current stable Chrome)
+  let majorVersion = "149";
+  let fullVersion = "149.0.7827.55";
   let platform = '"Windows"';
   let platformVersion = '"10.0"';
   let arch = '"x86"';
