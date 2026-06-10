@@ -425,6 +425,7 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
         applicantName: `[TEST] schengen`,
         travelDate: "",
         urgencyTier: "standard",
+        broadcastVisaClass: null,
         slotBookingRefs: null,
         hunterConfig: {
           embassyUsername: test.testUsername,
@@ -559,6 +560,7 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
       applicantName: `[TEST] canada`,
       travelDate: "",
       urgencyTier: "standard",
+      broadcastVisaClass: null,
       slotBookingRefs: null,
       hunterConfig: {
         embassyUsername: test.testUsername!,
@@ -648,6 +650,7 @@ export async function runBotTestSession(test: BotTest): Promise<void> {
     applicantName: `[TEST] ${test.destination}`,
     travelDate: "",
     urgencyTier: "standard",
+    broadcastVisaClass: null,
     slotBookingRefs: null,
     hunterConfig: {
       embassyUsername: test.testUsername!,
