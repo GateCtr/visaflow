@@ -56,6 +56,7 @@ interface SiphonedCookies {
   aspNetSessionId?: string;
   userAgent?: string;
   validUntil?: number;
+  preferredCulture?: string;
 }
 
 // ─── Helpers réseau ───────────────────────────────────────────────────────────
@@ -66,7 +67,9 @@ interface SiphonedCookies {
  */
 function buildCevCookieStr(sessionCookie: string, siphoned?: SiphonedCookies): string {
   const aspCookie = siphoned?.aspNetSessionId ?? sessionCookie;
-  let cookieStr = `ASP.NET_SessionId=${aspCookie}; PreferredCulture=en-US`;
+  // FIX Faille #2 : fr-BE cohérent avec Accept-Language: fr-BE (siphoned garde sa valeur serveur)
+  const culture = siphoned?.preferredCulture ?? "fr-BE";
+  let cookieStr = `ASP.NET_SessionId=${aspCookie}; PreferredCulture=${culture}`;
   if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
     if (!siphoned.validUntil || Date.now() < siphoned.validUntil) {
       cookieStr = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${cookieStr}`;
@@ -199,6 +202,100 @@ function extractInlineAjaxEndpoints(html: string): string[] {
   }
 
   return [...endpoints].slice(0, 30); // max 30 pour éviter les logs trop volumineux
+}
+
+/**
+ * Extrait les URLs de script bundles (<script src="...">) depuis le HTML de la page.
+ * Retourne uniquement les bundles hébergés sur le même domaine CEV (pas CDN externe).
+ */
+function extractScriptBundleUrls(html: string, base: string): string[] {
+  const urls: string[] = [];
+  const regex = /<script[^>]+src=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(html)) !== null) {
+    const src = m[1];
+    if (src.startsWith("/") || src.startsWith(base)) {
+      const full = src.startsWith("http") ? src : `${base}${src}`;
+      if (full.includes("appointment.cloud.diplomatie.be")) urls.push(full);
+    }
+  }
+  return [...new Set(urls)].slice(0, 8); // max 8 bundles
+}
+
+/**
+ * Scan les script bundles de la page SelectSlot pour découvrir l'endpoint de booking.
+ * Cherche les patterns jQuery $.ajax / callPost / url: contenant Book, SelectSlot, Confirm, etc.
+ * Log le résultat via botLog — ne modifie pas le flux de booking.
+ *
+ * Appelé uniquement en mode discovery (pas de knownConfig), pour ne pas ralentir le booking
+ * quand l'endpoint est déjà connu.
+ */
+async function scanBundlesForBookingEndpoint(
+  html: string,
+  referer: string,
+  sessionCookie: string,
+  siphoned: SiphonedCookies | undefined,
+  ua: string,
+  clientId: string,
+): Promise<{ endpoints: string[]; bundlesScanned: number }> {
+  const bundleUrls = extractScriptBundleUrls(html, CEV_BASE);
+  const allEndpoints = new Set<string>();
+
+  // Patterns couvrant jQuery callPost, $.ajax url:, $.post, fetch
+  const patterns = [
+    /callPost\(["']([^"']+(?:slot|book|appoint|select|confirm|reserve|submit)[^"']*)["']/gi,
+    /url\s*:\s*["']([^"']+(?:Slot|Book|Appoint|Select|Confirm|Submit|Reserve|Home\/)[^"']*)["']/gi,
+    /\$\.(?:post|ajax)\(\s*["']([^"']+)["']/gi,
+    /callPost\(\s*["']([^"'\/][^"']*)["']/gi, // callPost avec chemin relatif court
+  ];
+
+  for (const bundleUrl of bundleUrls) {
+    try {
+      const res = await cevImpitFetch(bundleUrl, {
+        method: "GET",
+        headers: getCevBrowserHeaders({
+          cookie: buildCevCookieStr(sessionCookie, siphoned),
+          userAgent: ua,
+          referer,
+          accept: "*/*",
+          fetchSite: "same-origin",
+        }),
+        signal: AbortSignal.timeout(15_000),
+      }, "[CEV-BUNDLE]");
+
+      if (!res.ok) continue;
+      const text = await res.text().catch(() => "");
+      if (!text) continue;
+
+      for (const pattern of patterns) {
+        pattern.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = pattern.exec(text)) !== null) {
+          allEndpoints.add(m[1]);
+        }
+      }
+    } catch {
+      // Timeout ou erreur réseau — ignorer ce bundle
+    }
+  }
+
+  const endpoints = [...allEndpoints].slice(0, 20);
+
+  botLog({
+    applicationId: clientId,
+    step: "cev_http_bundle_scan",
+    status: "ok",
+    data: {
+      bundlesScanned: bundleUrls.length,
+      bundleUrls,
+      endpointsFound: endpoints,
+      bookingCandidates: endpoints.filter(e =>
+        /book|select.*slot|confirm|submit/i.test(e)
+      ),
+    },
+  });
+
+  return { endpoints, bundlesScanned: bundleUrls.length };
 }
 
 /**
@@ -568,6 +665,24 @@ export async function bookCevViaHttp(
         htmlPreview: knownConfig ? html.slice(0, 500) : html.slice(0, 3000),
       },
     });
+
+    // ═══ ÉTAPE 2b : Scan des bundles JS pour découvrir l'endpoint de booking ═══
+    // Exécuté uniquement en mode discovery (pas de knownConfig).
+    // Faille #4 : l'endpoint exact de booking n'est pas dans le HTML inline — il est dans un bundle.
+    // On télécharge les bundles de la page SelectSlot et on cherche callPost/$.ajax/url: contenant
+    // des patterns booking. Résultat loggé dans botLog (step cev_http_bundle_scan) — ne bloque pas le flux.
+    if (!knownConfig) {
+      // Fire-and-forget avec timeout global de 30s (n'attend pas si la page arrive sans bundle)
+      scanBundlesForBookingEndpoint(html, selectSlotUrl, sessionCookie, siphoned, ua, clientId)
+        .catch(err => {
+          botLog({
+            applicationId: clientId,
+            step: 'cev_http_bundle_scan_error',
+            status: 'warn',
+            data: { error: String(err).slice(0, 200) },
+          });
+        });
+    }
 
     // ═══ ÉTAPE 3 : GET /Home/AvailableTimeSlots (mois courant) ═══
     const now = new Date();

@@ -581,6 +581,14 @@ export async function setupCevSessionHttp(
             integrationUrl = eText.trim().replace(/^"|"$/g, "");
           }
         }
+        // FIX Faille #2 : aligner la langue de l'URL avec Accept-Language: fr-BE.
+        // GetEAppointmentUrl retourne l'URL avec le suffixe de culture VOWINT (/en-US par défaut).
+        // Un utilisateur belge francophone naviguant depuis VOWINT en français obtiendrait /fr-BE.
+        // On remplace /en-US par /fr-BE pour que le serveur CEV pose PreferredCulture=fr-BE,
+        // cohérent avec Accept-Language: fr-BE,fr;q=0.9,… envoyé dans tous les headers.
+        if (integrationUrl?.endsWith("/en-US")) {
+          integrationUrl = integrationUrl.slice(0, -6) + "/fr-BE";
+        }
       } else if (eRes.status === 429) {
         // HTTP 429 explicite = rate-limit sur ce dossier/requête (pas d'invalidation session globale)
         botLog({ applicationId: clientId, step: "cev_http_rate_limit_429", status: "warn", data: { status: eRes.status } });
@@ -664,8 +672,10 @@ export async function setupCevSessionHttp(
       }
     }
 
-    // Construire le cookie header complet, avec F5 si disponible
-    let fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=en-US`;
+    // Construire le cookie header complet, avec F5 si disponible.
+    // FIX Faille #2 : PreferredCulture=fr-BE (cohérent avec Accept-Language: fr-BE envoyé dans les headers
+    // ET avec l'URL d'intégration remplacée par /fr-BE ci-dessus — le serveur CEV le posera lui-même).
+    let fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=fr-BE`;
     if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
       fullCevCookie = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${fullCevCookie}`;
     }

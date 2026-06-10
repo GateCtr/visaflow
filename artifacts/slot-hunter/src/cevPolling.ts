@@ -29,6 +29,7 @@ interface SiphonedCookies {
   aspNetSessionId?: string;
   userAgent?: string;
   validUntil?: number;
+  preferredCulture?: string;
 }
 
 /** Construit le cookie header enrichi avec le F5 si disponible (siphonné > manager) */
@@ -38,9 +39,11 @@ function buildEnrichedCookieHeader(
 ): string {
   // Use siphoned ASP.NET Session ID if available and valid
   const aspNetCookie = siphoned?.aspNetSessionId || sessionCookie;
+  // FIX Faille #2 : fr-BE cohérent avec Accept-Language: fr-BE et l'URL /fr-BE (siphoned garde sa valeur)
+  const culture = siphoned?.preferredCulture ?? "fr-BE";
   const baseCookie = aspNetCookie.includes("ASP.NET_SessionId")
     ? aspNetCookie
-    : `ASP.NET_SessionId=${aspNetCookie}; PreferredCulture=en-US`;
+    : `ASP.NET_SessionId=${aspNetCookie}; PreferredCulture=${culture}`;
 
   // Check if siphoned F5 cookie is available and valid
   if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
@@ -210,6 +213,12 @@ async function pollViaApi(
   const now = new Date();
   // Vérifier mois courant + mois suivant (comme pollCevSlotsMultiMonth)
   for (let i = 0; i < 2; i++) {
+    // FIX Faille #3 : délai inter-mois 0.8–2s.
+    // Un vrai utilisateur clique "mois suivant" dans le calendrier — pas deux POST en <10ms.
+    // Sans ce délai, deux requêtes quasi-simultanées vers le même endpoint sont détectables.
+    if (i > 0) {
+      await new Promise(r => setTimeout(r, 800 + Math.random() * 1200)); // 0.8–2s
+    }
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const body = { month: d.getMonth() + 1, year: d.getFullYear() };
 
