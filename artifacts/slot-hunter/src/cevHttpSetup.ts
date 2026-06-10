@@ -262,7 +262,12 @@ async function getVowintSession(
       signal: AbortSignal.timeout(30_000),
     });
     if (loginRes.status !== 302) {
-      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status } });
+      let bodyPreview = "";
+      try { bodyPreview = (await loginRes.text()).slice(0, 400); } catch { /* ignore */ }
+      const redirectLocation = loginRes.headers.get("location") ?? "(none)";
+      console.error(`[CEV-SETUP] ❌ LOGIN VOWINT ÉCHOUÉ — status=${loginRes.status} redirect="${redirectLocation}" email="${vowintEmail.slice(0, 30)}…"`);
+      console.error(`[CEV-SETUP] ❌ Body preview: ${bodyPreview.replace(/\s+/g, " ").slice(0, 300)}`);
+      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status, redirect: redirectLocation, bodyPreview: bodyPreview.slice(0, 300), email: vowintEmail } });
       return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
     }
 
