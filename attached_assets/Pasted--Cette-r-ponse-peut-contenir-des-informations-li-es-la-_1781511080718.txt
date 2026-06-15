@@ -1,0 +1,869 @@
+**Cette réponse peut contenir des informations liées à la sécurité, un sujet nuancé. Vous devriez vérifier la réponse en utilisant un jugement humain éclairé. Visitez [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) pour plus de détails.**
+
+# 🛡️ Pistes Complémentaires pour Robustesse Maximale
+
+Excellente question ! Voici les pistes avancées non explorées pour renforcer l'architecture défensive d'Agotels :
+
+## 🍪 **1. Cookie F5 BIG-IP & Load Balancer Fingerprinting**
+
+### **🔍 Analyse des Cookies de Protection Réseau :**
+
+```python
+def analyze_f5_bigip_cookies(request_headers):
+    """
+    Analyse sophistiquée des cookies F5 BIG-IP
+    """
+    f5_indicators = {
+        'BIGipServer': extract_bigip_server_cookie(request_headers),
+        'TS': extract_timestamp_cookie(request_headers),
+        'rd': extract_route_domain_cookie(request_headers),
+        'LastMRH_Session': extract_mrh_session(request_headers)
+    }
+    
+    # Analyse de cohérence temporelle
+    temporal_analysis = {
+        'cookie_age_consistency': validate_cookie_timestamps(f5_indicators),
+        'session_persistence_pattern': analyze_persistence_pattern(f5_indicators),
+        'load_balancer_affinity': check_lb_affinity_consistency(f5_indicators)
+    }
+    
+    # Détection d'anomalies F5
+    anomalies = []
+    
+    # Anomalie 1: Cookie F5 sans infrastructure F5
+    if has_f5_cookies_without_f5_infrastructure(f5_indicators):
+        anomalies.append({
+            'type': 'f5_cookie_spoofing',
+            'severity': 'high',
+            'evidence': 'F5 cookies present without F5 infrastructure'
+        })
+    
+    # Anomalie 2: Timestamps incohérents
+    if temporal_analysis['cookie_age_consistency'] < 0.7:
+        anomalies.append({
+            'type': 'temporal_inconsistency',
+            'severity': 'medium',
+            'evidence': temporal_analysis
+        })
+    
+    # Anomalie 3: Pattern de persistence suspect
+    if is_suspicious_persistence_pattern(temporal_analysis['session_persistence_pattern']):
+        anomalies.append({
+            'type': 'suspicious_persistence',
+            'severity': 'high',
+            'evidence': temporal_analysis['session_persistence_pattern']
+        })
+    
+    return {
+        'indicators': f5_indicators,
+        'temporal_analysis': temporal_analysis,
+        'anomalies': anomalies,
+        'risk_score': calculate_f5_risk_score(anomalies)
+    }
+
+def extract_bigip_server_cookie(headers):
+    """
+    Extraction et analyse du cookie BIGipServer
+    """
+    bigip_cookie = headers.get('Cookie', '').split('BIGipServer')
+    if len(bigip_cookie) > 1:
+        cookie_value = bigip_cookie[1].split(';')[0].strip('=')
+        
+        # Décodage de la valeur F5
+        decoded_info = decode_f5_cookie_value(cookie_value)
+        
+        return {
+            'raw_value': cookie_value,
+            'decoded_ip': decoded_info.get('ip'),
+            'decoded_port': decoded_info.get('port'),
+            'encoding_method': decoded_info.get('method'),
+            'is_valid_encoding': validate_f5_encoding(cookie_value)
+        }
+    
+    return None
+
+# Configuration WAF pour cookies F5
+F5_COOKIE_DETECTION_RULE = {
+    "Name": "F5-Cookie-Anomaly-Detection",
+    "Priority": 15,
+    "Statement": {
+        "AndStatement": {
+            "Statements": [
+                {
+                    "ByteMatchStatement": {
+                        "SearchString": "BIGipServer",
+                        "FieldToMatch": {"SingleHeader": {"Name": "cookie"}},
+                        "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                        "PositionalConstraint": "CONTAINS"
+                    }
+                },
+                {
+                    "NotStatement": {
+                        "Statement": {
+                            "IPSetReferenceStatement": {
+                                "ARN": "arn:aws:wafv2:region:account:global/ipset/f5-infrastructure-ips/id"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "Action": {
+        "Block": {
+            "CustomResponse": {
+                "ResponseCode": 403,
+                "CustomResponseBodyKey": "f5_cookie_spoofing_detected"
+            }
+        }
+    }
+}
+```
+
+## 🖥️ **2. Device Fingerprinting Avancé (Canvas, WebGL, Audio)**
+
+### **🎨 Empreinte Canvas & WebGL :**
+
+```javascript
+// JavaScript côté client pour empreinte device avancée
+class AdvancedDeviceFingerprinting {
+    constructor() {
+        this.fingerprint = {};
+    }
+    
+    async generateComprehensiveFingerprint() {
+        // Canvas Fingerprinting
+        this.fingerprint.canvas = this.generateCanvasFingerprint();
+        
+        // WebGL Fingerprinting
+        this.fingerprint.webgl = this.generateWebGLFingerprint();
+        
+        // Audio Context Fingerprinting
+        this.fingerprint.audio = await this.generateAudioFingerprint();
+        
+        // Hardware Fingerprinting
+        this.fingerprint.hardware = this.generateHardwareFingerprint();
+        
+        // Behavioral Fingerprinting
+        this.fingerprint.behavioral = this.generateBehavioralFingerprint();
+        
+        // Font Fingerprinting
+        this.fingerprint.fonts = this.generateFontFingerprint();
+        
+        return this.createCompositeFingerprint();
+    }
+    
+    generateCanvasFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Dessin complexe pour empreinte unique
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.fillText('Agotels Security Check 🔒', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.fillText('Advanced Fingerprinting', 4, 45);
+        
+        // Ajout de formes géométriques
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgb(255,0,255)';
+        ctx.beginPath();
+        ctx.arc(50, 50, 50, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+        
+        return {
+            hash: this.hashString(canvas.toDataURL()),
+            dimensions: `${canvas.width}x${canvas.height}`,
+            colorDepth: screen.colorDepth,
+            pixelRatio: window.devicePixelRatio
+        };
+    }
+    
+    generateWebGLFingerprint() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        
+        if (!gl) return { supported: false };
+        
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        
+        return {
+            supported: true,
+            vendor: gl.getParameter(gl.VENDOR),
+            renderer: gl.getParameter(gl.RENDERER),
+            version: gl.getParameter(gl.VERSION),
+            shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+            unmaskedVendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : null,
+            unmaskedRenderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null,
+            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+            maxViewportDims: gl.getParameter(gl.MAX_VIEWPORT_DIMS),
+            extensions: gl.getSupportedExtensions()
+        };
+    }
+    
+    async generateAudioFingerprint() {
+        return new Promise((resolve) => {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const analyser = audioContext.createAnalyser();
+                const gainNode = audioContext.createGain();
+                const scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(10000, audioContext.currentTime);
+                
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                
+                oscillator.connect(analyser);
+                analyser.connect(scriptProcessor);
+                scriptProcessor.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                scriptProcessor.onaudioprocess = (event) => {
+                    const buffer = event.inputBuffer.getChannelData(0);
+                    let sum = 0;
+                    for (let i = 0; i < buffer.length; i++) {
+                        sum += Math.abs(buffer[i]);
+                    }
+                    
+                    oscillator.disconnect();
+                    scriptProcessor.disconnect();
+                    audioContext.close();
+                    
+                    resolve({
+                        fingerprint: this.hashString(sum.toString()),
+                        sampleRate: audioContext.sampleRate,
+                        maxChannelCount: audioContext.destination.maxChannelCount,
+                        numberOfInputs: audioContext.destination.numberOfInputs,
+                        numberOfOutputs: audioContext.destination.numberOfOutputs,
+                        channelCount: audioContext.destination.channelCount
+                    });
+                };
+                
+                oscillator.start(0);
+            } catch (e) {
+                resolve({ supported: false, error: e.message });
+            }
+        });
+    }
+    
+    generateHardwareFingerprint() {
+        return {
+            cpuCores: navigator.hardwareConcurrency,
+            memory: navigator.deviceMemory,
+            platform: navigator.platform,
+            maxTouchPoints: navigator.maxTouchPoints,
+            screen: {
+                width: screen.width,
+                height: screen.height,
+                availWidth: screen.availWidth,
+                availHeight: screen.availHeight,
+                colorDepth: screen.colorDepth,
+                pixelDepth: screen.pixelDepth,
+                orientation: screen.orientation ? screen.orientation.type : null
+            },
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            language: navigator.language,
+            languages: navigator.languages,
+            cookieEnabled: navigator.cookieEnabled,
+            doNotTrack: navigator.doNotTrack
+        };
+    }
+    
+    generateBehavioralFingerprint() {
+        // Collecte de données comportementales
+        const behavioral = {
+            mouseMovements: this.collectMouseMovements(),
+            keyboardTiming: this.collectKeyboardTiming(),
+            scrollBehavior: this.collectScrollBehavior(),
+            clickPatterns: this.collectClickPatterns()
+        };
+        
+        return behavioral;
+    }
+    
+    hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash.toString(36);
+    }
+}
+```
+
+### **🔍 Analyse Côté Serveur :**
+
+```python
+def analyze_device_fingerprint(fingerprint_data):
+    """
+    Analyse sophistiquée de l'empreinte device
+    """
+    analysis = {
+        'consistency_score': calculate_fingerprint_consistency(fingerprint_data),
+        'uniqueness_score': calculate_fingerprint_uniqueness(fingerprint_data),
+        'spoofing_indicators': detect_fingerprint_spoofing(fingerprint_data),
+        'automation_signals': detect_automation_signals(fingerprint_data)
+    }
+    
+    # Détection d'incohérences
+    inconsistencies = []
+    
+    # Incohérence 1: Canvas/WebGL mismatch
+    if is_canvas_webgl_mismatch(fingerprint_data):
+        inconsistencies.append({
+            'type': 'canvas_webgl_mismatch',
+            'severity': 'high',
+            'description': 'Canvas and WebGL fingerprints indicate different hardware'
+        })
+    
+    # Incohérence 2: Audio fingerprint impossible
+    if is_impossible_audio_fingerprint(fingerprint_data):
+        inconsistencies.append({
+            'type': 'impossible_audio',
+            'severity': 'medium',
+            'description': 'Audio fingerprint inconsistent with declared hardware'
+        })
+    
+    # Incohérence 3: Empreinte trop parfaite (automation)
+    if is_too_perfect_fingerprint(fingerprint_data):
+        inconsistencies.append({
+            'type': 'perfect_fingerprint',
+            'severity': 'high',
+            'description': 'Fingerprint lacks natural variance expected from real devices'
+        })
+    
+    return {
+        'analysis': analysis,
+        'inconsistencies': inconsistencies,
+        'risk_score': calculate_device_risk_score(analysis, inconsistencies),
+        'recommendation': generate_fingerprint_recommendation(analysis, inconsistencies)
+    }
+```
+
+## 🌐 **3. Network-Level Behavioral Analysis**
+
+### **📊 Analyse des Patterns TCP/IP :**
+
+```python
+def analyze_network_behavioral_patterns(connection_data):
+    """
+    Analyse comportementale au niveau réseau
+    """
+    network_signals = {
+        'tcp_window_scaling': analyze_tcp_window_behavior(connection_data),
+        'packet_timing_variance': calculate_packet_timing_variance(connection_data),
+        'mtu_discovery_pattern': analyze_mtu_discovery(connection_data),
+        'tcp_options_fingerprint': extract_tcp_options_fingerprint(connection_data),
+        'congestion_control_behavior': analyze_congestion_control(connection_data)
+    }
+    
+    # Détection de patterns automatisés
+    automation_indicators = []
+    
+    # Indicateur 1: Timing trop régulier
+    if network_signals['packet_timing_variance'] < HUMAN_TIMING_THRESHOLD:
+        automation_indicators.append({
+            'type': 'regular_packet_timing',
+            'confidence': 0.85,
+            'evidence': network_signals['packet_timing_variance']
+        })
+    
+    # Indicateur 2: TCP window scaling suspect
+    if is_suspicious_tcp_window_scaling(network_signals['tcp_window_scaling']):
+        automation_indicators.append({
+            'type': 'suspicious_tcp_scaling',
+            'confidence': 0.75,
+            'evidence': network_signals['tcp_window_scaling']
+        })
+    
+    # Indicateur 3: Options TCP non-standard
+    if has_non_standard_tcp_options(network_signals['tcp_options_fingerprint']):
+        automation_indicators.append({
+            'type': 'non_standard_tcp_options',
+            'confidence': 0.70,
+            'evidence': network_signals['tcp_options_fingerprint']
+        })
+    
+    return {
+        'network_signals': network_signals,
+        'automation_indicators': automation_indicators,
+        'network_risk_score': calculate_network_risk_score(automation_indicators)
+    }
+
+# Configuration CloudWatch pour métriques réseau
+NETWORK_METRICS_CONFIG = {
+    'CustomMetrics': [
+        {
+            'MetricName': 'TCPWindowVariance',
+            'Namespace': 'Agotels/NetworkBehavior',
+            'Dimensions': [
+                {'Name': 'SourceIP', 'Value': '${source_ip}'},
+                {'Name': 'ConnectionType', 'Value': '${connection_type}'}
+            ]
+        },
+        {
+            'MetricName': 'PacketTimingRegularity',
+            'Namespace': 'Agotels/NetworkBehavior',
+            'Unit': 'Percent'
+        }
+    ]
+}
+```
+
+## 🔐 **4. Cryptographic Challenge-Response**
+
+### **🧩 Défis Cryptographiques Dynamiques :**
+
+```python
+import hashlib
+import secrets
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
+class CryptographicChallengeSystem:
+    def __init__(self):
+        self.active_challenges = {}
+        
+    def generate_dynamic_challenge(self, session_id, difficulty_level):
+        """
+        Génération de défis cryptographiques adaptatifs
+        """
+        challenge_types = [
+            'proof_of_work',
+            'memory_hard_function',
+            'time_lock_puzzle',
+            'interactive_proof'
+        ]
+        
+        challenge_type = self.select_challenge_type(difficulty_level)
+        
+        if challenge_type == 'proof_of_work':
+            return self.generate_proof_of_work_challenge(session_id, difficulty_level)
+        elif challenge_type == 'memory_hard_function':
+            return self.generate_memory_hard_challenge(session_id, difficulty_level)
+        elif challenge_type == 'time_lock_puzzle':
+            return self.generate_time_lock_challenge(session_id, difficulty_level)
+        else:
+            return self.generate_interactive_proof_challenge(session_id, difficulty_level)
+    
+    def generate_proof_of_work_challenge(self, session_id, difficulty):
+        """
+        Défi Proof-of-Work adaptatif
+        """
+        nonce = secrets.token_hex(16)
+        target_prefix = '0' * difficulty
+        
+        challenge = {
+            'type': 'proof_of_work',
+            'session_id': session_id,
+            'nonce': nonce,
+            'target_prefix': target_prefix,
+            'algorithm': 'sha256',
+            'timestamp': time.time(),
+            'expected_time': self.calculate_expected_solve_time(difficulty)
+        }
+        
+        self.active_challenges[session_id] = challenge
+        
+        return {
+            'challenge_id': session_id,
+            'nonce': nonce,
+            'target_prefix': target_prefix,
+            'instructions': f'Find a value that when concatenated with {nonce} and hashed with SHA256 starts with {target_prefix}'
+        }
+    
+    def verify_challenge_response(self, session_id, response):
+        """
+        Vérification sophistiquée des réponses
+        """
+        if session_id not in self.active_challenges:
+            return {'valid': False, 'reason': 'challenge_not_found'}
+        
+        challenge = self.active_challenges[session_id]
+        
+        # Vérification temporelle
+        solve_time = time.time() - challenge['timestamp']
+        expected_time = challenge['expected_time']
+        
+        # Détection de résolution trop rapide (bot)
+        if solve_time < expected_time * 0.1:
+            return {
+                'valid': False, 
+                'reason': 'solved_too_quickly',
+                'solve_time': solve_time,
+                'expected_minimum': expected_time * 0.1
+            }
+        
+        # Détection de résolution trop lente (timeout)
+        if solve_time > expected_time * 10:
+            return {
+                'valid': False,
+                'reason': 'timeout',
+                'solve_time': solve_time,
+                'maximum_allowed': expected_time * 10
+            }
+        
+        # Vérification cryptographique
+        if challenge['type'] == 'proof_of_work':
+            return self.verify_proof_of_work(challenge, response, solve_time)
+        
+        return {'valid': False, 'reason': 'unknown_challenge_type'}
+    
+    def verify_proof_of_work(self, challenge, response, solve_time):
+        """
+        Vérification Proof-of-Work avec analyse comportementale
+        """
+        combined = challenge['nonce'] + response
+        hash_result = hashlib.sha256(combined.encode()).hexdigest()
+        
+        is_valid = hash_result.startswith(challenge['target_prefix'])
+        
+        if is_valid:
+            # Analyse comportementale du temps de résolution
+            behavioral_analysis = self.analyze_solve_time_behavior(
+                challenge['expected_time'], 
+                solve_time,
+                challenge['session_id']
+            )
+            
+            return {
+                'valid': True,
+                'solve_time': solve_time,
+                'hash_result': hash_result,
+                'behavioral_score': behavioral_analysis['human_likelihood'],
+                'automation_indicators': behavioral_analysis['automation_signals']
+            }
+        
+        return {'valid': False, 'reason': 'incorrect_solution'}
+
+# Configuration WAF pour défis cryptographiques
+CRYPTO_CHALLENGE_RULE = {
+    "Name": "Cryptographic-Challenge-Verification",
+    "Priority": 20,
+    "Statement": {
+        "AndStatement": {
+            "Statements": [
+                {
+                    "ByteMatchStatement": {
+                        "SearchString": "/api/verify-challenge",
+                        "FieldToMatch": {"UriPath": {}},
+                        "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                        "PositionalConstraint": "EXACTLY"
+                    }
+                },
+                {
+                    "LabelMatchStatement": {
+                        "Scope": "LABEL",
+                        "Key": "agotels:challenge:failed_verification"
+                    }
+                }
+            ]
+        }
+    },
+    "Action": {
+        "Block": {
+            "CustomResponse": {
+                "ResponseCode": 403,
+                "CustomResponseBodyKey": "crypto_challenge_failed"
+            }
+        }
+    }
+}
+```
+
+## 🕸️ **5. Honeypot & Trap Integration**
+
+### **🍯 Système de Honeypots Intelligents :**
+
+```python
+class IntelligentHoneypotSystem:
+    def __init__(self):
+        self.honeypots = {}
+        self.trap_analytics = {}
+        
+    def deploy_adaptive_honeypots(self, request_context):
+        """
+        Déploiement de honeypots adaptatifs
+        """
+        honeypot_types = [
+            'invisible_form_fields',
+            'fake_api_endpoints',
+            'decoy_cookies',
+            'phantom_links',
+            'timing_traps'
+        ]
+        
+        deployed_traps = []
+        
+        for trap_type in honeypot_types:
+            if self.should_deploy_trap(trap_type, request_context):
+                trap = self.create_honeypot(trap_type, request_context)
+                deployed_traps.append(trap)
+                
+        return deployed_traps
+    
+    def create_honeypot(self, trap_type, context):
+        """
+        Création de honeypots spécialisés
+        """
+        if trap_type == 'invisible_form_fields':
+            return self.create_invisible_field_trap(context)
+        elif trap_type == 'fake_api_endpoints':
+            return self.create_fake_endpoint_trap(context)
+        elif trap_type == 'decoy_cookies':
+            return self.create_decoy_cookie_trap(context)
+        elif trap_type == 'phantom_links':
+            return self.create_phantom_link_trap(context)
+        elif trap_type == 'timing_traps':
+            return self.create_timing_trap(context)
+    
+    def create_invisible_field_trap(self, context):
+        """
+        Champs de formulaire invisibles pour détecter les bots
+        """
+        trap_id = secrets.token_hex(8)
+        
+        trap = {
+            'type': 'invisible_form_field',
+            'id': trap_id,
+            'field_name': f'user_verification_{trap_id}',
+            'css_style': 'position:absolute;left:-9999px;visibility:hidden;',
+            'expected_value': '',  # Les humains ne peuvent pas le voir/remplir
+            'session_id': context.get('session_id'),
+            'created_at': time.time()
+        }
+        
+        self.honeypots[trap_id] = trap
+        
+        return {
+            'html': f'<input type="text" name="{trap["field_name"]}" style="{trap["css_style"]}" tabindex="-1" autocomplete="off">',
+            'trap_id': trap_id,
+            'validation_endpoint': f'/validate-trap/{trap_id}'
+        }
+    
+    def create_fake_endpoint_trap(self, context):
+        """
+        Endpoints API factices pour détecter le scraping
+        """
+        trap_id = secrets.token_hex(8)
+        
+        fake_endpoints = [
+            f'/api/internal/admin-{trap_id}',
+            f'/api/debug/status-{trap_id}',
+            f'/api/backup/data-{trap_id}',
+            f'/.env-{trap_id}',
+            f'/robots-{trap_id}.txt'
+        ]
+        
+        trap = {
+            'type': 'fake_api_endpoint',
+            'id': trap_id,
+            'endpoints': fake_endpoints,
+            'session_id': context.get('session_id'),
+            'created_at': time.time(),
+            'access_count': 0
+        }
+        
+        self.honeypots[trap_id] = trap
+        
+        return {
+            'endpoints': fake_endpoints,
+            'trap_id': trap_id,
+            'monitoring_rule': self.generate_endpoint_monitoring_rule(fake_endpoints)
+        }
+    
+    def analyze_honeypot_interaction(self, trap_id, interaction_data):
+        """
+        Analyse des interactions avec les honeypots
+        """
+        if trap_id not in self.honeypots:
+            return {'valid': False, 'reason': 'trap_not_found'}
+        
+        trap = self.honeypots[trap_id]
+        
+        # Analyse comportementale de l'interaction
+        behavioral_analysis = {
+            'interaction_speed': self.calculate_interaction_speed(interaction_data),
+            'interaction_pattern': self.analyze_interaction_pattern(interaction_data),
+            'automation_indicators': self.detect_automation_in_interaction(interaction_data)
+        }
+        
+        # Scoring de suspicion
+        suspicion_score = self.calculate_suspicion_score(
+            trap['type'], 
+            interaction_data, 
+            behavioral_analysis
+        )
+        
+        # Mise à jour des analytics
+        self.update_trap_analytics(trap_id, interaction_data, suspicion_score)
+        
+        return {
+            'trap_triggered': True,
+            'trap_type': trap['type'],
+            'suspicion_score': suspicion_score,
+            'behavioral_analysis': behavioral_analysis,
+            'recommended_action': self.recommend_action(suspicion_score)
+        }
+
+# Configuration WAF pour honeypots
+HONEYPOT_DETECTION_RULES = [
+    {
+        "Name": "Invisible-Field-Trap-Detection",
+        "Priority": 25,
+        "Statement": {
+            "ByteMatchStatement": {
+                "SearchString": "user_verification_",
+                "FieldToMatch": {"Body": {}},
+                "TextTransformations": [{"Priority": 0, "Type": "URL_DECODE"}],
+                "PositionalConstraint": "CONTAINS"
+            }
+        },
+        "Action": {
+            "Block": {
+                "CustomResponse": {
+                    "ResponseCode": 403,
+                    "CustomResponseBodyKey": "honeypot_triggered"
+                }
+            }
+        }
+    },
+    {
+        "Name": "Fake-Endpoint-Access-Detection",
+        "Priority": 26,
+        "Statement": {
+            "OrStatement": {
+                "Statements": [
+                    {
+                        "ByteMatchStatement": {
+                            "SearchString": "/api/internal/admin-",
+                            "FieldToMatch": {"UriPath": {}},
+                            "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                            "PositionalConstraint": "STARTS_WITH"
+                        }
+                    },
+                    {
+                        "ByteMatchStatement": {
+                            "SearchString": "/.env-",
+                            "FieldToMatch": {"UriPath": {}},
+                            "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                            "PositionalConstraint": "STARTS_WITH"
+                        }
+                    }
+                ]
+            }
+        },
+        "Action": {
+            "Block": {
+                "CustomResponse": {
+                    "ResponseCode": 404,
+                    "CustomResponseBodyKey": "fake_endpoint_accessed"
+                }
+            }
+        }
+    }
+]
+```
+
+## 📱 **6. Mobile-Specific Detection**
+
+### **📲 Détection Spécialisée Mobile :**
+
+```python
+def analyze_mobile_specific_signals(request_data):
+    """
+    Analyse spécialisée pour les appareils mobiles
+    """
+    mobile_signals = {
+        'device_orientation': extract_device_orientation(request_data),
+        'touch_events': analyze_touch_events(request_data),
+        'accelerometer_data': extract_accelerometer_data(request_data),
+        'battery_api': analyze_battery_api_usage(request_data),
+        'network_type': detect_network_type(request_data),
+        'app_vs_browser': detect_app_vs_browser_context(request_data)
+    }
+    
+    # Détection d'émulation mobile
+    emulation_indicators = []
+    
+    # Indicateur 1: Orientation sans événements tactiles
+    if mobile_signals['device_orientation'] and not mobile_signals['touch_events']:
+        emulation_indicators.append({
+            'type': 'orientation_without_touch',
+            'severity': 'medium',
+            'description': 'Device orientation detected without corresponding touch events'
+        })
+    
+    # Indicateur 2: User-Agent mobile avec comportement desktop
+    if is_mobile_user_agent(request_data) and has_desktop_behavior(mobile_signals):
+        emulation_indicators.append({
+            'type': 'mobile_ua_desktop_behavior',
+            'severity': 'high',
+            'description': 'Mobile User-Agent with desktop-like behavior patterns'
+        })
+    
+    # Indicateur 3: APIs mobiles incohérentes
+    if has_inconsistent_mobile_apis(mobile_signals):
+        emulation_indicators.append({
+            'type': 'inconsistent_mobile_apis',
+            'severity': 'high',
+            'description': 'Inconsistent mobile API availability or behavior'
+        })
+    
+    return {
+        'mobile_signals': mobile_signals,
+        'emulation_indicators': emulation_indicators,
+        'mobile_authenticity_score': calculate_mobile_authenticity_score(
+            mobile_signals, emulation_indicators
+        )
+    }
+
+# Configuration WAF pour détection mobile
+MOBILE_DETECTION_RULES = [
+    {
+        "Name": "Mobile-Emulation-Detection",
+        "Priority": 30,
+        "Statement": {
+            "AndStatement": {
+                "Statements": [
+                    {
+                        "RegexMatchStatement": {
+                            "RegexString": "(Mobile|Android|iPhone|iPad)",
+                            "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                            "TextTransformations": [{"Priority": 0, "Type": "NONE"}]
+                        }
+                    },
+                    {
+                        "LabelMatchStatement": {
+                            "Scope": "LABEL",
+                            "Key": "agotels:mobile:emulation_detected"
+                        }
+                    }
+                ]
+            }
+        },
+        "Action": {
+            "Challenge": {
+                "CustomRequestHandling": {
+                    "InsertHeaders": [
+                        {
+                            "Name": "X-Mobile-Verification-Required",
+                            "Value": "true"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+]
+```
+
+Ces pistes complémentaires offrent une défense en profondeur contre les APBs les plus sophistiqués, en exploitant des vecteurs de détection souvent négligés mais très efficaces.

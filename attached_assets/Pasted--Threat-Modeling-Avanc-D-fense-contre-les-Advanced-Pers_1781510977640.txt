@@ -1,0 +1,290 @@
+# 🎯 Threat Modeling Avancé : Défense contre les Advanced Persistent Bots (APBs)
+
+Excellente approche ! Voici une analyse complète des trois couches de détection face aux APBs utilisant Impit :
+
+## 📊 Analyse des Vecteurs d'Attaque
+
+### **Élément 1 : Asymétrie Comportementale des Sessions (Cookie Jump)**
+
+**🔍 Mécanisme de Détection :**
+Les algorithmes de Behavioral Analytics d'AWS WAF Advanced Bot Control détectent cette rupture via :
+
+- **Analyse des patterns de navigation** : Les règles `TGT_ML_CoordinatedActivity` analysent la cohérence des sessions
+- **Détection de ressources manquantes** : Absence de requêtes CSS/JS/images après authentification
+- **Timing analysis** : Transition trop rapide entre phases d'authentification et d'exploitation
+- **Fingerprint consistency** : Rupture dans la cohérence des empreintes TLS/JA4
+
+**🛡️ Contre-mesures AWS :**
+```json
+{
+  "Rules": [
+    "TGT_ML_CoordinatedActivity_High",
+    "TGT_SessionConsistency", 
+    "TGT_BrowserInterrogation"
+  ]
+}
+```
+
+### **Élément 2 : Réputation Infrastructure Réseau (IP Résidentielles)**
+
+**🔍 Mécanisme de Détection ML :**
+Les algorithmes AWS WAF utilisent plusieurs signaux faibles :
+
+- **Micro-patterns temporels** : Régularité mathématique du polling (détection de jitter artificiel)
+- **Behavioral entropy** : Manque de variabilité naturelle humaine
+- **Session persistence analysis** : Corrélation anormale entre durée de session et activité
+- **Geolocation behavioral mapping** : Comparaison avec patterns régionaux légitimes
+
+**🧠 Modèles ML Spécialisés :**
+- `TGT_ML_TokenReuse_IP_High` : Détecte la réutilisation suspecte de tokens
+- `TGT_ML_VolumetricSession` : Analyse les volumes de requêtes par session
+- Algorithmes de clustering pour identifier les outliers comportementaux
+
+### **Élément 3 : Architecture Shadow Ban Multi-Couches**
+
+## 🏗️ Architecture Recommandée pour Agotels
+
+```mermaid
+graph TD
+    A[Client Request] --> B[CloudFront + WAF]
+    B --> C[API Gateway]
+    C --> D[Lambda Authorizer]
+    D --> E[Cognito User Pool]
+    D --> F[Behavioral Analysis Engine]
+    F --> G[Shadow Ban Decision]
+    G --> H[Normal Response]
+    G --> I[Filtered Response]
+```
+
+### **🔧 Implémentation Technique**
+
+#### **1. WAF Advanced Bot Control Configuration**
+```json
+{
+  "WebACL": {
+    "Rules": [
+      {
+        "Name": "AWSManagedRulesBotControlRuleSet",
+        "Priority": 1,
+        "Statement": {
+          "ManagedRuleGroupStatement": {
+            "VendorName": "AWS",
+            "Name": "AWSManagedRulesBotControlRuleSet",
+            "Version": null
+          }
+        },
+        "Action": {
+          "Allow": {
+            "CustomRequestHandling": {
+              "InsertHeaders": [
+                {
+                  "Name": "X-Bot-Score",
+                  "Value": "{awswaf:matched-rule-labels}"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### **2. Cognito User Pool avec Attributs Personnalisés**
+```json
+{
+  "UserPool": {
+    "Schema": [
+      {
+        "Name": "shadow_ban_status",
+        "AttributeDataType": "String",
+        "Mutable": true
+      },
+      {
+        "Name": "behavioral_score",
+        "AttributeDataType": "Number",
+        "Mutable": true
+      },
+      {
+        "Name": "last_anomaly_detected",
+        "AttributeDataType": "DateTime",
+        "Mutable": true
+      }
+    ]
+  }
+}
+```
+
+#### **3. Lambda Behavioral Analysis Engine**
+```python
+import json
+import boto3
+from datetime import datetime, timedelta
+
+def lambda_handler(event, context):
+    # Extraction des signaux comportementaux
+    bot_score = extract_bot_score(event['headers'])
+    user_id = event['requestContext']['authorizer']['claims']['sub']
+    
+    # Analyse multi-dimensionnelle
+    behavioral_signals = {
+        'request_timing': analyze_timing_patterns(event),
+        'session_consistency': check_session_consistency(user_id),
+        'resource_access_pattern': analyze_resource_patterns(event),
+        'geolocation_consistency': check_geo_consistency(event)
+    }
+    
+    # Calcul du score de risque composite
+    risk_score = calculate_composite_risk(behavioral_signals, bot_score)
+    
+    # Décision de shadow ban
+    if risk_score > SHADOW_BAN_THRESHOLD:
+        return implement_shadow_ban(user_id, risk_score)
+    elif risk_score > MONITORING_THRESHOLD:
+        return implement_enhanced_monitoring(user_id, risk_score)
+    else:
+        return allow_normal_access(user_id)
+
+def calculate_composite_risk(signals, bot_score):
+    """
+    Algorithme de scoring multi-factoriel
+    """
+    weights = {
+        'timing_regularity': 0.25,
+        'session_anomaly': 0.30,
+        'resource_pattern': 0.20,
+        'geo_consistency': 0.15,
+        'waf_bot_score': 0.10
+    }
+    
+    composite_score = (
+        signals['request_timing'] * weights['timing_regularity'] +
+        signals['session_consistency'] * weights['session_anomaly'] +
+        signals['resource_access_pattern'] * weights['resource_pattern'] +
+        signals['geolocation_consistency'] * weights['geo_consistency'] +
+        bot_score * weights['waf_bot_score']
+    )
+    
+    return min(composite_score, 100)  # Cap à 100
+
+def implement_shadow_ban(user_id, risk_score):
+    """
+    Implémentation du shadow ban graduel
+    """
+    shadow_ban_config = {
+        'data_filtering': True,
+        'response_delay': calculate_delay(risk_score),
+        'content_limitation': True,
+        'rate_limiting': True
+    }
+    
+    # Mise à jour Cognito
+    update_user_attributes(user_id, {
+        'shadow_ban_status': 'active',
+        'behavioral_score': str(risk_score),
+        'last_anomaly_detected': datetime.utcnow().isoformat()
+    })
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'X-Shadow-Ban': 'true',
+            'X-Risk-Score': str(risk_score)
+        },
+        'body': json.dumps(shadow_ban_config)
+    }
+```
+
+#### **4. Système de Monitoring CloudWatch**
+```python
+# Métriques personnalisées pour détection d'anomalies
+cloudwatch = boto3.client('cloudwatch')
+
+def publish_behavioral_metrics(user_id, metrics):
+    cloudwatch.put_metric_data(
+        Namespace='Agotels/BehavioralAnalysis',
+        MetricData=[
+            {
+                'MetricName': 'RequestRegularity',
+                'Dimensions': [
+                    {'Name': 'UserId', 'Value': user_id}
+                ],
+                'Value': metrics['timing_regularity'],
+                'Unit': 'Percent'
+            },
+            {
+                'MetricName': 'SessionAnomalyScore',
+                'Dimensions': [
+                    {'Name': 'UserId', 'Value': user_id}
+                ],
+                'Value': metrics['session_anomaly'],
+                'Unit': 'Count'
+            }
+        ]
+    )
+```
+
+### **🎯 Stratégies Anti-Faux Positifs**
+
+#### **1. Système de Scoring Graduel**
+```python
+RISK_THRESHOLDS = {
+    'LOW': 30,      # Monitoring renforcé
+    'MEDIUM': 60,   # Shadow ban partiel
+    'HIGH': 80,     # Shadow ban complet
+    'CRITICAL': 95  # Blocage temporaire
+}
+```
+
+#### **2. Whitelist Comportementale**
+```python
+def check_legitimate_patterns(user_id, behavioral_data):
+    """
+    Vérification des patterns légitimes connus
+    """
+    legitimate_indicators = [
+        'consistent_human_timing_variance',
+        'natural_session_breaks',
+        'diverse_resource_access',
+        'expected_geo_mobility'
+    ]
+    
+    return any(indicator in behavioral_data for indicator in legitimate_indicators)
+```
+
+#### **3. Feedback Loop d'Apprentissage**
+```python
+def update_ml_model_feedback(user_id, actual_behavior, predicted_risk):
+    """
+    Mise à jour continue du modèle ML
+    """
+    feedback_data = {
+        'user_id': user_id,
+        'predicted_risk': predicted_risk,
+        'actual_behavior': actual_behavior,
+        'false_positive': determine_false_positive(actual_behavior, predicted_risk)
+    }
+    
+    # Envoi vers SageMaker pour réentraînement
+    send_to_training_pipeline(feedback_data)
+```
+
+### **📈 Métriques de Performance**
+
+#### **KPIs de Détection :**
+- **Précision** : >95% (minimiser les faux positifs)
+- **Rappel** : >90% (détecter les vrais APBs)
+- **Temps de détection** : <30 secondes
+- **Taux de faux positifs** : <2%
+
+#### **Monitoring Opérationnel :**
+```python
+MONITORING_DASHBOARDS = {
+    'real_time_threats': 'CloudWatch Dashboard',
+    'behavioral_trends': 'QuickSight Analytics',
+    'false_positive_tracking': 'Custom Lambda Metrics'
+}
+```
+
+Cette architecture multicouche permet de détecter et mitiger efficacement les APBs sophistiqués tout en préservant l'expérience utilisateur légitime. La clé réside dans la combinaison de signaux faibles et l'apprentissage continu pour s'adapter aux nouvelles techniques d'évasion.

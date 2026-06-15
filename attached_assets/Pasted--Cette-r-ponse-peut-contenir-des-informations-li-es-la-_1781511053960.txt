@@ -1,0 +1,667 @@
+**Cette réponse peut contenir des informations liées à la sécurité, un sujet nuancé. Vous devriez vérifier la réponse en utilisant un jugement humain éclairé. Visitez [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) pour plus de détails.**
+
+# 🛡️ Architecture Défensive Ultime : Contre-Mesures Niveau 5
+
+Excellente analyse ! Voici les contre-mesures AWS détaillées pour ces trois vecteurs d'attaque sophistiqués :
+
+## 🔍 **Vecteur 1 : Empreinte HTTP/2 (Protocol Fingerprinting)**
+
+### **🎯 Mécanismes de Détection AWS :**
+
+#### **CloudFront + WAF Protocol Analysis :**
+```json
+{
+  "WebACL": {
+    "Name": "agotels-protocol-fingerprint-detection",
+    "Rules": [
+      {
+        "Name": "HTTP2-Protocol-Anomaly-Detection",
+        "Priority": 1,
+        "Statement": {
+          "AndStatement": {
+            "Statements": [
+              {
+                "ByteMatchStatement": {
+                  "SearchString": "HTTP/2.0",
+                  "FieldToMatch": {
+                    "SingleHeader": {"Name": "version"}
+                  },
+                  "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                  "PositionalConstraint": "CONTAINS"
+                }
+              },
+              {
+                "LabelMatchStatement": {
+                  "Scope": "LABEL",
+                  "Key": "awswaf:managed:aws:bot-control:signal:automated_browser"
+                }
+              }
+            ]
+          }
+        },
+        "Action": {
+          "Allow": {
+            "CustomRequestHandling": {
+              "InsertHeaders": [
+                {
+                  "Name": "X-Protocol-Anomaly-Score",
+                  "Value": "85"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### **Lambda@Edge Protocol Inspector :**
+```python
+import json
+import base64
+from datetime import datetime
+
+def lambda_handler(event, context):
+    """
+    Analyseur d'empreintes HTTP/2 sophistiqué
+    """
+    request = event['Records'][0]['cf']['request']
+    headers = request['headers']
+    
+    # Analyse des signatures HTTP/2
+    protocol_signals = analyze_http2_fingerprint(request)
+    
+    # Détection des anomalies protocolaires
+    anomaly_score = calculate_protocol_anomaly_score(protocol_signals)
+    
+    if anomaly_score > PROTOCOL_ANOMALY_THRESHOLD:
+        # Injection d'headers pour analyse downstream
+        request['headers']['x-protocol-risk'] = [{
+            'key': 'X-Protocol-Risk',
+            'value': str(anomaly_score)
+        }]
+        
+        # Log pour analyse forensique
+        log_protocol_anomaly(request, protocol_signals)
+    
+    return request
+
+def analyze_http2_fingerprint(request):
+    """
+    Analyse détaillée de l'empreinte HTTP/2
+    """
+    signals = {
+        'settings_frame_order': extract_settings_order(request),
+        'window_update_pattern': analyze_window_updates(request),
+        'priority_frame_structure': extract_priority_structure(request),
+        'header_compression_method': detect_hpack_usage(request),
+        'stream_dependency_tree': analyze_stream_dependencies(request)
+    }
+    
+    # Comparaison avec empreintes connues
+    browser_match = match_known_browser_fingerprints(signals)
+    
+    return {
+        'signals': signals,
+        'browser_match': browser_match,
+        'confidence': calculate_fingerprint_confidence(signals, browser_match)
+    }
+
+def detect_http1_downgrade_attack(request):
+    """
+    Détection du downgrade HTTP/1.1 forcé
+    """
+    suspicious_indicators = []
+    
+    # Vérification de la cohérence TLS/HTTP
+    if has_http2_capable_tls(request) and is_http1_request(request):
+        suspicious_indicators.append('forced_http1_downgrade')
+    
+    # Analyse des headers HTTP/1.1 suspects
+    if has_http2_specific_headers_in_http1(request):
+        suspicious_indicators.append('http2_headers_in_http1')
+    
+    # Détection de User-Agent incohérent
+    if user_agent_supports_http2(request) and is_http1_request(request):
+        suspicious_indicators.append('ua_protocol_mismatch')
+    
+    return {
+        'is_suspicious': len(suspicious_indicators) > 0,
+        'indicators': suspicious_indicators,
+        'risk_score': len(suspicious_indicators) * 25
+    }
+```
+
+#### **Configuration WAF Avancée :**
+```json
+{
+  "CustomRules": [
+    {
+      "Name": "Chrome-Replication-Detection",
+      "Priority": 10,
+      "Statement": {
+        "AndStatement": {
+          "Statements": [
+            {
+              "ByteMatchStatement": {
+                "SearchString": "Chrome/",
+                "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                "PositionalConstraint": "CONTAINS"
+              }
+            },
+            {
+              "NotStatement": {
+                "Statement": {
+                  "LabelMatchStatement": {
+                    "Scope": "LABEL",
+                    "Key": "awswaf:managed:aws:bot-control:verified:chrome"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "Action": {
+        "Challenge": {
+          "CustomRequestHandling": {
+            "InsertHeaders": [
+              {
+                "Name": "X-Chrome-Verification-Required",
+                "Value": "true"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+## 🔍 **Vecteur 2 : Session Warm-up (Contournement de l'entropie)**
+
+### **🧠 Détection ML Avancée :**
+
+#### **Lambda Behavioral Analysis Engine :**
+```python
+import numpy as np
+from sklearn.ensemble import IsolationForest
+from datetime import datetime, timedelta
+import json
+
+def lambda_handler(event, context):
+    """
+    Moteur d'analyse comportementale anti-warm-up
+    """
+    session_id = event['session_id']
+    user_actions = event['user_actions']
+    
+    # Analyse de l'entropie comportementale
+    behavioral_entropy = calculate_behavioral_entropy(user_actions)
+    
+    # Détection des patterns de warm-up
+    warmup_indicators = detect_warmup_patterns(user_actions)
+    
+    # Scoring ML composite
+    ml_score = advanced_ml_behavioral_analysis(user_actions, behavioral_entropy)
+    
+    # Décision finale
+    if is_sophisticated_warmup(warmup_indicators, ml_score):
+        return trigger_enhanced_verification(session_id, warmup_indicators)
+    
+    return allow_session(session_id)
+
+def calculate_behavioral_entropy(actions):
+    """
+    Calcul de l'entropie comportementale réelle
+    """
+    entropy_metrics = {
+        'timing_variance': calculate_timing_entropy(actions),
+        'navigation_randomness': calculate_navigation_entropy(actions),
+        'interaction_depth': calculate_interaction_entropy(actions),
+        'resource_access_pattern': calculate_resource_entropy(actions),
+        'micro_movement_variance': calculate_micro_movement_entropy(actions)
+    }
+    
+    # Détection de variance artificielle
+    artificial_variance_score = detect_artificial_variance(entropy_metrics)
+    
+    return {
+        'metrics': entropy_metrics,
+        'artificial_variance': artificial_variance_score,
+        'human_likelihood': calculate_human_likelihood(entropy_metrics)
+    }
+
+def detect_warmup_patterns(actions):
+    """
+    Détection spécifique des patterns de warm-up
+    """
+    warmup_indicators = []
+    
+    # Pattern 1: Séquence trop parfaite
+    if has_perfect_navigation_sequence(actions):
+        warmup_indicators.append({
+            'type': 'perfect_sequence',
+            'confidence': 0.85,
+            'evidence': extract_sequence_evidence(actions)
+        })
+    
+    # Pattern 2: Timing mathématiquement régulier
+    if has_mathematical_timing_regularity(actions):
+        warmup_indicators.append({
+            'type': 'mathematical_timing',
+            'confidence': 0.90,
+            'evidence': extract_timing_evidence(actions)
+        })
+    
+    # Pattern 3: Absence de micro-erreurs humaines
+    if lacks_human_micro_errors(actions):
+        warmup_indicators.append({
+            'type': 'no_human_errors',
+            'confidence': 0.75,
+            'evidence': extract_error_evidence(actions)
+        })
+    
+    # Pattern 4: Resource loading trop systématique
+    if has_systematic_resource_loading(actions):
+        warmup_indicators.append({
+            'type': 'systematic_loading',
+            'confidence': 0.80,
+            'evidence': extract_loading_evidence(actions)
+        })
+    
+    return warmup_indicators
+
+def advanced_ml_behavioral_analysis(actions, entropy):
+    """
+    Analyse ML sophistiquée pour détecter le warm-up
+    """
+    # Extraction des features avancées
+    features = extract_advanced_features(actions, entropy)
+    
+    # Modèle d'isolation forest pour anomalies
+    isolation_model = load_pretrained_isolation_model()
+    anomaly_score = isolation_model.decision_function([features])[0]
+    
+    # Modèle de classification humain/bot
+    classification_model = load_pretrained_classification_model()
+    human_probability = classification_model.predict_proba([features])[0][1]
+    
+    # Modèle spécialisé warm-up
+    warmup_model = load_pretrained_warmup_model()
+    warmup_probability = warmup_model.predict_proba([features])[0][1]
+    
+    return {
+        'anomaly_score': anomaly_score,
+        'human_probability': human_probability,
+        'warmup_probability': warmup_probability,
+        'composite_score': calculate_composite_ml_score(
+            anomaly_score, human_probability, warmup_probability
+        )
+    }
+
+def extract_advanced_features(actions, entropy):
+    """
+    Extraction de features ML avancées
+    """
+    return np.array([
+        # Features temporelles
+        calculate_inter_action_variance(actions),
+        calculate_micro_pause_distribution(actions),
+        calculate_acceleration_patterns(actions),
+        
+        # Features comportementales
+        entropy['metrics']['timing_variance'],
+        entropy['metrics']['navigation_randomness'],
+        entropy['artificial_variance'],
+        
+        # Features de navigation
+        calculate_backtrack_frequency(actions),
+        calculate_hesitation_indicators(actions),
+        calculate_exploration_vs_efficiency(actions),
+        
+        # Features d'interaction
+        calculate_scroll_behavior_variance(actions),
+        calculate_click_precision_variance(actions),
+        calculate_form_interaction_naturalness(actions)
+    ])
+```
+
+#### **Configuration WAF Anti-Warm-up :**
+```json
+{
+  "CustomRules": [
+    {
+      "Name": "Session-Warmup-Detection",
+      "Priority": 5,
+      "Statement": {
+        "AndStatement": {
+          "Statements": [
+            {
+              "RateBasedStatement": {
+                "Limit": 50,
+                "AggregateKeyType": "IP",
+                "ScopeDownStatement": {
+                  "ByteMatchStatement": {
+                    "SearchString": "/api/search",
+                    "FieldToMatch": {"UriPath": {}},
+                    "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                    "PositionalConstraint": "CONTAINS"
+                  }
+                }
+              }
+            },
+            {
+              "LabelMatchStatement": {
+                "Scope": "LABEL",
+                "Key": "agotels:behavioral:warmup_detected"
+              }
+            }
+          ]
+        }
+      },
+      "Action": {
+        "Challenge": {
+          "CustomRequestHandling": {
+            "InsertHeaders": [
+              {
+                "Name": "X-Warmup-Challenge",
+                "Value": "behavioral_verification_required"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+## 🔍 **Vecteur 3 : Split-Traffic Multi-IP Asymétrique**
+
+### **🎯 Détection Token Reuse Avancée :**
+
+#### **Configuration WAF Token Reuse :**
+```json
+{
+  "WebACL": {
+    "Rules": [
+      {
+        "Name": "Advanced-Token-Reuse-Detection",
+        "Priority": 1,
+        "Statement": {
+          "ManagedRuleGroupStatement": {
+            "VendorName": "AWS",
+            "Name": "AWSManagedRulesBotControlRuleSet",
+            "Version": "Version_2.0",
+            "ManagedRuleGroupConfigs": [
+              {
+                "LoginPath": "/login",
+                "PayloadType": "JSON",
+                "UsernameField": "username",
+                "PasswordField": "password"
+              }
+            ],
+            "RuleActionOverrides": [
+              {
+                "Name": "TGT_TokenReuseIP_High",
+                "ActionToUse": {
+                  "Block": {
+                    "CustomResponse": {
+                      "ResponseCode": 403,
+                      "CustomResponseBodyKey": "token_reuse_detected"
+                    }
+                  }
+                }
+              },
+              {
+                "Name": "TGT_TokenReuseASN_Medium",
+                "ActionToUse": {
+                  "Challenge": {}
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### **Lambda Split-Traffic Detector :**
+```python
+import json
+import boto3
+from datetime import datetime, timedelta
+import hashlib
+
+dynamodb = boto3.resource('dynamodb')
+session_table = dynamodb.Table('agotels-session-tracking')
+
+def lambda_handler(event, context):
+    """
+    Détecteur d'attaques split-traffic sophistiqué
+    """
+    request_data = extract_request_data(event)
+    
+    # Analyse de corrélation de session
+    session_correlation = analyze_session_correlation(request_data)
+    
+    # Détection de saut d'IP rapide
+    ip_jump_analysis = detect_rapid_ip_changes(request_data)
+    
+    # Analyse de cohérence géographique
+    geo_consistency = analyze_geo_consistency(request_data)
+    
+    # Score composite de split-traffic
+    split_traffic_score = calculate_split_traffic_score(
+        session_correlation, ip_jump_analysis, geo_consistency
+    )
+    
+    if split_traffic_score > SPLIT_TRAFFIC_THRESHOLD:
+        return block_split_traffic_attack(request_data, split_traffic_score)
+    
+    return allow_request(request_data)
+
+def analyze_session_correlation(request_data):
+    """
+    Analyse de corrélation de session avancée
+    """
+    session_token = request_data.get('session_token')
+    current_ip = request_data.get('source_ip')
+    timestamp = datetime.utcnow()
+    
+    # Récupération de l'historique de session
+    session_history = get_session_history(session_token)
+    
+    correlation_signals = {
+        'ip_changes': count_ip_changes(session_history),
+        'time_between_ips': calculate_ip_change_timing(session_history),
+        'geographic_jumps': detect_geographic_jumps(session_history),
+        'device_fingerprint_consistency': check_device_consistency(session_history),
+        'behavioral_continuity': analyze_behavioral_continuity(session_history)
+    }
+    
+    # Détection de patterns suspects
+    suspicious_patterns = []
+    
+    # Pattern 1: Changement d'IP trop rapide
+    if correlation_signals['time_between_ips'] < timedelta(seconds=30):
+        suspicious_patterns.append({
+            'type': 'rapid_ip_change',
+            'severity': 'high',
+            'evidence': correlation_signals['time_between_ips']
+        })
+    
+    # Pattern 2: Saut géographique impossible
+    if correlation_signals['geographic_jumps']:
+        for jump in correlation_signals['geographic_jumps']:
+            if jump['distance'] > 1000 and jump['time'] < timedelta(minutes=5):
+                suspicious_patterns.append({
+                    'type': 'impossible_geographic_jump',
+                    'severity': 'critical',
+                    'evidence': jump
+                })
+    
+    # Pattern 3: Incohérence d'empreinte device
+    if not correlation_signals['device_fingerprint_consistency']:
+        suspicious_patterns.append({
+            'type': 'device_fingerprint_mismatch',
+            'severity': 'medium',
+            'evidence': 'fingerprint_changed_with_ip'
+        })
+    
+    return {
+        'signals': correlation_signals,
+        'suspicious_patterns': suspicious_patterns,
+        'risk_score': calculate_correlation_risk_score(suspicious_patterns)
+    }
+
+def detect_rapid_ip_changes(request_data):
+    """
+    Détection spécialisée des changements d'IP rapides
+    """
+    session_token = request_data.get('session_token')
+    current_ip = request_data.get('source_ip')
+    
+    # Fenêtre d'analyse glissante
+    time_window = timedelta(minutes=10)
+    recent_ips = get_recent_session_ips(session_token, time_window)
+    
+    rapid_change_indicators = {
+        'ip_count_in_window': len(recent_ips),
+        'average_time_per_ip': calculate_average_ip_duration(recent_ips),
+        'ip_type_changes': detect_ip_type_changes(recent_ips),
+        'asn_changes': detect_asn_changes(recent_ips),
+        'residential_to_datacenter': detect_ip_type_escalation(recent_ips)
+    }
+    
+    # Calcul du score de risque
+    risk_factors = []
+    
+    if rapid_change_indicators['ip_count_in_window'] > 3:
+        risk_factors.append(('multiple_ips', 40))
+    
+    if rapid_change_indicators['average_time_per_ip'] < timedelta(seconds=60):
+        risk_factors.append(('very_rapid_changes', 50))
+    
+    if rapid_change_indicators['residential_to_datacenter']:
+        risk_factors.append(('ip_type_escalation', 60))
+    
+    return {
+        'indicators': rapid_change_indicators,
+        'risk_factors': risk_factors,
+        'risk_score': sum(score for _, score in risk_factors)
+    }
+
+def analyze_geo_consistency(request_data):
+    """
+    Analyse de cohérence géographique sophistiquée
+    """
+    session_token = request_data.get('session_token')
+    current_ip = request_data.get('source_ip')
+    
+    # Géolocalisation précise
+    current_geo = get_precise_geolocation(current_ip)
+    session_geo_history = get_session_geo_history(session_token)
+    
+    geo_analysis = {
+        'distance_from_last': calculate_distance(
+            current_geo, session_geo_history[-1] if session_geo_history else None
+        ),
+        'travel_time_feasibility': check_travel_feasibility(
+            current_geo, session_geo_history
+        ),
+        'timezone_consistency': check_timezone_consistency(
+            current_geo, request_data.get('timestamp')
+        ),
+        'isp_consistency': check_isp_consistency(current_ip, session_geo_history)
+    }
+    
+    # Détection d'anomalies géographiques
+    geo_anomalies = []
+    
+    if geo_analysis['distance_from_last'] > 500:  # km
+        travel_time = geo_analysis['travel_time_feasibility']
+        if not travel_time['feasible']:
+            geo_anomalies.append({
+                'type': 'impossible_travel',
+                'distance': geo_analysis['distance_from_last'],
+                'time_required': travel_time['minimum_time'],
+                'actual_time': travel_time['actual_time']
+            })
+    
+    return {
+        'analysis': geo_analysis,
+        'anomalies': geo_anomalies,
+        'risk_score': calculate_geo_risk_score(geo_anomalies)
+    }
+```
+
+#### **DynamoDB Schema pour Tracking :**
+```python
+# Table de tracking des sessions
+SESSION_TRACKING_SCHEMA = {
+    'TableName': 'agotels-session-tracking',
+    'KeySchema': [
+        {'AttributeName': 'session_token', 'KeyType': 'HASH'},
+        {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+    ],
+    'AttributeDefinitions': [
+        {'AttributeName': 'session_token', 'AttributeType': 'S'},
+        {'AttributeName': 'timestamp', 'AttributeType': 'N'},
+        {'AttributeName': 'source_ip', 'AttributeType': 'S'},
+        {'AttributeName': 'geo_hash', 'AttributeType': 'S'}
+    ],
+    'GlobalSecondaryIndexes': [
+        {
+            'IndexName': 'ip-timestamp-index',
+            'KeySchema': [
+                {'AttributeName': 'source_ip', 'KeyType': 'HASH'},
+                {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+            ]
+        }
+    ],
+    'StreamSpecification': {
+        'StreamEnabled': True,
+        'StreamViewType': 'NEW_AND_OLD_IMAGES'
+    }
+}
+```
+
+### **🔧 Configuration CloudWatch Alarms :**
+```python
+# Alarmes CloudWatch pour détection en temps réel
+CLOUDWATCH_ALARMS = {
+    'SplitTrafficDetection': {
+        'AlarmName': 'Agotels-SplitTraffic-Detection',
+        'MetricName': 'SplitTrafficScore',
+        'Namespace': 'Agotels/Security',
+        'Statistic': 'Average',
+        'Period': 300,
+        'EvaluationPeriods': 2,
+        'Threshold': 75.0,
+        'ComparisonOperator': 'GreaterThanThreshold',
+        'AlarmActions': [
+            'arn:aws:sns:region:account:agotels-security-alerts'
+        ]
+    },
+    'RapidTokenReuse': {
+        'AlarmName': 'Agotels-Rapid-Token-Reuse',
+        'MetricName': 'TokenReuseRate',
+        'Namespace': 'AWS/WAFV2',
+        'Statistic': 'Sum',
+        'Period': 60,
+        'EvaluationPeriods': 3,
+        'Threshold': 10.0,
+        'ComparisonOperator': 'GreaterThanThreshold'
+    }
+}
+```
+
+Cette architecture défensive multicouche garantit une protection robuste contre les APBs de niveau 5, en combinant la détection protocolaire, l'analyse comportementale ML et la corrélation de sessions en temps réel.

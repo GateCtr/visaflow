@@ -1,0 +1,770 @@
+**Cette réponse peut contenir des informations liées à la sécurité, un sujet nuancé. Vous devriez vérifier la réponse en utilisant un jugement humain éclairé. Visitez [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) pour plus de détails.**
+
+# 🎭 Détection Avancée : Puppeteer & Playwright
+
+Excellente question ! Face à des outils sophistiqués comme Puppeteer et Playwright, voici les techniques de détection spécialisées :
+
+## 🔍 **1. Détection des Signatures Puppeteer/Playwright**
+
+### **🎯 Empreintes Spécifiques aux Outils d'Automatisation :**
+
+```javascript
+// Détection côté client des signatures d'automatisation
+class AutomationToolDetector {
+    constructor() {
+        this.detectionResults = {};
+    }
+    
+    detectPuppeteerSignatures() {
+        const puppeteerIndicators = [];
+        
+        // Signature 1: Variables globales Puppeteer
+        if (window.navigator.webdriver === true) {
+            puppeteerIndicators.push({
+                type: 'webdriver_property',
+                confidence: 0.95,
+                evidence: 'navigator.webdriver === true'
+            });
+        }
+        
+        // Signature 2: Chrome DevTools Protocol
+        if (window.chrome && window.chrome.runtime && window.chrome.runtime.onConnect) {
+            puppeteerIndicators.push({
+                type: 'chrome_runtime_signature',
+                confidence: 0.80,
+                evidence: 'Chrome runtime with automation signatures'
+            });
+        }
+        
+        // Signature 3: Puppeteer-specific user agent patterns
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('HeadlessChrome') || 
+            userAgent.includes('Chrome/') && !userAgent.includes('Safari/')) {
+            puppeteerIndicators.push({
+                type: 'headless_user_agent',
+                confidence: 0.85,
+                evidence: userAgent
+            });
+        }
+        
+        // Signature 4: Permissions API anomalies
+        if (navigator.permissions) {
+            navigator.permissions.query({name: 'notifications'}).then(result => {
+                if (result.state === 'denied' && !this.hasUserInteracted()) {
+                    puppeteerIndicators.push({
+                        type: 'permission_anomaly',
+                        confidence: 0.70,
+                        evidence: 'Permissions denied without user interaction'
+                    });
+                }
+            });
+        }
+        
+        // Signature 5: Plugin array anomalies
+        if (navigator.plugins.length === 0 && navigator.mimeTypes.length === 0) {
+            puppeteerIndicators.push({
+                type: 'empty_plugins',
+                confidence: 0.75,
+                evidence: 'No plugins or mime types detected'
+            });
+        }
+        
+        return puppeteerIndicators;
+    }
+    
+    detectPlaywrightSignatures() {
+        const playwrightIndicators = [];
+        
+        // Signature 1: Playwright-specific window properties
+        if (window.__playwright || window.__pw_manual) {
+            playwrightIndicators.push({
+                type: 'playwright_globals',
+                confidence: 0.98,
+                evidence: 'Playwright global variables detected'
+            });
+        }
+        
+        // Signature 2: CDP session detection
+        if (window.chrome && window.chrome.debugger) {
+            playwrightIndicators.push({
+                type: 'cdp_debugger',
+                confidence: 0.90,
+                evidence: 'Chrome debugger API available'
+            });
+        }
+        
+        // Signature 3: Playwright user agent patterns
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('Playwright') || 
+            (userAgent.includes('Firefox') && !window.InstallTrigger)) {
+            playwrightIndicators.push({
+                type: 'playwright_user_agent',
+                confidence: 0.85,
+                evidence: userAgent
+            });
+        }
+        
+        // Signature 4: Viewport anomalies
+        if (screen.width === 1280 && screen.height === 720 && 
+            window.innerWidth === 1280 && window.innerHeight === 720) {
+            playwrightIndicators.push({
+                type: 'default_viewport',
+                confidence: 0.60,
+                evidence: 'Default Playwright viewport dimensions'
+            });
+        }
+        
+        // Signature 5: Missing browser-specific APIs
+        if (this.hasMissingBrowserAPIs()) {
+            playwrightIndicators.push({
+                type: 'missing_browser_apis',
+                confidence: 0.70,
+                evidence: 'Expected browser APIs are missing'
+            });
+        }
+        
+        return playwrightIndicators;
+    }
+    
+    detectAdvancedAutomationSignatures() {
+        const advancedIndicators = [];
+        
+        // Test 1: Mouse movement entropy
+        const mouseEntropy = this.calculateMouseEntropy();
+        if (mouseEntropy < 0.3) {
+            advancedIndicators.push({
+                type: 'low_mouse_entropy',
+                confidence: 0.80,
+                evidence: `Mouse entropy: ${mouseEntropy}`
+            });
+        }
+        
+        // Test 2: Keyboard timing patterns
+        const keyboardTiming = this.analyzeKeyboardTiming();
+        if (keyboardTiming.isRegular) {
+            advancedIndicators.push({
+                type: 'regular_keyboard_timing',
+                confidence: 0.75,
+                evidence: keyboardTiming
+            });
+        }
+        
+        // Test 3: Canvas fingerprint consistency
+        const canvasFingerprint = this.generateCanvasFingerprint();
+        if (this.isCanvasFingerprintSuspicious(canvasFingerprint)) {
+            advancedIndicators.push({
+                type: 'suspicious_canvas',
+                confidence: 0.85,
+                evidence: canvasFingerprint
+            });
+        }
+        
+        // Test 4: WebGL renderer detection
+        const webglRenderer = this.getWebGLRenderer();
+        if (webglRenderer.includes('SwiftShader') || webglRenderer.includes('ANGLE')) {
+            advancedIndicators.push({
+                type: 'software_renderer',
+                confidence: 0.70,
+                evidence: webglRenderer
+            });
+        }
+        
+        // Test 5: Performance timing anomalies
+        const performanceTiming = this.analyzePerformanceTiming();
+        if (performanceTiming.isSuspicious) {
+            advancedIndicators.push({
+                type: 'performance_timing_anomaly',
+                confidence: 0.65,
+                evidence: performanceTiming
+            });
+        }
+        
+        return advancedIndicators;
+    }
+    
+    // Tests comportementaux avancés
+    performBehavioralTests() {
+        return new Promise((resolve) => {
+            const behavioralTests = [];
+            
+            // Test 1: Réaction aux événements invisibles
+            this.testInvisibleEventReaction().then(result => {
+                if (result.reacted) {
+                    behavioralTests.push({
+                        type: 'invisible_event_reaction',
+                        confidence: 0.90,
+                        evidence: 'Reacted to invisible DOM events'
+                    });
+                }
+                
+                // Test 2: Timing de scroll artificiel
+                this.testScrollTiming().then(scrollResult => {
+                    if (scrollResult.isArtificial) {
+                        behavioralTests.push({
+                            type: 'artificial_scroll_timing',
+                            confidence: 0.80,
+                            evidence: scrollResult
+                        });
+                    }
+                    
+                    // Test 3: Réponse aux défis JavaScript
+                    this.performJavaScriptChallenges().then(challengeResults => {
+                        behavioralTests.push(...challengeResults);
+                        
+                        resolve(behavioralTests);
+                    });
+                });
+            });
+        });
+    }
+    
+    performJavaScriptChallenges() {
+        return new Promise((resolve) => {
+            const challenges = [];
+            
+            // Défi 1: Calcul cryptographique
+            const startTime = performance.now();
+            const result = this.performCryptoChallenge();
+            const endTime = performance.now();
+            
+            if (endTime - startTime < 10) { // Trop rapide pour un navigateur normal
+                challenges.push({
+                    type: 'crypto_challenge_too_fast',
+                    confidence: 0.85,
+                    evidence: `Completed in ${endTime - startTime}ms`
+                });
+            }
+            
+            // Défi 2: Manipulation DOM complexe
+            const domManipulationTime = this.testDOMManipulationSpeed();
+            if (domManipulationTime.isSuspicious) {
+                challenges.push({
+                    type: 'suspicious_dom_manipulation',
+                    confidence: 0.75,
+                    evidence: domManipulationTime
+                });
+            }
+            
+            resolve(challenges);
+        });
+    }
+}
+```
+
+### **🛡️ Configuration WAF Anti-Puppeteer/Playwright :**
+
+```json
+{
+  "WebACL": {
+    "Name": "agotels-automation-tool-detection",
+    "Rules": [
+      {
+        "Name": "Puppeteer-Playwright-Detection",
+        "Priority": 5,
+        "Statement": {
+          "OrStatement": {
+            "Statements": [
+              {
+                "ByteMatchStatement": {
+                  "SearchString": "HeadlessChrome",
+                  "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                  "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                  "PositionalConstraint": "CONTAINS"
+                }
+              },
+              {
+                "ByteMatchStatement": {
+                  "SearchString": "Playwright",
+                  "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                  "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                  "PositionalConstraint": "CONTAINS"
+                }
+              },
+              {
+                "AndStatement": {
+                  "Statements": [
+                    {
+                      "ByteMatchStatement": {
+                        "SearchString": "Chrome/",
+                        "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                        "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                        "PositionalConstraint": "CONTAINS"
+                      }
+                    },
+                    {
+                      "NotStatement": {
+                        "Statement": {
+                          "ByteMatchStatement": {
+                            "SearchString": "Safari/",
+                            "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                            "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                            "PositionalConstraint": "CONTAINS"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "Action": {
+          "Challenge": {
+            "CustomRequestHandling": {
+              "InsertHeaders": [
+                {
+                  "Name": "X-Automation-Tool-Detected",
+                  "Value": "puppeteer_playwright_signature"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Name": "Webdriver-Property-Detection",
+        "Priority": 6,
+        "Statement": {
+          "LabelMatchStatement": {
+            "Scope": "LABEL",
+            "Key": "agotels:automation:webdriver_detected"
+          }
+        },
+        "Action": {
+          "Block": {
+            "CustomResponse": {
+              "ResponseCode": 403,
+              "CustomResponseBodyKey": "automation_tool_blocked"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## 🧠 **2. Analyse Comportementale Anti-Automation**
+
+### **🎭 Lambda Behavioral Analysis Engine :**
+
+```python
+import json
+import numpy as np
+from datetime import datetime, timedelta
+import boto3
+
+def lambda_handler(event, context):
+    """
+    Moteur d'analyse comportementale anti-automation avancé
+    """
+    automation_signals = extract_automation_signals(event)
+    
+    # Analyse multi-dimensionnelle
+    behavioral_analysis = {
+        'mouse_movement_analysis': analyze_mouse_patterns(automation_signals),
+        'keyboard_timing_analysis': analyze_keyboard_patterns(automation_signals),
+        'scroll_behavior_analysis': analyze_scroll_patterns(automation_signals),
+        'click_precision_analysis': analyze_click_patterns(automation_signals),
+        'navigation_timing_analysis': analyze_navigation_timing(automation_signals)
+    }
+    
+    # Détection spécifique Puppeteer/Playwright
+    automation_detection = detect_automation_tools(automation_signals, behavioral_analysis)
+    
+    # Score composite
+    automation_score = calculate_automation_score(behavioral_analysis, automation_detection)
+    
+    if automation_score > AUTOMATION_THRESHOLD:
+        return trigger_automation_countermeasures(event, automation_score)
+    
+    return allow_with_monitoring(event, automation_score)
+
+def analyze_mouse_patterns(signals):
+    """
+    Analyse sophistiquée des patterns de souris
+    """
+    mouse_data = signals.get('mouse_movements', [])
+    
+    if not mouse_data:
+        return {'no_mouse_data': True, 'suspicion_score': 0.8}
+    
+    # Calcul de l'entropie des mouvements
+    movement_entropy = calculate_movement_entropy(mouse_data)
+    
+    # Détection de patterns linéaires (automation)
+    linear_patterns = detect_linear_movements(mouse_data)
+    
+    # Analyse de la vitesse constante
+    velocity_consistency = analyze_velocity_consistency(mouse_data)
+    
+    # Détection de mouvements impossibles
+    impossible_movements = detect_impossible_movements(mouse_data)
+    
+    analysis = {
+        'movement_entropy': movement_entropy,
+        'linear_pattern_ratio': linear_patterns['ratio'],
+        'velocity_consistency': velocity_consistency,
+        'impossible_movements': impossible_movements,
+        'human_likelihood': calculate_human_mouse_likelihood(
+            movement_entropy, linear_patterns, velocity_consistency
+        )
+    }
+    
+    return analysis
+
+def detect_automation_tools(signals, behavioral_analysis):
+    """
+    Détection spécialisée des outils d'automation
+    """
+    automation_indicators = []
+    
+    # Indicateur 1: Signatures JavaScript
+    js_signatures = signals.get('javascript_signatures', {})
+    if js_signatures.get('webdriver_property'):
+        automation_indicators.append({
+            'type': 'webdriver_property_detected',
+            'tool': 'puppeteer_selenium',
+            'confidence': 0.95
+        })
+    
+    if js_signatures.get('playwright_globals'):
+        automation_indicators.append({
+            'type': 'playwright_globals_detected',
+            'tool': 'playwright',
+            'confidence': 0.98
+        })
+    
+    # Indicateur 2: Patterns comportementaux
+    if behavioral_analysis['mouse_movement_analysis']['human_likelihood'] < 0.3:
+        automation_indicators.append({
+            'type': 'non_human_mouse_patterns',
+            'tool': 'generic_automation',
+            'confidence': 0.80
+        })
+    
+    # Indicateur 3: Timing patterns
+    if behavioral_analysis['keyboard_timing_analysis'].get('is_regular', False):
+        automation_indicators.append({
+            'type': 'regular_keyboard_timing',
+            'tool': 'script_automation',
+            'confidence': 0.75
+        })
+    
+    # Indicateur 4: Canvas fingerprint anomalies
+    canvas_data = signals.get('canvas_fingerprint', {})
+    if is_automation_canvas_fingerprint(canvas_data):
+        automation_indicators.append({
+            'type': 'automation_canvas_signature',
+            'tool': 'headless_browser',
+            'confidence': 0.85
+        })
+    
+    # Indicateur 5: Performance timing anomalies
+    perf_timing = signals.get('performance_timing', {})
+    if has_automation_performance_signature(perf_timing):
+        automation_indicators.append({
+            'type': 'automation_performance_signature',
+            'tool': 'automated_browser',
+            'confidence': 0.70
+        })
+    
+    return {
+        'indicators': automation_indicators,
+        'most_likely_tool': determine_most_likely_tool(automation_indicators),
+        'overall_confidence': calculate_overall_automation_confidence(automation_indicators)
+    }
+
+def is_automation_canvas_fingerprint(canvas_data):
+    """
+    Détection d'empreintes Canvas typiques de l'automation
+    """
+    if not canvas_data:
+        return False
+    
+    # Signatures connues d'automation
+    automation_signatures = [
+        'da39a3ee5e6b4b0d3255bfef95601890afd80709',  # Canvas vide
+        '2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d',  # Pattern répétitif
+        # Autres signatures connues...
+    ]
+    
+    canvas_hash = canvas_data.get('hash', '')
+    
+    # Vérification des signatures connues
+    if canvas_hash in automation_signatures:
+        return True
+    
+    # Vérification de la complexité
+    if len(set(canvas_hash)) < 8:  # Trop peu de caractères uniques
+        return True
+    
+    # Vérification des dimensions suspectes
+    dimensions = canvas_data.get('dimensions', '')
+    if dimensions in ['1280x720', '1920x1080'] and canvas_data.get('is_default', False):
+        return True
+    
+    return False
+
+def has_automation_performance_signature(perf_timing):
+    """
+    Détection de signatures de performance typiques de l'automation
+    """
+    if not perf_timing:
+        return False
+    
+    # Temps de chargement trop rapides/réguliers
+    load_time = perf_timing.get('loadEventEnd', 0) - perf_timing.get('navigationStart', 0)
+    
+    # Automation souvent plus rapide et plus régulière
+    if load_time < 100:  # Moins de 100ms
+        return True
+    
+    # Vérification des temps de DNS/TCP trop parfaits
+    dns_time = perf_timing.get('domainLookupEnd', 0) - perf_timing.get('domainLookupStart', 0)
+    tcp_time = perf_timing.get('connectEnd', 0) - perf_timing.get('connectStart', 0)
+    
+    if dns_time == 0 and tcp_time == 0:  # Connexion réutilisée de manière suspecte
+        return True
+    
+    return False
+```
+
+## 🎯 **3. Contre-Mesures Dynamiques**
+
+### **🛡️ Système de Défis Adaptatifs :**
+
+```python
+class AdaptiveAutomationChallenges:
+    def __init__(self):
+        self.challenge_types = [
+            'mouse_tracking_challenge',
+            'timing_based_challenge',
+            'visual_puzzle_challenge',
+            'behavioral_consistency_challenge',
+            'multi_step_verification'
+        ]
+    
+    def generate_anti_automation_challenge(self, automation_score, detected_tool):
+        """
+        Génération de défis spécialisés anti-automation
+        """
+        if detected_tool == 'puppeteer':
+            return self.generate_puppeteer_specific_challenge(automation_score)
+        elif detected_tool == 'playwright':
+            return self.generate_playwright_specific_challenge(automation_score)
+        else:
+            return self.generate_generic_automation_challenge(automation_score)
+    
+    def generate_puppeteer_specific_challenge(self, score):
+        """
+        Défis spécialisés contre Puppeteer
+        """
+        challenges = []
+        
+        # Défi 1: Détection de webdriver property
+        challenges.append({
+            'type': 'webdriver_detection',
+            'javascript': '''
+                if (navigator.webdriver === true) {
+                    return {detected: true, tool: 'puppeteer'};
+                }
+                return {detected: false};
+            ''',
+            'expected_response': {'detected': False}
+        })
+        
+        # Défi 2: Test de permissions API
+        challenges.append({
+            'type': 'permissions_api_test',
+            'javascript': '''
+                return navigator.permissions.query({name: 'camera'})
+                    .then(result => ({
+                        state: result.state,
+                        timestamp: Date.now()
+                    }));
+            ''',
+            'validation': 'check_permission_timing'
+        })
+        
+        # Défi 3: Mouse movement entropy
+        challenges.append({
+            'type': 'mouse_entropy_challenge',
+            'instructions': 'Move mouse in natural pattern for 3 seconds',
+            'duration': 3000,
+            'validation': 'analyze_mouse_entropy'
+        })
+        
+        return {
+            'challenge_id': self.generate_challenge_id(),
+            'challenges': challenges,
+            'timeout': 30000,
+            'required_success_rate': 0.8
+        }
+    
+    def generate_playwright_specific_challenge(self, score):
+        """
+        Défis spécialisés contre Playwright
+        """
+        challenges = []
+        
+        # Défi 1: Détection de variables globales Playwright
+        challenges.append({
+            'type': 'playwright_globals_detection',
+            'javascript': '''
+                const playwrightIndicators = [
+                    'window.__playwright',
+                    'window.__pw_manual',
+                    'window.playwright'
+                ];
+                
+                for (let indicator of playwrightIndicators) {
+                    if (eval(indicator)) {
+                        return {detected: true, indicator: indicator};
+                    }
+                }
+                return {detected: false};
+            ''',
+            'expected_response': {'detected': False}
+        })
+        
+        # Défi 2: Test de viewport par défaut
+        challenges.append({
+            'type': 'viewport_test',
+            'javascript': '''
+                return {
+                    screenWidth: screen.width,
+                    screenHeight: screen.height,
+                    windowWidth: window.innerWidth,
+                    windowHeight: window.innerHeight,
+                    isDefault: (screen.width === 1280 && screen.height === 720)
+                };
+            ''',
+            'validation': 'check_viewport_naturalness'
+        })
+        
+        # Défi 3: Test de CDP (Chrome DevTools Protocol)
+        challenges.append({
+            'type': 'cdp_detection',
+            'javascript': '''
+                return {
+                    hasDebugger: !!(window.chrome && window.chrome.debugger),
+                    hasRuntime: !!(window.chrome && window.chrome.runtime),
+                    timestamp: Date.now()
+                };
+            ''',
+            'validation': 'analyze_cdp_presence'
+        })
+        
+        return {
+            'challenge_id': self.generate_challenge_id(),
+            'challenges': challenges,
+            'timeout': 25000,
+            'required_success_rate': 0.85
+        }
+    
+    def validate_challenge_response(self, challenge_id, responses):
+        """
+        Validation sophistiquée des réponses aux défis
+        """
+        challenge = self.get_challenge(challenge_id)
+        validation_results = []
+        
+        for i, response in enumerate(responses):
+            challenge_def = challenge['challenges'][i]
+            
+            if challenge_def['type'] == 'mouse_entropy_challenge':
+                result = self.validate_mouse_entropy(response)
+            elif challenge_def['type'] == 'webdriver_detection':
+                result = self.validate_webdriver_response(response, challenge_def)
+            elif challenge_def['type'] == 'viewport_test':
+                result = self.validate_viewport_response(response)
+            else:
+                result = self.validate_generic_response(response, challenge_def)
+            
+            validation_results.append(result)
+        
+        # Calcul du score global
+        success_rate = sum(r['success'] for r in validation_results) / len(validation_results)
+        
+        return {
+            'challenge_id': challenge_id,
+            'success_rate': success_rate,
+            'individual_results': validation_results,
+            'passed': success_rate >= challenge['required_success_rate'],
+            'automation_likelihood': 1 - success_rate
+        }
+    
+    def validate_mouse_entropy(self, mouse_data):
+        """
+        Validation de l'entropie des mouvements de souris
+        """
+        if not mouse_data or len(mouse_data) < 10:
+            return {'success': False, 'reason': 'insufficient_mouse_data'}
+        
+        # Calcul de l'entropie
+        entropy = self.calculate_mouse_entropy(mouse_data)
+        
+        # Détection de patterns linéaires
+        linear_ratio = self.detect_linear_mouse_patterns(mouse_data)
+        
+        # Analyse de la vitesse
+        velocity_variance = self.calculate_velocity_variance(mouse_data)
+        
+        # Score composite
+        human_score = (entropy * 0.4) + ((1 - linear_ratio) * 0.3) + (velocity_variance * 0.3)
+        
+        return {
+            'success': human_score > 0.6,
+            'human_score': human_score,
+            'entropy': entropy,
+            'linear_ratio': linear_ratio,
+            'velocity_variance': velocity_variance
+        }
+```
+
+### **🔧 Configuration CloudWatch pour Monitoring :**
+
+```python
+# Métriques spécialisées pour automation tools
+AUTOMATION_METRICS = {
+    'PuppeteerDetectionRate': {
+        'MetricName': 'PuppeteerDetectionRate',
+        'Namespace': 'Agotels/AutomationDetection',
+        'Unit': 'Percent',
+        'Dimensions': [
+            {'Name': 'DetectionMethod', 'Value': 'webdriver_property'},
+            {'Name': 'ConfidenceLevel', 'Value': 'high'}
+        ]
+    },
+    'PlaywrightDetectionRate': {
+        'MetricName': 'PlaywrightDetectionRate',
+        'Namespace': 'Agotels/AutomationDetection',
+        'Unit': 'Percent',
+        'Dimensions': [
+            {'Name': 'DetectionMethod', 'Value': 'global_variables'},
+            {'Name': 'ConfidenceLevel', 'Value': 'high'}
+        ]
+    },
+    'AutomationChallengeSuccessRate': {
+        'MetricName': 'AutomationChallengeSuccessRate',
+        'Namespace': 'Agotels/Challenges',
+        'Unit': 'Percent'
+    }
+}
+
+# Alarmes pour détection d'automation
+AUTOMATION_ALARMS = {
+    'HighAutomationDetection': {
+        'AlarmName': 'Agotels-High-Automation-Detection',
+        'MetricName': 'AutomationScore',
+        'Threshold': 0.8,
+        'ComparisonOperator': 'GreaterThanThreshold',
+        'EvaluationPeriods': 2,
+        'Period': 300
+    }
+}
+```
+
+Cette approche multicouche permet de détecter et contrer efficacement les outils d'automation sophistiqués comme Puppeteer et Playwright, en combinant la détection de signatures, l'analyse comportementale et les défis adaptatifs.
