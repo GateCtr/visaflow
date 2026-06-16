@@ -655,17 +655,20 @@ export function makeIproyalStickyUrl(baseUrl: string, lifetimeMinutes: number = 
       password = password.replace(/_session-[^_]+_lifetime-\d+m/, "");
     }
     
-    // ── Générer un session ID stable par période + compte ──────────────────────
-    // Hash déterministe : même demi-journée + même username → même session ID.
-    // Le session ID change à 00h/12h UTC → nouveau login = nouvelle IP.
+    // V10 — Session ID déterministe avec fenêtres 12h décalées par-compte.
+    // Avant : halfDay = "AM"|"PM" → rotation synchronisée à 00h/12h UTC pour TOUS les comptes.
+    // Après : chaque compte a un offset [0–3599s] unique (hash % 3600), étalant les rotations
+    // sur ±1h autour de chaque fenêtre 12h.
     // NOTE: iProyal lifetime=60m → l'IP expire après 60 min quoi qu'il arrive.
-    // Le halfDay sert uniquement à la reprise déterministe si le bot redémarre,
-    // PAS à garder la même IP pendant 12h (c'est impossible avec lifetime=60m).
-    // On ajoute un compteur de rotation pour forcer une nouvelle IP après un 401/504.
+    // La fenêtre 12h sert uniquement à la reprise déterministe si le bot redémarre.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const rotationCount = _iproyalRotationCount.get((username ?? "default").toLowerCase()) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:iproyal-rotate:r${rotationCount}`;
+    const _v10Key = (username ?? "default").toLowerCase();
+    let _v10h = 0;
+    for (const ch of (_v10Key + ":v10-rotation-offset")) _v10h = ((_v10h << 5) - _v10h + ch.charCodeAt(0)) & 0x7fffffff;
+    const _v10OffsetSec = Math.abs(_v10h) % 3600;
+    const _v10WindowIdx = Math.floor((Math.floor(now.getTime() / 1000) - _v10OffsetSec) / 43200);
+    const rotationCount = _iproyalRotationCount.get(_v10Key) ?? 0;
+    const seed = `w${_v10WindowIdx}:${_v10Key}:iproyal-rotate:r${rotationCount}`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     // Convertir en base62 (8 chars) — même format que l'ancien random

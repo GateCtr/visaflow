@@ -109,11 +109,15 @@ export function makeSpainSoaxStickyUrl(
       .replace(/-opt-[^-]*/g, "")
       .replace(/-+$/, "");
 
-    // Session ID déterministe (stable pendant la demi-journée sauf rotation)
+    // V10 — Fenêtres 12h décalées par-compte pour éviter rotation synchronisée à 00h/12h UTC.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
+    const _v10Key = identifier.toLowerCase();
+    let _v10h = 0;
+    for (const ch of (_v10Key + ":v10-rotation-offset")) _v10h = ((_v10h << 5) - _v10h + ch.charCodeAt(0)) & 0x7fffffff;
+    const _v10OffsetSec = Math.abs(_v10h) % 3600;
+    const _v10WindowIdx = Math.floor((Math.floor(now.getTime() / 1000) - _v10OffsetSec) / 43200);
     const rotationCount = _spainSoaxRotationCount.get(identifier) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${identifier}:spain-soax:r${rotationCount}`;
+    const seed = `w${_v10WindowIdx}:${_v10Key}:spain-soax:r${rotationCount}`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";

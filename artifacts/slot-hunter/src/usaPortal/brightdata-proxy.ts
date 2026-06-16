@@ -82,13 +82,17 @@ export function makeBrightDataStickyUrl(
       .replace(/-session-[a-zA-Z0-9]+/g, "")
       .replace(/-country-[a-z]{2}/g, "");
 
-    // Générer session ID déterministe (stable par période + compteur de rotation)
-    // NOTE: Ceci ne garantit PAS la même IP pendant 12h. La session iProyal expire
-    // après 60 min (lifetime). Le halfDay sert uniquement à la reprise déterministe.
+    // V10 — Session ID déterministe avec fenêtres 12h décalées par-compte.
+    // Fix : offset par-compte [0–3599s] = hash(username) % 3600 pour éviter
+    // que tous les comptes changent d'IP simultanément à 00h/12h UTC.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const rotationCount = _brightdataRotationCount.get((username ?? "default").toLowerCase()) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:brightdata:r${rotationCount}`;
+    const _v10Key = (username ?? "default").toLowerCase();
+    let _v10h = 0;
+    for (const ch of (_v10Key + ":v10-rotation-offset")) _v10h = ((_v10h << 5) - _v10h + ch.charCodeAt(0)) & 0x7fffffff;
+    const _v10OffsetSec = Math.abs(_v10h) % 3600;
+    const _v10WindowIdx = Math.floor((Math.floor(now.getTime() / 1000) - _v10OffsetSec) / 43200);
+    const rotationCount = _brightdataRotationCount.get(_v10Key) ?? 0;
+    const seed = `w${_v10WindowIdx}:${_v10Key}:brightdata:r${rotationCount}`;
 
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;

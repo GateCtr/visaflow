@@ -526,6 +526,24 @@ export function getCevBrowserHeaders(overrides?: {
   return headers;
 }
 
+// ─── V10 — Offset de rotation par-compte (anti-synchronisation 00h/12h UTC) ──
+
+/**
+ * Calcule un offset déterministe [0–3599s] unique par identifiant de compte.
+ *
+ * Problème original : `halfDay = "AM"|"PM"` provoque une rotation synchronisée
+ * de toutes les IPs SOAX/iProyal à 00h00 UTC et 12h00 UTC — pattern détectable.
+ *
+ * Fix V10 : chaque compte est décalé par hash(identifiant) % 3600, étalant
+ * les rotations sur ±1h autour de chaque fenêtre 12h.
+ */
+function _cevAccountRotationOffsetSec(identifier: string): number {
+  const key = identifier.toLowerCase() + ":v10-rotation-offset";
+  let h = 0;
+  for (const ch of key) h = ((h << 5) - h + ch.charCodeAt(0)) & 0x7fffffff;
+  return Math.abs(h) % 3600;
+}
+
 // ─── iProyal Sticky Session Management (aligné sur usa-http.ts) ─────────────
 
 /** Compteur de rotation par identifiant — incrémenté après échec proxy pour forcer nouvelle IP. */
@@ -557,11 +575,13 @@ export function makeCevIproyalStickyUrl(
       password = password.replace(/_session-[^_]+_lifetime-\d+[mh]/, "");
     }
 
-    // Générer un session ID stable par période + identifiant
+    // V10 — Fenêtres 12h décalées par-compte (même logique que SOAX).
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const rotationCount = _cevIproyalRotationCount.get((identifier ?? "cev-default").toLowerCase()) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(identifier ?? "cev-default").toLowerCase()}:cev-iproyal:r${rotationCount}`;
+    const accountKey = (identifier ?? "cev-default").toLowerCase();
+    const offsetSec = _cevAccountRotationOffsetSec(accountKey);
+    const windowIdx = Math.floor((Math.floor(now.getTime() / 1000) - offsetSec) / 43200);
+    const rotationCount = _cevIproyalRotationCount.get(accountKey) ?? 0;
+    const seed = `w${windowIdx}:${accountKey}:cev-iproyal:r${rotationCount}`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     // Convertir en base62 (8 chars)
@@ -645,11 +665,13 @@ export function makeCevSoaxStickyUrl(
       .replace(/-opt-[^-]*/g, "")
       .replace(/-+$/, "");
 
-    // Générer un session ID stable par période + identifiant (même logique que iProyal)
+    // V10 — Fenêtres 12h décalées par-compte pour éviter rotation synchronisée à 00h/12h UTC.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const rotationCount = _cevSoaxRotationCount.get((identifier ?? "cev-default").toLowerCase()) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(identifier ?? "cev-default").toLowerCase()}:cev-soax:r${rotationCount}`;
+    const accountKey = (identifier ?? "cev-default").toLowerCase();
+    const offsetSec = _cevAccountRotationOffsetSec(accountKey);
+    const windowIdx = Math.floor((Math.floor(now.getTime() / 1000) - offsetSec) / 43200);
+    const rotationCount = _cevSoaxRotationCount.get(accountKey) ?? 0;
+    const seed = `w${windowIdx}:${accountKey}:cev-soax:r${rotationCount}`;
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -659,6 +681,9 @@ export function makeCevSoaxStickyUrl(
       sessionId += chars[h % 36];
       h = Math.floor(h / 36) + (i + 1) * 7;
     }
+    const nextWindowSec = (windowIdx + 1) * 43200 + offsetSec;
+    const nextRotationAt = new Date(nextWindowSec * 1000).toISOString().slice(11, 16) + " UTC";
+    console.log(`[CEV-SOAX] ⏱ V10 offset=${offsetSec}s window=${windowIdx} → prochaine rotation ~${nextRotationAt}`);
 
     // Construire le username avec les paramètres SOAX
     const sessionLengthSec = lifetimeMinutes * 60;

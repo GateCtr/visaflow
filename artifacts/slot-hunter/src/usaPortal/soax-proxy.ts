@@ -83,6 +83,40 @@ function simpleHash(seed: string): string {
 }
 
 /**
+ * V10 — Offset de rotation par-compte (0–3599 secondes).
+ *
+ * Problème : tous les comptes utilisaient `halfDay = "AM"/"PM"` comme graine,
+ * ce qui provoque une rotation synchronisée de TOUTES les IPs à exactement
+ * 00h00 UTC et 12h00 UTC — pattern immédiatement détectable par le portail.
+ *
+ * Fix : chaque compte reçoit un offset déterministe (hash du username mod 3600s)
+ * qui décale son point de rotation. Avec N comptes uniformément distribués,
+ * les rotations sont étalées sur jusqu'à 1h autour de chaque fenêtre 12h.
+ *
+ * @param username - Identifiant du compte (email / username)
+ * @returns Offset en secondes dans [0, 3599]
+ */
+function accountRotationOffsetSec(username: string): number {
+  const key = username.toLowerCase() + ":v10-rotation-offset";
+  let h = 0;
+  for (const ch of key) h = ((h << 5) - h + ch.charCodeAt(0)) & 0x7fffffff;
+  return Math.abs(h) % 3600;
+}
+
+/**
+ * Calcule l'index de fenêtre 12h décalé par l'offset par-compte.
+ * Chaque compte a sa propre "horloge" de fenêtre, décalée de 0–3599s.
+ *
+ * @param nowMs   - Timestamp actuel (Date.now())
+ * @param offsetSec - Offset par-compte (accountRotationOffsetSec())
+ * @returns Index de fenêtre stable pendant 12h pour ce compte
+ */
+function staggeredWindowIndex(nowMs: number, offsetSec: number): number {
+  const nowSec = Math.floor(nowMs / 1000);
+  return Math.floor((nowSec - offsetSec) / 43200); // 43200 = 12h en secondes
+}
+
+/**
  * Nettoie le username SOAX des paramètres de session existants.
  * Retourne le username de base (package-XXXXX) sans les options dynamiques.
  */
@@ -131,12 +165,21 @@ export function makeSoaxStickyUrl(
     
     proxyUser = cleanSoaxUsername(proxyUser);
 
-    // Générer session ID déterministe (stable par période + compteur de rotation)
+    // V10 — Session ID déterministe avec fenêtres 12h décalées par-compte.
+    // Avant : halfDay = "AM"|"PM" → rotation synchronisée à 00h/12h UTC pour TOUS les comptes.
+    // Après : chaque compte a un offset [0–3599s] unique, étalant les rotations sur ±1h.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? "AM" : "PM";
-    const rotationCount = _soaxRotationCount.get((username ?? "default").toLowerCase()) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${(username ?? "default").toLowerCase()}:soax:r${rotationCount}`;
+    const accountKey = (username ?? "default").toLowerCase();
+    const offsetSec = accountRotationOffsetSec(accountKey);
+    const windowIdx = staggeredWindowIndex(now.getTime(), offsetSec);
+    const rotationCount = _soaxRotationCount.get(accountKey) ?? 0;
+    const seed = `w${windowIdx}:${accountKey}:soax:r${rotationCount}`;
     const sessionId = simpleHash(seed);
+
+    // Log du prochain changement de fenêtre pour ce compte
+    const nextWindowSec = (windowIdx + 1) * 43200 + offsetSec;
+    const nextRotationAt = new Date(nextWindowSec * 1000).toISOString().slice(11, 16) + " UTC";
+    console.log(`[soax] ⏱ V10 offset=${offsetSec}s window=${windowIdx} → prochaine rotation ~${nextRotationAt}`);
 
     // Construire le username avec les paramètres SOAX (format Dashboard v2)
     // Format: {package}-sessionid-{id}-sessionlength-{sec}-country-{cc}-city-{city}[-bindttl-{ttl}][-opt-{opt}]

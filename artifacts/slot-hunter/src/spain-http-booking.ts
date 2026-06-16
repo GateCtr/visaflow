@@ -176,11 +176,13 @@ async function callBookititEndpoint(
   const url = `${baseUrl}${endpoint}?${q.toString()}`;
 
   const res = await spainCfFetch(url, session, {
-    Referer: portalUrl,
-    "X-Requested-With": "XMLHttpRequest",
-    "Sec-Fetch-Dest": "script",
-    "Sec-Fetch-Mode": "no-cors",
-    "Sec-Fetch-Site": "same-origin",
+    headers: {
+      "Referer": portalUrl,
+      "X-Requested-With": "XMLHttpRequest",
+      "Sec-Fetch-Dest": "script",
+      "Sec-Fetch-Mode": "no-cors",
+      "Sec-Fetch-Site": "same-origin",
+    },
   });
 
   if (!res) return null;

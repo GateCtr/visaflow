@@ -133,10 +133,14 @@ export class ProxyPool {
    * Permet reprise après redémarrage (même session ID → même IP si pas expirée).
    */
   private generateSessionId(accountKey: string): string {
+    // V10 — Fenêtres 12h décalées par-compte pour éviter rotation synchronisée à 00h/12h UTC.
     const now = new Date();
-    const halfDay = now.getUTCHours() < 12 ? 'AM' : 'PM';
+    let _v10h = 0;
+    for (const ch of (accountKey + ':v10-rotation-offset')) _v10h = ((_v10h << 5) - _v10h + ch.charCodeAt(0)) & 0x7fffffff;
+    const _v10OffsetSec = Math.abs(_v10h) % 3600;
+    const _v10WindowIdx = Math.floor((Math.floor(now.getTime() / 1000) - _v10OffsetSec) / 43200);
     const rotation = this.rotationCount.get(accountKey) ?? 0;
-    const seed = `${now.toISOString().slice(0, 10)}-${halfDay}:${accountKey}:2captcha-gw:r${rotation}`;
+    const seed = `w${_v10WindowIdx}:${accountKey}:2captcha-gw:r${rotation}`;
 
     let hash = 0;
     for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
