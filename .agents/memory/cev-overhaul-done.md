@@ -48,7 +48,7 @@ When enabled, `captureFullSessionForAccount()` runs every 4h per account and con
 11. ✅ Session TTL too long (4h)
 12. ✅ Shadow ban detection (15 no-slots threshold)
 13. ✅ Captcha retry resilience (preserved from existing code)
+14. ✅ LogRenderingClientTime telemetry absent — added in 2 places: `cevHttpSetup.ts` (fire-and-forget via cevImpitFetch after login) + `captureFullSessionForAccount()` (page.evaluate for headless safety)
 
 Remaining:
-- LogRenderingClientTime telemetry (OutSystems APM — low priority)
 - SOAX per-account rotation offset (partially handled by existing rotation logic)

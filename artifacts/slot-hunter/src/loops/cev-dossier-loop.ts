@@ -398,6 +398,24 @@ async function captureFullSessionForAccount(
     if (!currentUrl.includes("IndexByUserId")) {
       await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: "networkidle2", timeout: 45_000 });
     }
+
+    // ── Telemetry OutSystems LogRenderingClientTime (V11) ─────────────────────
+    // Le framework JS OutSystems envoie automatiquement ce POST après rendu de page.
+    // En Puppeteer headless le PerformanceObserver peut ne pas déclencher — on
+    // s'assure de l'envoyer explicitement pour correspondre au comportement Chrome réel.
+    // Source HAR réel 2026-06-09: POST /Common/LogRenderingClientTime?actionName=getVisaApplication&time=334
+    await page.evaluate(async () => {
+      const u1 = Math.random(), u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
+      const renderTimeMs = Math.max(120, Math.min(1100, Math.round(Math.exp(5.94 + 0.38 * z))));
+      try {
+        await (window as unknown as { fetch: typeof fetch }).fetch(
+          `/Common/LogRenderingClientTime?actionName=getVisaApplication&time=${renderTimeMs}`,
+          { method: "POST", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" },
+        );
+      } catch { /* non-critique */ }
+    }).catch(() => {}); // ignorer erreur evaluate (page fermée, etc.)
+
     // Délai "lecture de liste" comportemental (1-4s comme un utilisateur réel)
     await new Promise(r => setTimeout(r, logNormalJitter(2500, 0.5)));
 

@@ -499,6 +499,34 @@ export async function setupCevSessionHttp(
       setCevExternalUserAgent(siphoned.userAgent);
     }
 
+    // ── Telemetry OutSystems LogRenderingClientTime ─────────────────────────
+    // Le framework JS OutSystems envoie ce POST automatiquement après rendu de page.
+    // En mode HTTP pur (sans navigateur réel), il faut l'émuler — son absence est
+    // un signal bot détectable par le WAF F5.
+    // Source HAR réel 2026-06-09: POST /Common/LogRenderingClientTime?actionName=getVisaApplication&time=334
+    // Fire-and-forget : non bloquant, erreur ignorée (dégrad gracieux).
+    void (async () => {
+      try {
+        // Log-normal centré ~380ms (plage réaliste 120-1100ms — app AngularJS + réseau BE)
+        const _u1 = Math.random(), _u2 = Math.random();
+        const _z = Math.sqrt(-2 * Math.log(_u1 + 1e-10)) * Math.cos(2 * Math.PI * _u2);
+        const renderTimeMs = Math.max(120, Math.min(1100, Math.round(Math.exp(5.94 + 0.38 * _z))));
+        const telemetryUrl = `${VOWINT_BASE}/Common/LogRenderingClientTime?actionName=getVisaApplication&time=${renderTimeMs}`;
+        await cevImpitFetch(telemetryUrl, {
+          method: "POST",
+          headers: getCevBrowserHeaders({
+            referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+            cookie: postLoginCookies,
+            xRequestedWith: true,
+            accept: "*/*",
+          }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(8_000),
+        });
+        console.log(`[CEV-TELEMETRY] LogRenderingClientTime: time=${renderTimeMs}ms`);
+      } catch { /* non-critique — ignorer silencieusement */ }
+    })();
+
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 2 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
     //           (= 1 clic VOWINT comptabilisé, limite 5/heure)
