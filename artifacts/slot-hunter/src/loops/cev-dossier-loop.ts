@@ -60,6 +60,149 @@ import {
 } from "../cev-redis-persistence.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 import { createLogger } from "../logger.js";
+import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
+import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
+
+// ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
+
+/** UA Chrome 149 Windows — cohérent avec le pool UA de cev-shared-impit.ts */
+const STEALTH_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36";
+
+/** sec-ch-ua corrigé (sans HeadlessChrome, format exact navigateur réel) */
+const STEALTH_CH_UA =
+  '"Not/A)Brand";v="8", "Chromium";v="149", "Google Chrome";v="149"';
+
+const VOWINT_BASE = "https://visaonweb.diplomatie.be";
+const CEV_BASE = "https://appointment.cloud.diplomatie.be";
+const CEV_CAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
+const FULL_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4h
+
+// ─── Helpers stealth ──────────────────────────────────────────────────────────
+
+/** Configure une page Puppeteer avec toutes les corrections anti-détection */
+async function applyStealthToPage(page: any, logger: ReturnType<typeof createLogger>): Promise<void> {
+  // Viewport réaliste (1920×1080 — jamais headless 800×600)
+  await page.setViewport({ width: 1920, height: 1080 });
+
+  // User-Agent Chrome 149 sans HeadlessChrome
+  await page.setUserAgent(STEALTH_UA);
+
+  // Masquer navigator.webdriver, ajouter Chrome runtime, corriger plugins
+  await page.evaluateOnNewDocument(() => {
+    // FIX: navigator.webdriver indétectable
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+
+    // FIX: Chrome runtime (absent en headless → signal bot)
+    // @ts-ignore
+    if (!window.chrome) {
+      // @ts-ignore
+      window.chrome = {
+        runtime: {
+          onMessage: { addListener: () => {}, removeListener: () => {} },
+          connect: () => ({}),
+        },
+        loadTimes: () => ({}),
+        csi: () => ({}),
+      };
+    }
+
+    // FIX: Plugins non vides (headless = [] → signal bot)
+    Object.defineProperty(navigator, "plugins", {
+      get: () => [
+        { name: "Chrome PDF Plugin", filename: "internal-pdf-viewer", description: "Portable Document Format", length: 1, item: () => null, namedItem: () => null },
+        { name: "Chrome PDF Viewer", filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai", description: "", length: 0, item: () => null, namedItem: () => null },
+        { name: "Native Client", filename: "internal-nacl-plugin", description: "", length: 2, item: () => null, namedItem: () => null },
+      ],
+    });
+
+    // FIX: Languages cohérentes avec Accept-Language headers CEV
+    Object.defineProperty(navigator, "languages", { get: () => ["fr-BE", "fr", "en-GB", "en"] });
+
+    // FIX: WebGL renderer réaliste (headless retourne "SwiftShader" → signal bot)
+    const getParam = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+      if (parameter === 37445) return "Google Inc. (NVIDIA)";
+      if (parameter === 37446) return "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)";
+      return getParam.call(this, parameter);
+    };
+  });
+
+  // FIX: Request interception — corriger HeadlessChrome dans sec-ch-ua
+  await page.setRequestInterception(true);
+  page.on("request", (req: any) => {
+    const headers = { ...req.headers() };
+    if (headers["sec-ch-ua"]?.includes("HeadlessChrome")) {
+      headers["sec-ch-ua"] = STEALTH_CH_UA;
+      headers["sec-ch-ua-mobile"] = "?0";
+      headers["sec-ch-ua-platform"] = '"Windows"';
+    }
+    // Toujours continuer
+    req.continue({ headers }).catch(() => { /* page peut être fermée */ });
+  });
+
+  logger.info("🛡️ Stealth Puppeteer appliqué (webdriver, plugins, WebGL, sec-ch-ua, viewport)");
+}
+
+/** Retourne PROXY_URL + parsed components pour Puppeteer + Anti-Captcha */
+function resolvePuppeteerProxy(accountId: string, hunterConfig?: { cevUseProxy?: boolean }): {
+  proxyUrl: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxyUser: string;
+  proxyPass: string;
+} | null {
+  const useProxy = hunterConfig?.cevUseProxy ?? true;
+  if (!useProxy) return null;
+
+  let rawUrl = "";
+  if (process.env.SOAX_PROXY_URL) {
+    rawUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
+  } else if (process.env.IPROYAL_PROXY_URL) {
+    rawUrl = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
+  } else if (process.env.PROXY_URL) {
+    rawUrl = process.env.PROXY_URL;
+  }
+
+  if (!rawUrl) return null;
+
+  try {
+    const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `http://${rawUrl}`);
+    return {
+      proxyUrl: rawUrl,
+      proxyHost: parsed.hostname,
+      proxyPort: parseInt(parsed.port || "3128", 10),
+      proxyUser: decodeURIComponent(parsed.username),
+      proxyPass: decodeURIComponent(parsed.password),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Jitter humain ────────────────────────────────────────────────────────────
+
+/**
+ * Jitter log-normal centré sur mu (ms) — distribution réaliste du temps humain.
+ * Remplace Math.random() * N (distribution uniforme trop mécanique).
+ */
+function logNormalJitter(muMs: number, sigmaFrac = 0.35): number {
+  const u1 = Math.random();
+  const u2 = Math.random();
+  // Box-Muller
+  const z = Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
+  const sigma = Math.log(1 + sigmaFrac * sigmaFrac);
+  const mu = Math.log(muMs) - sigma / 2;
+  return Math.max(50, Math.exp(mu + Math.sqrt(sigma) * z));
+}
+
+/** Saisie clavier humaine (délai log-normal entre caractères) */
+async function humanType(page: any, selector: string, text: string): Promise<void> {
+  await page.focus(selector);
+  for (const char of text) {
+    await page.keyboard.type(char, { delay: logNormalJitter(90, 0.4) });
+  }
+}
 
 // ─── Fonction pour capturer le cookie F5 (TS01) ──────────────────────────────
 
@@ -83,118 +226,429 @@ async function captureF5CookieForAccount(
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
+    "--disable-features=IsolateOrigins,site-per-process",
   ];
 
-  // Check if proxy should be used
-  const useProxy = hunterConfig?.cevUseProxy ?? true;
-  let PROXY_URL = "";
-  if (useProxy) {
-    // First try SOAX with accountId as identifier (same as the loop)
-    if (process.env.SOAX_PROXY_URL) {
-      PROXY_URL = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
-    } else if (process.env.IPROYAL_PROXY_URL) {
-      PROXY_URL = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
-    } else {
-      PROXY_URL = process.env.PROXY_URL ?? "";
-    }
-  }
-
-  let proxyHost = "";
-  let proxyPort = "";
-
-  if (PROXY_URL) {
-    try {
-      const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
-      proxyHost = parsed.hostname;
-      proxyPort = parsed.port;
-      launchArgs.push(`--proxy-server=${parsed.hostname}:${parsed.port}`);
-      logger.info(`Proxy configuré pour capture cookie F5: ${proxyHost}:${proxyPort}`);
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      logger.warn(`Erreur config proxy: ${errMsg}`);
-    }
+  const proxyInfo = resolvePuppeteerProxy(accountId, hunterConfig);
+  if (proxyInfo) {
+    launchArgs.push(`--proxy-server=${proxyInfo.proxyHost}:${proxyInfo.proxyPort}`);
+    logger.info(`Proxy F5 capture: ${proxyInfo.proxyHost}:${proxyInfo.proxyPort}`);
   }
 
   let browser: any = null;
-  const VOWINT_URL = "https://visaonweb.diplomatie.be";
 
   try {
     logger.info(`Lancement du navigateur pour capture cookie F5...`);
-    browser = await puppeteer.default.launch({
-      headless: "new",
-      args: launchArgs,
-    });
-    logger.info("Navigateur lancé avec succès");
+    browser = await puppeteer.default.launch({ headless: "new", args: launchArgs });
 
     const page = await browser.newPage();
 
-    if (PROXY_URL) {
-      try {
-        const parsed = new URL(PROXY_URL.startsWith("http") ? PROXY_URL : `http://${PROXY_URL}`);
-        if (parsed.username) {
-          logger.info(`Authentification proxy avec username: ${decodeURIComponent(parsed.username).slice(0, 30)}…`);
-          await page.authenticate({
-            username: decodeURIComponent(parsed.username),
-            password: decodeURIComponent(parsed.password),
-          });
-        }
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        logger.error(`Erreur lors de l'authentification proxy: ${errMsg}`);
-        return null;
-      }
+    // Authentification proxy
+    if (proxyInfo?.proxyUser) {
+      await page.authenticate({ username: proxyInfo.proxyUser, password: proxyInfo.proxyPass });
     }
 
-    const userAgent = await browser.userAgent();
-    logger.info(`User-Agent: ${userAgent.slice(0, 80)}...`);
+    // Stealth complet
+    await applyStealthToPage(page, logger);
 
-    // Step 1: Go to VOWINT homepage
-    logger.info(`Navigating to VOWINT homepage pour TS cookie: ${VOWINT_URL}`);
-    await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
-    const waitVowintSec = 8 + Math.random() * 4;
-    logger.info(`Waiting ${waitVowintSec.toFixed(1)}s sur VOWINT pour TS cookie...`);
-    await new Promise(r => setTimeout(r, waitVowintSec * 1000));
+    // Navigation VOWINT homepage
+    logger.info(`Navigating to VOWINT homepage pour TS cookie…`);
+    await page.goto(VOWINT_BASE, { waitUntil: "networkidle2", timeout: 60_000 });
+    const waitMs = logNormalJitter(9000, 0.3);
+    logger.info(`Attente comportementale ${Math.round(waitMs)}ms sur homepage…`);
+    await new Promise(r => setTimeout(r, waitMs));
 
     let cookies = await page.cookies();
-    logger.info(`${cookies.length} cookie(s) capturés: ${cookies.map((c: any) => c.name).join(", ")}`);
+    logger.info(`${cookies.length} cookie(s): ${cookies.map((c: any) => c.name).join(", ")}`);
 
     let f5Cookie = cookies.find((c: any) => c.name.startsWith("TS"));
     if (!f5Cookie) {
-      logger.warn(`F5 cookie (TS*) introuvable! Essai rechargement...`);
-      // Retry like session worker
-      await page.goto(VOWINT_URL, { waitUntil: "networkidle2", timeout: 60_000 });
-      await new Promise(r => setTimeout(r, 10000));
-
+      logger.warn(`F5 cookie (TS*) introuvable — rechargement…`);
+      await page.goto(VOWINT_BASE, { waitUntil: "networkidle2", timeout: 60_000 });
+      await new Promise(r => setTimeout(r, 10_000));
       const cookies2 = await page.cookies();
       f5Cookie = cookies2.find((c: any) => c.name.startsWith("TS"));
-
       if (!f5Cookie) {
         logger.error("F5 cookie toujours manquant après reload!");
         return null;
       }
     }
 
-    logger.success(`✅ Cookie F5 capturé: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}...`);
-    return { 
-      f5CookieValue: f5Cookie.value, 
-      f5CookieName: f5Cookie.name,
-      userAgent: userAgent,
-    };
+    logger.info(`✅ Cookie F5: ${f5Cookie.name}=${f5Cookie.value.slice(0, 20)}…`);
+    return { f5CookieValue: f5Cookie.value, f5CookieName: f5Cookie.name, userAgent: STEALTH_UA };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : "";
     logger.error(`Erreur Puppeteer capture cookie F5: ${msg}`);
-    if (stack) logger.error(`Stack trace: ${stack}`);
     return null;
   } finally {
     if (browser) {
-      try {
-        logger.info("Fermeture du navigateur");
-        await browser.close();
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        logger.warn(`Erreur lors de la fermeture du navigateur: ${errMsg}`);
+      try { await browser.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
+// ─── Flow Puppeteer complet (login → captcha → session CEV) ──────────────────
+
+/**
+ * Capture une session CEV complète via Puppeteer :
+ *   Login VOWINT → IndexByUserId → GetEAppointmentUrl → Integration/VOW
+ *   → /Captcha → solve hCaptcha → SetCaptchaToken → extraction cookies
+ *
+ * Retourne une FullCevSession avec TOUS les cookies nécessaires au polling.
+ * La session est valide 4h et peut être réutilisée sans consommer de clics VOWINT.
+ *
+ * @param dossierRef - Référence VOWINT (ex: "VOWINT6085888") ou UUID direct
+ */
+async function captureFullSessionForAccount(
+  accountId: string,
+  vowintEmail: string,
+  vowintPassword: string,
+  dossierRef: string,
+  logger: ReturnType<typeof createLogger>,
+  hunterConfig?: { cevUseProxy?: boolean },
+): Promise<FullCevSession | null> {
+  let puppeteer: any;
+  try {
+    puppeteer = await import("puppeteer-extra");
+    const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
+    puppeteer.default.use(StealthPlugin());
+  } catch (err) {
+    logger.error(`puppeteer-extra non disponible: ${err}`);
+    return null;
+  }
+
+  const launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-features=IsolateOrigins,site-per-process",
+  ];
+
+  const proxyInfo = resolvePuppeteerProxy(accountId, hunterConfig);
+  if (proxyInfo) {
+    launchArgs.push(`--proxy-server=${proxyInfo.proxyHost}:${proxyInfo.proxyPort}`);
+    logger.info(`Full session proxy: ${proxyInfo.proxyHost}:${proxyInfo.proxyPort}`);
+  }
+
+  let browser: any = null;
+
+  try {
+    logger.info(`🚀 Capture session complète CEV — dossier: ${dossierRef}`);
+    browser = await puppeteer.default.launch({ headless: "new", args: launchArgs });
+    const page = await browser.newPage();
+
+    // Proxy auth
+    if (proxyInfo?.proxyUser) {
+      await page.authenticate({ username: proxyInfo.proxyUser, password: proxyInfo.proxyPass });
+    }
+
+    // Stealth complet
+    await applyStealthToPage(page, logger);
+
+    // ── ÉTAPE 1 : Homepage VOWINT (F5 cookie) ───────────────────────────────
+    logger.info(`[1/7] Homepage VOWINT…`);
+    await page.goto(VOWINT_BASE, { waitUntil: "networkidle2", timeout: 60_000 });
+    await new Promise(r => setTimeout(r, logNormalJitter(4000, 0.35)));
+
+    const allCookiesHome = await page.cookies();
+    const f5Cookie = allCookiesHome.find((c: any) => c.name.startsWith("TS"));
+    if (!f5Cookie) {
+      logger.warn(`F5 cookie manquant après homepage — rechargement`);
+      await page.reload({ waitUntil: "networkidle2", timeout: 30_000 });
+      await new Promise(r => setTimeout(r, 6_000));
+    }
+
+    // ── ÉTAPE 2 : Login VOWINT ───────────────────────────────────────────────
+    logger.info(`[2/7] Login VOWINT (${vowintEmail.slice(0, 15)}…)…`);
+    await page.goto(`${VOWINT_BASE}/en/Account/Login`, { waitUntil: "networkidle2", timeout: 45_000 });
+    await new Promise(r => setTimeout(r, logNormalJitter(2500, 0.3)));
+
+    // Saisie username
+    try {
+      await page.waitForSelector('#UserName, [name="UserName"], input[type="email"]', { timeout: 15_000 });
+      await humanType(page, '#UserName, [name="UserName"], input[type="email"]', vowintEmail);
+      await new Promise(r => setTimeout(r, logNormalJitter(800, 0.3)));
+      await humanType(page, '#Password, [name="Password"], input[type="password"]', vowintPassword);
+      await new Promise(r => setTimeout(r, logNormalJitter(1200, 0.3)));
+
+      // Soumission
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45_000 }),
+        page.click('[type="submit"], button[type="submit"], input[value="Login"], input[value="Log in"]'),
+      ]);
+    } catch (loginErr) {
+      logger.error(`Erreur login VOWINT: ${loginErr}`);
+      return null;
+    }
+
+    const currentUrl = page.url();
+    logger.info(`Après login: ${currentUrl.slice(0, 80)}`);
+
+    // Vérifier succès login (redirection vers IndexByUserId ou home)
+    if (currentUrl.includes("Account/Login") || currentUrl.includes("login")) {
+      // Peut être un échec de login ou une page GDPR
+      const pageText = await page.evaluate(() => document.body.innerText.slice(0, 300));
+      logger.warn(`Login peut avoir échoué — URL: ${currentUrl.slice(0, 80)}, texte: ${pageText.slice(0, 100)}`);
+      // Continuer quand même — VOWINT redirige parfois vers la home avant IndexByUserId
+    }
+
+    // ── ÉTAPE 3 : IndexByUserId (chargement des ressources comportementales) ─
+    logger.info(`[3/7] IndexByUserId…`);
+    if (!currentUrl.includes("IndexByUserId")) {
+      await page.goto(`${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, { waitUntil: "networkidle2", timeout: 45_000 });
+    }
+    // Délai "lecture de liste" comportemental (1-4s comme un utilisateur réel)
+    await new Promise(r => setTimeout(r, logNormalJitter(2500, 0.5)));
+
+    // ── ÉTAPE 4 : GetEAppointmentUrl ─────────────────────────────────────────
+    logger.info(`[4/7] GetEAppointmentUrl pour dossier ${dossierRef}…`);
+
+    // Chercher le lien GetEAppointmentUrl correspondant au dossierRef
+    let integrationUrl: string | null = null;
+    let foundAppId: string | null = null;
+
+    try {
+      // D'abord essayer de trouver le lien sur la page (via attribut href)
+      const links = await page.evaluate((ref: string) => {
+        const anchors = Array.from(document.querySelectorAll("a[href*='GetEAppointmentUrl']"));
+        // Chercher un lien proche du dossierRef dans le DOM
+        const allLinks = anchors.map((a: any) => ({ href: a.href, text: a.closest("tr")?.innerText ?? "" }));
+        const matching = allLinks.find(l => l.text.includes(ref));
+        return matching ? [matching] : allLinks;
+      }, dossierRef);
+
+      if (links && links.length > 0) {
+        const targetLink = links[0];
+        const urlObj = new URL(targetLink.href);
+        foundAppId = urlObj.searchParams.get("id");
+        logger.info(`UUID trouvé via DOM: ${foundAppId?.slice(0, 16)}…`);
       }
+    } catch { /* fallback via AJAX */ }
+
+    // Fallback : appel AJAX MyList si DOM n'a pas donné l'UUID
+    if (!foundAppId) {
+      try {
+        const myListResult = await page.evaluate(async (ref: string) => {
+          const resp = await (window as any).fetch("/VisaApplication/MyList?draw=1&start=0&length=20", {
+            headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json, text/javascript, */*; q=0.01" },
+            credentials: "same-origin",
+          });
+          if (!resp.ok) return null;
+          const data = await resp.json();
+          const dossiers = data?.data ?? data?.aaData ?? [];
+          const match = dossiers.find((d: any) => {
+            const dossierId = d.VOWId ?? d.ApplicationId ?? d.Id ?? "";
+            return dossierId.toString().includes(ref.replace("VOWINT", ""));
+          });
+          return match ? { id: match.Id ?? match.ApplicationId, ref: match.VOWId } : (dossiers[0] ? { id: dossiers[0].Id ?? dossiers[0].ApplicationId } : null);
+        }, dossierRef);
+
+        if (myListResult?.id) {
+          foundAppId = myListResult.id;
+          logger.info(`UUID via MyList AJAX: ${foundAppId?.slice(0, 16)}…`);
+        }
+      } catch (ajaxErr) {
+        logger.warn(`MyList AJAX échoué: ${ajaxErr}`);
+      }
+    }
+
+    if (!foundAppId) {
+      logger.error(`Impossible de trouver l'UUID pour dossier ${dossierRef}`);
+      return null;
+    }
+
+    // Appel GetEAppointmentUrl via page.evaluate (cookies automatiques, même referer)
+    const eAppResult = await page.evaluate(async (appId: string) => {
+      const url = `/Common/GetEAppointmentUrl?id=${encodeURIComponent(appId)}`;
+      const resp = await (window as any).fetch(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json, text/plain, */*",
+          "X-Requested-With": "XMLHttpRequest",
+          "Cache-Control": "max-age=0",
+          "If-Modified-Since": "0",
+        },
+        credentials: "same-origin",
+      });
+      const text = await resp.text();
+      return { status: resp.status, body: text };
+    }, foundAppId);
+
+    logger.info(`GetEAppointmentUrl → HTTP ${eAppResult.status}, body: ${eAppResult.body.slice(0, 120)}`);
+
+    if (eAppResult.status !== 200 || !eAppResult.body) {
+      if (eAppResult.body?.toLowerCase().includes("rate") || eAppResult.body?.includes("5 fois") || eAppResult.body?.includes("5 times")) {
+        logger.warn(`Rate-limit VOWINT détecté dans GetEAppointmentUrl`);
+      } else {
+        logger.error(`GetEAppointmentUrl échoué: ${eAppResult.status}`);
+      }
+      return null;
+    }
+
+    // Parser la réponse JSON ou URL brute
+    try {
+      const parsed = JSON.parse(eAppResult.body);
+      if (typeof parsed === "string" && parsed.includes("/Integration/VOW/")) {
+        integrationUrl = parsed;
+      } else if (parsed?.url) {
+        integrationUrl = parsed.url;
+      }
+    } catch {
+      if (eAppResult.body.includes("/Integration/VOW/")) {
+        integrationUrl = eAppResult.body.trim().replace(/^"|"$/g, "");
+      }
+    }
+
+    if (!integrationUrl) {
+      logger.error(`Impossible d'extraire l'integration URL depuis: ${eAppResult.body.slice(0, 100)}`);
+      return null;
+    }
+
+    // Cohérence culture: fr-BE (comme cevHttpSetup.ts)
+    if (integrationUrl.endsWith("/en-US")) {
+      integrationUrl = integrationUrl.slice(0, -6) + "/fr-BE";
+    }
+
+    logger.info(`Integration URL: ${integrationUrl.slice(0, 80)}…`);
+
+    // ── ÉTAPE 5 : Naviguer vers Integration/VOW (CEV) ────────────────────────
+    logger.info(`[5/7] Navigation Integration/VOW…`);
+    await page.goto(integrationUrl, { waitUntil: "networkidle2", timeout: 45_000 });
+    await new Promise(r => setTimeout(r, logNormalJitter(3000, 0.4)));
+
+    // ── ÉTAPE 6 : Résoudre hCaptcha ──────────────────────────────────────────
+    logger.info(`[6/7] Résolution hCaptcha…`);
+
+    // Extraire le sitekey dynamiquement depuis la page
+    let sitekey = CEV_CAPTCHA_SITEKEY;
+    try {
+      const extractedKey = await page.evaluate(() => {
+        const el = document.querySelector("[data-sitekey]");
+        return el ? (el as any).dataset.sitekey : null;
+      });
+      if (extractedKey && extractedKey.length > 10) {
+        sitekey = extractedKey;
+        logger.info(`Sitekey extrait dynamiquement: ${sitekey.slice(0, 12)}…`);
+      }
+    } catch { /* utiliser la valeur par défaut */ }
+
+    // Si on n'est pas encore sur la page Captcha, naviguer explicitement
+    const currentPageUrl = page.url();
+    if (!currentPageUrl.includes("/Captcha")) {
+      logger.info(`Navigation explicite vers ${CEV_BASE}/Captcha…`);
+      await page.goto(`${CEV_BASE}/Captcha`, { waitUntil: "networkidle2", timeout: 30_000 });
+      await new Promise(r => setTimeout(r, logNormalJitter(2000, 0.3)));
+    }
+
+    // Extraire ASP.NET_SessionId avant de résoudre le captcha
+    const cevCookiesBefore = await page.cookies();
+    const aspNetCookie = cevCookiesBefore.find((c: any) => c.name === "ASP.NET_SessionId");
+    if (!aspNetCookie) {
+      logger.error(`ASP.NET_SessionId manquant sur la page Captcha`);
+      return null;
+    }
+    logger.info(`ASP.NET_SessionId: ${aspNetCookie.value.slice(0, 12)}…`);
+
+    // Résoudre hCaptcha via Anti-Captcha (avec même proxy que Puppeteer = pas de IP jump)
+    const acProxy = proxyInfo ? parseProxyForAnticaptcha(proxyInfo.proxyUrl) : undefined;
+    let hcaptchaToken: string;
+    try {
+      hcaptchaToken = await solveHcaptchaWithProxy({
+        sitekey,
+        siteUrl: `${CEV_BASE}/Captcha`,
+        proxy: acProxy ?? undefined,
+        timeoutMs: 120_000,
+        logPrefix: `[CEV-FullSession:${accountId.slice(0, 8)}]`,
+      });
+    } catch (captchaErr) {
+      logger.error(`hCaptcha échoué: ${captchaErr}`);
+      return null;
+    }
+
+    // ── ÉTAPE 7 : POST SetCaptchaToken (dans le contexte browser) ────────────
+    logger.info(`[7/7] POST SetCaptchaToken…`);
+
+    const setCaptchaResult = await page.evaluate(async (token: string) => {
+      try {
+        const resp = await (window as any).fetch("/Captcha/SetCaptchaToken", {
+          method: "POST",
+          headers: {
+            "Accept": "*/*",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          credentials: "same-origin",
+          body: `captcha=${encodeURIComponent(token)}`,
+        });
+        const body = await resp.text();
+        return { status: resp.status, ok: resp.ok, body };
+      } catch (e) {
+        return { status: 0, ok: false, body: String(e) };
+      }
+    }, hcaptchaToken);
+
+    logger.info(`SetCaptchaToken → HTTP ${setCaptchaResult.status}, body: ${setCaptchaResult.body.slice(0, 120)}`);
+
+    if (!setCaptchaResult.ok) {
+      logger.error(`SetCaptchaToken échoué: ${setCaptchaResult.status}`);
+      return null;
+    }
+
+    // Vérifier que captchaSolved !== false
+    try {
+      const captchaData = JSON.parse(setCaptchaResult.body) as { captchaSolved?: boolean; validUntil?: string };
+      if (captchaData.captchaSolved === false) {
+        logger.error(`Captcha rejeté par le serveur (captchaSolved=false)`);
+        return null;
+      }
+    } catch { /* body non-JSON → OK */ }
+
+    // ── Extraire TOUS les cookies finaux ─────────────────────────────────────
+    const finalCookies = await page.cookies();
+    logger.info(`Cookies finaux (${finalCookies.length}): ${finalCookies.map((c: any) => c.name).join(", ")}`);
+
+    const getCookieVal = (name: string): string => {
+      const c = finalCookies.find((c: any) => c.name === name);
+      return c?.value ?? "";
+    };
+    const getStartWith = (prefix: string): { name: string; value: string } | null => {
+      const c = finalCookies.find((c: any) => c.name.startsWith(prefix));
+      return c ? { name: c.name, value: c.value } : null;
+    };
+
+    // Construire la FullCevSession
+    const f5Final = getStartWith("TS");
+    const now = Date.now();
+
+    const fullSession: FullCevSession = {
+      f5CookieName: f5Final?.name ?? "",
+      f5CookieValue: f5Final?.value ?? "",
+      serverId: getCookieVal("ServerId"),
+      osOnline: getCookieVal("OSOnline"),
+      culture: getCookieVal("_culture"),
+      requestVerificationToken: getCookieVal("__RequestVerificationToken"),
+      aspNetSessionId: getCookieVal("ASP.NET_SessionId") || aspNetCookie.value,
+      preferredCulture: getCookieVal("PreferredCulture") || "fr-BE",
+      integrationUrl,
+      appId: foundAppId,
+      userAgent: STEALTH_UA,
+      proxyUsed: proxyInfo ? `${proxyInfo.proxyHost}:${proxyInfo.proxyPort}` : null,
+      capturedAt: now,
+      validUntil: now + FULL_SESSION_TTL_MS,
+      isFullSession: true,
+    };
+
+    logger.info(`✅ Session complète capturée — expire dans 4h | aspNet=${fullSession.aspNetSessionId.slice(0, 10)}… | integrationUrl=${integrationUrl.slice(0, 60)}…`);
+    return fullSession;
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`Erreur captureFullSessionForAccount: ${msg}`);
+    return null;
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch { /* ignore */ }
     }
   }
 }
@@ -448,9 +902,38 @@ function sleep(ms: number): Promise<void> {
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
 
 interface ScanResult {
-  status: "no_slot" | "slot_found" | "rate_limited" | "error";
+  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll";
   sessionCookie?: string;
   integrationUrl?: string;
+}
+
+// ─── Type étendu pour siphonedCreds (full session + legacy F5) ───────────────
+
+interface SiphonedCreds {
+  f5CookieValue?: string;
+  f5CookieName?: string;
+  aspNetSessionId?: string;
+  userAgent?: string;
+  validUntil?: number;
+  siphonedAt?: number;
+  // Full session mode (cev_full_puppeteer_mode=1)
+  isFullSession?: boolean;
+  integrationUrl?: string;
+  preferredCulture?: string;
+  serverId?: string;
+  osOnline?: string;
+  culture?: string;
+}
+
+/** Construit le cookie header complet depuis les données de session */
+function buildFullSessionCookieStr(s: SiphonedCreds): string {
+  const parts: string[] = [];
+  if (s.f5CookieName && s.f5CookieValue) parts.push(`${s.f5CookieName}=${s.f5CookieValue}`);
+  if (s.aspNetSessionId) parts.push(`ASP.NET_SessionId=${s.aspNetSessionId}`);
+  parts.push(`PreferredCulture=${s.preferredCulture ?? "fr-BE"}`);
+  if (s.serverId) parts.push(`ServerId=${s.serverId}`);
+  if (s.osOnline) parts.push(`OSOnline=${s.osOnline}`);
+  return parts.join("; ");
 }
 
 async function performScan(
@@ -458,13 +941,7 @@ async function performScan(
   vowintPassword: string,
   dossier: DossierSlot,
   applicationId: string,
-  siphoned?: {
-    f5CookieValue?: string;
-    f5CookieName?: string;
-    aspNetSessionId?: string;
-    userAgent?: string;
-    validUntil?: number;
-  },
+  siphoned?: SiphonedCreds,
   _hcaptchaRetry = 0,
   logger?: ReturnType<typeof createLogger>,
 ): Promise<ScanResult> {
@@ -474,12 +951,43 @@ async function performScan(
     error: (msg: string) => log("ERROR", msg) 
   };
 
+  // ── Shortcut mode full session : skip setupCevSessionHttp, polling direct ──
+  // Quand une FullCevSession est disponible (capturée par captureFullSessionForAccount),
+  // on n'a pas besoin de re-login + re-captcha. On poll directement.
+  // Avantage : aucun clic VOWINT consommé (limite 5/h préservée pour la capture initiale).
+  if (
+    siphoned?.isFullSession &&
+    siphoned.integrationUrl &&
+    siphoned.aspNetSessionId &&
+    siphoned.validUntil &&
+    Date.now() < siphoned.validUntil
+  ) {
+    const cookieStr = buildFullSessionCookieStr(siphoned);
+    const pollResult = await pollCevSlot(siphoned.integrationUrl, cookieStr, siphoned);
+
+    if (pollResult.status === "slot_found") {
+      return {
+        status: "slot_found",
+        sessionCookie: cookieStr,
+        integrationUrl: siphoned.integrationUrl,
+      };
+    }
+    // Session expirée côté serveur → forcer refresh
+    if (pollResult.status === "session_expired") {
+      logFn.warn(`  Session CEV expirée côté serveur — invalidation`);
+      return { status: "error" };
+    }
+    // Pas de créneau — status spécial pour que le loop ne compte pas ce poll comme un clic
+    return { status: "no_slot_poll", sessionCookie: cookieStr, integrationUrl: siphoned.integrationUrl };
+  }
+
+  // ── Mode legacy : setupCevSessionHttp (login + captcha via HTTP/impit) ──────
   const result = await setupCevSessionHttp(
     vowintEmail,
     vowintPassword,
     applicationId,
     applicationId,
-    dossier.vowintRef, // Le numéro VOWINT sera résolu via MyList
+    dossier.vowintRef,
     siphoned,
   );
 
@@ -487,8 +995,6 @@ async function performScan(
     if (result.error?.includes("RATE_LIMIT")) {
       return { status: "rate_limited" };
     }
-    // Retry automatique sur erreurs captcha (HCAPTCHA_FAILED, CAPTCHA_NO_VALID_UNTIL, etc.)
-    // Invalide le cache clé Anti-Captcha avant de réessayer → force relecture env + botConfig
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
@@ -867,17 +1373,12 @@ async function runAccountLoop(job: any): Promise<void> {
 
   let nextScanAllowedAt = 0;
   let globalSessionClicks = 0;
-  let siphonedCreds: {
-    f5CookieValue?: string;
-    f5CookieName?: string;
-    aspNetSessionId?: string;
-    userAgent?: string;
-    validUntil?: number;
-    siphonedAt?: number;
-  } | undefined = undefined;
+  let siphonedCreds: SiphonedCreds | undefined = undefined;
   
   let lastF5CookieCapturedAt = 0;
-  const F5_COOKIE_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // Refresh every 30 minutes
+  // F5-only mode : 30min. Full session mode : 4h (session CEV expire en 4h)
+  const F5_COOKIE_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+  const FULL_SESSION_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
   // Récupérer les credentials siphonnés depuis le job's hunterConfig
   const hc = job.hunterConfig as any;
@@ -954,49 +1455,94 @@ async function runAccountLoop(job: any): Promise<void> {
         }
       }
 
-      // ─── Capturer et injecter le cookie F5 si nécessaire ────────────────────
+      // ─── Capturer session (mode F5 legacy ou full session) ──────────────────
       const nowTime = Date.now();
-      if (!siphonedCreds || nowTime - lastF5CookieCapturedAt > F5_COOKIE_REFRESH_INTERVAL_MS) {
-        logger.info(`🍪 Capture du cookie F5 pour le compte ${applicantName}...`);
-        
-        const f5Cookie = await captureF5CookieForAccount(accountId, logger, job.hunterConfig);
-        
-        if (f5Cookie) {
-          // Inject the cookie into the job's hunterConfig
-          const injectSuccess = await injectApplicationF5Cookies(
-            accountId,
-            f5Cookie.f5CookieValue,
-            undefined, // ASP.NET SessionId will be obtained naturally
-            f5Cookie.userAgent,
-            {
-              f5CookieName: f5Cookie.f5CookieName,
-              validityMinutes: 60, // Valid for 1 hour
-            }
-          );
+
+      // Lire le mode depuis botConfig (mis en cache 50 scans)
+      let fullPuppeteerMode = false;
+      if (state.scanCount % 50 === 0 || state.scanCount === 0) {
+        const modeVal = await getBotConfigValue("cev_full_puppeteer_mode");
+        fullPuppeteerMode = modeVal === "1";
+      } else {
+        // Réutiliser la valeur précédente — détecter si isFullSession déjà actif
+        fullPuppeteerMode = !!siphonedCreds?.isFullSession;
+      }
+
+      const refreshInterval = fullPuppeteerMode
+        ? FULL_SESSION_REFRESH_INTERVAL_MS
+        : F5_COOKIE_REFRESH_INTERVAL_MS;
+
+      const needsRefresh =
+        !siphonedCreds ||
+        nowTime - lastF5CookieCapturedAt > refreshInterval ||
+        (siphonedCreds.validUntil && nowTime > siphonedCreds.validUntil);
+
+      if (needsRefresh) {
+        if (fullPuppeteerMode) {
+          // ── MODE FULL SESSION : login + captcha complet via Puppeteer ─────
+          logger.info(`🔐 Capture SESSION COMPLÈTE pour ${applicantName} (mode full-puppeteer)…`);
           
-          if (injectSuccess) {
-            // Update our local siphonedCreds
+          // Trouver le premier dossier disponible pour la capture
+          const targetDossier = localPool.getNextAvailable() ?? { vowintRef: dossiers[0] ?? "" };
+          
+          const fullSession = await captureFullSessionForAccount(
+            accountId,
+            vowintEmail,
+            vowintPassword,
+            targetDossier.vowintRef,
+            logger,
+            job.hunterConfig,
+          );
+
+          if (fullSession) {
+            // Stocker dans le session manager
+            cevSessionManager.storeSession(accountId, fullSession);
+
+            // Convertir en siphonedCreds étendu
             siphonedCreds = {
-              f5CookieValue: f5Cookie.f5CookieValue,
-              f5CookieName: f5Cookie.f5CookieName,
-              userAgent: f5Cookie.userAgent,
-              validUntil: nowTime + 60 * 60 * 1000,
-              siphonedAt: nowTime,
+              ...fullSessionToSiphoned(fullSession),
             };
-            
             lastF5CookieCapturedAt = nowTime;
-            
-            // Set external user agent
-            setCevExternalUserAgent(f5Cookie.userAgent);
-            
-            logger.success(`🍪 Cookie F5 capturé et injecté avec succès pour le compte ${applicantName}`);
+            setCevExternalUserAgent(fullSession.userAgent);
+            logger.info(`✅ Session complète en cache (expire dans 4h) — appId=${fullSession.appId.slice(0, 12)}…`);
           } else {
-            logger.warn(`❌ Échec de l'injection du cookie F5 dans Convex`);
+            logger.warn(`❌ Capture session complète échouée — fallback mode F5 dans 2min…`);
+            await sleep(2 * 60 * 1000);
+            continue;
           }
         } else {
-          logger.warn(`❌ Échec de la capture du cookie F5 — réessaie dans 2min...`);
-          await sleep(2 * 60 * 1000); // Wait 2 minutes before retrying capture
-          continue; // Skip this loop iteration, no scan without cookies!
+          // ── MODE LEGACY : capture F5 cookie uniquement ────────────────────
+          logger.info(`🍪 Capture cookie F5 pour ${applicantName}…`);
+          const f5Cookie = await captureF5CookieForAccount(accountId, logger, job.hunterConfig);
+
+          if (f5Cookie) {
+            const injectSuccess = await injectApplicationF5Cookies(
+              accountId,
+              f5Cookie.f5CookieValue,
+              undefined,
+              f5Cookie.userAgent,
+              { f5CookieName: f5Cookie.f5CookieName, validityMinutes: 60 },
+            );
+
+            if (injectSuccess) {
+              siphonedCreds = {
+                f5CookieValue: f5Cookie.f5CookieValue,
+                f5CookieName: f5Cookie.f5CookieName,
+                userAgent: f5Cookie.userAgent,
+                validUntil: nowTime + 60 * 60 * 1000,
+                siphonedAt: nowTime,
+              };
+              lastF5CookieCapturedAt = nowTime;
+              setCevExternalUserAgent(f5Cookie.userAgent);
+              logger.info(`✅ Cookie F5 capturé et injecté pour ${applicantName}`);
+            } else {
+              logger.warn(`❌ Injection cookie F5 Convex échouée`);
+            }
+          } else {
+            logger.warn(`❌ Capture cookie F5 échouée — réessaie dans 2min…`);
+            await sleep(2 * 60 * 1000);
+            continue;
+          }
         }
       }
       
@@ -1072,6 +1618,8 @@ async function runAccountLoop(job: any): Promise<void> {
           logger.info(`  🚨 SLOT TROUVÉ!`);
           recordScan(uniqueJobId, dossier.vowintRef);
           recordSlotFound(uniqueJobId, dossier.vowintRef);
+          // Réinitialiser compteur no-slots (slot trouvé = pas de shadow ban)
+          if (siphonedCreds?.isFullSession) cevSessionManager.resetNoSlots(accountId);
           // Re-login préventif si on atteint la limite (avant le booking)
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
             logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
@@ -1098,25 +1646,44 @@ async function runAccountLoop(job: any): Promise<void> {
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
-          // Invalider le cache Anti-Captcha ET le cache VOWINT pour forcer
-          // un re-login complet au prochain scan (credentials frais depuis Convex)
           invalidateAnticaptchaCache();
           invalidateVowintCache(vowintEmail);
           globalSessionClicks = 0;
-          logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain scan utilisera des credentials frais`);
+          // En mode full session : invalider aussi le cache session (session CEV expirée)
+          if (siphonedCreds?.isFullSession) {
+            cevSessionManager.invalidate(accountId);
+            siphonedCreds = undefined;
+            lastF5CookieCapturedAt = 0;
+            logger.warn(`  🔄 Session complète invalidée — re-capture au prochain tour`);
+          } else {
+            logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain scan utilisera des credentials frais`);
+          }
           break;
         case "no_slot":
-          logger.info(`  — Pas de créneau`);
+          logger.info(`  — Pas de créneau (clic VOWINT consommé)`);
           recordScan(uniqueJobId, dossier.vowintRef);
-          // Clic réussi — enregistrer (déjà fait dans performScan, mais on enregistre ici aussi pour comptage pool)
           localPool.recordClick(dossier);
           globalSessionClicks++;
-          // Re-login préventif après MAX_CLICKS_PER_SESSION clics GLOBAUX
           if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
             logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
             invalidateVowintCache(vowintEmail);
             globalSessionClicks = 0;
             recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
+          }
+          break;
+        case "no_slot_poll":
+          // Mode full session : poll direct — AUCUN clic VOWINT consommé
+          logger.info(`  — Pas de créneau (poll direct, pas de clic VOWINT)`);
+          recordScan(uniqueJobId, dossier.vowintRef);
+          // Shadow ban detection : N no-slots consécutifs → invalider la session
+          {
+            const shadowBanned = cevSessionManager.recordNoSlots(accountId);
+            if (shadowBanned) {
+              logger.warn(`  🚫 Shadow ban détecté — session complète invalidée → re-capture dans 2min`);
+              siphonedCreds = undefined;
+              lastF5CookieCapturedAt = 0;
+              await sleep(2 * 60_000);
+            }
           }
           break;
       }
@@ -1139,9 +1706,18 @@ async function runAccountLoop(job: any): Promise<void> {
       syncPoolStateToRedis({ ...localPool.exportState(), scanCount: state.scanCount }, redisKey);
 
       // Pause entre les scans (intervalle dynamique)
-      // Jitter important de ±30s (anti-shadow ban)
-      const jitter = (Math.random() * 60 - 30) * 1000; // ±30s aléatoires
-      const finalSleepMs = Math.max(10_000, effectiveIntervalMs + jitter); // Garder au moins 10s
+      // Mode full session : intervalle réduit (30-60s) car pas de clics VOWINT consommés
+      // Mode legacy : intervalle dynamique basé sur la capacité du pool
+      let baseIntervalMs = effectiveIntervalMs;
+      if (siphonedCreds?.isFullSession) {
+        // Poll rapide : 30-60s (log-normal, centré 45s)
+        baseIntervalMs = Math.max(20_000, logNormalJitter(45_000, 0.3));
+      }
+      // Jitter log-normal (anti-shadow ban — distribution réaliste vs uniform Math.random)
+      const jitterSign = Math.random() < 0.5 ? 1 : -1;
+      const jitterAbs = logNormalJitter(siphonedCreds?.isFullSession ? 10_000 : 25_000, 0.4);
+      const jitter = jitterSign * Math.min(jitterAbs, baseIntervalMs * 0.4);
+      const finalSleepMs = Math.max(10_000, baseIntervalMs + jitter);
       nextScanAllowedAt = Date.now() + finalSleepMs;
       logger.info(`Pause de ${Math.round(finalSleepMs / 1000)}s planifiée avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
 

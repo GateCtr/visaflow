@@ -110,7 +110,7 @@ const vowintSessionCache = new Map<string, VowintSessionCache>();
 // La session VOWINT persiste plusieurs jours côté serveur.
 // On ne force le re-login que si le serveur retourne 302→login (détecté dynamiquement
 // via invalidateVowintCache()). Ce timeout 24h est un filet de sécurité ultime.
-const VOWINT_SESSION_MAX_AGE_MS = 24 * 60 * 60_000; // 24h
+const VOWINT_SESSION_MAX_AGE_MS = 4 * 60 * 60_000; // 4h (sessions CEV expirent bien avant 24h)
 
 // Durée max pour le cache appId (24h — les UUIDs ne changent pas)
 const VOWINT_APPID_CACHE_MAX_AGE_MS = 24 * 60 * 60_000;

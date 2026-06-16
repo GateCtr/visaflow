@@ -880,7 +880,7 @@ export function getProxyImpit(proxyUrl?: string): InstanceType<typeof Impit> {
   const targetProxy = proxyUrl ?? IPROYAL_PROXY_URL;
   // Recréer si le proxy a changé
   if (!_proxyImpit || targetProxy !== _proxyImpitUrl) {
-    const opts: Record<string, unknown> = { browser: "chrome", ignoreTlsErrors: true };
+    const opts: Record<string, unknown> = { browser: "chrome" };
     if (targetProxy) {
       opts.proxyUrl = targetProxy;
       const masked = targetProxy.replace(/:([^:@]+)@/, ":***@");
@@ -897,7 +897,7 @@ export function getProxyImpit(proxyUrl?: string): InstanceType<typeof Impit> {
 let _directImpit: InstanceType<typeof Impit> | undefined;
 export function getDirectImpit(): InstanceType<typeof Impit> {
   if (!_directImpit) {
-    _directImpit = new Impit({ browser: "chrome", ignoreTlsErrors: true } as any);
+    _directImpit = new Impit({ browser: "chrome" } as any);
     console.log("[CEV] ✅ impit direct initialisé (fingerprint TLS Chrome) — sans proxy");
   }
   return _directImpit;
@@ -1005,8 +1005,11 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
     );
   }
 
-  // ── Jitter réseau réaliste (comme usa-http.ts) ──────────────────────────────
-  const jitterMs = 30 + Math.random() * 170; // 30-200ms
+  // ── Jitter réseau log-normal (distribution réaliste — remplace Math.random uniforme) ──
+  // Log-normal centré ~80ms (mu=4.2, sigma=0.45) — plage effective 20-350ms
+  const _u1 = Math.random(), _u2 = Math.random();
+  const _z = Math.sqrt(-2 * Math.log(_u1 + 1e-10)) * Math.cos(2 * Math.PI * _u2);
+  const jitterMs = Math.max(20, Math.min(400, Math.exp(4.2 + 0.45 * _z)));
   await new Promise(r => setTimeout(r, jitterMs));
 
   // ── Déterminer le proxy à utiliser ──────────────────────────────────────────
