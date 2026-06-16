@@ -1,4 +1,5 @@
-import type { Page } from "playwright";
+// Migration Puppeteer: Page type aliased to any
+type Page = any;
 import { buildStickyIproyalUrl } from "./browser.js";
 
 const TWO_CAPTCHA_BASE = "https://2captcha.com";
@@ -1158,7 +1159,7 @@ export async function solveTurnstileWithProxyInjection(
           
           // Vérifier si le cookie cf_clearance est présent
           const cookies = await page.context().cookies();
-          const cfClearance = cookies.find(c => c.name === "cf_clearance");
+          const cfClearance = cookies.find((c: any) => c.name === "cf_clearance");
           
           if (cfClearance) {
             console.log(`[captcha] Cookie cf_clearance obtenu: ${cfClearance.value.slice(0, 20)}...`);

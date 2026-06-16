@@ -1,4 +1,4 @@
-import type { Browser, Page } from "playwright";
+import type { Browser, Page } from "puppeteer";
 import { launchBrowser, humanType, humanClick, humanScroll, randomDelay, isDryRun } from "./browser.js";
 import { detectAndSolveCaptcha } from "./captcha.js";
 import { reportSlotFound, sendHeartbeat, uploadScreenshot, reportBotTestResult, type HunterJob, type BotTest } from "./convexClient.js";
@@ -201,7 +201,7 @@ async function scanForAvailableSlots(
     "";
 
   const responseCapture: { url: string; body: unknown }[] = [];
-  const responseHandler = async (response: import("playwright").Response) => {
+  const responseHandler = async (response: any) => {
     const url = response.url();
     if (
       (url.includes("slot") ||
@@ -222,7 +222,7 @@ async function scanForAvailableSlots(
 
   if (scheduleUrl) {
     console.log(`[navigator] Navigating to schedule page: ${scheduleUrl}`);
-    await page.goto(scheduleUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(scheduleUrl, { waitUntil: "networkidle0", timeout: 30000 });
     await randomDelay(2000, 4000);
   }
 
@@ -327,7 +327,7 @@ async function parseSlotsFromDom(page: Page): Promise<SlotInfo | null> {
 async function captureAndUploadScreenshot(page: Page): Promise<string | null> {
   try {
     const screenshotBuffer = await page.screenshot({ fullPage: false, type: "png" });
-    const base64 = screenshotBuffer.toString("base64");
+    const base64 = Buffer.from(screenshotBuffer).toString("base64");
     console.log(`[navigator] Screenshot captured (${Math.round(base64.length / 1024)}kb) — uploading...`);
     const storageId = await uploadScreenshot(base64);
     if (storageId) {

@@ -1,4 +1,5 @@
-import { BrowserContext, Page } from 'playwright';
+import type { Page } from 'puppeteer';
+import type { PuppeteerContextAdapter } from './browser.js';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
@@ -160,7 +161,7 @@ export async function runCevBookingSession(
  */
 async function establishCevSession(
   page: Page,
-  context: BrowserContext,
+  context: PuppeteerContextAdapter,
   config: CevBookingConfig,
   _capturedCalls: CapturedNetworkCall[]
 ): Promise<{ cookies: string; cevPage: Page; integrationUrl: string | null } | null> {
@@ -172,7 +173,7 @@ async function establishCevSession(
     // Couvre à la fois le GET initial ET le POST /en/Account/Login.
     // x-luminati-error header = signature BrightData "Residential Failed (bad_endpoint)".
     let brightData402Detected = false;
-    const onResponse = (response: import('playwright').Response) => {
+    const onResponse = (response: any) => {
       if (!response.url().includes('diplomatie.be')) return;
       if (response.status() !== 402) return;
       const hdrs = response.headers();
@@ -183,9 +184,9 @@ async function establishCevSession(
     };
     page.on('response', onResponse);
 
-    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'commit', timeout: 90_000 });
+    await page.goto('https://visaonweb.diplomatie.be', { waitUntil: 'load', timeout: 90_000 });
     // Attendre que le DOM soit suffisamment chargé pour interagir (best-effort)
-    await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
+    await (page as any).waitForNavigation?.({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
 
     // BrightData peut retourner HTTP 402 "bad_endpoint" pour visaonweb.diplomatie.be.
     // Le listener ci-dessus couvre le GET initial ; on vérifie aussi le contenu de la page.
@@ -219,7 +220,7 @@ async function establishCevSession(
       await randomDelay(300, 700);
       await humanClick(page, 'button[type="submit"]');
       // Utiliser domcontentloaded (networkidle peut ne jamais se stabiliser sur VOWINT/AngularJS)
-      await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
+      await (page as any).waitForNavigation?.({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
       await randomDelay(1_000, 2_000); // laisser le redirect s'établir
 
       // Vérifier BrightData 402 sur le POST login AVANT d'analyser l'URL
@@ -267,9 +268,9 @@ async function establishCevSession(
 
     // domcontentloaded d'abord, puis on attend networkidle en best-effort
     // AngularJS fait du XHR polling — networkidle peut ne jamais se stabiliser
-    await page.goto(targetUrl, { waitUntil: 'commit', timeout: 90_000 });
-    await page.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await (page as any).waitForNavigation?.({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    await (page as any).waitForNavigation?.({ waitUntil: 'networkidle0', timeout: 15_000 }).catch(() => {});
     // Attendre le rendu AngularJS (lazy-loaded) + micro-pause humaine avant interaction
     await randomDelay(2_000, 4_000);
     await humanScroll(page); // scroll naturel — évite le pattern "goto → clic immédiat"
@@ -343,7 +344,7 @@ async function establishCevSession(
       rdvBtn.click(),
     ]);
 
-    await newPage.waitForLoadState('domcontentloaded', { timeout: 60_000 }).catch(() => {});
+    await (newPage as any).waitForNavigation?.({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
     await randomDelay(1_500, 3_000); // laisser les cookies s'établir dans le jar
 
     // Fallback 1 : si le premier event de navigation était déjà /Captcha, essayer l'URL courante
@@ -396,7 +397,7 @@ async function establishCevSession(
     // === ÉTAPE 4 : Extraire ASP.NET_SessionId depuis le jar navigateur ===
     const allCookies = await context.cookies();
     const cevCookies = allCookies.filter(c =>
-      c.domain.includes('appointment.cloud.diplomatie.be')
+      (c.domain ?? '').includes('appointment.cloud.diplomatie.be')
     );
 
     if (cevCookies.length === 0) {
@@ -551,9 +552,9 @@ async function completebookingViaUI(
     for (const sel of dateCandidates) {
       const dateEl = await page.$(sel);
       if (dateEl) {
-        bookedDate = await dateEl.getAttribute('data-date') ??
-                     await dateEl.getAttribute('data-value') ??
-                     await dateEl.innerText().catch(() => '');
+        bookedDate = await (dateEl as any).evaluate((el: any) =>
+          el.getAttribute('data-date') ?? el.getAttribute('data-value') ?? el.innerText ?? ''
+        ).catch(() => '');
 
         // ── Intercepter les appels POST déclenchés par le clic sur la date ──
         // C'est ici qu'on découvrira l'endpoint de chargement des créneaux horaires.
@@ -608,16 +609,16 @@ async function completebookingViaUI(
     if (!dateClicked) {
       // Screenshot pour debug si aucun sélecteur ne marche
       const screenshotBuf = await page.screenshot().catch(() => null);
-      const screenshotB64 = screenshotBuf ? screenshotBuf.toString('base64') : null;
+      const screenshotB64 = screenshotBuf ? Buffer.from(screenshotBuf).toString('base64') : null;
       const storageId = screenshotB64 ? await uploadScreenshot(screenshotB64) : null;
       const pageUrl = page.url();
-      const pageText = await page.innerText('body').catch(() => '');
+      const pageText = await page.$eval('body', (el: any) => el.innerText).catch(() => '');
       botLog({ applicationId: config.clientId, step: 'cev_no_date_found', status: 'fail', data: { screenshotStorageId: storageId ?? '', pageUrl, pageTextPreview: pageText.slice(0, 300) } });
       return { success: false, error: 'NO_DATE_SELECTOR_MATCHED', screenshotStorageId: storageId ?? undefined };
     }
 
     // Attendre le chargement des créneaux horaires (AJAX probable après sélection date)
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await (page as any).waitForNavigation?.({ waitUntil: 'networkidle0', timeout: 15_000 }).catch(() => {});
     await randomDelay(1_200, 2_500);
 
     // ── Dump HTML de la page après sélection de date (structure créneaux horaires) ──
@@ -660,10 +661,9 @@ async function completebookingViaUI(
     for (const sel of timeCandidates) {
       const timeEl = await page.$(sel);
       if (timeEl) {
-        bookedTime = await timeEl.getAttribute('data-slot-time') ??
-                     await timeEl.getAttribute('data-time') ??
-                     await timeEl.getAttribute('value') ??
-                     await timeEl.innerText().catch(() => '');
+        bookedTime = await (timeEl as any).evaluate((el: any) =>
+          el.getAttribute('data-slot-time') ?? el.getAttribute('data-time') ?? el.getAttribute('value') ?? el.innerText ?? ''
+        ).catch(() => '');
         await humanClick(page, sel);
         timeClicked = true;
         botLog({ applicationId: config.clientId, step: 'cev_time_selected', status: 'ok', data: { selector: sel, time: bookedTime } });
@@ -672,7 +672,7 @@ async function completebookingViaUI(
     }
 
     if (timeClicked) {
-      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await (page as any).waitForNavigation?.({ waitUntil: 'networkidle0', timeout: 15_000 }).catch(() => {});
       await randomDelay(800, 1_800);
     }
 
@@ -703,11 +703,11 @@ async function completebookingViaUI(
       }
     }
 
-    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await (page as any).waitForNavigation?.({ waitUntil: 'networkidle0', timeout: 20_000 }).catch(() => {});
 
     // === Screenshot de confirmation ===
     const screenshotBuf2 = await page.screenshot({ fullPage: true }).catch(() => null);
-    const screenshotB64 = screenshotBuf2 ? screenshotBuf2.toString('base64') : null;
+    const screenshotB64 = screenshotBuf2 ? Buffer.from(screenshotBuf2).toString('base64') : null;
     const screenshotStorageId = (screenshotB64 ? await uploadScreenshot(screenshotB64) : null) ?? undefined;
 
     // === Extraire le code de confirmation ===
@@ -738,7 +738,7 @@ async function completebookingViaUI(
 
   } catch (err) {
     const screenshotBuf3 = await page.screenshot().catch(() => null);
-    const screenshotStorageId3 = screenshotBuf3 ? await uploadScreenshot(screenshotBuf3.toString('base64')) : undefined;
+    const screenshotStorageId3 = screenshotBuf3 ? await uploadScreenshot(Buffer.from(screenshotBuf3).toString('base64')) : undefined;
     const screenshotStorageId = screenshotStorageId3 ?? undefined;
     // Dump même en cas d'erreur — les appels déjà capturés sont précieux
     _dumpCapturedCalls(config.clientId, capturedCalls);
@@ -815,14 +815,14 @@ async function extractConfirmationCode(page: Page): Promise<string | null> {
     try {
       const el = await page.$(sel);
       if (el) {
-        const text = await el.innerText();
+        const text = await (el as any).evaluate((e: any) => e.innerText ?? '').catch(() => '');
         if (text && text.trim().length > 0) return text.trim();
       }
     } catch { /* continue */ }
   }
 
   // Fallback : cherche un pattern alphanumérique dans le body (code RDV belge)
-  const bodyText = await page.innerText('body').catch(() => '');
+  const bodyText = await page.$eval('body', (el: any) => el.innerText).catch(() => '');
   const match = bodyText.match(/\b([A-Z]{2,4}[-\s]?\d{4,10})\b/);
   return match ? match[1] : null;
 }
@@ -1600,7 +1600,7 @@ export async function runCevDirectSessionSetup(
       botLog({ applicationId: clientId, step: 'cev_direct_navigation_done', status: 'ok', data: { currentUrl } });
 
       const allCookies = await context.cookies();
-      const cevCookies = allCookies.filter(c => c.domain.includes('appointment.cloud.diplomatie.be'));
+      const cevCookies = allCookies.filter(c => (c.domain ?? '').includes('appointment.cloud.diplomatie.be'));
 
       if (cevCookies.length === 0) {
         botLog({ applicationId: clientId, step: 'cev_direct_no_cookie', status: 'fail', data: { currentUrl } });
@@ -1845,7 +1845,7 @@ export async function bookWithExistingSession(
     // Naviguer vers l'URL d'intégration avec le cookie injecté
     // Le serveur va vérifier la session et rediriger vers SelectSlot (ou NoAvailability)
     await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await (page as any).waitForNavigation?.({ waitUntil: 'networkidle0', timeout: 15_000 }).catch(() => {});
 
     const currentUrl = page.url();
     botLog({

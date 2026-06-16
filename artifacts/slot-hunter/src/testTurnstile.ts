@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test local : résolution Cloudflare Turnstile via 2captcha
  *

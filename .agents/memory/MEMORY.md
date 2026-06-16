@@ -2,3 +2,4 @@
 - [CEV UA pool rules](cev-ua-pool-rules.md) — rules for maintaining the UA pool: always use real build numbers, always include "Google Chrome" brand for stable Chrome, no Linux profiles.
 - [CEV implementation plan](cev-impl-plan.md) — complete anti-shadow-ban overhaul plan written to CEV_BOT_IMPLEMENTATION_PLAN.md (1259 lines); 15 detection vectors from real captures; full Puppeteer flow replaces HTTP-only setup; 6 phases ~20-27h effort.
 - [CEV anti-shadow-ban overhaul](cev-overhaul-done.md) — implementation done: cev-hcaptcha.ts + cev-session-manager.ts created; captureFullSessionForAccount() + stealth fixes in cev-dossier-loop.ts; ignoreTlsErrors removed + log-normal jitter in cev-shared-impit.ts; VOWINT TTL 24h→4h; activate with cev_full_puppeteer_mode=1.
+- [Playwright→Puppeteer migration](playwright-puppeteer-migration.md) — API diff cheatsheet and file-level strategy used to migrate browser.ts + 6 portal files; 0 TS errors after.

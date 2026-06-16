@@ -16,8 +16,12 @@
  *   capture.entries() // accès aux données brutes
  */
 
-import type { BrowserContext, Request, Response } from 'playwright';
 import { botLog } from './convexClient.js';
+
+/** Interface minimale requise — compatible Playwright BrowserContext ET PuppeteerContextAdapter. */
+interface EventEmittable {
+  on(event: string, listener: (...args: any[]) => void): void;
+}
 
 const WATCHED_DOMAINS = [
   'visaonweb.diplomatie.be',
@@ -68,14 +72,14 @@ function sanitizeHeaders(raw: Record<string, string>): Record<string, string> {
 }
 
 export function attachNetCapture(
-  context: BrowserContext,
+  context: EventEmittable,
   applicationId: string,
 ): NetCapture {
   let seq = 0;
   const map = new Map<string, NetEntry>();
   const list: NetEntry[] = [];
 
-  context.on('request', (req: Request) => {
+  context.on('request', (req: any) => {
     if (!isWatched(req.url(), req.resourceType())) return;
 
     const id = ++seq;
@@ -112,7 +116,7 @@ export function attachNetCapture(
     });
   });
 
-  context.on('response', async (res: Response) => {
+  context.on('response', async (res: any) => {
     if (!isWatched(res.url(), res.request().resourceType())) return;
 
     const now = Date.now();

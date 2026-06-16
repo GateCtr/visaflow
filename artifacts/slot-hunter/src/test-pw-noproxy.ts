@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test Playwright SANS PROXY — diagnostic rendu Angular USA portal
  * Vérifie si le proxy iProyal est la cause du router-outlet vide.

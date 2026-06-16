@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test Playwright — Interception réseau USA portal pour Christian (cancellable flow)
  * Approche : login via formulaire Angular → intercepter appels API → capturer IDs

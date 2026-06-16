@@ -1,21 +1,16 @@
-import { chromium as baseChromium } from "playwright";
-import { addExtra } from "playwright-extra";
+import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import type { Browser, BrowserContext, Page, LaunchOptions } from "playwright";
-import { ProxyPool, parseHttpProxyUrlForPlaywright } from "./proxyPool.js";
+import type { Browser, Page, CookieParam, Protocol } from "puppeteer";
+import { ProxyPool } from "./proxyPool.js";
 
-const playwrightChromium = addExtra(baseChromium);
-playwrightChromium.use(StealthPlugin());
+puppeteer.use(StealthPlugin());
 
-const PROXY_URL          = process.env.PROXY_URL;
-const IPROYAL_PROXY_URL  = process.env.IPROYAL_PROXY_URL;
+const PROXY_URL           = process.env.PROXY_URL;
+const IPROYAL_PROXY_URL   = process.env.IPROYAL_PROXY_URL;
 const BRIGHTDATA_PROXY_URL = process.env.BRIGHTDATA_PROXY_URL;
-const SOAX_PROXY_URL     = process.env.SOAX_PROXY_URL;
+const SOAX_PROXY_URL      = process.env.SOAX_PROXY_URL;
 const DRY_RUN = process.env.DRY_RUN === "true";
 
-// ProxyPool centralisé (src/proxyPool.ts — inliné depuis proxy-service pour éviter
-// les problèmes de résolution workspace sur Railway).
-// Priorité : 2captcha pool (IPs stables 30 min) → iProyal (Espagne) → BrightData (CEV) → PROXY_URL statique → direct.
 export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 
 // ─── User-Agents desktop uniquement ─────────────────────────────────────────
@@ -24,10 +19,9 @@ export const proxyPool = new ProxyPool(process.env.TWOCAPTCHA_API_KEY ?? "");
 // Versions alignées sur juin 2026 : Chrome 147-148 (stable), Edge 148, Firefox 138,
 // Safari 18, Opera 120. Profils variés : Windows/macOS/Linux.
 // ⚠️ À mettre à jour environ tous les 3 mois quand Chrome dépasse +10 versions.
-// UA Playwright — portails non-CEV (USA, Dubaï, Schengen, etc.)
+// UA Puppeteer — portails non-CEV (USA, Dubaï, Schengen, etc.)
 // Règle : builds réels uniquement — le WAF détecte les .0.0.0 fictifs.
 // Chrome 149 (stable juin 2026) en tête, Chrome 148 secondaire.
-// Pas utilisé pour les appels HTTP CEV (qui ont leur propre pool dans cev-shared-impit.ts).
 const USER_AGENTS = [
   // Chrome 149 stable Windows — version courante (juin 2026)
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
@@ -85,6 +79,135 @@ export function randomViewport() {
   return VIEWPORTS[Math.floor(Math.random() * VIEWPORTS.length)];
 }
 
+// ─── Cookie type compatible Playwright ↔ Puppeteer ───────────────────────────
+export interface CookieLike {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+  url?: string;
+}
+
+// ─── PuppeteerContextAdapter ──────────────────────────────────────────────────
+// Expose la même interface que Playwright BrowserContext pour que cevBooking.ts
+// et les autres appelants n'aient pas besoin de changer leurs appels.
+export class PuppeteerContextAdapter {
+  private _initFns: Array<{ fn: Function | string; args: unknown[] }> = [];
+
+  constructor(
+    private _browser: Browser,
+    private _page: Page,
+    private _ua: string,
+    private _viewport: { width: number; height: number },
+    private _proxyAuth: { username: string; password: string } | undefined,
+    private _extraHeaders: Record<string, string>,
+  ) {}
+
+  /** Crée et configure une nouvelle page (équivalent de context.newPage() Playwright). */
+  async newPage(): Promise<Page> {
+    const p = await this._browser.newPage();
+    await p.setUserAgent(this._ua);
+    await p.setViewport(this._viewport);
+    await p.setExtraHTTPHeaders(this._extraHeaders);
+    if (this._proxyAuth) await p.authenticate(this._proxyAuth);
+    for (const { fn, args } of this._initFns) {
+      await (p as any).evaluateOnNewDocument(fn, ...args);
+    }
+    return p;
+  }
+
+  /** Lit les cookies de la page courante (équivalent de context.cookies() Playwright). */
+  async cookies(...urls: string[]): Promise<CookieLike[]> {
+    const raw = await this._page.cookies(...urls) as Protocol.Network.Cookie[];
+    return raw.map((c) => ({
+      name: c.name,
+      value: c.value,
+      domain: c.domain,
+      path: c.path,
+      expires: c.expires,
+      httpOnly: c.httpOnly,
+      secure: c.secure,
+      sameSite: c.sameSite as "Strict" | "Lax" | "None" | undefined,
+    }));
+  }
+
+  /** Pose des cookies sur la page courante (équivalent de context.addCookies() Playwright). */
+  async addCookies(cookies: CookieLike[]): Promise<void> {
+    await this._page.setCookie(
+      ...cookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path ?? "/",
+        expires: c.expires,
+        httpOnly: c.httpOnly,
+        secure: c.secure,
+        sameSite: c.sameSite,
+        url: c.url,
+      }) as CookieParam),
+    );
+  }
+
+  /**
+   * Injecte un script d'init dans toutes les pages futures.
+   * Équivalent de context.addInitScript() Playwright → evaluateOnNewDocument() Puppeteer.
+   */
+  async addInitScript(fn: Function | string, ...args: unknown[]): Promise<void> {
+    this._initFns.push({ fn, args });
+    await (this._page as any).evaluateOnNewDocument(fn, ...args);
+  }
+
+  /**
+   * Attend l'ouverture d'une nouvelle page (popup/onglet).
+   * Équivalent de context.waitForEvent('page', options) Playwright.
+   * → browser.on('targetcreated') Puppeteer.
+   */
+  waitForEvent(event: string, options?: { timeout?: number }): Promise<Page> {
+    if (event !== "page") throw new Error(`[PuppeteerContextAdapter] Unsupported event: ${event}`);
+    const timeout = options?.timeout ?? 30_000;
+    return new Promise<Page>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("Timeout waiting for new page (targetcreated)")),
+        timeout,
+      );
+      this._browser.once("targetcreated" as any, async (target: any) => {
+        if (target.type() === "page") {
+          clearTimeout(timer);
+          resolve(await target.page());
+        }
+      });
+    });
+  }
+
+  /** Ferme le navigateur. */
+  async close(): Promise<void> {
+    await this._browser.close();
+  }
+
+  /** Accès direct au navigateur Puppeteer sous-jacent. */
+  get browser(): Browser {
+    return this._browser;
+  }
+
+  /**
+   * Délègue les événements à la page Puppeteer sous-jacente.
+   * Permet à netCapture.ts d'appeler context.on('request', ...) / context.on('response', ...).
+   * Puppeteer intercepte request/response au niveau page (pas contexte) — compatible pour CEV.
+   */
+  on(event: string, listener: (...args: any[]) => void): void {
+    (this._page as any).on(event, listener);
+  }
+
+  off(event: string, listener: (...args: any[]) => void): void {
+    (this._page as any).off(event, listener);
+  }
+}
+
+// ─── BrowserOverrides ─────────────────────────────────────────────────────────
 export interface BrowserOverrides {
   locale?: string;
   timezoneId?: string;
@@ -104,15 +227,18 @@ export interface BrowserOverrides {
   headless?: boolean;
 }
 
-export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
+// ─── launchBrowser ────────────────────────────────────────────────────────────
+export async function launchBrowser(overrides?: BrowserOverrides): Promise<{
+  browser: Browser;
+  context: PuppeteerContextAdapter;
+  page: Page;
+}> {
   const ua = randomUserAgent();
   const viewport = randomViewport();
 
   // ── Résolution du proxy ───────────────────────────────────────────────────
-  // Priorité globale : BrightData (CEV) | iProyal (Espagne) | 2captcha pool (USA prioritaire) | PROXY_URL statique | direct
-  // forceNoProxy: true → bypass total (retry après ERR_PROXY_CONNECTION_FAILED)
-  const forceNoProxy  = overrides?.forceNoProxy ?? false;
-  const proxySource   = overrides?.proxySource ?? "auto";
+  const forceNoProxy = overrides?.forceNoProxy ?? false;
+  const proxySource  = overrides?.proxySource ?? "auto";
   let proxyAddress: string | undefined;
 
   if (!forceNoProxy) {
@@ -126,7 +252,6 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
       const poolResult = await proxyPool.getProxy();
       proxyAddress = poolResult?.proxy ?? PROXY_URL;
     } else {
-      // auto : 2captcha (priorité USA — IPs stables 30 min) → SOAX → iProyal → PROXY_URL statique
       if (proxyPool.isConfigured) {
         const poolResult = await proxyPool.getProxy();
         proxyAddress = poolResult?.proxy ?? SOAX_PROXY_URL ?? IPROYAL_PROXY_URL ?? PROXY_URL;
@@ -140,16 +265,8 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
     }
   }
 
-  // Playwright ne parse pas les credentials depuis l'URL (→ HTTP 407).
-  // On extrait username/password explicitement si présents dans l'URL.
-  let proxyConfig: { server: string; username?: string; password?: string } | undefined;
-  if (proxyAddress) {
-    proxyConfig = parseHttpProxyUrlForPlaywright(proxyAddress);
-  }
-
-  const locale         = overrides?.locale         ?? "fr-FR";
-  const timezoneId     = overrides?.timezoneId     ?? "Africa/Kinshasa";
-  // acceptLanguage dérivé du locale si non fourni explicitement (évite fr-FR par défaut quand locale=fr-BE)
+  const locale      = overrides?.locale      ?? "fr-FR";
+  const timezoneId  = overrides?.timezoneId  ?? "Africa/Kinshasa";
   const defaultAcceptLang = (() => {
     const [lang, region] = locale.split("-");
     if (region) return `${locale},${lang};q=0.9,en-US;q=0.8,en;q=0.7`;
@@ -162,6 +279,7 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
     ? [locale, langParts[0], "en-US", "en"].filter((v, i, a) => a.indexOf(v) === i)
     : ["fr-FR", "fr", "en-US", "en"];
 
+  // ── Puppeteer : proxy dans les args (--proxy-server) + authenticate() ──────
   const launchArgs: string[] = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
@@ -169,31 +287,49 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
     "--disable-infobars",
     "--disable-dev-shm-usage",
     "--disable-gpu",
-    "--window-size=" + viewport.width + "," + viewport.height,
+    `--window-size=${viewport.width},${viewport.height}`,
   ];
 
-  const launchOptions: LaunchOptions = {
+  let proxyAuth: { username: string; password: string } | undefined;
+  if (proxyAddress) {
+    const parsed = parseProxyForPuppeteer(proxyAddress);
+    if (parsed) {
+      launchArgs.push(`--proxy-server=${parsed.server}`);
+      if (parsed.username) {
+        proxyAuth = { username: parsed.username, password: parsed.password ?? "" };
+      }
+    }
+  }
+
+  // BrightData intercepte TLS — ignoreHTTPSErrors via CDP après launch
+  const ignoreTls = proxySource === "brightdata";
+  if (ignoreTls) {
+    launchArgs.push("--ignore-certificate-errors");
+  }
+
+  const browser = await (puppeteer as any).launch({
     headless: overrides?.headless ?? true,
     args: launchArgs,
-    proxy: proxyConfig,
-  };
-  const browser = await playwrightChromium.launch(launchOptions) as unknown as Browser;
+    ignoreHTTPSErrors: ignoreTls,
+    // Puppeteer timezoneId via CDP (set below per-page)
+  }) as Browser;
 
-  // BrightData intercepte TLS côté proxy — ignoreHTTPSErrors requis pour que
-  // Playwright puisse établir des tunnels HTTPS à travers leur infrastructure.
-  const ignoreHTTPSErrors = proxySource === "brightdata";
+  const page = await browser.newPage();
+  await page.setUserAgent(ua);
+  await page.setViewport(viewport);
+  await page.setExtraHTTPHeaders({ "Accept-Language": acceptLanguage });
+  if (proxyAuth) await page.authenticate(proxyAuth);
 
-  const context = await browser.newContext({
-    userAgent: ua,
-    viewport,
-    locale,
-    timezoneId,
-    extraHTTPHeaders: { "Accept-Language": acceptLanguage },
-    javaScriptEnabled: true,
-    ignoreHTTPSErrors,
-  });
+  // Timezone via CDP (Playwright l'expose en option contexte, Puppeteer via CDP)
+  try {
+    const client = await (page as any).target().createCDPSession();
+    await client.send("Emulation.setTimezoneOverride", { timezoneId });
+  } catch {
+    // Non fatal si non supporté
+  }
 
-  await context.addInitScript((langs: string[]) => {
+  // Init script — équivalent de context.addInitScript() Playwright
+  const initFn = (langs: string[]) => {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     Object.defineProperty(navigator, "languages", { get: () => langs });
 
@@ -239,12 +375,17 @@ export async function launchBrowser(overrides?: BrowserOverrides): Promise<{ bro
       },
       _: noopObj,
     };
-  }, navLanguages);
+  };
 
-  const page = await context.newPage();
+  await (page as any).evaluateOnNewDocument(initFn, navLanguages);
+
+  const extraHeaders = { "Accept-Language": acceptLanguage };
+  const context = new PuppeteerContextAdapter(browser, page, ua, viewport, proxyAuth, extraHeaders);
 
   return { browser, context, page };
 }
+
+// ─── Helpers humains ──────────────────────────────────────────────────────────
 
 export async function randomDelay(minMs = 500, maxMs = 2000): Promise<void> {
   const ms = minMs + Math.random() * (maxMs - minMs);
@@ -283,7 +424,8 @@ export async function humanScroll(page: Page): Promise<void> {
   const scrolls = 2 + Math.floor(Math.random() * 4);
   for (let i = 0; i < scrolls; i++) {
     const delta = 100 + Math.random() * 300;
-    await page.mouse.wheel(0, delta);
+    // Puppeteer : mouse.wheel prend un objet options (Playwright : args positionnels)
+    await (page.mouse as any).wheel({ deltaY: delta });
     await randomDelay(300, 800);
   }
 }
@@ -294,31 +436,18 @@ export function isDryRun(): boolean {
 
 // ─── iProyal Sticky Session ───────────────────────────────────────────────────
 
-/**
- * ID de session iProyal basé sur l'heure courante (rotation toutes les heures).
- * Partagé entre Playwright et CapSolver pour garantir le même exit IP.
- */
 export function getIproyalSessionId(): string {
-  // Format YYYYMMDDHH — change chaque heure pour rotation IP quotidienne
   return `j${new Date().toISOString().slice(0, 13).replace(/[-T:]/g, "")}`;
 }
 
-/**
- * Ajoute un ID de session sticky à l'URL iProyal.
- * Format iProyal sticky : http://USER_session-ID:PASS@geo.iproyal.com:12321
- * Même ID = même exit IP entre CapSolver et Playwright.
- */
 export function buildStickyIproyalUrl(proxyUrl: string, sessionId?: string): string {
   try {
     if (!proxyUrl.includes("iproyal.com")) return proxyUrl;
     const u = new URL(proxyUrl);
     const decodedUser = decodeURIComponent(u.username);
-    // Ne pas dupliquer le suffixe session s'il est déjà présent
     if (decodedUser.includes("_session-")) return proxyUrl;
     const sid = sessionId ?? getIproyalSessionId();
-    // Format iProyal sticky : USER_session-ID (underscore avant "session", tiret avant l'ID)
     const stickyUser = encodeURIComponent(`${decodedUser}_session-${sid}`);
-    // Reconstruire l'URL sans trailing slash
     return `http://${stickyUser}:${u.password}@${u.host}`;
   } catch {
     return proxyUrl;
@@ -326,8 +455,36 @@ export function buildStickyIproyalUrl(proxyUrl: string, sessionId?: string): str
 }
 
 /**
- * Parse une URL proxy en objet { server, username, password } pour Playwright.
+ * Parse une URL proxy pour Puppeteer.
+ * Puppeteer: proxy via --proxy-server=HOST:PORT + page.authenticate({username, password})
  */
-export function parseProxyUrl(proxyUrl: string): { server: string; username?: string; password?: string } | undefined {
-  return parseHttpProxyUrlForPlaywright(proxyUrl);
+export function parseProxyForPuppeteer(
+  proxyUrl: string,
+): { server: string; username?: string; password?: string } | undefined {
+  try {
+    const url = new URL(proxyUrl.startsWith("http") ? proxyUrl : `http://${proxyUrl}`);
+    const server = `${url.hostname}:${url.port || "8080"}`;
+    const username = url.username ? decodeURIComponent(url.username) : undefined;
+    const password = url.password ? decodeURIComponent(url.password) : undefined;
+    return { server, username, password };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Alias pour compatibilité arrière (anciennement parseHttpProxyUrlForPlaywright).
+ * Retourne le même objet { server, username, password }.
+ */
+export function parseHttpProxyUrlForPlaywright(
+  proxyUrl: string,
+): { server: string; username?: string; password?: string } | undefined {
+  return parseProxyForPuppeteer(proxyUrl);
+}
+
+/** Alias court. */
+export function parseProxyUrl(
+  proxyUrl: string,
+): { server: string; username?: string; password?: string } | undefined {
+  return parseProxyForPuppeteer(proxyUrl);
 }

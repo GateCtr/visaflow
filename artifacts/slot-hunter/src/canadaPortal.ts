@@ -27,7 +27,7 @@
  *   visaCategoryId = 437 (Biometric Enrolment)
  */
 
-import type { Page } from "playwright";
+import type { Page } from "puppeteer";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
 import {
   botLog,
@@ -133,8 +133,8 @@ function isSlotDate(dateDisplay: unknown): boolean {
  */
 async function captureAndUpload(page: Page): Promise<string | undefined> {
   try {
-    const buf = await page.screenshot({ fullPage: false, type: "png" });
-    const storageId = await uploadScreenshot(buf.toString("base64"));
+    const buf = await (page as any).screenshot({ fullPage: false, type: "png" });
+    const storageId = await uploadScreenshot(Buffer.from(buf).toString("base64"));
     return storageId ?? undefined;
   } catch {
     return undefined;
@@ -146,8 +146,7 @@ async function captureAndUpload(page: Page): Promise<string | undefined> {
  */
 async function captureConfirmationPdf(page: Page): Promise<string | null> {
   try {
-    const ctx = page.context();
-    const printPage = await ctx.newPage();
+    const printPage = await (page as any).browser().newPage();
     const html = await page.content();
     await printPage.setContent(html, { waitUntil: "domcontentloaded" });
     const pdfBytes = Buffer.from(
@@ -243,9 +242,9 @@ async function loginVfsIrcc(
     "input[type='password']",
   ].join(", ");
 
-  await page.fill(usernameSelector, job.hunterConfig.embassyUsername);
+  await page.$eval(usernameSelector, (el: any, v: string) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, job.hunterConfig.embassyUsername);
   await randomDelay(400, 900);
-  await page.fill(passwordSelector, job.hunterConfig.embassyPassword);
+  await page.$eval(passwordSelector, (el: any, v: string) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, job.hunterConfig.embassyPassword);
   await randomDelay(600, 1200);
 
   // Soumettre le formulaire

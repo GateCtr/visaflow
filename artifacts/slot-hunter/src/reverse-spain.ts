@@ -16,7 +16,7 @@
  *
  * Usage : npx tsx src/reverse-spain.ts
  */
-import type { BrowserContext, Page } from "playwright";
+import type { Page } from "puppeteer";
 import { ProxyAgent } from "undici";
 import { detectAndSolveTurnstile } from "./captcha.js";
 import { launchBrowser } from "./browser.js";
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
 
   console.log("  Navigation vers:", WIDGET_URL);
   try {
-    await page.goto(WIDGET_URL, { waitUntil: "commit", timeout: 30_000 });
+    await page.goto(WIDGET_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
   } catch (e) {
     console.warn("  goto timeout/err:", e instanceof Error ? e.message : e);
   }
@@ -197,8 +197,8 @@ async function main(): Promise<void> {
   const cookies = await context.cookies();
   console.log("  Cookies total:", cookies.length);
   const bktCookies = cookies.filter(c =>
-    c.domain.includes("bookitit") ||
-    c.domain.includes("citaconsular") ||
+    (c.domain ?? "").includes("bookitit") ||
+    (c.domain ?? "").includes("citaconsular") ||
     c.name.toLowerCase().includes("sess") ||
     c.name.toLowerCase().includes("phpsess") ||
     c.name.toLowerCase().includes("ci_") ||
@@ -329,28 +329,9 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── Phase D : Vérifier si page.context().request fonctionne (approach actuelle) ──
-  sep("D. Confirmation — page.context().request (approche actuelle)");
-  if (bases.length > 0 && !bases[0].includes("app.bookitit")) {
-    const base = bases[0];
-    const req = page.context().request;
-    try {
-      const cb = `cb${Date.now()}`;
-      const res = await req.get(`${base}getwidgetconfigurations/?callback=${cb}&_=${Date.now()}`, {
-        timeout: 15_000,
-      });
-      const text = await res.text();
-      const m = text.trim().match(/^[\w$.]+\(([\s\S]*)\);?$/);
-      const parsed = m ? JSON.parse(m[1]) : null;
-      console.log(`  HTTP: ${res.status()}`);
-      console.log("  Parsé :", parsed !== null ? "✅ OUI" : "❌ NON");
-      console.log("  Body  :", text.slice(0, 300));
-    } catch (e) {
-      console.log("  Erreur:", e instanceof Error ? e.message : e);
-    }
-  } else {
-    console.log("  Skipped — base URL non connue ou générique");
-  }
+  // ── Phase D : Skipped — page.context().request non disponible avec Puppeteer ──
+  sep("D. Confirmation — APIRequestContext (Puppeteer: non disponible, utiliser undici)");
+  console.log("  Skipped — page.context().request est une API Playwright. Utiliser callJsonpUndici à la place.");
 
   await browser.close();
 

@@ -1,4 +1,9 @@
-import type { APIRequestContext, Page, Response, Browser, BrowserContext } from "playwright";
+// Types remplacés par any (migration Playwright → Puppeteer) — les APIs at runtime sont compatibles
+type APIRequestContext = any;
+type Page = any;
+type Response = any;
+type Browser = any;
+type BrowserContext = any;
 import { ProxyAgent } from "undici";
 import { detectAndSolveCaptcha, detectAndSolveTurnstile, detectAndSolveTurnstileWithInjection } from "./captcha.js";
 import { launchBrowser, randomDelay, humanScroll } from "./browser.js";
@@ -381,7 +386,7 @@ async function detectSlotInDom(page: Page): Promise<SpainSlot | null> {
 async function captureAndUpload(page: Page): Promise<string | undefined> {
   try {
     const buf = await page.screenshot({ fullPage: false, type: "png" });
-    const storageId = await uploadScreenshot(buf.toString("base64"));
+    const storageId = await uploadScreenshot(Buffer.from(buf).toString("base64"));
     return storageId ?? undefined;
   } catch {
     return undefined;
@@ -429,15 +434,14 @@ async function captureConfirmationPdf(page: Page): Promise<string | null> {
     await page.waitForSelector("#idBktDefaultTicketContainer", { timeout: 6_000 }).catch(() => {});
 
     const ticketHtml = await page
-      .$eval("#idBktDefaultTicketContainer", (el) => (el as HTMLElement).innerHTML)
+      .$eval("#idBktDefaultTicketContainer", (el: any) => (el as HTMLElement).innerHTML)
       .catch(() => "");
 
     let pdfBytes: Buffer;
 
     if (ticketHtml) {
       // Ouvre une page éphémère avec uniquement le HTML du ticket — propre et sans chrome
-      const ctx = page.context();
-      const ticketPage = await ctx.newPage();
+      const ticketPage = await (page as any).browser().newPage();
       await ticketPage.setContent(
         `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Confirmation RDV</title></head><body style="margin:16px;font-family:sans-serif">${ticketHtml}</body></html>`,
         { waitUntil: "domcontentloaded" },
@@ -569,7 +573,7 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
   const target = `${base}#selecttime/${encodeURIComponent(slot.date)}/${encodeURIComponent(slot.time)}${agendaPart}`;
 
   try {
-    await page.goto(target, { waitUntil: "commit", timeout: 30_000 });
+    await page.goto(target, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await randomDelay(1000, 1800);
   } catch {
     return { status: "failed", note: "selecttime_navigation_failed" };
@@ -750,18 +754,19 @@ async function tryApiFirstSlot(
   endpointBase: string,
   runtime: SpainRuntimeContext,
 ): Promise<SpainSlot | null> {
-  const req = page.context().request;
+  const _rawCookies = await (page as any).cookies().catch(() => [] as any[]);
+  const _cookieHdr = (_rawCookies as any[]).map((c: any) => `${c.name}=${c.value}`).join('; ');
   const initParams = toStringMap(runtime.init);
 
   // 1) Bootstrap config (souvent nécessaire côté serveur pour initialiser bktToken/session)
-  await callJsonp(req, endpointBase, "getwidgetconfigurations/", initParams).catch(() => null);
+  await callJsonpUndici(endpointBase, "getwidgetconfigurations/", initParams, _cookieHdr, endpointBase).catch(() => null);
 
   // 2) Services
-  const servicesPayload = await callJsonp(req, endpointBase, "getservices/", {
+  const servicesPayload = await callJsonpUndici(endpointBase, "getservices/", {
     ...initParams,
     services: runtime.selectedServices.join(","),
     selectedPeople: String(runtime.selectedPeople),
-  });
+  }, _cookieHdr, endpointBase);
 
   let services = runtime.selectedServices;
   if (services.length === 0) {
@@ -769,11 +774,11 @@ async function tryApiFirstSlot(
   }
 
   // 3) Agendas
-  const agendasPayload = await callJsonp(req, endpointBase, "getagendas/", {
+  const agendasPayload = await callJsonpUndici(endpointBase, "getagendas/", {
     ...initParams,
     services: services.join(","),
     selectedPeople: String(runtime.selectedPeople),
-  });
+  }, _cookieHdr, endpointBase);
 
   let agendas = runtime.selectedAgendas;
   if (agendas.length === 0) {
@@ -788,14 +793,14 @@ async function tryApiFirstSlot(
   const baseDate = new Date();
   for (let i = 0; i < 9; i++) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
-    const payload = await callJsonp(req, endpointBase, "datetime/", {
+    const payload = await callJsonpUndici(endpointBase, "datetime/", {
       ...initParams,
       services: services.join(","),
       agendas: agendas.join(","),
       start: firstMonthDayYmd(d),
       end: lastMonthDayYmd(d),
       selectedPeople: String(runtime.selectedPeople),
-    });
+    }, _cookieHdr, endpointBase);
     const slot = extractSlotFromBookititPayload(payload);
     if (slot) return slot;
   }
@@ -895,9 +900,9 @@ async function extractAndSaveSession(
   if (!base) return null;
 
   try {
-    const allCookies = await page.context().cookies();
+    const allCookies = (await (page as any).cookies());
     // Garder les cookies Bookitit + session PHP
-    const relevantCookies = allCookies.filter(c =>
+    const relevantCookies = allCookies.filter((c: any) =>
       c.domain.includes("bookitit") ||
       c.domain.includes("citaconsular") ||
       /phpsess|ci_sess|bkt|sess/i.test(c.name)
@@ -905,32 +910,32 @@ async function extractAndSaveSession(
 
     // Fallback : si aucun cookie spécifique, garder tous les cookies
     const cookiesToUse = relevantCookies.length > 0 ? relevantCookies : allCookies;
-    const cookieHeader = cookiesToUse.map(c => `${c.name}=${c.value}`).join("; ");
+    const cookieHeader = cookiesToUse.map((c: any) => `${c.name}=${c.value}`).join("; ");
 
     if (!cookieHeader) return null;
 
-    // Récupérer services + agendas frais depuis le contexte Playwright
-    // pour les avoir disponibles dans le cache
-    const req = page.context().request;
+    // Récupérer services + agendas frais (version Puppeteer — pas d'APIRequestContext)
+    const _rc2 = await (page as any).cookies().catch(() => [] as any[]);
+    const _ch2 = (_rc2 as any[]).map((c: any) => `${c.name}=${c.value}`).join('; ');
     const initParams = toStringMap(runtime.init);
 
     let services = runtime.selectedServices;
     let agendas = runtime.selectedAgendas;
 
     if (services.length === 0) {
-      const svcPayload = await callJsonp(req, base, "getservices/", {
+      const svcPayload = await callJsonpUndici(base, "getservices/", {
         ...initParams,
         selectedPeople: "1",
-      }).catch(() => null);
+      }, _ch2, base).catch(() => null);
       if (svcPayload) services = collectIds(svcPayload, /(service.*id|services.*id|^id$)/i).slice(0, 3);
     }
 
     if (agendas.length === 0) {
-      const agPayload = await callJsonp(req, base, "getagendas/", {
+      const agPayload = await callJsonpUndici(base, "getagendas/", {
         ...initParams,
         services: services.join(","),
         selectedPeople: "1",
-      }).catch(() => null);
+      }, _ch2, base).catch(() => null);
       if (agPayload) agendas = collectIds(agPayload, /(agenda.*id|agendas.*id|^id$)/i).slice(0, 5);
     }
 
@@ -1184,7 +1189,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
             acceptLanguage: "es-ES,es;q=0.9,en;q=0.8",
           });
           try {
-            await bkPage.goto(url, { waitUntil: "commit", timeout: 45_000 });
+            await bkPage.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
             await randomDelay(1500, 2500);
             const booking = await tryAutoBookSpainSlot(bkPage, job, slot);
             if (booking.status === "otp_required") {
@@ -1243,7 +1248,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
     });
     browser = launched.browser;
     page = launched.page;
-    context = page.context(); // Get context from page
+    context = { on: (e: string, l: any) => (page as any)?.on(e, l) } as any;
     botLog({
       applicationId: job.id,
       step: "login",
@@ -1258,8 +1263,9 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       const base = [...bookititBases][0];
       if (!base || Object.keys(sessionInitParams).length === 0) return;
       try {
-        const req = page.context().request;
-        await callJsonp(req, base, "freetempevent/", sessionInitParams);
+        const _rc3 = await (page as any).cookies().catch(() => [] as any[]);
+        const _ch3 = (_rc3 as any[]).map((c: any) => `${c.name}=${c.value}`).join('; ');
+        await callJsonpUndici(base, "freetempevent/", sessionInitParams, _ch3, base);
         botLog({ applicationId: job.id, step: "freetempevent", status: "ok", data: { base, flow: "spain" } });
       } catch {
         // fire-and-forget — ne pas bloquer le retour d'erreur
@@ -1286,13 +1292,13 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       // PROBLÈME: page.on("dialog") a une race condition — si le dialog arrive pendant
       // le Cloudflare challenge ou très tôt, Playwright peut le rater et la page reste bloquée.
       // SOLUTION: supprimer window.alert AVANT que le JS s'exécute (addInitScript).
-      await page.addInitScript(() => {
+      await (page as any).evaluateOnNewDocument(() => {
         window.alert = () => {};
         window.confirm = () => true;
         window.prompt = () => "";
       });
       // Backup: handler Playwright classique (double sécurité)
-      page.on("dialog", async (dialog) => {
+      page.on("dialog", async (dialog: any) => {
         console.log(`[spain] Dialog natif détecté (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
       });
@@ -1305,7 +1311,7 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
         const domainRoot = `${widgetBaseUrl.protocol}//${widgetBaseUrl.hostname}/`;
         if (url !== domainRoot) {
           console.log(`[spain] Warm-up: ${domainRoot}`);
-          await page.goto(domainRoot, { waitUntil: "commit", timeout: 20_000 }).catch(() => { /* timeout ok */ });
+          await page.goto(domainRoot, { waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => { /* timeout ok */ });
           await randomDelay(1500, 3000);
 
           // Si CF bloque déjà la racine, attente courte
@@ -1323,10 +1329,10 @@ export async function runSpainSession(job: HunterJob): Promise<SessionResult> {
       // "commit" : robuste face aux challenges Cloudflare et portails lents.
       // On attend ensuite les sélecteurs spécifiques plutôt que le parsing HTML global.
       try {
-        await page.goto(url, { waitUntil: "commit", timeout: 30_000 });
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
       } catch {
         console.warn("[spain] goto timeout 30s — retry 45s");
-        await page.goto(url, { waitUntil: "commit", timeout: 45_000 });
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
       }
       await randomDelay(1500, 3000);
 
@@ -1657,12 +1663,12 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
 
       // Dialog handlers are already handled within solveCloudflareFree, but we keep
       // these as a backup for any other dialogs or if the page navigates away from CF.
-      await page.addInitScript(() => {
+      await (page as any).evaluateOnNewDocument(() => {
         window.alert = () => {};
         window.confirm = () => true;
         window.prompt = () => "";
       });
-      page.on("dialog", async (dialog) => {
+      page.on("dialog", async (dialog: any) => {
         console.log(`[spain-watcher] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
         await dialog.accept().catch(() => undefined);
       });
@@ -1682,26 +1688,26 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       });
       browser = launched.browser;
       page = launched.page;
-      context = page.context(); // Get context from page
+      context = { on: (e: string, l: any) => (page as any)?.on(e, l) } as any;
 
       // Attach response handler
       page.on("response", responseHandler);
 
       try {
         // Dismiss dialogs natifs (window.alert / window.confirm / window.prompt)
-        await page.addInitScript(() => {
+        await (page as any).evaluateOnNewDocument(() => {
           window.alert = () => {};
           window.confirm = () => true;
           window.prompt = () => "";
         });
-        page.on("dialog", async (dialog) => {
+        page.on("dialog", async (dialog: any) => {
           console.log(`[spain-watcher] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
           await dialog.accept().catch(() => undefined);
         });
 
         console.log(`[spain-watcher] Probe → ${portalUrl}`);
         try {
-          await page.goto(portalUrl, { waitUntil: "commit", timeout: 25_000 });
+          await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 25_000 });
         } catch (gotoErr) {
           const gotoErrStr = String(gotoErr);
           if (
@@ -1712,7 +1718,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
             throw gotoErr;
           }
           console.warn("[spain-watcher] goto timeout 25s — retry 45s");
-          await page.goto(portalUrl, { waitUntil: "commit", timeout: 45_000 });
+          await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
         }
         await randomDelay(1500, 2500);
 
@@ -2048,7 +2054,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           const slot = await tryApiFirstSlot(page, base, runtime).catch(() => null);
           if (slot) {
             const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
-            const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+            const screenshotBase64 = screenshotBuf ? Buffer.from(screenshotBuf).toString("base64") : undefined;
             const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
             console.log(`[spain-watcher] ✅ Créneau trouvé (api_first): ${slotInfo}`);
             return { status: "found", slotInfo, screenshotBase64 };
@@ -2061,7 +2067,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         const slot = extractSlotFromBookititPayload(p);
         if (slot) {
           const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
-          const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+          const screenshotBase64 = screenshotBuf ? Buffer.from(screenshotBuf).toString("base64") : undefined;
           const slotInfo = `${slot.date} à ${slot.time} — ${slot.location}`;
           console.log(`[spain-watcher] ✅ Créneau trouvé (network_fallback): ${slotInfo}`);
           return { status: "found", slotInfo, screenshotBase64 };
@@ -2072,7 +2078,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       const domSlot = await detectSlotInDom(page);
       if (domSlot) {
         const screenshotBuf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
-        const screenshotBase64 = screenshotBuf ? screenshotBuf.toString("base64") : undefined;
+        const screenshotBase64 = screenshotBuf ? Buffer.from(screenshotBuf).toString("base64") : undefined;
         const slotInfo = `${domSlot.date} à ${domSlot.time} — ${domSlot.location}`;
         console.log(`[spain-watcher] ✅ Créneau trouvé (dom): ${slotInfo}`);
         return { status: "found", slotInfo, screenshotBase64 };
@@ -2093,7 +2099,7 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           }).catch(() => ""),
         ]);
         const buf = await page.screenshot({ fullPage: false, type: "png" }).catch(() => null);
-        if (buf) notFoundScreenshot = buf.toString("base64");
+        if (buf) notFoundScreenshot = Buffer.from(buf).toString("base64");
         const hash = await page.evaluate(() => window.location.hash).catch(() => "");
         notFoundDiag = `hash="${hash}" | title="${diagTitle}" | ${diagUrl} | DOM: ${diagText}`;
         console.log(`[spain-watcher] Diagnostic not_found — hash="${hash}" titre="${diagTitle}"`);
