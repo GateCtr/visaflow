@@ -140,22 +140,29 @@ async function getVowintSession(
   vowintPassword: string,
   clientId: string,
   vowintAppUrl?: string,
+  ipSlotId?: string,
 ): Promise<{ success: true; cookies: string; appId: string; ua: string } | { success: false; error: string }> {
 
-  // ═══ COUCHE 1 : Obtenir cookies authentifiés (partagés entre dossiers) ═══
+  // Fix TGT_TokenReuseIP : clé de cache = "email:ipSlotId" pour que chaque slot IP
+  // ait sa propre ASP.NET_SessionId — empêche le WAF de corréler le même token sur N IPs.
+  // Sans ipSlotId (appels legacy) : clé = email seul (comportement inchangé).
+  const authCacheKey = ipSlotId ? `${vowintEmail}:${ipSlotId}` : vowintEmail;
+
+  // ═══ COUCHE 1 : Obtenir cookies authentifiés (liés au slot IP si fourni) ═══
   let authCookies: string | null = null;
   let authUa: string | null = null;
 
-  // Cache mémoire auth (nouveau)
-  const cachedAuth = vowintAuthCache.get(vowintEmail);
+  // Cache mémoire auth
+  const cachedAuth = vowintAuthCache.get(authCacheKey);
   if (cachedAuth && (Date.now() - cachedAuth.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
     authCookies = cachedAuth.cookies;
     authUa = cachedAuth.ua;
     cachedAuth.lastUsedAt = Date.now();
+    if (ipSlotId) console.log(`[CEV-SETUP] 🔑 Cache auth HIT pour slot ${ipSlotId.slice(0, 20)}…`);
   }
 
-  // Legacy cache (compat mode non-pool)
-  if (!authCookies) {
+  // Legacy cache (compat mode non-pool, uniquement si pas de slot)
+  if (!authCookies && !ipSlotId) {
     const cachedLegacy = vowintSessionCache.get(vowintEmail);
     if (cachedLegacy && (Date.now() - cachedLegacy.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
       authCookies = cachedLegacy.cookies;
@@ -164,13 +171,13 @@ async function getVowintSession(
     }
   }
 
-  // Redis fallback
+  // Redis fallback (clé = authCacheKey pour isolation par slot)
   if (!authCookies) {
-    const redisSession = await restoreVowintSessionFromRedis(vowintEmail);
+    const redisSession = await restoreVowintSessionFromRedis(authCacheKey);
     if (redisSession && (Date.now() - redisSession.lastUsedAt) < VOWINT_SESSION_MAX_AGE_MS) {
       authCookies = redisSession.cookies;
       authUa = redisSession.ua;
-      vowintAuthCache.set(vowintEmail, { cookies: redisSession.cookies, ua: redisSession.ua, lastUsedAt: Date.now() });
+      vowintAuthCache.set(authCacheKey, { cookies: redisSession.cookies, ua: redisSession.ua, lastUsedAt: Date.now() });
       botLog({ applicationId: clientId, step: "cev_http_vowint_redis_hit", status: "ok" });
     }
   }
@@ -296,8 +303,9 @@ async function getVowintSession(
 
     authCookies = cookies;
     authUa = ua;
-    // Stocker dans le cache auth
-    vowintAuthCache.set(vowintEmail, { cookies, ua, lastUsedAt: Date.now() });
+    // Stocker dans le cache auth (clé = authCacheKey : isolée par slot IP si fourni)
+    vowintAuthCache.set(authCacheKey, { cookies, ua, lastUsedAt: Date.now() });
+    if (ipSlotId) console.log(`[CEV-SETUP] 🔐 Nouveau login VOWINT pour slot ${ipSlotId.slice(0, 20)}…`);
   }
 
   // ═══ COUCHE 2 : Résoudre l'appId pour le dossier SPÉCIFIQUE demandé ═══
@@ -340,9 +348,9 @@ async function getVowintSession(
 
   botLog({ applicationId: clientId, step: "cev_http_app_id_found", status: "ok", data: { appId, dossier: vowintAppUrl ?? "default" } });
 
-  // Mettre à jour les caches
-  vowintSessionCache.set(vowintEmail, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
-  syncVowintSessionToRedis(vowintEmail, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
+  // Mettre à jour les caches (clé = authCacheKey pour isolation par slot IP)
+  vowintSessionCache.set(authCacheKey, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
+  syncVowintSessionToRedis(authCacheKey, { cookies: authCookies!, appId, ua: authUa!, lastUsedAt: Date.now() });
 
   return { success: true, cookies: authCookies!, appId, ua: authUa! };
 }
@@ -435,21 +443,47 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
   return null;
 }
 
-/** Invalide le cache VOWINT (appelé quand on détecte une session expirée) */
-export function invalidateVowintCache(vowintEmail: string): void {
-  vowintSessionCache.delete(vowintEmail);
-  vowintAuthCache.delete(vowintEmail);
-  // Invalider tous les appId cachés pour cet email
+/**
+ * Invalide le cache VOWINT pour un email — et optionnellement pour un slot IP précis.
+ *
+ * Fix TGT_TokenReuseIP : chaque slot IP a sa propre entrée de cache sous la clé
+ * `${email}:${ipSlotId}`. Sans ipSlotId, on invalide le cache "global" (clé=email)
+ * ET toutes les clés `email:*` (tous les slots).
+ */
+export function invalidateVowintCache(vowintEmail: string, ipSlotId?: string): void {
+  if (ipSlotId) {
+    const slotKey = `${vowintEmail}:${ipSlotId}`;
+    vowintSessionCache.delete(slotKey);
+    vowintAuthCache.delete(slotKey);
+    removeVowintSessionFromRedis(slotKey);
+    console.log(`[CEV-SETUP] 🔄 Cache VOWINT invalidé pour slot ${ipSlotId.slice(0, 20)}…`);
+  } else {
+    // Invalider clé globale (email seul) ET toutes les clés slot (email:*)
+    vowintSessionCache.delete(vowintEmail);
+    vowintAuthCache.delete(vowintEmail);
+    for (const key of vowintSessionCache.keys()) {
+      if (key.startsWith(`${vowintEmail}:`)) vowintSessionCache.delete(key);
+    }
+    for (const key of vowintAuthCache.keys()) {
+      if (key.startsWith(`${vowintEmail}:`)) vowintAuthCache.delete(key);
+    }
+    removeVowintSessionFromRedis(vowintEmail);
+  }
+  // Invalider tous les appId cachés pour cet email (indépendant du slot)
   for (const key of vowintAppIdCache.keys()) {
     if (key.startsWith(`${vowintEmail}|`)) {
       vowintAppIdCache.delete(key);
     }
   }
-  removeVowintSessionFromRedis(vowintEmail);
 }
 
 /**
  * Setup complet d'une session CEV en HTTP pur.
+ *
+ * @param ipSlotId - Identifiant du slot IP (ex: ipSlot.sessionId depuis cev-stealth-loop).
+ *   Quand fourni, la session VOWINT est isolée par slot : chaque IP du pool obtient son
+ *   propre ASP.NET_SessionId, ce qui neutralise la règle WAF TGT_ML_TokenReuseIP_High
+ *   (même token vu depuis N IPs différentes).
  */
 export async function setupCevSessionHttp(
   vowintEmail: string,
@@ -464,6 +498,7 @@ export async function setupCevSessionHttp(
     userAgent?: string;
     validUntil?: number;
   },
+  ipSlotId?: string,
 ): Promise<CevHttpSetupResult> {
   try {
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
@@ -486,9 +521,9 @@ export async function setupCevSessionHttp(
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 1 : Obtenir session VOWINT (login ou cache)
+    // ÉTAPE 1 : Obtenir session VOWINT (login ou cache isolé par slot IP)
     // ══════════════════════════════════════════════════════════════════════════
-    const vowintSession = await getVowintSession(vowintEmail, vowintPassword, clientId, vowintAppUrl);
+    const vowintSession = await getVowintSession(vowintEmail, vowintPassword, clientId, vowintAppUrl, ipSlotId);
     if (!vowintSession.success) {
       return { success: false, error: vowintSession.error };
     }
@@ -638,7 +673,7 @@ export async function setupCevSessionHttp(
               botLog({ applicationId: clientId, step: "cev_http_redirect_rate_limit", status: "warn", data: { redirectTo: loc } });
               return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS_REDIRECT" };
             }
-            invalidateVowintCache(vowintEmail);
+            invalidateVowintCache(vowintEmail, ipSlotId);
             botLog({ applicationId: clientId, step: "cev_http_redirect_error", status: "warn", data: { redirectTo: loc } });
             return { success: false, error: "RATE_LIMIT_VOWINT_5_CLICKS_REDIRECT" };
           }
@@ -650,8 +685,8 @@ export async function setupCevSessionHttp(
     }
 
     if (!integrationUrl) {
-      // Si GetEAppointmentUrl a échoué, la session VOWINT est peut-être expirée → invalider le cache
-      invalidateVowintCache(vowintEmail);
+      // Si GetEAppointmentUrl a échoué, la session VOWINT est peut-être expirée → invalider le cache du slot
+      invalidateVowintCache(vowintEmail, ipSlotId);
       botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail" });
       return { success: false, error: "NO_INTEGRATION_URL" };
     }

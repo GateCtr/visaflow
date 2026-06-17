@@ -330,9 +330,13 @@ async function performSingleCheck(
   }
 
   try {
-    // NE PAS invalider le cache VOWINT — la session login est réutilisable entre IPs.
-    // Seul le GetEAppointmentUrl est sensible à l'IP (compteur 5 clics/h par IP).
-    // Le re-login inutile DÉCLENCHE le rate-limit (testé et confirmé 19/05/2026).
+    // Fix TGT_ML_TokenReuseIP_High : chaque slot IP obtient sa propre session VOWINT.
+    // La clé de cache est "email:ipSlot.sessionId" → même token jamais vu depuis 2 IPs
+    // différentes, neutralisant la règle WAF de corrélation multi-IP.
+    //
+    // POURQUOI pas un re-login par IP brut ? Le re-login sur GetEAppointmentUrl déclenche
+    // le rate-limit (testé 19/05/2026) — mais un re-login lié au slot sticky iProyal (60 min)
+    // est safe : chaque slot a sa propre fenêtre sticky, donc son propre token.
 
     const result = await setupCevSessionHttp(
       vowintEmail,
@@ -340,6 +344,8 @@ async function performSingleCheck(
       applicationId,
       applicationId,
       vowintAppUrl,
+      undefined,        // siphoned — géré séparément via F5CookieManager
+      ipSlot.sessionId, // ipSlotId — lie ce login à ce slot IP (fix TGT_TokenReuseIP)
     );
 
     if (!result.success) {
