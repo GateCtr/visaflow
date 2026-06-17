@@ -1,0 +1,134 @@
+**Cette réponse peut contenir des informations liées à la sécurité, un sujet nuancé. Vous devriez vérifier la réponse en utilisant un jugement humain éclairé. Visitez [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) pour plus de détails.**
+
+# 🎭 Détection Avancée : Puppeteer & Playwright
+
+Excellente question ! Face à des outils sophistiqués comme Puppeteer et Playwright, voici les techniques de détection spécialisées :
+
+## 🔍 **1. Détection des Signatures Puppeteer/Playwright**
+
+### **🎯 Empreintes Spécifiques aux Outils d'Automatisation :**
+
+```javascript
+// Détection côté client des signatures d'automatisation
+class AutomationToolDetector {
+    constructor() {
+        this.detectionResults = {};
+    }
+    
+    detectPuppeteerSignatures() {
+        const puppeteerIndicators = [];
+        
+        // Signature 1: Variables globales Puppeteer
+        if (window.navigator.webdriver === true) {
+            puppeteerIndicators.push({
+                type: 'webdriver_property',
+                confidence: 0.95,
+                evidence: 'navigator.webdriver === true'
+            });
+        }
+        
+        // Signature 2: Chrome DevTools Protocol
+        if (window.chrome && window.chrome.runtime && window.chrome.runtime.onConnect) {
+            puppeteerIndicators.push({
+                type: 'chrome_runtime_signature',
+                confidence: 0.80,
+                evidence: 'Chrome runtime with automation signatures'
+            });
+        }
+        
+        // Signature 3: Puppeteer-specific user agent patterns
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('HeadlessChrome') || 
+            userAgent.includes('Chrome/') && !userAgent.includes('Safari/')) {
+            puppeteerIndicators.push({
+                type: 'headless_user_agent',
+                confidence: 0.85,
+                evidence: userAgent
+            });
+        }
+        
+        // Signature 4: Permissions API anomalies
+        if (navigator.permissions) {
+            navigator.permissions.query({name: 'notifications'}).then(result => {
+                if (result.state === 'denied' && !this.hasUserInteracted()) {
+                    puppeteerIndicators.push({
+                        type: 'permission_anomaly',
+                        confidence: 0.70,
+                        evidence: 'Permissions denied without user interaction'
+                    });
+                }
+            });
+        }
+        
+        // Signature 5: Plugin array anomalies
+        if (navigator.plugins.length === 0 && navigator.mimeTypes.length === 0) {
+            puppeteerIndicators.push({
+                type: 'empty_plugins',
+                confidence: 0.75,
+                evidence: 'No plugins or mime types detected'
+            });
+        }
+        
+        return puppeteerIndicators;
+    }
+    
+    detectPlaywrightSignatures() {
+        const playwrightIndicators = [];
+        
+        // Signature 1: Playwright-specific window properties
+        if (window.__playwright || window.__pw_manual) {
+            playwrightIndicators.push({
+                type: 'playwright_globals',
+                confidence: 0.98,
+                evidence: 'Playwright global variables detected'
+            });
+        }
+        
+        // Signature 2: CDP session detection
+        if (window.chrome && window.chrome.debugger) {
+            playwrightIndicators.push({
+                type: 'cdp_debugger',
+                confidence: 0.90,
+                evidence: 'Chrome debugger API available'
+            });
+        }
+        
+        // Signature 3: Playwright user agent patterns
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('Playwright') || 
+            (userAgent.includes('Firefox') && !window.InstallTrigger)) {
+            playwrightIndicators.push({
+                type: 'playwright_user_agent',
+                confidence: 0.85,
+                evidence: userAgent
+            });
+        }
+        
+        // Signature 4: Viewport anomalies
+        if (screen.width === 1280 && screen.height === 720 && 
+            window.innerWidth === 1280 && window.innerHeight === 720) {
+            playwrightIndicators.push({
+                type: 'default_viewport',
+                confidence: 0.60,
+                evidence: 'Default Playwright viewport dimensions'
+            });
+        }
+        
+        // Signature 5: Missing browser-specific APIs
+        if (this.hasMissingBrowserAPIs()) {
+            playwrightIndicators.push({
+                type: 'missing_browser_apis',
+                confidence: 0.70,
+                evidence: 'Expected browser APIs are missing'
+            });
+        }
+        
+        return playwrightIndicators;
+    }
+    
+    detectAdvancedAutomationSignatures() {
+        const advancedIndicators = [];
+        
+        // Test 1: Mouse movement entropy
+        const mouseEntropy = this.calculateMouseEntropy();
+        ...

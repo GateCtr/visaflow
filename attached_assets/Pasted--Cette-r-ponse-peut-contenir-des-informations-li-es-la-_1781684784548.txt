@@ -1,0 +1,160 @@
+**Cette réponse peut contenir des informations liées à la sécurité, un sujet nuancé. Vous devriez vérifier la réponse en utilisant un jugement humain éclairé. Visitez [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) pour plus de détails.**
+
+# 🛡️ Architecture Défensive Ultime : Contre-Mesures Niveau 5
+
+Excellente analyse ! Voici les contre-mesures AWS détaillées pour ces trois vecteurs d'attaque sophistiqués :
+
+## 🔍 **Vecteur 1 : Empreinte HTTP/2 (Protocol Fingerprinting)**
+
+### **🎯 Mécanismes de Détection AWS :**
+
+#### **CloudFront + WAF Protocol Analysis :**
+```json
+{
+  "WebACL": {
+    "Name": "agotels-protocol-fingerprint-detection",
+    "Rules": [
+      {
+        "Name": "HTTP2-Protocol-Anomaly-Detection",
+        "Priority": 1,
+        "Statement": {
+          "AndStatement": {
+            "Statements": [
+              {
+                "ByteMatchStatement": {
+                  "SearchString": "HTTP/2.0",
+                  "FieldToMatch": {
+                    "SingleHeader": {"Name": "version"}
+                  },
+                  "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                  "PositionalConstraint": "CONTAINS"
+                }
+              },
+              {
+                "LabelMatchStatement": {
+                  "Scope": "LABEL",
+                  "Key": "awswaf:managed:aws:bot-control:signal:automated_browser"
+                }
+              }
+            ]
+          }
+        },
+        "Action": {
+          "Allow": {
+            "CustomRequestHandling": {
+              "InsertHeaders": [
+                {
+                  "Name": "X-Protocol-Anomaly-Score",
+                  "Value": "85"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### **Lambda@Edge Protocol Inspector :**
+```python
+import json
+import base64
+from datetime import datetime
+
+def lambda_handler(event, context):
+    """
+    Analyseur d'empreintes HTTP/2 sophistiqué
+    """
+    request = event['Records'][0]['cf']['request']
+    headers = request['headers']
+    
+    # Analyse des signatures HTTP/2
+    protocol_signals = analyze_http2_fingerprint(request)
+    
+    # Détection des anomalies protocolaires
+    anomaly_score = calculate_protocol_anomaly_score(protocol_signals)
+    
+    if anomaly_score > PROTOCOL_ANOMALY_THRESHOLD:
+        # Injection d'headers pour analyse downstream
+        request['headers']['x-protocol-risk'] = [{
+            'key': 'X-Protocol-Risk',
+            'value': str(anomaly_score)
+        }]
+        
+        # Log pour analyse forensique
+        log_protocol_anomaly(request, protocol_signals)
+    
+    return request
+
+def analyze_http2_fingerprint(request):
+    """
+    Analyse détaillée de l'empreinte HTTP/2
+    """
+    signals = {
+        'settings_frame_order': extract_settings_order(request),
+        'window_update_pattern': analyze_window_updates(request),
+        'priority_frame_structure': extract_priority_structure(request),
+        'header_compression_method': detect_hpack_usage(request),
+        'stream_dependency_tree': analyze_stream_dependencies(request)
+    }
+    
+    # Comparaison avec empreintes connues
+    browser_match = match_known_browser_fingerprints(signals)
+    
+    return {
+        'signals': signals,
+        'browser_match': browser_match,
+        'confidence': calculate_fingerprint_confidence(signals, browser_match)
+    }
+
+def detect_http1_downgrade_attack(request):
+    """
+    Détection du downgrade HTTP/1.1 forcé
+    """
+    suspicious_indicators = []
+    
+    # Vérification de la cohérence TLS/HTTP
+    if has_http2_capable_tls(request) and is_http1_request(request):
+        suspicious_indicators.append('forced_http1_downgrade')
+    
+    # Analyse des headers HTTP/1.1 suspects
+    if has_http2_specific_headers_in_http1(request):
+        suspicious_indicators.append('http2_headers_in_http1')
+    
+    # Détection de User-Agent incohérent
+    if user_agent_supports_http2(request) and is_http1_request(request):
+        suspicious_indicators.append('ua_protocol_mismatch')
+    
+    return {
+        'is_suspicious': len(suspicious_indicators) > 0,
+        'indicators': suspicious_indicators,
+        'risk_score': len(suspicious_indicators) * 25
+    }
+```
+
+#### **Configuration WAF Avancée :**
+```json
+{
+  "CustomRules": [
+    {
+      "Name": "Chrome-Replication-Detection",
+      "Priority": 10,
+      "Statement": {
+        "AndStatement": {
+          "Statements": [
+            {
+              "ByteMatchStatement": {
+                "SearchString": "Chrome/",
+                "FieldToMatch": {"SingleHeader": {"Name": "user-agent"}},
+                "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
+                "PositionalConstraint": "CONTAINS"
+              }
+            },
+            {
+              "NotStatement": {
+                "Statement": {
+                  "LabelMatchStatement": {
+                    "Scope": "LABEL",
+          ...

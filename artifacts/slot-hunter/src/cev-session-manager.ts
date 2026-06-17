@@ -36,6 +36,8 @@ export interface FullCevSession {
   capturedAt: number;          // Timestamp de capture
   validUntil: number;          // Timestamp d'expiration (capturedAt + 4h)
   isFullSession: true;         // Flag pour distinguer des siphoned simples
+  // Tous les cookies bruts Puppeteer — inclut BIGipServer, LastMRH_Session, rd, etc.
+  rawCookies?: string[];
 }
 
 // ─── Cache interne ────────────────────────────────────────────────────────────
@@ -180,6 +182,7 @@ export function fullSessionToSiphoned(session: FullCevSession): {
   osOnline: string;
   culture: string;
   isFullSession: true;
+  rawCookies?: string[];
 } {
   return {
     f5CookieValue:       session.f5CookieValue,
@@ -194,5 +197,6 @@ export function fullSessionToSiphoned(session: FullCevSession): {
     osOnline:            session.osOnline,
     culture:             session.culture,
     isFullSession:       true,
+    rawCookies:          session.rawCookies,
   };
 }

@@ -128,6 +128,22 @@ async function applyStealthToPage(page: any, logger: ReturnType<typeof createLog
       if (parameter === 37446) return "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)";
       return getParam.call(this, parameter);
     };
+
+    // FIX: deviceMemory (undefined en headless → signal bot — Chrome réel retourne 4 ou 8)
+    Object.defineProperty(navigator, "deviceMemory", { get: () => 8 });
+
+    // FIX: mimeTypes cohérents avec les plugins déclarés (vide en headless → signal bot)
+    const fakeMimeTypes = [
+      { type: "application/pdf", suffixes: "pdf", description: "Portable Document Format", enabledPlugin: null },
+      { type: "application/x-google-chrome-pdf", suffixes: "pdf", description: "Portable Document Format", enabledPlugin: null },
+    ];
+    Object.defineProperty(navigator, "mimeTypes", {
+      get: () => Object.assign(fakeMimeTypes, {
+        length: fakeMimeTypes.length,
+        item: (i: number) => fakeMimeTypes[i] ?? null,
+        namedItem: (name: string) => fakeMimeTypes.find(m => m.type === name) ?? null,
+      }),
+    });
   });
 
   // FIX: Request interception — corriger HeadlessChrome dans sec-ch-ua
@@ -206,6 +222,44 @@ async function humanType(page: any, selector: string, text: string): Promise<voi
   }
 }
 
+/**
+ * Déplace la souris en trajectoire courbe Bézier vers l'élément puis clique.
+ * Génère un vrai signal d'entropy souris (contra bare page.click() qui n'envoie
+ * aucun mouseenter/mousemove et est détectable par mouse-movement entropy analysis).
+ */
+async function humanClick(page: any, selector: string): Promise<void> {
+  try {
+    const el = await page.$(selector);
+    if (!el) { await page.click(selector); return; }
+    const box = await el.boundingBox();
+    if (!box) { await page.click(selector); return; }
+
+    // Point de départ aléatoire dans la moitié supérieure de l'écran
+    const startX = 150 + Math.random() * 700;
+    const startY = 60 + Math.random() * 250;
+    // Point cible au centre de l'élément avec offset aléatoire
+    const targetX = box.x + box.width  * (0.25 + Math.random() * 0.50);
+    const targetY = box.y + box.height * (0.25 + Math.random() * 0.50);
+
+    await page.mouse.move(startX, startY);
+    const steps = 10 + Math.floor(Math.random() * 8);
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      // Bruit perpendiculaire qui s'annule en début et fin (sin(π·t))
+      const noise = (Math.random() - 0.5) * 28 * Math.sin(Math.PI * t);
+      await page.mouse.move(
+        startX + (targetX - startX) * t + noise,
+        startY + (targetY - startY) * t + noise * 0.45,
+      );
+      await new Promise(r => setTimeout(r, 10 + Math.random() * 22));
+    }
+    await page.mouse.click(targetX, targetY);
+  } catch {
+    // Fallback silencieux si l'élément disparaît
+    await page.click(selector).catch(() => {});
+  }
+}
+
 // ─── Fonction pour capturer le cookie F5 (TS01) ──────────────────────────────
 
 async function captureF5CookieForAccount(
@@ -229,6 +283,8 @@ async function captureF5CookieForAccount(
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
     "--disable-features=IsolateOrigins,site-per-process",
+    "--window-size=1920,1080",   // screen.width/height réalistes (headless défaut → 0)
+    "--lang=fr-BE,fr",           // Accept-Language cohérent avec navigator.languages
   ];
 
   const proxyInfo = resolvePuppeteerProxy(accountId, hunterConfig);
@@ -325,6 +381,8 @@ async function captureFullSessionForAccount(
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
     "--disable-features=IsolateOrigins,site-per-process",
+    "--window-size=1920,1080",   // screen.width/height réalistes (headless défaut → 0)
+    "--lang=fr-BE,fr",           // Accept-Language cohérent avec navigator.languages
   ];
 
   const proxyInfo = resolvePuppeteerProxy(accountId, hunterConfig);
@@ -377,7 +435,7 @@ async function captureFullSessionForAccount(
       // Soumission
       await Promise.all([
         page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45_000 }),
-        page.click('[type="submit"], button[type="submit"], input[value="Login"], input[value="Log in"]'),
+        humanClick(page, '[type="submit"], button[type="submit"], input[value="Login"], input[value="Log in"]'),
       ]);
     } catch (loginErr) {
       logger.error(`Erreur login VOWINT: ${loginErr}`);
@@ -657,6 +715,9 @@ async function captureFullSessionForAccount(
       capturedAt: now,
       validUntil: now + FULL_SESSION_TTL_MS,
       isFullSession: true,
+      // TOUS les cookies Puppeteer — BIGipServer, LastMRH_Session, rd, TS*, ServerId, OSOnline, etc.
+      // Permet à buildFullSessionCookieStr d'envoyer l'exact ensemble de cookies qu'un vrai navigateur enverrait.
+      rawCookies: finalCookies.map((c: any) => `${c.name}=${c.value}`),
     };
 
     logger.info(`✅ Session complète capturée — expire dans 4h | aspNet=${fullSession.aspNetSessionId.slice(0, 10)}… | integrationUrl=${integrationUrl.slice(0, 60)}…`);
@@ -887,10 +948,22 @@ interface SiphonedCreds {
   serverId?: string;
   osOnline?: string;
   culture?: string;
+  // Tous les cookies bruts capturés par Puppeteer — inclut BIGipServer, LastMRH_Session, rd, etc.
+  rawCookies?: string[];
 }
 
-/** Construit le cookie header complet depuis les données de session */
+/** Construit le cookie header complet depuis les données de session.
+ *
+ * Mode full session (Puppeteer) : utilise rawCookies — TOUS les cookies
+ * capturés par le navigateur réel, incluant BIGipServer, LastMRH_Session,
+ * rd et autres cookies F5/WAF normalement invisibles au HTTP bot.
+ *
+ * Mode legacy (impit) : reconstruit à partir des champs nommés connus.
+ */
 function buildFullSessionCookieStr(s: SiphonedCreds): string {
+  if (s.rawCookies && s.rawCookies.length > 0) {
+    return s.rawCookies.join("; ");
+  }
   const parts: string[] = [];
   if (s.f5CookieName && s.f5CookieValue) parts.push(`${s.f5CookieName}=${s.f5CookieValue}`);
   if (s.aspNetSessionId) parts.push(`ASP.NET_SessionId=${s.aspNetSessionId}`);
