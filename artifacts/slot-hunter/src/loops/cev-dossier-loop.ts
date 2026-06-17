@@ -1,22 +1,24 @@
 /**
- * CEV Dossier Loop v3 — Pool de DOSSIERS (pas d'IPs)
+ * CEV Dossier Loop v4 — One-Shot (Predator)
  *
  * STRATÉGIE :
- *   La limite des 5 clics/heure est PAR DOSSIER (AppId), pas par IP ni par compte.
- *   → On utilise N dossiers en rotation round-robin sur 1 seule IP SOAX.
- *   → 5 dossiers × 5 clics/h = 25 scans/heure = 1 scan toutes les ~2.5 min
+ *   La limite 5 clics/heure par dossier n'existe plus côté serveur.
+ *   → Réveil toutes les ~2 min → 1 clic par dossier (round-robin) → sleep → répéter.
+ *   → La session VOWINT est réutilisée si elle est encore valide (cache 4h dans cevHttpSetup).
+ *   → Si session expirée → re-login + captcha automatique, puis clic.
+ *   → Pas de gestion F5 / full-session / quota par dossier.
  *
  * ARCHITECTURE :
  *   - 1 seule IP proxy (SOAX Kinshasa, sticky session 5min)
  *   - N dossiers VOWINT (configurés via bot-config "cev_dossier_pool")
- *   - Rotation round-robin entre les dossiers
- *   - Chaque dossier a son propre compteur de clics (5/h max)
- *   - Quand un dossier détecte un slot → booking immédiat avec CE dossier
+ *   - Round-robin pur (pas de quota)
+ *   - Session VOWINT réutilisée via cache Redis 4h (dans setupCevSessionHttp)
+ *   - Quand un dossier détecte un slot → booking immédiat + pause de CE dossier
  *
  * CONFIG Convex (bot-config) :
  *   cev_dossier_mode = "1"                  → activer ce loop
  *   cev_dossier_pool = "VOWINT6085888,VOWINT6085889,VOWINT6085890"
- *   cev_dossier_interval_sec = "30"         → pause entre chaque scan (défaut: calculé auto)
+ *   cev_dossier_interval_sec = "120"        → pause entre chaque scan (défaut: 120s = 2 min)
  *
  * IMPORTANT : MUTUELLEMENT EXCLUSIF avec cev-stealth-loop (v2 IP pool).
  */
@@ -673,13 +675,11 @@ async function captureFullSessionForAccount(
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const MAX_CLICKS_PER_SESSION = 5; // Limite GLOBALE par session VOWINT (serveur bloque au 6ème)
-const MAX_CLICKS_PER_DOSSIER_PER_HOUR = 5; // Vraie limite serveur CEV (vérifiée)
-const CLICK_WINDOW_MS = 60 * 60 * 1000; // 1 heure
-const DEFAULT_INTERVAL_SEC = 150; // Pause par défaut — calibrée pour 3 dossiers × 5 clics × 80% = 150s
-
-// Compteur GLOBAL de clics sur la session VOWINT courante
-let globalSessionClicks = 0;
+// ── One-Shot (Predator) — la limite 5 clics/h n'existe plus ────────────────
+// Stratégie : 1 réveil toutes les 2 min → 1 clic par dossier → fermeture → sleep
+// Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
+const DEFAULT_INTERVAL_SEC = 120; // 2 min par défaut (configurable via cevScanIntervalSec)
+const CLICK_WINDOW_MS = 60 * 60 * 1000; // fenêtre stats uniquement (plus de limite quota)
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
@@ -723,95 +723,41 @@ class CevDossierPool {
     this.slots.forEach((s, i) => this.logger.info(`  #${i}: ${s.vowintRef}`));
   }
 
-  /** Retourne le prochain dossier disponible (quota non épuisé) */
+  /** Retourne le prochain dossier (One-Shot: round-robin pur, pas de quota) */
   getNextAvailable(): DossierSlot | null {
     if (this.slots.length === 0) return null;
-    const now = Date.now();
     const startIndex = this.currentIndex;
 
     for (let attempts = 0; attempts < this.slots.length; attempts++) {
       const idx = (startIndex + attempts) % this.slots.length;
       const slot = this.slots[idx];
 
-      // Purger les clics > 1 heure
-      slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
-
-      // Vérifier quota
-      if (slot.clickTimestamps.length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) {
-        // Vérifier si le dossier est en pause (slot trouvé précédemment)
-        if (pausedDossiers.has(slot.vowintRef)) {
-          this.logger.info(`  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
-          continue;
-        }
-        this.currentIndex = (idx + 1) % this.slots.length;
-        return slot;
+      if (pausedDossiers.has(slot.vowintRef)) {
+        this.logger.info(`  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
+        continue;
       }
-
-      // Dossier épuisé — loguer le skip
-      if (attempts === 0 || this.slots.length <= 3) {
-        const oldestClick = slot.clickTimestamps[0];
-        const availableInMin = Math.ceil((oldestClick + CLICK_WINDOW_MS - now) / 60_000);
-        this.logger.info(`  ⏭️ #${slot.index} ${slot.vowintRef} épuisé (${slot.clickTimestamps.length}/${MAX_CLICKS_PER_DOSSIER_PER_HOUR}) — dispo dans ${availableInMin}min`);
-      }
+      this.currentIndex = (idx + 1) % this.slots.length;
+      return slot;
     }
 
-    return null; // Tous les dossiers sont épuisés
+    return null; // Tous les dossiers sont en pause
   }
 
-  /** Enregistre un clic sur un dossier */
+  /** Enregistre un clic sur un dossier (pour les stats uniquement) */
   recordClick(slot: DossierSlot): void {
     slot.clickTimestamps.push(Date.now());
     slot.totalScans++;
   }
 
-  /** Marque un dossier comme rate-limité (tous ses clics comptés) */
-  markRateLimited(slot: DossierSlot): void {
-    // Remplir les clics pour bloquer ce dossier pendant 1h
-    const now = Date.now();
-    while (slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS).length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) {
-      slot.clickTimestamps.push(now);
-    }
-    slot.rateLimitCount++;
-    this.logger.warn(`Dossier #${slot.index} ${slot.vowintRef} rate-limité (${slot.rateLimitCount}x)`);
-  }
-
-  /** Temps d'attente avant qu'un dossier soit disponible */
-  getNextAvailableIn(): number {
-    const now = Date.now();
-    let minWait = Infinity;
-
-    for (const slot of this.slots) {
-      slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
-      if (slot.clickTimestamps.length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) {
-        return 0;
-      }
-      // Quand le plus ancien clic expire
-      const oldest = slot.clickTimestamps[0];
-      const availableAt = oldest + CLICK_WINDOW_MS;
-      minWait = Math.min(minWait, availableAt - now);
-    }
-
-    return minWait === Infinity ? 60_000 : minWait;
-  }
+  /** Toujours 0 (One-Shot: pas de quota) */
+  getNextAvailableIn(): number { return 0; }
 
   /** Stats du pool */
   getStats(): { total: number; available: number; exhausted: number; totalScans: number } {
-    const now = Date.now();
-    let available = 0;
     let totalScans = 0;
-
-    for (const slot of this.slots) {
-      slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
-      if (slot.clickTimestamps.length < MAX_CLICKS_PER_DOSSIER_PER_HOUR) available++;
-      totalScans += slot.totalScans;
-    }
-
-    return {
-      total: this.slots.length,
-      available,
-      exhausted: this.slots.length - available,
-      totalScans,
-    };
+    for (const slot of this.slots) totalScans += slot.totalScans;
+    const active = this.slots.length - pausedDossiers.size;
+    return { total: this.slots.length, available: active, exhausted: pausedDossiers.size, totalScans };
   }
 
   /** Reset quotidien de tous les compteurs */
@@ -1025,9 +971,6 @@ async function performScan(
     logFn.warn(`  Erreur setup: ${result.error}`);
     return { status: "error" };
   }
-
-  // Clic réussi — enregistrer
-  globalSessionClicks++;
 
   if (result.slotsAvailable) {
     return {
@@ -1345,8 +1288,8 @@ async function runAccountLoop(job: any): Promise<void> {
 
   logger.info(`Config:`);
   logger.info(`  • Dossiers: ${localPool.size}`);
-  logger.info(`  • Clics/h total: ${localPool.size * MAX_CLICKS_PER_DOSSIER_PER_HOUR}`);
-  logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (1 scan toutes les ${Math.round(intervalMs / 1000)}s)`);
+  logger.info(`  • Stratégie: One-Shot (1 clic/réveil, session réutilisée si valide)`);
+  logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (±jitter log-normal)`);
 
   if (useProxy) {
     logger.info(`  • Proxy: SOAX (1 IP fixe Kinshasa)`);
@@ -1390,33 +1333,8 @@ async function runAccountLoop(job: any): Promise<void> {
   };
 
   let nextScanAllowedAt = 0;
-  let globalSessionClicks = 0;
-  let siphonedCreds: SiphonedCreds | undefined = undefined;
-  
-  let lastF5CookieCapturedAt = 0;
-  // F5-only mode : 30min. Full session mode : 4h (session CEV expire en 4h)
-  const F5_COOKIE_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
-  const FULL_SESSION_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
-
-  // Récupérer les credentials siphonnés depuis le job's hunterConfig
-  const hc = job.hunterConfig as any;
-  if (hc?.cevSiphonedF5CookieValue) {
-    siphonedCreds = {
-      f5CookieValue: hc.cevSiphonedF5CookieValue,
-      f5CookieName: hc.cevSiphonedF5CookieName,
-      aspNetSessionId: hc.cevSiphonedAspNetSessionId,
-      userAgent: hc.cevSiphonedUserAgent,
-      validUntil: hc.cevSiphonedValidUntil,
-      siphonedAt: hc.cevSiphonedAt,
-    };
-    logger.info(`🍪 Cookies siphonnés chargés depuis hunterConfig: F5=${!!siphonedCreds.f5CookieValue}, ASP.NET=${!!siphonedCreds.aspNetSessionId}`);
-    
-    if (siphonedCreds.userAgent) {
-      setCevExternalUserAgent(siphonedCreds.userAgent);
-    }
-  } else {
-    logger.info( "🍪 Pas de cookies siphonnés dans hunterConfig");
-  }
+  // One-Shot: pas de siphonedCreds ni de gestion F5/full-session.
+  // setupCevSessionHttp() réutilise automatiquement la session VOWINT si elle est encore valide (cache 4h).
 
   state.isRunning = true;
   state.startedAt = Date.now();
@@ -1473,149 +1391,35 @@ async function runAccountLoop(job: any): Promise<void> {
         }
       }
 
-      // ─── Capturer session (mode F5 legacy ou full session) ──────────────────
-      const nowTime = Date.now();
-
-      // Lire le mode depuis botConfig (mis en cache 50 scans)
-      let fullPuppeteerMode = false;
-      if (state.scanCount % 50 === 0 || state.scanCount === 0) {
-        const modeVal = await getBotConfigValue("cev_full_puppeteer_mode");
-        fullPuppeteerMode = modeVal === "1";
-      } else {
-        // Réutiliser la valeur précédente — détecter si isFullSession déjà actif
-        fullPuppeteerMode = !!siphonedCreds?.isFullSession;
-      }
-
-      const refreshInterval = fullPuppeteerMode
-        ? FULL_SESSION_REFRESH_INTERVAL_MS
-        : F5_COOKIE_REFRESH_INTERVAL_MS;
-
-      const needsRefresh =
-        !siphonedCreds ||
-        nowTime - lastF5CookieCapturedAt > refreshInterval ||
-        (siphonedCreds.validUntil && nowTime > siphonedCreds.validUntil);
-
-      if (needsRefresh) {
-        if (fullPuppeteerMode) {
-          // ── MODE FULL SESSION : login + captcha complet via Puppeteer ─────
-          logger.info(`🔐 Capture SESSION COMPLÈTE pour ${applicantName} (mode full-puppeteer)…`);
-          
-          // Trouver le premier dossier disponible pour la capture
-          const targetDossier = localPool.getNextAvailable() ?? { vowintRef: dossiers[0] ?? "" };
-          
-          const fullSession = await captureFullSessionForAccount(
-            accountId,
-            vowintEmail,
-            vowintPassword,
-            targetDossier.vowintRef,
-            logger,
-            job.hunterConfig,
-          );
-
-          if (fullSession) {
-            // Stocker dans le session manager
-            cevSessionManager.storeSession(accountId, fullSession);
-
-            // Convertir en siphonedCreds étendu
-            siphonedCreds = {
-              ...fullSessionToSiphoned(fullSession),
-            };
-            lastF5CookieCapturedAt = nowTime;
-            setCevExternalUserAgent(fullSession.userAgent);
-            logger.info(`✅ Session complète en cache (expire dans 4h) — appId=${fullSession.appId.slice(0, 12)}…`);
-          } else {
-            logger.warn(`❌ Capture session complète échouée — fallback mode F5 dans 2min…`);
-            await sleep(2 * 60 * 1000);
-            continue;
-          }
-        } else {
-          // ── MODE LEGACY : capture F5 cookie uniquement ────────────────────
-          logger.info(`🍪 Capture cookie F5 pour ${applicantName}…`);
-          const f5Cookie = await captureF5CookieForAccount(accountId, logger, job.hunterConfig);
-
-          if (f5Cookie) {
-            const injectSuccess = await injectApplicationF5Cookies(
-              accountId,
-              f5Cookie.f5CookieValue,
-              undefined,
-              f5Cookie.userAgent,
-              { f5CookieName: f5Cookie.f5CookieName, validityMinutes: 60 },
-            );
-
-            if (injectSuccess) {
-              siphonedCreds = {
-                f5CookieValue: f5Cookie.f5CookieValue,
-                f5CookieName: f5Cookie.f5CookieName,
-                userAgent: f5Cookie.userAgent,
-                validUntil: nowTime + 60 * 60 * 1000,
-                siphonedAt: nowTime,
-              };
-              lastF5CookieCapturedAt = nowTime;
-              setCevExternalUserAgent(f5Cookie.userAgent);
-              logger.info(`✅ Cookie F5 capturé et injecté pour ${applicantName}`);
-            } else {
-              logger.warn(`❌ Injection cookie F5 Convex échouée`);
-            }
-          } else {
-            logger.warn(`❌ Capture cookie F5 échouée — réessaie dans 2min…`);
-            await sleep(2 * 60 * 1000);
-            continue;
-          }
-        }
-      }
-      
-      // Double check we have cookies before scanning
-      if (!siphonedCreds) {
-        logger.warn(`❌ Toujours pas de cookies F5 — réessaie dans 2min...`);
-        await sleep(2 * 60 * 1000);
-        continue;
-      }
-
-      // Récupérer le prochain dossier disponible
+      // ─── One-Shot: récupérer le prochain dossier (round-robin) ─────────────
       const dossier = localPool.getNextAvailable();
       if (!dossier) {
-        const waitMs = localPool.getNextAvailableIn();
-        const waitMin = Math.ceil(waitMs / 60_000);
-        const stats = localPool.getStats();
-        logger.info(`⏳ Tous les dossiers épuisés (${stats.exhausted}/${stats.total}) — attente ${waitMin} min`);
-        // Attente réduite: max 2 min au lieu de 5 min
-        await sleep(Math.min(waitMs + 5000, 2 * 60_000));
+        // Tous les dossiers sont en PAUSE (slot déjà trouvé) → attente 30s
+        logger.info(`⏸️ Tous les dossiers en pause — attente 30s`);
+        await sleep(30_000);
         continue;
       }
 
       // Scan
       state.scanCount++;
-      
-      // Vérifier et reset les compteurs quotidiens
       localPool.checkDailyReset();
-      
       const stats = localPool.getStats();
 
-      // ─── Intervalle DYNAMIQUE basé sur les dossiers réellement actifs ──────
-      // Formule : capacité max (s/scan) divisée par 0.8 pour utiliser 80% du quota
-      // → jamais de burst, jamais d'épuisement, jamais de pause forcée
-      // Exemple : 6 dossiers × 5 clics/h → max=120s → safe=150s → 24 scans/h uniforme
-      const activeDossiers = stats.available - pausedDossiers.size;
-      const dynamicIntervalMs = activeDossiers > 0
-        ? Math.ceil((3600 / (activeDossiers * MAX_CLICKS_PER_DOSSIER_PER_HOUR)) / 0.8 * 1000)
-        : intervalMs;
-      // Utiliser le PLUS GRAND des deux : dynamique est un plancher de sécurité,
-      // l'utilisateur peut configurer un intervalle plus long via cevScanIntervalSec
-      const effectiveIntervalMs = Math.max(intervalMs, dynamicIntervalMs);
+      logger.info(`[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Actifs: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
 
-      logger.info(`[Scan #${state.scanCount}] Dossier: #${dossier.index} ${dossier.vowintRef} | Dispo: ${stats.available}/${stats.total} | Total: ${stats.totalScans} scans`);
-
+      // One-Shot: setupCevSessionHttp réutilise la session VOWINT si encore valide (cache 4h).
+      // Si expirée → re-login + captcha automatique.
       const result = await performScan(
         vowintEmail,
         vowintPassword,
         dossier,
         logApplicationId,
-        siphonedCreds,
+        undefined, // pas de siphonedCreds en One-Shot
         0,
         logger,
       );
 
-      // Log chaque scan dans Convex avec le dossier concerné
+      // Log chaque scan dans Convex
       botLog({
         applicationId: logApplicationId,
         step: "cev_dossier_scan",
@@ -1625,7 +1429,7 @@ async function runAccountLoop(job: any): Promise<void> {
           dossier: `#${dossier.index} ${dossier.vowintRef}`,
           result: result.status,
           scanNumber: state.scanCount,
-          poolAvailable: stats.available,
+          poolActive: stats.available,
           poolTotal: stats.total,
         },
       });
@@ -1636,73 +1440,38 @@ async function runAccountLoop(job: any): Promise<void> {
           logger.info(`  🚨 SLOT TROUVÉ!`);
           recordScan(uniqueJobId, dossier.vowintRef);
           recordSlotFound(uniqueJobId, dossier.vowintRef);
-          // Réinitialiser compteur no-slots (slot trouvé = pas de shadow ban)
-          if (siphonedCreds?.isFullSession) cevSessionManager.resetNoSlots(accountId);
-          // Re-login préventif si on atteint la limite (avant le booking)
-          if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
-            logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
-            invalidateVowintCache(vowintEmail);
-            globalSessionClicks = 0;
-            recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
-          }
           await handleSlotFound(
             vowintEmail, vowintPassword, dossier, logApplicationId,
             result.sessionCookie, result.integrationUrl,
-            siphonedCreds,
+            undefined,
             logger,
           );
           break;
         case "rate_limited":
+          // Rare en One-Shot, mais possible si serveur répond avec rate-limit
           state.rateLimits++;
           recordScan(uniqueJobId, dossier.vowintRef);
-          recordRateLimit(uniqueJobId, dossier.vowintRef, "CEV 5 clics/h");
-          localPool.markRateLimited(dossier);
-          // Le rate-limit vient du serveur → session grillée, reset le compteur
-          globalSessionClicks = 0;
-          logger.warn(`  ⚡ Rate-limit sur #${dossier.index} ${dossier.vowintRef} — rotation vers prochain dossier`);
+          recordRateLimit(uniqueJobId, dossier.vowintRef, "CEV rate-limit");
+          invalidateVowintCache(vowintEmail);
+          logger.warn(`  ⚡ Rate-limit inattendu sur #${dossier.index} — invalidation session + pause 5min`);
+          await sleep(5 * 60_000);
           break;
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
           invalidateAnticaptchaCache();
           invalidateVowintCache(vowintEmail);
-          globalSessionClicks = 0;
-          // En mode full session : invalider aussi le cache session (session CEV expirée)
-          if (siphonedCreds?.isFullSession) {
-            cevSessionManager.invalidate(accountId);
-            siphonedCreds = undefined;
-            lastF5CookieCapturedAt = 0;
-            logger.warn(`  🔄 Session complète invalidée — re-capture au prochain tour`);
-          } else {
-            logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain scan utilisera des credentials frais`);
-          }
+          logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain cycle utilisera des credentials frais`);
           break;
         case "no_slot":
-          logger.info(`  — Pas de créneau (clic VOWINT consommé)`);
+          logger.info(`  — Pas de créneau disponible`);
           recordScan(uniqueJobId, dossier.vowintRef);
           localPool.recordClick(dossier);
-          globalSessionClicks++;
-          if (globalSessionClicks >= MAX_CLICKS_PER_SESSION) {
-            logger.info(`  🔄 Session VOWINT: ${globalSessionClicks}/${MAX_CLICKS_PER_SESSION} clics — re-login préventif`);
-            invalidateVowintCache(vowintEmail);
-            globalSessionClicks = 0;
-            recordRelogin(uniqueJobId, dossier.vowintRef, "preventive");
-          }
           break;
         case "no_slot_poll":
-          // Mode full session : poll direct — AUCUN clic VOWINT consommé
-          logger.info(`  — Pas de créneau (poll direct, pas de clic VOWINT)`);
+          // Chemin legacy (full session) — ne devrait pas arriver en One-Shot
+          logger.info(`  — Pas de créneau (poll direct)`);
           recordScan(uniqueJobId, dossier.vowintRef);
-          // Shadow ban detection : N no-slots consécutifs → invalider la session
-          {
-            const shadowBanned = cevSessionManager.recordNoSlots(accountId);
-            if (shadowBanned) {
-              logger.warn(`  🚫 Shadow ban détecté — session complète invalidée → re-capture dans 2min`);
-              siphonedCreds = undefined;
-              lastF5CookieCapturedAt = 0;
-              await sleep(2 * 60_000);
-            }
-          }
           break;
       }
 
@@ -1723,21 +1492,13 @@ async function runAccountLoop(job: any): Promise<void> {
       // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
       syncPoolStateToRedis({ ...localPool.exportState(), scanCount: state.scanCount }, redisKey);
 
-      // Pause entre les scans (intervalle dynamique)
-      // Mode full session : intervalle réduit (30-60s) car pas de clics VOWINT consommés
-      // Mode legacy : intervalle dynamique basé sur la capacité du pool
-      let baseIntervalMs = effectiveIntervalMs;
-      if (siphonedCreds?.isFullSession) {
-        // Poll rapide : 30-60s (log-normal, centré 45s)
-        baseIntervalMs = Math.max(20_000, logNormalJitter(45_000, 0.3));
-      }
-      // Jitter log-normal (anti-shadow ban — distribution réaliste vs uniform Math.random)
+      // ─── One-Shot: pause fixe ~2 min avec jitter log-normal (anti-shadow-ban) ──
       const jitterSign = Math.random() < 0.5 ? 1 : -1;
-      const jitterAbs = logNormalJitter(siphonedCreds?.isFullSession ? 10_000 : 25_000, 0.4);
-      const jitter = jitterSign * Math.min(jitterAbs, baseIntervalMs * 0.4);
-      const finalSleepMs = Math.max(10_000, baseIntervalMs + jitter);
+      const jitterAbs = logNormalJitter(20_000, 0.35); // centré ~20s d'écart
+      const jitter = jitterSign * Math.min(jitterAbs, intervalMs * 0.3);
+      const finalSleepMs = Math.max(60_000, intervalMs + jitter);
       nextScanAllowedAt = Date.now() + finalSleepMs;
-      logger.info(`Pause de ${Math.round(finalSleepMs / 1000)}s planifiée avant le prochain scan (jitter: ${Math.round(jitter / 1000)}s)`);
+      logger.info(`Pause One-Shot: ${Math.round(finalSleepMs / 1000)}s (jitter: ${Math.round(jitter / 1000)}s)`);
 
     } catch (loopErr) {
       logger.error(`Erreur loop: ${loopErr}`);
