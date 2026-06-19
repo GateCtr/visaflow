@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Helmet } from "react-helmet-async";
+import { ConvexErrorBoundary } from "@/components/ConvexErrorBoundary";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
@@ -306,10 +307,12 @@ const GUARANTEES = [
   },
 ];
 
-export default function Landing() {
+type TestimonialItem = { name: string; city?: string; dest: string; code: string; text: string; stars: number };
+
+function LiveTestimonialsGrid() {
   const liveReviews = useQuery(api.reviews.listApproved);
 
-  const testimonialsToShow = liveReviews && liveReviews.length > 0
+  const testimonialsToShow: TestimonialItem[] = liveReviews && liveReviews.length > 0
     ? liveReviews.map((r: { displayName: string; city?: string; destination: string; comment: string; rating: number }) => ({
         name: r.displayName,
         city: r.city,
@@ -319,6 +322,68 @@ export default function Landing() {
         stars: r.rating,
       }))
     : TESTIMONIALS;
+
+  return (
+    <>
+      {liveReviews && liveReviews.length === 0 && (
+        <p className="text-center text-xs text-muted-foreground mb-4 italic">Exemples d'avis · Les vôtres apparaîtront ici après validation</p>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {testimonialsToShow.map((t: TestimonialItem) => (
+          <div key={t.name} className="bg-muted rounded-2xl p-7 border border-border flex flex-col">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(t.stars)].map((_, i) => (
+                <Star key={i} className="w-4 h-4 text-secondary fill-secondary" />
+              ))}
+            </div>
+            <blockquote className="text-foreground text-sm leading-relaxed flex-1 mb-5 italic">
+              "{t.text}"
+            </blockquote>
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+                <FlagImg code={t.code ?? destToFlagCode(t.dest)} size={40} className="w-full h-full object-cover rounded-none" />
+              </div>
+              <div>
+                <p className="font-bold text-primary text-sm">{t.name}</p>
+                <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function StaticTestimonialsGrid() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {TESTIMONIALS.map((t: TestimonialItem) => (
+        <div key={t.name} className="bg-muted rounded-2xl p-7 border border-border flex flex-col">
+          <div className="flex items-center gap-1 mb-4">
+            {[...Array(t.stars)].map((_, i) => (
+              <Star key={i} className="w-4 h-4 text-secondary fill-secondary" />
+            ))}
+          </div>
+          <blockquote className="text-foreground text-sm leading-relaxed flex-1 mb-5 italic">
+            "{t.text}"
+          </blockquote>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+              <FlagImg code={t.code ?? destToFlagCode(t.dest)} size={40} className="w-full h-full object-cover rounded-none" />
+            </div>
+            <div>
+              <p className="font-bold text-primary text-sm">{t.name}</p>
+              <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
@@ -758,32 +823,9 @@ export default function Landing() {
             </div>
           </div>
 
-          {liveReviews && liveReviews.length === 0 && (
-            <p className="text-center text-xs text-muted-foreground mb-4 italic">Exemples d'avis · Les vôtres apparaîtront ici après validation</p>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonialsToShow.map((t: { name: string; city?: string; dest: string; code: string; text: string; stars: number }) => (
-              <div key={t.name} className="bg-muted rounded-2xl p-7 border border-border flex flex-col">
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(t.stars)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-secondary fill-secondary" />
-                  ))}
-                </div>
-                <blockquote className="text-foreground text-sm leading-relaxed flex-1 mb-5 italic">
-                  "{t.text}"
-                </blockquote>
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <FlagImg code={t.code ?? destToFlagCode(t.dest)} size={40} className="w-full h-full object-cover rounded-none" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-primary text-sm">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.city} · {t.dest}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ConvexErrorBoundary fallback={<StaticTestimonialsGrid />}>
+            <LiveTestimonialsGrid />
+          </ConvexErrorBoundary>
         </div>
       </section>
 

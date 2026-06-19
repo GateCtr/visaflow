@@ -1,0 +1,170 @@
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. environment
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. client
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. convex
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. convex
+WebSocket reconnected at t=8.2s index-D7fqgddg.js:23:55149
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. convex
+WebSocket reconnected at t=10.1s index-D7fqgddg.js:23:55149
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. convex
+WebSocket reconnected at t=12.2s index-D7fqgddg.js:23:55149
+Failed to authenticate: "No auth provider found matching the given token", check your server auth config index-D7fqgddg.js:23:55221
+Attempting reconnect in 1344ms index-D7fqgddg.js:23:55149
+WebSocket reconnected at t=15.1s after disconnect due to closed with code 1005 index-D7fqgddg.js:23:55149
+Uncaught Error: [CONVEX Q(messages:getUnreadTotal)] [Request ID: ba3f6aaca8a48b4d] Server Error
+  Called by client
+    queryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    localQueryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    localQueryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    getLocalResults https://joventy.cd/assets/index-D7fqgddg.js:24
+    getCurrentValue https://joventy.cd/assets/index-D7fqgddg.js:24
+    o https://joventy.cd/assets/index-D7fqgddg.js:24
+    ms https://joventy.cd/assets/index-D7fqgddg.js:8
+    mv https://joventy.cd/assets/index-D7fqgddg.js:8
+    LO https://joventy.cd/assets/index-D7fqgddg.js:8
+    o https://joventy.cd/assets/index-D7fqgddg.js:24
+    notifyListeners https://joventy.cd/assets/index-D7fqgddg.js:24
+    l https://joventy.cd/assets/index-D7fqgddg.js:24
+    transition https://joventy.cd/assets/index-D7fqgddg.js:24
+    handleTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    get sync/this.cachedPaginatedQueryClient< https://joventy.cd/assets/index-D7fqgddg.js:24
+    onBaseTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    iie https://joventy.cd/assets/index-D7fqgddg.js:24
+    handleTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    notifyOnQueryResultChanges https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    s https://joventy.cd/assets/index-D7fqgddg.js:24
+    setTimeout handler*scheduleReconnect https://joventy.cd/assets/index-D7fqgddg.js:24
+    onclose https://joventy.cd/assets/index-D7fqgddg.js:24
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    qae https://joventy.cd/assets/index-D7fqgddg.js:24
+    nie https://joventy.cd/assets/index-D7fqgddg.js:24
+    get sync https://joventy.cd/assets/index-D7fqgddg.js:24
+    setAuth https://joventy.cd/assets/index-D7fqgddg.js:24
+    jie https://joventy.cd/assets/index-D7fqgddg.js:24
+    bv https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+index-D7fqgddg.js:24:11916
+    queryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    localQueryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    localQueryResult https://joventy.cd/assets/index-D7fqgddg.js:24
+    getLocalResults https://joventy.cd/assets/index-D7fqgddg.js:24
+    getCurrentValue https://joventy.cd/assets/index-D7fqgddg.js:24
+    o https://joventy.cd/assets/index-D7fqgddg.js:24
+    ms https://joventy.cd/assets/index-D7fqgddg.js:8
+    mv https://joventy.cd/assets/index-D7fqgddg.js:8
+    LO https://joventy.cd/assets/index-D7fqgddg.js:8
+    o https://joventy.cd/assets/index-D7fqgddg.js:24
+    notifyListeners https://joventy.cd/assets/index-D7fqgddg.js:24
+    l https://joventy.cd/assets/index-D7fqgddg.js:24
+    transition https://joventy.cd/assets/index-D7fqgddg.js:24
+    handleTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    get sync/this.cachedPaginatedQueryClient< https://joventy.cd/assets/index-D7fqgddg.js:24
+    onBaseTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    iie https://joventy.cd/assets/index-D7fqgddg.js:24
+    handleTransition https://joventy.cd/assets/index-D7fqgddg.js:24
+    notifyOnQueryResultChanges https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : EventHandlerNonNull)
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    s https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : setTimeout handler)
+    scheduleReconnect https://joventy.cd/assets/index-D7fqgddg.js:24
+    onclose https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : EventHandlerNonNull)
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    InterpretGeneratorResume self-hosted:1312
+    AsyncFunctionNext self-hosted:780
+    (Asynchrone : async)
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : EventHandlerNonNull)
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    InterpretGeneratorResume self-hosted:1312
+    AsyncFunctionNext self-hosted:780
+    (Asynchrone : async)
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : EventHandlerNonNull)
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestart https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryRestartSocket https://joventy.cd/assets/index-D7fqgddg.js:24
+    tryToReauthenticate https://joventy.cd/assets/index-D7fqgddg.js:24
+    InterpretGeneratorResume self-hosted:1312
+    AsyncFunctionNext self-hosted:780
+    (Asynchrone : async)
+    onAuthError https://joventy.cd/assets/index-D7fqgddg.js:24
+    onMessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    onmessage https://joventy.cd/assets/index-D7fqgddg.js:24
+    (Asynchrone : EventHandlerNonNull)
+    connect https://joventy.cd/assets/index-D7fqgddg.js:24
+    qae https://joventy.cd/assets/index-D7fqgddg.js:24
+    nie https://joventy.cd/assets/index-D7fqgddg.js:24
+    get sync https://joventy.cd/assets/index-D7fqgddg.js:24
+    setAuth https://joventy.cd/assets/index-D7fqgddg.js:24
+    jie https://joventy.cd/assets/index-D7fqgddg.js:24
+    bv https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+    NF https://joventy.cd/assets/index-D7fqgddg.js:8
+    Nc https://joventy.cd/assets/index-D7fqgddg.js:8
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. touch
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. touch
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. touch
+Le cookie « _cfuvid » a été rejeté car le domaine est invalide. touch
+
+​
