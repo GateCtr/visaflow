@@ -28,6 +28,7 @@ import type * as slotDiscoveries from "../slotDiscoveries.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
 import type * as spainOtp from "../spainOtp.js";
 import type * as spainWatcher from "../spainWatcher.js";
+import type * as traffic from "../traffic.js";
 import type * as users from "../users.js";
 import type * as visaClassifications from "../visaClassifications.js";
 import type * as visaDocuments from "../visaDocuments.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   slotFoundHelper: typeof slotFoundHelper;
   spainOtp: typeof spainOtp;
   spainWatcher: typeof spainWatcher;
+  traffic: typeof traffic;
   users: typeof users;
   visaClassifications: typeof visaClassifications;
   visaDocuments: typeof visaDocuments;

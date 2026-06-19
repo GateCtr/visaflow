@@ -13,6 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { OnboardingContractGate } from "@/components/OnboardingContractGate";
+import { useTrafficTracker } from "@/hooks/useTrafficTracker";
 
 import Landing from "@/pages/Landing";
 import Login from "@/pages/auth/Login";
@@ -107,8 +108,15 @@ const ProtectedRoute = ({
   );
 };
 
+function RouterWithTracker() {
+  useTrafficTracker();
+  return null;
+}
+
 function Router() {
   return (
+    <>
+    <RouterWithTracker />
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
@@ -211,6 +219,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 

@@ -542,4 +542,22 @@ export default defineSchema({
   })
     .index("by_visa_class", ["visaClass"])
     .index("by_current_eclaireur", ["currentEclaireur"]),
+
+  // ─── Traffic Analytics ────────────────────────────────────────────────────
+  pageViews: defineTable({
+    sessionId: v.string(),
+    path: v.string(),
+    month: v.string(),      // "YYYY-MM" pour grouper par mois
+    timestamp: v.number(),
+  })
+    .index("by_month", ["month"])
+    .index("by_session_month", ["sessionId", "month"]),
+
+  presence: defineTable({
+    sessionId: v.string(),
+    path: v.string(),
+    lastSeen: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_lastSeen", ["lastSeen"]),
 });

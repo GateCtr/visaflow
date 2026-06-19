@@ -10,6 +10,8 @@ import {
   Clock,
   ChevronRight,
   MessageCircle,
+  Eye,
+  Radio,
 } from "lucide-react";
 import {
   BarChart,
@@ -19,12 +21,28 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LineChart,
+  Line,
+  CartesianGrid,
 } from "recharts";
+
+const MONTH_LABELS: Record<string, string> = {
+  "01": "Jan", "02": "Fév", "03": "Mar", "04": "Avr",
+  "05": "Mai", "06": "Juin", "07": "Juil", "08": "Août",
+  "09": "Sep", "10": "Oct", "11": "Nov", "12": "Déc",
+};
+
+function monthLabel(key: string) {
+  const [, m] = key.split("-");
+  return MONTH_LABELS[m] ?? key;
+}
 
 export default function AdminDashboard() {
   const stats = useQuery(api.admin.getStats);
   const conversations = useQuery(api.messages.listConversations) ?? [];
   const unreadTotal = useQuery(api.messages.getUnreadTotal) ?? 0;
+  const liveVisitors = useQuery(api.traffic.getLiveVisitors);
+  const monthlyStats = useQuery(api.traffic.getMonthlyStats);
   const isLoading = stats === undefined;
 
   if (isLoading)
@@ -49,6 +67,12 @@ export default function AdminDashboard() {
     .filter((c) => c.unreadCount > 0)
     .slice(0, 5);
 
+  const trafficData = (monthlyStats ?? []).map((m) => ({
+    name: monthLabel(m.month),
+    vues: m.views,
+    visiteurs: m.visitors,
+  }));
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -70,7 +94,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* KPI Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[
           {
@@ -141,8 +165,136 @@ export default function AdminDashboard() {
         </Link>
       )}
 
+      {/* ─── Trafic ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Trafic en direct */}
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+            </span>
+            <h2 className="text-sm font-bold text-primary">En direct</h2>
+            <Radio className="w-4 h-4 text-emerald-500 ml-auto" />
+          </div>
+
+          <div className="text-center py-4">
+            <p className="text-6xl font-bold text-primary tabular-nums">
+              {liveVisitors?.total ?? "—"}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              visiteur{(liveVisitors?.total ?? 0) > 1 ? "s" : ""} actif{(liveVisitors?.total ?? 0) > 1 ? "s" : ""}
+            </p>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5">dans les 2 dernières minutes</p>
+          </div>
+
+          {liveVisitors && liveVisitors.byPath.length > 0 && (
+            <div className="space-y-2 border-t border-border pt-4">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Pages actives</p>
+              {liveVisitors.byPath.map(({ path, count }) => (
+                <div key={path} className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-primary truncate font-medium">{path === "/" ? "Accueil" : path}</p>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex-shrink-0">
+                    {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Trafic mensuel */}
+        <div className="lg:col-span-2 bg-card rounded-2xl border border-border shadow-premium p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-bold text-primary">Trafic mensuel</h2>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 bg-primary rounded inline-block" />
+                Vues
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 bg-secondary rounded inline-block" />
+                Visiteurs
+              </span>
+            </div>
+          </div>
+
+          {trafficData.length > 0 ? (
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trafficData} margin={{ left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#64748b", fontSize: 11 }}
+                    dy={8}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#64748b", fontSize: 11 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "12px",
+                      border: "none",
+                      boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="vues"
+                    stroke="#1E4FA3"
+                    strokeWidth={2.5}
+                    dot={{ fill: "#1E4FA3", r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="visiteurs"
+                    stroke="#1DA1D2"
+                    strokeWidth={2.5}
+                    strokeDasharray="5 3"
+                    dot={{ fill: "#1DA1D2", r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">
+              Les données s'accumulent au fil des visites…
+            </div>
+          )}
+
+          {trafficData.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-primary">
+                  {trafficData.reduce((s, m) => s + m.vues, 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Pages vues (6 mois)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-secondary">
+                  {trafficData[trafficData.length - 1]?.visiteurs ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Visiteurs uniques ce mois</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Chart */}
+        {/* Dossiers par destination */}
         <div className="lg:col-span-2 bg-card rounded-2xl border border-border shadow-premium p-6">
           <h2 className="text-lg font-bold text-primary mb-6">
             Demandes par destination
@@ -185,7 +337,6 @@ export default function AdminDashboard() {
 
         {/* Recent activity + pending messages */}
         <div className="space-y-6">
-          {/* Pending messages section */}
           {pendingConversations.length > 0 && (
             <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
               <div className="p-5 border-b border-border flex justify-between items-center bg-red-50">
@@ -233,7 +384,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Recent applications */}
           <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden flex flex-col">
             <div className="p-5 border-b border-border bg-muted/50">
               <h2 className="text-sm font-bold text-primary">Activités récentes</h2>
