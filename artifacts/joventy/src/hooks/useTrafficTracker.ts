@@ -26,6 +26,7 @@ export function useTrafficTracker() {
   useEffect(() => {
     if (lastPath.current === location) return;
     lastPath.current = location;
+    if (location.startsWith("/admin")) return;
     recordPageView({ sessionId: sessionId.current, path: location }).catch(() => {});
     updatePresence({ sessionId: sessionId.current, path: location }).catch(() => {});
   }, [location, recordPageView, updatePresence]);
@@ -33,7 +34,9 @@ export function useTrafficTracker() {
   useEffect(() => {
     const sid = sessionId.current;
     const tick = () => {
-      updatePresence({ sessionId: sid, path: lastPath.current ?? "/" }).catch(() => {});
+      const path = lastPath.current ?? "/";
+      if (path.startsWith("/admin")) return;
+      updatePresence({ sessionId: sid, path }).catch(() => {});
     };
     const interval = setInterval(tick, 30_000);
     return () => clearInterval(interval);
