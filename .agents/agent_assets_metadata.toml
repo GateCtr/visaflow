@@ -23,3 +23,9 @@ id = "N80qOowk_JB7ASf7dYHpR"
 uri = "file://debug_dumps/bundles/cev-bundles.zip"
 type = "unspecified"
 title = "CEV Bundles — sharedScripts.js + layoutBundle.css (265 KB)"
+
+[[outputs]]
+id = "WHIYKhSEfR0ogjItf4TAH"
+uri = "file://artifacts/cev-extension.zip"
+type = "unspecified"
+title = "CEV Slot Hunter — Extension iPhone (Orion)"

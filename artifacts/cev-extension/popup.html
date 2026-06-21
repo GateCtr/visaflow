@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CEV Slot Hunter</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── En-tête ── -->
+    <header class="header">
+      <div class="header-icon">🎯</div>
+      <div>
+        <div class="header-title">CEV Slot Hunter</div>
+        <div class="header-sub">Portail belge — Kinshasa</div>
+      </div>
+      <div id="statusDot" class="status-dot idle" title="Statut"></div>
+    </header>
+
+    <!-- ── Statut principal ── -->
+    <div class="status-card" id="statusCard">
+      <div class="status-label" id="statusLabel">Inactif</div>
+      <div class="status-sub" id="statusSub">Configurer la clé API puis démarrer</div>
+    </div>
+
+    <!-- ── Stats ── -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num" id="statChecks">0</div>
+        <div class="stat-label">Checks</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num green" id="statSlots">0</div>
+        <div class="stat-label">Créneaux</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num blue" id="statCaptcha">0</div>
+        <div class="stat-label">Captchas</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num orange" id="statSession">—</div>
+        <div class="stat-label">Session</div>
+      </div>
+    </div>
+
+    <!-- ── Configuration ── -->
+    <div class="section">
+      <div class="section-title">⚙️ Configuration</div>
+
+      <label class="field-label">Clé API Anti-Captcha</label>
+      <div class="input-row">
+        <input
+          type="password"
+          id="apiKey"
+          class="input"
+          placeholder="Coller la clé Anti-Captcha ici…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+        <button class="btn-icon" id="btnToggleKey" title="Afficher/masquer">👁</button>
+      </div>
+      <div id="apiKeyStatus" class="field-hint"></div>
+    </div>
+
+    <!-- ── Contrôles ── -->
+    <div class="controls">
+      <button class="btn btn-start" id="btnStart">▶ Démarrer</button>
+      <button class="btn btn-stop hidden" id="btnStop">⏹ Arrêter</button>
+      <button class="btn btn-save" id="btnSave">💾 Sauvegarder</button>
+    </div>
+
+    <!-- ── Instructions ── -->
+    <div class="section info-box">
+      <div class="info-title">📱 Comment utiliser</div>
+      <ol class="info-list">
+        <li>Entre ta clé Anti-Captcha et sauvegarde</li>
+        <li>Ouvre <strong>appointment.cloud.diplomatie.be</strong> depuis VOWINT</li>
+        <li>Reviens ici et appuie sur <strong>Démarrer</strong></li>
+        <li>L'extension surveille et réserve automatiquement</li>
+      </ol>
+    </div>
+
+    <!-- ── Logs ── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">📋 Journal</div>
+        <button class="btn-clear" id="btnClearLogs">Effacer</button>
+      </div>
+      <div class="log-container" id="logContainer">
+        <div class="log-empty">Aucun événement</div>
+      </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <div class="footer">
+      Limite : 4 clics/h · Pause auto 90min · Anti-Captcha uniquement
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
