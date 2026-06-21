@@ -172,6 +172,43 @@ async function getVowintTab() {
   });
 }
 
+/**
+ * Recharge l'onglet VOWINT et attend que la page soit fully loaded.
+ * Stratégie anti-restriction découverte expérimentalement :
+ *   mobile = déconnexion auto après inactivité → session fraîche → pas de restriction
+ *   PC = session longue durée → token vieilli → restriction si clic sans refresh
+ * Solution : simuler le comportement mobile en rechargant la page avant chaque clic.
+ *
+ * Timeout 30s. Retourne true si OK, false si timeout.
+ */
+async function reloadAndWaitVowintTab(tabId) {
+  return new Promise(resolve => {
+    const deadline = Date.now() + 30_000;
+
+    function onUpdated(updTabId, changeInfo) {
+      if (updTabId !== tabId) return;
+      if (changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        resolve(true);
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.reload(tabId, { bypassCache: true }, () => {
+      if (chrome.runtime.lastError) {
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        resolve(false);
+        return;
+      }
+      // Sécurité : timeout au cas où l'événement complete ne vient pas
+      setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        resolve(Date.now() < deadline); // vrai si on est encore dans le délai
+      }, 30_000);
+    });
+  });
+}
+
 // ─── Boucle principale ────────────────────────────────────────────────────────
 
 async function runLoop() {
@@ -202,6 +239,19 @@ async function runLoop() {
       await sleep(15_000);
       continue;
     }
+
+    // ── Recharger la page VOWINT avant de cliquer (anti-restriction) ─────────
+    // Simule le comportement mobile : session fraîche à chaque tentative.
+    // Sans ce rechargement, le portail détecte un token vieilli et restreint le compte.
+    setPhase('clicking', '🔄 Rechargement VOWINT (anti-restriction)…');
+    const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
+    if (!reloaded) {
+      warn('⚠️ Rechargement VOWINT timeout — tentative sans refresh');
+    } else {
+      // Pause humaine après le chargement de la page (lit la liste des demandes)
+      await sleep(randDelay(2_000, 4_500));
+    }
+    if (!state.running) break;
 
     // ── Déclencher le clic ───────────────────────────────────────────────────
     state.attempts++;
