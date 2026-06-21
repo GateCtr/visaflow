@@ -2,7 +2,7 @@
  * background.js — CEV Slot Hunter v2.1 (Manifest V3 / Service Worker)
  *
  * MV3 : background script = service worker (pas de page persistante).
- * L'état est stocké dans chrome.storage.session pour survivre aux redémarrages SW.
+ * L'état est stocké dans chrome.storage.local pour survivre aux redémarrages SW.
  * Le sleep() touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
  */
 
@@ -10,7 +10,7 @@
 
 const MAX_CLICKS_PER_HOUR = 4;
 
-// ─── État en mémoire + persisté dans chrome.storage.session ───────────────────
+// ─── État en mémoire + persisté dans chrome.storage.local ────────────────────
 
 let state = {
   running: false,
@@ -24,8 +24,8 @@ let state = {
   clickTimestamps: [],
 };
 
-// Restaurer l'état depuis la session au démarrage du SW
-chrome.storage.session.get(['cevState'], (d) => {
+// Restaurer l'état depuis le storage au démarrage du SW
+chrome.storage.local.get(['cevState'], (d) => {
   if (d.cevState) {
     state = d.cevState;
     // Si le SW a été tué pendant une exécution → signaler et réinitialiser
@@ -39,7 +39,7 @@ chrome.storage.session.get(['cevState'], (d) => {
 });
 
 function persistState() {
-  chrome.storage.session.set({ cevState: state });
+  chrome.storage.local.set({ cevState: state });
 }
 
 // ─── Logging ──────────────────────────────────────────────────────────────────

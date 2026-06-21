@@ -7,8 +7,7 @@
     "storage",
     "notifications",
     "activeTab",
-    "tabs",
-    "alarms"
+    "tabs"
   ],
   "host_permissions": [
     "https://visaonweb.diplomatie.be/*",
@@ -20,7 +19,9 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "CEV Slot Hunter"
+    "default_icon": {
+      "48": "icons/icon48.png"
+    }
   },
   "content_scripts": [
     {
