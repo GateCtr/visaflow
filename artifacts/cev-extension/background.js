@@ -1,33 +1,46 @@
 /**
- * background.js — Orchestrateur CEV Slot Hunter v2
+ * background.js — CEV Slot Hunter v2.1 (Manifest V3 / Service Worker)
  *
- * Flow réel :
- *   1. VOWINT : clic "Prendre rendez-vous" → nouveau onglet avec URL éphémère
- *   2. Onglet CEV → Captcha → résolution Anti-Captcha → soumission
- *   3. Redirection serveur → soit NoAvailability (fermer + réessayer) soit SelectSlot (réserver)
- *
- * Machine à états :
- *   idle → clicking → captcha_solving → waiting_result → [success | retry]
+ * MV3 : background script = service worker (pas de page persistante).
+ * L'état est stocké dans chrome.storage.session pour survivre aux redémarrages SW.
+ * Le sleep() touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
  */
 
 'use strict';
 
-// ─── État global ──────────────────────────────────────────────────────────────
+const MAX_CLICKS_PER_HOUR = 4;
 
-const state = {
+// ─── État en mémoire + persisté dans chrome.storage.session ───────────────────
+
+let state = {
   running: false,
-  phase: 'idle',          // idle | clicking | captcha_solving | waiting_result | success | retry
+  phase: 'idle',
   attempts: 0,
   captchasSolved: 0,
   lastAttemptTs: null,
   activeCevTabId: null,
   logs: [],
-  nextRetryIn: null,      // secondes avant prochain essai
+  nextRetryIn: null,
+  clickTimestamps: [],
 };
 
-// Compteur de clics pour le rate-limit (max 4/heure par IP)
-const clickTimestamps = [];
-const MAX_CLICKS_PER_HOUR = 4;
+// Restaurer l'état depuis la session au démarrage du SW
+chrome.storage.session.get(['cevState'], (d) => {
+  if (d.cevState) {
+    state = d.cevState;
+    // Si le SW a été tué pendant une exécution → signaler et réinitialiser
+    if (state.running) {
+      state.running = false;
+      state.phase = 'idle';
+      state.activeCevTabId = null;
+      addLog('warn', '⚠️ Watcher interrompu (service worker redémarré) — relancer manuellement');
+    }
+  }
+});
+
+function persistState() {
+  chrome.storage.session.set({ cevState: state });
+}
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -43,9 +56,10 @@ const error = msg => { console.error('[BG]', msg); addLog('error', msg); };
 const ok    = msg => { console.log('[BG] ✅', msg); addLog('ok',   msg); };
 
 function broadcastState() {
+  persistState();
   try {
     chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state }, () => {
-      void chrome.runtime.lastError; // consume error silently (popup fermé = normal)
+      void chrome.runtime.lastError; // consume silencieusement (popup fermé = normal)
     });
   } catch (_) {}
 }
@@ -70,15 +84,16 @@ function notify(title, message) {
 function canAttempt() {
   const now = Date.now();
   const windowStart = now - 60 * 60_000;
-  while (clickTimestamps.length && clickTimestamps[0] < windowStart) clickTimestamps.shift();
-  return clickTimestamps.length < MAX_CLICKS_PER_HOUR;
+  state.clickTimestamps = (state.clickTimestamps || []).filter(t => t > windowStart);
+  return state.clickTimestamps.length < MAX_CLICKS_PER_HOUR;
 }
 
 function recordAttempt() {
-  clickTimestamps.push(Date.now());
+  if (!state.clickTimestamps) state.clickTimestamps = [];
+  state.clickTimestamps.push(Date.now());
 }
 
-// ─── Anti-Captcha ──────────────────────────────────────────────────────────────
+// ─── Anti-Captcha ─────────────────────────────────────────────────────────────
 
 async function solveHcaptcha(sitekey, siteUrl, apiKey) {
   log(`🔒 Anti-Captcha: création tâche | sitekey=${sitekey.slice(0, 10)}…`);
@@ -126,13 +141,28 @@ async function solveHcaptcha(sitekey, siteUrl, apiKey) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+/**
+ * Sleep compatible service worker MV3 :
+ * touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
+ */
+async function sleep(ms) {
+  const CHUNK = 20_000;
+  let remaining = ms;
+  while (remaining > 0) {
+    const wait = Math.min(CHUNK, remaining);
+    await new Promise(r => setTimeout(r, wait));
+    remaining -= wait;
+    if (remaining > 0) {
+      // Toucher l'API Chrome → réinitialise le timer idle du service worker
+      await new Promise(r => chrome.runtime.getPlatformInfo(r));
+    }
+  }
+}
 
 function randDelay(minMs, maxMs) {
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
 }
 
-// Obtenir l'onglet VOWINT actif (mes applications)
 async function getVowintTab() {
   return new Promise(resolve => {
     chrome.tabs.query({ url: 'https://visaonweb.diplomatie.be/*' }, tabs => {
@@ -145,9 +175,9 @@ async function getVowintTab() {
 
 async function runLoop() {
   while (state.running) {
-    // ── Vérification rate-limit ──────────────────────────────────────────────
+    // ── Rate-limit ───────────────────────────────────────────────────────────
     if (!canAttempt()) {
-      const oldestClick = clickTimestamps[0];
+      const oldestClick = state.clickTimestamps[0];
       const waitUntil = oldestClick + 60 * 60_000;
       const waitSec = Math.ceil((waitUntil - Date.now()) / 1000);
       setPhase('retry', `⚠️ Rate-limit atteint (${MAX_CLICKS_PER_HOUR}/h) — attente ${Math.round(waitSec/60)}min`);
@@ -155,7 +185,7 @@ async function runLoop() {
       continue;
     }
 
-    // ── Délai aléatoire entre essais (sauf premier) ──────────────────────────
+    // ── Délai entre essais (sauf premier) ───────────────────────────────────
     if (state.attempts > 0) {
       const delay = randDelay(3 * 60_000, 5 * 60_000);
       const delaySec = Math.round(delay / 1000);
@@ -184,7 +214,7 @@ async function runLoop() {
       }
     });
 
-    // Attendre que le nouvel onglet CEV s'ouvre (max 15s)
+    // ── Attendre l'onglet CEV ─────────────────────────────────────────────────
     const cevTab = await waitForNewCevTab(15_000);
     if (!cevTab) {
       error('❌ Aucun onglet CEV ouvert après clic — VOWINT sur la bonne page ?');
@@ -194,7 +224,6 @@ async function runLoop() {
     state.activeCevTabId = cevTab.id;
     setPhase('captcha_solving', '🔒 Onglet CEV ouvert — attente captcha…');
 
-    // Attendre le résultat de cet onglet (captcha + redirection)
     const result = await waitForCevResult(cevTab.id);
     state.activeCevTabId = null;
 
@@ -215,7 +244,8 @@ async function runLoop() {
   }
 }
 
-// Attend qu'un nouvel onglet CEV s'ouvre après un clic
+// ─── Attente onglet CEV ───────────────────────────────────────────────────────
+
 function waitForNewCevTab(timeoutMs) {
   return new Promise(resolve => {
     let resolved = false;
@@ -238,7 +268,6 @@ function waitForNewCevTab(timeoutMs) {
       }
     }
 
-    // Si l'URL n'est pas encore définie au moment de onCreated, surveiller onUpdated
     function updatedListener(tabId, changeInfo) {
       if (changeInfo.url && changeInfo.url.includes('appointment.cloud.diplomatie.be')) {
         clearTimeout(timer);
@@ -255,24 +284,23 @@ function waitForNewCevTab(timeoutMs) {
   });
 }
 
-// Attend le résultat de l'onglet CEV (success, no_availability, error, closed)
+// ─── Attente résultat CEV ─────────────────────────────────────────────────────
+
+let pendingCevResultResolver = null;
+
 function waitForCevResult(tabId) {
   return new Promise(resolve => {
     const timeout = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(urlListener);
       chrome.tabs.onRemoved.removeListener(closedListener);
       resolve('timeout');
-    }, 3 * 60_000); // max 3 minutes par tentative
+    }, 3 * 60_000);
 
     function urlListener(changedTabId, changeInfo) {
       if (changedTabId !== tabId || !changeInfo.url) return;
       const url = changeInfo.url.toLowerCase();
-
       if (url.includes('noavailability') || url.includes('no-availability') || url.includes('error')) {
         done('no_availability');
-      } else if (url.includes('selectslot') || url.includes('select-slot') || url.includes('calendar')) {
-        // SelectSlot s'affiche → le content-cev.js va gérer le booking
-        // On attend que le content script nous signale le résultat
       }
     }
 
@@ -288,18 +316,14 @@ function waitForCevResult(tabId) {
       resolve(result);
     }
 
-    // Le content-cev.js nous envoie le résultat via message
     pendingCevResultResolver = done;
-
     chrome.tabs.onUpdated.addListener(urlListener);
     chrome.tabs.onRemoved.addListener(closedListener);
   });
 }
 
-// Resolver global pour les messages depuis content-cev.js
-let pendingCevResultResolver = null;
+// ─── Countdown ────────────────────────────────────────────────────────────────
 
-// Countdown avec mise à jour du popup
 async function countdownWait(ms) {
   const step = 5_000;
   let remaining = ms;
@@ -332,7 +356,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       state.running = false;
       state.phase = 'idle';
       state.nextRetryIn = null;
-      // Fermer l'onglet CEV actif si présent
       if (state.activeCevTabId) {
         chrome.tabs.remove(state.activeCevTabId, () => {});
         state.activeCevTabId = null;
@@ -342,7 +365,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       break;
     }
 
-    // Le content-cev.js demande la résolution du captcha
     case 'SOLVE_CAPTCHA': {
       const { sitekey, siteUrl } = msg;
       chrome.storage.local.get(['anticaptchaKey'], async ({ anticaptchaKey }) => {
@@ -361,7 +383,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true; // async
     }
 
-    // Le content-cev.js signale le résultat (success, no_availability, error)
     case 'CEV_RESULT': {
       log(`📩 Résultat CEV reçu: ${msg.result}`);
       if (pendingCevResultResolver) {
@@ -397,7 +418,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       state.attempts = 0;
       state.captchasSolved = 0;
       state.logs = [];
-      clickTimestamps.length = 0;
+      state.clickTimestamps = [];
       broadcastState();
       sendResponse({ ok: true });
       break;
@@ -405,4 +426,4 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
-log('CEV Slot Hunter v2 démarré');
+log('CEV Slot Hunter v2.1 démarré (MV3 service worker)');
