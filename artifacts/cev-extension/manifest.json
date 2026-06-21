@@ -1,13 +1,14 @@
 {
   "manifest_version": 2,
   "name": "CEV Slot Hunter",
-  "version": "1.0.0",
-  "description": "Détection automatique de créneaux CEV avec résolution Anti-Captcha",
+  "version": "2.0.0",
+  "description": "Automatise la prise de RDV CEV : clique, résout le captcha, réserve dès qu'un créneau s'ouvre.",
   "permissions": [
     "storage",
     "notifications",
     "activeTab",
     "tabs",
+    "https://visaonweb.diplomatie.be/*",
     "https://appointment.cloud.diplomatie.be/*",
     "https://api.anti-captcha.com/*"
   ],
@@ -17,10 +18,14 @@
   },
   "content_scripts": [
     {
+      "matches": ["https://visaonweb.diplomatie.be/*"],
+      "js": ["content-vowint.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["https://appointment.cloud.diplomatie.be/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle",
-      "all_frames": false
+      "js": ["content-cev.js"],
+      "run_at": "document_idle"
     }
   ],
   "browser_action": {

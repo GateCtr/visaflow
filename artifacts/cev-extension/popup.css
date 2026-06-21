@@ -69,7 +69,72 @@ body {
   50%       { opacity: 0.4; }
 }
 
-/* ── Status card ── */
+/* ── Phase card ── */
+.phase-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1a1a24;
+  border: 1px solid #2a2a38;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.phase-icon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.phase-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #c8c8e0;
+}
+
+.phase-sub {
+  font-size: 11px;
+  color: #555570;
+  margin-top: 2px;
+}
+
+/* ── Flow row ── */
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 10px;
+  background: #1a1a24;
+  border: 1px solid #2a2a38;
+  border-radius: 10px;
+}
+
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.3;
+  transition: opacity 0.3s;
+  min-width: 46px;
+}
+
+.flow-step.active { opacity: 1; }
+.flow-step.done   { opacity: 1; }
+
+.flow-icon  { font-size: 16px; line-height: 1; }
+.flow-label { font-size: 9px; color: #666680; text-align: center; letter-spacing: 0.3px; }
+.flow-step.active .flow-label { color: #aaaacc; }
+.flow-step.done   .flow-label { color: #22c55e; }
+
+.flow-arrow {
+  color: #2a2a3a;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Status card (legacy) ── */
 .status-card {
   background: #1a1a24;
   border: 1px solid #2a2a38;
@@ -247,6 +312,17 @@ body {
 }
 
 .btn-save:hover { background: #33334e; }
+
+.btn-reset {
+  background: #1a1a24;
+  color: #555570;
+  border: 1px solid #2a2a38;
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+
+.btn-reset:hover { color: #aaaacc; border-color: #3a3a58; }
 
 .hidden { display: none !important; }
 

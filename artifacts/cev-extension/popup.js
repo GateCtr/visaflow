@@ -1,123 +1,112 @@
 /**
- * popup.js — Interface CEV Slot Hunter
+ * popup.js — Interface CEV Slot Hunter v2
  */
 
 'use strict';
 
-// ─── Éléments DOM ─────────────────────────────────────────────────────────────
-
 const els = {
   statusDot:   document.getElementById('statusDot'),
-  statusLabel: document.getElementById('statusLabel'),
-  statusSub:   document.getElementById('statusSub'),
-  statChecks:  document.getElementById('statChecks'),
-  statSlots:   document.getElementById('statSlots'),
+  phaseIcon:   document.getElementById('phaseIcon'),
+  phaseLabel:  document.getElementById('phaseLabel'),
+  phaseSub:    document.getElementById('phaseSub'),
+  statAttempts:document.getElementById('statAttempts'),
   statCaptcha: document.getElementById('statCaptcha'),
-  statSession: document.getElementById('statSession'),
+  statNext:    document.getElementById('statNext'),
   apiKey:      document.getElementById('apiKey'),
-  apiKeyStatus:document.getElementById('apiKeyStatus'),
-  btnToggleKey:document.getElementById('btnToggleKey'),
+  keyStatus:   document.getElementById('keyStatus'),
+  btnToggle:   document.getElementById('btnToggle'),
   btnStart:    document.getElementById('btnStart'),
   btnStop:     document.getElementById('btnStop'),
   btnSave:     document.getElementById('btnSave'),
-  btnClearLogs:document.getElementById('btnClearLogs'),
+  btnReset:    document.getElementById('btnReset'),
+  btnClear:    document.getElementById('btnClear'),
   logContainer:document.getElementById('logContainer'),
+  steps: {
+    click:   document.getElementById('step-click'),
+    captcha: document.getElementById('step-captcha'),
+    result:  document.getElementById('step-result'),
+    book:    document.getElementById('step-book'),
+  },
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function send(msg) {
   return new Promise(r => chrome.runtime.sendMessage(msg, r));
 }
 
-function fmtTime(ts) {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
+// ─── Phases ───────────────────────────────────────────────────────────────────
 
-function fmtDuration(ms) {
-  if (!ms) return '—';
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h${String(m % 60).padStart(2,'0')}`;
-  if (m > 0) return `${m}m${String(s % 60).padStart(2,'0')}s`;
-  return `${s}s`;
-}
-
-// ─── Rendu de l'état ──────────────────────────────────────────────────────────
-
-const STATUS_CONFIG = {
-  idle:           { dot: 'idle',    label: 'Inactif',              sub: 'Appuie sur Démarrer sur la page CEV ouverte' },
-  running:        { dot: 'running', label: 'En surveillance…',     sub: 'Polling des créneaux en cours' },
-  solving_captcha:{ dot: 'solving', label: 'Résolution captcha…',  sub: 'Anti-Captcha en cours (30-90s)' },
-  booked:         { dot: 'booked',  label: '✅ Réservé !',         sub: 'Rendez-vous confirmé — watcher arrêté' },
-  page_ready:     { dot: 'idle',    label: 'Page CEV détectée',    sub: 'Prêt à démarrer' },
+const PHASE_CONFIG = {
+  idle:            { dot: 'idle',    icon: '⏸',  label: 'Inactif',               sub: 'Appuie sur Démarrer sur la page VOWINT ouverte',  active: [] },
+  clicking:        { dot: 'running', icon: '🖱',  label: 'Clic en cours…',        sub: 'Clic sur "Prendre rendez-vous"',                  active: ['click'] },
+  captcha_solving: { dot: 'solving', icon: '🔒',  label: 'Résolution captcha…',   sub: 'Anti-Captcha en cours (30–90s)',                  active: ['click', 'captcha'] },
+  waiting_result:  { dot: 'running', icon: '⏳',  label: 'Attente de la réponse', sub: 'Redirection en cours…',                          active: ['click', 'captcha', 'result'] },
+  retry:           { dot: 'idle',    icon: '🔄',  label: 'Aucune disponibilité',  sub: 'Prochain essai dans…',                           active: [] },
+  success:         { dot: 'booked',  icon: '🎉',  label: 'Rendez-vous réservé !', sub: 'Confirmation confirmée — watcher arrêté',         active: ['click', 'captcha', 'result', 'book'] },
+  calendar_empty:  { dot: 'idle',    icon: '📅',  label: 'Calendrier vide',       sub: 'SelectSlot ouvert mais aucune date disponible',   active: ['click', 'captcha', 'result'] },
 };
 
 function applyState(state) {
   if (!state) return;
 
-  // Statut dot + label
-  const cfg = STATUS_CONFIG[state.status] || STATUS_CONFIG.idle;
+  const cfg = PHASE_CONFIG[state.phase] || PHASE_CONFIG.idle;
+
+  // Dot couleur
   els.statusDot.className = `status-dot ${cfg.dot}`;
-  els.statusLabel.textContent = cfg.label;
-  els.statusSub.textContent = cfg.sub;
+
+  // Phase card
+  els.phaseIcon.textContent  = cfg.icon;
+  els.phaseLabel.textContent = cfg.label;
+
+  // Sub text : intégrer le countdown si disponible
+  if (state.phase === 'retry' && state.nextRetryIn) {
+    const m = Math.floor(state.nextRetryIn / 60);
+    const s = state.nextRetryIn % 60;
+    els.phaseSub.textContent = `Prochain essai dans ${m > 0 ? m + 'm' : ''}${String(s).padStart(2, '0')}s`;
+  } else {
+    els.phaseSub.textContent = cfg.sub;
+  }
 
   // Stats
-  els.statChecks.textContent  = state.checksCount ?? 0;
-  els.statSlots.textContent   = state.slotsFound ?? 0;
-  els.statCaptcha.textContent = state.captchasSolved ?? 0;
+  els.statAttempts.textContent = state.attempts ?? 0;
+  els.statCaptcha.textContent  = state.captchasSolved ?? 0;
+  els.statNext.textContent     = state.nextRetryIn
+    ? `${Math.floor(state.nextRetryIn / 60)}m${String(state.nextRetryIn % 60).padStart(2,'0')}s`
+    : '—';
 
-  // Durée session
-  if (state.sessionStart && state.running) {
-    const dur = Date.now() - state.sessionStart;
-    els.statSession.textContent = fmtDuration(dur);
-  } else {
-    els.statSession.textContent = '—';
-  }
+  // Flow steps
+  const active = new Set(cfg.active);
+  Object.entries(els.steps).forEach(([key, el]) => {
+    el.classList.toggle('active',  active.has(key));
+    el.classList.toggle('done', state.phase === 'success');
+  });
 
-  // Boutons Start / Stop
-  if (state.running || state.status === 'solving_captcha') {
-    els.btnStart.classList.add('hidden');
-    els.btnStop.classList.remove('hidden');
-  } else {
-    els.btnStart.classList.remove('hidden');
-    els.btnStop.classList.add('hidden');
-  }
+  // Boutons
+  const isRunning = state.running || state.phase === 'captcha_solving';
+  els.btnStart.classList.toggle('hidden', isRunning);
+  els.btnStop.classList.toggle('hidden', !isRunning);
 
-  // Logs
   renderLogs(state.logs || []);
 }
 
-// ─── Rendu des logs ───────────────────────────────────────────────────────────
+// ─── Logs ─────────────────────────────────────────────────────────────────────
 
 function renderLogs(logs) {
   if (!logs.length) {
     els.logContainer.innerHTML = '<div class="log-empty">Aucun événement</div>';
     return;
   }
-
-  els.logContainer.innerHTML = logs.slice(0, 50).map(entry => {
-    const time = fmtTime(entry.ts);
-    const cls  = entry.level === 'ok' ? 'ok' : entry.level === 'warn' ? 'warn' : entry.level === 'error' ? 'error' : '';
-    const msg  = escapeHtml(entry.msg);
-    return `<div class="log-entry ${cls}">
-      <span class="log-time">${time}</span>
-      <span class="log-msg">${msg}</span>
-    </div>`;
+  els.logContainer.innerHTML = logs.slice(0, 60).map(({ ts, level, msg }) => {
+    const t   = new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const cls = level === 'ok' ? 'ok' : level === 'warn' ? 'warn' : level === 'error' ? 'error' : '';
+    return `<div class="log-entry ${cls}"><span class="log-time">${t}</span><span class="log-msg">${esc(msg)}</span></div>`;
   }).join('');
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Sauvegarde / chargement config ──────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 function loadConfig() {
   chrome.storage.local.get(['anticaptchaKey'], ({ anticaptchaKey }) => {
@@ -129,123 +118,66 @@ function loadConfig() {
 }
 
 function saveConfig() {
-  const key = els.apiKey.value.trim();
-  if (!key) {
-    showKeyStatus('⚠ Entre ta clé Anti-Captcha', 'error');
-    return;
-  }
-  if (key.length < 10) {
-    showKeyStatus('⚠ Clé trop courte — vérifie-la', 'error');
-    return;
-  }
-  chrome.storage.local.set({ anticaptchaKey: key }, () => {
-    showKeyStatus('✓ Clé sauvegardée avec succès', 'ok');
-  });
+  const k = els.apiKey.value.trim();
+  if (!k || k.length < 10) { showKeyStatus('⚠ Clé invalide ou trop courte', 'error'); return; }
+  chrome.storage.local.set({ anticaptchaKey: k }, () => showKeyStatus('✓ Clé sauvegardée', 'ok'));
 }
 
 function showKeyStatus(msg, type = '') {
-  els.apiKeyStatus.textContent = msg;
-  els.apiKeyStatus.className = `field-hint ${type}`;
-  if (type === 'ok') {
-    setTimeout(() => {
-      if (els.apiKeyStatus.textContent === msg) {
-        els.apiKeyStatus.textContent = '';
-        els.apiKeyStatus.className = 'field-hint';
-      }
-    }, 3000);
-  }
+  els.keyStatus.textContent = msg;
+  els.keyStatus.className = `field-hint ${type}`;
+  if (type === 'ok') setTimeout(() => { els.keyStatus.textContent = ''; els.keyStatus.className = 'field-hint'; }, 2500);
 }
 
-// ─── Démarrer / arrêter ───────────────────────────────────────────────────────
+// ─── Démarrer / Arrêter ───────────────────────────────────────────────────────
 
-async function startHunter() {
-  const key = els.apiKey.value.trim() || await getStoredKey();
-  if (!key) {
-    showKeyStatus('⚠ Configure la clé Anti-Captcha d\'abord', 'error');
-    return;
-  }
-
-  // Sauvegarder la clé si pas encore fait
-  chrome.storage.local.set({ anticaptchaKey: key, hunterRunning: true });
-
-  // Notifier le background
+async function start() {
+  const key = els.apiKey.value.trim() || await getKey();
+  if (!key) { showKeyStatus('⚠ Entre ta clé Anti-Captcha d\'abord', 'error'); return; }
+  chrome.storage.local.set({ anticaptchaKey: key });
   await send({ type: 'START' });
-
-  // Injecter le démarrage dans le content script de l'onglet CEV actif
-  const tabs = await getCevTabs();
-  if (tabs.length === 0) {
-    els.statusSub.textContent = 'Aucune page CEV ouverte — navigue sur le portail d\'abord';
-    return;
-  }
-
-  for (const tab of tabs) {
-    chrome.tabs.sendMessage(tab.id, { type: 'START_POLLING' }, (resp) => {
-      if (chrome.runtime.lastError) return;
-    });
-  }
 }
 
-async function stopHunter() {
-  chrome.storage.local.set({ hunterRunning: false });
+async function stop() {
   await send({ type: 'STOP' });
-
-  const tabs = await getCevTabs();
-  for (const tab of tabs) {
-    chrome.tabs.sendMessage(tab.id, { type: 'STOP_POLLING' }, () => {});
-  }
 }
 
-function getStoredKey() {
-  return new Promise(r => {
-    chrome.storage.local.get(['anticaptchaKey'], ({ anticaptchaKey }) => r(anticaptchaKey || ''));
-  });
+function getKey() {
+  return new Promise(r => chrome.storage.local.get(['anticaptchaKey'], d => r(d.anticaptchaKey || '')));
 }
 
-function getCevTabs() {
-  return new Promise(r => {
-    chrome.tabs.query({ url: 'https://appointment.cloud.diplomatie.be/*' }, tabs => r(tabs || []));
-  });
-}
+// ─── Listeners ────────────────────────────────────────────────────────────────
 
-// ─── Timer rafraîchissement session ──────────────────────────────────────────
+els.btnSave.addEventListener('click', saveConfig);
+els.btnStart.addEventListener('click', start);
+els.btnStop.addEventListener('click', stop);
+els.btnClear.addEventListener('click', () => send({ type: 'CLEAR_LOGS' }));
+els.btnReset.addEventListener('click', () => send({ type: 'RESET' }));
 
-setInterval(async () => {
-  const resp = await send({ type: 'GET_STATE' });
-  if (resp?.state) applyState(resp.state);
-}, 2000);
+els.btnToggle.addEventListener('click', () => {
+  const isPw = els.apiKey.type === 'password';
+  els.apiKey.type = isPw ? 'text' : 'password';
+  els.btnToggle.textContent = isPw ? '🔒' : '👁';
+});
 
-// ─── Écoute des mises à jour en temps réel ───────────────────────────────────
+els.apiKey.addEventListener('keydown', e => { if (e.key === 'Enter') saveConfig(); });
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener(msg => {
   if (msg.type === 'STATE_UPDATE') applyState(msg.state);
 });
 
-// ─── Événements UI ────────────────────────────────────────────────────────────
-
-els.btnSave.addEventListener('click', saveConfig);
-
-els.btnStart.addEventListener('click', startHunter);
-
-els.btnStop.addEventListener('click', stopHunter);
-
-els.btnToggleKey.addEventListener('click', () => {
-  const isPass = els.apiKey.type === 'password';
-  els.apiKey.type = isPass ? 'text' : 'password';
-  els.btnToggleKey.textContent = isPass ? '🔒' : '👁';
-});
-
-els.btnClearLogs.addEventListener('click', () => send({ type: 'CLEAR_LOGS' }));
-
-els.apiKey.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') saveConfig();
-});
+// Rafraîchir l'état toutes les 2s (pour le countdown)
+setInterval(async () => {
+  const r = await send({ type: 'GET_STATE' });
+  if (r?.state) applyState(r.state);
+}, 2000);
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
   loadConfig();
-  const resp = await send({ type: 'GET_STATE' });
-  if (resp?.state) applyState(resp.state);
+  const r = await send({ type: 'GET_STATE' });
+  if (r?.state) applyState(r.state);
 }
 
 init();
