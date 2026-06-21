@@ -28,6 +28,8 @@ async function humanClick(el) {
   el.dispatchEvent(new MouseEvent('mouseup',    opts));
   await sleep(10 + Math.random() * 30);
   el.dispatchEvent(new MouseEvent('click',      opts));
+  // Appel natif : garantit le déclenchement du ng-click AngularJS
+  el.click();
 }
 
 // ─── Recherche du bouton RDV ──────────────────────────────────────────────────
@@ -38,9 +40,39 @@ async function humanClick(el) {
  * Sinon, prend le premier bouton visible.
  */
 function findRdvButton(applicationId) {
+  // ── Stratégie 1 : sélecteur AngularJS direct (portail VOWINT réel) ──────────
+  // Le bouton réel utilise ng-click="groupVAEapp(...)" sur le portail VOWINT
+  const ngClickCandidates = Array.from(
+    document.querySelectorAll('[ng-click*="groupVAEapp"], [ng-click*="rdv"], [ng-click*="appointment"]')
+  );
+
+  if (ngClickCandidates.length) {
+    // Si applicationId fourni, chercher dans le contexte de la bonne demande
+    if (applicationId) {
+      for (const btn of ngClickCandidates) {
+        let el = btn;
+        for (let i = 0; i < 8; i++) {
+          if (!el) break;
+          if ((el.textContent || '').includes(applicationId) ||
+              el.getAttribute('data-id') === applicationId ||
+              el.getAttribute('data-application-id') === applicationId) {
+            return btn;
+          }
+          el = el.parentElement;
+        }
+      }
+    }
+    // Premier visible
+    const visible = ngClickCandidates.find(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (visible) return visible;
+  }
+
+  // ── Stratégie 2 : recherche par texte (fallback générique) ──────────────────
   const allBtns = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"]'));
 
-  // Textes attendus (FR / NL / EN)
   const rdvTexts = [
     'prendre rendez-vous',
     'rendez-vous',
@@ -49,6 +81,8 @@ function findRdvButton(applicationId) {
     'make appointment',
     'book',
     'réserver',
+    'calendar',
+    'calendrier',
   ];
 
   const candidates = allBtns.filter(el => {
@@ -61,7 +95,6 @@ function findRdvButton(applicationId) {
   // Si applicationId fourni : cherche dans le contexte de la bonne demande
   if (applicationId) {
     for (const btn of candidates) {
-      // Cherche un ancêtre contenant l'ID de la demande
       let el = btn;
       for (let i = 0; i < 8; i++) {
         if (!el) break;

@@ -43,7 +43,11 @@ const error = msg => { console.error('[BG]', msg); addLog('error', msg); };
 const ok    = msg => { console.log('[BG] ✅', msg); addLog('ok',   msg); };
 
 function broadcastState() {
-  chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state }).catch(() => {});
+  try {
+    chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state }, () => {
+      void chrome.runtime.lastError; // consume error silently (popup fermé = normal)
+    });
+  } catch (_) {}
 }
 
 function setPhase(phase, logMsg) {
@@ -214,31 +218,39 @@ async function runLoop() {
 // Attend qu'un nouvel onglet CEV s'ouvre après un clic
 function waitForNewCevTab(timeoutMs) {
   return new Promise(resolve => {
+    let resolved = false;
+
+    function cleanup() {
+      chrome.tabs.onCreated.removeListener(createdListener);
+      chrome.tabs.onUpdated.removeListener(updatedListener);
+    }
+
     const timer = setTimeout(() => {
-      chrome.tabs.onCreated.removeListener(listener);
-      resolve(null);
+      cleanup();
+      if (!resolved) { resolved = true; resolve(null); }
     }, timeoutMs);
 
-    function listener(tab) {
+    function createdListener(tab) {
       if (tab.url && tab.url.includes('appointment.cloud.diplomatie.be')) {
         clearTimeout(timer);
-        chrome.tabs.onCreated.removeListener(listener);
-        resolve(tab);
+        cleanup();
+        if (!resolved) { resolved = true; resolve(tab); }
       }
     }
 
     // Si l'URL n'est pas encore définie au moment de onCreated, surveiller onUpdated
-    chrome.tabs.onCreated.addListener(listener);
-
-    // Surveiller aussi les onglets qui changent d'URL vers CEV
-    function updatedListener(tabId, changeInfo, tab) {
+    function updatedListener(tabId, changeInfo) {
       if (changeInfo.url && changeInfo.url.includes('appointment.cloud.diplomatie.be')) {
         clearTimeout(timer);
-        chrome.tabs.onCreated.removeListener(listener);
-        chrome.tabs.onUpdated.removeListener(updatedListener);
-        chrome.tabs.get(tabId, t => resolve(t));
+        cleanup();
+        if (!resolved) {
+          resolved = true;
+          chrome.tabs.get(tabId, t => resolve(t));
+        }
       }
     }
+
+    chrome.tabs.onCreated.addListener(createdListener);
     chrome.tabs.onUpdated.addListener(updatedListener);
   });
 }
