@@ -141,5 +141,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true; // async
 });
 
-// Signaler au background que la page VOWINT est prête
-chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '📄 Page VOWINT détectée — prêt' });
+// ─── Détection login page ─────────────────────────────────────────────────────
+
+/**
+ * Vérifie si on est sur la page de login VOWINT (session expirée).
+ * Cherche les éléments propres au formulaire de login.
+ */
+function isLoginPage() {
+  // Formulaire de connexion VOWINT : champs UserName + Password
+  if (document.querySelector('#UserName') && document.querySelector('#Password')) return true;
+  // Champ email login alternatif
+  if (document.querySelector('input[name="UserName"], input[name="Email"], input[type="email"]') &&
+      document.querySelector('input[type="password"]')) {
+    // Vérifier qu'on n'est PAS sur une page VisaApplication (qui pourrait avoir des champs)
+    const isAppPage = document.querySelector('[ng-click*="groupVAEapp"]') ||
+                      document.querySelector('[ng-repeat*="vaeGroup"]') ||
+                      document.querySelector('[ng-controller]');
+    if (!isAppPage) return true;
+  }
+  return false;
+}
+
+// Signaler l'état de la page au background dès le chargement
+if (isLoginPage()) {
+  chrome.runtime.sendMessage({ type: 'VOWINT_LOGIN_PAGE' });
+  // Ne pas continuer — inutile de logger "prêt" si on est déconnecté
+} else {
+  chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '📄 Page VOWINT détectée — prêt' });
+}

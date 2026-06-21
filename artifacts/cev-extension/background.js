@@ -173,6 +173,40 @@ async function getVowintTab() {
 }
 
 /**
+ * Retourne l'URL courante d'un onglet.
+ */
+async function getTabUrl(tabId) {
+  return new Promise(resolve => {
+    chrome.tabs.get(tabId, tab => {
+      if (chrome.runtime.lastError) { resolve(null); return; }
+      resolve(tab?.url || null);
+    });
+  });
+}
+
+/**
+ * Détecte si l'URL VOWINT est une page de login (session expirée).
+ * Indicateurs fiables :
+ *   - URL contient /Account/   (ex. /Account/Login)
+ *   - URL contient /login      (insensible à la casse)
+ *   - URL contient ReturnUrl=  (redirect vers login avec retour)
+ *   - URL ne contient PAS /VisaApplication/ ni /en/ ni /fr/
+ *     (toutes les pages authentifiées passent par ces paths)
+ */
+function isVowintLoginPage(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  if (u.includes('/account/')) return true;
+  if (u.includes('/login'))    return true;
+  if (u.includes('returnurl')) return true;
+  // Si l'URL est juste la racine ou ne contient aucune route connue → probablement login
+  const isKnownRoute = u.includes('/visaapplication') || u.includes('/en/') || u.includes('/fr/') || u.includes('/nl/');
+  const isRoot = new URL(url).pathname.replace(/\//g, '').length < 3;
+  if (!isKnownRoute && isRoot) return true;
+  return false;
+}
+
+/**
  * Recharge l'onglet VOWINT et attend que la page soit fully loaded.
  * Stratégie anti-restriction découverte expérimentalement :
  *   mobile = déconnexion auto après inactivité → session fraîche → pas de restriction
@@ -252,6 +286,19 @@ async function runLoop() {
       await sleep(randDelay(2_000, 4_500));
     }
     if (!state.running) break;
+
+    // ── Détecter une déconnexion VOWINT ─────────────────────────────────────
+    // Après le rechargement, si le portail a redirigé vers la page de login,
+    // on stoppe immédiatement plutôt que de gaspiller un clic sur une page vide.
+    const currentUrl = await getTabUrl(vowintTab.id);
+    if (isVowintLoginPage(currentUrl)) {
+      error('🔓 Session VOWINT expirée — reconnecte-toi et relance l\'extension');
+      notify('🔓 Session VOWINT expirée', 'Reconnecte-toi sur VOWINT dans l\'onglet, puis relance l\'extension.');
+      state.running = false;
+      state.phase = 'idle';
+      broadcastState();
+      break;
+    }
 
     // ── Déclencher le clic ───────────────────────────────────────────────────
     state.attempts++;
@@ -435,6 +482,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
       });
       return true; // async
+    }
+
+    case 'VOWINT_LOGIN_PAGE': {
+      // Le content script signale que la page VOWINT est une page de login
+      // (session expirée après rechargement). On stoppe si le bot tourne.
+      if (state.running) {
+        error('🔓 Session VOWINT expirée (page login détectée) — reconnecte-toi et relance');
+        notify('🔓 Session VOWINT expirée', 'Reconnecte-toi sur VOWINT dans l\'onglet, puis relance l\'extension.');
+        state.running = false;
+        state.phase = 'idle';
+        broadcastState();
+      }
+      break;
     }
 
     case 'CEV_RESULT': {
