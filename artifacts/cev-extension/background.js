@@ -22,6 +22,7 @@ let state = {
   logs: [],
   nextRetryIn: null,
   clickTimestamps: [],
+  applicationId: null,
 };
 
 // Restaurer l'état depuis le storage au démarrage du SW
@@ -208,7 +209,7 @@ async function runLoop() {
     recordAttempt();
     setPhase('clicking', `🖱 Essai #${state.attempts} — clic "Prendre rendez-vous"`);
 
-    chrome.tabs.sendMessage(vowintTab.id, { type: 'CLICK_RDV_BUTTON' }, resp => {
+    chrome.tabs.sendMessage(vowintTab.id, { type: 'CLICK_RDV_BUTTON', applicationId: state.applicationId || null }, resp => {
       if (chrome.runtime.lastError || !resp?.ok) {
         error(`❌ Clic échoué: ${chrome.runtime.lastError?.message || resp?.error || 'inconnu'}`);
       }
@@ -342,6 +343,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg.type) {
 
     case 'START': {
+      if (msg.applicationId !== undefined) {
+        state.applicationId = msg.applicationId || null;
+      }
       if (!state.running) {
         state.running = true;
         state.phase = 'idle';

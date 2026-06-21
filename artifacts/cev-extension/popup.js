@@ -18,10 +18,12 @@ const els = {
   btnStart:    document.getElementById('btnStart'),
   btnStop:     document.getElementById('btnStop'),
   btnSave:     document.getElementById('btnSave'),
-  btnReset:    document.getElementById('btnReset'),
-  btnClear:    document.getElementById('btnClear'),
-  btnCopy:     document.getElementById('btnCopy'),
-  logContainer:document.getElementById('logContainer'),
+  btnReset:      document.getElementById('btnReset'),
+  btnClear:      document.getElementById('btnClear'),
+  btnCopy:       document.getElementById('btnCopy'),
+  dossierId:     document.getElementById('dossierId'),
+  dossierStatus: document.getElementById('dossierStatus'),
+  logContainer:  document.getElementById('logContainer'),
   steps: {
     click:   document.getElementById('step-click'),
     captcha: document.getElementById('step-captcha'),
@@ -148,13 +150,41 @@ function copyLogs() {
   });
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ─── Config & Dossier ─────────────────────────────────────────────────────────
+
+function normalizeDossierId(raw) {
+  const v = raw.trim().toUpperCase();
+  if (!v) return '';
+  // Accepter avec ou sans préfixe VOWINT
+  return v.startsWith('VOWINT') ? v : 'VOWINT' + v;
+}
+
+function saveDossierId() {
+  const raw = els.dossierId.value.trim();
+  const id  = normalizeDossierId(raw);
+  chrome.storage.local.set({ vowintDossierId: id }, () => {
+    if (id) {
+      els.dossierId.value = id;
+      els.dossierStatus.textContent = `✓ Cible : ${id}`;
+      els.dossierStatus.className = 'field-hint ok';
+      setTimeout(() => { els.dossierStatus.className = 'field-hint'; }, 2500);
+    } else {
+      els.dossierStatus.textContent = 'Optionnel — cible le bon bouton si plusieurs dossiers sur la page';
+      els.dossierStatus.className = 'field-hint';
+    }
+  });
+}
 
 function loadConfig() {
-  chrome.storage.local.get(['anticaptchaKey'], ({ anticaptchaKey }) => {
-    if (anticaptchaKey) {
-      els.apiKey.value = anticaptchaKey;
+  chrome.storage.local.get(['anticaptchaKey', 'vowintDossierId'], d => {
+    if (d.anticaptchaKey) {
+      els.apiKey.value = d.anticaptchaKey;
       showKeyStatus('✓ Clé sauvegardée', 'ok');
+    }
+    if (d.vowintDossierId) {
+      els.dossierId.value = d.vowintDossierId;
+      els.dossierStatus.textContent = `✓ Cible : ${d.vowintDossierId}`;
+      els.dossierStatus.className = 'field-hint ok';
     }
   });
 }
@@ -162,6 +192,7 @@ function loadConfig() {
 function saveConfig() {
   const k = els.apiKey.value.trim();
   if (!k || k.length < 10) { showKeyStatus('⚠ Clé invalide ou trop courte', 'error'); return; }
+  saveDossierId();
   chrome.storage.local.set({ anticaptchaKey: k }, () => showKeyStatus('✓ Clé sauvegardée', 'ok'));
 }
 
@@ -177,7 +208,10 @@ async function start() {
   const key = els.apiKey.value.trim() || await getKey();
   if (!key) { showKeyStatus('⚠ Entre ta clé Anti-Captcha d\'abord', 'error'); return; }
   chrome.storage.local.set({ anticaptchaKey: key });
-  await send({ type: 'START' });
+  const rawId = els.dossierId.value.trim();
+  const applicationId = rawId ? normalizeDossierId(rawId) : null;
+  if (rawId && applicationId) saveDossierId();
+  await send({ type: 'START', applicationId });
 }
 
 async function stop() {
@@ -203,7 +237,9 @@ els.btnToggle.addEventListener('click', () => {
   els.btnToggle.textContent = isPw ? '🔒' : '👁';
 });
 
-els.apiKey.addEventListener('keydown', e => { if (e.key === 'Enter') saveConfig(); });
+els.apiKey.addEventListener('keydown',    e => { if (e.key === 'Enter') saveConfig(); });
+els.dossierId.addEventListener('keydown', e => { if (e.key === 'Enter') saveDossierId(); });
+els.dossierId.addEventListener('blur',    () => { if (els.dossierId.value.trim()) saveDossierId(); });
 
 chrome.runtime.onMessage.addListener(msg => {
   if (msg.type === 'STATE_UPDATE') applyState(msg.state);

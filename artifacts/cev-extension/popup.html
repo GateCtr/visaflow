@@ -69,7 +69,19 @@
 
   <!-- ── Config ── -->
   <div class="section">
-    <div class="section-title">⚙️ Anti-Captcha API Key</div>
+    <div class="section-title">⚙️ Configuration</div>
+
+    <label class="field-label" for="dossierId">📁 Numéro de dossier VOWINT</label>
+    <div class="input-row">
+      <input type="text" id="dossierId" class="input"
+        placeholder="Ex : VOWINT5903406"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
+    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers sur la page</div>
+
+    <div class="config-sep"></div>
+
+    <label class="field-label" for="apiKey">🔑 Clé Anti-Captcha</label>
     <div class="input-row">
       <input type="password" id="apiKey" class="input"
         placeholder="Clé Anti-Captcha…"
@@ -92,6 +104,7 @@
     <div class="info-title">📱 Mode d'emploi</div>
     <ol class="info-list">
       <li>Entre ta clé Anti-Captcha → <strong>Sauvegarder</strong></li>
+      <li>Entre ton numéro de dossier VOWINT (optionnel)</li>
       <li>Ouvre VOWINT → <strong>Mes applications</strong> dans Orion</li>
       <li>Appuie sur <strong>▶ Démarrer</strong> ici</li>
       <li>L'extension clique, résout le captcha, et réserve automatiquement</li>
