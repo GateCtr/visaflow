@@ -20,6 +20,7 @@ const els = {
   btnSave:     document.getElementById('btnSave'),
   btnReset:    document.getElementById('btnReset'),
   btnClear:    document.getElementById('btnClear'),
+  btnCopy:     document.getElementById('btnCopy'),
   logContainer:document.getElementById('logContainer'),
   steps: {
     click:   document.getElementById('step-click'),
@@ -91,6 +92,7 @@ function applyState(state) {
 // ─── Logs ─────────────────────────────────────────────────────────────────────
 
 function renderLogs(logs) {
+  _lastLogs = logs || [];
   if (!logs.length) {
     els.logContainer.innerHTML = '<div class="log-empty">Aucun événement</div>';
     return;
@@ -104,6 +106,46 @@ function renderLogs(logs) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Copier les logs ───────────────────────────────────────────────────────────
+
+let _lastLogs = [];
+
+function copyLogs() {
+  if (!_lastLogs.length) return;
+
+  const text = _lastLogs.slice(0, 60).map(({ ts, level, msg }) => {
+    const t = new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const lvl = level === 'ok' ? '✅' : level === 'warn' ? '⚠️' : level === 'error' ? '❌' : '·';
+    return `[${t}] ${lvl} ${msg}`;
+  }).join('\n');
+
+  navigator.clipboard.writeText(text).then(() => {
+    els.btnCopy.textContent = '✓';
+    els.btnCopy.classList.add('copied');
+    setTimeout(() => {
+      els.btnCopy.textContent = '📋';
+      els.btnCopy.classList.remove('copied');
+    }, 1800);
+  }).catch(() => {
+    // Fallback textarea pour les navigateurs sans clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    els.btnCopy.textContent = '✓';
+    els.btnCopy.classList.add('copied');
+    setTimeout(() => {
+      els.btnCopy.textContent = '📋';
+      els.btnCopy.classList.remove('copied');
+    }, 1800);
+  });
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -152,6 +194,7 @@ els.btnSave.addEventListener('click', saveConfig);
 els.btnStart.addEventListener('click', start);
 els.btnStop.addEventListener('click', stop);
 els.btnClear.addEventListener('click', () => send({ type: 'CLEAR_LOGS' }));
+els.btnCopy.addEventListener('click', copyLogs);
 els.btnReset.addEventListener('click', () => send({ type: 'RESET' }));
 
 els.btnToggle.addEventListener('click', () => {
