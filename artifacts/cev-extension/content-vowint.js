@@ -218,6 +218,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         if (!appIds.length) {
+          // Debug : dumper le HTML de la page pour identifier le bon pattern
+          const bodySnippet = document.body ? document.body.innerHTML.slice(0, 3000) : '(body vide)';
+          // Chercher toute occurrence d'UUID dans le DOM (pattern large)
+          const anyUuids = [...document.documentElement.innerHTML.matchAll(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi)].map(m => m[0]);
+          chrome.runtime.sendMessage({
+            type: 'LOG', level: 'warn',
+            msg: `⚠️ Aucun appId après 12s. UUIDs bruts trouvés: [${[...new Set(anyUuids)].slice(0, 5).join(', ')}] — DOM aperçu: ${bodySnippet.slice(0, 500).replace(/\s+/g, ' ')}`,
+          });
           sendResponse({ ok: false, error: 'Aucun appId trouvé après 12s — vérifie que la page "Mes applications" VOWINT est chargée et que des dossiers sont visibles' });
           return;
         }
