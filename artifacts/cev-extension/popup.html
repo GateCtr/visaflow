@@ -19,6 +19,56 @@
     <div id="statusDot" class="status-dot idle"></div>
   </header>
 
+  <!-- ── Config (EN PREMIER — toujours visible) ── -->
+  <div class="section">
+    <div class="section-title">⚙️ Configuration</div>
+
+    <label class="field-label" for="vowintEmail">👤 Email VOWINT</label>
+    <div class="input-row">
+      <input type="email" id="vowintEmail" class="input"
+        placeholder="votre@email.com"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
+
+    <label class="field-label field-label-mt" for="vowintPassword">🔒 Mot de passe VOWINT</label>
+    <div class="input-row">
+      <input type="password" id="vowintPassword" class="input"
+        placeholder="Mot de passe…"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="btn-icon" id="btnToggleVowint">👁</button>
+    </div>
+    <div id="vowintStatus" class="field-hint">Connexion automatique si session expirée</div>
+
+    <div class="config-sep"></div>
+
+    <label class="field-label" for="dossierId">📁 Numéro de dossier VOWINT</label>
+    <div class="input-row">
+      <input type="text" id="dossierId" class="input"
+        placeholder="Ex : VOWINT5903406"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
+    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers</div>
+
+    <div class="config-sep"></div>
+
+    <label class="field-label" for="apiKey">🔑 Clé Anti-Captcha</label>
+    <div class="input-row">
+      <input type="password" id="apiKey" class="input"
+        placeholder="Clé Anti-Captcha…"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="btn-icon" id="btnToggle">👁</button>
+    </div>
+    <div id="keyStatus" class="field-hint"></div>
+  </div>
+
+  <!-- ── Contrôles ── -->
+  <div class="controls">
+    <button class="btn btn-start hidden" id="btnStart">▶ Démarrer</button>
+    <button class="btn btn-stop hidden" id="btnStop">⏹ Arrêter</button>
+    <button class="btn btn-save" id="btnSave">💾 Sauvegarder</button>
+    <button class="btn btn-reset" id="btnReset" title="Réinitialiser stats">↺</button>
+  </div>
+
   <!-- ── Alerte slot (visible uniquement si slot_found) ── -->
   <div class="slot-alert hidden" id="slotAlert">
     <div class="slot-alert-title">🚨 CRÉNEAU DISPONIBLE !</div>
@@ -80,56 +130,6 @@
       <div class="stat-num orange" id="statNext">—</div>
       <div class="stat-label">Prochain</div>
     </div>
-  </div>
-
-  <!-- ── Config ── -->
-  <div class="section">
-    <div class="section-title">⚙️ Configuration</div>
-
-    <label class="field-label" for="vowintEmail">👤 Email VOWINT</label>
-    <div class="input-row">
-      <input type="email" id="vowintEmail" class="input"
-        placeholder="votre@email.com"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-    </div>
-
-    <label class="field-label field-label-mt" for="vowintPassword">🔒 Mot de passe VOWINT</label>
-    <div class="input-row">
-      <input type="password" id="vowintPassword" class="input"
-        placeholder="Mot de passe…"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-      <button class="btn-icon" id="btnToggleVowint">👁</button>
-    </div>
-    <div id="vowintStatus" class="field-hint">Connexion automatique si session expirée</div>
-
-    <div class="config-sep"></div>
-
-    <label class="field-label" for="dossierId">📁 Numéro de dossier VOWINT</label>
-    <div class="input-row">
-      <input type="text" id="dossierId" class="input"
-        placeholder="Ex : VOWINT5903406"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-    </div>
-    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers</div>
-
-    <div class="config-sep"></div>
-
-    <label class="field-label" for="apiKey">🔑 Clé Anti-Captcha</label>
-    <div class="input-row">
-      <input type="password" id="apiKey" class="input"
-        placeholder="Clé Anti-Captcha…"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-      <button class="btn-icon" id="btnToggle">👁</button>
-    </div>
-    <div id="keyStatus" class="field-hint"></div>
-  </div>
-
-  <!-- ── Contrôles ── -->
-  <div class="controls">
-    <button class="btn btn-start hidden" id="btnStart">▶ Démarrer</button>
-    <button class="btn btn-stop hidden" id="btnStop">⏹ Arrêter</button>
-    <button class="btn btn-save" id="btnSave">💾</button>
-    <button class="btn btn-reset" id="btnReset" title="Réinitialiser stats">↺</button>
   </div>
 
   <!-- ── Instructions ── -->

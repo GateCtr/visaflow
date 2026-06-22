@@ -28,7 +28,7 @@ title = "CEV Bundles — sharedScripts.js + layoutBundle.css (265 KB)"
 id = "WHIYKhSEfR0ogjItf4TAH"
 uri = "file://artifacts/cev-extension.zip"
 type = "unspecified"
-title = "CEV Slot Hunter — fix sauvegarde email/password"
+title = "CEV Slot Hunter — champs email/mdp visibles en haut"
 
 [[outputs]]
 id = "Go6Ru4UnrQct3oD1Vw3nO"
