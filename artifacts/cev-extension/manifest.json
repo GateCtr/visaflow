@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CEV Slot Hunter",
-  "version": "3.2.0",
-  "description": "Surveille les créneaux CEV — notification statut live (lock screen), rate-limit intelligent 60 min, réaction par catégorie d'erreur.",
+  "version": "3.3.0",
+  "description": "Surveille les créneaux CEV — bouton état réel, refresh Mes Applications avant/après pause, notification live.",
   "permissions": [
     "storage",
     "notifications",

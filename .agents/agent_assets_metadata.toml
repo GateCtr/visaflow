@@ -47,3 +47,9 @@ id = "lgeoiNQBVBASm_W-gvDPA"
 uri = "file://cev-slot-hunter-v3.2.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.2 — Notification live lock screen"
+
+[[outputs]]
+id = "pAvaAQELeA3XTCALr-KG1"
+uri = "file://cev-slot-hunter-v3.3.zip"
+type = "unspecified"
+title = "CEV Slot Hunter v3.3 — Bouton état réel + refresh Mes Applications"

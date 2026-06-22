@@ -318,8 +318,20 @@ setInterval(async () => {
 
 async function init() {
   loadConfig();
+
+  // Afficher un état neutre pendant le chargement de l'état réel
+  els.phaseLabel.textContent = '…';
+  els.phaseSub.textContent   = 'Chargement…';
+
   const r = await send({ type: 'GET_STATE' });
-  if (r?.state) applyState(r.state);
+  if (r?.state) {
+    applyState(r.state);
+  } else {
+    // Background ne répond pas (SW inactif) → montrer Démarrer par défaut
+    els.btnStart.classList.remove('hidden');
+    els.phaseLabel.textContent = 'Inactif';
+    els.phaseSub.textContent   = 'Configure la clé puis démarre';
+  }
 }
 
 init();

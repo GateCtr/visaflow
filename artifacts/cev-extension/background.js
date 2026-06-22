@@ -556,6 +556,32 @@ async function navigateToApplicationsPage(tabId, lang) {
   await sleep(randDelay(1_800, 3_200));
 }
 
+/**
+ * Rafraîchit la page Mes Applications VOWINT.
+ * Si tabId est fourni, recharge ce tab. Sinon cherche le tab VOWINT actif.
+ * Utilisé : juste après un scan sans slot (avant la pause)
+ *           et juste après la fin de la pause (avant le prochain scan).
+ */
+async function refreshMesApplications(context, tabId) {
+  try {
+    let id = tabId;
+    if (!id) {
+      const tab = await getVowintTab();
+      if (!tab) { log(`🔄 Rafraîchissement [${context}] : aucun onglet VOWINT trouvé`); return; }
+      id = tab.id;
+    }
+    log(`🔄 Rafraîchissement Mes Applications [${context}]…`);
+    const lang = await getStoredVowintLang();
+    const targetUrl = getApplicationsUrl(lang);
+    await new Promise(resolve => chrome.tabs.update(id, { url: targetUrl }, () => resolve()));
+    await waitForTabLoad(id, 20_000);
+    await sleep(randDelay(800, 1_500));
+    log(`✅ Mes Applications rechargée [${context}]`);
+  } catch (err) {
+    warn(`⚠️ Rafraîchissement [${context}] échoué : ${err}`);
+  }
+}
+
 function isVowintLoginPage(url) {
   if (!url) return false;
   const u = url.toLowerCase();
@@ -733,6 +759,9 @@ async function runLoop() {
       setPhase('retry',
         `⏱ Prochain scan dans ${dMin}m${String(dSec).padStart(2,'0')}s (pause humaine)`);
       await countdownWait(delay);
+      if (!state.running) break;
+      // ── Rafraîchir Mes Applications après la pause ─────────────────────────
+      await refreshMesApplications('après pause');
     }
     if (!state.running) break;
 
@@ -789,11 +818,12 @@ async function runLoop() {
       setPhase('slot_found', `🚨 SLOT DÉTECTÉ — alerte active ! (essai #${state.attempts})`);
     } else if (result === 'rate_limited') {
       // applyRateLimit déjà appelé via le message RATE_LIMITED
-      // runLoop reprendra sur le prochain tour et verra rlRemaining > 0
     } else if (result === 'server_error') {
       // déjà traité via SERVER_ERROR message
-    } else if (result === 'no_availability') {
+    } else if (result === 'no_availability' || result === 'tab_closed' || result === 'timeout') {
       setPhase('retry', `❌ Essai #${state.attempts} : aucune dispo`);
+      // ── Rafraîchir Mes Applications immédiatement avant la pause ───────────
+      if (vowintTab) await refreshMesApplications('après scan', vowintTab.id);
     } else {
       warn(`⚠️ Résultat: ${result}`);
     }
