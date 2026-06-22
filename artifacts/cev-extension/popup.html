@@ -14,10 +14,17 @@
     <div class="header-icon">🎯</div>
     <div>
       <div class="header-title">CEV Slot Hunter</div>
-      <div class="header-sub">Portail belge · Kinshasa</div>
+      <div class="header-sub">Portail belge · Kinshasa · Mode détection</div>
     </div>
     <div id="statusDot" class="status-dot idle"></div>
   </header>
+
+  <!-- ── Alerte slot (visible uniquement si slot_found) ── -->
+  <div class="slot-alert hidden" id="slotAlert">
+    <div class="slot-alert-title">🚨 CRÉNEAU DISPONIBLE !</div>
+    <div class="slot-alert-detail" id="slotAlertDetail">—</div>
+    <button class="btn btn-ack" id="btnAck">✅ J'ai vu — arrêter la sonnerie</button>
+  </div>
 
   <!-- ── Phase actuelle ── -->
   <div class="phase-card" id="phaseCard">
@@ -40,14 +47,14 @@
       <div class="flow-label">Captcha</div>
     </div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step" id="step-result">
-      <div class="flow-icon">📅</div>
-      <div class="flow-label">Résultat</div>
+    <div class="flow-step" id="step-scan">
+      <div class="flow-icon">🔍</div>
+      <div class="flow-label">Scan</div>
     </div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step" id="step-book">
-      <div class="flow-icon">✅</div>
-      <div class="flow-label">Réservé</div>
+    <div class="flow-step" id="step-alert">
+      <div class="flow-icon">🔔</div>
+      <div class="flow-label">Alerte</div>
     </div>
   </div>
 
@@ -55,7 +62,7 @@
   <div class="stats-row">
     <div class="stat-box">
       <div class="stat-num" id="statAttempts">0</div>
-      <div class="stat-label">Essais</div>
+      <div class="stat-label">Scans</div>
     </div>
     <div class="stat-box">
       <div class="stat-num blue" id="statCaptcha">0</div>
@@ -71,7 +78,6 @@
   <div class="section">
     <div class="section-title">⚙️ Configuration</div>
 
-    <!-- VOWINT credentials -->
     <label class="field-label" for="vowintEmail">👤 Email VOWINT</label>
     <div class="input-row">
       <input type="email" id="vowintEmail" class="input"
@@ -96,7 +102,7 @@
         placeholder="Ex : VOWINT5903406"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
     </div>
-    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers sur la page</div>
+    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers</div>
 
     <div class="config-sep"></div>
 
@@ -124,8 +130,9 @@
     <ol class="info-list">
       <li>Entre email + mot de passe VOWINT → <strong>Sauvegarder</strong></li>
       <li>Entre ta clé Anti-Captcha → <strong>Sauvegarder</strong></li>
-      <li>Numéro de dossier : optionnel si plusieurs demandes</li>
-      <li>Appuie sur <strong>▶ Démarrer</strong> — l'extension ouvre VOWINT, se connecte, clique et réserve</li>
+      <li>Appuie sur <strong>▶ Démarrer</strong> — tourne en arrière-plan</li>
+      <li>Dès qu'un créneau est détecté → <strong>sonnerie + notification</strong></li>
+      <li>Appuie sur <strong>"J'ai vu"</strong> dans ce popup pour couper la sonnerie</li>
     </ol>
   </div>
 
@@ -143,7 +150,7 @@
     </div>
   </div>
 
-  <div class="footer">Limite : 4 tentatives/heure · Anti-Captcha uniquement (CapSolver blacklisté CEV)</div>
+  <div class="footer">Limite : 4 scans/heure · Mode détection · Anti-Captcha uniquement</div>
 </div>
 <script src="popup.js"></script>
 </body>

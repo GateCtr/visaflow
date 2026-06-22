@@ -1,5 +1,5 @@
 /**
- * popup.js — Interface CEV Slot Hunter v2
+ * popup.js — CEV Slot Hunter v3 (mode détection + alerte sonore)
  */
 
 'use strict';
@@ -19,20 +19,24 @@ const els = {
   apiKey:      document.getElementById('apiKey'),
   keyStatus:   document.getElementById('keyStatus'),
   btnToggle:   document.getElementById('btnToggle'),
+  btnToggle:   document.getElementById('btnToggle'),
   btnStart:    document.getElementById('btnStart'),
   btnStop:     document.getElementById('btnStop'),
   btnSave:     document.getElementById('btnSave'),
-  btnReset:      document.getElementById('btnReset'),
-  btnClear:      document.getElementById('btnClear'),
-  btnCopy:       document.getElementById('btnCopy'),
-  dossierId:     document.getElementById('dossierId'),
+  btnReset:    document.getElementById('btnReset'),
+  btnClear:    document.getElementById('btnClear'),
+  btnCopy:     document.getElementById('btnCopy'),
+  btnAck:      document.getElementById('btnAck'),
+  dossierId:   document.getElementById('dossierId'),
   dossierStatus: document.getElementById('dossierStatus'),
   logContainer:  document.getElementById('logContainer'),
+  slotAlert:     document.getElementById('slotAlert'),
+  slotAlertDetail: document.getElementById('slotAlertDetail'),
   steps: {
     click:   document.getElementById('step-click'),
     captcha: document.getElementById('step-captcha'),
-    result:  document.getElementById('step-result'),
-    book:    document.getElementById('step-book'),
+    scan:    document.getElementById('step-scan'),
+    alert:   document.getElementById('step-alert'),
   },
 };
 
@@ -43,13 +47,13 @@ function send(msg) {
 // ─── Phases ───────────────────────────────────────────────────────────────────
 
 const PHASE_CONFIG = {
-  idle:            { dot: 'idle',    icon: '⏸',  label: 'Inactif',               sub: 'Appuie sur Démarrer sur la page VOWINT ouverte',  active: [] },
-  clicking:        { dot: 'running', icon: '🖱',  label: 'Clic en cours…',        sub: 'Clic sur "Prendre rendez-vous"',                  active: ['click'] },
-  captcha_solving: { dot: 'solving', icon: '🔒',  label: 'Résolution captcha…',   sub: 'Anti-Captcha en cours (30–90s)',                  active: ['click', 'captcha'] },
-  waiting_result:  { dot: 'running', icon: '⏳',  label: 'Attente de la réponse', sub: 'Redirection en cours…',                          active: ['click', 'captcha', 'result'] },
-  retry:           { dot: 'idle',    icon: '🔄',  label: 'Aucune disponibilité',  sub: 'Prochain essai dans…',                           active: [] },
-  success:         { dot: 'booked',  icon: '🎉',  label: 'Rendez-vous réservé !', sub: 'Confirmation confirmée — watcher arrêté',         active: ['click', 'captcha', 'result', 'book'] },
-  calendar_empty:  { dot: 'idle',    icon: '📅',  label: 'Calendrier vide',       sub: 'SelectSlot ouvert mais aucune date disponible',   active: ['click', 'captcha', 'result'] },
+  idle:            { dot: 'idle',    icon: '⏸',  label: 'Inactif',                sub: 'Appuie sur Démarrer — tourne en arrière-plan',     active: [] },
+  clicking:        { dot: 'running', icon: '🖱',  label: 'Clic en cours…',         sub: 'Clic sur "Prendre rendez-vous"',                   active: ['click'] },
+  captcha_solving: { dot: 'solving', icon: '🔒',  label: 'Résolution captcha…',    sub: 'Anti-Captcha en cours (30–90s)',                   active: ['click', 'captcha'] },
+  waiting_result:  { dot: 'running', icon: '⏳',  label: 'Scan en cours…',         sub: 'Vérification des disponibilités…',                 active: ['click', 'captcha', 'scan'] },
+  retry:           { dot: 'idle',    icon: '🔄',  label: 'Pause (humain paresseux)', sub: 'Prochain scan dans…',                            active: [] },
+  slot_found:      { dot: 'booked',  icon: '🚨',  label: 'CRÉNEAU DÉTECTÉ !',      sub: 'Sonnerie active — acquitte dans ce popup',         active: ['click', 'captcha', 'scan', 'alert'] },
+  calendar_empty:  { dot: 'idle',    icon: '📅',  label: 'Calendrier vide',        sub: 'Aucune date disponible cette fois',                 active: ['click', 'captcha', 'scan'] },
 };
 
 function applyState(state) {
@@ -57,23 +61,18 @@ function applyState(state) {
 
   const cfg = PHASE_CONFIG[state.phase] || PHASE_CONFIG.idle;
 
-  // Dot couleur
   els.statusDot.className = `status-dot ${cfg.dot}`;
-
-  // Phase card
   els.phaseIcon.textContent  = cfg.icon;
   els.phaseLabel.textContent = cfg.label;
 
-  // Sub text : intégrer le countdown si disponible
-  if (state.phase === 'retry' && state.nextRetryIn) {
+  if ((state.phase === 'retry' || state.phase === 'idle') && state.nextRetryIn) {
     const m = Math.floor(state.nextRetryIn / 60);
     const s = state.nextRetryIn % 60;
-    els.phaseSub.textContent = `Prochain essai dans ${m > 0 ? m + 'm' : ''}${String(s).padStart(2, '0')}s`;
+    els.phaseSub.textContent = `Prochain scan dans ${m > 0 ? m + 'm' : ''}${String(s).padStart(2, '0')}s`;
   } else {
     els.phaseSub.textContent = cfg.sub;
   }
 
-  // Stats
   els.statAttempts.textContent = state.attempts ?? 0;
   els.statCaptcha.textContent  = state.captchasSolved ?? 0;
   els.statNext.textContent     = state.nextRetryIn
@@ -83,19 +82,34 @@ function applyState(state) {
   // Flow steps
   const active = new Set(cfg.active);
   Object.entries(els.steps).forEach(([key, el]) => {
-    el.classList.toggle('active',  active.has(key));
-    el.classList.toggle('done', state.phase === 'success');
+    if (!el) return;
+    el.classList.toggle('active', active.has(key));
+    el.classList.toggle('done',   state.phase === 'slot_found');
   });
 
-  // Boutons
+  // Boutons start/stop
   const isRunning = state.running || state.phase === 'captcha_solving';
   els.btnStart.classList.toggle('hidden', isRunning);
   els.btnStop.classList.toggle('hidden', !isRunning);
+
+  // Bannière d'alerte slot
+  const hasSlot = state.phase === 'slot_found' || state.alarmActive;
+  els.slotAlert.classList.toggle('hidden', !hasSlot);
+  if (hasSlot && state.slotFound) {
+    const s = state.slotFound;
+    els.slotAlertDetail.textContent =
+      `📅 ${s.date || '?'}${s.time ? ' à ' + s.time : ''}` +
+      `${s.count > 1 ? ' — ' + s.count + ' créneaux disponibles' : ''}`;
+  } else if (hasSlot) {
+    els.slotAlertDetail.textContent = 'Ouvre le portail CEV maintenant !';
+  }
 
   renderLogs(state.logs || []);
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────
+
+let _lastLogs = [];
 
 function renderLogs(logs) {
   _lastLogs = logs || [];
@@ -114,52 +128,25 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Copier les logs ───────────────────────────────────────────────────────────
-
-let _lastLogs = [];
-
 function copyLogs() {
   if (!_lastLogs.length) return;
-
   const text = _lastLogs.slice(0, 60).map(({ ts, level, msg }) => {
-    const t = new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const t   = new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const lvl = level === 'ok' ? '✅' : level === 'warn' ? '⚠️' : level === 'error' ? '❌' : '·';
     return `[${t}] ${lvl} ${msg}`;
   }).join('\n');
-
   navigator.clipboard.writeText(text).then(() => {
     els.btnCopy.textContent = '✓';
     els.btnCopy.classList.add('copied');
-    setTimeout(() => {
-      els.btnCopy.textContent = '📋';
-      els.btnCopy.classList.remove('copied');
-    }, 1800);
-  }).catch(() => {
-    // Fallback textarea pour les navigateurs sans clipboard API
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    els.btnCopy.textContent = '✓';
-    els.btnCopy.classList.add('copied');
-    setTimeout(() => {
-      els.btnCopy.textContent = '📋';
-      els.btnCopy.classList.remove('copied');
-    }, 1800);
-  });
+    setTimeout(() => { els.btnCopy.textContent = '📋'; els.btnCopy.classList.remove('copied'); }, 1800);
+  }).catch(() => {});
 }
 
-// ─── Config & Dossier ─────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 function normalizeDossierId(raw) {
   const v = raw.trim().toUpperCase();
   if (!v) return '';
-  // Accepter avec ou sans préfixe VOWINT
   return v.startsWith('VOWINT') ? v : 'VOWINT' + v;
 }
 
@@ -172,30 +159,20 @@ function saveDossierId() {
       els.dossierStatus.textContent = `✓ Cible : ${id}`;
       els.dossierStatus.className = 'field-hint ok';
       setTimeout(() => { els.dossierStatus.className = 'field-hint'; }, 2500);
-    } else {
-      els.dossierStatus.textContent = 'Optionnel — cible le bon bouton si plusieurs dossiers sur la page';
-      els.dossierStatus.className = 'field-hint';
     }
   });
 }
 
 function loadConfig() {
   chrome.storage.local.get(['anticaptchaKey', 'vowintDossierId', 'vowintEmail', 'vowintPassword'], d => {
-    if (d.anticaptchaKey) {
-      els.apiKey.value = d.anticaptchaKey;
-      showKeyStatus('✓ Clé sauvegardée', 'ok');
-    }
+    if (d.anticaptchaKey) { els.apiKey.value = d.anticaptchaKey; showKeyStatus('✓ Clé sauvegardée', 'ok'); }
     if (d.vowintDossierId) {
       els.dossierId.value = d.vowintDossierId;
       els.dossierStatus.textContent = `✓ Cible : ${d.vowintDossierId}`;
       els.dossierStatus.className = 'field-hint ok';
     }
-    if (d.vowintEmail) {
-      els.vowintEmail.value = d.vowintEmail;
-    }
-    if (d.vowintPassword) {
-      els.vowintPassword.value = d.vowintPassword;
-    }
+    if (d.vowintEmail)    els.vowintEmail.value    = d.vowintEmail;
+    if (d.vowintPassword) els.vowintPassword.value = d.vowintPassword;
     if (d.vowintEmail && d.vowintPassword) {
       els.vowintStatus.textContent = `✓ Compte : ${d.vowintEmail}`;
       els.vowintStatus.className = 'field-hint ok';
@@ -230,7 +207,7 @@ function showKeyStatus(msg, type = '') {
   if (type === 'ok') setTimeout(() => { els.keyStatus.textContent = ''; els.keyStatus.className = 'field-hint'; }, 2500);
 }
 
-// ─── Démarrer / Arrêter ───────────────────────────────────────────────────────
+// ─── Démarrer / Arrêter / Acquitter ───────────────────────────────────────────
 
 async function start() {
   const key = els.apiKey.value.trim() || await getKey();
@@ -246,6 +223,10 @@ async function stop() {
   await send({ type: 'STOP' });
 }
 
+async function acknowledgeSlot() {
+  await send({ type: 'ACKNOWLEDGE_SLOT' });
+}
+
 function getKey() {
   return new Promise(r => chrome.storage.local.get(['anticaptchaKey'], d => r(d.anticaptchaKey || '')));
 }
@@ -255,6 +236,7 @@ function getKey() {
 els.btnSave.addEventListener('click', saveConfig);
 els.btnStart.addEventListener('click', start);
 els.btnStop.addEventListener('click', stop);
+els.btnAck.addEventListener('click', acknowledgeSlot);
 els.btnClear.addEventListener('click', () => send({ type: 'CLEAR_LOGS' }));
 els.btnCopy.addEventListener('click', copyLogs);
 els.btnReset.addEventListener('click', () => send({ type: 'RESET' }));
@@ -281,7 +263,6 @@ chrome.runtime.onMessage.addListener(msg => {
   if (msg.type === 'STATE_UPDATE') applyState(msg.state);
 });
 
-// Rafraîchir l'état toutes les 2s (pour le countdown)
 setInterval(async () => {
   const r = await send({ type: 'GET_STATE' });
   if (r?.state) applyState(r.state);

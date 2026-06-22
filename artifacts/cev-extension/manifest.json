@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "CEV Slot Hunter",
-  "version": "2.1.0",
-  "description": "Automatise la prise de RDV CEV : clique, résout le captcha, réserve dès qu'un créneau s'ouvre.",
+  "version": "3.0.0",
+  "description": "Surveille les créneaux CEV et alerte par sonnerie répétée dès qu'un slot est détecté.",
   "permissions": [
     "storage",
     "notifications",
     "activeTab",
-    "tabs"
+    "tabs",
+    "alarms",
+    "offscreen"
   ],
   "host_permissions": [
     "https://visaonweb.diplomatie.be/*",
@@ -15,8 +17,7 @@
     "https://api.anti-captcha.com/*"
   ],
   "background": {
-    "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",

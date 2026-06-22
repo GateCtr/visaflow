@@ -29,3 +29,9 @@ id = "WHIYKhSEfR0ogjItf4TAH"
 uri = "file://artifacts/cev-extension.zip"
 type = "unspecified"
 title = "CEV Slot Hunter — Anti-détection + Shadowban"
+
+[[outputs]]
+id = "Go6Ru4UnrQct3oD1Vw3nO"
+uri = "file://cev-slot-hunter-v3.zip"
+type = "unspecified"
+title = "CEV Slot Hunter v3.0 — Extension Chrome"

@@ -1,22 +1,23 @@
 /**
- * background.js — CEV Slot Hunter v2.1 (Manifest V3 / Service Worker)
+ * background.js — CEV Slot Hunter v3.0 (Manifest V3 / Service Worker)
  *
- * MV3 : background script = service worker (pas de page persistante).
- * L'état est stocké dans chrome.storage.local pour survivre aux redémarrages SW.
- * Le sleep() touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
+ * CHANGEMENTS v3 :
+ *  - Mode détection uniquement : aucune réservation automatique.
+ *    Dès qu'un slot est trouvé → sonnerie répétée + notifications jusqu'à acquittement.
+ *  - Délai entre scans : 2 min base + pause non-linéaire aléatoire (simulation humain paresseux).
+ *  - Fonctionne en arrière-plan : plus besoin que l'onglet soit actif/visible.
+ *  - Détection complète des erreurs serveur et 4xx après captcha.
+ *  - Alarme chrome.alarms pour réveiller le SW même si le navigateur est minimisé.
  */
 
 'use strict';
 
 const MAX_CLICKS_PER_HOUR = 4;
 
-// ─── Anti-shadowban ───────────────────────────────────────────────────────────
-// VOWINT peut appliquer un shadowban silencieux : le clic "réussit" (ok: true)
-// mais n'ouvre aucun onglet CEV. Le compteur consecutiveNoTab détecte ce pattern.
-const SHADOWBAN_WARN_THRESHOLD = 3;  // avertissement après N cycles sans onglet CEV
-const SHADOWBAN_STOP_THRESHOLD = 6;  // arrêt automatique (probable shadowban)
+const SHADOWBAN_WARN_THRESHOLD = 3;
+const SHADOWBAN_STOP_THRESHOLD = 6;
 
-// ─── État en mémoire + persisté dans chrome.storage.local ────────────────────
+// ─── État ────────────────────────────────────────────────────────────────────
 
 let state = {
   running: false,
@@ -29,18 +30,20 @@ let state = {
   nextRetryIn: null,
   clickTimestamps: [],
   applicationId: null,
-  consecutiveNoTab: 0,  // cycles successifs sans onglet CEV ouvert (shadowban detector)
+  consecutiveNoTab: 0,
+  slotFound: null,        // { date, time, id } du dernier slot détecté
+  alarmActive: false,     // sonnerie en cours
 };
 
 // Restaurer l'état depuis le storage au démarrage du SW
 chrome.storage.local.get(['cevState'], (d) => {
   if (d.cevState) {
-    state = d.cevState;
-    // Si le SW a été tué pendant une exécution → signaler et réinitialiser
+    state = { ...state, ...d.cevState };
     if (state.running) {
       state.running = false;
       state.phase = 'idle';
       state.activeCevTabId = null;
+      state.alarmActive = false;
       addLog('warn', '⚠️ Watcher interrompu (service worker redémarré) — relancer manuellement');
     }
   }
@@ -67,16 +70,102 @@ function broadcastState() {
   persistState();
   try {
     chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state }, () => {
-      void chrome.runtime.lastError; // consume silencieusement (popup fermé = normal)
+      void chrome.runtime.lastError;
     });
   } catch (_) {}
 }
 
 function setPhase(phase, logMsg) {
   state.phase = phase;
-  if (logMsg) addLog(phase === 'success' ? 'ok' : phase === 'retry' ? 'warn' : 'info', logMsg);
+  if (logMsg) {
+    const level = phase === 'success' || phase === 'slot_found' ? 'ok'
+                : phase === 'retry' ? 'warn'
+                : 'info';
+    addLog(level, logMsg);
+  }
   broadcastState();
 }
+
+// ─── Offscreen (sonnerie audio) ───────────────────────────────────────────────
+
+async function ensureOffscreen() {
+  try {
+    const existing = await chrome.offscreen.hasDocument().catch(() => false);
+    if (!existing) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['AUDIO_PLAYBACK'],
+        justification: 'Sonnerie d\'alerte slot disponible',
+      });
+    }
+  } catch (_) {}
+}
+
+async function sendOffscreen(type) {
+  await ensureOffscreen();
+  try {
+    chrome.runtime.sendMessage({ type });
+  } catch (_) {}
+}
+
+// ─── Sonnerie répétée (slot trouvé) ───────────────────────────────────────────
+
+async function startAlarm(slot) {
+  state.alarmActive = true;
+  state.slotFound = slot;
+  broadcastState();
+
+  await sendOffscreen('ALARM_START');
+
+  // Notification initiale
+  chrome.notifications.create('slot_alert', {
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: '🚨 CRÉNEAU CEV DISPONIBLE !',
+    message: slot
+      ? `📅 ${slot.date || '?'} ${slot.time || ''} — Ouvre le portail CEV maintenant !`
+      : 'Un créneau est disponible — agis vite !',
+    priority: 2,
+    requireInteraction: true,
+  });
+
+  // Alarme chrome.alarms pour ré-alerter toutes les 30s même si le SW dort
+  chrome.alarms.create('slot_reminder', { periodInMinutes: 0.5 });
+}
+
+async function stopAlarm() {
+  state.alarmActive = false;
+  broadcastState();
+  chrome.alarms.clear('slot_reminder');
+  await sendOffscreen('ALARM_STOP');
+  chrome.notifications.clear('slot_alert', () => {});
+}
+
+// Gestionnaire des alarmes périodiques
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'slot_reminder' && state.alarmActive) {
+    // Répéter la sonnerie audio
+    await sendOffscreen('ALARM_PING');
+
+    // Répéter la notification
+    const slot = state.slotFound;
+    chrome.notifications.create(`slot_alert_${Date.now()}`, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: '🚨 CRÉNEAU CEV DISPONIBLE !',
+      message: slot
+        ? `📅 ${slot.date || '?'} ${slot.time || ''} — Appuie sur "Acquitter" dans l\'extension.`
+        : 'Un créneau est disponible ! Acquitte l\'alerte dans l\'extension.',
+      priority: 2,
+      requireInteraction: true,
+    });
+  }
+
+  if (alarm.name === 'sw_keepalive' && state.running) {
+    // Toucher l'API pour maintenir le SW actif
+    chrome.runtime.getPlatformInfo(() => {});
+  }
+});
 
 // ─── Notifications ────────────────────────────────────────────────────────────
 
@@ -99,6 +188,28 @@ function canAttempt() {
 function recordAttempt() {
   if (!state.clickTimestamps) state.clickTimestamps = [];
   state.clickTimestamps.push(Date.now());
+}
+
+// ─── Délai humain non-linéaire ────────────────────────────────────────────────
+/**
+ * Calcule un délai de 2 min base + composante non-linéaire aléatoire.
+ *
+ * Distribution :
+ *  - Base fixe : 2 min (jamais moins)
+ *  - Extra : courbe puissance biaisée vers le haut (humain parfois rapide, parfois long)
+ *  - Jitter sinusoïdal basé sur le temps : casse le pattern périodique statique
+ *
+ * Résultat typique : 2–6 min, pic vers 3–4 min, queue longue rare.
+ */
+function humanLikeRetryDelay() {
+  const BASE    = 2 * 60_000;                           // 2 min incompressibles
+  const r       = Math.random();
+  // r^0.55 biaise vers des valeurs élevées (paresseux qui tarde souvent)
+  const extra   = Math.pow(r, 0.55) * 4 * 60_000;      // 0 – 4 min extra
+  // Jitter sinusoïdal non-statique (période ~97s, amplitude ±20s)
+  const jitter  = Math.sin(Date.now() / 97_000) * 20_000;
+  const total   = Math.max(BASE, BASE + extra + jitter);
+  return Math.round(total);
 }
 
 // ─── Anti-Captcha ─────────────────────────────────────────────────────────────
@@ -150,8 +261,8 @@ async function solveHcaptcha(sitekey, siteUrl, apiKey) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Sleep compatible service worker MV3 :
- * touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
+ * Sleep compatible service worker MV3.
+ * Touche l'API Chrome toutes les 20s pour éviter l'extinction idle du SW.
  */
 async function sleep(ms) {
   const CHUNK = 20_000;
@@ -161,7 +272,6 @@ async function sleep(ms) {
     await new Promise(r => setTimeout(r, wait));
     remaining -= wait;
     if (remaining > 0) {
-      // Toucher l'API Chrome → réinitialise le timer idle du service worker
       await new Promise(r => chrome.runtime.getPlatformInfo(r));
     }
   }
@@ -180,19 +290,6 @@ async function getVowintTab() {
 }
 
 /**
- * Met l'onglet VOWINT au premier plan (active: true) avant d'interagir.
- * Un onglet en arrière-plan reçoit moins d'événements — le focer visible
- * garantit que les events souris/clavier sont traités normalement par VOWINT.
- */
-async function focusVowintTab(tabId) {
-  return new Promise(resolve => {
-    chrome.tabs.update(tabId, { active: true }, () => {
-      if (chrome.runtime.lastError) { resolve(false); } else { resolve(true); }
-    });
-  });
-}
-
-/**
  * Retourne l'URL courante d'un onglet.
  */
 async function getTabUrl(tabId) {
@@ -204,104 +301,48 @@ async function getTabUrl(tabId) {
   });
 }
 
-/**
- * Détecte la langue de l'interface VOWINT depuis une URL.
- * Retourne la langue ('fr'|'en'|'nl') si détectable, ou null sinon.
- *
- * Deux sources de langue dans les URLs VOWINT :
- *
- * 1. Préfixe dans le chemin (pages connectées) :
- *    https://visaonweb.diplomatie.be/en/VisaApplication/… → 'en'
- *    https://visaonweb.diplomatie.be/fr/VisaApplication/… → 'fr'
- *    https://visaonweb.diplomatie.be/nl/…                 → 'nl'
- *
- * 2. Paramètre ReturnUrl sur la page de login :
- *    …/Account/Login?ReturnUrl=%2Fen  → 'en'  (navigateur en anglais)
- *    …/Account/Login?ReturnUrl=%2Ffr  → 'fr'
- *    …/Account/Login                  → null  (langue choisie manuellement,
- *                                              pas encodée dans l'URL)
- */
 function detectVowintLang(url) {
   if (!url) return null;
-
-  // Cas 1 : préfixe de langue dans le chemin → /en/, /fr/, /nl/
   const pathMatch = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
   if (pathMatch) {
     const lang = pathMatch[1].toLowerCase();
     if (['fr', 'en', 'nl'].includes(lang)) return lang;
   }
-
-  // Cas 2 : page de login avec ReturnUrl encodé → ?ReturnUrl=%2Fen ou %2Ffr
   const returnMatch = url.match(/[?&]ReturnUrl=(?:%2F|\/)(en|fr|nl)/i);
   if (returnMatch) return returnMatch[1].toLowerCase();
-
-  // Langue non détectable depuis l'URL (ex. /Account/Login sans ReturnUrl)
   return null;
 }
 
-/**
- * Construit l'URL de la page des demandes pour une langue donnée.
- */
 function getApplicationsUrl(lang = 'en') {
   return `https://visaonweb.diplomatie.be/${lang}/VisaApplication/IndexByUserId`;
 }
 
-/**
- * Persiste la langue VOWINT confirmée dans chrome.storage.local.
- */
 function saveVowintLang(lang) {
   chrome.storage.local.set({ vowintLang: lang });
 }
 
-/**
- * Lit la langue VOWINT stockée. Retourne 'en' si aucune langue n'a encore été sauvegardée.
- */
 function getStoredVowintLang() {
   return new Promise(resolve => {
     chrome.storage.local.get(['vowintLang'], (d) => resolve(d.vowintLang || 'en'));
   });
 }
 
-/**
- * Résout la langue VOWINT à utiliser pour naviguer.
- *
- * Priorité :
- *   1. Détection depuis l'URL (chemin /en/ /fr/ /nl/ OU ReturnUrl=%2Fen…)
- *      → si trouvée, sauvegarde et retourne.
- *   2. Langue stockée dans chrome.storage.local (mémorisée lors d'un cycle précédent).
- *   3. Fallback ultime : 'en'.
- *
- * Cas couverts :
- *   /Account/Login?ReturnUrl=%2Fen → 'en' (détecté via ReturnUrl)
- *   /Account/Login?ReturnUrl=%2Ffr → 'fr'
- *   /Account/Login (sans ReturnUrl) → langue choisie manuellement → stockage
- *   /en/VisaApplication/…          → 'en' (détecté via chemin)
- */
 async function resolveVowintLang(url) {
   const detected = detectVowintLang(url);
   if (detected) {
     saveVowintLang(detected);
     return detected;
   }
-  // Langue non détectable (ex. /Account/Login sans ReturnUrl) → langue mémorisée
   const stored = await getStoredVowintLang();
   log(`🌐 Langue non lisible dans l'URL — langue mémorisée : ${stored}`);
   return stored;
 }
 
-/**
- * Détecte si l'URL est la page des demandes (là où les boutons RDV apparaissent).
- */
 function isVowintApplicationsPage(url) {
   if (!url) return false;
   return url.toLowerCase().includes('/visaapplication/indexbyuserid');
 }
 
-/**
- * Navigue vers la page des demandes VOWINT dans la bonne langue et attend que l'AngularJS soit prêt.
- * @param {number} tabId
- * @param {string} [lang] — langue (fr/en/nl). Si omis, `resolveVowintLang` est appelé.
- */
 async function navigateToApplicationsPage(tabId, lang) {
   const resolvedLang = lang || await getStoredVowintLang();
   const targetUrl = getApplicationsUrl(resolvedLang);
@@ -312,45 +353,23 @@ async function navigateToApplicationsPage(tabId, lang) {
   });
   const loaded = await waitForTabLoad(tabId, 25_000);
   if (!loaded) warn('⚠️ Navigation vers Mes Applications : timeout');
-  // Attendre que AngularJS rende le tableau des demandes
   await sleep(randDelay(1_800, 3_200));
 }
 
-/**
- * Détecte si l'URL VOWINT est une page de login (session expirée).
- * Indicateurs fiables :
- *   - URL contient /Account/   (ex. /Account/Login)
- *   - URL contient /login      (insensible à la casse)
- *   - URL contient ReturnUrl=  (redirect vers login avec retour)
- *   - URL ne contient PAS /VisaApplication/ ni /en/ ni /fr/
- *     (toutes les pages authentifiées passent par ces paths)
- */
 function isVowintLoginPage(url) {
   if (!url) return false;
   const u = url.toLowerCase();
   if (u.includes('/account/')) return true;
   if (u.includes('/login'))    return true;
   if (u.includes('returnurl')) return true;
-  // Si l'URL est juste la racine ou ne contient aucune route connue → probablement login
   const isKnownRoute = u.includes('/visaapplication') || u.includes('/en/') || u.includes('/fr/') || u.includes('/nl/');
   const isRoot = new URL(url).pathname.replace(/\//g, '').length < 3;
   if (!isKnownRoute && isRoot) return true;
   return false;
 }
 
-/**
- * Recharge l'onglet VOWINT et attend que la page soit fully loaded.
- * Stratégie anti-restriction découverte expérimentalement :
- *   mobile = déconnexion auto après inactivité → session fraîche → pas de restriction
- *   PC = session longue durée → token vieilli → restriction si clic sans refresh
- * Solution : simuler le comportement mobile en rechargant la page avant chaque clic.
- *
- * Timeout 30s. Retourne true si OK, false si timeout.
- */
 async function reloadAndWaitVowintTab(tabId) {
   return new Promise(resolve => {
-    const deadline = Date.now() + 30_000;
-
     function onUpdated(updTabId, changeInfo) {
       if (updTabId !== tabId) return;
       if (changeInfo.status === 'complete') {
@@ -358,7 +377,6 @@ async function reloadAndWaitVowintTab(tabId) {
         resolve(true);
       }
     }
-
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.reload(tabId, { bypassCache: true }, () => {
       if (chrome.runtime.lastError) {
@@ -366,23 +384,17 @@ async function reloadAndWaitVowintTab(tabId) {
         resolve(false);
         return;
       }
-      // Sécurité : timeout au cas où l'événement complete ne vient pas
       setTimeout(() => {
         chrome.tabs.onUpdated.removeListener(onUpdated);
-        resolve(Date.now() < deadline); // vrai si on est encore dans le délai
+        resolve(false);
       }, 30_000);
     });
   });
 }
 
-// ─── Auto-login VOWINT ────────────────────────────────────────────────────────
-
-/**
- * Ouvre un nouvel onglet VOWINT et attend que la page soit chargée.
- * Retourne le tab ou null si échec.
- */
 async function openVowintTab() {
   return new Promise(resolve => {
+    // active: false → onglet en arrière-plan, pas besoin d'être visible
     chrome.tabs.create({ url: 'https://visaonweb.diplomatie.be', active: false }, tab => {
       if (chrome.runtime.lastError) { resolve(null); return; }
       function onLoad(tabId, changeInfo) {
@@ -396,9 +408,6 @@ async function openVowintTab() {
   });
 }
 
-/**
- * Attend que l'onglet soit entièrement chargé (status=complete).
- */
 async function waitForTabLoad(tabId, timeoutMs = 25_000) {
   return new Promise(resolve => {
     function onUpdated(updTabId, changeInfo) {
@@ -411,9 +420,6 @@ async function waitForTabLoad(tabId, timeoutMs = 25_000) {
   });
 }
 
-/**
- * Lit les identifiants VOWINT depuis chrome.storage.local.
- */
 async function getStoredCredentials() {
   return new Promise(resolve => {
     chrome.storage.local.get(['vowintEmail', 'vowintPassword'], d => {
@@ -422,9 +428,6 @@ async function getStoredCredentials() {
   });
 }
 
-/**
- * Envoie le message AUTO_LOGIN au content script et attend la réponse.
- */
 async function performAutoLogin(tabId, creds) {
   return new Promise(resolve => {
     chrome.tabs.sendMessage(tabId, { type: 'AUTO_LOGIN', email: creds.email, password: creds.password }, resp => {
@@ -439,29 +442,22 @@ async function performAutoLogin(tabId, creds) {
 }
 
 /**
- * Assure une session VOWINT active avant chaque tentative de clic.
- * Gère 3 cas :
- *   1. Aucun onglet VOWINT → ouvre un nouvel onglet
- *   2. Onglet existant → recharge (anti-restriction)
- *   3. Session expirée → login automatique avec les identifiants sauvegardés
- *
- * Retourne le tab VOWINT prêt, ou null si impossible de continuer.
+ * Assure une session VOWINT active en arrière-plan.
+ * L'onglet n'est jamais mis au premier plan — fonctionne même navigateur minimisé.
  */
 async function ensureVowintSession() {
-  // ── Étape 1 : trouver ou ouvrir l'onglet ────────────────────────────────
   let vowintTab = await getVowintTab();
 
   if (!vowintTab) {
-    log('🌐 Ouverture de l\'onglet VOWINT…');
-    setPhase('clicking', '🌐 Ouverture de l\'onglet VOWINT…');
+    log('🌐 Ouverture onglet VOWINT (arrière-plan)…');
+    setPhase('clicking', '🌐 Ouverture onglet VOWINT…');
     vowintTab = await openVowintTab();
     if (!vowintTab) {
       error('❌ Impossible d\'ouvrir l\'onglet VOWINT');
       return null;
     }
-    await sleep(1_500); // attente initialisation content script
+    await sleep(1_500);
   } else {
-    // ── Étape 2 : recharger (anti-restriction) ───────────────────────────
     setPhase('clicking', '🔄 Rechargement VOWINT (anti-restriction)…');
     const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
     if (reloaded) {
@@ -473,24 +469,21 @@ async function ensureVowintSession() {
 
   if (!state.running) return null;
 
-  // ── Étape 3 : détecter l'état de la page actuelle ────────────────────────
   const currentUrl = await getTabUrl(vowintTab.id);
 
   if (!isVowintLoginPage(currentUrl)) {
-    // Session active — mais on est peut-être sur la mauvaise page
     if (!isVowintApplicationsPage(currentUrl)) {
       const lang = await resolveVowintLang(currentUrl);
-      log(`📍 Page actuelle (${lang}) : ${currentUrl || '?'} → navigation vers Mes Applications`);
       await navigateToApplicationsPage(vowintTab.id, lang);
       if (!state.running) return null;
     }
-    return vowintTab; // session active, sur la bonne page
+    return vowintTab;
   }
 
-  // ── Étape 4 : page de login → auto-login ─────────────────────────────────
+  // Session expirée → auto-login
   const creds = await getStoredCredentials();
   if (!creds.email || !creds.password) {
-    error('🔓 Session expirée — configure email + mot de passe VOWINT dans l\'extension');
+    error('🔓 Session expirée — configure email + mot de passe VOWINT');
     notify('🔓 Session VOWINT expirée', 'Entre tes identifiants VOWINT dans le popup.');
     state.running = false;
     state.phase = 'idle';
@@ -509,12 +502,10 @@ async function ensureVowintSession() {
     return null;
   }
 
-  // ── Étape 5 : attendre la redirection post-login ─────────────────────────
   setPhase('clicking', '⏳ Redirection après connexion…');
   await waitForTabLoad(vowintTab.id, 25_000);
-  await sleep(randDelay(1_500, 2_500)); // laisser VOWINT finir son init
+  await sleep(randDelay(1_500, 2_500));
 
-  // ── Étape 6 : vérifier que la session est bien établie ───────────────────
   const postLoginUrl = await getTabUrl(vowintTab.id);
   if (isVowintLoginPage(postLoginUrl)) {
     error('❌ Login VOWINT échoué — identifiants incorrects ?');
@@ -527,25 +518,11 @@ async function ensureVowintSession() {
 
   ok('✅ Connecté à VOWINT');
 
-  // ── Étape 7 : naviguer vers Mes Applications si ce n'est pas déjà le cas ─
-  // Après le login VOWINT redirige souvent vers une page d'accueil générale
-  // (ex. /en/ ou /fr/). On force la navigation vers IndexByUserId dans la
-  // langue détectée depuis l'URL de redirection.
   if (!isVowintApplicationsPage(postLoginUrl)) {
     const lang = await resolveVowintLang(postLoginUrl);
-    log(`📍 Post-login (${lang}) sur : ${postLoginUrl || '?'} → navigation vers Mes Applications`);
     await navigateToApplicationsPage(vowintTab.id, lang);
     if (!state.running) return null;
-
-    // Vérification finale
-    const finalUrl = await getTabUrl(vowintTab.id);
-    if (!isVowintApplicationsPage(finalUrl)) {
-      warn(`⚠️ Navigation Mes Applications a abouti sur : ${finalUrl || '?'} — on tente quand même`);
-    } else {
-      ok(`✅ Page Mes Applications (${lang}) chargée`);
-    }
   } else {
-    // Déjà sur la bonne page → on profite pour sauvegarder la langue détectée
     const lang = await resolveVowintLang(postLoginUrl);
     ok(`✅ Déjà sur Mes Applications (${lang})`);
   }
@@ -556,72 +533,72 @@ async function ensureVowintSession() {
 // ─── Boucle principale ────────────────────────────────────────────────────────
 
 async function runLoop() {
+  // Alarme keepalive : réveille le SW toutes les minutes
+  chrome.alarms.create('sw_keepalive', { periodInMinutes: 1 });
+
   while (state.running) {
-    // ── Rate-limit ───────────────────────────────────────────────────────────
+
+    // Si une alarme slot est active → pause : ne pas scanner pendant l'alerte
+    if (state.alarmActive) {
+      await sleep(5_000);
+      continue;
+    }
+
+    // ── Rate-limit ────────────────────────────────────────────────────────────
     if (!canAttempt()) {
       const oldestClick = state.clickTimestamps[0];
       const waitUntil = oldestClick + 60 * 60_000;
       const waitSec = Math.ceil((waitUntil - Date.now()) / 1000);
-      setPhase('retry', `⚠️ Rate-limit atteint (${MAX_CLICKS_PER_HOUR}/h) — attente ${Math.round(waitSec/60)}min`);
+      setPhase('retry', `⚠️ Rate-limit (${MAX_CLICKS_PER_HOUR}/h) — attente ${Math.round(waitSec/60)}min`);
       await countdownWait(waitSec * 1000);
       continue;
     }
 
-    // ── Délai entre essais (sauf premier) ───────────────────────────────────
+    // ── Délai humain non-linéaire (sauf premier essai) ────────────────────────
     if (state.attempts > 0) {
-      const delay = randDelay(3 * 60_000, 5 * 60_000);
+      const delay    = humanLikeRetryDelay();
       const delaySec = Math.round(delay / 1000);
-      setPhase('retry', `⏱ Prochain essai dans ${Math.round(delaySec/60)}m${delaySec%60}s`);
+      const delayMin = Math.floor(delaySec / 60);
+      const delaySec2 = delaySec % 60;
+      setPhase('retry', `⏱ Prochain scan dans ${delayMin}m${String(delaySec2).padStart(2,'0')}s (pause humaine)`);
       await countdownWait(delay);
     }
     if (!state.running) break;
 
-    // ── Préparer la session VOWINT ───────────────────────────────────────────
-    // ensureVowintSession() gère tout : ouvre l'onglet si besoin, recharge
-    // (anti-restriction), détecte la page de login et se reconnecte auto.
+    // ── Session VOWINT en arrière-plan ────────────────────────────────────────
     const vowintTab = await ensureVowintSession();
     if (!vowintTab || !state.running) break;
 
-    // ── Anti-détection : focus + pause "lecture" avant clic ─────────────────
-    // 1. Mettre l'onglet VOWINT au premier plan (les events souris sont mieux
-    //    traités sur un onglet visible).
-    await focusVowintTab(vowintTab.id);
-    // 2. Pause variable 2-5s : simule l'utilisateur qui regarde la liste avant
-    //    de cliquer — rend le timing imprévisible pour les systèmes de détection.
-    const readPause = randDelay(2_000, 5_000);
-    setPhase('clicking', `👁 Lecture page VOWINT… (${Math.round(readPause/1000)}s)`);
+    // ── Pause "lecture" avant clic (anti-détection) ───────────────────────────
+    // L'onglet reste en arrière-plan — pas de focusVowintTab
+    const readPause = randDelay(1_500, 3_500);
+    setPhase('clicking', `👁 Scan arrière-plan… (${Math.round(readPause/1000)}s)`);
     await sleep(readPause);
     if (!state.running) break;
 
-    // ── Déclencher le clic ───────────────────────────────────────────────────
+    // ── Déclenchement du clic ────────────────────────────────────────────────
     state.attempts++;
     state.lastAttemptTs = Date.now();
     recordAttempt();
     setPhase('clicking', `🖱 Essai #${state.attempts} — clic "Prendre rendez-vous"`);
 
-    chrome.tabs.sendMessage(vowintTab.id, { type: 'CLICK_RDV_BUTTON', applicationId: state.applicationId || null }, resp => {
-      if (chrome.runtime.lastError || !resp?.ok) {
-        error(`❌ Clic échoué: ${chrome.runtime.lastError?.message || resp?.error || 'inconnu'}`);
-      }
-    });
+    chrome.tabs.sendMessage(
+      vowintTab.id,
+      { type: 'CLICK_RDV_BUTTON', applicationId: state.applicationId || null },
+      resp => { void chrome.runtime.lastError; }
+    );
 
     // ── Attendre l'onglet CEV ─────────────────────────────────────────────────
-    // Délai d'attente plus long pour couvrir le temps de humanPageScan() côté content script
     const cevTab = await waitForNewCevTab(22_000);
 
     if (!cevTab) {
-      // ── Détection shadowban ────────────────────────────────────────────────
-      // Le clic semble réussir mais aucun onglet CEV ne s'ouvre = signe d'un
-      // shadowban silencieux côté VOWINT (requête ignorée sans message d'erreur).
       state.consecutiveNoTab = (state.consecutiveNoTab || 0) + 1;
       broadcastState();
 
       if (state.consecutiveNoTab >= SHADOWBAN_STOP_THRESHOLD) {
-        error(`🚫 Shadowban détecté — ${state.consecutiveNoTab} cycles sans onglet CEV. Arrêt automatique.`);
-        notify(
-          '🚫 Possible shadowban VOWINT',
-          `${state.consecutiveNoTab} tentatives sans résultat. Attends 30-60 min avant de relancer.`
-        );
+        error(`🚫 Shadowban détecté — ${state.consecutiveNoTab} cycles sans onglet CEV. Arrêt.`);
+        notify('🚫 Possible shadowban VOWINT',
+          `${state.consecutiveNoTab} tentatives sans résultat. Attends 30-60 min.`);
         state.running = false;
         state.phase = 'idle';
         broadcastState();
@@ -629,38 +606,35 @@ async function runLoop() {
       }
 
       if (state.consecutiveNoTab >= SHADOWBAN_WARN_THRESHOLD) {
-        warn(`⚠️ ${state.consecutiveNoTab} cycles sans onglet CEV — possible shadowban VOWINT (arrêt dans ${SHADOWBAN_STOP_THRESHOLD - state.consecutiveNoTab} cycle(s))`);
-        notify(
-          '⚠️ Aucun onglet CEV ouvert',
-          `${state.consecutiveNoTab} fois de suite. VOWINT semble ignorer les clics.`
-        );
+        warn(`⚠️ ${state.consecutiveNoTab} cycles sans onglet CEV`);
+        notify('⚠️ Aucun onglet CEV', `${state.consecutiveNoTab} fois de suite.`);
       } else {
-        error(`❌ Aucun onglet CEV (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD}) — VOWINT sur la bonne page ?`);
+        error(`❌ Aucun onglet CEV (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD})`);
       }
       continue;
     }
 
-    // CEV ouvert → shadowban écarté pour ce cycle
     state.consecutiveNoTab = 0;
     state.activeCevTabId = cevTab.id;
-    setPhase('captcha_solving', '🔒 Onglet CEV ouvert — attente captcha…');
+    setPhase('captcha_solving', '🔒 Onglet CEV ouvert — résolution captcha…');
 
     const result = await waitForCevResult(cevTab.id);
     state.activeCevTabId = null;
 
-    if (result === 'success') {
-      setPhase('success', '✅ Rendez-vous réservé avec succès !');
-      notify('✅ RENDEZ-VOUS RÉSERVÉ !', 'Le créneau a été confirmé sur le portail CEV.');
-      state.running = false;
-      break;
+    if (result === 'slot_found') {
+      // Slot détecté → alerte uniquement, pas de réservation
+      setPhase('slot_found', `🚨 SLOT DISPONIBLE — alerte active ! (essai #${state.attempts})`);
+      // startAlarm() est appelé par le handler SLOT_FOUND du content script
     } else if (result === 'no_availability') {
-      setPhase('retry', `❌ Essai #${state.attempts} : aucune disponibilité — on réessaie`);
+      setPhase('retry', `❌ Essai #${state.attempts} : aucune dispo — on réessaie`);
     } else {
-      warn(`⚠️ Résultat inattendu: ${result} — on réessaie`);
+      warn(`⚠️ Résultat: ${result} — prochain essai`);
     }
   }
 
-  if (!state.running && state.phase !== 'success') {
+  chrome.alarms.clear('sw_keepalive');
+
+  if (!state.running && state.phase !== 'slot_found') {
     setPhase('idle', '⏹ Watcher arrêté');
   }
 }
@@ -683,16 +657,14 @@ function waitForNewCevTab(timeoutMs) {
 
     function createdListener(tab) {
       if (tab.url && tab.url.includes('appointment.cloud.diplomatie.be')) {
-        clearTimeout(timer);
-        cleanup();
+        clearTimeout(timer); cleanup();
         if (!resolved) { resolved = true; resolve(tab); }
       }
     }
 
     function updatedListener(tabId, changeInfo) {
       if (changeInfo.url && changeInfo.url.includes('appointment.cloud.diplomatie.be')) {
-        clearTimeout(timer);
-        cleanup();
+        clearTimeout(timer); cleanup();
         if (!resolved) {
           resolved = true;
           chrome.tabs.get(tabId, t => resolve(t));
@@ -769,6 +741,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (!state.running) {
         state.running = true;
         state.phase = 'idle';
+        state.alarmActive = false;
+        state.slotFound = null;
         runLoop();
       }
       broadcastState();
@@ -784,7 +758,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         chrome.tabs.remove(state.activeCevTabId, () => {});
         state.activeCevTabId = null;
       }
+      stopAlarm();
       broadcastState();
+      sendResponse({ ok: true });
+      break;
+    }
+
+    case 'ACKNOWLEDGE_SLOT': {
+      // L'utilisateur a vu l'alerte → arrêter la sonnerie, reprendre le scan
+      stopAlarm().then(() => {
+        state.slotFound = null;
+        if (state.running) {
+          state.phase = 'retry';
+        } else {
+          state.phase = 'idle';
+        }
+        broadcastState();
+      });
       sendResponse({ ok: true });
       break;
     }
@@ -808,23 +798,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case 'VOWINT_LOGIN_PAGE': {
-      // Le content script signale que la page est une page de login.
-      // ensureVowintSession() gère la reconnexion automatique dans la boucle.
-      // On log seulement si le bot ne tourne pas (info passive).
       if (!state.running) {
-        addLog('warn', '🔓 Page VOWINT : session expirée — configure tes identifiants et lance ▶');
+        addLog('warn', '🔓 Page VOWINT : session expirée — configure identifiants et lance ▶');
       }
       break;
     }
 
-    case 'CEV_RESULT': {
-      log(`📩 Résultat CEV reçu: ${msg.result}`);
+    case 'SLOT_FOUND': {
+      // Content script a détecté un slot disponible → alerte sans réserver
+      const slot = msg.slot || null;
+      ok(`🚨 Slot détecté: ${slot?.date || '?'} ${slot?.time || ''} — alerte déclenchée`);
+      startAlarm(slot);
       if (pendingCevResultResolver) {
-        pendingCevResultResolver(msg.result);
+        pendingCevResultResolver('slot_found');
         pendingCevResultResolver = null;
       }
-      if (msg.result === 'success') {
-        ok(`Réservé ! Code: ${msg.confirmationCode || '(voir la page)'}`);
+      sendResponse({ ok: true });
+      break;
+    }
+
+    case 'CEV_RESULT': {
+      log(`📩 Résultat CEV: ${msg.result}`);
+      if (msg.result !== 'slot_found') { // slot_found géré via SLOT_FOUND
+        if (pendingCevResultResolver) {
+          pendingCevResultResolver(msg.result);
+          pendingCevResultResolver = null;
+        }
       }
       sendResponse({ ok: true });
       break;
@@ -854,6 +853,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       state.logs = [];
       state.clickTimestamps = [];
       state.consecutiveNoTab = 0;
+      state.slotFound = null;
+      stopAlarm();
       broadcastState();
       sendResponse({ ok: true });
       break;
@@ -861,4 +862,4 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
-log('CEV Slot Hunter v2.1 démarré (MV3 service worker)');
+log('CEV Slot Hunter v3.0 — mode détection uniquement, fonctionnement en arrière-plan');
