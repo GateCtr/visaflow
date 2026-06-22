@@ -1,79 +1,157 @@
 /**
- * content-vowint.js — Script sur visaonweb.diplomatie.be
+ * content-vowint.js — visaonweb.diplomatie.be
  *
- * Rôle unique : trouver et cliquer le bouton "Prendre rendez-vous"
- * de la bonne demande quand le background le demande.
+ * FIX ORION/iOS : WebKit bloque window.open() depuis des MouseEvent synthétiques.
+ * Solution : on ne clique JAMAIS le bouton.
+ * À la place :
+ *   1. On extrait l'appId depuis le HTML de la page
+ *   2. On fait nous-mêmes le XHR GET /Common/GetEAppointmentUrl?id={appId}
+ *      (c'est exactement ce que le bouton ferait — même cookies, même session)
+ *   3. On envoie l'URL CEV au background → chrome.tabs.create() → aucun popup bloqué
  *
- * Le bouton ouvre un nouveau onglet avec l'URL d'intégration CEV éphémère.
+ * Sur Firefox PC l'ancien clic fonctionnait, mais cette approche marche partout
+ * et est aussi plus fiable (pas de dépendance au DOM du bouton).
  */
 
 'use strict';
 
+const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Simulation comportement humain ──────────────────────────────────────────
+// ─── Extraction appId depuis le HTML ──────────────────────────────────────────
 
 /**
- * Simule un utilisateur qui lit la page avant d'agir :
- *   - scrolls aléatoires vers différentes zones de la page
- *   - mouvements de souris dispersés (sans cibler un élément précis)
- *   - pause variable "lecture"
+ * Cherche l'appId (UUID) dans le HTML de la page.
+ * VOWINT embed les UUIDs dans les attributs ng-click, data-*, href ou
+ * directement dans les scripts inline.
  *
- * À appeler AVANT de scroller vers le bouton et de cliquer.
- * Rend le comportement imprévisible et moins détectable comme bot.
+ * Depuis cevHttpSetup.ts ligne 421 :
+ *   html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i)
  */
+function extractAppIds() {
+  const html = document.documentElement.innerHTML;
+  const ids = new Set();
+
+  // 1. GetEAppointmentUrl?id= dans les attributs/scripts
+  for (const m of html.matchAll(/GetEAppointmentUrl\?id=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi)) {
+    ids.add(m[1]);
+  }
+
+  // 2. ng-click="groupVAEapp('uuid')" ou ng-click="...('uuid',...)"
+  for (const m of html.matchAll(/ng-click="[^"]*\('([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'/gi)) {
+    ids.add(m[1]);
+  }
+
+  // 3. data-id="uuid" ou data-app-id="uuid"
+  for (const el of document.querySelectorAll('[data-id], [data-app-id], [data-application-id]')) {
+    const id = el.getAttribute('data-id') || el.getAttribute('data-app-id') || el.getAttribute('data-application-id') || '';
+    if (/^[a-f0-9]{8}-[a-f0-9]{4}-/i.test(id)) ids.add(id);
+  }
+
+  return [...ids];
+}
+
+/**
+ * Sélectionne l'appId correspondant à une demande VOWINT précise (par numéro ex: VOWINT6085888).
+ * Fallback : premier appId disponible.
+ */
+function selectAppId(appIds, vowintRef) {
+  if (!appIds.length) return null;
+  if (!vowintRef || appIds.length === 1) return appIds[0];
+
+  // Chercher dans le HTML le numéro VOWINT près de l'UUID correspondant
+  const html = document.documentElement.innerHTML;
+  const refNorm = vowintRef.toUpperCase().replace(/\s+/g, '');
+  const refMatch = html.indexOf(refNorm);
+  if (refMatch !== -1) {
+    // Chercher un UUID dans un rayon de 2000 chars autour du numéro VOWINT
+    const window = html.slice(Math.max(0, refMatch - 1000), refMatch + 1000);
+    const uuidMatch = window.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
+    if (uuidMatch && appIds.includes(uuidMatch[0])) return uuidMatch[0];
+  }
+
+  return appIds[0];
+}
+
+// ─── XHR GetEAppointmentUrl ───────────────────────────────────────────────────
+
+/**
+ * Fait le vrai appel XHR que le bouton déclencherait.
+ * Retourne l'URL d'intégration CEV ou null.
+ *
+ * Headers reproduits depuis capture-1780347172859.json (req 227) :
+ *   X-Requested-With: XMLHttpRequest
+ *   Accept: application/json, text/plain, *‌/*
+ *   If-Modified-Since: 0
+ *   Referer: .../en/VisaApplication/IndexByUserId
+ */
+async function getEAppointmentUrl(appId) {
+  const url = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${appId}`;
+
+  const resp = await fetch(url, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json, text/plain, */*',
+      'If-Modified-Since': '0',
+      'Referer': `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
+      'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8',
+    },
+  });
+
+  if (!resp.ok) throw new Error(`GetEAppointmentUrl HTTP ${resp.status}`);
+
+  // La réponse peut être :
+  //  - une URL directe (string)       "https://appointment.cloud.diplomatie.be/Integration/..."
+  //  - un objet JSON { url: "..." }
+  //  - un objet JSON { redirectUrl: "..." }
+  const ct = resp.headers.get('content-type') || '';
+  if (ct.includes('json') || ct.includes('javascript')) {
+    const data = await resp.json().catch(() => null);
+    if (typeof data === 'string') return data;
+    if (data?.url)         return data.url;
+    if (data?.redirectUrl) return data.redirectUrl;
+    if (data?.integrationUrl) return data.integrationUrl;
+    // Si l'objet contient une propriété qui ressemble à une URL CEV
+    for (const v of Object.values(data || {})) {
+      if (typeof v === 'string' && v.includes('appointment.cloud.diplomatie.be')) return v;
+    }
+    return null;
+  }
+
+  // Réponse texte brut = URL directe
+  const text = (await resp.text()).trim();
+  if (text.startsWith('http')) return text;
+
+  // Parfois c'est du HTML avec une meta refresh ou une URL dans le corps
+  const m = text.match(/https?:\/\/appointment\.cloud\.diplomatie\.be[^\s"'<>]+/);
+  return m?.[0] || null;
+}
+
+// ─── Comportement humain avant le scan ────────────────────────────────────────
+
 async function humanPageScan() {
   const docH = Math.max(document.body.scrollHeight, 800);
-
-  // 2-4 scrolls progressifs vers des zones aléatoires (simule lecture)
-  const scrollSteps = 2 + Math.floor(Math.random() * 3);
+  const scrollSteps = 2 + Math.floor(Math.random() * 2);
   for (let i = 0; i < scrollSteps; i++) {
-    const targetY = Math.floor(Math.random() * docH * 0.55);
-    window.scrollTo({ top: targetY, behavior: 'smooth' });
-    await sleep(350 + Math.random() * 650);
+    window.scrollTo({ top: Math.floor(Math.random() * docH * 0.5), behavior: 'smooth' });
+    await sleep(300 + Math.random() * 500);
   }
-
-  // 3-6 mouvements de souris sur la page (hors élément cible)
-  const moves = 3 + Math.floor(Math.random() * 4);
-  for (let i = 0; i < moves; i++) {
-    const x = 80 + Math.random() * (window.innerWidth  - 160);
-    const y = 80 + Math.random() * (window.innerHeight - 160);
-    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
-    await sleep(100 + Math.random() * 300);
+  // Mouvement souris aléatoire
+  for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
+    document.dispatchEvent(new MouseEvent('mousemove', {
+      bubbles: true,
+      clientX: 80 + Math.random() * (window.innerWidth  - 160),
+      clientY: 80 + Math.random() * (window.innerHeight - 160),
+    }));
+    await sleep(80 + Math.random() * 200);
   }
-
-  // Pause "lecture" variable (800ms – 2.5s)
-  await sleep(800 + Math.random() * 1700);
+  await sleep(600 + Math.random() * 1200);
 }
 
-async function humanClick(el) {
-  const rect = el.getBoundingClientRect();
-  const x = rect.left + rect.width  * (0.35 + Math.random() * 0.3);
-  const y = rect.top  + rect.height * (0.35 + Math.random() * 0.3);
+// ─── Frappe humaine (login) ───────────────────────────────────────────────────
 
-  const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 };
-  // mouseover / mousemove / mousedown / mouseup : humanisation uniquement (pas de ng-click)
-  el.dispatchEvent(new MouseEvent('mouseover',  opts));
-  await sleep(40 + Math.random() * 80);
-  el.dispatchEvent(new MouseEvent('mousemove',  opts));
-  await sleep(20 + Math.random() * 60);
-  el.dispatchEvent(new MouseEvent('mousedown',  opts));
-  await sleep(60 + Math.random() * 120);
-  el.dispatchEvent(new MouseEvent('mouseup',    opts));
-  await sleep(10 + Math.random() * 30);
-  // Un seul déclencheur de clic : el.click() natif → un seul ng-click AngularJS → un seul onglet CEV.
-  // IMPORTANT : ne pas combiner avec dispatchEvent('click') — AngularJS répondrait deux fois
-  // et ouvrirait deux onglets simultanément.
-  el.click();
-}
-
-// ─── Frappe humaine ───────────────────────────────────────────────────────────
-
-/**
- * Remplit un champ de formulaire caractère par caractère avec des délais aléatoires.
- * Déclenche les événements input/keyup pour que les frameworks (AngularJS, React…)
- * détectent les changements.
- */
 async function humanFill(input, text) {
   input.focus();
   input.value = '';
@@ -82,184 +160,98 @@ async function humanFill(input, text) {
     input.value += char;
     input.dispatchEvent(new Event('input',  { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: char }));
-    await sleep(35 + Math.random() * 95);
+    await sleep(35 + Math.random() * 90);
   }
   input.dispatchEvent(new Event('change', { bubbles: true }));
   input.dispatchEvent(new Event('blur',   { bubbles: true }));
 }
 
-// ─── Recherche du bouton RDV ──────────────────────────────────────────────────
-
-/**
- * Cherche le bouton "Prendre rendez-vous" sur la page.
- * Si applicationId est fourni, cible le bouton de la demande correspondante.
- * Sinon, prend le premier bouton visible.
- */
-function findRdvButton(applicationId) {
-  // ── Stratégie 1 : sélecteur AngularJS direct (portail VOWINT réel) ──────────
-  // Le bouton réel utilise ng-click="groupVAEapp(...)" sur le portail VOWINT
-  const ngClickCandidates = Array.from(
-    document.querySelectorAll('[ng-click*="groupVAEapp"], [ng-click*="rdv"], [ng-click*="appointment"]')
-  );
-
-  if (ngClickCandidates.length) {
-    // Si applicationId fourni, chercher dans le contexte de la bonne demande
-    if (applicationId) {
-      for (const btn of ngClickCandidates) {
-        let el = btn;
-        for (let i = 0; i < 8; i++) {
-          if (!el) break;
-          if ((el.textContent || '').includes(applicationId) ||
-              el.getAttribute('data-id') === applicationId ||
-              el.getAttribute('data-application-id') === applicationId) {
-            return btn;
-          }
-          el = el.parentElement;
-        }
-      }
-    }
-    // Premier visible
-    const visible = ngClickCandidates.find(el => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    });
-    if (visible) return visible;
-  }
-
-  // ── Stratégie 2 : recherche par texte (fallback générique) ──────────────────
-  const allBtns = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"]'));
-
-  const rdvTexts = [
-    'prendre rendez-vous',
-    'rendez-vous',
-    'afspraak',
-    'appointment',
-    'make appointment',
-    'book',
-    'réserver',
-    'calendar',
-    'calendrier',
-  ];
-
-  const candidates = allBtns.filter(el => {
-    const txt = (el.textContent || el.value || el.title || el.getAttribute('aria-label') || '').toLowerCase().trim();
-    return rdvTexts.some(t => txt.includes(t));
-  });
-
-  if (!candidates.length) return null;
-
-  // Si applicationId fourni : cherche dans le contexte de la bonne demande
-  if (applicationId) {
-    for (const btn of candidates) {
-      let el = btn;
-      for (let i = 0; i < 8; i++) {
-        if (!el) break;
-        const text = el.textContent || '';
-        const dataId = el.getAttribute('data-id') || el.getAttribute('data-application-id') || '';
-        if (text.includes(applicationId) || dataId === applicationId) {
-          return btn;
-        }
-        el = el.parentElement;
-      }
-    }
-  }
-
-  // Sinon, premier bouton visible
-  return candidates.find(el => {
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
-  }) || candidates[0];
-}
-
-// ─── Écoute des messages du background ───────────────────────────────────────
+// ─── Messages du background ───────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
-  // ── Connexion automatique VOWINT ─────────────────────────────────────────
+  // ── Login automatique ────────────────────────────────────────────────────
   if (msg.type === 'AUTO_LOGIN') {
     const emailInput    = document.querySelector('#UserName, input[name="UserName"], input[type="email"]:not([readonly])');
     const passwordInput = document.querySelector('#Password, input[name="Password"], input[type="password"]');
-    const submitBtn     = document.querySelector(
-      'button[type="submit"], input[type="submit"], .btn-primary[type="submit"], button.login-btn, button.btn'
-    );
+    const submitBtn     = document.querySelector('button[type="submit"], input[type="submit"], .btn-primary[type="submit"]');
 
     if (!emailInput || !passwordInput) {
-      sendResponse({ ok: false, error: 'Champs login introuvables sur la page' });
+      sendResponse({ ok: false, error: 'Champs login introuvables' });
       return;
     }
-
     (async () => {
       try {
         await humanFill(emailInput, msg.email);
         await sleep(300 + Math.random() * 500);
         await humanFill(passwordInput, msg.password);
         await sleep(400 + Math.random() * 700);
-        if (submitBtn) {
-          submitBtn.click();
-        } else if (passwordInput.form) {
-          passwordInput.form.submit();
-        } else {
-          // Fallback : touche Entrée sur le champ mot de passe
-          passwordInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-        }
+        if (submitBtn) submitBtn.click();
+        else if (passwordInput.form) passwordInput.form.submit();
+        else passwordInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
         sendResponse({ ok: true });
+      } catch (err) { sendResponse({ ok: false, error: err.message }); }
+    })();
+    return true;
+  }
+
+  // ── Déclenchement du scan (remplace l'ancien CLICK_RDV_BUTTON) ──────────
+  if (msg.type === 'CLICK_RDV_BUTTON' || msg.type === 'FETCH_CEV_URL') {
+    (async () => {
+      try {
+        // Comportement humain avant d'agir
+        await humanPageScan();
+
+        // Extraire l'appId depuis la page
+        const appIds = extractAppIds();
+        if (!appIds.length) {
+          sendResponse({ ok: false, error: 'Aucun appId trouvé — navigue sur la page "Mes applications" VOWINT' });
+          return;
+        }
+
+        const appId = selectAppId(appIds, msg.vowintRef);
+        chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: `🔗 appId sélectionné: ${appId.slice(0, 8)}… (${appIds.length} trouvé(s))` });
+
+        // Délai humain avant l'appel (simule le temps pour "viser" le bouton)
+        await sleep(400 + Math.random() * 800);
+
+        // XHR GetEAppointmentUrl — équivalent exact du clic bouton
+        const cevUrl = await getEAppointmentUrl(appId);
+
+        if (!cevUrl) {
+          sendResponse({ ok: false, error: 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV valide' });
+          return;
+        }
+
+        chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: `🌐 URL CEV obtenue → ${cevUrl.slice(0, 60)}…` });
+
+        // Envoyer l'URL au background pour ouverture via chrome.tabs.create
+        // (pas de window.open → pas de popup blocker sur Orion/WebKit)
+        sendResponse({ ok: true, cevUrl, appId });
+
       } catch (err) {
-        sendResponse({ ok: false, error: err.message });
+        sendResponse({ ok: false, error: err.message || String(err) });
       }
     })();
     return true; // async
   }
-
-  if (msg.type !== 'CLICK_RDV_BUTTON') return;
-
-  const btn = findRdvButton(msg.applicationId);
-
-  if (!btn) {
-    const btns = Array.from(document.querySelectorAll('a, button')).map(e => e.textContent?.trim().slice(0, 30));
-    sendResponse({
-      ok: false,
-      error: `Bouton "Prendre rendez-vous" introuvable. Boutons sur la page: ${btns.slice(0, 10).join(' | ')}`,
-    });
-    return;
-  }
-
-  // Anti-détection : scan humain de la page avant d'approcher le bouton
-  (async () => {
-    await humanPageScan();                              // scroll + mouvements souris aléatoires
-    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await sleep(500 + Math.random() * 900);            // temps pour "voir" le bouton
-    await humanClick(btn);
-    sendResponse({ ok: true, buttonText: btn.textContent?.trim().slice(0, 50) });
-  })();
-
-  return true; // async
 });
 
 // ─── Détection login page ─────────────────────────────────────────────────────
 
-/**
- * Vérifie si on est sur la page de login VOWINT (session expirée).
- * Cherche les éléments propres au formulaire de login.
- */
 function isLoginPage() {
-  // Formulaire de connexion VOWINT : champs UserName + Password
   if (document.querySelector('#UserName') && document.querySelector('#Password')) return true;
-  // Champ email login alternatif
-  if (document.querySelector('input[name="UserName"], input[name="Email"], input[type="email"]') &&
-      document.querySelector('input[type="password"]')) {
-    // Vérifier qu'on n'est PAS sur une page VisaApplication (qui pourrait avoir des champs)
-    const isAppPage = document.querySelector('[ng-click*="groupVAEapp"]') ||
-                      document.querySelector('[ng-repeat*="vaeGroup"]') ||
-                      document.querySelector('[ng-controller]');
+  const hasEmail = document.querySelector('input[name="UserName"], input[name="Email"], input[type="email"]');
+  const hasPass  = document.querySelector('input[type="password"]');
+  if (hasEmail && hasPass) {
+    const isAppPage = document.querySelector('[ng-click*="groupVAEapp"], [ng-repeat], [ng-controller]');
     if (!isAppPage) return true;
   }
   return false;
 }
 
-// Signaler l'état de la page au background dès le chargement
 if (isLoginPage()) {
   chrome.runtime.sendMessage({ type: 'VOWINT_LOGIN_PAGE' });
-  // Ne pas continuer — inutile de logger "prêt" si on est déconnecté
 } else {
-  chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '📄 Page VOWINT détectée — prêt' });
+  chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '📄 VOWINT prêt — extraction appId disponible' });
 }

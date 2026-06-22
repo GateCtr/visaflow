@@ -775,39 +775,69 @@ async function runLoop() {
     await sleep(readPause);
     if (!state.running) break;
 
-    // ── Clic ─────────────────────────────────────────────────────────────────
+    // ── Fetch URL CEV via XHR (bypass window.open — fix Orion/WebKit iOS) ────────
     state.attempts++;
     state.lastAttemptTs = Date.now();
     recordAttempt();
-    setPhase('clicking', `🖱 Essai #${state.attempts} — clic "Prendre rendez-vous"`);
+    setPhase('clicking', `🔗 Essai #${state.attempts} — récupération URL CEV…`);
 
-    chrome.tabs.sendMessage(
-      vowintTab.id,
-      { type: 'CLICK_RDV_BUTTON', applicationId: state.applicationId || null },
-      resp => { void chrome.runtime.lastError; }
-    );
+    // Le content script fait lui-même le XHR GetEAppointmentUrl et retourne l'URL
+    const fetchResp = await new Promise(resolve => {
+      chrome.tabs.sendMessage(
+        vowintTab.id,
+        { type: 'CLICK_RDV_BUTTON', vowintRef: state.vowintRef || null },
+        resp => {
+          if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
+          else resolve(resp || { ok: false, error: 'Pas de réponse du content script' });
+        }
+      );
+      // Timeout si le content script ne répond pas
+      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (20s)' }), 20_000);
+    });
 
-    // ── Attendre l'onglet CEV ─────────────────────────────────────────────────
-    const cevTab = await waitForNewCevTab(22_000);
-
-    if (!cevTab) {
+    if (!fetchResp?.ok || !fetchResp?.cevUrl) {
       state.consecutiveNoTab = (state.consecutiveNoTab || 0) + 1;
       broadcastState();
+      const errMsg = fetchResp?.error || 'URL CEV non obtenue';
+
       if (state.consecutiveNoTab >= SHADOWBAN_STOP_THRESHOLD) {
-        error(`🚫 Shadowban — ${state.consecutiveNoTab} cycles sans onglet CEV`);
+        error(`🚫 Shadowban probable — ${state.consecutiveNoTab} cycles sans URL CEV`);
         notify('🚫 Shadowban VOWINT', `${state.consecutiveNoTab} tentatives sans résultat. Attends 30-60 min.`);
         state.running = false; state.phase = 'idle'; broadcastState(); break;
       }
       if (state.consecutiveNoTab >= SHADOWBAN_WARN_THRESHOLD) {
-        warn(`⚠️ ${state.consecutiveNoTab} cycles sans onglet CEV`);
-        notify('⚠️ Aucun onglet CEV', `${state.consecutiveNoTab} fois de suite.`);
+        warn(`⚠️ ${state.consecutiveNoTab}× sans URL CEV : ${errMsg}`);
+        notify('⚠️ Aucune URL CEV', `${state.consecutiveNoTab} fois de suite — ${errMsg.slice(0, 60)}`);
       } else {
-        error(`❌ Aucun onglet CEV (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD})`);
+        error(`❌ URL CEV non obtenue (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD}): ${errMsg}`);
       }
       continue;
     }
 
     state.consecutiveNoTab = 0;
+    log(`🌐 URL CEV obtenue → ouverture onglet (chrome.tabs.create)`);
+    setPhase('captcha_solving', '🔒 Ouverture onglet CEV — captcha en cours…');
+
+    // Ouvrir l'onglet CEV via chrome.tabs.create — pas de window.open → pas de popup blocker
+    const cevTab = await new Promise(resolve => {
+      chrome.tabs.create({ url: fetchResp.cevUrl, active: false }, tab => {
+        if (chrome.runtime.lastError || !tab) { resolve(null); return; }
+        // Attendre que l'onglet soit chargé (le content-cev.js s'injecte à document_idle)
+        function onLoad(tabId, changeInfo) {
+          if (tabId !== tab.id || changeInfo.status !== 'complete') return;
+          chrome.tabs.onUpdated.removeListener(onLoad);
+          resolve(tab);
+        }
+        chrome.tabs.onUpdated.addListener(onLoad);
+        setTimeout(() => { chrome.tabs.onUpdated.removeListener(onLoad); resolve(tab); }, 20_000);
+      });
+    });
+
+    if (!cevTab) {
+      error('❌ Impossible d\'ouvrir l\'onglet CEV via chrome.tabs.create');
+      continue;
+    }
+
     state.activeCevTabId = cevTab.id;
     setPhase('captcha_solving', '🔒 Onglet CEV ouvert — captcha en cours…');
 
