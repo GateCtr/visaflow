@@ -427,6 +427,72 @@ body {
 .log-entry.warn  .log-msg { color: #f59e0b; }
 .log-entry.error .log-msg { color: #ef4444; }
 
+/* ── Status dot: paused (rate-limit / server error) ── */
+.status-dot.paused {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b80;
+  animation: pulsePaused 1.4s ease-in-out infinite;
+}
+@keyframes pulsePaused {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ── Rate-limit Alert Banner ── */
+.ratelimit-alert {
+  background: linear-gradient(135deg, #1a1200 0%, #2a1e00 100%);
+  border: 1.5px solid #f59e0b;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 2px;
+}
+
+.ratelimit-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fbbf24;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+.ratelimit-reason {
+  font-size: 11px;
+  color: #d97706;
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ratelimit-countdown {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fde68a;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+.btn-force-resume {
+  background: transparent;
+  color: #f59e0b;
+  border: 1px solid #f59e0b60;
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.2s, color 0.2s;
+  margin-top: 2px;
+}
+.btn-force-resume:hover {
+  background: #f59e0b20;
+  color: #fde68a;
+}
+
 /* ── Slot Alert Banner ── */
 .slot-alert {
   background: linear-gradient(135deg, #1a0a0a 0%, #2a0f0f 100%);

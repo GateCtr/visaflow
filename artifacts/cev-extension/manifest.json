@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CEV Slot Hunter",
-  "version": "3.0.0",
-  "description": "Surveille les créneaux CEV et alerte par sonnerie répétée dès qu'un slot est détecté.",
+  "version": "3.1.0",
+  "description": "Surveille les créneaux CEV — détection rate-limit intelligente, pause 60 min, réaction par catégorie d'erreur.",
   "permissions": [
     "storage",
     "notifications",

@@ -1,12 +1,15 @@
 /**
- * content-cev.js — appointment.cloud.diplomatie.be
+ * content-cev.js — appointment.cloud.diplomatie.be  v3.1
  *
- * v3.0 — MODE DÉTECTION UNIQUEMENT
- *  - Aucune réservation automatique.
- *  - Lorsqu'un slot disponible est détecté → SLOT_FOUND envoyé au background.
- *  - Le background déclenche la sonnerie + notification répétée.
- *  - Après captcha : détection complète des erreurs serveur et 4xx/5xx.
- *  - Fonctionne en arrière-plan (onglet invisible ou navigateur minimisé).
+ * MODE DÉTECTION UNIQUEMENT — Réaction intelligente aux erreurs serveur.
+ *
+ * Signaux détectés et remontés au background :
+ *   RATE_LIMITED  — 429, 403 WAF, corps de page avec mots-clés "trop de tentatives",
+ *                   URL /Error/TooManyAttempts, /Error/Blocked, /Error/AccessDenied
+ *   SERVER_ERROR  — 5xx avec classification (down, timeout, conflit)
+ *   SESSION_ERROR — 401 / 410 / session expirée
+ *   CEV_RESULT    — no_availability, slot_found, captcha_*
+ *   SLOT_FOUND    — créneau disponible détecté
  */
 
 'use strict';
@@ -20,12 +23,115 @@ function log(msg, level = 'info') { bg({ type: 'LOG', level, msg }); }
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const SITEKEY  = '5f64399c-14a8-415e-ad1a-7ebccdc4943a';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Détection Too Many Attempts / Rate-limit ─────────────────────────────────
+
+/**
+ * Mots-clés indiquant un rate-limit ou blocage (FR / EN / NL).
+ * Cherchés dans le corps de la page ET dans les corps de réponse JSON.
+ */
+const RATE_LIMIT_PATTERNS = [
+  /trop de tentatives/i,
+  /too many attempts/i,
+  /too many requests/i,
+  /te veel pogingen/i,
+  /rate.?limit/i,
+  /vous avez été bloqué/i,
+  /you have been blocked/i,
+  /access denied/i,
+  /accès refusé/i,
+  /please try again later/i,
+  /réessayez plus tard/i,
+  /veuillez patienter/i,
+  /temporarily blocked/i,
+  /temporairement bloqué/i,
+  /maximum.*attempt/i,
+  /quota.*exceeded/i,
+  /suspicious activity/i,
+  /activité suspecte/i,
+];
+
+/**
+ * Vérifie si un texte contient un signal de rate-limit.
+ */
+function containsRateLimitSignal(text) {
+  if (!text) return false;
+  return RATE_LIMIT_PATTERNS.some(re => re.test(text));
+}
+
+/**
+ * Vérifie si l'URL courante indique une page de blocage CEV.
+ */
+function isRateLimitUrl(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return (
+    u.includes('/error/toomanyrequests')  ||
+    u.includes('/error/toomanyattempts')  ||
+    u.includes('/error/blocked')          ||
+    u.includes('/error/accessdenied')     ||
+    u.includes('/error/forbidden')        ||
+    u.includes('toomany')                 ||
+    u.includes('ratelimit')               ||
+    u.includes('blocked')
+  );
+}
+
+/**
+ * Signale un rate-limit au background avec source et raison.
+ */
+async function reportRateLimit(source, reason) {
+  log(`🚫 RATE-LIMIT détecté [${source}] — ${reason}`, 'error');
+  await bg({ type: 'RATE_LIMITED', source, reason });
+}
+
+/**
+ * Signale une erreur serveur au background.
+ * `category` : 'down' | 'timeout' | 'conflict' | 'session' | 'generic'
+ */
+async function reportServerError(source, status, category, reason) {
+  log(`⚠️ ERREUR SERVEUR ${status} [${source}] ${category} — ${reason}`, 'error');
+  await bg({ type: 'SERVER_ERROR', source, status, category, reason });
+}
+
+// ─── Classification HTTP ──────────────────────────────────────────────────────
+
+/**
+ * Classifie un code HTTP retourné par CEV.
+ * Retourne { label, category } ou null si 2xx.
+ *
+ * categories :
+ *   rate_limited  → pause 60min
+ *   session       → re-login
+ *   conflict      → continuer (slot pris entre-temps)
+ *   down          → pause 10min (serveur down)
+ *   timeout       → pause 5min  (timeout réseau)
+ *   generic       → pause 5min  (autre 4xx/5xx)
+ */
+function classifyStatus(status) {
+  if (status >= 200 && status < 300) return null;
+  if (status === 429) return { label: '429 Too Many Requests',          category: 'rate_limited' };
+  if (status === 403) return { label: '403 Forbidden (WAF)',            category: 'rate_limited' };
+  if (status === 401) return { label: '401 Unauthorized',               category: 'session'      };
+  if (status === 410) return { label: '410 Gone — session révoquée',    category: 'session'      };
+  if (status === 409) return { label: '409 Conflict — slot déjà pris',  category: 'conflict'     };
+  if (status === 400) return { label: '400 Bad Request',                category: 'generic'      };
+  if (status === 404) return { label: '404 Not Found',                  category: 'generic'      };
+  if (status === 408) return { label: '408 Request Timeout',            category: 'timeout'      };
+  if (status === 422) return { label: '422 Unprocessable',              category: 'generic'      };
+  if (status === 500) return { label: '500 Internal Server Error',      category: 'down'         };
+  if (status === 502) return { label: '502 Bad Gateway',                category: 'down'         };
+  if (status === 503) return { label: '503 Service Unavailable',        category: 'down'         };
+  if (status === 504) return { label: '504 Gateway Timeout',            category: 'timeout'      };
+  if (status >= 400 && status < 500) return { label: `${status} Erreur client`, category: 'generic' };
+  if (status >= 500) return { label: `${status} Erreur serveur`,        category: 'down'         };
+  return { label: `HTTP ${status}`, category: 'generic' };
+}
+
+// ─── Helpers captcha ──────────────────────────────────────────────────────────
 
 function detectHcaptchaWidget() {
   const widget = document.querySelector(`[data-sitekey="${SITEKEY}"], [data-sitekey]`);
   if (widget) return { found: true, sitekey: widget.getAttribute('data-sitekey'), widget };
-
   for (const iframe of document.querySelectorAll('iframe')) {
     const m = (iframe.src || '').match(/[?&]sitekey=([^&]+)/);
     if (m && iframe.src.includes('hcaptcha.com')) return { found: true, sitekey: m[1], widget: iframe };
@@ -43,13 +149,11 @@ function triggerNativeCallback(token) {
       ta.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
-
-  const widget = document.querySelector('[data-callback]');
-  const cbName = widget?.getAttribute('data-callback');
+  const widget  = document.querySelector('[data-callback]');
+  const cbName  = widget?.getAttribute('data-callback');
   if (cbName && typeof window[cbName] === 'function') {
     try { window[cbName](token); return true; } catch {}
   }
-
   if (window.hcaptcha) {
     try {
       const widgetId = document.querySelector('[data-hcaptcha-widget-id]')
@@ -60,33 +164,8 @@ function triggerNativeCallback(token) {
   return false;
 }
 
-/**
- * Classifie une réponse HTTP en catégorie d'erreur.
- * Retourne null si la réponse est OK.
- */
-function classifyHttpError(status) {
-  if (status >= 200 && status < 300) return null;
-  if (status === 400) return '400 Bad Request — paramètre invalide';
-  if (status === 401) return '401 Unauthorized — session expirée ou token invalide';
-  if (status === 403) return '403 Forbidden — accès refusé (WAF ou session CEV révoquée)';
-  if (status === 404) return '404 Not Found — endpoint introuvable';
-  if (status === 408) return '408 Request Timeout — serveur CEV lent';
-  if (status === 409) return '409 Conflict — slot déjà pris entre-temps';
-  if (status === 410) return '410 Gone — session CEV expirée définitivement';
-  if (status === 422) return '422 Unprocessable — données de captcha rejetées';
-  if (status === 429) return '429 Too Many Requests — rate-limit CEV atteint';
-  if (status >= 400 && status < 500) return `${status} Erreur client`;
-  if (status === 500) return '500 Internal Server Error — panne serveur CEV';
-  if (status === 502) return '502 Bad Gateway — infrastructure CEV temporairement down';
-  if (status === 503) return '503 Service Unavailable — maintenance ou surcharge CEV';
-  if (status === 504) return '504 Gateway Timeout — timeout serveur CEV';
-  if (status >= 500) return `${status} Erreur serveur CEV`;
-  return `HTTP ${status} inattendu`;
-}
+// ─── POST /Captcha/SetCaptchaToken ────────────────────────────────────────────
 
-/**
- * POST /Captcha/SetCaptchaToken avec détection complète des erreurs serveur et 4xx/5xx.
- */
 async function postSetCaptchaToken(token) {
   try {
     const resp = await fetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
@@ -101,41 +180,58 @@ async function postSetCaptchaToken(token) {
       body: `captcha=${encodeURIComponent(token)}`,
     });
 
-    // Détecter toutes les erreurs HTTP avant de traiter la réponse
-    const httpError = classifyHttpError(resp.status);
-    if (httpError) {
-      log(`❌ SetCaptchaToken — ${httpError}`, 'error');
-      return { ok: false, error: httpError, status: resp.status };
+    const cls = classifyStatus(resp.status);
+    if (cls) {
+      if (cls.category === 'rate_limited') {
+        await reportRateLimit('SetCaptchaToken', cls.label);
+        return { ok: false, rateLimited: true, error: cls.label };
+      }
+      if (cls.category === 'session') {
+        await reportServerError('SetCaptchaToken', resp.status, 'session', cls.label);
+        return { ok: false, sessionError: true, error: cls.label };
+      }
+      if (cls.category !== 'conflict') {
+        await reportServerError('SetCaptchaToken', resp.status, cls.category, cls.label);
+      }
+      return { ok: false, error: cls.label, status: resp.status, category: cls.category };
     }
 
-    if (resp.redirected) {
-      return { ok: true, redirectUrl: resp.url };
-    }
+    if (resp.redirected) return { ok: true, redirectUrl: resp.url };
 
     const ct = resp.headers.get('content-type') || '';
     if (ct.includes('application/json') || ct.includes('text/javascript')) {
       const data = await resp.json().catch(() => null);
-      if (!data) {
-        return { ok: false, error: 'Réponse JSON vide ou malformée' };
+      if (!data) return { ok: false, error: 'JSON vide ou malformé' };
+
+      // Chercher signal rate-limit dans le corps JSON
+      const bodyText = JSON.stringify(data);
+      if (containsRateLimitSignal(bodyText)) {
+        await reportRateLimit('SetCaptchaToken-body', `Corps JSON: ${bodyText.slice(0, 80)}`);
+        return { ok: false, rateLimited: true, error: 'Rate-limit dans corps JSON' };
       }
+
       if (data?.redirectUrl) return { ok: true, redirectUrl: data.redirectUrl };
       if (data?.url)         return { ok: true, redirectUrl: data.url };
       if (data?.error || data?.message) {
-        return { ok: false, error: `Serveur: ${data.error || data.message}` };
+        const errMsg = data.error || data.message;
+        if (containsRateLimitSignal(errMsg)) {
+          await reportRateLimit('SetCaptchaToken-msg', errMsg);
+          return { ok: false, rateLimited: true, error: errMsg };
+        }
+        return { ok: false, error: `Serveur: ${errMsg}` };
       }
     }
 
     const loc = resp.headers.get('location');
     if (loc) return { ok: true, redirectUrl: loc.startsWith('http') ? loc : `${CEV_BASE}${loc}` };
-
     return {
       ok: resp.ok,
       redirectUrl: resp.url !== `${CEV_BASE}/Captcha/SetCaptchaToken` ? resp.url : null,
     };
   } catch (err) {
     const msg = String(err);
-    if (msg.includes('fetch')) log(`❌ SetCaptchaToken réseau: ${msg}`, 'error');
-    return { ok: false, error: msg };
+    await reportServerError('SetCaptchaToken', 0, 'timeout', `Réseau: ${msg}`);
+    return { ok: false, error: msg, category: 'timeout' };
   }
 }
 
@@ -143,6 +239,15 @@ async function postSetCaptchaToken(token) {
 
 async function handleCaptchaPage() {
   log('🔒 Page captcha CEV — attente widget hCaptcha…');
+
+  // Vérifier d'abord si la page elle-même signale un rate-limit
+  const pageBody = document.body?.innerText || '';
+  if (containsRateLimitSignal(pageBody)) {
+    await reportRateLimit('captcha-page-body', pageBody.slice(0, 120).trim());
+    bg({ type: 'CEV_RESULT', result: 'rate_limited' });
+    setTimeout(() => { try { window.close(); } catch {} }, 1000);
+    return;
+  }
 
   let captcha = detectHcaptchaWidget();
   let waited = 0;
@@ -185,42 +290,44 @@ async function handleCaptchaPage() {
   log('📬 POST /Captcha/SetCaptchaToken');
   const result = await postSetCaptchaToken(token);
 
+  if (result.rateLimited || result.sessionError) {
+    // Déjà signalé au background via reportRateLimit / reportServerError
+    bg({ type: 'CEV_RESULT', result: result.rateLimited ? 'rate_limited' : 'session_error' });
+    setTimeout(() => { try { window.close(); } catch {} }, 800);
+    return;
+  }
+
   if (!result.ok || !result.redirectUrl) {
-    const errDetail = result.error || `HTTP ${result.status || '?'} — pas de redirectUrl`;
-    log(`❌ SetCaptchaToken échoué: ${errDetail}`, 'error');
-
-    // Erreurs récupérables : relancer depuis le début
-    if (result.status === 429 || result.status === 503 || result.status === 502) {
-      log(`⚠️ Erreur temporaire (${result.status}) — le background relancera`, 'warn');
-    }
-    // Erreurs de session : signaler explicitement
-    if (result.status === 401 || result.status === 403 || result.status === 410) {
-      log(`⚠️ Session CEV invalide (${result.status}) — recaptcha nécessaire`, 'warn');
-    }
-
+    log(`❌ SetCaptchaToken échoué: ${result.error || '?'}`, 'error');
     bg({ type: 'CEV_RESULT', result: 'captcha_post_failed' });
     return;
   }
 
-  log(`🔀 Redirection vers: ${result.redirectUrl.slice(0, 80)}`);
+  log(`🔀 Redirection → ${result.redirectUrl.slice(0, 80)}`);
   window.location.href = result.redirectUrl;
 }
 
 // ─── 2. NO AVAILABILITY ───────────────────────────────────────────────────────
 
 function handleNoAvailabilityPage() {
-  log('❌ NoAvailability — aucun créneau pour ce compte');
+  log('❌ NoAvailability — aucun créneau');
   bg({ type: 'CEV_RESULT', result: 'no_availability' });
   setTimeout(() => { try { window.close(); } catch {} }, 1500);
 }
 
-// ─── 3. SELECT SLOT — DÉTECTION UNIQUEMENT, PAS DE RÉSERVATION ───────────────
+// ─── 3. RATE LIMIT / BLOCKED PAGE ────────────────────────────────────────────
 
-/**
- * POST /Home/AvailableTimeSlots avec détection complète des erreurs.
- */
+async function handleRateLimitPage(reason) {
+  log(`🚫 Page de blocage CEV détectée — ${reason}`, 'error');
+  await reportRateLimit('error-page', reason);
+  bg({ type: 'CEV_RESULT', result: 'rate_limited' });
+  setTimeout(() => { try { window.close(); } catch {} }, 1000);
+}
+
+// ─── 4. SELECT SLOT — DÉTECTION UNIQUEMENT ────────────────────────────────────
+
 async function fetchFirstAvailableSlot() {
-  const now = new Date();
+  const now  = new Date();
   const body = JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear() });
   try {
     const resp = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
@@ -235,24 +342,40 @@ async function fetchFirstAvailableSlot() {
       body,
     });
 
-    const httpError = classifyHttpError(resp.status);
-    if (httpError) {
-      log(`⚠️ AvailableTimeSlots — ${httpError}`, 'warn');
-      // 409 = slot pris entre-temps, 429 = rate-limit → signaler mais ne pas planter
-      if (resp.status === 409) log('⚠️ Conflit : slot peut-être déjà pris', 'warn');
-      if (resp.status === 429) log('⚠️ Rate-limit CEV — pause nécessaire', 'warn');
-      return null;
+    const cls = classifyStatus(resp.status);
+    if (cls) {
+      if (cls.category === 'rate_limited') {
+        await reportRateLimit('AvailableTimeSlots', cls.label);
+        return { rateLimited: true };
+      }
+      if (cls.category === 'session') {
+        await reportServerError('AvailableTimeSlots', resp.status, 'session', cls.label);
+        return { sessionError: true };
+      }
+      if (cls.category === 'conflict') {
+        log('⚠️ 409 Conflict — slot pris entre-temps, on continue', 'warn');
+        return null;
+      }
+      await reportServerError('AvailableTimeSlots', resp.status, cls.category, cls.label);
+      return { serverError: true, category: cls.category };
     }
 
     const data = await resp.json().catch(() => null);
     if (!data) {
-      log('⚠️ AvailableTimeSlots : réponse JSON vide ou malformée', 'warn');
+      log('⚠️ AvailableTimeSlots : réponse JSON vide', 'warn');
       return null;
     }
 
-    const items = Array.isArray(data)                  ? data
-                : Array.isArray(data.slots)             ? data.slots
-                : Array.isArray(data.availableSlots)    ? data.availableSlots
+    // Chercher signal rate-limit dans le corps
+    const bodyStr = JSON.stringify(data);
+    if (containsRateLimitSignal(bodyStr)) {
+      await reportRateLimit('AvailableTimeSlots-body', bodyStr.slice(0, 120));
+      return { rateLimited: true };
+    }
+
+    const items = Array.isArray(data)               ? data
+                : Array.isArray(data.slots)          ? data.slots
+                : Array.isArray(data.availableSlots) ? data.availableSlots
                 : [];
 
     const available = items.filter(s =>
@@ -262,98 +385,62 @@ async function fetchFirstAvailableSlot() {
 
     const first = available[0];
     return {
-      date:  first.date  ?? first.Date  ?? first.day   ?? first.Day   ?? '',
-      time:  first.time  ?? first.Time  ?? first.hour  ?? first.Hour  ?? first.startTime ?? '',
-      id:    first.id    ?? first.Id    ?? first.slotId ?? first.appointmentId ?? null,
+      date:  first.date  ?? first.Date  ?? first.day       ?? first.Day   ?? '',
+      time:  first.time  ?? first.Time  ?? first.hour       ?? first.Hour  ?? first.startTime ?? '',
+      id:    first.id    ?? first.Id    ?? first.slotId     ?? first.appointmentId ?? null,
       count: available.length,
-      raw:   first,
     };
   } catch (err) {
-    log(`⚠️ AvailableTimeSlots réseau: ${err}`, 'warn');
-    return null;
+    await reportServerError('AvailableTimeSlots', 0, 'timeout', `Réseau: ${err}`);
+    return { serverError: true, category: 'timeout' };
   }
 }
 
-/**
- * Scan les créneaux via l'API et le DOM.
- * En cas de slot trouvé → notifie le background, ferme l'onglet CEV.
- * Ne tente JAMAIS de réserver.
- */
 async function handleSelectSlotPage() {
-  log('🔍 Page SelectSlot — scan des disponibilités (mode détection uniquement)');
+  log('🔍 SelectSlot — scan disponibilités (détection uniquement)');
   await sleep(rand(800, 1500));
 
-  // ── Stratégie 1 : API /Home/AvailableTimeSlots ────────────────────────────
+  // Vérifier rate-limit sur la page avant toute requête
+  const pageBody = document.body?.innerText || '';
+  if (containsRateLimitSignal(pageBody)) {
+    await handleRateLimitPage(pageBody.slice(0, 120).trim());
+    return;
+  }
+
   log('📡 POST /Home/AvailableTimeSlots');
   const slot = await fetchFirstAvailableSlot();
 
-  if (slot) {
-    log(`🚨 SLOT TROUVÉ via API: ${slot.date} ${slot.time} (${slot.count} dispo, id=${slot.id})`, 'ok');
-    await bg({
-      type: 'SLOT_FOUND',
-      slot: { date: slot.date, time: slot.time, id: slot.id, count: slot.count },
-    });
-    // Fermer l'onglet CEV — la sonnerie s'en charge côté background
-    setTimeout(() => { try { window.close(); } catch {} }, 1000);
+  if (!slot) {
+    // null = pas de slot, pas d'erreur
+    log('❌ Aucun créneau disponible', 'warn');
+    bg({ type: 'CEV_RESULT', result: 'no_availability' });
+    setTimeout(() => { try { window.close(); } catch {} }, 1500);
     return;
   }
 
-  // ── Stratégie 2 : scan DOM du calendrier ─────────────────────────────────
-  log('🔍 API vide — scan DOM calendrier');
-  const domSlotFound = await scanCalendarDom();
-
-  if (domSlotFound) {
-    log(`🚨 SLOT TROUVÉ via DOM calendrier`, 'ok');
-    await bg({
-      type: 'SLOT_FOUND',
-      slot: { date: domSlotFound.date, time: null, id: null, count: 1 },
-    });
-    setTimeout(() => { try { window.close(); } catch {} }, 1000);
+  // Erreurs remontées au background via reportRateLimit/reportServerError — fermer l'onglet
+  if (slot.rateLimited || slot.serverError || slot.sessionError) {
+    const result = slot.rateLimited ? 'rate_limited'
+                 : slot.sessionError ? 'session_error'
+                 : 'server_error';
+    bg({ type: 'CEV_RESULT', result });
+    setTimeout(() => { try { window.close(); } catch {} }, 800);
     return;
   }
 
-  log('❌ Aucun créneau disponible cette fois', 'warn');
-  bg({ type: 'CEV_RESULT', result: 'no_availability' });
-  setTimeout(() => { try { window.close(); } catch {} }, 1500);
+  // Slot trouvé !
+  log(`🚨 SLOT TROUVÉ: ${slot.date} ${slot.time} (${slot.count} dispo, id=${slot.id})`, 'ok');
+  await bg({
+    type: 'SLOT_FOUND',
+    slot: { date: slot.date, time: slot.time, id: slot.id, count: slot.count },
+  });
+  setTimeout(() => { try { window.close(); } catch {} }, 1000);
 }
 
-/**
- * Scanne le DOM du calendrier pour détecter un jour disponible.
- * Retourne { date } si trouvé, null sinon.
- * Ne clique sur rien.
- */
-async function scanCalendarDom() {
-  const daySelectors = [
-    'td.available a', 'td.open a', '.calendar-day.available a',
-    '[data-available="true"] a', '.fc-day:not(.fc-day-disabled) a',
-    'td:not(.disabled):not(.unavailable):not(.empty):not(.weekend) a',
-    'td.selectable a', 'td.day:not(.disabled) a',
-  ];
-
-  for (const sel of daySelectors) {
-    const el = document.querySelector(sel);
-    if (el) {
-      const dateText = el.textContent?.trim()
-                    || el.getAttribute('data-date')
-                    || el.closest('td')?.getAttribute('data-date')
-                    || '?';
-      return { date: dateText, selector: sel };
-    }
-  }
-
-  // Essayer le mois suivant (sans cliquer, juste vérifier si un "suivant" existe)
-  const nextBtn = document.querySelector('.next, .btn-next, [aria-label*="next"], .fc-next-button');
-  if (nextBtn) {
-    log('⏭ Bouton mois suivant détecté — note pour futur scan');
-  }
-
-  return null;
-}
-
-// ─── 4. SESSION EXPIRÉE ───────────────────────────────────────────────────────
+// ─── 5. SESSION EXPIRÉE ───────────────────────────────────────────────────────
 
 function handleSessionExpiredPage() {
-  log('⏱ Session CEV expirée — signalement background', 'warn');
+  log('⏱ Session CEV expirée', 'warn');
   bg({ type: 'CEV_RESULT', result: 'session_expired' });
   setTimeout(() => { try { window.close(); } catch {} }, 1200);
 }
@@ -363,6 +450,11 @@ function handleSessionExpiredPage() {
 function detectPageType() {
   const path = window.location.pathname.toLowerCase();
   const body = document.body?.innerText?.toLowerCase() || '';
+
+  // Rate-limit / blocage — priorité haute
+  if (isRateLimitUrl(window.location.href) || containsRateLimitSignal(body)) {
+    return 'rate_limited';
+  }
 
   if (path.includes('/integration/error/sessionexpired') || path.includes('expired'))
     return 'session_expired';
@@ -393,6 +485,7 @@ async function init() {
   log(`📄 CEV ${type} @ ${window.location.pathname.slice(0, 60)}`);
 
   switch (type) {
+    case 'rate_limited':    await handleRateLimitPage(`URL: ${window.location.pathname}`); break;
     case 'captcha':         await handleCaptchaPage();       break;
     case 'no_availability':      handleNoAvailabilityPage(); break;
     case 'select_slot':     await handleSelectSlotPage();    break;

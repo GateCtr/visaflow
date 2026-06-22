@@ -19,7 +19,6 @@ const els = {
   apiKey:      document.getElementById('apiKey'),
   keyStatus:   document.getElementById('keyStatus'),
   btnToggle:   document.getElementById('btnToggle'),
-  btnToggle:   document.getElementById('btnToggle'),
   btnStart:    document.getElementById('btnStart'),
   btnStop:     document.getElementById('btnStop'),
   btnSave:     document.getElementById('btnSave'),
@@ -27,11 +26,15 @@ const els = {
   btnClear:    document.getElementById('btnClear'),
   btnCopy:     document.getElementById('btnCopy'),
   btnAck:      document.getElementById('btnAck'),
+  btnForceResume: document.getElementById('btnForceResume'),
   dossierId:   document.getElementById('dossierId'),
   dossierStatus: document.getElementById('dossierStatus'),
   logContainer:  document.getElementById('logContainer'),
   slotAlert:     document.getElementById('slotAlert'),
   slotAlertDetail: document.getElementById('slotAlertDetail'),
+  rateLimitAlert:     document.getElementById('rateLimitAlert'),
+  rateLimitReason:    document.getElementById('rateLimitReason'),
+  rateLimitCountdown: document.getElementById('rateLimitCountdown'),
   steps: {
     click:   document.getElementById('step-click'),
     captcha: document.getElementById('step-captcha'),
@@ -51,10 +54,22 @@ const PHASE_CONFIG = {
   clicking:        { dot: 'running', icon: '🖱',  label: 'Clic en cours…',         sub: 'Clic sur "Prendre rendez-vous"',                   active: ['click'] },
   captcha_solving: { dot: 'solving', icon: '🔒',  label: 'Résolution captcha…',    sub: 'Anti-Captcha en cours (30–90s)',                   active: ['click', 'captcha'] },
   waiting_result:  { dot: 'running', icon: '⏳',  label: 'Scan en cours…',         sub: 'Vérification des disponibilités…',                 active: ['click', 'captcha', 'scan'] },
-  retry:           { dot: 'idle',    icon: '🔄',  label: 'Pause (humain paresseux)', sub: 'Prochain scan dans…',                            active: [] },
+  retry:           { dot: 'idle',    icon: '🔄',  label: 'Pause humaine',           sub: 'Prochain scan dans…',                             active: [] },
   slot_found:      { dot: 'booked',  icon: '🚨',  label: 'CRÉNEAU DÉTECTÉ !',      sub: 'Sonnerie active — acquitte dans ce popup',         active: ['click', 'captcha', 'scan', 'alert'] },
   calendar_empty:  { dot: 'idle',    icon: '📅',  label: 'Calendrier vide',        sub: 'Aucune date disponible cette fois',                 active: ['click', 'captcha', 'scan'] },
+  rate_limited:    { dot: 'paused',  icon: '🚫',  label: 'Pause rate-limit CEV',   sub: 'Trop de tentatives — pause 60 min',                active: [] },
+  server_error:    { dot: 'paused',  icon: '⚠️',  label: 'Erreur serveur CEV',     sub: 'Pause automatique avant nouvelle tentative',       active: [] },
 };
+
+const RATE_LIMIT_PAUSE_MS = 60 * 60_000;
+
+function fmtCountdown(ms) {
+  if (ms <= 0) return '0m00s';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}m${String(s).padStart(2, '0')}s`;
+}
 
 function applyState(state) {
   if (!state) return;
@@ -65,7 +80,7 @@ function applyState(state) {
   els.phaseIcon.textContent  = cfg.icon;
   els.phaseLabel.textContent = cfg.label;
 
-  if ((state.phase === 'retry' || state.phase === 'idle') && state.nextRetryIn) {
+  if ((state.phase === 'retry' || state.phase === 'server_error') && state.nextRetryIn) {
     const m = Math.floor(state.nextRetryIn / 60);
     const s = state.nextRetryIn % 60;
     els.phaseSub.textContent = `Prochain scan dans ${m > 0 ? m + 'm' : ''}${String(s).padStart(2, '0')}s`;
@@ -92,7 +107,7 @@ function applyState(state) {
   els.btnStart.classList.toggle('hidden', isRunning);
   els.btnStop.classList.toggle('hidden', !isRunning);
 
-  // Bannière d'alerte slot
+  // ── Bannière d'alerte slot ──────────────────────────────────────────────────
   const hasSlot = state.phase === 'slot_found' || state.alarmActive;
   els.slotAlert.classList.toggle('hidden', !hasSlot);
   if (hasSlot && state.slotFound) {
@@ -104,8 +119,35 @@ function applyState(state) {
     els.slotAlertDetail.textContent = 'Ouvre le portail CEV maintenant !';
   }
 
+  // ── Bannière rate-limit ─────────────────────────────────────────────────────
+  const isRateLimited = state.phase === 'rate_limited' && state.rateLimitStartTs;
+  els.rateLimitAlert.classList.toggle('hidden', !isRateLimited);
+  if (isRateLimited) {
+    const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
+    els.rateLimitCountdown.textContent = `⏳ Reprise dans ${fmtCountdown(remaining)}`;
+    const reason = state.rateLimitReason || '';
+    // Tronquer la raison technique pour l'affichage
+    const shortReason = reason.replace(/^\[.*?\]\s*/, '').slice(0, 100);
+    els.rateLimitReason.textContent = shortReason || 'Détecté par le serveur CEV';
+  }
+
   renderLogs(state.logs || []);
 }
+
+// Mise à jour countdown rate-limit toutes les secondes (quand visible)
+setInterval(() => {
+  const rl = els.rateLimitAlert;
+  if (!rl || rl.classList.contains('hidden')) return;
+  send({ type: 'GET_STATE' }).then(r => {
+    if (!r?.state) return;
+    if (r.state.rateLimitStartTs) {
+      const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - r.state.rateLimitStartTs);
+      els.rateLimitCountdown.textContent = remaining > 0
+        ? `⏳ Reprise dans ${fmtCountdown(remaining)}`
+        : '✅ Pause terminée — reprise en cours…';
+    }
+  });
+}, 1000);
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────
 
@@ -240,6 +282,10 @@ els.btnAck.addEventListener('click', acknowledgeSlot);
 els.btnClear.addEventListener('click', () => send({ type: 'CLEAR_LOGS' }));
 els.btnCopy.addEventListener('click', copyLogs);
 els.btnReset.addEventListener('click', () => send({ type: 'RESET' }));
+els.btnForceResume.addEventListener('click', async () => {
+  await send({ type: 'CLEAR_RATE_LIMIT' });
+  els.rateLimitAlert.classList.add('hidden');
+});
 
 els.btnToggle.addEventListener('click', () => {
   const isPw = els.apiKey.type === 'password';

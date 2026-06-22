@@ -26,6 +26,14 @@
     <button class="btn btn-ack" id="btnAck">✅ J'ai vu — arrêter la sonnerie</button>
   </div>
 
+  <!-- ── Alerte rate-limit (visible si phase = rate_limited) ── -->
+  <div class="ratelimit-alert hidden" id="rateLimitAlert">
+    <div class="ratelimit-title">🚫 Trop de tentatives détectées</div>
+    <div class="ratelimit-reason" id="rateLimitReason">Pause automatique CEV</div>
+    <div class="ratelimit-countdown" id="rateLimitCountdown">⏳ —</div>
+    <button class="btn btn-force-resume" id="btnForceResume">⚡ Forcer la reprise maintenant</button>
+  </div>
+
   <!-- ── Phase actuelle ── -->
   <div class="phase-card" id="phaseCard">
     <div class="phase-icon" id="phaseIcon">⏸</div>

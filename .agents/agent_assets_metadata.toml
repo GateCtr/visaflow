@@ -35,3 +35,9 @@ id = "Go6Ru4UnrQct3oD1Vw3nO"
 uri = "file://cev-slot-hunter-v3.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.0 — Extension Chrome"
+
+[[outputs]]
+id = "uFraOVQbhlfMvjBIyyTOw"
+uri = "file://cev-slot-hunter-v3.1.zip"
+type = "unspecified"
+title = "CEV Slot Hunter v3.1 — Rate-limit intelligent"
