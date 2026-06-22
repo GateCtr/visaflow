@@ -951,7 +951,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg.type) {
 
     case 'START': {
-      if (msg.applicationId !== undefined) state.applicationId = msg.applicationId || null;
+      if (msg.applicationId !== undefined) {
+        state.applicationId = msg.applicationId || null;
+        state.vowintRef     = msg.applicationId || null; // alias utilisé par content-vowint
+      }
       if (!state.running) {
         state.running    = true;
         state.phase      = 'idle';

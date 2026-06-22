@@ -223,11 +223,16 @@ function loadConfig() {
 }
 
 function saveConfig() {
-  const k = els.apiKey.value.trim();
-  if (!k || k.length < 10) { showKeyStatus('⚠ Clé invalide ou trop courte', 'error'); return; }
+  // Toujours sauvegarder les credentials et le dossier, peu importe la clé
   saveDossierId();
   saveVowintCredentials();
-  chrome.storage.local.set({ anticaptchaKey: k }, () => showKeyStatus('✓ Clé sauvegardée', 'ok'));
+
+  const k = els.apiKey.value.trim();
+  if (!k || k.length < 10) {
+    showKeyStatus('⚠ Clé Anti-Captcha invalide ou trop courte', 'error');
+    return;
+  }
+  chrome.storage.local.set({ anticaptchaKey: k }, () => showKeyStatus('✓ Tout sauvegardé', 'ok'));
 }
 
 function saveVowintCredentials() {
