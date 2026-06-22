@@ -428,11 +428,11 @@ function recordAttempt() {
 // ─── Délai humain non-linéaire ────────────────────────────────────────────────
 
 function humanLikeRetryDelay() {
-  const BASE   = 2 * 60_000;
-  const r      = Math.random();
-  const extra  = Math.pow(r, 0.55) * 4 * 60_000;
-  const jitter = Math.sin(Date.now() / 97_000) * 20_000;
-  return Math.round(Math.max(BASE, BASE + extra + jitter));
+  const BASE  = 2 * 60_000;
+  // Humain paressé : distribution non-uniforme 0-50s, concentrée vers les valeurs basses
+  // Math.pow(r, 1.8) → majorité < 20s, max ~50s
+  const extra = Math.pow(Math.random(), 1.8) * 50_000;
+  return Math.round(BASE + extra);  // 2:00 → 2:50, majorité ~2:00-2:20
 }
 
 // ─── Anti-Captcha ─────────────────────────────────────────────────────────────
