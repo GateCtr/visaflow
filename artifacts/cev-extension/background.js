@@ -212,6 +212,46 @@ function getApplicationsUrl(lang = 'en') {
 }
 
 /**
+ * Persiste la langue VOWINT confirmée dans chrome.storage.local.
+ */
+function saveVowintLang(lang) {
+  chrome.storage.local.set({ vowintLang: lang });
+}
+
+/**
+ * Lit la langue VOWINT stockée. Retourne 'en' si aucune langue n'a encore été sauvegardée.
+ */
+function getStoredVowintLang() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['vowintLang'], (d) => resolve(d.vowintLang || 'en'));
+  });
+}
+
+/**
+ * Résout la langue VOWINT à utiliser pour naviguer :
+ *   1. Tente de la détecter depuis l'URL courante.
+ *   2. Si trouvée → sauvegarde + retourne.
+ *   3. Sinon (page login, URL sans préfixe) → retourne la dernière langue connue (storage).
+ *
+ * Permet d'éviter une re-détection à chaque cycle et de naviguer correctement
+ * même depuis une page de login qui ne contient pas de préfixe de langue.
+ */
+async function resolveVowintLang(url) {
+  const match = url && url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
+  if (match) {
+    const lang = match[1].toLowerCase();
+    if (['fr', 'en', 'nl'].includes(lang)) {
+      saveVowintLang(lang);   // mémorise pour les prochains cycles
+      return lang;
+    }
+  }
+  // URL sans préfixe (page login, page racine…) → utilise la langue stockée
+  const stored = await getStoredVowintLang();
+  log(`🌐 Langue VOWINT non détectable depuis l'URL — utilisation langue stockée : ${stored}`);
+  return stored;
+}
+
+/**
  * Détecte si l'URL est la page des demandes (là où les boutons RDV apparaissent).
  */
 function isVowintApplicationsPage(url) {
@@ -222,12 +262,13 @@ function isVowintApplicationsPage(url) {
 /**
  * Navigue vers la page des demandes VOWINT dans la bonne langue et attend que l'AngularJS soit prêt.
  * @param {number} tabId
- * @param {string} [lang] — langue détectée (fr/en/nl). Si omis, détecté depuis l'URL courante.
+ * @param {string} [lang] — langue (fr/en/nl). Si omis, `resolveVowintLang` est appelé.
  */
 async function navigateToApplicationsPage(tabId, lang) {
-  const targetUrl = getApplicationsUrl(lang || 'en');
-  log(`🗂 Navigation vers Mes Applications (${lang || 'en'}) → ${targetUrl}`);
-  setPhase('clicking', `🗂 Navigation vers Mes Applications (${lang || 'en'})…`);
+  const resolvedLang = lang || await getStoredVowintLang();
+  const targetUrl = getApplicationsUrl(resolvedLang);
+  log(`🗂 Navigation vers Mes Applications (${resolvedLang}) → ${targetUrl}`);
+  setPhase('clicking', `🗂 Navigation vers Mes Applications (${resolvedLang})…`);
   await new Promise(resolve => {
     chrome.tabs.update(tabId, { url: targetUrl }, () => resolve());
   });
@@ -400,7 +441,7 @@ async function ensureVowintSession() {
   if (!isVowintLoginPage(currentUrl)) {
     // Session active — mais on est peut-être sur la mauvaise page
     if (!isVowintApplicationsPage(currentUrl)) {
-      const lang = detectVowintLang(currentUrl);
+      const lang = await resolveVowintLang(currentUrl);
       log(`📍 Page actuelle (${lang}) : ${currentUrl || '?'} → navigation vers Mes Applications`);
       await navigateToApplicationsPage(vowintTab.id, lang);
       if (!state.running) return null;
@@ -453,7 +494,7 @@ async function ensureVowintSession() {
   // (ex. /en/ ou /fr/). On force la navigation vers IndexByUserId dans la
   // langue détectée depuis l'URL de redirection.
   if (!isVowintApplicationsPage(postLoginUrl)) {
-    const lang = detectVowintLang(postLoginUrl);
+    const lang = await resolveVowintLang(postLoginUrl);
     log(`📍 Post-login (${lang}) sur : ${postLoginUrl || '?'} → navigation vers Mes Applications`);
     await navigateToApplicationsPage(vowintTab.id, lang);
     if (!state.running) return null;
@@ -466,7 +507,9 @@ async function ensureVowintSession() {
       ok(`✅ Page Mes Applications (${lang}) chargée`);
     }
   } else {
-    ok('✅ Déjà sur Mes Applications');
+    // Déjà sur la bonne page → on profite pour sauvegarder la langue détectée
+    const lang = await resolveVowintLang(postLoginUrl);
+    ok(`✅ Déjà sur Mes Applications (${lang})`);
   }
 
   return await getVowintTab() || vowintTab;
