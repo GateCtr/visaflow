@@ -11,7 +11,40 @@
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Simulation clic humain ───────────────────────────────────────────────────
+// ─── Simulation comportement humain ──────────────────────────────────────────
+
+/**
+ * Simule un utilisateur qui lit la page avant d'agir :
+ *   - scrolls aléatoires vers différentes zones de la page
+ *   - mouvements de souris dispersés (sans cibler un élément précis)
+ *   - pause variable "lecture"
+ *
+ * À appeler AVANT de scroller vers le bouton et de cliquer.
+ * Rend le comportement imprévisible et moins détectable comme bot.
+ */
+async function humanPageScan() {
+  const docH = Math.max(document.body.scrollHeight, 800);
+
+  // 2-4 scrolls progressifs vers des zones aléatoires (simule lecture)
+  const scrollSteps = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < scrollSteps; i++) {
+    const targetY = Math.floor(Math.random() * docH * 0.55);
+    window.scrollTo({ top: targetY, behavior: 'smooth' });
+    await sleep(350 + Math.random() * 650);
+  }
+
+  // 3-6 mouvements de souris sur la page (hors élément cible)
+  const moves = 3 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < moves; i++) {
+    const x = 80 + Math.random() * (window.innerWidth  - 160);
+    const y = 80 + Math.random() * (window.innerHeight - 160);
+    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+    await sleep(100 + Math.random() * 300);
+  }
+
+  // Pause "lecture" variable (800ms – 2.5s)
+  await sleep(800 + Math.random() * 1700);
+}
 
 async function humanClick(el) {
   const rect = el.getBoundingClientRect();
@@ -190,12 +223,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
 
-  // Scroll vers le bouton + clic humain
-  btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  sleep(300 + Math.random() * 400).then(async () => {
+  // Anti-détection : scan humain de la page avant d'approcher le bouton
+  (async () => {
+    await humanPageScan();                              // scroll + mouvements souris aléatoires
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await sleep(500 + Math.random() * 900);            // temps pour "voir" le bouton
     await humanClick(btn);
     sendResponse({ ok: true, buttonText: btn.textContent?.trim().slice(0, 50) });
-  });
+  })();
 
   return true; // async
 });

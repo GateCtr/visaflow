@@ -10,6 +10,12 @@
 
 const MAX_CLICKS_PER_HOUR = 4;
 
+// ─── Anti-shadowban ───────────────────────────────────────────────────────────
+// VOWINT peut appliquer un shadowban silencieux : le clic "réussit" (ok: true)
+// mais n'ouvre aucun onglet CEV. Le compteur consecutiveNoTab détecte ce pattern.
+const SHADOWBAN_WARN_THRESHOLD = 3;  // avertissement après N cycles sans onglet CEV
+const SHADOWBAN_STOP_THRESHOLD = 6;  // arrêt automatique (probable shadowban)
+
 // ─── État en mémoire + persisté dans chrome.storage.local ────────────────────
 
 let state = {
@@ -23,6 +29,7 @@ let state = {
   nextRetryIn: null,
   clickTimestamps: [],
   applicationId: null,
+  consecutiveNoTab: 0,  // cycles successifs sans onglet CEV ouvert (shadowban detector)
 };
 
 // Restaurer l'état depuis le storage au démarrage du SW
@@ -168,6 +175,19 @@ async function getVowintTab() {
   return new Promise(resolve => {
     chrome.tabs.query({ url: 'https://visaonweb.diplomatie.be/*' }, tabs => {
       resolve(tabs?.[0] || null);
+    });
+  });
+}
+
+/**
+ * Met l'onglet VOWINT au premier plan (active: true) avant d'interagir.
+ * Un onglet en arrière-plan reçoit moins d'événements — le focer visible
+ * garantit que les events souris/clavier sont traités normalement par VOWINT.
+ */
+async function focusVowintTab(tabId) {
+  return new Promise(resolve => {
+    chrome.tabs.update(tabId, { active: true }, () => {
+      if (chrome.runtime.lastError) { resolve(false); } else { resolve(true); }
     });
   });
 }
@@ -562,6 +582,17 @@ async function runLoop() {
     const vowintTab = await ensureVowintSession();
     if (!vowintTab || !state.running) break;
 
+    // ── Anti-détection : focus + pause "lecture" avant clic ─────────────────
+    // 1. Mettre l'onglet VOWINT au premier plan (les events souris sont mieux
+    //    traités sur un onglet visible).
+    await focusVowintTab(vowintTab.id);
+    // 2. Pause variable 2-5s : simule l'utilisateur qui regarde la liste avant
+    //    de cliquer — rend le timing imprévisible pour les systèmes de détection.
+    const readPause = randDelay(2_000, 5_000);
+    setPhase('clicking', `👁 Lecture page VOWINT… (${Math.round(readPause/1000)}s)`);
+    await sleep(readPause);
+    if (!state.running) break;
+
     // ── Déclencher le clic ───────────────────────────────────────────────────
     state.attempts++;
     state.lastAttemptTs = Date.now();
@@ -575,12 +606,42 @@ async function runLoop() {
     });
 
     // ── Attendre l'onglet CEV ─────────────────────────────────────────────────
-    const cevTab = await waitForNewCevTab(15_000);
+    // Délai d'attente plus long pour couvrir le temps de humanPageScan() côté content script
+    const cevTab = await waitForNewCevTab(22_000);
+
     if (!cevTab) {
-      error('❌ Aucun onglet CEV ouvert après clic — VOWINT sur la bonne page ?');
+      // ── Détection shadowban ────────────────────────────────────────────────
+      // Le clic semble réussir mais aucun onglet CEV ne s'ouvre = signe d'un
+      // shadowban silencieux côté VOWINT (requête ignorée sans message d'erreur).
+      state.consecutiveNoTab = (state.consecutiveNoTab || 0) + 1;
+      broadcastState();
+
+      if (state.consecutiveNoTab >= SHADOWBAN_STOP_THRESHOLD) {
+        error(`🚫 Shadowban détecté — ${state.consecutiveNoTab} cycles sans onglet CEV. Arrêt automatique.`);
+        notify(
+          '🚫 Possible shadowban VOWINT',
+          `${state.consecutiveNoTab} tentatives sans résultat. Attends 30-60 min avant de relancer.`
+        );
+        state.running = false;
+        state.phase = 'idle';
+        broadcastState();
+        break;
+      }
+
+      if (state.consecutiveNoTab >= SHADOWBAN_WARN_THRESHOLD) {
+        warn(`⚠️ ${state.consecutiveNoTab} cycles sans onglet CEV — possible shadowban VOWINT (arrêt dans ${SHADOWBAN_STOP_THRESHOLD - state.consecutiveNoTab} cycle(s))`);
+        notify(
+          '⚠️ Aucun onglet CEV ouvert',
+          `${state.consecutiveNoTab} fois de suite. VOWINT semble ignorer les clics.`
+        );
+      } else {
+        error(`❌ Aucun onglet CEV (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD}) — VOWINT sur la bonne page ?`);
+      }
       continue;
     }
 
+    // CEV ouvert → shadowban écarté pour ce cycle
+    state.consecutiveNoTab = 0;
     state.activeCevTabId = cevTab.id;
     setPhase('captcha_solving', '🔒 Onglet CEV ouvert — attente captcha…');
 
@@ -792,6 +853,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       state.captchasSolved = 0;
       state.logs = [];
       state.clickTimestamps = [];
+      state.consecutiveNoTab = 0;
       broadcastState();
       sendResponse({ ok: true });
       break;
