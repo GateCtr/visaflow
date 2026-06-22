@@ -243,6 +243,152 @@ async function reloadAndWaitVowintTab(tabId) {
   });
 }
 
+// ─── Auto-login VOWINT ────────────────────────────────────────────────────────
+
+/**
+ * Ouvre un nouvel onglet VOWINT et attend que la page soit chargée.
+ * Retourne le tab ou null si échec.
+ */
+async function openVowintTab() {
+  return new Promise(resolve => {
+    chrome.tabs.create({ url: 'https://visaonweb.diplomatie.be', active: false }, tab => {
+      if (chrome.runtime.lastError) { resolve(null); return; }
+      function onLoad(tabId, changeInfo) {
+        if (tabId !== tab.id || changeInfo.status !== 'complete') return;
+        chrome.tabs.onUpdated.removeListener(onLoad);
+        resolve(tab);
+      }
+      chrome.tabs.onUpdated.addListener(onLoad);
+      setTimeout(() => { chrome.tabs.onUpdated.removeListener(onLoad); resolve(tab); }, 30_000);
+    });
+  });
+}
+
+/**
+ * Attend que l'onglet soit entièrement chargé (status=complete).
+ */
+async function waitForTabLoad(tabId, timeoutMs = 25_000) {
+  return new Promise(resolve => {
+    function onUpdated(updTabId, changeInfo) {
+      if (updTabId !== tabId || changeInfo.status !== 'complete') return;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      resolve(true);
+    }
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    setTimeout(() => { chrome.tabs.onUpdated.removeListener(onUpdated); resolve(false); }, timeoutMs);
+  });
+}
+
+/**
+ * Lit les identifiants VOWINT depuis chrome.storage.local.
+ */
+async function getStoredCredentials() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['vowintEmail', 'vowintPassword'], d => {
+      resolve({ email: d.vowintEmail || '', password: d.vowintPassword || '' });
+    });
+  });
+}
+
+/**
+ * Envoie le message AUTO_LOGIN au content script et attend la réponse.
+ */
+async function performAutoLogin(tabId, creds) {
+  return new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { type: 'AUTO_LOGIN', email: creds.email, password: creds.password }, resp => {
+      if (chrome.runtime.lastError || !resp?.ok) {
+        error(`❌ Login auto échoué : ${chrome.runtime.lastError?.message || resp?.error || 'inconnu'}`);
+        resolve(false);
+        return;
+      }
+      resolve(true);
+    });
+  });
+}
+
+/**
+ * Assure une session VOWINT active avant chaque tentative de clic.
+ * Gère 3 cas :
+ *   1. Aucun onglet VOWINT → ouvre un nouvel onglet
+ *   2. Onglet existant → recharge (anti-restriction)
+ *   3. Session expirée → login automatique avec les identifiants sauvegardés
+ *
+ * Retourne le tab VOWINT prêt, ou null si impossible de continuer.
+ */
+async function ensureVowintSession() {
+  // ── Étape 1 : trouver ou ouvrir l'onglet ────────────────────────────────
+  let vowintTab = await getVowintTab();
+
+  if (!vowintTab) {
+    log('🌐 Ouverture de l\'onglet VOWINT…');
+    setPhase('clicking', '🌐 Ouverture de l\'onglet VOWINT…');
+    vowintTab = await openVowintTab();
+    if (!vowintTab) {
+      error('❌ Impossible d\'ouvrir l\'onglet VOWINT');
+      return null;
+    }
+    await sleep(1_500); // attente initialisation content script
+  } else {
+    // ── Étape 2 : recharger (anti-restriction) ───────────────────────────
+    setPhase('clicking', '🔄 Rechargement VOWINT (anti-restriction)…');
+    const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
+    if (reloaded) {
+      await sleep(randDelay(2_000, 4_500));
+    } else {
+      warn('⚠️ Rechargement timeout — tentative sans refresh');
+    }
+  }
+
+  if (!state.running) return null;
+
+  // ── Étape 3 : vérifier l'état de la session ──────────────────────────────
+  const currentUrl = await getTabUrl(vowintTab.id);
+  if (!isVowintLoginPage(currentUrl)) {
+    return vowintTab; // session active — rien à faire
+  }
+
+  // ── Étape 4 : session expirée → login automatique ────────────────────────
+  const creds = await getStoredCredentials();
+  if (!creds.email || !creds.password) {
+    error('🔓 Session expirée — configure email + mot de passe VOWINT dans l\'extension');
+    notify('🔓 Session VOWINT expirée', 'Entre tes identifiants VOWINT dans le popup de l\'extension.');
+    state.running = false;
+    state.phase = 'idle';
+    broadcastState();
+    return null;
+  }
+
+  log(`🔐 Connexion automatique VOWINT (${creds.email})…`);
+  setPhase('clicking', `🔐 Connexion VOWINT (${creds.email})…`);
+
+  const loginOk = await performAutoLogin(vowintTab.id, creds);
+  if (!loginOk) {
+    state.running = false;
+    state.phase = 'idle';
+    broadcastState();
+    return null;
+  }
+
+  // ── Étape 5 : attendre la redirection post-login ─────────────────────────
+  setPhase('clicking', '⏳ Redirection après connexion…');
+  await waitForTabLoad(vowintTab.id, 25_000);
+  await sleep(randDelay(2_000, 3_500)); // initialisation AngularJS
+
+  // ── Étape 6 : vérifier que la session est bien établie ───────────────────
+  const newUrl = await getTabUrl(vowintTab.id);
+  if (isVowintLoginPage(newUrl)) {
+    error('❌ Login VOWINT échoué — identifiants incorrects ?');
+    notify('❌ Login VOWINT échoué', 'Vérifie email + mot de passe dans le popup.');
+    state.running = false;
+    state.phase = 'idle';
+    broadcastState();
+    return null;
+  }
+
+  ok(`✅ Connecté à VOWINT — Mes demandes chargées`);
+  return await getVowintTab() || vowintTab;
+}
+
 // ─── Boucle principale ────────────────────────────────────────────────────────
 
 async function runLoop() {
@@ -266,39 +412,11 @@ async function runLoop() {
     }
     if (!state.running) break;
 
-    // ── Trouver l'onglet VOWINT ──────────────────────────────────────────────
-    const vowintTab = await getVowintTab();
-    if (!vowintTab) {
-      warn('⚠️ Aucun onglet VOWINT ouvert — navigue sur visaonweb.diplomatie.be');
-      await sleep(15_000);
-      continue;
-    }
-
-    // ── Recharger la page VOWINT avant de cliquer (anti-restriction) ─────────
-    // Simule le comportement mobile : session fraîche à chaque tentative.
-    // Sans ce rechargement, le portail détecte un token vieilli et restreint le compte.
-    setPhase('clicking', '🔄 Rechargement VOWINT (anti-restriction)…');
-    const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
-    if (!reloaded) {
-      warn('⚠️ Rechargement VOWINT timeout — tentative sans refresh');
-    } else {
-      // Pause humaine après le chargement de la page (lit la liste des demandes)
-      await sleep(randDelay(2_000, 4_500));
-    }
-    if (!state.running) break;
-
-    // ── Détecter une déconnexion VOWINT ─────────────────────────────────────
-    // Après le rechargement, si le portail a redirigé vers la page de login,
-    // on stoppe immédiatement plutôt que de gaspiller un clic sur une page vide.
-    const currentUrl = await getTabUrl(vowintTab.id);
-    if (isVowintLoginPage(currentUrl)) {
-      error('🔓 Session VOWINT expirée — reconnecte-toi et relance l\'extension');
-      notify('🔓 Session VOWINT expirée', 'Reconnecte-toi sur VOWINT dans l\'onglet, puis relance l\'extension.');
-      state.running = false;
-      state.phase = 'idle';
-      broadcastState();
-      break;
-    }
+    // ── Préparer la session VOWINT ───────────────────────────────────────────
+    // ensureVowintSession() gère tout : ouvre l'onglet si besoin, recharge
+    // (anti-restriction), détecte la page de login et se reconnecte auto.
+    const vowintTab = await ensureVowintSession();
+    if (!vowintTab || !state.running) break;
 
     // ── Déclencher le clic ───────────────────────────────────────────────────
     state.attempts++;
@@ -485,14 +603,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case 'VOWINT_LOGIN_PAGE': {
-      // Le content script signale que la page VOWINT est une page de login
-      // (session expirée après rechargement). On stoppe si le bot tourne.
-      if (state.running) {
-        error('🔓 Session VOWINT expirée (page login détectée) — reconnecte-toi et relance');
-        notify('🔓 Session VOWINT expirée', 'Reconnecte-toi sur VOWINT dans l\'onglet, puis relance l\'extension.');
-        state.running = false;
-        state.phase = 'idle';
-        broadcastState();
+      // Le content script signale que la page est une page de login.
+      // ensureVowintSession() gère la reconnexion automatique dans la boucle.
+      // On log seulement si le bot ne tourne pas (info passive).
+      if (!state.running) {
+        addLog('warn', '🔓 Page VOWINT : session expirée — configure tes identifiants et lance ▶');
       }
       break;
     }

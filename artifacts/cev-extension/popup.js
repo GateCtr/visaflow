@@ -12,6 +12,10 @@ const els = {
   statAttempts:document.getElementById('statAttempts'),
   statCaptcha: document.getElementById('statCaptcha'),
   statNext:    document.getElementById('statNext'),
+  vowintEmail:      document.getElementById('vowintEmail'),
+  vowintPassword:   document.getElementById('vowintPassword'),
+  vowintStatus:     document.getElementById('vowintStatus'),
+  btnToggleVowint:  document.getElementById('btnToggleVowint'),
   apiKey:      document.getElementById('apiKey'),
   keyStatus:   document.getElementById('keyStatus'),
   btnToggle:   document.getElementById('btnToggle'),
@@ -176,7 +180,7 @@ function saveDossierId() {
 }
 
 function loadConfig() {
-  chrome.storage.local.get(['anticaptchaKey', 'vowintDossierId'], d => {
+  chrome.storage.local.get(['anticaptchaKey', 'vowintDossierId', 'vowintEmail', 'vowintPassword'], d => {
     if (d.anticaptchaKey) {
       els.apiKey.value = d.anticaptchaKey;
       showKeyStatus('✓ Clé sauvegardée', 'ok');
@@ -186,6 +190,16 @@ function loadConfig() {
       els.dossierStatus.textContent = `✓ Cible : ${d.vowintDossierId}`;
       els.dossierStatus.className = 'field-hint ok';
     }
+    if (d.vowintEmail) {
+      els.vowintEmail.value = d.vowintEmail;
+    }
+    if (d.vowintPassword) {
+      els.vowintPassword.value = d.vowintPassword;
+    }
+    if (d.vowintEmail && d.vowintPassword) {
+      els.vowintStatus.textContent = `✓ Compte : ${d.vowintEmail}`;
+      els.vowintStatus.className = 'field-hint ok';
+    }
   });
 }
 
@@ -193,7 +207,21 @@ function saveConfig() {
   const k = els.apiKey.value.trim();
   if (!k || k.length < 10) { showKeyStatus('⚠ Clé invalide ou trop courte', 'error'); return; }
   saveDossierId();
+  saveVowintCredentials();
   chrome.storage.local.set({ anticaptchaKey: k }, () => showKeyStatus('✓ Clé sauvegardée', 'ok'));
+}
+
+function saveVowintCredentials() {
+  const email    = els.vowintEmail.value.trim();
+  const password = els.vowintPassword.value;
+  if (!email && !password) return;
+  chrome.storage.local.set({ vowintEmail: email, vowintPassword: password }, () => {
+    if (email) {
+      els.vowintStatus.textContent = `✓ Compte : ${email}`;
+      els.vowintStatus.className = 'field-hint ok';
+      setTimeout(() => { els.vowintStatus.className = 'field-hint'; }, 2500);
+    }
+  });
 }
 
 function showKeyStatus(msg, type = '') {
@@ -237,9 +265,17 @@ els.btnToggle.addEventListener('click', () => {
   els.btnToggle.textContent = isPw ? '🔒' : '👁';
 });
 
-els.apiKey.addEventListener('keydown',    e => { if (e.key === 'Enter') saveConfig(); });
-els.dossierId.addEventListener('keydown', e => { if (e.key === 'Enter') saveDossierId(); });
-els.dossierId.addEventListener('blur',    () => { if (els.dossierId.value.trim()) saveDossierId(); });
+els.btnToggleVowint.addEventListener('click', () => {
+  const isPw = els.vowintPassword.type === 'password';
+  els.vowintPassword.type = isPw ? 'text' : 'password';
+  els.btnToggleVowint.textContent = isPw ? '🔒' : '👁';
+});
+
+els.apiKey.addEventListener('keydown',         e => { if (e.key === 'Enter') saveConfig(); });
+els.dossierId.addEventListener('keydown',      e => { if (e.key === 'Enter') saveDossierId(); });
+els.dossierId.addEventListener('blur',         () => { if (els.dossierId.value.trim()) saveDossierId(); });
+els.vowintEmail.addEventListener('blur',       () => { if (els.vowintEmail.value.trim()) saveVowintCredentials(); });
+els.vowintPassword.addEventListener('keydown', e => { if (e.key === 'Enter') saveVowintCredentials(); });
 
 chrome.runtime.onMessage.addListener(msg => {
   if (msg.type === 'STATE_UPDATE') applyState(msg.state);

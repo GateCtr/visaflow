@@ -34,6 +34,27 @@ async function humanClick(el) {
   el.click();
 }
 
+// ─── Frappe humaine ───────────────────────────────────────────────────────────
+
+/**
+ * Remplit un champ de formulaire caractère par caractère avec des délais aléatoires.
+ * Déclenche les événements input/keyup pour que les frameworks (AngularJS, React…)
+ * détectent les changements.
+ */
+async function humanFill(input, text) {
+  input.focus();
+  input.value = '';
+  input.dispatchEvent(new Event('focus', { bubbles: true }));
+  for (const char of String(text)) {
+    input.value += char;
+    input.dispatchEvent(new Event('input',  { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: char }));
+    await sleep(35 + Math.random() * 95);
+  }
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  input.dispatchEvent(new Event('blur',   { bubbles: true }));
+}
+
 // ─── Recherche du bouton RDV ──────────────────────────────────────────────────
 
 /**
@@ -120,6 +141,42 @@ function findRdvButton(applicationId) {
 // ─── Écoute des messages du background ───────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
+  // ── Connexion automatique VOWINT ─────────────────────────────────────────
+  if (msg.type === 'AUTO_LOGIN') {
+    const emailInput    = document.querySelector('#UserName, input[name="UserName"], input[type="email"]:not([readonly])');
+    const passwordInput = document.querySelector('#Password, input[name="Password"], input[type="password"]');
+    const submitBtn     = document.querySelector(
+      'button[type="submit"], input[type="submit"], .btn-primary[type="submit"], button.login-btn, button.btn'
+    );
+
+    if (!emailInput || !passwordInput) {
+      sendResponse({ ok: false, error: 'Champs login introuvables sur la page' });
+      return;
+    }
+
+    (async () => {
+      try {
+        await humanFill(emailInput, msg.email);
+        await sleep(300 + Math.random() * 500);
+        await humanFill(passwordInput, msg.password);
+        await sleep(400 + Math.random() * 700);
+        if (submitBtn) {
+          submitBtn.click();
+        } else if (passwordInput.form) {
+          passwordInput.form.submit();
+        } else {
+          // Fallback : touche Entrée sur le champ mot de passe
+          passwordInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+        }
+        sendResponse({ ok: true });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
+    })();
+    return true; // async
+  }
+
   if (msg.type !== 'CLICK_RDV_BUTTON') return;
 
   const btn = findRdvButton(msg.applicationId);

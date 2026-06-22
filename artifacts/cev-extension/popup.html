@@ -71,6 +71,25 @@
   <div class="section">
     <div class="section-title">⚙️ Configuration</div>
 
+    <!-- VOWINT credentials -->
+    <label class="field-label" for="vowintEmail">👤 Email VOWINT</label>
+    <div class="input-row">
+      <input type="email" id="vowintEmail" class="input"
+        placeholder="votre@email.com"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    </div>
+
+    <label class="field-label field-label-mt" for="vowintPassword">🔒 Mot de passe VOWINT</label>
+    <div class="input-row">
+      <input type="password" id="vowintPassword" class="input"
+        placeholder="Mot de passe…"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="btn-icon" id="btnToggleVowint">👁</button>
+    </div>
+    <div id="vowintStatus" class="field-hint">Connexion automatique si session expirée</div>
+
+    <div class="config-sep"></div>
+
     <label class="field-label" for="dossierId">📁 Numéro de dossier VOWINT</label>
     <div class="input-row">
       <input type="text" id="dossierId" class="input"
@@ -103,11 +122,10 @@
   <div class="section info-box">
     <div class="info-title">📱 Mode d'emploi</div>
     <ol class="info-list">
+      <li>Entre email + mot de passe VOWINT → <strong>Sauvegarder</strong></li>
       <li>Entre ta clé Anti-Captcha → <strong>Sauvegarder</strong></li>
-      <li>Entre ton numéro de dossier VOWINT (optionnel)</li>
-      <li>Ouvre VOWINT → <strong>Mes applications</strong> dans Orion</li>
-      <li>Appuie sur <strong>▶ Démarrer</strong> ici</li>
-      <li>L'extension clique, résout le captcha, et réserve automatiquement</li>
+      <li>Numéro de dossier : optionnel si plusieurs demandes</li>
+      <li>Appuie sur <strong>▶ Démarrer</strong> — l'extension ouvre VOWINT, se connecte, clique et réserve</li>
     </ol>
   </div>
 
