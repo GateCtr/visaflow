@@ -184,7 +184,32 @@ async function getTabUrl(tabId) {
   });
 }
 
-const VOWINT_APPLICATIONS_URL = 'https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId';
+/**
+ * Détecte la langue de l'interface VOWINT depuis une URL.
+ * VOWINT utilise des URLs préfixées par la langue : /en/, /fr/, /nl/
+ * Retourne 'en' par défaut si la langue n'est pas reconnue.
+ *
+ * Exemples :
+ *   https://visaonweb.diplomatie.be/en/VisaApplication/… → 'en'
+ *   https://visaonweb.diplomatie.be/fr/VisaApplication/… → 'fr'
+ *   https://visaonweb.diplomatie.be/nl/…                 → 'nl'
+ */
+function detectVowintLang(url) {
+  if (!url) return 'en';
+  const match = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
+  if (match) {
+    const lang = match[1].toLowerCase();
+    if (['fr', 'en', 'nl'].includes(lang)) return lang;
+  }
+  return 'en';
+}
+
+/**
+ * Construit l'URL de la page des demandes pour une langue donnée.
+ */
+function getApplicationsUrl(lang = 'en') {
+  return `https://visaonweb.diplomatie.be/${lang}/VisaApplication/IndexByUserId`;
+}
 
 /**
  * Détecte si l'URL est la page des demandes (là où les boutons RDV apparaissent).
@@ -195,15 +220,16 @@ function isVowintApplicationsPage(url) {
 }
 
 /**
- * Navigue vers la page des demandes VOWINT et attend que l'AngularJS soit prêt.
+ * Navigue vers la page des demandes VOWINT dans la bonne langue et attend que l'AngularJS soit prêt.
+ * @param {number} tabId
+ * @param {string} [lang] — langue détectée (fr/en/nl). Si omis, détecté depuis l'URL courante.
  */
-async function navigateToApplicationsPage(tabId) {
-  log('🗂 Navigation vers Mes Applications…');
-  setPhase('clicking', '🗂 Navigation vers Mes Applications…');
+async function navigateToApplicationsPage(tabId, lang) {
+  const targetUrl = getApplicationsUrl(lang || 'en');
+  log(`🗂 Navigation vers Mes Applications (${lang || 'en'}) → ${targetUrl}`);
+  setPhase('clicking', `🗂 Navigation vers Mes Applications (${lang || 'en'})…`);
   await new Promise(resolve => {
-    chrome.tabs.update(tabId, { url: VOWINT_APPLICATIONS_URL }, () => {
-      if (chrome.runtime.lastError) { resolve(); } else { resolve(); }
-    });
+    chrome.tabs.update(tabId, { url: targetUrl }, () => resolve());
   });
   const loaded = await waitForTabLoad(tabId, 25_000);
   if (!loaded) warn('⚠️ Navigation vers Mes Applications : timeout');
@@ -374,8 +400,9 @@ async function ensureVowintSession() {
   if (!isVowintLoginPage(currentUrl)) {
     // Session active — mais on est peut-être sur la mauvaise page
     if (!isVowintApplicationsPage(currentUrl)) {
-      log(`📍 Page actuelle : ${currentUrl || '?'} → navigation vers Mes Applications`);
-      await navigateToApplicationsPage(vowintTab.id);
+      const lang = detectVowintLang(currentUrl);
+      log(`📍 Page actuelle (${lang}) : ${currentUrl || '?'} → navigation vers Mes Applications`);
+      await navigateToApplicationsPage(vowintTab.id, lang);
       if (!state.running) return null;
     }
     return vowintTab; // session active, sur la bonne page
@@ -422,19 +449,21 @@ async function ensureVowintSession() {
   ok('✅ Connecté à VOWINT');
 
   // ── Étape 7 : naviguer vers Mes Applications si ce n'est pas déjà le cas ─
-  // Après le login VOWINT redirige souvent vers une page d'accueil générale.
-  // On force la navigation vers IndexByUserId pour avoir les boutons RDV.
+  // Après le login VOWINT redirige souvent vers une page d'accueil générale
+  // (ex. /en/ ou /fr/). On force la navigation vers IndexByUserId dans la
+  // langue détectée depuis l'URL de redirection.
   if (!isVowintApplicationsPage(postLoginUrl)) {
-    log(`📍 Post-login sur : ${postLoginUrl || '?'} → navigation vers Mes Applications`);
-    await navigateToApplicationsPage(vowintTab.id);
+    const lang = detectVowintLang(postLoginUrl);
+    log(`📍 Post-login (${lang}) sur : ${postLoginUrl || '?'} → navigation vers Mes Applications`);
+    await navigateToApplicationsPage(vowintTab.id, lang);
     if (!state.running) return null;
 
-    // Vérification finale : s'assurer qu'on a bien atterri sur la bonne page
+    // Vérification finale
     const finalUrl = await getTabUrl(vowintTab.id);
     if (!isVowintApplicationsPage(finalUrl)) {
       warn(`⚠️ Navigation Mes Applications a abouti sur : ${finalUrl || '?'} — on tente quand même`);
     } else {
-      ok('✅ Page Mes Applications chargée');
+      ok(`✅ Page Mes Applications (${lang}) chargée`);
     }
   } else {
     ok('✅ Déjà sur Mes Applications');
