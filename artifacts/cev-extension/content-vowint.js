@@ -19,6 +19,7 @@ async function humanClick(el) {
   const y = rect.top  + rect.height * (0.35 + Math.random() * 0.3);
 
   const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 };
+  // mouseover / mousemove / mousedown / mouseup : humanisation uniquement (pas de ng-click)
   el.dispatchEvent(new MouseEvent('mouseover',  opts));
   await sleep(40 + Math.random() * 80);
   el.dispatchEvent(new MouseEvent('mousemove',  opts));
@@ -27,8 +28,9 @@ async function humanClick(el) {
   await sleep(60 + Math.random() * 120);
   el.dispatchEvent(new MouseEvent('mouseup',    opts));
   await sleep(10 + Math.random() * 30);
-  el.dispatchEvent(new MouseEvent('click',      opts));
-  // Appel natif : garantit le déclenchement du ng-click AngularJS
+  // Un seul déclencheur de clic : el.click() natif → un seul ng-click AngularJS → un seul onglet CEV.
+  // IMPORTANT : ne pas combiner avec dispatchEvent('click') — AngularJS répondrait deux fois
+  // et ouvrirait deux onglets simultanément.
   el.click();
 }
 
