@@ -186,22 +186,37 @@ async function getTabUrl(tabId) {
 
 /**
  * Détecte la langue de l'interface VOWINT depuis une URL.
- * VOWINT utilise des URLs préfixées par la langue : /en/, /fr/, /nl/
- * Retourne 'en' par défaut si la langue n'est pas reconnue.
+ * Retourne la langue ('fr'|'en'|'nl') si détectable, ou null sinon.
  *
- * Exemples :
- *   https://visaonweb.diplomatie.be/en/VisaApplication/… → 'en'
- *   https://visaonweb.diplomatie.be/fr/VisaApplication/… → 'fr'
- *   https://visaonweb.diplomatie.be/nl/…                 → 'nl'
+ * Deux sources de langue dans les URLs VOWINT :
+ *
+ * 1. Préfixe dans le chemin (pages connectées) :
+ *    https://visaonweb.diplomatie.be/en/VisaApplication/… → 'en'
+ *    https://visaonweb.diplomatie.be/fr/VisaApplication/… → 'fr'
+ *    https://visaonweb.diplomatie.be/nl/…                 → 'nl'
+ *
+ * 2. Paramètre ReturnUrl sur la page de login :
+ *    …/Account/Login?ReturnUrl=%2Fen  → 'en'  (navigateur en anglais)
+ *    …/Account/Login?ReturnUrl=%2Ffr  → 'fr'
+ *    …/Account/Login                  → null  (langue choisie manuellement,
+ *                                              pas encodée dans l'URL)
  */
 function detectVowintLang(url) {
-  if (!url) return 'en';
-  const match = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
-  if (match) {
-    const lang = match[1].toLowerCase();
+  if (!url) return null;
+
+  // Cas 1 : préfixe de langue dans le chemin → /en/, /fr/, /nl/
+  const pathMatch = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
+  if (pathMatch) {
+    const lang = pathMatch[1].toLowerCase();
     if (['fr', 'en', 'nl'].includes(lang)) return lang;
   }
-  return 'en';
+
+  // Cas 2 : page de login avec ReturnUrl encodé → ?ReturnUrl=%2Fen ou %2Ffr
+  const returnMatch = url.match(/[?&]ReturnUrl=(?:%2F|\/)(en|fr|nl)/i);
+  if (returnMatch) return returnMatch[1].toLowerCase();
+
+  // Langue non détectable depuis l'URL (ex. /Account/Login sans ReturnUrl)
+  return null;
 }
 
 /**
@@ -228,26 +243,29 @@ function getStoredVowintLang() {
 }
 
 /**
- * Résout la langue VOWINT à utiliser pour naviguer :
- *   1. Tente de la détecter depuis l'URL courante.
- *   2. Si trouvée → sauvegarde + retourne.
- *   3. Sinon (page login, URL sans préfixe) → retourne la dernière langue connue (storage).
+ * Résout la langue VOWINT à utiliser pour naviguer.
  *
- * Permet d'éviter une re-détection à chaque cycle et de naviguer correctement
- * même depuis une page de login qui ne contient pas de préfixe de langue.
+ * Priorité :
+ *   1. Détection depuis l'URL (chemin /en/ /fr/ /nl/ OU ReturnUrl=%2Fen…)
+ *      → si trouvée, sauvegarde et retourne.
+ *   2. Langue stockée dans chrome.storage.local (mémorisée lors d'un cycle précédent).
+ *   3. Fallback ultime : 'en'.
+ *
+ * Cas couverts :
+ *   /Account/Login?ReturnUrl=%2Fen → 'en' (détecté via ReturnUrl)
+ *   /Account/Login?ReturnUrl=%2Ffr → 'fr'
+ *   /Account/Login (sans ReturnUrl) → langue choisie manuellement → stockage
+ *   /en/VisaApplication/…          → 'en' (détecté via chemin)
  */
 async function resolveVowintLang(url) {
-  const match = url && url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
-  if (match) {
-    const lang = match[1].toLowerCase();
-    if (['fr', 'en', 'nl'].includes(lang)) {
-      saveVowintLang(lang);   // mémorise pour les prochains cycles
-      return lang;
-    }
+  const detected = detectVowintLang(url);
+  if (detected) {
+    saveVowintLang(detected);
+    return detected;
   }
-  // URL sans préfixe (page login, page racine…) → utilise la langue stockée
+  // Langue non détectable (ex. /Account/Login sans ReturnUrl) → langue mémorisée
   const stored = await getStoredVowintLang();
-  log(`🌐 Langue VOWINT non détectable depuis l'URL — utilisation langue stockée : ${stored}`);
+  log(`🌐 Langue non lisible dans l'URL — langue mémorisée : ${stored}`);
   return stored;
 }
 
