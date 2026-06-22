@@ -119,6 +119,8 @@ function setPhase(phase, logMsg) {
     addLog(level, logMsg);
   }
   broadcastState();
+  // Rafraîchir immédiatement la notification statut sur tout changement significatif
+  updateStatusNotification();
 }
 
 // ─── Rate-limit — pause 60 min ancrée sur premier hit ────────────────────────
@@ -258,9 +260,149 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'sw_keepalive' && state.running) {
     chrome.runtime.getPlatformInfo(() => {});
   }
+  if (alarm.name === 'cev_status') {
+    updateStatusNotification();
+  }
 });
 
-// ─── Notifications ────────────────────────────────────────────────────────────
+// ─── Notification statut persistante (barre de notifications / écran verrouillé) ──
+
+const STATUS_NOTIF_ID = 'cev_live_status';
+
+/**
+ * Formate un nombre de secondes en "4m32s" ou "58m00s".
+ */
+function fmtMs(ms) {
+  if (ms <= 0) return '0s';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+
+/**
+ * Construit le contenu de la notification statut selon l'état courant.
+ * Retourne { title, message, iconUrl }.
+ */
+function buildStatusContent() {
+  const phase = state.phase || 'idle';
+
+  // ── Slot trouvé — priorité absolue ────────────────────────────────────────
+  if (phase === 'slot_found' || state.alarmActive) {
+    const s = state.slotFound;
+    return {
+      title:   '🚨 CRÉNEAU CEV DISPONIBLE !',
+      message: s
+        ? `📅 ${s.date || '?'}${s.time ? ' à ' + s.time : ''}${s.count > 1 ? ' · ' + s.count + ' créneaux' : ''}\nOuvre CEV et réserve maintenant !`
+        : 'Ouvre le portail CEV immédiatement !',
+      iconUrl: 'icons/icon128.png',
+    };
+  }
+
+  // ── Rate-limit ─────────────────────────────────────────────────────────────
+  if (phase === 'rate_limited' && state.rateLimitStartTs) {
+    const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
+    return {
+      title:   '🚫 CEV Slot Hunter — Pause rate-limit',
+      message: `⏳ Reprise dans ${fmtMs(remaining)}\n` +
+               `🔍 ${state.attempts} scans effectués`,
+      iconUrl: 'icons/icon48.png',
+    };
+  }
+
+  // ── Extension arrêtée ──────────────────────────────────────────────────────
+  if (!state.running || phase === 'idle') {
+    return {
+      title:   '⏸ CEV Slot Hunter — Inactif',
+      message: `${state.attempts > 0 ? `🔍 ${state.attempts} scans · ` : ''}Appuie ▶ pour relancer`,
+      iconUrl: 'icons/icon48.png',
+    };
+  }
+
+  // ── Erreur serveur ─────────────────────────────────────────────────────────
+  if (phase === 'server_error') {
+    const wait = state.nextRetryIn ? `Reprise dans ${fmtMs(state.nextRetryIn * 1000)}` : 'Reprise bientôt…';
+    return {
+      title:   '⚠️ CEV Slot Hunter — Erreur serveur',
+      message: `${wait}\n🔍 ${state.attempts} scans · 🔒 ${state.captchasSolved} captchas`,
+      iconUrl: 'icons/icon48.png',
+    };
+  }
+
+  // ── En cours de scan ───────────────────────────────────────────────────────
+  const phaseLabel = {
+    clicking:        '🖱 Clic "Prendre rendez-vous"…',
+    captcha_solving: '🔒 Résolution captcha…',
+    waiting_result:  '🔍 Scan des disponibilités…',
+    retry:           state.nextRetryIn
+                       ? `⏱ Prochain scan dans ${fmtMs(state.nextRetryIn * 1000)}`
+                       : '⏱ Pause entre scans…',
+  }[phase] || `🔄 ${phase}`;
+
+  const now   = new Date();
+  const hhmm  = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  return {
+    title:   '🎯 CEV Slot Hunter — En cours',
+    message: `${phaseLabel}\n` +
+             `🔍 ${state.attempts} scans · 🔒 ${state.captchasSolved} captchas · ${hhmm}`,
+    iconUrl: 'icons/icon48.png',
+  };
+}
+
+/**
+ * Crée ou met à jour la notification statut.
+ * Appelée toutes les 30 secondes via l'alarme 'cev_status'
+ * et à chaque changement d'état significatif.
+ */
+function updateStatusNotification() {
+  if (!state.running && state.phase === 'idle' && state.attempts === 0) {
+    chrome.notifications.clear(STATUS_NOTIF_ID, () => {});
+    return;
+  }
+
+  const { title, message, iconUrl } = buildStatusContent();
+
+  // Tenter de mettre à jour d'abord, créer si elle n'existe pas
+  chrome.notifications.update(STATUS_NOTIF_ID, {
+    type: 'basic',
+    iconUrl,
+    title,
+    message,
+    priority: 1,
+  }, (wasUpdated) => {
+    if (!wasUpdated) {
+      chrome.notifications.create(STATUS_NOTIF_ID, {
+        type: 'basic',
+        iconUrl,
+        title,
+        message,
+        priority: 1,
+        // requireInteraction: false → la notification reste dans la barre
+        // sans bloquer l'écran, mais visible sur l'écran de verrouillage
+        isClickable: true,
+      });
+    }
+  });
+}
+
+/**
+ * Démarre l'alarme de mise à jour de la notification statut (toutes les 30s).
+ */
+function startStatusAlarm() {
+  chrome.alarms.create('cev_status', { periodInMinutes: 0.5 }); // 30 secondes
+  updateStatusNotification(); // mise à jour immédiate
+}
+
+/**
+ * Arrête l'alarme et efface la notification statut.
+ */
+function stopStatusAlarm() {
+  chrome.alarms.clear('cev_status');
+  chrome.notifications.clear(STATUS_NOTIF_ID, () => {});
+}
+
+// ─── Notifications ponctuelles ────────────────────────────────────────────────
 
 function notify(title, message) {
   chrome.notifications.create(`notif_${Date.now()}`, {
@@ -755,6 +897,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         state.phase      = 'idle';
         state.alarmActive = false;
         state.slotFound  = null;
+        startStatusAlarm();
         runLoop();
       }
       broadcastState();
@@ -771,6 +914,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         state.activeCevTabId = null;
       }
       stopAlarm();
+      stopStatusAlarm();
       broadcastState();
       sendResponse({ ok: true });
       break;

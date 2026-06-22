@@ -41,3 +41,9 @@ id = "uFraOVQbhlfMvjBIyyTOw"
 uri = "file://cev-slot-hunter-v3.1.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.1 — Rate-limit intelligent"
+
+[[outputs]]
+id = "lgeoiNQBVBASm_W-gvDPA"
+uri = "file://cev-slot-hunter-v3.2.zip"
+type = "unspecified"
+title = "CEV Slot Hunter v3.2 — Notification live lock screen"
