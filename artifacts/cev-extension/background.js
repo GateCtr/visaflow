@@ -184,6 +184,33 @@ async function getTabUrl(tabId) {
   });
 }
 
+const VOWINT_APPLICATIONS_URL = 'https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId';
+
+/**
+ * Détecte si l'URL est la page des demandes (là où les boutons RDV apparaissent).
+ */
+function isVowintApplicationsPage(url) {
+  if (!url) return false;
+  return url.toLowerCase().includes('/visaapplication/indexbyuserid');
+}
+
+/**
+ * Navigue vers la page des demandes VOWINT et attend que l'AngularJS soit prêt.
+ */
+async function navigateToApplicationsPage(tabId) {
+  log('🗂 Navigation vers Mes Applications…');
+  setPhase('clicking', '🗂 Navigation vers Mes Applications…');
+  await new Promise(resolve => {
+    chrome.tabs.update(tabId, { url: VOWINT_APPLICATIONS_URL }, () => {
+      if (chrome.runtime.lastError) { resolve(); } else { resolve(); }
+    });
+  });
+  const loaded = await waitForTabLoad(tabId, 25_000);
+  if (!loaded) warn('⚠️ Navigation vers Mes Applications : timeout');
+  // Attendre que AngularJS rende le tableau des demandes
+  await sleep(randDelay(1_800, 3_200));
+}
+
 /**
  * Détecte si l'URL VOWINT est une page de login (session expirée).
  * Indicateurs fiables :
@@ -341,17 +368,24 @@ async function ensureVowintSession() {
 
   if (!state.running) return null;
 
-  // ── Étape 3 : vérifier l'état de la session ──────────────────────────────
+  // ── Étape 3 : détecter l'état de la page actuelle ────────────────────────
   const currentUrl = await getTabUrl(vowintTab.id);
+
   if (!isVowintLoginPage(currentUrl)) {
-    return vowintTab; // session active — rien à faire
+    // Session active — mais on est peut-être sur la mauvaise page
+    if (!isVowintApplicationsPage(currentUrl)) {
+      log(`📍 Page actuelle : ${currentUrl || '?'} → navigation vers Mes Applications`);
+      await navigateToApplicationsPage(vowintTab.id);
+      if (!state.running) return null;
+    }
+    return vowintTab; // session active, sur la bonne page
   }
 
-  // ── Étape 4 : session expirée → login automatique ────────────────────────
+  // ── Étape 4 : page de login → auto-login ─────────────────────────────────
   const creds = await getStoredCredentials();
   if (!creds.email || !creds.password) {
     error('🔓 Session expirée — configure email + mot de passe VOWINT dans l\'extension');
-    notify('🔓 Session VOWINT expirée', 'Entre tes identifiants VOWINT dans le popup de l\'extension.');
+    notify('🔓 Session VOWINT expirée', 'Entre tes identifiants VOWINT dans le popup.');
     state.running = false;
     state.phase = 'idle';
     broadcastState();
@@ -372,11 +406,11 @@ async function ensureVowintSession() {
   // ── Étape 5 : attendre la redirection post-login ─────────────────────────
   setPhase('clicking', '⏳ Redirection après connexion…');
   await waitForTabLoad(vowintTab.id, 25_000);
-  await sleep(randDelay(2_000, 3_500)); // initialisation AngularJS
+  await sleep(randDelay(1_500, 2_500)); // laisser VOWINT finir son init
 
   // ── Étape 6 : vérifier que la session est bien établie ───────────────────
-  const newUrl = await getTabUrl(vowintTab.id);
-  if (isVowintLoginPage(newUrl)) {
+  const postLoginUrl = await getTabUrl(vowintTab.id);
+  if (isVowintLoginPage(postLoginUrl)) {
     error('❌ Login VOWINT échoué — identifiants incorrects ?');
     notify('❌ Login VOWINT échoué', 'Vérifie email + mot de passe dans le popup.');
     state.running = false;
@@ -385,7 +419,27 @@ async function ensureVowintSession() {
     return null;
   }
 
-  ok(`✅ Connecté à VOWINT — Mes demandes chargées`);
+  ok('✅ Connecté à VOWINT');
+
+  // ── Étape 7 : naviguer vers Mes Applications si ce n'est pas déjà le cas ─
+  // Après le login VOWINT redirige souvent vers une page d'accueil générale.
+  // On force la navigation vers IndexByUserId pour avoir les boutons RDV.
+  if (!isVowintApplicationsPage(postLoginUrl)) {
+    log(`📍 Post-login sur : ${postLoginUrl || '?'} → navigation vers Mes Applications`);
+    await navigateToApplicationsPage(vowintTab.id);
+    if (!state.running) return null;
+
+    // Vérification finale : s'assurer qu'on a bien atterri sur la bonne page
+    const finalUrl = await getTabUrl(vowintTab.id);
+    if (!isVowintApplicationsPage(finalUrl)) {
+      warn(`⚠️ Navigation Mes Applications a abouti sur : ${finalUrl || '?'} — on tente quand même`);
+    } else {
+      ok('✅ Page Mes Applications chargée');
+    }
+  } else {
+    ok('✅ Déjà sur Mes Applications');
+  }
+
   return await getVowintTab() || vowintTab;
 }
 
