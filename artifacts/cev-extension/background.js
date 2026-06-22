@@ -792,7 +792,8 @@ async function runLoop() {
         }
       );
       // Timeout si le content script ne répond pas
-      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (20s)' }), 20_000);
+      // 35s = 12s attente Angular + humanPageScan + délai humain + XHR GetEAppointmentUrl
+      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (35s)' }), 35_000);
     });
 
     if (!fetchResp?.ok || !fetchResp?.cevUrl) {

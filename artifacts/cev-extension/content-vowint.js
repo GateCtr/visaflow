@@ -202,10 +202,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         // Comportement humain avant d'agir
         await humanPageScan();
 
-        // Extraire l'appId depuis la page
-        const appIds = extractAppIds();
+        // Attendre que AngularJS ait rendu la liste des dossiers.
+        // La page /VisaApplication/IndexByUserId passe à status="complete" dès le HTML
+        // initial, mais les UUIDs (GetEAppointmentUrl / ng-click) sont injectés par XHR
+        // AngularJS 200-3000ms plus tard. Sans cette attente, extractAppIds() trouve 0 id.
+        let appIds = extractAppIds();
         if (!appIds.length) {
-          sendResponse({ ok: false, error: 'Aucun appId trouvé — navigue sur la page "Mes applications" VOWINT' });
+          chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '⏳ Mes Applications — attente rendu AngularJS (jusqu\'à 12s)…' });
+          let waited = 0;
+          while (!appIds.length && waited < 12_000) {
+            await sleep(400);
+            waited += 400;
+            appIds = extractAppIds();
+          }
+        }
+
+        if (!appIds.length) {
+          sendResponse({ ok: false, error: 'Aucun appId trouvé après 12s — vérifie que la page "Mes applications" VOWINT est chargée et que des dossiers sont visibles' });
           return;
         }
 
