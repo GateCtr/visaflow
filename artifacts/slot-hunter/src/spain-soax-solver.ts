@@ -27,7 +27,7 @@ import {
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
-import { solveWithLocalPlaywright } from "./local-playwright-solver.js";
+import { solveWithLocalPlaywright, solveSpainWidgetSession } from "./local-playwright-solver.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -433,12 +433,43 @@ export async function ensureSpainCfSession(
 
   // 2. Tenter de résoudre via Local Playwright Stealth (si activé dans l'environnement)
   if (process.env.USE_LOCAL_STEALTH === "true") {
-    console.log("[spain-soax] 🔍 Mode local stealth activé. Tentative de résolution gratuite...");
+    console.log("[spain-soax] 🔍 Mode local stealth activé — solveSpainWidgetSession (JSD Oneshot natif)…");
+
+    // Générer le proxy SOAX sticky si dispo — DOIT être la même IP que les appels impit
+    const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+    const soaxProxyForPlaywright = soaxBaseUrl
+      ? makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf")
+      : undefined;
+
+    const widgetCookies = await solveSpainWidgetSession(targetUrl, soaxProxyForPlaywright);
+    if (widgetCookies) {
+      const session: SpainCfSession = {
+        cfClearance: widgetCookies.cfClearance,
+        cfDomain: ".citaconsular.es",
+        soaxProxyUrl: soaxProxyForPlaywright ?? "",
+        userAgent: widgetCookies.userAgent,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
+        allCookies: widgetCookies.allCookies,
+        extraHeaders: {},
+      };
+      _activeCfSession = session;
+      syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
+      console.log(
+        `[spain-soax] 🎉 Session Playwright établie ! ` +
+        `PHPSESSID=${session.allCookies.find(c => c.name === "PHPSESSID") ? "✅" : "❌"} | ` +
+        `Valide ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`
+      );
+      return session;
+    }
+
+    console.warn("[spain-soax] ⚠️ solveSpainWidgetSession échoué — fallback CapSolver…");
+    // Fallback : ancien solver simple (obtient cf_clearance #1 seulement, sans JSD Oneshot)
     const localSolved = await solveWithLocalPlaywright(targetUrl);
     if (localSolved) {
       return ensureSpainCfSession(targetUrl);
     }
-    console.warn("[spain-soax] ⚠️ Échec de la résolution locale stealth. Fallback sur la méthode cloud/payante...");
+    console.warn("[spain-soax] ⚠️ Échec fallback local stealth aussi. Tentative CapSolver cloud…");
   }
 
   // Tenter restauration depuis Redis (survit aux redéploiements)

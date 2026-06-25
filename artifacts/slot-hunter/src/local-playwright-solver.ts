@@ -2,6 +2,24 @@ import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { cookieManager } from "./cookie-manager.js";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface PlaywrightProxy {
+  server: string;
+  username?: string;
+  password?: string;
+}
+
+/** Cookies complets extraits après que JSD Oneshot ait tourné dans le vrai navigateur. */
+export interface SpainWidgetCookies {
+  /** cf_clearance post-JSD-Oneshot (le "#2" de Burp). */
+  cfClearance: string;
+  /** Tous les cookies du contexte navigateur (cf_clearance, PHPSESSID, _ga…). */
+  allCookies: Array<{ name: string; value: string }>;
+  userAgent: string;
+  capturedAt: number;
+}
+
 // Apply stealth plugin to Playwright Extra
 const chromiumStealth = chromium as any;
 chromiumStealth.use((StealthPlugin as any)());
@@ -139,5 +157,182 @@ export async function solveWithLocalPlaywright(portalUrl: string): Promise<boole
   } finally {
     await browser.close();
     console.log("[PLAYWRIGHT-STEALTH] 🔋 Instance fermée proprement.");
+  }
+}
+
+// ─── solveSpainWidgetSession ──────────────────────────────────────────────────
+
+/**
+ * Établit une session citaconsular.es complète via un vrai navigateur Playwright.
+ *
+ * POURQUOI : Le corps du JSD Oneshot (body envoyé à /cdn-cgi/challenge-platform/.../jsd/oneshot/...)
+ * est calculé par le JS de Cloudflare dans le navigateur (Proof-of-Work + fingerprint télémétrique).
+ * Il est impossible à reproduire en HTTP-only sans exécuter ce JS.
+ * Cette fonction laisse le navigateur charger le widget → CF JS tourne → JSD Oneshot se déclenche
+ * automatiquement → cf_clearance #2 est capturé depuis la réponse Set-Cookie.
+ *
+ * ARCHITECTURE IP :
+ * Le proxy SOAX fourni doit être LE MÊME sticky-session que celui qu'impit utilisera ensuite
+ * pour les appels JSONP. cf_clearance est lié à l'IP du solve — une IP différente = 403.
+ *
+ * @param widgetUrl   - URL du widget citaconsular (ex: /es/hosteds/widgetdefault/<pk>/)
+ * @param soaxProxyUrl - URL proxy SOAX sticky (format http://user:pass@host:port).
+ *                       Si absent → connexion directe (IP Replit, utile pour tests locaux).
+ * @returns SpainWidgetCookies avec cf_clearance #2, PHPSESSID et tous les cookies du contexte.
+ */
+export async function solveSpainWidgetSession(
+  widgetUrl: string,
+  soaxProxyUrl?: string,
+): Promise<SpainWidgetCookies | null> {
+  const UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
+
+  // ─── Parse proxy SOAX ────────────────────────────────────────────────────
+  let proxyConfig: PlaywrightProxy | undefined;
+  if (soaxProxyUrl) {
+    try {
+      const parsed = new URL(soaxProxyUrl);
+      proxyConfig = {
+        server: `http://${parsed.hostname}:${parsed.port || "5000"}`,
+        username: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+      };
+      console.log(`[PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: ${parsed.hostname}:${parsed.port}`);
+    } catch {
+      console.warn("[PLAYWRIGHT-WIDGET] ⚠️ Impossible de parser l'URL proxy — connexion directe");
+    }
+  }
+
+  const browser = await chromiumStealth.launch({
+    headless: false,
+    args: [
+      "--no-sandbox",
+      "--disable-blink-features=AutomationControlled",
+      "--window-position=-2000,-2000",
+      "--window-size=1280,720",
+      "--no-first-run",
+      "--no-default-browser-check",
+    ],
+  });
+
+  const contextOptions: Record<string, unknown> = {
+    userAgent: UA,
+    viewport: { width: 1280, height: 720 },
+    locale: "fr-FR",
+    timezoneId: "Europe/Paris",
+  };
+  if (proxyConfig) contextOptions["proxy"] = proxyConfig;
+
+  const context = await browser.newContext(contextOptions);
+
+  try {
+    const page = await context.newPage();
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    });
+
+    // ─── Listener : capture cf_clearance #2 depuis réponse JSD Oneshot ───
+    // CF's JS déclenche automatiquement POST /cdn-cgi/challenge-platform/.../jsd/oneshot/...
+    // La réponse contient Set-Cookie: cf_clearance=<nouveau_token>
+    let postOneshotCfClearance: string | null = null;
+    page.on("response", async (response: any) => {
+      try {
+        const url: string = response.url();
+        if (
+          url.includes("/cdn-cgi/challenge-platform/") &&
+          url.includes("/jsd/oneshot/")
+        ) {
+          const headers: Record<string, string> = response.headers();
+          const setCookie: string = headers["set-cookie"] ?? "";
+          const match = /cf_clearance=([^;]+)/.exec(setCookie);
+          if (match) {
+            postOneshotCfClearance = match[1]!;
+            console.log(
+              `[PLAYWRIGHT-WIDGET] ✅ JSD Oneshot déclenché — cf_clearance #2: ${postOneshotCfClearance.slice(0, 20)}…`
+            );
+          } else {
+            console.log(`[PLAYWRIGHT-WIDGET] ℹ️ JSD Oneshot détecté (status ${response.status()}) — pas de Set-Cookie cf_clearance`);
+          }
+        }
+      } catch {
+        // Ignore erreurs listener (réponses interrompues)
+      }
+    });
+
+    // ─── Navigation vers le widget ────────────────────────────────────────
+    console.log(`[PLAYWRIGHT-WIDGET] 🌐 Navigation vers ${widgetUrl}…`);
+    await page.goto(widgetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+
+    // ─── Phase 1 : Attente CF challenge initial (Turnstile) ───────────────
+    console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente résolution CF Turnstile (~8s)…");
+    await new Promise<void>((r) => setTimeout(r, 8_000));
+
+    let cookies = await context.cookies();
+    let cfClearance = cookies.find((c: any) => c.name === "cf_clearance");
+
+    if (!cfClearance) {
+      console.log("[PLAYWRIGHT-WIDGET] 🔘 cf_clearance absent — tentative clic Turnstile…");
+      const clicked = await forceClickTurnstile(page);
+      await new Promise<void>((r) => setTimeout(r, clicked ? 10_000 : 12_000));
+      cookies = await context.cookies();
+      cfClearance = cookies.find((c: any) => c.name === "cf_clearance");
+    }
+
+    if (!cfClearance) {
+      throw new Error("cf_clearance #1 non obtenu — CF Turnstile non résolu");
+    }
+    console.log(`[PLAYWRIGHT-WIDGET] 🍪 cf_clearance #1: ${cfClearance.value.slice(0, 20)}…`);
+
+    // ─── Phase 2 : Attente JSD Oneshot (JS CF tournant dans le navigateur) ──
+    // Le widget HTML est chargé, CF's JS s'exécute et déclenche JSD Oneshot ~3-8s après.
+    // On attend max 20s pour la capture via le listener response.
+    console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot (exécution JS CF dans le navigateur)…");
+    const ONESHOT_TIMEOUT_MS = 20_000;
+    const tWait = Date.now();
+    while (!postOneshotCfClearance && Date.now() - tWait < ONESHOT_TIMEOUT_MS) {
+      await new Promise<void>((r) => setTimeout(r, 500));
+    }
+
+    if (!postOneshotCfClearance) {
+      console.warn(
+        "[PLAYWRIGHT-WIDGET] ⚠️ JSD Oneshot non détecté dans le délai imparti — " +
+        "on utilise cf_clearance #1 comme fallback (acceptable : #1 est valide ~2h)"
+      );
+    }
+
+    // ─── Phase 3 : Extraction cookies finaux ─────────────────────────────
+    const finalBrowserCookies = await context.cookies();
+    const allCookies = finalBrowserCookies.map((c: any) => ({
+      name: c.name as string,
+      value: c.value as string,
+    }));
+
+    // cf_clearance final = #2 si JSD Oneshot capturé, sinon #1
+    const finalCfClearance =
+      postOneshotCfClearance ??
+      finalBrowserCookies.find((c: any) => c.name === "cf_clearance")?.value ??
+      cfClearance.value;
+
+    const phpSessIdCookie = finalBrowserCookies.find((c: any) => c.name === "PHPSESSID");
+    console.log(
+      `[PLAYWRIGHT-WIDGET] 🎯 Session établie | ` +
+      `cf_clearance=${postOneshotCfClearance ? "#2 (post-Oneshot)" : "#1 (fallback)"} | ` +
+      `PHPSESSID=${phpSessIdCookie ? `✅ ${phpSessIdCookie.value.slice(0, 10)}…` : "❌ absent"} | ` +
+      `Cookies total: ${allCookies.length}`
+    );
+
+    return {
+      cfClearance: finalCfClearance,
+      allCookies,
+      userAgent: UA,
+      capturedAt: Date.now(),
+    };
+  } catch (err: any) {
+    console.error(`[PLAYWRIGHT-WIDGET] ❌ Échec solveSpainWidgetSession: ${err.message}`);
+    return null;
+  } finally {
+    await browser.close();
+    console.log("[PLAYWRIGHT-WIDGET] 🔋 Instance fermée.");
   }
 }

@@ -709,8 +709,17 @@ async function scanViaMainEndpoint(
   // Current cf_clearance (may be updated after JSD oneshot)
   let activeCfClearance = session.cfClearance;
 
-  // PHPSESSID (captured from GET entry response Set-Cookie)
-  let phpSessId = "";
+  // PHPSESSID : pré-initialisé depuis session.allCookies si la session a été établie
+  // via Playwright (solveSpainWidgetSession) — dans ce cas PHPSESSID est déjà valide
+  // côté serveur et on n'a pas besoin d'attendre le Set-Cookie du GET entry.
+  // Si le GET entry retourne un nouveau PHPSESSID, il sera mis à jour ci-dessous.
+  let phpSessId =
+    session.allCookies.find((c) => c.name === "PHPSESSID")?.value ?? "";
+  if (phpSessId) {
+    console.log(
+      `[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): ${phpSessId.slice(0, 12)}…`
+    );
+  }
 
   /**
    * Builds the full Cookie header string matching Burp order:
