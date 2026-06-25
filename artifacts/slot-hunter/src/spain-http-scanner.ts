@@ -125,11 +125,14 @@ function buildRumBody(pageUrl: string, rayId: string, transferSize: number): str
  * Fire CF RUM beacon en fire-and-forget.
  * Doit être appelé après chaque chargement de page/ressource citaconsular,
  * avec un délai optionnel qui simule le temps de traitement JS.
+ *
+ * @param cookieStr - Cookie header complet (Burp: _ga; _ga_F3; PHPSESSID; cf_clearance).
+ *                    Si absent → spainCfFetch construit un cookie minimal (cf_clearance uniquement).
  */
 function fireRumBeacon(
   session: SpainCfSession,
   pageUrl: string,
-  opts: { delayMs?: number; rayId?: string; transferSize?: number } = {}
+  opts: { delayMs?: number; rayId?: string; transferSize?: number; cookieStr?: string } = {}
 ): void {
   void (async () => {
     if (opts.delayMs && opts.delayMs > 0) {
@@ -137,16 +140,20 @@ function fireRumBeacon(
     }
     const rayId = opts.rayId ?? Math.random().toString(36).slice(2, 18);
     const body = buildRumBody(pageUrl, rayId, opts.transferSize ?? 3000);
+    const rumHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Referer": pageUrl,
+      "Origin": "https://www.citaconsular.es",
+      "Accept-Language": "fr-FR,fr;q=0.9",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
+      "Priority": "u=1, i",
+    };
+    if (opts.cookieStr) rumHeaders["Cookie"] = opts.cookieStr;
     await spainCfFetch("https://www.citaconsular.es/cdn-cgi/rum?", session, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Referer": pageUrl,
-        "Origin": "https://www.citaconsular.es",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-      },
+      headers: rumHeaders,
       body,
     }).catch(() => null); // Silently ignore errors — beacon best-effort
   })();
@@ -892,7 +899,7 @@ async function scanViaMainEndpoint(
   }
 
   // ─── Step 4: RUM beacon #21 (Burp: ~5s après POST widget row 15) ─────
-  fireRumBeacon(session, widgetReferer, { delayMs: 4800 + Math.floor(Math.random() * 400), transferSize: 1226 });
+  fireRumBeacon(session, widgetReferer, { delayMs: 4800 + Math.floor(Math.random() * 400), transferSize: 1226, cookieStr: buildCookieStr() });
 
   // ─── Step 5: Second widget POST (Burp row 23) ──────────────────────
   // Après le JSD oneshot, le navigateur refait un POST widget avec le nouveau cf_clearance.
@@ -934,7 +941,7 @@ async function scanViaMainEndpoint(
   if (postRes2) await postRes2.text().catch(() => null);
 
   // ─── Step 6: RUM beacon #24 (Burp: ~402ms après second POST widget) ──
-  fireRumBeacon(session, widgetReferer, { delayMs: 380 + Math.floor(Math.random() * 50), transferSize: 1335 });
+  fireRumBeacon(session, widgetReferer, { delayMs: 380 + Math.floor(Math.random() * 50), transferSize: 1335, cookieStr: buildCookieStr() });
 
   // ─── Step 7: JSONP calls (Burp rows 26, 103, 107) ────────────────────
   // Le vrai navigateur fire main/ puis getwidgetconfigurations/ + getservices/ ~3s plus tard
@@ -1007,10 +1014,11 @@ async function scanViaMainEndpoint(
 
   // RUM #28 — beacon critique : 3ms après GET main/ (Burp: row 26 → 28)
   // C'est le beacon le plus fort : CF sait que le JS a traité la réponse main/ en temps réel
-  fireRumBeacon(session, referer, { delayMs: 3 + Math.floor(Math.random() * 8), transferSize: 124917 });
+  fireRumBeacon(session, referer, { delayMs: 3 + Math.floor(Math.random() * 8), transferSize: 124917, cookieStr: buildCookieStr() });
 
-  // Fire companions ~3s après main/ + RUM #109 après les companions — fire-and-forget
+  // Fire companions ~3s après main/ + RUM #111 après les companions — fire-and-forget
   void (async () => {
+    const cookieForCompanions = buildCookieStr();
     await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
     const tNow = Date.now();
     const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
@@ -1020,10 +1028,10 @@ async function scanViaMainEndpoint(
       spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
     ]);
     // RUM #111 — beacon après getwidgetconfigurations/ (~578ms dans Burp)
-    fireRumBeacon(session, referer, { delayMs: 500 + Math.floor(Math.random() * 150), transferSize: 1170 });
+    fireRumBeacon(session, referer, { delayMs: 500 + Math.floor(Math.random() * 150), transferSize: 1170, cookieStr: cookieForCompanions });
     // RUM final — beacon de navigation/unload (~3.1s après #111 dans Burp)
     // Déclenché par le widget qui finalise son chargement complet (DOMInteractive → fully loaded)
-    fireRumBeacon(session, referer, { delayMs: 3000 + Math.floor(Math.random() * 200), transferSize: 680 });
+    fireRumBeacon(session, referer, { delayMs: 3000 + Math.floor(Math.random() * 200), transferSize: 680, cookieStr: cookieForCompanions });
   })();
 
   if (!mainRes || mainRes.status !== 200) {
