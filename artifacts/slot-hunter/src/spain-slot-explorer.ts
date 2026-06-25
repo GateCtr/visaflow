@@ -66,8 +66,9 @@ async function callJsonp(
     headers: {
       "Referer": portalUrl,
       "X-Requested-With": "XMLHttpRequest",
-      "Sec-Fetch-Dest": "script",
-      "Sec-Fetch-Mode": "no-cors",
+      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-origin",
     },
   });

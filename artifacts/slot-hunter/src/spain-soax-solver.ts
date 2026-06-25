@@ -580,6 +580,9 @@ export async function spainCfFetch(
     }
   }
 
+  // Extract Chrome major version from UA
+  const chromeMajor = session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136";
+
   // Base headers, can be overridden by session.extraHeaders and fetchOptions.headers
   const baseHeaders: Record<string, string> = {
     "User-Agent": session.userAgent,
@@ -587,9 +590,19 @@ export async function spainCfFetch(
     "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
     "Accept-Encoding": "gzip, deflate, br, zstd",
     "Cookie": cookieParts.join("; "),
-    "Sec-CH-UA": `"Chromium";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}", "Not.A/Brand";v="99", "Google Chrome";v="${session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136"}"`,
-    "Sec-CH-UA-Mobile": "?0",
-    "Sec-CH-UA-Platform": '"Windows"',
+    // Sec-Ch-Ua: ordre réel Chrome = "Not/A)Brand" first, then Chromium, then Google Chrome
+    // La chaîne "Not(A;Brand" change de format à chaque version — Chrome 136 utilise "Not/A)Brand"
+    "Sec-Ch-Ua": `"Not/A)Brand";v="8", "Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}"`,
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    // High-entropy hints requis par Cloudflare via Accept-CH sur citaconsular.es
+    // Chrome envoie les headers mais avec valeurs vides (privacy budget)
+    "Sec-Ch-Ua-Platform-Version": "",
+    "Sec-Ch-Ua-Full-Version": "",
+    "Sec-Ch-Ua-Full-Version-List": "",
+    "Sec-Ch-Ua-Arch": "",
+    "Sec-Ch-Ua-Bitness": "",
+    "Sec-Ch-Ua-Model": "",
   };
 
   const finalHeaders = {

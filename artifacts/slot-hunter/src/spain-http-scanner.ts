@@ -208,11 +208,11 @@ async function callBookititJsonp(
   const res = await spainCfFetch(url, session, {
     headers: {
       Referer: referer,
-      Origin: new URL(referer).origin,
       "X-Requested-With": "XMLHttpRequest",
-      "Sec-Fetch-Dest": "script",
-      "Sec-Fetch-Mode": "no-cors",
-      "Sec-Fetch-Site": "cross-site",
+      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
     },
   });
 
@@ -701,13 +701,11 @@ async function scanViaMainEndpoint(
   const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${params}`;
   const mainRes = await spainCfFetch(mainUrl, session, {
     headers: {
-      "Accept": "*/*",
-      "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Accept-Encoding": "gzip, deflate, br, zstd",
       "Referer": portalUrl.replace(/\/?$/, "/"),
       "X-Requested-With": "XMLHttpRequest",
-      "Sec-Fetch-Dest": "script",
-      "Sec-Fetch-Mode": "no-cors",
+      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-origin",
     },
   });
