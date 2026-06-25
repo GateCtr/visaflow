@@ -682,33 +682,66 @@ async function scanViaMainEndpoint(
     console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
   }
 
-  // Step 3: Call /onlinebookings/main/ — the critical widget init call
-  const cbName = `jQuery21104${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-  const params = new URLSearchParams({
+  // Step 3: Appels JSONP simultanés — reproduit le comportement jQuery réel
+  // Le vrai navigateur fire main/ + getwidgetconfigurations/ + getservices/ en < 10ms (Promise.all)
+  // même callback jQuery, _ incrémenté de 1ms (comportement loadermaec.js confirmé par Burp)
+  const tWidget = Date.now();
+  const cbName = `jQuery21104${tWidget}_${Math.floor(Math.random() * 1e9)}`;
+
+  // Extract publickey from portalUrl (override le defaut)
+  const pkMatch = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/);
+  const publickey = pkMatch?.[1] ?? "25028fcd7126544630b8da0c6e60722b5";
+  const referer = portalUrl.replace(/\/?$/, "/");
+  const srvsrc = "https://www.citaconsular.es";
+  const baseBookititUrl = "https://www.citaconsular.es/onlinebookings/";
+
+  const jsonpHeaders = {
+    "Referer": referer,
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+  };
+
+  const mainParams = new URLSearchParams({
+    callback: cbName,
     type: "default",
-    publickey: "25028fcd7126544630b8da0c6e60722b5",
+    publickey,
     lang: "es",
     version: "4",
-    src: portalUrl.replace(/\/?$/, "/"),
+    src: referer,
+    _: String(tWidget),
+  });
+
+  const companionParams = new URLSearchParams({
     callback: cbName,
-    _: String(Date.now()),
+    type: "default",
+    publickey,
+    lang: "es",
+    version: "4",
+    src: referer,
+    srvsrc,
+    _: String(tWidget + 1),
   });
 
-  // Extract publickey from portalUrl if possible
-  const pkMatch = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/);
-  if (pkMatch) params.set("publickey", pkMatch[1]);
-
-  const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${params}`;
-  const mainRes = await spainCfFetch(mainUrl, session, {
-    headers: {
-      "Referer": portalUrl.replace(/\/?$/, "/"),
-      "X-Requested-With": "XMLHttpRequest",
-      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-    },
+  const servicesParams = new URLSearchParams({
+    callback: cbName,
+    type: "default",
+    publickey,
+    lang: "es",
+    version: "4",
+    src: referer,
+    srvsrc,
+    _: String(tWidget + 2),
   });
+
+  // Fire all 3 simultaneously — same pattern as jQuery widget init
+  const [mainRes] = await Promise.all([
+    spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders }),
+    spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${companionParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+    spainCfFetch(`${baseBookititUrl}getservices/?${servicesParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+  ]);
 
   if (!mainRes || mainRes.status !== 200) {
     console.warn(`[spain-http] ⚠️ /onlinebookings/main/ status: ${mainRes?.status ?? "no response"}`);
