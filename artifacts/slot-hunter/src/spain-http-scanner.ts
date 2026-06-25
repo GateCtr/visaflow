@@ -776,10 +776,11 @@ async function scanViaMainEndpoint(
     console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
   }
 
-  // RUM #20 — beacon après widget render (~3.6s dans Burp)
-  // Simule window.__cfBeacon qui fire après DOMContentLoaded + render du widget
-  // (referer pas encore déclaré ici, on inline l'expression)
-  fireRumBeacon(session, portalUrl.replace(/\/?$/, "/"), { delayMs: 3400 + Math.floor(Math.random() * 400), transferSize: 3676 });
+  // RUM #24 — beacon déclenché par le callback JSD oneshot, ~402ms après POST token (#23)
+  // Burp: #22 (jsd/oneshot, t+17774ms) et #24 (rum, t+17774ms) arrivent APRÈS #23 (t+17372ms)
+  // Le widget JS fire le JSD oneshot et son callback fire ce beacon en même temps (~400ms post-submit)
+  // NB: RUM #20 (3.6s après #14) est géré par CapSolver côté interne — notre ancrage est #23
+  fireRumBeacon(session, portalUrl.replace(/\/?$/, "/"), { delayMs: 380 + Math.floor(Math.random() * 50), transferSize: 2537 });
 
   // Step 3: Appels JSONP simultanés — reproduit le comportement jQuery réel
   // Le vrai navigateur fire main/ + getwidgetconfigurations/ + getservices/ en < 10ms (Promise.all)
@@ -862,6 +863,9 @@ async function scanViaMainEndpoint(
     ]);
     // RUM #109 — beacon après getwidgetconfigurations/ (~578ms dans Burp)
     fireRumBeacon(session, referer, { delayMs: 500 + Math.floor(Math.random() * 150), transferSize: 1170 });
+    // RUM #114 — beacon de navigation/unload (~3.1s après #109 dans Burp)
+    // Déclenché par le widget qui finalise son chargement complet (DOMInteractive → fully loaded)
+    fireRumBeacon(session, referer, { delayMs: 3000 + Math.floor(Math.random() * 200), transferSize: 680 });
   })();
 
   if (!mainRes || mainRes.status !== 200) {
