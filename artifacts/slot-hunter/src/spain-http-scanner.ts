@@ -695,16 +695,35 @@ async function scanViaMainEndpoint(
 ): Promise<SpainHttpScanResult | null> {
   const t0 = Date.now();
 
-  // ─── GA cookies (Burp: présents dans TOUTES les requêtes citaconsular) ───
-  // Format _ga : GA1.1.<randomInt>.<tsSeconds>
-  // Format _ga_XXXX : GS2.1.s<ts>$o<N>$g0$t<ts>$j60$l0$h0
-  const gaClientRnd = String(100_000_000 + Math.floor(Math.random() * 900_000_000));
-  const gaClientTs  = String(Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 30 * 24 * 3600));
-  const gaSessionTs = String(Math.floor(Date.now() / 1000));
-  const gaCookies = [
-    `_ga=GA1.1.${gaClientRnd}.${gaClientTs}`,
-    `_ga_F3TYSDL945=GS2.1.s${gaSessionTs}$o1$g0$t${gaSessionTs}$j60$l0$h0`,
-  ];
+  // ─── GA cookies ────────────────────────────────────────────────────────
+  // Priorité 1 : GA cookies capturés par le vrai navigateur Playwright (GTM a tourné
+  //   dans le browser, Google Analytics a set les cookies → valeurs légitimes connues de GA).
+  // Priorité 2 : Génération synthétique (fallback si session CapSolver sans Playwright).
+  //
+  // POURQUOI c'est important : CF Analytics corrèle les valeurs _ga avec ses propres logs.
+  // Une valeur _ga aléatoire à chaque scan = "visiteur" jamais vu → signal bot potentiel.
+  // Une valeur _ga stable (réutilisée sur toute la durée de la sticky session) = profil cohérent.
+  const sessionGa    = session.allCookies.find((c) => c.name === "_ga")?.value;
+  const sessionGaF3  = session.allCookies.find((c) => c.name === "_ga_F3TYSDL945")?.value;
+
+  let gaCookies: string[];
+  if (sessionGa && sessionGaF3) {
+    // Cas Playwright : valeurs réelles capturées par GTM dans le navigateur
+    gaCookies = [`_ga=${sessionGa}`, `_ga_F3TYSDL945=${sessionGaF3}`];
+    console.log(`[spain-http] 🍪 GA réutilisé depuis session Playwright: ${sessionGa.slice(0, 20)}…`);
+  } else {
+    // Cas CapSolver : génération synthétique stable pour toute la session
+    // On seed le random sur session.createdAt pour garder les mêmes valeurs d'un scan à l'autre
+    // (même sticky session → même "profil" GA vu par CF)
+    const seedBase = session.createdAt;
+    const gaClientRnd = String(100_000_000 + (seedBase % 900_000_000));
+    const gaClientTs  = String(Math.floor(seedBase / 1000) - 15 * 24 * 3600); // "visiteur depuis 15j"
+    const gaSessionTs = String(Math.floor(session.createdAt / 1000));
+    gaCookies = [
+      `_ga=GA1.1.${gaClientRnd}.${gaClientTs}`,
+      `_ga_F3TYSDL945=GS2.1.s${gaSessionTs}$o1$g0$t${gaSessionTs}$j60$l0$h0`,
+    ];
+  }
 
   // Current cf_clearance (may be updated after JSD oneshot)
   let activeCfClearance = session.cfClearance;

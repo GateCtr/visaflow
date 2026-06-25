@@ -203,12 +203,18 @@ export async function solveSpainWidgetSession(
     }
   }
 
+  // Sur Railway/CI (pas de display X11) on force headless:true avec le nouveau moteur.
+  // En local (DISPLAY ou REPLIT_DEV_DOMAIN absent) on reste visible pour débogage.
+  const isHeadlessEnv = !!(process.env.RAILWAY_ENVIRONMENT || process.env.CI);
+
   const browser = await chromiumStealth.launch({
-    headless: false,
+    headless: isHeadlessEnv,
     args: [
       "--no-sandbox",
       "--disable-blink-features=AutomationControlled",
-      "--window-position=-2000,-2000",
+      // Position plausible (coin haut-gauche d'un écran 1920×1080) plutôt que -2000,-2000
+      // CF JS peut lire window.screenX/Y — une position hors-écran est un signal bot connu.
+      "--window-position=80,60",
       "--window-size=1280,720",
       "--no-first-run",
       "--no-default-browser-check",
@@ -228,8 +234,24 @@ export async function solveSpainWidgetSession(
   try {
     const page = await context.newPage();
 
+    // ─── Patch fingerprint JS ─────────────────────────────────────────────
+    // CF's challenge script lit plusieurs propriétés du navigateur pour détecter l'automation.
+    // On corrige les valeurs qui trahissent headless / Playwright.
     await page.addInitScript(() => {
+      // webdriver doit être undefined (Playwright le set à true par défaut)
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+
+      // Écran plausible — screenX/Y proches de la position fenêtre (--window-position=80,60)
+      Object.defineProperty(window, "screenX", { get: () => 80 });
+      Object.defineProperty(window, "screenY", { get: () => 60 });
+      Object.defineProperty(window, "outerWidth",  { get: () => 1280 });
+      Object.defineProperty(window, "outerHeight", { get: () => 720 });
+      Object.defineProperty(screen, "width",       { get: () => 1920 });
+      Object.defineProperty(screen, "height",      { get: () => 1080 });
+      Object.defineProperty(screen, "availWidth",  { get: () => 1920 });
+      Object.defineProperty(screen, "availHeight", { get: () => 1040 }); // barre des tâches ~40px
+      Object.defineProperty(screen, "colorDepth",  { get: () => 24 });
+      Object.defineProperty(screen, "pixelDepth",  { get: () => 24 });
     });
 
     // ─── Listener : capture cf_clearance #2 depuis réponse JSD Oneshot ───
