@@ -736,12 +736,26 @@ async function scanViaMainEndpoint(
     _: String(tWidget + 2),
   });
 
-  // Fire all 3 simultaneously — same pattern as jQuery widget init
-  const [mainRes] = await Promise.all([
-    spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders }),
-    spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${companionParams}`, session, { headers: jsonpHeaders }).catch(() => null),
-    spainCfFetch(`${baseBookititUrl}getservices/?${servicesParams}`, session, { headers: jsonpHeaders }).catch(() => null),
-  ]);
+  // Séquence confirmée par Burp (tableau complet 2026-06-25) :
+  //   main/                → t+0      (response immédiate, détection depuis ce body)
+  //   GTM script load      → t+2914ms (déclencheur des companions)
+  //   getwidgetconfs/      → t+3046ms (132ms après GTM — callback GTM)
+  //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
+  // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
+  // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
+  const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
+
+  // Fire companions ~3s après main/ (pattern GTM réel) — fire-and-forget, non bloquant
+  void (async () => {
+    await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
+    const tNow = Date.now();
+    const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
+    const svcParams  = new URLSearchParams({ ...Object.fromEntries(servicesParams),  _: String(tNow + 9) });
+    await Promise.all([
+      spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+      spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+    ]);
+  })();
 
   if (!mainRes || mainRes.status !== 200) {
     console.warn(`[spain-http] ⚠️ /onlinebookings/main/ status: ${mainRes?.status ?? "no response"}`);
