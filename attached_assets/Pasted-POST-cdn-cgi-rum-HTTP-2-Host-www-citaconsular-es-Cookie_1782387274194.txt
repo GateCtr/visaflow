@@ -1,0 +1,26 @@
+POST /cdn-cgi/rum? HTTP/2
+Host: www.citaconsular.es
+Cookie: _ga=GA1.1.467244596.1782320257; _ga_F3TYSDL945=GS2.1.s1782376503$o3$g0$t1782376503$j60$l0$h0; PHPSESSID=wj6HR60JekGJtzQMANhIlx8%2C; cf_clearance=Ax2GrNRuw7UwKk.rWX9tTPbavyv19HupWoK4N6GQq20-1782386505-1.2.1.1-SG9t.Q.NOE6gPhFW8CONOZprWik8cRJucHqFTeWw12s6Myi1PU_qllEsjSB5NSJ9pxEpvFC_6V.YJf7vbKBpQKVw1k1EPOnKlwsS3bYG1Yxj5vYH2b6idqVTlMJKOt676cOTamFsYfilkpPKNB.DXzsAUYocapg5aKR4uALDe815O0ttYVHPwmrvFq07GXZwCHH1YExoXqYCoyvT5EICcHdk1Cid.XIiTxMb91EEq.d5vr3MhzzUpEZf7lYI0OGClsixEKfV9DieNK6fWKsyvlZRHSTJpyEyWmfs_W79n8tu1ONuYU3TzR.c.hHBHjYMEKvgTizrP6I7N0ybdfs9lLtAlB95bUdn0wtFiIk_YcZWf8wjoSJxoeOSfFYYY9lZzkGE4Ngp_yybbNuQEXyZ9p02MLxwEcLHtcIha4FHpy2TOAm0z..2mafomME0t6fD
+Content-Length: 1335
+Sec-Ch-Ua-Full-Version-List: 
+Sec-Ch-Ua-Platform: "Windows"
+Accept-Language: fr-FR,fr;q=0.9
+Sec-Ch-Ua: "Not-A.Brand";v="24", "Chromium";v="146"
+Sec-Ch-Ua-Bitness: ""
+Sec-Ch-Ua-Model: ""
+Sec-Ch-Ua-Mobile: ?0
+Sec-Ch-Ua-Arch: ""
+Sec-Ch-Ua-Full-Version: ""
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+Content-Type: application/json
+Sec-Ch-Ua-Platform-Version: ""
+Accept: */*
+Origin: https://www.citaconsular.es
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+Accept-Encoding: gzip, deflate, br
+Priority: u=4, i
+
+{"referrer":"https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/?__cf_chl_tk=3FjtOZejGX2Z24rhuJZvu3Q7fvjKQUhhTQSRchyXJBE-1782386486-1.0.1.1-OEcgsW0uOw6ZndAr6vwb8ByLc6dKnzSK0XUO6LNtQ0o","eventType":3,"versions":{"js":"2026.5.0","fl":"2024.11.0"},"pageloadId":"d82db58e-5039-47fd-9098-c029a227fbf3","location":"https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","landingPath":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","startTime":1782386496326,"nt":"navigate","siteToken":"cd9fdba4a6e847f9beaa09fc8dd7c1a7","lcp":{"value":5340,"path":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","element":"#idCaptchaText","size":33002,"rld":0,"rlt":0,"erd":4960.79999999993,"fp":null},"cls":{"value":0,"path":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/"},"fcp":{"value":5340,"path":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/"},"ttfb":{"value":379.20000000006985,"path":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/"},"inp":{"value":0,"path":"/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","element":"#idCaptchaButton","name":"pointer","idy":0.5999999999767169,"pdn":0,"pdy":0},"timingsV2":{"nextHopProtocol":"h2","transferSize":3104,"decodedBodySize":2804},"dt":"","st":1}
