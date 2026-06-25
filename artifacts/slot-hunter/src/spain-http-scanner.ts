@@ -58,6 +58,100 @@ interface BookititConfig {
   extractedAt: number;
 }
 
+// ─── CF RUM Beacon ──────────────────────────────────────────────────────────
+//
+// Cloudflare injecte un script __cfBeacon dans chaque page protégée.
+// Ce script fire un POST /cdn-cgi/rum? avec des métriques de performance.
+// Si CF détecte qu'un client charge ses pages mais ne fire JAMAIS ce beacon,
+// c'est un signal fort que JavaScript ne s'exécute pas → bot HTTP.
+//
+// Pattern observé dans Burp (citaconsular.es, Chrome 146) :
+//   #20  POST /cdn-cgi/rum?  → ~3.6s après widget render   (beacon page principale)
+//   #24  POST /cdn-cgi/rum?  → ~4.3s après widget render
+//   #29  POST /cdn-cgi/rum?  → ~3ms après GET main/        ← LE PLUS CRITIQUE
+//   #109 POST /cdn-cgi/rum?  → ~578ms après getwidgetconfs/
+//   #114 POST /cdn-cgi/rum?  → ~6.7s après main/           (navigation beacon)
+
+function buildRumBody(pageUrl: string, rayId: string, transferSize: number): string {
+  // Valeurs performance.timing réalistes — générées avec jitter naturel
+  const tDns   = 4 + Math.floor(Math.random() * 8);           // 4-12ms DNS lookup
+  const tConn  = tDns + 40 + Math.floor(Math.random() * 60);  // 44-72ms TCP connect
+  const tTLS   = tConn - tDns + 110 + Math.floor(Math.random() * 40); // 150-190ms TLS
+  const tReq   = tConn + 8 + Math.floor(Math.random() * 12);  // 8-20ms request
+  const tFb    = tReq + 80 + Math.floor(Math.random() * 120); // 80-200ms first byte
+  const tTotal = tFb + 20 + Math.floor(Math.random() * 60);   // 20-80ms body transfer
+
+  const body = {
+    v: "1",
+    sv: "1",
+    r: rayId,
+    t: {
+      connectEnd: tConn,
+      connectStart: tDns,
+      domainLookupEnd: tDns,
+      domainLookupStart: 2,
+      fetchStart: 0,
+      requestStart: tReq,
+      responseEnd: tTotal,
+      responseStart: tFb,
+      secureConnectionStart: tDns + 2,
+      startTime: 0,
+    },
+    b: {
+      n: "",
+      sn: "",
+      t: pageUrl,
+      a: "",
+      s: 0,
+      cf: {
+        sTLS: tDns + 2,
+        tLS: tTLS,
+        tConnect: tConn,
+        tFirstByte: tFb,
+        tTotal,
+      },
+    },
+    meta: {
+      startTime: Date.now() - tTotal,
+      duration: tTotal,
+      transferSize,
+    },
+  };
+
+  return JSON.stringify(body);
+}
+
+/**
+ * Fire CF RUM beacon en fire-and-forget.
+ * Doit être appelé après chaque chargement de page/ressource citaconsular,
+ * avec un délai optionnel qui simule le temps de traitement JS.
+ */
+function fireRumBeacon(
+  session: SpainCfSession,
+  pageUrl: string,
+  opts: { delayMs?: number; rayId?: string; transferSize?: number } = {}
+): void {
+  void (async () => {
+    if (opts.delayMs && opts.delayMs > 0) {
+      await new Promise<void>((r) => setTimeout(r, opts.delayMs));
+    }
+    const rayId = opts.rayId ?? Math.random().toString(36).slice(2, 18);
+    const body = buildRumBody(pageUrl, rayId, opts.transferSize ?? 3000);
+    await spainCfFetch("https://www.citaconsular.es/cdn-cgi/rum?", session, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Referer": pageUrl,
+        "Origin": "https://www.citaconsular.es",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body,
+    }).catch(() => null); // Silently ignore errors — beacon best-effort
+  })();
+}
+
 // ─── Bookitit Config Cache ──────────────────────────────────────────────────
 
 /** TTL de la config Bookitit (30min — aligné sur PHPSESSID). */
@@ -682,6 +776,11 @@ async function scanViaMainEndpoint(
     console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
   }
 
+  // RUM #20 — beacon après widget render (~3.6s dans Burp)
+  // Simule window.__cfBeacon qui fire après DOMContentLoaded + render du widget
+  // (referer pas encore déclaré ici, on inline l'expression)
+  fireRumBeacon(session, portalUrl.replace(/\/?$/, "/"), { delayMs: 3400 + Math.floor(Math.random() * 400), transferSize: 3676 });
+
   // Step 3: Appels JSONP simultanés — reproduit le comportement jQuery réel
   // Le vrai navigateur fire main/ + getwidgetconfigurations/ + getservices/ en < 10ms (Promise.all)
   // même callback jQuery, _ incrémenté de 1ms (comportement loadermaec.js confirmé par Burp)
@@ -738,14 +837,20 @@ async function scanViaMainEndpoint(
 
   // Séquence confirmée par Burp (tableau complet 2026-06-25) :
   //   main/                → t+0      (response immédiate, détection depuis ce body)
+  //   RUM #29              → t+3ms    ← LE PLUS CRITIQUE (CF corrèle direct avec main/)
   //   GTM script load      → t+2914ms (déclencheur des companions)
   //   getwidgetconfs/      → t+3046ms (132ms après GTM — callback GTM)
   //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
+  //   RUM #109             → t+3624ms (578ms après getwidgetconfs/)
   // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
   // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
   const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
 
-  // Fire companions ~3s après main/ (pattern GTM réel) — fire-and-forget, non bloquant
+  // RUM #29 — beacon critique : 3ms après GET main/ (Burp: #27 à t+18151ms, #29 à t+18154ms)
+  // C'est le beacon le plus fort : CF sait que le JS a traité la réponse main/ en temps réel
+  fireRumBeacon(session, referer, { delayMs: 3 + Math.floor(Math.random() * 8), transferSize: 124917 });
+
+  // Fire companions ~3s après main/ + RUM #109 après les companions — fire-and-forget
   void (async () => {
     await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
     const tNow = Date.now();
@@ -755,6 +860,8 @@ async function scanViaMainEndpoint(
       spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
       spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
     ]);
+    // RUM #109 — beacon après getwidgetconfigurations/ (~578ms dans Burp)
+    fireRumBeacon(session, referer, { delayMs: 500 + Math.floor(Math.random() * 150), transferSize: 1170 });
   })();
 
   if (!mainRes || mainRes.status !== 200) {
