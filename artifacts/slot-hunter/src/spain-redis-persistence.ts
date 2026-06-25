@@ -34,6 +34,9 @@ const REDIS_SPAIN_SOAX_TTL_SEC = 12 * 60 * 60; // 12h (rotation est basée sur d
 const REDIS_SPAIN_BOOKITIT_PREFIX = "visaflow:spain-bookitit:";
 const REDIS_SPAIN_BOOKITIT_TTL_SEC = 30 * 60; // 30min (aligné sur PHPSESSID)
 
+const REDIS_SPAIN_GA_KEY = "visaflow:spain-ga:profile";
+const REDIS_SPAIN_GA_TTL_SEC = 30 * 24 * 60 * 60; // 30 jours
+
 // ─── Types sérialisables ────────────────────────────────────────────────────
 
 export interface SerializableSpainCfSession {
@@ -49,6 +52,20 @@ export interface SerializableSpainCfSession {
 
 export interface SerializableSoaxRotation {
   rotationCounts: Record<string, number>; // identifier → count
+  savedAt: number;
+}
+
+/**
+ * Profil GA long-terme (30 jours).
+ * _ga = client ID stable (représente "le même visiteur" pour GA Analytics + CF).
+ * sessionCount = compteur de sessions (champ $oN dans _ga_F3TYSDL945) — s'incrémente
+ *   à chaque nouveau solve CF pour simuler un visiteur récurrent.
+ */
+export interface SerializableGaProfile {
+  /** Valeur complète du cookie _ga : "GA1.1.<clientRnd>.<firstVisitTs>" */
+  ga: string;
+  /** Nombre de sessions depuis la création du profil. Utilisé pour $oN dans _ga_F3. */
+  sessionCount: number;
   savedAt: number;
 }
 
@@ -295,6 +312,114 @@ export async function restoreBookititConfigFromRedis(portalUrl: string): Promise
     console.warn(`[spain-redis] ⚠️ Restauration Bookitit échouée: ${msg}`);
     return null;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GA PROFILE (client ID stable 30 jours — profil visiteur récurrent)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sauvegarde le profil GA dans Redis avec un TTL de 30 jours.
+ * Fire-and-forget.
+ */
+export function syncGaProfileToRedis(profile: SerializableGaProfile): void {
+  if (!redisReady || !redisClient) return;
+  redisClient
+    .set(REDIS_SPAIN_GA_KEY, JSON.stringify(profile), { EX: REDIS_SPAIN_GA_TTL_SEC })
+    .catch((err: Error) => {
+      console.warn(`[spain-redis] GA profile sync échouée: ${err.message}`);
+    });
+}
+
+/**
+ * Restaure le profil GA depuis Redis.
+ * Retourne null si absent ou Redis indisponible.
+ */
+export async function restoreGaProfileFromRedis(): Promise<SerializableGaProfile | null> {
+  if (!redisReady || !redisClient) return null;
+  try {
+    const data = await redisClient.get(REDIS_SPAIN_GA_KEY);
+    if (!data) return null;
+    return JSON.parse(data) as SerializableGaProfile;
+  } catch (err) {
+    console.warn(`[spain-redis] GA profile restore échouée: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+/**
+ * Applique un profil GA stable (30 jours) sur les cookies de session.
+ *
+ * Logique :
+ *   1. Tente de restaurer le profil depuis Redis (TTL 30j).
+ *   2. Si trouvé → réutilise le même ga client ID + incrémente sessionCount.
+ *   3. Si absent → utilise le _ga capturé par Playwright (currentAllCookies)
+ *      OU génère un _ga synthétique stable basé sur sessionCreatedAt.
+ *   4. Reconstruit _ga_F3TYSDL945 avec les timestamps courants + sessionCount.
+ *   5. Persiste le profil mis à jour dans Redis (TTL réinitialisé à 30j).
+ *   6. Retourne le tableau allCookies avec _ga et _ga_F3TYSDL945 mis à jour.
+ *
+ * POURQUOI _ga_F3TYSDL945 n'est PAS persisté 30 jours :
+ *   C'est un cookie de session GA4 (timestamps courants, durée de session…).
+ *   Un vrai navigateur le régénère à chaque visite — persister une valeur figée
+ *   serait un signal bot. On persiste uniquement le client ID (_ga) et sessionCount.
+ */
+export async function applyStableGaProfile(
+  currentAllCookies: Array<{ name: string; value: string }>,
+  sessionCreatedAt: number,
+): Promise<Array<{ name: string; value: string }>> {
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // ─── 1. Restaurer ou créer le profil ────────────────────────────────────
+  const existing = await restoreGaProfileFromRedis();
+
+  let gaValue: string;
+  let sessionCount: number;
+
+  if (existing) {
+    // Visiteur connu — même client ID, session suivante
+    gaValue = existing.ga;
+    sessionCount = existing.sessionCount + 1;
+    const ageDays = Math.round((Date.now() - existing.savedAt) / 86_400_000);
+    console.log(
+      `[spain-redis] ♻️ Profil GA restauré (${ageDays}j) | client: ${gaValue.slice(0, 25)}… | session #${sessionCount}`
+    );
+  } else {
+    // Nouveau profil — priorité au _ga capturé par le navigateur Playwright
+    const playwrightGa = currentAllCookies.find((c) => c.name === "_ga")?.value;
+    if (playwrightGa) {
+      gaValue = playwrightGa;
+      console.log(`[spain-redis] 🆕 Nouveau profil GA depuis Playwright: ${gaValue.slice(0, 25)}…`);
+    } else {
+      // Fallback synthétique — seed sur sessionCreatedAt pour reproductibilité
+      const clientRnd = 100_000_000 + (sessionCreatedAt % 900_000_000);
+      // firstVisitTs = "15 à 45 jours avant le premier solve" → visiteur avec historique
+      const firstVisitTs = Math.floor(sessionCreatedAt / 1000) - (15 + (sessionCreatedAt % 30)) * 86_400;
+      gaValue = `GA1.1.${clientRnd}.${firstVisitTs}`;
+      console.log(`[spain-redis] 🆕 Nouveau profil GA synthétique (seed session): ${gaValue.slice(0, 25)}…`);
+    }
+    sessionCount = 1;
+  }
+
+  // ─── 2. Reconstruire _ga_F3TYSDL945 avec timestamps courants ────────────
+  // Format Burp confirmé : GS2.1.s<sessionTs>$o<N>$g0$t<ts>$j60$l0$h0
+  // s<sessionTs> = début de cette session (maintenant)
+  // $o<N>        = numéro de session (1, 2, 3… comme un vrai visiteur récurrent)
+  // $t<ts>       = timestamp courant (identique à s<sessionTs> au premier load)
+  const gaF3Value = `GS2.1.s${nowSec}$o${sessionCount}$g0$t${nowSec}$j60$l0$h0`;
+
+  // ─── 3. Persister le profil mis à jour (TTL réinitialisé à 30j) ─────────
+  syncGaProfileToRedis({ ga: gaValue, sessionCount, savedAt: Date.now() });
+
+  // ─── 4. Mettre à jour allCookies — remplacer _ga et _ga_F3TYSDL945 ──────
+  const filtered = currentAllCookies.filter(
+    (c) => c.name !== "_ga" && c.name !== "_ga_F3TYSDL945"
+  );
+  return [
+    { name: "_ga", value: gaValue },
+    { name: "_ga_F3TYSDL945", value: gaF3Value },
+    ...filtered,
+  ];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

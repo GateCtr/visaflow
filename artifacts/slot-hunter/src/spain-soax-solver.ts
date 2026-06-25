@@ -28,6 +28,7 @@ import {
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
 import { solveWithLocalPlaywright, solveSpainWidgetSession } from "./local-playwright-solver.js";
+import { applyStableGaProfile } from "./spain-redis-persistence.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -417,14 +418,19 @@ export async function ensureSpainCfSession(
       ? makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf")
       : "";
 
+    const sessionCreatedAt = Date.now() - (7200 - (bestCookie.expires - Math.floor(Date.now() / 1000))) * 1000;
+    const poolAllCookies = await applyStableGaProfile(
+      [{ name: bestCookie.name, value: bestCookie.value }],
+      sessionCreatedAt,
+    );
     const session: SpainCfSession = {
       cfClearance: bestCookie.value,
       cfDomain: bestCookie.domain,
       soaxProxyUrl,
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      createdAt: Date.now() - (7200 - (bestCookie.expires - Math.floor(Date.now() / 1000))) * 1000,
+      createdAt: sessionCreatedAt,
       expiresAt: bestCookie.expires * 1000,
-      allCookies: [{ name: bestCookie.name, value: bestCookie.value }],
+      allCookies: poolAllCookies,
       extraHeaders: {}
     };
     _activeCfSession = session;
@@ -443,14 +449,16 @@ export async function ensureSpainCfSession(
 
     const widgetCookies = await solveSpainWidgetSession(targetUrl, soaxProxyForPlaywright);
     if (widgetCookies) {
+      const pwCreatedAt = Date.now();
+      const pwAllCookies = await applyStableGaProfile(widgetCookies.allCookies, pwCreatedAt);
       const session: SpainCfSession = {
         cfClearance: widgetCookies.cfClearance,
         cfDomain: ".citaconsular.es",
         soaxProxyUrl: soaxProxyForPlaywright ?? "",
         userAgent: widgetCookies.userAgent,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
-        allCookies: widgetCookies.allCookies,
+        createdAt: pwCreatedAt,
+        expiresAt: pwCreatedAt + CF_CLEARANCE_TTL_MS,
+        allCookies: pwAllCookies,
         extraHeaders: {},
       };
       _activeCfSession = session;
@@ -477,6 +485,7 @@ export async function ensureSpainCfSession(
     const cached = await restoreSpainCfSessionFromRedis();
     if (cached) {
       // Reconstruire la session en mémoire
+      const restoredAllCookies = await applyStableGaProfile(cached.allCookies, cached.createdAt);
       const restored: SpainCfSession = {
         cfClearance: cached.cfClearance,
         cfDomain: cached.cfDomain,
@@ -484,7 +493,7 @@ export async function ensureSpainCfSession(
         userAgent: cached.userAgent,
         createdAt: cached.createdAt,
         expiresAt: cached.expiresAt,
-        allCookies: cached.allCookies,
+        allCookies: restoredAllCookies,
         extraHeaders: cached.extraHeaders,
       };
       _activeCfSession = restored;
@@ -520,11 +529,15 @@ export async function ensureSpainCfSession(
     const result = await solveSpainCloudflare(targetUrl, capsolverKey, soaxProxyUrl);
 
     if (result.success && result.session) {
+      result.session.allCookies = await applyStableGaProfile(
+        result.session.allCookies,
+        result.session.createdAt,
+      );
       _activeCfSession = result.session;
       console.log(`[spain-soax] 🎉 Session CF établie! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
       console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
 
-      // Persister dans Redis pour survivre aux redéploiements
+      // Persister dans Redis pour survivre aux redéploiements (inclut le GA stable)
       syncSpainCfSessionToRedis(result.session as SerializableSpainCfSession);
 
       return result.session;
