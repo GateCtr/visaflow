@@ -467,6 +467,85 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
 }
 
 /**
+ * Résout TOUS les dossiers disponibles dans MyList.
+ * Retourne un tableau de UUIDs (champ Id — utilisable directement comme vowintAppUrl).
+ * Si un seul dossier → comportement identique à resolveFirstAppIdFromMyList.
+ * length=100 dans la requête MyList pour capturer tous les dossiers même si > 10.
+ * Ne consomme PAS de clic GetEAppointmentUrl.
+ */
+export async function resolveAllAppIdsFromMyList(cookies: string): Promise<string[]> {
+  const results: string[] = [];
+
+  // 1ère passe : scraper l'HTML de IndexByUserId pour tous les GetEAppointmentUrl?id=
+  let currentUrl = `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`;
+  let currentCookies = cookies;
+  let finalRes: Response | null = null;
+
+  for (let i = 0; i < 6; i++) {
+    const r = await cevSetupFetch(currentUrl, {
+      method: "GET",
+      headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: currentCookies }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    currentCookies = mergeCookies(currentCookies, r);
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get("location");
+      if (!loc) break;
+      currentUrl = loc.startsWith("http") ? loc : `${VOWINT_BASE}${loc}`;
+    } else {
+      finalRes = r;
+      break;
+    }
+  }
+
+  if (finalRes?.ok) {
+    const html = await finalRes.text();
+    const allMatches = [...html.matchAll(/GetEAppointmentUrl\?id=([a-f0-9-]+)/gi)];
+    for (const m of allMatches) {
+      if (!results.includes(m[1])) results.push(m[1]);
+    }
+  }
+
+  if (results.length > 0) return results;
+
+  // Fallback : API MyList avec length=100 (Burp Chrome 146 — DataTables + GetAllVisaStatusTypes d'abord)
+  await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
+    signal: AbortSignal.timeout(20_000),
+  }).then(r => r.text()).catch(() => {});
+  await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    signal: AbortSignal.timeout(15_000),
+  }).then(r => r.text()).catch(() => {});
+
+  const allUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=100&search%5Bvalue%5D=&search%5Bregex%5D=false`;
+  const listRes2 = await cevSetupFetch(allUrl, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (listRes2.ok) {
+    const text = await listRes2.text();
+    try {
+      const data = JSON.parse(text) as { data?: Array<{ Id?: string; VOWId?: string }> };
+      for (const item of data.data ?? []) {
+        const ref = item.Id ?? item.VOWId;
+        if (ref && !results.includes(ref)) results.push(ref);
+      }
+    } catch {
+      const allUuids = [...text.matchAll(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/gi)];
+      for (const m of allUuids) {
+        if (!results.includes(m[0])) results.push(m[0]);
+      }
+    }
+  }
+  return results;
+}
+
+/**
  * Invalide le cache VOWINT pour un email — et optionnellement pour un slot IP précis.
  *
  * Fix TGT_TokenReuseIP : chaque slot IP a sa propre entrée de cache sous la clé
