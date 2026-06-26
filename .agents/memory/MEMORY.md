@@ -7,3 +7,4 @@
 - [Spain Bookitit fingerprint fixes](spain-bookitit-fingerprint.md) — 4 JSONP callers had wrong Sec-Fetch (no-cors/script→cors/empty), wrong Accept, and 6 missing high-entropy CH hints; all fixed via Burp Chrome 146 audit 2026-06-25.
 - [Spain citaconsular session flow](spain-citaconsular-session-flow.md) — exact 8-step HTTP flow (GET entry→POST token→JSD oneshot→2nd POST widget→JSONP); cookie order, PHPSESSID forwarding, GA cookies, JSD oneshot extraction — confirmed by Burp 2026-06-25.
 - [CEV VOWINT Burp audit Chrome 146](cev-vowint-burp-audit.md) — forensic comparison Burp Chrome 146 vs bot; 2 fixes applied: GetAllVisaStatusTypes + Priority header.
+- [CEV Extension v4.0](cev-extension-v4.md) — round-robin pool, selectDossier strict mode, server-error backoff via serverPauseUntil, Priority header, page detection.

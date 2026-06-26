@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "CEV Slot Hunter",
-  "version": "3.3.0",
-  "description": "Surveille les créneaux CEV — bouton état réel, refresh Mes Applications avant/après pause, notification live.",
+  "version": "4.0.0",
+  "description": "Round-robin multi-dossiers · 1 min + jitter humain · Anti-shadowban · Non détectable.",
   "permissions": [
     "storage",
     "notifications",
     "activeTab",
     "tabs",
-    "alarms"
+    "alarms",
+    "offscreen"
   ],
   "host_permissions": [
     "https://visaonweb.diplomatie.be/*",
@@ -16,13 +17,14 @@
     "https://api.anti-captcha.com/*"
   ],
   "background": {
-    "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "48": "icons/icon48.png"
+      "16":  "icons/icon16.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "content_scripts": [
@@ -38,8 +40,8 @@
     }
   ],
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
   }
 }

@@ -13,13 +13,13 @@
   <header class="header">
     <div class="header-icon">🎯</div>
     <div>
-      <div class="header-title">CEV Slot Hunter</div>
-      <div class="header-sub">Portail belge · Kinshasa · Mode détection</div>
+      <div class="header-title">CEV Slot Hunter <span class="version-badge">v4</span></div>
+      <div class="header-sub">Portail belge · Kinshasa · Round-robin multi-dossiers</div>
     </div>
     <div id="statusDot" class="status-dot idle"></div>
   </header>
 
-  <!-- ── Config (EN PREMIER — toujours visible) ── -->
+  <!-- ── Config ── -->
   <div class="section">
     <div class="section-title">⚙️ Configuration</div>
 
@@ -41,13 +41,13 @@
 
     <div class="config-sep"></div>
 
-    <label class="field-label" for="dossierId">📁 Numéro de dossier VOWINT</label>
+    <label class="field-label" for="dossierId">📁 Dossier cible (optionnel)</label>
     <div class="input-row">
       <input type="text" id="dossierId" class="input"
-        placeholder="Ex : VOWINT5903406"
+        placeholder="Ex : VOWINT5903406 — vide = tous les dossiers"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
     </div>
-    <div id="dossierStatus" class="field-hint">Optionnel — cible le bon bouton si plusieurs dossiers</div>
+    <div id="dossierStatus" class="field-hint">Vide = round-robin automatique sur tous les dossiers actifs</div>
 
     <div class="config-sep"></div>
 
@@ -69,35 +69,43 @@
     <button class="btn btn-reset" id="btnReset" title="Réinitialiser stats">↺</button>
   </div>
 
-  <!-- ── Alerte slot (visible uniquement si slot_found) ── -->
+  <!-- ── Alerte slot ── -->
   <div class="slot-alert hidden" id="slotAlert">
     <div class="slot-alert-title">🚨 CRÉNEAU DISPONIBLE !</div>
     <div class="slot-alert-detail" id="slotAlertDetail">—</div>
     <button class="btn btn-ack" id="btnAck">✅ J'ai vu — arrêter la sonnerie</button>
   </div>
 
-  <!-- ── Alerte rate-limit (visible si phase = rate_limited) ── -->
+  <!-- ── Alerte rate-limit ── -->
   <div class="ratelimit-alert hidden" id="rateLimitAlert">
     <div class="ratelimit-title">🚫 Trop de tentatives détectées</div>
     <div class="ratelimit-reason" id="rateLimitReason">Pause automatique CEV</div>
     <div class="ratelimit-countdown" id="rateLimitCountdown">⏳ —</div>
-    <button class="btn btn-force-resume" id="btnForceResume">⚡ Forcer la reprise maintenant</button>
+    <button class="btn btn-force-resume" id="btnForceResume">⚡ Forcer la reprise</button>
   </div>
 
-  <!-- ── Phase actuelle ── -->
+  <!-- ── Phase courante ── -->
   <div class="phase-card" id="phaseCard">
     <div class="phase-icon" id="phaseIcon">⏸</div>
-    <div>
+    <div style="flex:1;min-width:0">
       <div class="phase-label" id="phaseLabel">Inactif</div>
       <div class="phase-sub" id="phaseSub">Configure la clé puis démarre</div>
     </div>
+  </div>
+
+  <!-- ── Dossiers round-robin ── -->
+  <div class="section" id="dossierSection" style="display:none">
+    <div class="section-title">📋 Dossiers détectés
+      <span class="rr-badge" id="rrBadge">0</span>
+    </div>
+    <div id="dossierList" class="dossier-list"></div>
   </div>
 
   <!-- ── Flow visuel ── -->
   <div class="flow-row">
     <div class="flow-step" id="step-click">
       <div class="flow-icon">🖱</div>
-      <div class="flow-label">Clic RDV</div>
+      <div class="flow-label">URL CEV</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-step" id="step-captcha">
@@ -130,6 +138,10 @@
       <div class="stat-num orange" id="statNext">—</div>
       <div class="stat-label">Prochain</div>
     </div>
+    <div class="stat-box">
+      <div class="stat-num green" id="statDossiers">—</div>
+      <div class="stat-label">Dossiers</div>
+    </div>
   </div>
 
   <!-- ── Instructions ── -->
@@ -138,9 +150,9 @@
     <ol class="info-list">
       <li>Entre email + mot de passe VOWINT → <strong>Sauvegarder</strong></li>
       <li>Entre ta clé Anti-Captcha → <strong>Sauvegarder</strong></li>
+      <li>Laisse "Dossier cible" vide pour scanner <strong>tous les dossiers</strong> automatiquement</li>
       <li>Appuie sur <strong>▶ Démarrer</strong> — tourne en arrière-plan</li>
       <li>Dès qu'un créneau est détecté → <strong>sonnerie + notification</strong></li>
-      <li>Appuie sur <strong>"J'ai vu"</strong> dans ce popup pour couper la sonnerie</li>
     </ol>
   </div>
 
@@ -158,7 +170,9 @@
     </div>
   </div>
 
-  <div class="footer">Limite : 4 scans/heure · Mode détection · Anti-Captcha uniquement</div>
+  <div class="footer">
+    Intervalle : ~1 min + jitter · Round-robin multi-dossiers · Anti-shadowban
+  </div>
 </div>
 <script src="popup.js"></script>
 </body>

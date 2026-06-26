@@ -1,16 +1,15 @@
 /**
- * content-vowint.js — visaonweb.diplomatie.be
+ * content-vowint.js — visaonweb.diplomatie.be  v4.0
  *
- * FIX ORION/iOS : WebKit bloque window.open() depuis des MouseEvent synthétiques.
- * Solution : on ne clique JAMAIS le bouton.
- * À la place :
- *   1. On extrait l'appId depuis le HTML de la page
- *   2. On fait nous-mêmes le XHR GET /Common/GetEAppointmentUrl?id={appId}
- *      (c'est exactement ce que le bouton ferait — même cookies, même session)
- *   3. On envoie l'URL CEV au background → chrome.tabs.create() → aucun popup bloqué
- *
- * Sur Firefox PC l'ancien clic fonctionnait, mais cette approche marche partout
- * et est aussi plus fiable (pas de dépendance au DOM du bouton).
+ * Nouveautés v4 :
+ *   • LIST_DOSSIERS  — liste tous les dossiers actifs sans déclencher de scan
+ *   • CLICK_RDV_BUTTON — accepte targetAppId pour le round-robin BG
+ *   • Retourne toujours allDossiers dans la réponse (pool mis à jour côté BG)
+ *   • Détection page précise → VOWINT_PAGE_TYPE envoyé au background
+ *   • Priority: u=1, i  sur tous les XHR (aligné Burp Chrome 146)
+ *   • Cache-Control + If-Modified-Since sur GetEAppointmentUrl (déjà correct,
+ *     confirmé Burp — conservé explicitement)
+ *   • humanPageScan() enrichi (scroll + mouse + micro-pauses réalistes)
  */
 
 'use strict';
@@ -18,136 +17,218 @@
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Extraction appId depuis le HTML ──────────────────────────────────────────
+// ─── Détection de la page ─────────────────────────────────────────────────────
+
+function detectVowintPageType() {
+  const path = window.location.pathname.toLowerCase();
+  const url  = window.location.href.toLowerCase();
+
+  // Page login
+  if (
+    path.includes('/account/') ||
+    path.includes('/login')    ||
+    url.includes('returnurl')  ||
+    (document.querySelector('#UserName') && document.querySelector('#Password'))
+  ) return 'login';
+
+  // Page Mes Applications (liste des dossiers)
+  if (path.includes('/visaapplication/indexbyuserid')) return 'applications';
+
+  // Autres pages VOWINT authentifiées
+  if (path.includes('/en/') || path.includes('/fr/') || path.includes('/nl/')) return 'authenticated';
+
+  return 'unknown';
+}
+
+// ─── Extraction appIds ────────────────────────────────────────────────────────
 
 /**
- * Cherche l'appId (UUID) dans le HTML de la page.
- * VOWINT embed les UUIDs dans les attributs ng-click, data-*, href ou
- * directement dans les scripts inline.
- *
- * Depuis cevHttpSetup.ts ligne 421 :
- *   html.match(/GetEAppointmentUrl\?id=([a-f0-9-]+)/i)
+ * Cherche TOUS les UUIDs d'application dans le HTML de la page.
+ * Retourne [{ appId, ref, label }] — ref = numéro VOWINT, label = texte affiché.
  */
-function extractAppIds() {
-  const html = document.documentElement.innerHTML;
-  const ids = new Set();
+function extractAllDossiers() {
+  const html     = document.documentElement.innerHTML;
+  const appIds   = new Set();
 
-  // 1. GetEAppointmentUrl?id= dans les attributs/scripts
+  // 1. GetEAppointmentUrl?id= dans attributs / scripts
   for (const m of html.matchAll(/GetEAppointmentUrl\?id=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi)) {
-    ids.add(m[1]);
+    appIds.add(m[1]);
   }
 
-  // 2. ng-click="groupVAEapp('uuid')" ou ng-click="...('uuid',...)"
+  // 2. ng-click="groupVAEapp('uuid')" ou pattern similaire
   for (const m of html.matchAll(/ng-click="[^"]*\('([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'/gi)) {
-    ids.add(m[1]);
+    appIds.add(m[1]);
   }
 
-  // 3. data-id="uuid" ou data-app-id="uuid"
-  for (const el of document.querySelectorAll('[data-id], [data-app-id], [data-application-id]')) {
-    const id = el.getAttribute('data-id') || el.getAttribute('data-app-id') || el.getAttribute('data-application-id') || '';
-    if (/^[a-f0-9]{8}-[a-f0-9]{4}-/i.test(id)) ids.add(id);
+  // 3. data-id / data-app-id / data-application-id
+  for (const el of document.querySelectorAll('[data-id],[data-app-id],[data-application-id]')) {
+    const id = el.getAttribute('data-id') ||
+               el.getAttribute('data-app-id') ||
+               el.getAttribute('data-application-id') || '';
+    if (/^[a-f0-9]{8}-[a-f0-9]{4}-/i.test(id)) appIds.add(id);
   }
 
-  return [...ids];
+  if (!appIds.size) return [];
+
+  // Enrichir chaque appId avec ref VOWINT + label
+  return [...appIds].map(appId => {
+    // Chercher un numéro VOWINT dans un rayon de 1500 chars autour de l'UUID
+    const idx = html.indexOf(appId);
+    const ctx = idx !== -1
+      ? html.slice(Math.max(0, idx - 1500), Math.min(html.length, idx + 1500))
+      : '';
+
+    const refMatch = ctx.match(/VOWINT(\d{6,10})/i);
+    const ref = refMatch ? `VOWINT${refMatch[1]}` : null;
+
+    // Texte visible le plus proche (nom du pays / type de visa)
+    let label = '';
+    if (idx !== -1) {
+      // Chercher un texte lisible en cherchant des spans/td proches
+      const stripped = ctx.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const labelMatch = stripped.match(/\b([A-Z][a-zÀ-ÿ]{3,}\s+[a-zÀ-ÿA-Z ]{2,30})\b/);
+      if (labelMatch) label = labelMatch[1].trim().slice(0, 40);
+    }
+
+    return { appId, ref, label };
+  });
 }
 
 /**
- * Sélectionne l'appId correspondant à une demande VOWINT précise (par numéro ex: VOWINT6085888).
- * Fallback : premier appId disponible.
+ * Sélectionne le dossier cible selon la priorité :
+ *   1. targetAppId (round-robin BG) → match exact UUID
+ *   2. vowintRef (dossier fixe)     → match HTML + ref extraites
+ *   3. Aucune contrainte            → premier de la liste (round-robin libre)
+ *
+ * Retourne null si une cible explicite est demandée mais introuvable —
+ * le background doit alors skipper le scan, PAS utiliser un autre dossier.
  */
-function selectAppId(appIds, vowintRef) {
-  if (!appIds.length) return null;
-  if (!vowintRef || appIds.length === 1) return appIds[0];
+function selectDossier(dossiers, vowintRef, targetAppId) {
+  if (!dossiers.length) return null;
 
-  // Chercher dans le HTML le numéro VOWINT près de l'UUID correspondant
-  const html = document.documentElement.innerHTML;
-  const refNorm = vowintRef.toUpperCase().replace(/\s+/g, '');
-  const refMatch = html.indexOf(refNorm);
-  if (refMatch !== -1) {
-    // Chercher un UUID dans un rayon de 2000 chars autour du numéro VOWINT
-    const window = html.slice(Math.max(0, refMatch - 1000), refMatch + 1000);
-    const uuidMatch = window.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
-    if (uuidMatch && appIds.includes(uuidMatch[0])) return uuidMatch[0];
+  // ── Priorité 1 : UUID exact fourni par le BG (round-robin) ────────────────
+  if (targetAppId) {
+    const found = dossiers.find(d => d.appId === targetAppId);
+    if (found) return found;
+    // targetAppId fourni mais introuvable → refus strict (pas de fallback)
+    return { __notFound: true, targetAppId };
   }
 
-  return appIds[0];
+  // ── Priorité 2 : ref VOWINT fixe (ex : VOWINT5903406) ────────────────────
+  if (vowintRef) {
+    const html    = document.documentElement.innerHTML;
+    const refNorm = vowintRef.toUpperCase().replace(/\s+/g, '');
+    const idx     = html.indexOf(refNorm);
+
+    if (idx !== -1) {
+      const ctx = html.slice(Math.max(0, idx - 1000), idx + 1000);
+      const m   = ctx.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
+      if (m) {
+        const found = dossiers.find(d => d.appId === m[0]);
+        if (found) return found;
+      }
+    }
+
+    // Chercher dans les refs extraites
+    const byRef = dossiers.find(d =>
+      d.ref && (d.ref === refNorm || d.ref.includes(vowintRef) || vowintRef.includes(d.ref))
+    );
+    if (byRef) return byRef;
+
+    // vowintRef fourni mais introuvable → refus strict
+    return { __notFound: true, vowintRef };
+  }
+
+  // ── Priorité 3 : round-robin libre (pas de contrainte) ───────────────────
+  return dossiers[0];
 }
 
 // ─── XHR GetEAppointmentUrl ───────────────────────────────────────────────────
 
 /**
- * Fait le vrai appel XHR que le bouton déclencherait.
- * Retourne l'URL d'intégration CEV ou null.
- *
- * Headers reproduits depuis capture-1780347172859.json (req 227) :
- *   X-Requested-With: XMLHttpRequest
- *   Accept: application/json, text/plain, *‌/*
- *   If-Modified-Since: 0
- *   Referer: .../en/VisaApplication/IndexByUserId
+ * Reproduit exactement le XHR que le bouton "Prendre rendez-vous" déclencherait.
+ * Headers alignés sur capture Burp Chrome 146 (audit 2026-06-26) :
+ *   - X-Requested-With: XMLHttpRequest
+ *   - Accept: application/json, text/plain, *‌/*
+ *   - Cache-Control: max-age=0 (AngularJS $http anti-304)
+ *   - If-Modified-Since: 0
+ *   - Priority: u=1, i  (Chrome 117+ XHR feature)
  */
-async function getEAppointmentUrl(appId) {
-  const url = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${appId}`;
+async function getEAppointmentUrl(appId, lang) {
+  const referer = `${VOWINT_BASE}/${lang || 'en'}/VisaApplication/IndexByUserId`;
+  const url     = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${appId}`;
 
   const resp = await fetch(url, {
     method: 'GET',
     credentials: 'include',
     headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'Accept': 'application/json, text/plain, */*',
+      'X-Requested-With':  'XMLHttpRequest',
+      'Accept':            'application/json, text/plain, */*',
+      'Cache-Control':     'max-age=0',
       'If-Modified-Since': '0',
-      'Referer': `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`,
-      'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8',
+      'Accept-Language':   'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Referer':           referer,
+      'Priority':          'u=1, i',
     },
   });
 
   if (!resp.ok) throw new Error(`GetEAppointmentUrl HTTP ${resp.status}`);
 
-  // La réponse peut être :
-  //  - une URL directe (string)       "https://appointment.cloud.diplomatie.be/Integration/..."
-  //  - un objet JSON { url: "..." }
-  //  - un objet JSON { redirectUrl: "..." }
   const ct = resp.headers.get('content-type') || '';
   if (ct.includes('json') || ct.includes('javascript')) {
     const data = await resp.json().catch(() => null);
     if (typeof data === 'string') return data;
-    if (data?.url)         return data.url;
-    if (data?.redirectUrl) return data.redirectUrl;
+    if (data?.url)            return data.url;
+    if (data?.redirectUrl)    return data.redirectUrl;
     if (data?.integrationUrl) return data.integrationUrl;
-    // Si l'objet contient une propriété qui ressemble à une URL CEV
     for (const v of Object.values(data || {})) {
       if (typeof v === 'string' && v.includes('appointment.cloud.diplomatie.be')) return v;
     }
     return null;
   }
 
-  // Réponse texte brut = URL directe
   const text = (await resp.text()).trim();
   if (text.startsWith('http')) return text;
-
-  // Parfois c'est du HTML avec une meta refresh ou une URL dans le corps
   const m = text.match(/https?:\/\/appointment\.cloud\.diplomatie\.be[^\s"'<>]+/);
   return m?.[0] || null;
 }
 
-// ─── Comportement humain avant le scan ────────────────────────────────────────
+// ─── Comportement humain ──────────────────────────────────────────────────────
 
+/**
+ * Simule un humain qui lit la page avant d'agir :
+ *   - Scroll partiel (2-4 pas, vitesse variable)
+ *   - Mouvements souris aléatoires (4-7)
+ *   - Micro-pauses entre chaque action
+ *   - Durée totale : 1.2-3.5 s (concentrée ~1.8 s)
+ */
 async function humanPageScan() {
-  const docH = Math.max(document.body.scrollHeight, 800);
-  const scrollSteps = 2 + Math.floor(Math.random() * 2);
+  const docH = Math.max(document.body?.scrollHeight || 800, 800);
+
+  // Scroll initial rapide (découvrir la page)
+  const scrollSteps = 2 + Math.floor(Math.random() * 3);
   for (let i = 0; i < scrollSteps; i++) {
-    window.scrollTo({ top: Math.floor(Math.random() * docH * 0.5), behavior: 'smooth' });
-    await sleep(300 + Math.random() * 500);
+    const target = Math.floor(Math.random() * docH * 0.6);
+    window.scrollTo({ top: target, behavior: 'smooth' });
+    await sleep(250 + Math.random() * 350);
   }
-  // Mouvement souris aléatoire
-  for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
+  // Revenir vers le haut (comme un humain qui cherche le bouton)
+  window.scrollTo({ top: Math.floor(Math.random() * 200), behavior: 'smooth' });
+  await sleep(200 + Math.random() * 300);
+
+  // Mouvements souris
+  const mouseMoves = 4 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < mouseMoves; i++) {
     document.dispatchEvent(new MouseEvent('mousemove', {
       bubbles: true,
-      clientX: 80 + Math.random() * (window.innerWidth  - 160),
-      clientY: 80 + Math.random() * (window.innerHeight - 160),
+      clientX: 60 + Math.random() * (window.innerWidth  - 120),
+      clientY: 60 + Math.random() * (window.innerHeight - 120),
     }));
-    await sleep(80 + Math.random() * 200);
+    await sleep(60 + Math.random() * 180);
   }
-  await sleep(600 + Math.random() * 1200);
+
+  // Pause finale avant action (simule le temps de lecture)
+  await sleep(500 + Math.random() * 900);
 }
 
 // ─── Frappe humaine (login) ───────────────────────────────────────────────────
@@ -160,95 +241,136 @@ async function humanFill(input, text) {
     input.value += char;
     input.dispatchEvent(new Event('input',  { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: char }));
-    await sleep(35 + Math.random() * 90);
+    await sleep(30 + Math.random() * 100);
   }
   input.dispatchEvent(new Event('change', { bubbles: true }));
   input.dispatchEvent(new Event('blur',   { bubbles: true }));
 }
 
-// ─── Messages du background ───────────────────────────────────────────────────
+// ─── Détection langue de la page ─────────────────────────────────────────────
+
+function detectLang() {
+  const m = window.location.pathname.match(/\/([a-z]{2})\//i);
+  if (m && ['fr', 'en', 'nl'].includes(m[1].toLowerCase())) return m[1].toLowerCase();
+  return document.documentElement.lang?.slice(0, 2).toLowerCase() || 'en';
+}
+
+// ─── Messages entrants ────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
-  // ── Login automatique ────────────────────────────────────────────────────
+  // ── Login automatique ──────────────────────────────────────────────────────
   if (msg.type === 'AUTO_LOGIN') {
-    const emailInput    = document.querySelector('#UserName, input[name="UserName"], input[type="email"]:not([readonly])');
-    const passwordInput = document.querySelector('#Password, input[name="Password"], input[type="password"]');
-    const submitBtn     = document.querySelector('button[type="submit"], input[type="submit"], .btn-primary[type="submit"]');
+    const emailIn = document.querySelector('#UserName, input[name="UserName"], input[type="email"]:not([readonly])');
+    const passIn  = document.querySelector('#Password, input[name="Password"], input[type="password"]');
+    const submit  = document.querySelector('button[type="submit"], input[type="submit"], .btn-primary[type="submit"]');
 
-    if (!emailInput || !passwordInput) {
+    if (!emailIn || !passIn) {
       sendResponse({ ok: false, error: 'Champs login introuvables' });
       return;
     }
     (async () => {
       try {
-        await humanFill(emailInput, msg.email);
-        await sleep(300 + Math.random() * 500);
-        await humanFill(passwordInput, msg.password);
-        await sleep(400 + Math.random() * 700);
-        if (submitBtn) submitBtn.click();
-        else if (passwordInput.form) passwordInput.form.submit();
-        else passwordInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+        await humanFill(emailIn, msg.email);
+        await sleep(280 + Math.random() * 450);
+        await humanFill(passIn,  msg.password);
+        await sleep(380 + Math.random() * 600);
+        if (submit) submit.click();
+        else if (passIn.form) passIn.form.submit();
+        else passIn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
         sendResponse({ ok: true });
       } catch (err) { sendResponse({ ok: false, error: err.message }); }
     })();
     return true;
   }
 
-  // ── Déclenchement du scan (remplace l'ancien CLICK_RDV_BUTTON) ──────────
+  // ── Lister les dossiers sans scan (sonde pool) ───────────────────────────
+  if (msg.type === 'LIST_DOSSIERS') {
+    (async () => {
+      let dossiers = extractAllDossiers();
+      if (!dossiers.length) {
+        // Attendre le rendu AngularJS (jusqu'à 10s)
+        let waited = 0;
+        while (!dossiers.length && waited < 10_000) {
+          await sleep(400);
+          waited += 400;
+          dossiers = extractAllDossiers();
+        }
+      }
+      sendResponse({ ok: true, dossiers });
+    })();
+    return true;
+  }
+
+  // ── Déclenchement scan (round-robin ou cible fixe) ───────────────────────
   if (msg.type === 'CLICK_RDV_BUTTON' || msg.type === 'FETCH_CEV_URL') {
     (async () => {
       try {
         // Comportement humain avant d'agir
         await humanPageScan();
 
-        // Attendre que AngularJS ait rendu la liste des dossiers.
-        // La page /VisaApplication/IndexByUserId passe à status="complete" dès le HTML
-        // initial, mais les UUIDs (GetEAppointmentUrl / ng-click) sont injectés par XHR
-        // AngularJS 200-3000ms plus tard. Sans cette attente, extractAppIds() trouve 0 id.
-        let appIds = extractAppIds();
-        if (!appIds.length) {
-          chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '⏳ Mes Applications — attente rendu AngularJS (jusqu\'à 12s)…' });
+        // Attendre le rendu AngularJS (jusqu'à 12s)
+        let dossiers = extractAllDossiers();
+        if (!dossiers.length) {
+          chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '⏳ Attente rendu AngularJS (jusqu\'à 12s)…' });
           let waited = 0;
-          while (!appIds.length && waited < 12_000) {
+          while (!dossiers.length && waited < 12_000) {
             await sleep(400);
             waited += 400;
-            appIds = extractAppIds();
+            dossiers = extractAllDossiers();
           }
         }
 
-        if (!appIds.length) {
-          // Debug : dumper le HTML de la page pour identifier le bon pattern
-          const bodySnippet = document.body ? document.body.innerHTML.slice(0, 3000) : '(body vide)';
-          // Chercher toute occurrence d'UUID dans le DOM (pattern large)
-          const anyUuids = [...document.documentElement.innerHTML.matchAll(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi)].map(m => m[0]);
+        if (!dossiers.length) {
+          // Debug : dump UUIDs bruts
+          const anyUuids = [...document.documentElement.innerHTML
+            .matchAll(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi)]
+            .map(m => m[0]);
           chrome.runtime.sendMessage({
             type: 'LOG', level: 'warn',
-            msg: `⚠️ Aucun appId après 12s. UUIDs bruts trouvés: [${[...new Set(anyUuids)].slice(0, 5).join(', ')}] — DOM aperçu: ${bodySnippet.slice(0, 500).replace(/\s+/g, ' ')}`,
+            msg: `⚠️ Aucun appId après 12s. UUIDs bruts: [${[...new Set(anyUuids)].slice(0,5).join(', ')}]`,
           });
-          sendResponse({ ok: false, error: 'Aucun appId trouvé après 12s — vérifie que la page "Mes applications" VOWINT est chargée et que des dossiers sont visibles' });
+          sendResponse({ ok: false, error: 'Aucun dossier trouvé après 12s — Mes Applications VOWINT chargée ?' });
           return;
         }
 
-        const appId = selectAppId(appIds, msg.vowintRef);
-        chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: `🔗 appId sélectionné: ${appId.slice(0, 8)}… (${appIds.length} trouvé(s))` });
+        // Sélection du dossier cible
+        const dossier = selectDossier(dossiers, msg.vowintRef, msg.targetAppId);
+        if (!dossier) {
+          sendResponse({ ok: false, error: 'Aucun dossier trouvé', dossiers });
+          return;
+        }
+        // Cible explicite demandée mais introuvable → refus strict (pas de scan sur mauvais dossier)
+        if (dossier.__notFound) {
+          const what = dossier.targetAppId
+            ? `appId ${dossier.targetAppId.slice(0, 8)}…`
+            : `ref ${dossier.vowintRef}`;
+          sendResponse({ ok: false, error: `Dossier cible [${what}] introuvable sur la page — pool mis à jour`, dossiers });
+          return;
+        }
 
-        // Délai humain avant l'appel (simule le temps pour "viser" le bouton)
-        await sleep(400 + Math.random() * 800);
+        chrome.runtime.sendMessage({
+          type: 'LOG', level: 'info',
+          msg: `🔗 Dossier: ${dossier.ref || dossier.appId.slice(0,8)} (${dossiers.length} total) — XHR GetEAppointmentUrl…`,
+        });
 
-        // XHR GetEAppointmentUrl — équivalent exact du clic bouton
-        const cevUrl = await getEAppointmentUrl(appId);
+        // Délai "clic humain" (temps de pointer le bouton)
+        await sleep(350 + Math.random() * 700);
+
+        const lang   = detectLang();
+        const cevUrl = await getEAppointmentUrl(dossier.appId, lang);
 
         if (!cevUrl) {
-          sendResponse({ ok: false, error: 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV valide' });
+          sendResponse({ ok: false, error: 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV', dossiers });
           return;
         }
 
-        chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: `🌐 URL CEV obtenue → ${cevUrl.slice(0, 60)}…` });
+        chrome.runtime.sendMessage({
+          type: 'LOG', level: 'info',
+          msg: `🌐 URL CEV obtenue → ${cevUrl.slice(0, 60)}…`,
+        });
 
-        // Envoyer l'URL au background pour ouverture via chrome.tabs.create
-        // (pas de window.open → pas de popup blocker sur Orion/WebKit)
-        sendResponse({ ok: true, cevUrl, appId });
+        sendResponse({ ok: true, cevUrl, appId: dossier.appId, dossiers });
 
       } catch (err) {
         sendResponse({ ok: false, error: err.message || String(err) });
@@ -258,21 +380,48 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
-// ─── Détection login page ─────────────────────────────────────────────────────
+// ─── Init — détection page + signalement au background ───────────────────────
 
-function isLoginPage() {
-  if (document.querySelector('#UserName') && document.querySelector('#Password')) return true;
-  const hasEmail = document.querySelector('input[name="UserName"], input[name="Email"], input[type="email"]');
-  const hasPass  = document.querySelector('input[type="password"]');
-  if (hasEmail && hasPass) {
-    const isAppPage = document.querySelector('[ng-click*="groupVAEapp"], [ng-repeat], [ng-controller]');
-    if (!isAppPage) return true;
+(async () => {
+  await sleep(400 + Math.random() * 300);
+
+  const pageType = detectVowintPageType();
+
+  // Sur la page Mes Applications, extraire les dossiers et les signaler
+  let dossiers = [];
+  if (pageType === 'applications') {
+    dossiers = extractAllDossiers();
+    if (!dossiers.length) {
+      // Attendre le rendu AngularJS
+      let waited = 0;
+      while (!dossiers.length && waited < 8_000) {
+        await sleep(400);
+        waited += 400;
+        dossiers = extractAllDossiers();
+      }
+    }
   }
-  return false;
-}
 
-if (isLoginPage()) {
-  chrome.runtime.sendMessage({ type: 'VOWINT_LOGIN_PAGE' });
-} else {
-  chrome.runtime.sendMessage({ type: 'LOG', level: 'info', msg: '📄 VOWINT prêt — extraction appId disponible' });
-}
+  chrome.runtime.sendMessage({
+    type: 'VOWINT_PAGE_TYPE',
+    pageType,
+    dossiers,
+    url: window.location.href,
+  });
+
+  if (pageType === 'login') {
+    chrome.runtime.sendMessage({ type: 'VOWINT_LOGIN_PAGE' });
+  }
+
+  if (pageType === 'applications' && dossiers.length) {
+    chrome.runtime.sendMessage({
+      type: 'LOG', level: 'info',
+      msg: `📋 VOWINT prêt — ${dossiers.length} dossier(s): ${dossiers.map(d => d.ref || d.appId.slice(0,8)).join(', ')}`,
+    });
+  } else {
+    chrome.runtime.sendMessage({
+      type: 'LOG', level: 'info',
+      msg: `📄 VOWINT [${pageType}] @ ${window.location.pathname.slice(0, 60)}`,
+    });
+  }
+})();

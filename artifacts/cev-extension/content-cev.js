@@ -1,15 +1,20 @@
 /**
- * content-cev.js — appointment.cloud.diplomatie.be  v3.1
+ * content-cev.js — appointment.cloud.diplomatie.be  v4.0
  *
  * MODE DÉTECTION UNIQUEMENT — Réaction intelligente aux erreurs serveur.
  *
- * Signaux détectés et remontés au background :
- *   RATE_LIMITED  — 429, 403 WAF, corps de page avec mots-clés "trop de tentatives",
- *                   URL /Error/TooManyAttempts, /Error/Blocked, /Error/AccessDenied
- *   SERVER_ERROR  — 5xx avec classification (down, timeout, conflit)
- *   SESSION_ERROR — 401 / 410 / session expirée
+ * Améliorations v4 :
+ *   • Priority: u=1, i  sur tous les XHR (aligné Burp Chrome 146)
+ *   • Accept-Language fr-BE cohérent
+ *   • handleUnknownPage() : réévaluation toutes les 2s jusqu'à 20s (au lieu de 3s fixe)
+ *   • Délai de fermeture onglet légèrement aléatoire (humain)
+ *   • Détection rate-limit renforcée sur body AngularJS chargé tardivement
+ *
+ * Signaux remontés au background :
+ *   RATE_LIMITED  — 429, 403 WAF, URL /Error/*, mots-clés body
+ *   SERVER_ERROR  — 5xx avec classification (down, timeout, conflict, session)
  *   CEV_RESULT    — no_availability, slot_found, captcha_*
- *   SLOT_FOUND    — créneau disponible détecté
+ *   SLOT_FOUND    — créneau disponible
  */
 
 'use strict';
@@ -23,12 +28,8 @@ function log(msg, level = 'info') { bg({ type: 'LOG', level, msg }); }
 const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const SITEKEY  = '5f64399c-14a8-415e-ad1a-7ebccdc4943a';
 
-// ─── Détection Too Many Attempts / Rate-limit ─────────────────────────────────
+// ─── Rate-limit patterns ──────────────────────────────────────────────────────
 
-/**
- * Mots-clés indiquant un rate-limit ou blocage (FR / EN / NL).
- * Cherchés dans le corps de la page ET dans les corps de réponse JSON.
- */
 const RATE_LIMIT_PATTERNS = [
   /trop de tentatives/i,
   /too many attempts/i,
@@ -50,17 +51,11 @@ const RATE_LIMIT_PATTERNS = [
   /activité suspecte/i,
 ];
 
-/**
- * Vérifie si un texte contient un signal de rate-limit.
- */
 function containsRateLimitSignal(text) {
   if (!text) return false;
   return RATE_LIMIT_PATTERNS.some(re => re.test(text));
 }
 
-/**
- * Vérifie si l'URL courante indique une page de blocage CEV.
- */
 function isRateLimitUrl(url) {
   if (!url) return false;
   const u = url.toLowerCase();
@@ -76,18 +71,11 @@ function isRateLimitUrl(url) {
   );
 }
 
-/**
- * Signale un rate-limit au background avec source et raison.
- */
 async function reportRateLimit(source, reason) {
-  log(`🚫 RATE-LIMIT détecté [${source}] — ${reason}`, 'error');
+  log(`🚫 RATE-LIMIT [${source}] — ${reason}`, 'error');
   await bg({ type: 'RATE_LIMITED', source, reason });
 }
 
-/**
- * Signale une erreur serveur au background.
- * `category` : 'down' | 'timeout' | 'conflict' | 'session' | 'generic'
- */
 async function reportServerError(source, status, category, reason) {
   log(`⚠️ ERREUR SERVEUR ${status} [${source}] ${category} — ${reason}`, 'error');
   await bg({ type: 'SERVER_ERROR', source, status, category, reason });
@@ -95,18 +83,6 @@ async function reportServerError(source, status, category, reason) {
 
 // ─── Classification HTTP ──────────────────────────────────────────────────────
 
-/**
- * Classifie un code HTTP retourné par CEV.
- * Retourne { label, category } ou null si 2xx.
- *
- * categories :
- *   rate_limited  → pause 60min
- *   session       → re-login
- *   conflict      → continuer (slot pris entre-temps)
- *   down          → pause 10min (serveur down)
- *   timeout       → pause 5min  (timeout réseau)
- *   generic       → pause 5min  (autre 4xx/5xx)
- */
 function classifyStatus(status) {
   if (status >= 200 && status < 300) return null;
   if (status === 429) return { label: '429 Too Many Requests',          category: 'rate_limited' };
@@ -123,8 +99,22 @@ function classifyStatus(status) {
   if (status === 503) return { label: '503 Service Unavailable',        category: 'down'         };
   if (status === 504) return { label: '504 Gateway Timeout',            category: 'timeout'      };
   if (status >= 400 && status < 500) return { label: `${status} Erreur client`, category: 'generic' };
-  if (status >= 500) return { label: `${status} Erreur serveur`,        category: 'down'         };
+  if (status >= 500)                 return { label: `${status} Erreur serveur`, category: 'down'    };
   return { label: `HTTP ${status}`, category: 'generic' };
+}
+
+// ─── Helpers XHR avec Priority header ────────────────────────────────────────
+
+/**
+ * Headers XHR alignés Burp Chrome 146 — Priority: u=1, i sur tous les XHR.
+ */
+function xhrHeaders(extra = {}) {
+  return {
+    'X-Requested-With':  'XMLHttpRequest',
+    'Accept-Language':   'fr-BE,fr;q=0.9,en-US;q=0.8',
+    'Priority':          'u=1, i',
+    ...extra,
+  };
 }
 
 // ─── Helpers captcha ──────────────────────────────────────────────────────────
@@ -149,8 +139,8 @@ function triggerNativeCallback(token) {
       ta.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
-  const widget  = document.querySelector('[data-callback]');
-  const cbName  = widget?.getAttribute('data-callback');
+  const widget = document.querySelector('[data-callback]');
+  const cbName = widget?.getAttribute('data-callback');
   if (cbName && typeof window[cbName] === 'function') {
     try { window[cbName](token); return true; } catch {}
   }
@@ -171,12 +161,10 @@ async function postSetCaptchaToken(token) {
     const resp = await fetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
       method: 'POST',
       credentials: 'include',
-      headers: {
+      headers: xhrHeaders({
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': '*/*',
-        'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8',
-      },
+        'Accept':       '*/*',
+      }),
       body: `captcha=${encodeURIComponent(token)}`,
     });
 
@@ -203,7 +191,6 @@ async function postSetCaptchaToken(token) {
       const data = await resp.json().catch(() => null);
       if (!data) return { ok: false, error: 'JSON vide ou malformé' };
 
-      // Chercher signal rate-limit dans le corps JSON
       const bodyText = JSON.stringify(data);
       if (containsRateLimitSignal(bodyText)) {
         await reportRateLimit('SetCaptchaToken-body', `Corps JSON: ${bodyText.slice(0, 80)}`);
@@ -240,17 +227,17 @@ async function postSetCaptchaToken(token) {
 async function handleCaptchaPage() {
   log('🔒 Page captcha CEV — attente widget hCaptcha…');
 
-  // Vérifier d'abord si la page elle-même signale un rate-limit
+  // Vérifier rate-limit dans le body
   const pageBody = document.body?.innerText || '';
   if (containsRateLimitSignal(pageBody)) {
     await reportRateLimit('captcha-page-body', pageBody.slice(0, 120).trim());
     bg({ type: 'CEV_RESULT', result: 'rate_limited' });
-    setTimeout(() => { try { window.close(); } catch {} }, 1000);
+    setTimeout(() => { try { window.close(); } catch {} }, rand(800, 1400));
     return;
   }
 
   let captcha = detectHcaptchaWidget();
-  let waited = 0;
+  let waited  = 0;
   while (!captcha.found && waited < 15_000) {
     await sleep(500); waited += 500;
     captcha = detectHcaptchaWidget();
@@ -275,10 +262,10 @@ async function handleCaptchaPage() {
   log('✅ Token captcha reçu — callback natif…');
 
   const callbackTriggered = triggerNativeCallback(token);
-  log(`${callbackTriggered ? '✅ Callback natif déclenché' : '⚠️ Pas de callback natif — POST direct'}`);
+  log(`${callbackTriggered ? '✅ Callback natif déclenché' : '⚠️ Pas de callback — POST direct'}`);
 
   if (callbackTriggered) {
-    await sleep(rand(1500, 3000));
+    await sleep(rand(1200, 2800));
     const newPath = window.location.pathname.toLowerCase();
     if (!newPath.includes('integration/vow/') || newPath.includes('selectslot') || newPath.includes('noavail')) {
       log(`🔀 Redirection naturelle → ${window.location.pathname}`);
@@ -291,9 +278,8 @@ async function handleCaptchaPage() {
   const result = await postSetCaptchaToken(token);
 
   if (result.rateLimited || result.sessionError) {
-    // Déjà signalé au background via reportRateLimit / reportServerError
     bg({ type: 'CEV_RESULT', result: result.rateLimited ? 'rate_limited' : 'session_error' });
-    setTimeout(() => { try { window.close(); } catch {} }, 800);
+    setTimeout(() => { try { window.close(); } catch {} }, rand(600, 1000));
     return;
   }
 
@@ -312,19 +298,19 @@ async function handleCaptchaPage() {
 function handleNoAvailabilityPage() {
   log('❌ NoAvailability — aucun créneau');
   bg({ type: 'CEV_RESULT', result: 'no_availability' });
-  setTimeout(() => { try { window.close(); } catch {} }, 1500);
+  setTimeout(() => { try { window.close(); } catch {} }, rand(1200, 2000));
 }
 
-// ─── 3. RATE LIMIT / BLOCKED PAGE ────────────────────────────────────────────
+// ─── 3. RATE LIMIT PAGE ───────────────────────────────────────────────────────
 
 async function handleRateLimitPage(reason) {
-  log(`🚫 Page de blocage CEV détectée — ${reason}`, 'error');
+  log(`🚫 Page de blocage CEV — ${reason}`, 'error');
   await reportRateLimit('error-page', reason);
   bg({ type: 'CEV_RESULT', result: 'rate_limited' });
-  setTimeout(() => { try { window.close(); } catch {} }, 1000);
+  setTimeout(() => { try { window.close(); } catch {} }, rand(800, 1400));
 }
 
-// ─── 4. SELECT SLOT — DÉTECTION UNIQUEMENT ────────────────────────────────────
+// ─── 4. SELECT SLOT ───────────────────────────────────────────────────────────
 
 async function fetchFirstAvailableSlot() {
   const now  = new Date();
@@ -333,40 +319,31 @@ async function fetchFirstAvailableSlot() {
     const resp = await fetch(`${CEV_BASE}/Home/AvailableTimeSlots`, {
       method: 'POST',
       credentials: 'include',
-      headers: {
+      headers: xhrHeaders({
         'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'fr-BE,fr;q=0.9',
-      },
+        'Accept':       'application/json, text/javascript, */*; q=0.01',
+      }),
       body,
     });
 
     const cls = classifyStatus(resp.status);
     if (cls) {
       if (cls.category === 'rate_limited') {
-        await reportRateLimit('AvailableTimeSlots', cls.label);
-        return { rateLimited: true };
+        await reportRateLimit('AvailableTimeSlots', cls.label); return { rateLimited: true };
       }
       if (cls.category === 'session') {
-        await reportServerError('AvailableTimeSlots', resp.status, 'session', cls.label);
-        return { sessionError: true };
+        await reportServerError('AvailableTimeSlots', resp.status, 'session', cls.label); return { sessionError: true };
       }
       if (cls.category === 'conflict') {
-        log('⚠️ 409 Conflict — slot pris entre-temps, on continue', 'warn');
-        return null;
+        log('⚠️ 409 Conflict — slot pris entre-temps', 'warn'); return null;
       }
       await reportServerError('AvailableTimeSlots', resp.status, cls.category, cls.label);
       return { serverError: true, category: cls.category };
     }
 
     const data = await resp.json().catch(() => null);
-    if (!data) {
-      log('⚠️ AvailableTimeSlots : réponse JSON vide', 'warn');
-      return null;
-    }
+    if (!data) { log('⚠️ AvailableTimeSlots : réponse JSON vide', 'warn'); return null; }
 
-    // Chercher signal rate-limit dans le corps
     const bodyStr = JSON.stringify(data);
     if (containsRateLimitSignal(bodyStr)) {
       await reportRateLimit('AvailableTimeSlots-body', bodyStr.slice(0, 120));
@@ -385,9 +362,9 @@ async function fetchFirstAvailableSlot() {
 
     const first = available[0];
     return {
-      date:  first.date  ?? first.Date  ?? first.day       ?? first.Day   ?? '',
-      time:  first.time  ?? first.Time  ?? first.hour       ?? first.Hour  ?? first.startTime ?? '',
-      id:    first.id    ?? first.Id    ?? first.slotId     ?? first.appointmentId ?? null,
+      date:  first.date  ?? first.Date  ?? first.day  ?? first.Day   ?? '',
+      time:  first.time  ?? first.Time  ?? first.hour ?? first.Hour  ?? first.startTime ?? '',
+      id:    first.id    ?? first.Id    ?? first.slotId ?? first.appointmentId ?? null,
       count: available.length,
     };
   } catch (err) {
@@ -397,44 +374,40 @@ async function fetchFirstAvailableSlot() {
 }
 
 async function handleSelectSlotPage() {
-  log('🔍 SelectSlot — scan disponibilités (détection uniquement)');
-  await sleep(rand(800, 1500));
+  log('🔍 SelectSlot — scan disponibilités');
+  await sleep(rand(700, 1400));
 
-  // Vérifier rate-limit sur la page avant toute requête
+  // Rate-limit sur la page avant requête
   const pageBody = document.body?.innerText || '';
   if (containsRateLimitSignal(pageBody)) {
-    await handleRateLimitPage(pageBody.slice(0, 120).trim());
-    return;
+    await handleRateLimitPage(pageBody.slice(0, 120).trim()); return;
   }
 
   log('📡 POST /Home/AvailableTimeSlots');
   const slot = await fetchFirstAvailableSlot();
 
   if (!slot) {
-    // null = pas de slot, pas d'erreur
     log('❌ Aucun créneau disponible', 'warn');
     bg({ type: 'CEV_RESULT', result: 'no_availability' });
-    setTimeout(() => { try { window.close(); } catch {} }, 1500);
+    setTimeout(() => { try { window.close(); } catch {} }, rand(1200, 2000));
     return;
   }
 
-  // Erreurs remontées au background via reportRateLimit/reportServerError — fermer l'onglet
   if (slot.rateLimited || slot.serverError || slot.sessionError) {
-    const result = slot.rateLimited ? 'rate_limited'
+    const result = slot.rateLimited  ? 'rate_limited'
                  : slot.sessionError ? 'session_error'
                  : 'server_error';
     bg({ type: 'CEV_RESULT', result });
-    setTimeout(() => { try { window.close(); } catch {} }, 800);
+    setTimeout(() => { try { window.close(); } catch {} }, rand(700, 1100));
     return;
   }
 
-  // Slot trouvé !
   log(`🚨 SLOT TROUVÉ: ${slot.date} ${slot.time} (${slot.count} dispo, id=${slot.id})`, 'ok');
   await bg({
     type: 'SLOT_FOUND',
     slot: { date: slot.date, time: slot.time, id: slot.id, count: slot.count },
   });
-  setTimeout(() => { try { window.close(); } catch {} }, 1000);
+  setTimeout(() => { try { window.close(); } catch {} }, rand(900, 1400));
 }
 
 // ─── 5. SESSION EXPIRÉE ───────────────────────────────────────────────────────
@@ -442,7 +415,7 @@ async function handleSelectSlotPage() {
 function handleSessionExpiredPage() {
   log('⏱ Session CEV expirée', 'warn');
   bg({ type: 'CEV_RESULT', result: 'session_expired' });
-  setTimeout(() => { try { window.close(); } catch {} }, 1200);
+  setTimeout(() => { try { window.close(); } catch {} }, rand(1000, 1600));
 }
 
 // ─── Routeur ──────────────────────────────────────────────────────────────────
@@ -451,10 +424,8 @@ function detectPageType() {
   const path = window.location.pathname.toLowerCase();
   const body = document.body?.innerText?.toLowerCase() || '';
 
-  // Rate-limit / blocage — priorité haute
-  if (isRateLimitUrl(window.location.href) || containsRateLimitSignal(body)) {
+  if (isRateLimitUrl(window.location.href) || containsRateLimitSignal(body))
     return 'rate_limited';
-  }
 
   if (path.includes('/integration/error/sessionexpired') || path.includes('expired'))
     return 'session_expired';
@@ -479,10 +450,10 @@ function detectPageType() {
 }
 
 async function init() {
-  await sleep(rand(700, 1500));
+  await sleep(rand(600, 1300));
 
   const type = detectPageType();
-  log(`📄 CEV ${type} @ ${window.location.pathname.slice(0, 60)}`);
+  log(`📄 CEV [${type}] @ ${window.location.pathname.slice(0, 60)}`);
 
   switch (type) {
     case 'rate_limited':    await handleRateLimitPage(`URL: ${window.location.pathname}`); break;
@@ -490,11 +461,25 @@ async function init() {
     case 'no_availability':      handleNoAvailabilityPage(); break;
     case 'select_slot':     await handleSelectSlotPage();    break;
     case 'session_expired':      handleSessionExpiredPage(); break;
-    default:
-      log('❓ Type inconnu — réévaluation dans 3s');
-      await sleep(3000);
-      const type2 = detectPageType();
-      if (type2 !== 'unknown') init();
+    default: {
+      // Réévaluer toutes les 2s jusqu'à 20s (JS peut charger tardivement)
+      let tries = 0;
+      const MAX_TRIES = 10;
+      const retry = async () => {
+        await sleep(2_000);
+        tries++;
+        const type2 = detectPageType();
+        if (type2 !== 'unknown') {
+          log(`📄 CEV [${type2}] détecté après ${tries * 2}s`);
+          init();
+        } else if (tries < MAX_TRIES) {
+          retry();
+        } else {
+          log('❓ Type CEV inconnu après 20s — abandon', 'warn');
+        }
+      };
+      retry();
+    }
   }
 }
 

@@ -157,10 +157,105 @@ body {
   margin-top: 3px;
 }
 
+/* ── Version badge ── */
+.version-badge {
+  display: inline-block;
+  background: #6366f1;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Dossier pool ── */
+.section-title .rr-badge {
+  display: inline-block;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.dossier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.dossier-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #12121c;
+  border: 1px solid #1e1e2a;
+  font-size: 11px;
+  transition: background 0.2s;
+}
+
+.dossier-item.dossier-current {
+  background: #1a1a3a;
+  border-color: #6366f1;
+}
+
+.dossier-item.dossier-next {
+  border-color: #22c55e40;
+}
+
+.dossier-dot {
+  font-size: 10px;
+  color: #444460;
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.dossier-item.dossier-current .dossier-dot { color: #6366f1; }
+.dossier-item.dossier-next    .dossier-dot { color: #22c55e; }
+
+.dossier-ref {
+  font-weight: 600;
+  color: #aaaacc;
+  font-family: monospace;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.dossier-item.dossier-current .dossier-ref { color: #818cf8; }
+
+.dossier-label {
+  color: #555570;
+  font-size: 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dossier-id {
+  color: #333348;
+  font-family: monospace;
+  font-size: 9px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* ── Stats ── */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 

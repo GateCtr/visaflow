@@ -1,63 +1,67 @@
 /**
- * background.js — CEV Slot Hunter v3.1
+ * background.js — CEV Slot Hunter v4.0
  *
- * Réaction intelligente aux erreurs serveur :
+ * Nouveautés v4 :
+ *   • Round-robin multi-dossiers — liste tous les dossiers actifs VOWINT en mémoire,
+ *     scanne chacun à tour de rôle ; aucun dossier cible = mode automatique
+ *   • Intervalle 1 min + jitter log-normal humain (≈1:00–2:30, concentré ~1:10)
+ *   • Détection page VOWINT via content script (LOGIN_PAGE, APPS_PAGE, UNKNOWN)
+ *   • Sync bouton démarrer/arrêter robuste (SW keepalive + re-wake detect)
+ *   • Anti-shadow-ban : shadowban counter par dossier, rotation forcée si bloqué
  *
- *   RATE_LIMITED  (429, 403 WAF, body keywords)
- *     → Pause 60 min ancrée sur le PREMIER timestamp de détection.
- *       Reprises consécutives dans la fenêtre n'allongent pas le chrono.
- *
- *   SERVER_ERROR  down (5xx)
- *     → Pause 10 min, retentative automatique.
- *
- *   SERVER_ERROR  timeout (504, réseau)
- *     → Pause 5 min, retentative automatique.
- *
- *   SERVER_ERROR  session (401, 410)
- *     → Re-login automatique VOWINT.
- *
- *   SERVER_ERROR  conflict (409)
- *     → Continuer immédiatement (slot pris entre-temps, pas grave).
- *
- *   Consécutives server down (≥3 en 10 min)
- *     → Pause 20 min, notification "serveur CEV instable".
+ * Réaction erreurs :
+ *   RATE_LIMITED  (429, 403 WAF, body keywords) → Pause 60 min ancrée (1er hit)
+ *   SERVER_ERROR  down (5xx)                    → Pause 10 min
+ *   SERVER_ERROR  timeout (504, réseau)          → Pause 5 min
+ *   SERVER_ERROR  session (401, 410)             → Re-login VOWINT
+ *   SERVER_ERROR  conflict (409)                 → Continuer (slot pris)
+ *   Consécutives ≥3 en 10 min                   → Pause 20 min (storm)
  */
 
 'use strict';
 
-const MAX_CLICKS_PER_HOUR     = 4;
-const RATE_LIMIT_PAUSE_MS     = 60 * 60_000;   // 60 min pause rate-limit
-const SERVER_DOWN_PAUSE_MS    = 10 * 60_000;   // 10 min pause 5xx
-const SERVER_TIMEOUT_PAUSE_MS =  5 * 60_000;   //  5 min pause timeout
-const SERVER_STORM_PAUSE_MS   = 20 * 60_000;   // 20 min si ≥3 erreurs serveur en 10 min
-const SERVER_STORM_THRESHOLD  = 3;             // nbre d'erreurs serveur avant "storm"
-const SERVER_STORM_WINDOW_MS  = 10 * 60_000;   // fenêtre de détection storm
+// ─── Constantes ──────────────────────────────────────────────────────────────
 
-const SHADOWBAN_WARN_THRESHOLD = 3;
-const SHADOWBAN_STOP_THRESHOLD = 6;
+const RATE_LIMIT_PAUSE_MS     = 60 * 60_000;   // 60 min
+const SERVER_DOWN_PAUSE_MS    = 10 * 60_000;   // 10 min
+const SERVER_TIMEOUT_PAUSE_MS =  5 * 60_000;   //  5 min
+const SERVER_STORM_PAUSE_MS   = 20 * 60_000;   // 20 min
+const SERVER_STORM_THRESHOLD  = 3;
+const SERVER_STORM_WINDOW_MS  = 10 * 60_000;
+
+const SHADOWBAN_WARN_THRESHOLD = 3;   // consecutiveNoUrl avant warn
+const SHADOWBAN_STOP_THRESHOLD = 6;   // consecutiveNoUrl avant stop
+
+// Intervalle entre scans : 1 min base + jitter log-normal
+const SCAN_BASE_INTERVAL_MS = 60_000;  // 1 min
 
 // ─── État ────────────────────────────────────────────────────────────────────
 
 let state = {
-  running: false,
-  phase: 'idle',
-  attempts: 0,
-  captchasSolved: 0,
-  lastAttemptTs: null,
-  activeCevTabId: null,
-  logs: [],
-  nextRetryIn: null,
-  clickTimestamps: [],
-  applicationId: null,
-  consecutiveNoTab: 0,
-  slotFound: null,
-  alarmActive: false,
+  running:          false,
+  phase:            'idle',
+  attempts:         0,
+  captchasSolved:   0,
+  lastAttemptTs:    null,
+  activeCevTabId:   null,
+  logs:             [],
+  nextRetryIn:      null,
+  applicationId:    null,   // dossier cible fixe (null = round-robin auto)
+  consecutiveNoUrl: 0,      // nombre de cycles consécutifs sans URL CEV
+  slotFound:        null,
+  alarmActive:      false,
+
+  // ── Round-robin pool ──
+  dossierPool:      [],     // [{ appId, ref, label }] — tous les dossiers VOWINT
+  rrIndex:          0,      // index courant dans le pool
+  currentDossier:   null,   // { appId, ref, label } — dossier en cours de scan
 
   // ── Gestion erreurs ──
-  rateLimitStartTs: null,       // timestamp du PREMIER rate-limit détecté (ancre 60 min)
-  rateLimitReason: null,        // raison lisible du rate-limit
-  serverErrorTs: [],            // timestamps des erreurs serveur (storm detection)
-  lastServerErrorCategory: null,
+  rateLimitStartTs:       null,
+  rateLimitReason:        null,
+  serverErrorTs:          [],
+  lastServerErrorCategory:null,
+  serverPauseUntil:       null,   // timestamp fin de pause serveur (5/10/20 min)
 };
 
 // Restaurer l'état depuis le storage au démarrage du SW
@@ -65,21 +69,16 @@ chrome.storage.local.get(['cevState'], (d) => {
   if (d.cevState) {
     state = { ...state, ...d.cevState };
     if (state.running) {
-      state.running = false;
-      state.phase = 'idle';
+      state.running    = false;
+      state.phase      = 'idle';
       state.activeCevTabId = null;
       state.alarmActive = false;
-      addLog('warn', '⚠️ Watcher interrompu (service worker redémarré) — relancer manuellement');
+      addLog('warn', '⚠️ Watcher interrompu (SW redémarré) — relancer manuellement');
     }
-    // Vérifier si le rate-limit est encore actif
     if (state.rateLimitStartTs) {
-      const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
-      if (remaining <= 0) {
-        state.rateLimitStartTs = null;
-        state.rateLimitReason  = null;
-      } else {
-        addLog('warn', `⏸ Rate-limit encore actif — ${Math.ceil(remaining / 60_000)} min restantes`);
-      }
+      const rem = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
+      if (rem <= 0) { state.rateLimitStartTs = null; state.rateLimitReason = null; }
+      else addLog('warn', `⏸ Rate-limit encore actif — ${Math.ceil(rem / 60_000)} min restantes`);
     }
   }
 });
@@ -92,7 +91,7 @@ function persistState() {
 
 function addLog(level, msg) {
   state.logs.unshift({ ts: Date.now(), level, msg });
-  if (state.logs.length > 150) state.logs.length = 150;
+  if (state.logs.length > 200) state.logs.length = 200;
   broadcastState();
 }
 
@@ -113,71 +112,53 @@ function broadcastState() {
 function setPhase(phase, logMsg) {
   state.phase = phase;
   if (logMsg) {
-    const level = phase === 'slot_found' ? 'ok'
-                : (phase === 'retry' || phase === 'rate_limited' || phase === 'server_error') ? 'warn'
+    const level = phase === 'slot_found'  ? 'ok'
+                : ['retry','rate_limited','server_error'].includes(phase) ? 'warn'
                 : 'info';
     addLog(level, logMsg);
   }
   broadcastState();
-  // Rafraîchir immédiatement la notification statut sur tout changement significatif
   updateStatusNotification();
 }
 
-// ─── Rate-limit — pause 60 min ancrée sur premier hit ────────────────────────
+// ─── Rate-limit ───────────────────────────────────────────────────────────────
 
-/**
- * Démarre ou prolonge la pause rate-limit.
- * Le PREMIER hit pose l'ancre — les hits suivants dans la fenêtre ne changent rien.
- * Retourne le nombre de ms restantes à attendre.
- */
 function applyRateLimit(reason) {
   const now = Date.now();
-
   if (!state.rateLimitStartTs) {
-    // Premier hit → poser l'ancre
     state.rateLimitStartTs = now;
     state.rateLimitReason  = reason;
-    error(`🚫 RATE-LIMIT — pause 60 min depuis maintenant | raison: ${reason}`);
-    notify('🚫 CEV : trop de tentatives détectées',
-      `Pause automatique 60 min. Raison: ${reason.slice(0, 80)}`);
+    error(`🚫 RATE-LIMIT — pause 60 min | ${reason}`);
+    notify('🚫 CEV : trop de tentatives', `Pause 60 min. ${reason.slice(0, 80)}`);
   } else {
-    const remaining = RATE_LIMIT_PAUSE_MS - (now - state.rateLimitStartTs);
-    if (remaining <= 0) {
-      // Fenêtre écoulée → nouveau cycle, reposer l'ancre
+    const rem = RATE_LIMIT_PAUSE_MS - (now - state.rateLimitStartTs);
+    if (rem <= 0) {
       state.rateLimitStartTs = now;
       state.rateLimitReason  = reason;
-      error(`🚫 RATE-LIMIT (nouveau cycle) — pause 60 min | raison: ${reason}`);
-      notify('🚫 CEV : nouveau rate-limit détecté', `Pause 60 min. ${reason.slice(0, 60)}`);
+      error(`🚫 RATE-LIMIT (nouveau cycle) — 60 min | ${reason}`);
+      notify('🚫 CEV : nouveau rate-limit', `Pause 60 min. ${reason.slice(0, 60)}`);
     } else {
-      warn(`⏸ RATE-LIMIT déjà actif — ${Math.ceil(remaining / 60_000)} min restantes`);
+      warn(`⏸ RATE-LIMIT déjà actif — ${Math.ceil(rem / 60_000)} min restantes`);
     }
   }
-
   broadcastState();
   return Math.max(0, RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs));
 }
 
-/**
- * Vérifie si un rate-limit est actif et retourne le ms restant (0 = libre).
- */
 function getRateLimitRemaining() {
   if (!state.rateLimitStartTs) return 0;
-  const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
-  if (remaining <= 0) {
+  const rem = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
+  if (rem <= 0) {
     state.rateLimitStartTs = null;
     state.rateLimitReason  = null;
     broadcastState();
     return 0;
   }
-  return remaining;
+  return rem;
 }
 
-// ─── Server error storm detection ────────────────────────────────────────────
+// ─── Storm detection ──────────────────────────────────────────────────────────
 
-/**
- * Enregistre une erreur serveur et vérifie si un "storm" est détecté.
- * Retourne 'storm' | 'down' | 'timeout' | 'generic' avec la durée de pause.
- */
 function classifyServerErrorResponse(category) {
   const now = Date.now();
   state.serverErrorTs = (state.serverErrorTs || []).filter(t => now - t < SERVER_STORM_WINDOW_MS);
@@ -185,19 +166,18 @@ function classifyServerErrorResponse(category) {
   state.lastServerErrorCategory = category;
 
   if (state.serverErrorTs.length >= SERVER_STORM_THRESHOLD) {
-    error(`🌩️ Storm serveur détecté — ${state.serverErrorTs.length} erreurs en ${SERVER_STORM_WINDOW_MS / 60_000} min → pause ${SERVER_STORM_PAUSE_MS / 60_000} min`);
-    notify('🌩️ CEV serveur instable',
-      `${state.serverErrorTs.length} erreurs en ${SERVER_STORM_WINDOW_MS/60_000} min — pause ${SERVER_STORM_PAUSE_MS/60_000} min`);
-    state.serverErrorTs = []; // reset après storm
+    error(`🌩️ Storm serveur — ${state.serverErrorTs.length} erreurs → pause ${SERVER_STORM_PAUSE_MS / 60_000} min`);
+    notify('🌩️ CEV instable', `${state.serverErrorTs.length} erreurs — pause ${SERVER_STORM_PAUSE_MS/60_000} min`);
+    state.serverErrorTs = [];
     return { type: 'storm', pauseMs: SERVER_STORM_PAUSE_MS };
   }
 
   const pauseMs = category === 'timeout' ? SERVER_TIMEOUT_PAUSE_MS : SERVER_DOWN_PAUSE_MS;
-  warn(`⚠️ Erreur serveur [${category}] — pause ${pauseMs / 60_000} min (${state.serverErrorTs.length}/${SERVER_STORM_THRESHOLD})`);
+  warn(`⚠️ Erreur serveur [${category}] — pause ${pauseMs / 60_000} min`);
   return { type: category, pauseMs };
 }
 
-// ─── Offscreen (sonnerie audio) ───────────────────────────────────────────────
+// ─── Audio / Offscreen ───────────────────────────────────────────────────────
 
 async function ensureOffscreen() {
   try {
@@ -217,7 +197,7 @@ async function sendOffscreen(type) {
   try { chrome.runtime.sendMessage({ type }); } catch (_) {}
 }
 
-// ─── Sonnerie répétée (slot trouvé) ──────────────────────────────────────────
+// ─── Alarme slot ──────────────────────────────────────────────────────────────
 
 async function startAlarm(slot) {
   state.alarmActive = true;
@@ -243,7 +223,6 @@ async function stopAlarm() {
   chrome.notifications.clear('slot_alert', () => {});
 }
 
-// Alarmes périodiques
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'slot_reminder' && state.alarmActive) {
     await sendOffscreen('ALARM_PING');
@@ -252,8 +231,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       type: 'basic', iconUrl: 'icons/icon128.png',
       title: '🚨 CRÉNEAU CEV DISPONIBLE !',
       message: slot
-        ? `📅 ${slot.date || '?'} ${slot.time || ''} — Appuie "Acquitter" dans l\'extension.`
-        : 'Créneau disponible — acquitte l\'alerte dans l\'extension.',
+        ? `📅 ${slot.date || '?'} ${slot.time || ''} — Acquitte dans l'extension.`
+        : 'Créneau disponible — acquitte dans l\'extension.',
       priority: 2, requireInteraction: true,
     });
   }
@@ -265,13 +244,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// ─── Notification statut persistante (barre de notifications / écran verrouillé) ──
+// ─── Notification statut persistante ─────────────────────────────────────────
 
 const STATUS_NOTIF_ID = 'cev_live_status';
 
-/**
- * Formate un nombre de secondes en "4m32s" ou "58m00s".
- */
 function fmtMs(ms) {
   if (ms <= 0) return '0s';
   const totalSec = Math.ceil(ms / 1000);
@@ -280,14 +256,12 @@ function fmtMs(ms) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-/**
- * Construit le contenu de la notification statut selon l'état courant.
- * Retourne { title, message, iconUrl }.
- */
 function buildStatusContent() {
   const phase = state.phase || 'idle';
+  const dossierInfo = state.currentDossier
+    ? ` [${state.currentDossier.ref || state.currentDossier.appId.slice(0,8)}]`
+    : '';
 
-  // ── Slot trouvé — priorité absolue ────────────────────────────────────────
   if (phase === 'slot_found' || state.alarmActive) {
     const s = state.slotFound;
     return {
@@ -299,18 +273,15 @@ function buildStatusContent() {
     };
   }
 
-  // ── Rate-limit ─────────────────────────────────────────────────────────────
   if (phase === 'rate_limited' && state.rateLimitStartTs) {
-    const remaining = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
+    const rem = RATE_LIMIT_PAUSE_MS - (Date.now() - state.rateLimitStartTs);
     return {
       title:   '🚫 CEV Slot Hunter — Pause rate-limit',
-      message: `⏳ Reprise dans ${fmtMs(remaining)}\n` +
-               `🔍 ${state.attempts} scans effectués`,
+      message: `⏳ Reprise dans ${fmtMs(rem)}\n🔍 ${state.attempts} scans`,
       iconUrl: 'icons/icon48.png',
     };
   }
 
-  // ── Extension arrêtée ──────────────────────────────────────────────────────
   if (!state.running || phase === 'idle') {
     return {
       title:   '⏸ CEV Slot Hunter — Inactif',
@@ -319,7 +290,6 @@ function buildStatusContent() {
     };
   }
 
-  // ── Erreur serveur ─────────────────────────────────────────────────────────
   if (phase === 'server_error') {
     const wait = state.nextRetryIn ? `Reprise dans ${fmtMs(state.nextRetryIn * 1000)}` : 'Reprise bientôt…';
     return {
@@ -329,80 +299,51 @@ function buildStatusContent() {
     };
   }
 
-  // ── En cours de scan ───────────────────────────────────────────────────────
   const phaseLabel = {
-    clicking:        '🖱 Clic "Prendre rendez-vous"…',
+    clicking:        `🖱 Récupération URL CEV${dossierInfo}…`,
     captcha_solving: '🔒 Résolution captcha…',
-    waiting_result:  '🔍 Scan des disponibilités…',
-    retry:           state.nextRetryIn
-                       ? `⏱ Prochain scan dans ${fmtMs(state.nextRetryIn * 1000)}`
-                       : '⏱ Pause entre scans…',
+    waiting_result:  '🔍 Scan disponibilités…',
+    retry: state.nextRetryIn
+      ? `⏱ Prochain scan dans ${fmtMs(state.nextRetryIn * 1000)}${dossierInfo}`
+      : '⏱ Pause humaine…',
   }[phase] || `🔄 ${phase}`;
 
-  const now   = new Date();
-  const hhmm  = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const poolInfo = state.dossierPool.length > 1
+    ? ` · ${state.dossierPool.length} dossiers` : '';
+  const hhmm = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   return {
     title:   '🎯 CEV Slot Hunter — En cours',
-    message: `${phaseLabel}\n` +
-             `🔍 ${state.attempts} scans · 🔒 ${state.captchasSolved} captchas · ${hhmm}`,
+    message: `${phaseLabel}\n🔍 ${state.attempts} scans · 🔒 ${state.captchasSolved} captchas${poolInfo} · ${hhmm}`,
     iconUrl: 'icons/icon48.png',
   };
 }
 
-/**
- * Crée ou met à jour la notification statut.
- * Appelée toutes les 30 secondes via l'alarme 'cev_status'
- * et à chaque changement d'état significatif.
- */
 function updateStatusNotification() {
   if (!state.running && state.phase === 'idle' && state.attempts === 0) {
     chrome.notifications.clear(STATUS_NOTIF_ID, () => {});
     return;
   }
-
   const { title, message, iconUrl } = buildStatusContent();
-
-  // Tenter de mettre à jour d'abord, créer si elle n'existe pas
-  chrome.notifications.update(STATUS_NOTIF_ID, {
-    type: 'basic',
-    iconUrl,
-    title,
-    message,
-    priority: 1,
-  }, (wasUpdated) => {
-    if (!wasUpdated) {
-      chrome.notifications.create(STATUS_NOTIF_ID, {
-        type: 'basic',
-        iconUrl,
-        title,
-        message,
-        priority: 1,
-        // requireInteraction: false → la notification reste dans la barre
-        // sans bloquer l'écran, mais visible sur l'écran de verrouillage
-        isClickable: true,
-      });
-    }
-  });
+  chrome.notifications.update(STATUS_NOTIF_ID, { type: 'basic', iconUrl, title, message, priority: 1 },
+    (wasUpdated) => {
+      if (!wasUpdated) {
+        chrome.notifications.create(STATUS_NOTIF_ID, {
+          type: 'basic', iconUrl, title, message, priority: 1, isClickable: true,
+        });
+      }
+    });
 }
 
-/**
- * Démarre l'alarme de mise à jour de la notification statut (toutes les 30s).
- */
 function startStatusAlarm() {
-  chrome.alarms.create('cev_status', { periodInMinutes: 0.5 }); // 30 secondes
-  updateStatusNotification(); // mise à jour immédiate
+  chrome.alarms.create('cev_status', { periodInMinutes: 0.5 });
+  updateStatusNotification();
 }
 
-/**
- * Arrête l'alarme et efface la notification statut.
- */
 function stopStatusAlarm() {
   chrome.alarms.clear('cev_status');
   chrome.notifications.clear(STATUS_NOTIF_ID, () => {});
 }
-
-// ─── Notifications ponctuelles ────────────────────────────────────────────────
 
 function notify(title, message) {
   chrome.notifications.create(`notif_${Date.now()}`, {
@@ -411,28 +352,71 @@ function notify(title, message) {
   });
 }
 
-// ─── Rate-limit interne (self) ────────────────────────────────────────────────
+// ─── Round-Robin dossier pool ─────────────────────────────────────────────────
 
-function canAttempt() {
-  const now = Date.now();
-  const windowStart = now - 60 * 60_000;
-  state.clickTimestamps = (state.clickTimestamps || []).filter(t => t > windowStart);
-  return state.clickTimestamps.length < MAX_CLICKS_PER_HOUR;
+/**
+ * Met à jour le pool de dossiers depuis la réponse content-vowint.
+ * `dossiers` = [{ appId, ref, label }]
+ */
+function updateDossierPool(dossiers) {
+  if (!Array.isArray(dossiers) || !dossiers.length) return;
+
+  const prev = state.dossierPool.length;
+  // Fusionner : conserver les entrées existantes (pour garder le rrIndex stable)
+  // Ajouter les nouvelles, supprimer les disparues
+  const newPool = dossiers.filter(d => d.appId);
+  if (newPool.length === 0) return;
+
+  state.dossierPool = newPool;
+  // Ajuster rrIndex si hors bornes
+  if (state.rrIndex >= state.dossierPool.length) state.rrIndex = 0;
+
+  if (prev !== newPool.length) {
+    log(`📋 Pool dossiers mis à jour : ${newPool.length} dossier(s) — ${newPool.map(d => d.ref || d.appId.slice(0,8)).join(', ')}`);
+  }
 }
 
-function recordAttempt() {
-  if (!state.clickTimestamps) state.clickTimestamps = [];
-  state.clickTimestamps.push(Date.now());
+/**
+ * Retourne le prochain dossier à scanner (round-robin).
+ * Si un dossier cible est fixé (state.applicationId), le retourne à la place.
+ */
+function pickNextDossier() {
+  // Mode cible fixe
+  if (state.applicationId) {
+    // Chercher dans le pool
+    const target = state.dossierPool.find(d =>
+      d.ref === state.applicationId ||
+      d.appId === state.applicationId ||
+      (d.ref && state.applicationId.includes(d.ref)) ||
+      (d.ref && d.ref.includes(state.applicationId))
+    );
+    if (target) return target;
+    // Pas encore dans le pool — on laisse content-vowint sélectionner par ref
+    return null;
+  }
+
+  // Mode round-robin automatique
+  if (!state.dossierPool.length) return null;
+  const dossier = state.dossierPool[state.rrIndex % state.dossierPool.length];
+  state.rrIndex = (state.rrIndex + 1) % state.dossierPool.length;
+  return dossier;
 }
 
-// ─── Délai humain non-linéaire ────────────────────────────────────────────────
+// ─── Délai humain log-normal ──────────────────────────────────────────────────
 
+/**
+ * Délai entre scans : 1 min base + jitter log-normal.
+ * Distribution : μ~1:10, max ~2:30, concentrée sur 1:00-1:30.
+ * Simule un humain qui attend la fin de la page puis agit.
+ */
 function humanLikeRetryDelay() {
-  const BASE  = 2 * 60_000;
-  // Humain paressé : distribution non-uniforme 0-50s, concentrée vers les valeurs basses
-  // Math.pow(r, 1.8) → majorité < 20s, max ~50s
-  const extra = Math.pow(Math.random(), 1.8) * 50_000;
-  return Math.round(BASE + extra);  // 2:00 → 2:50, majorité ~2:00-2:20
+  // Box-Muller → distribution normale → log-normale
+  const u1 = Math.max(1e-10, Math.random());
+  const u2  = Math.random();
+  const normal    = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const lognormal = Math.exp(0.4 + 0.55 * normal); // μ=0.4, σ=0.55
+  const jitter    = Math.min(Math.round(lognormal * 18_000), 90_000); // max 90s
+  return SCAN_BASE_INTERVAL_MS + jitter; // 1:00 → ~2:30
 }
 
 // ─── Anti-Captcha ─────────────────────────────────────────────────────────────
@@ -457,13 +441,13 @@ async function solveHcaptcha(sitekey, siteUrl, apiKey) {
   while (Date.now() < deadline) {
     await sleep(pollCount === 0 ? 8_000 : 5_000);
     pollCount++;
-    const res    = await fetch('https://api.anti-captcha.com/getTaskResult', {
+    const res = await fetch('https://api.anti-captcha.com/getTaskResult', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientKey: apiKey, taskId }),
     });
     const result = await res.json();
-    if (result.errorId !== 0) throw new Error(`Anti-Captcha task: ${result.errorCode}`);
+    if (result.errorId !== 0) throw new Error(`Anti-Captcha: ${result.errorCode}`);
     if (result.status === 'ready') {
       const token = result.solution?.gRecaptchaResponse ?? result.solution?.token;
       if (!token) throw new Error('Anti-Captcha: token vide');
@@ -476,7 +460,7 @@ async function solveHcaptcha(sitekey, siteUrl, apiKey) {
   throw new Error('Anti-Captcha timeout (>120s)');
 }
 
-// ─── Helpers SW ──────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function sleep(ms) {
   const CHUNK = 20_000;
@@ -512,13 +496,13 @@ async function getTabUrl(tabId) {
 
 function detectVowintLang(url) {
   if (!url) return null;
-  const pathMatch = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
-  if (pathMatch) {
-    const lang = pathMatch[1].toLowerCase();
+  const m = url.match(/visaonweb\.diplomatie\.be\/([a-z]{2})\//i);
+  if (m) {
+    const lang = m[1].toLowerCase();
     if (['fr', 'en', 'nl'].includes(lang)) return lang;
   }
-  const returnMatch = url.match(/[?&]ReturnUrl=(?:%2F|\/)(en|fr|nl)/i);
-  if (returnMatch) return returnMatch[1].toLowerCase();
+  const rm = url.match(/[?&]ReturnUrl=(?:%2F|\/)(en|fr|nl)/i);
+  if (rm) return rm[1].toLowerCase();
   return null;
 }
 
@@ -530,16 +514,14 @@ function saveVowintLang(lang) { chrome.storage.local.set({ vowintLang: lang }); 
 
 function getStoredVowintLang() {
   return new Promise(resolve => {
-    chrome.storage.local.get(['vowintLang'], (d) => resolve(d.vowintLang || 'en'));
+    chrome.storage.local.get(['vowintLang'], d => resolve(d.vowintLang || 'en'));
   });
 }
 
 async function resolveVowintLang(url) {
   const detected = detectVowintLang(url);
   if (detected) { saveVowintLang(detected); return detected; }
-  const stored = await getStoredVowintLang();
-  log(`🌐 Langue mémorisée : ${stored}`);
-  return stored;
+  return await getStoredVowintLang();
 }
 
 function isVowintApplicationsPage(url) {
@@ -551,23 +533,17 @@ async function navigateToApplicationsPage(tabId, lang) {
   const targetUrl    = getApplicationsUrl(resolvedLang);
   log(`🗂 Navigation Mes Applications (${resolvedLang})`);
   setPhase('clicking', `🗂 Navigation vers Mes Applications…`);
-  await new Promise(resolve => { chrome.tabs.update(tabId, { url: targetUrl }, () => resolve()); });
+  await new Promise(resolve => chrome.tabs.update(tabId, { url: targetUrl }, () => resolve()));
   await waitForTabLoad(tabId, 25_000);
-  await sleep(randDelay(1_800, 3_200));
+  await sleep(randDelay(2_000, 3_500));
 }
 
-/**
- * Rafraîchit la page Mes Applications VOWINT.
- * Si tabId est fourni, recharge ce tab. Sinon cherche le tab VOWINT actif.
- * Utilisé : juste après un scan sans slot (avant la pause)
- *           et juste après la fin de la pause (avant le prochain scan).
- */
 async function refreshMesApplications(context, tabId) {
   try {
     let id = tabId;
     if (!id) {
       const tab = await getVowintTab();
-      if (!tab) { log(`🔄 Rafraîchissement [${context}] : aucun onglet VOWINT trouvé`); return; }
+      if (!tab) { log(`🔄 Rafraîchissement [${context}] : aucun onglet VOWINT`); return; }
       id = tab.id;
     }
     log(`🔄 Rafraîchissement Mes Applications [${context}]…`);
@@ -575,7 +551,7 @@ async function refreshMesApplications(context, tabId) {
     const targetUrl = getApplicationsUrl(lang);
     await new Promise(resolve => chrome.tabs.update(id, { url: targetUrl }, () => resolve()));
     await waitForTabLoad(id, 20_000);
-    await sleep(randDelay(800, 1_500));
+    await sleep(randDelay(1_000, 2_000));
     log(`✅ Mes Applications rechargée [${context}]`);
   } catch (err) {
     warn(`⚠️ Rafraîchissement [${context}] échoué : ${err}`);
@@ -645,18 +621,21 @@ async function getStoredCredentials() {
 
 async function performAutoLogin(tabId, creds) {
   return new Promise(resolve => {
-    chrome.tabs.sendMessage(tabId, { type: 'AUTO_LOGIN', email: creds.email, password: creds.password }, resp => {
-      if (chrome.runtime.lastError || !resp?.ok) {
-        error(`❌ Login auto échoué: ${chrome.runtime.lastError?.message || resp?.error || '?'}`);
-        resolve(false); return;
-      }
-      resolve(true);
-    });
+    chrome.tabs.sendMessage(tabId,
+      { type: 'AUTO_LOGIN', email: creds.email, password: creds.password },
+      resp => {
+        if (chrome.runtime.lastError || !resp?.ok) {
+          error(`❌ Login auto échoué: ${chrome.runtime.lastError?.message || resp?.error || '?'}`);
+          resolve(false); return;
+        }
+        resolve(true);
+      });
   });
 }
 
 async function ensureVowintSession() {
   let vowintTab = await getVowintTab();
+
   if (!vowintTab) {
     log('🌐 Ouverture onglet VOWINT (arrière-plan)…');
     setPhase('clicking', '🌐 Ouverture onglet VOWINT…');
@@ -666,9 +645,10 @@ async function ensureVowintSession() {
   } else {
     setPhase('clicking', '🔄 Rechargement VOWINT…');
     const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
-    if (reloaded) await sleep(randDelay(2_000, 4_500));
+    if (reloaded) await sleep(randDelay(2_000, 4_000));
     else warn('⚠️ Rechargement timeout — tentative sans refresh');
   }
+
   if (!state.running) return null;
 
   const currentUrl = await getTabUrl(vowintTab.id);
@@ -687,6 +667,7 @@ async function ensureVowintSession() {
     notify('🔓 Session VOWINT expirée', 'Entre tes identifiants dans le popup.');
     state.running = false; state.phase = 'idle'; broadcastState(); return null;
   }
+
   log(`🔐 Connexion VOWINT (${creds.email})…`);
   setPhase('clicking', `🔐 Connexion VOWINT…`);
   const loginOk = await performAutoLogin(vowintTab.id, creds);
@@ -701,6 +682,7 @@ async function ensureVowintSession() {
     notify('❌ Login VOWINT échoué', 'Vérifie email + mot de passe.');
     state.running = false; state.phase = 'idle'; broadcastState(); return null;
   }
+
   ok('✅ Connecté à VOWINT');
   if (!isVowintApplicationsPage(postLoginUrl)) {
     const lang = await resolveVowintLang(postLoginUrl);
@@ -710,57 +692,85 @@ async function ensureVowintSession() {
   return await getVowintTab() || vowintTab;
 }
 
+// ─── Sonde dossiers (pré-scan) ────────────────────────────────────────────────
+
+/**
+ * Demande au content-vowint de lister tous les appIds sans déclencher de scan.
+ * Met à jour le pool si la réponse contient des dossiers.
+ */
+async function probeDossierPool(tabId) {
+  return new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { type: 'LIST_DOSSIERS' }, resp => {
+      if (chrome.runtime.lastError || !resp?.ok) { resolve(false); return; }
+      if (resp.dossiers?.length) {
+        updateDossierPool(resp.dossiers);
+      }
+      resolve(true);
+    });
+    setTimeout(() => resolve(false), 15_000);
+  });
+}
+
 // ─── Boucle principale ────────────────────────────────────────────────────────
 
-// Signal interne : le handler de message RATE_LIMITED / SERVER_ERROR
-// pose ces promesses pour interrompre countdownWait proprement
-let _rateLimitSignal = null;
-let _serverErrorSignal = null;
+let pendingCevResultResolver = null;
 
 async function runLoop() {
   chrome.alarms.create('sw_keepalive', { periodInMinutes: 1 });
 
   while (state.running) {
 
-    // ── Sonnerie slot active → attendre acquittement ──────────────────────────
+    // ── Sonnerie active → attendre acquittement ───────────────────────────────
     if (state.alarmActive) { await sleep(5_000); continue; }
 
-    // ── Rate-limit actif : attendre le temps restant ──────────────────────────
+    // ── Pause serveur active (5/10/20 min) ───────────────────────────────────
+    if (state.serverPauseUntil) {
+      const rem = state.serverPauseUntil - Date.now();
+      if (rem > 0) {
+        const mins = Math.ceil(rem / 60_000);
+        setPhase('server_error', `⚠️ Pause serveur — reprise dans ${mins} min`);
+        await countdownWait(rem);
+        if (!state.running) break;
+        state.serverPauseUntil = null;
+        ok('✅ Pause serveur terminée — reprise');
+        broadcastState();
+        continue;
+      } else {
+        state.serverPauseUntil = null;
+      }
+    }
+
+    // ── Rate-limit actif ──────────────────────────────────────────────────────
     const rlRemaining = getRateLimitRemaining();
     if (rlRemaining > 0) {
       const reason = state.rateLimitReason || 'trop de tentatives';
       const mins   = Math.ceil(rlRemaining / 60_000);
-      setPhase('rate_limited',
-        `🚫 Rate-limit CEV (${reason.slice(0, 50)}) — pause ${mins} min`);
-      await countdownWait(rlRemaining, 'rate_limited');
+      setPhase('rate_limited', `🚫 Rate-limit CEV (${reason.slice(0, 50)}) — pause ${mins} min`);
+      await countdownWait(rlRemaining);
       if (!state.running) break;
-      ok('✅ Pause rate-limit terminée — reprise des scans');
+      ok('✅ Pause rate-limit terminée — reprise');
       state.rateLimitStartTs = null;
       state.rateLimitReason  = null;
       broadcastState();
       continue;
     }
 
-    // ── Rate-limit interne (self, nb clics/h) ─────────────────────────────────
-    if (!canAttempt()) {
-      const oldestClick = state.clickTimestamps[0];
-      const waitUntil   = oldestClick + 60 * 60_000;
-      const waitSec     = Math.ceil((waitUntil - Date.now()) / 1000);
-      setPhase('retry', `⚠️ Limite ${MAX_CLICKS_PER_HOUR} scans/h — attente ${Math.round(waitSec/60)} min`);
-      await countdownWait(waitSec * 1000);
-      continue;
-    }
-
-    // ── Délai humain entre scans (sauf premier) ───────────────────────────────
+    // ── Délai humain entre scans ──────────────────────────────────────────────
     if (state.attempts > 0) {
-      const delay  = humanLikeRetryDelay();
-      const dMin   = Math.floor(delay / 60_000);
-      const dSec   = Math.round((delay % 60_000) / 1000);
+      const delay = humanLikeRetryDelay();
+      const dMin  = Math.floor(delay / 60_000);
+      const dSec  = Math.round((delay % 60_000) / 1000);
+
+      // Indiquer le prochain dossier dans le message de pause
+      const nextD = state.dossierPool.length > 0
+        ? state.dossierPool[state.rrIndex % state.dossierPool.length]
+        : null;
+      const nextLabel = nextD ? ` → ${nextD.ref || nextD.appId.slice(0,8)}` : '';
+
       setPhase('retry',
-        `⏱ Prochain scan dans ${dMin}m${String(dSec).padStart(2,'0')}s (pause humaine)`);
+        `⏱ Pause ${dMin}m${String(dSec).padStart(2,'0')}s${nextLabel} (humaine)`);
       await countdownWait(delay);
       if (!state.running) break;
-      // ── Rafraîchir Mes Applications après la pause ─────────────────────────
       await refreshMesApplications('après pause');
     }
     if (!state.running) break;
@@ -769,61 +779,81 @@ async function runLoop() {
     const vowintTab = await ensureVowintSession();
     if (!vowintTab || !state.running) break;
 
-    // ── Pause "lecture" avant clic ────────────────────────────────────────────
-    const readPause = randDelay(1_500, 3_500);
-    setPhase('clicking', `👁 Scan arrière-plan… (${Math.round(readPause/1000)}s)`);
+    // ── Sonde le pool de dossiers si vide ou premier scan ─────────────────────
+    if (state.dossierPool.length === 0 || state.attempts === 0) {
+      await probeDossierPool(vowintTab.id);
+    }
+
+    // ── Sélection du prochain dossier ─────────────────────────────────────────
+    const targetDossier = pickNextDossier();
+    state.currentDossier = targetDossier;
+    broadcastState();
+
+    const dossierLabel = targetDossier
+      ? `[${targetDossier.ref || targetDossier.appId.slice(0,8)}]`
+      : '[auto]';
+
+    // ── Pause "lecture" avant action ──────────────────────────────────────────
+    const readPause = randDelay(1_200, 3_000);
+    setPhase('clicking', `👁 Lecture VOWINT ${dossierLabel}… (${Math.round(readPause/1000)}s)`);
     await sleep(readPause);
     if (!state.running) break;
 
-    // ── Fetch URL CEV via XHR (bypass window.open — fix Orion/WebKit iOS) ────────
+    // ── Fetch URL CEV via XHR ─────────────────────────────────────────────────
     state.attempts++;
     state.lastAttemptTs = Date.now();
-    recordAttempt();
-    setPhase('clicking', `🔗 Essai #${state.attempts} — récupération URL CEV…`);
+    setPhase('clicking', `🔗 Essai #${state.attempts} ${dossierLabel} — récupération URL CEV…`);
 
-    // Le content script fait lui-même le XHR GetEAppointmentUrl et retourne l'URL
     const fetchResp = await new Promise(resolve => {
       chrome.tabs.sendMessage(
         vowintTab.id,
-        { type: 'CLICK_RDV_BUTTON', vowintRef: state.vowintRef || null },
+        {
+          type:        'CLICK_RDV_BUTTON',
+          vowintRef:   state.applicationId || null,
+          targetAppId: targetDossier?.appId || null,
+        },
         resp => {
           if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
           else resolve(resp || { ok: false, error: 'Pas de réponse du content script' });
         }
       );
-      // Timeout si le content script ne répond pas
-      // 35s = 12s attente Angular + humanPageScan + délai humain + XHR GetEAppointmentUrl
-      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (35s)' }), 35_000);
+      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (38s)' }), 38_000);
     });
 
+    // Mettre à jour le pool si le content script a retourné des dossiers
+    if (fetchResp?.dossiers?.length) {
+      updateDossierPool(fetchResp.dossiers);
+    }
+
     if (!fetchResp?.ok || !fetchResp?.cevUrl) {
-      state.consecutiveNoTab = (state.consecutiveNoTab || 0) + 1;
+      state.consecutiveNoUrl = (state.consecutiveNoUrl || 0) + 1;
       broadcastState();
       const errMsg = fetchResp?.error || 'URL CEV non obtenue';
 
-      if (state.consecutiveNoTab >= SHADOWBAN_STOP_THRESHOLD) {
-        error(`🚫 Shadowban probable — ${state.consecutiveNoTab} cycles sans URL CEV`);
-        notify('🚫 Shadowban VOWINT', `${state.consecutiveNoTab} tentatives sans résultat. Attends 30-60 min.`);
+      if (state.consecutiveNoUrl >= SHADOWBAN_STOP_THRESHOLD) {
+        error(`🚫 Shadowban probable — ${state.consecutiveNoUrl}× sans URL CEV — arrêt`);
+        notify('🚫 Shadowban VOWINT',
+          `${state.consecutiveNoUrl} tentatives sans résultat. Attends 30-60 min.`);
         state.running = false; state.phase = 'idle'; broadcastState(); break;
       }
-      if (state.consecutiveNoTab >= SHADOWBAN_WARN_THRESHOLD) {
-        warn(`⚠️ ${state.consecutiveNoTab}× sans URL CEV : ${errMsg}`);
-        notify('⚠️ Aucune URL CEV', `${state.consecutiveNoTab} fois de suite — ${errMsg.slice(0, 60)}`);
+      if (state.consecutiveNoUrl >= SHADOWBAN_WARN_THRESHOLD) {
+        warn(`⚠️ ${state.consecutiveNoUrl}× sans URL CEV : ${errMsg}`);
+        notify('⚠️ Aucune URL CEV',
+          `${state.consecutiveNoUrl} fois — ${errMsg.slice(0, 60)}`);
       } else {
-        error(`❌ URL CEV non obtenue (${state.consecutiveNoTab}/${SHADOWBAN_STOP_THRESHOLD}): ${errMsg}`);
+        error(`❌ URL CEV non obtenue (${state.consecutiveNoUrl}/${SHADOWBAN_STOP_THRESHOLD}): ${errMsg}`);
       }
       continue;
     }
 
-    state.consecutiveNoTab = 0;
-    log(`🌐 URL CEV obtenue → ouverture onglet (chrome.tabs.create)`);
-    setPhase('captcha_solving', '🔒 Ouverture onglet CEV — captcha en cours…');
+    state.consecutiveNoUrl = 0;
+    log(`🌐 URL CEV → ouverture onglet ${dossierLabel}`);
+    setPhase('captcha_solving', `🔒 Onglet CEV ${dossierLabel} — captcha…`);
 
-    // Ouvrir l'onglet CEV via chrome.tabs.create — pas de window.open → pas de popup blocker
+    // ── Ouvrir l'onglet CEV ───────────────────────────────────────────────────
     const cevTab = await new Promise(resolve => {
       chrome.tabs.create({ url: fetchResp.cevUrl, active: false }, tab => {
         if (chrome.runtime.lastError || !tab) { resolve(null); return; }
-        // Attendre que l'onglet soit chargé (le content-cev.js s'injecte à document_idle)
         function onLoad(tabId, changeInfo) {
           if (tabId !== tab.id || changeInfo.status !== 'complete') return;
           chrome.tabs.onUpdated.removeListener(onLoad);
@@ -835,25 +865,24 @@ async function runLoop() {
     });
 
     if (!cevTab) {
-      error('❌ Impossible d\'ouvrir l\'onglet CEV via chrome.tabs.create');
+      error('❌ Impossible d\'ouvrir l\'onglet CEV');
       continue;
     }
 
     state.activeCevTabId = cevTab.id;
-    setPhase('captcha_solving', '🔒 Onglet CEV ouvert — captcha en cours…');
+    setPhase('captcha_solving', `🔒 Onglet CEV ouvert ${dossierLabel} — captcha…`);
 
     const result = await waitForCevResult(cevTab.id);
     state.activeCevTabId = null;
 
     if (result === 'slot_found') {
-      setPhase('slot_found', `🚨 SLOT DÉTECTÉ — alerte active ! (essai #${state.attempts})`);
+      setPhase('slot_found', `🚨 SLOT DÉTECTÉ ${dossierLabel} ! (essai #${state.attempts})`);
     } else if (result === 'rate_limited') {
-      // applyRateLimit déjà appelé via le message RATE_LIMITED
+      // applyRateLimit déjà appelé
     } else if (result === 'server_error') {
-      // déjà traité via SERVER_ERROR message
-    } else if (result === 'no_availability' || result === 'tab_closed' || result === 'timeout') {
-      setPhase('retry', `❌ Essai #${state.attempts} : aucune dispo`);
-      // ── Rafraîchir Mes Applications immédiatement avant la pause ───────────
+      // traité via SERVER_ERROR message
+    } else if (['no_availability', 'tab_closed', 'timeout'].includes(result)) {
+      setPhase('retry', `❌ Essai #${state.attempts} ${dossierLabel} : aucune dispo`);
       if (vowintTab) await refreshMesApplications('après scan', vowintTab.id);
     } else {
       warn(`⚠️ Résultat: ${result}`);
@@ -866,35 +895,7 @@ async function runLoop() {
   }
 }
 
-// ─── Attente onglet CEV ───────────────────────────────────────────────────────
-
-function waitForNewCevTab(timeoutMs) {
-  return new Promise(resolve => {
-    let resolved = false;
-    const timer = setTimeout(() => { cleanup(); if (!resolved) { resolved = true; resolve(null); } }, timeoutMs);
-    function cleanup() {
-      chrome.tabs.onCreated.removeListener(createdListener);
-      chrome.tabs.onUpdated.removeListener(updatedListener);
-    }
-    function createdListener(tab) {
-      if (tab.url && tab.url.includes('appointment.cloud.diplomatie.be')) {
-        clearTimeout(timer); cleanup(); if (!resolved) { resolved = true; resolve(tab); }
-      }
-    }
-    function updatedListener(tabId, changeInfo) {
-      if (changeInfo.url && changeInfo.url.includes('appointment.cloud.diplomatie.be')) {
-        clearTimeout(timer); cleanup();
-        if (!resolved) { resolved = true; chrome.tabs.get(tabId, t => resolve(t)); }
-      }
-    }
-    chrome.tabs.onCreated.addListener(createdListener);
-    chrome.tabs.onUpdated.addListener(updatedListener);
-  });
-}
-
 // ─── Attente résultat CEV ─────────────────────────────────────────────────────
-
-let pendingCevResultResolver = null;
 
 function waitForCevResult(tabId) {
   return new Promise(resolve => {
@@ -931,7 +932,7 @@ function waitForCevResult(tabId) {
 
 // ─── Countdown ────────────────────────────────────────────────────────────────
 
-async function countdownWait(ms, phase = 'retry') {
+async function countdownWait(ms) {
   const step = 5_000;
   let remaining = ms;
   while (remaining > 0 && state.running) {
@@ -939,9 +940,6 @@ async function countdownWait(ms, phase = 'retry') {
     broadcastState();
     await sleep(Math.min(step, remaining));
     remaining -= step;
-
-    // Re-vérifier si un rate-limit est arrivé pendant le countdown
-    // (message reçu asynchronement) — on laisse le runLoop le gérer au prochain tour
   }
   state.nextRetryIn = null;
 }
@@ -954,13 +952,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case 'START': {
       if (msg.applicationId !== undefined) {
         state.applicationId = msg.applicationId || null;
-        state.vowintRef     = msg.applicationId || null; // alias utilisé par content-vowint
       }
       if (!state.running) {
-        state.running    = true;
-        state.phase      = 'idle';
+        state.running     = true;
+        state.phase       = 'idle';
         state.alarmActive = false;
-        state.slotFound  = null;
+        state.slotFound   = null;
         startStatusAlarm();
         runLoop();
       }
@@ -970,9 +967,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case 'STOP': {
-      state.running      = false;
-      state.phase        = 'idle';
-      state.nextRetryIn  = null;
+      state.running     = false;
+      state.phase       = 'idle';
+      state.nextRetryIn = null;
+      state.currentDossier = null;
       if (state.activeCevTabId) {
         chrome.tabs.remove(state.activeCevTabId, () => {});
         state.activeCevTabId = null;
@@ -994,12 +992,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       break;
     }
 
-    // ── Rate-limit signalé par content-cev.js ───────────────────────────────
     case 'RATE_LIMITED': {
       const reason = `[${msg.source}] ${msg.reason}`;
       applyRateLimit(reason);
       setPhase('rate_limited', `🚫 Rate-limit — ${reason.slice(0, 80)}`);
-      // Signaler la fin du résultat CEV en attente
       if (pendingCevResultResolver) {
         pendingCevResultResolver('rate_limited');
         pendingCevResultResolver = null;
@@ -1008,43 +1004,36 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       break;
     }
 
-    // ── Erreur serveur signalée par content-cev.js ───────────────────────────
     case 'SERVER_ERROR': {
-      const { source, status, category, reason } = msg;
+      const { source, status, category } = msg;
 
       if (category === 'conflict') {
-        // 409 : normal, le slot était peut-être pris — ne pas interrompre
-        warn(`⚠️ Conflit 409 [${source}] — slot pris entre-temps, on continue`);
-        sendResponse({ ok: true });
-        break;
+        warn(`⚠️ Conflit 409 [${source}] — slot pris, on continue`);
+        sendResponse({ ok: true }); break;
       }
 
       if (category === 'session') {
-        warn(`🔓 Session invalide [${source}] HTTP ${status} — relance session`);
+        warn(`🔓 Session invalide [${source}] HTTP ${status} — relance`);
         if (pendingCevResultResolver) {
           pendingCevResultResolver('session_error');
           pendingCevResultResolver = null;
         }
-        sendResponse({ ok: true });
-        break;
+        sendResponse({ ok: true }); break;
       }
 
-      // down / timeout / storm
       const { type: sType, pauseMs } = classifyServerErrorResponse(category || 'down');
       const pauseMin = Math.round(pauseMs / 60_000);
-
       setPhase('server_error',
         `⚠️ Erreur serveur ${status} [${source}] ${sType} — pause ${pauseMin} min`);
+
+      // Stocker l'heure de fin de pause — runLoop() la respecte au prochain tour
+      state.serverPauseUntil = Date.now() + pauseMs;
 
       if (pendingCevResultResolver) {
         pendingCevResultResolver('server_error');
         pendingCevResultResolver = null;
       }
 
-      // Démarrer la pause directement (hors boucle) pour ce cycle
-      // La boucle reprendra après la fin de countdownWait via CEV_RESULT 'server_error'
-      // puis humanLikeRetryDelay sera ajouté normalement
-      state._serverPausePending = { pauseMs };
       broadcastState();
       sendResponse({ ok: true });
       break;
@@ -1065,8 +1054,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true; // async
     }
 
-    case 'VOWINT_LOGIN_PAGE': {
-      if (!state.running) addLog('warn', '🔓 Session VOWINT expirée — configure identifiants et lance ▶');
+    case 'VOWINT_PAGE_TYPE': {
+      // Signalé par content-vowint au chargement de page
+      const { pageType, dossiers } = msg;
+      if (dossiers?.length) updateDossierPool(dossiers);
+      if (!state.running && pageType === 'login') {
+        addLog('warn', '🔓 Session VOWINT expirée — configure identifiants et lance ▶');
+      }
       break;
     }
 
@@ -1113,15 +1107,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case 'RESET': {
-      state.attempts = 0;
-      state.captchasSolved = 0;
-      state.logs = [];
-      state.clickTimestamps = [];
-      state.consecutiveNoTab = 0;
-      state.slotFound = null;
+      state.attempts         = 0;
+      state.captchasSolved   = 0;
+      state.logs             = [];
+      state.consecutiveNoUrl = 0;
+      state.slotFound        = null;
       state.rateLimitStartTs = null;
-      state.rateLimitReason = null;
-      state.serverErrorTs = [];
+      state.rateLimitReason  = null;
+      state.serverErrorTs    = [];
+      state.serverPauseUntil = null;
+      state.dossierPool      = [];
+      state.rrIndex          = 0;
+      state.currentDossier   = null;
       stopAlarm();
       broadcastState();
       sendResponse({ ok: true });
@@ -1129,7 +1126,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     case 'CLEAR_RATE_LIMIT': {
-      // Forcer la levée manuelle du rate-limit (bouton dans popup)
       state.rateLimitStartTs = null;
       state.rateLimitReason  = null;
       if (state.phase === 'rate_limited') {
@@ -1139,7 +1135,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ ok: true });
       break;
     }
+
+    case 'SET_APPLICATION_ID': {
+      state.applicationId = msg.applicationId || null;
+      broadcastState();
+      sendResponse({ ok: true });
+      break;
+    }
   }
 });
 
-log('CEV Slot Hunter v3.1 — réaction intelligente aux erreurs serveur');
+log('CEV Slot Hunter v4.0 — round-robin multi-dossiers · 1 min jitter · anti-shadowban');
