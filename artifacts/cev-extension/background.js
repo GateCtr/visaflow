@@ -817,7 +817,7 @@ async function runLoop() {
           else resolve(resp || { ok: false, error: 'Pas de réponse du content script' });
         }
       );
-      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (38s)' }), 38_000);
+      setTimeout(() => resolve({ ok: false, error: 'Content script timeout (60s)' }), 60_000);
     });
 
     // Mettre à jour le pool si le content script a retourné des dossiers

@@ -179,19 +179,31 @@ async function getEAppointmentUrl(appId, lang) {
   const referer = `${VOWINT_BASE}/${lang || 'en'}/VisaApplication/IndexByUserId`;
   const url     = `${VOWINT_BASE}/Common/GetEAppointmentUrl?id=${appId}`;
 
-  const resp = await fetch(url, {
-    method: 'GET',
-    credentials: 'include',
-    headers: {
-      'X-Requested-With':  'XMLHttpRequest',
-      'Accept':            'application/json, text/plain, */*',
-      'Cache-Control':     'max-age=0',
-      'If-Modified-Since': '0',
-      'Accept-Language':   'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Referer':           referer,
-      'Priority':          'u=1, i',
-    },
-  });
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), 22_000);
+
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      signal: controller.signal,
+      headers: {
+        'X-Requested-With':  'XMLHttpRequest',
+        'Accept':            'application/json, text/plain, */*',
+        'Cache-Control':     'max-age=0',
+        'If-Modified-Since': '0',
+        'Accept-Language':   'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer':           referer,
+        'Priority':          'u=1, i',
+      },
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('GetEAppointmentUrl timeout (22s) — serveur VOWINT lent');
+    throw err;
+  } finally {
+    clearTimeout(abortTimer);
+  }
 
   if (!resp.ok) throw new Error(`GetEAppointmentUrl HTTP ${resp.status}`);
 
