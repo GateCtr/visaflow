@@ -1013,6 +1013,10 @@ export async function setupCevSessionHttp(
           headers: getCevBrowserHeaders({
             fetchSite: "same-origin",
             cookie: fullCevCookie,
+            // Propager le UA siphonné si présent (sessions pré-établies)
+            // Burp Chrome 146 (2026-06-26) : SelectSlot + Integration/VOW 2ème hit
+            // utilisent le même UA que toutes les requêtes précédentes.
+            userAgent: siphoned?.userAgent,
           }),
           signal: AbortSignal.timeout(30_000),
         });

@@ -64,7 +64,15 @@ Appears after Accept-Encoding in Chrome's header list.
 - SetCaptchaToken: Accept: */* (XHR default), no Referer, X-Requested-With, Origin, Sec-Fetch-Site: same-origin ✅
 - Integration/VOW Sec-Fetch-Site: same-site (both on diplomatie.be) ✅
 
+## Fixes applied (2026-06-26, audit #4 — SelectSlot + 2nd Integration/VOW navigation)
+10. **UA propagated in redirect chain loop** — `getCevBrowserHeaders` in the post-SetCaptchaToken redirect hop loop now passes `userAgent: siphoned?.userAgent`. For siphoned sessions, all hops (Integration/VOW→SelectSlot→NoAvailability) now use the siphoned UA consistently.
+
+## Confirmed correct (SelectSlot + 2nd Integration/VOW)
+- `Sec-Fetch-Site: same-origin` on both ✅ (already on appointment.cloud.diplomatie.be)
+- No Referer on either ✅ (confirmed Burp Chrome 146 + HAR 2026-06-08)
+- Cookie order `PreferredCulture; ASP.NET_SessionId` ✅ (fixed audit #3)
+- `Priority: u=0, i` ✅
+
 ## Remaining minor gaps (not fixed — low impact)
 - Double GET /en in redirect chain — bot follows once
 - Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146
-- 2nd GET /Integration/VOW/{tokenId}/en-US (browser does this post-captcha-solve from /Captcha page) — bot replaces this by following SetCaptchaToken redirectUrl directly
