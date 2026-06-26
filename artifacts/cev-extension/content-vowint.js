@@ -205,7 +205,11 @@ async function getEAppointmentUrl(appId, lang) {
     clearTimeout(abortTimer);
   }
 
-  if (!resp.ok) throw new Error(`GetEAppointmentUrl HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const err = new Error(`GetEAppointmentUrl HTTP ${resp.status}`);
+    err.httpStatus = resp.status;
+    throw err;
+  }
 
   const ct = resp.headers.get('content-type') || '';
   if (ct.includes('json') || ct.includes('javascript')) {
@@ -408,16 +412,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             lastXhrError = 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV';
           } catch (xhrErr) {
             lastXhrError = xhrErr.message || String(xhrErr);
-            const isTimeout = lastXhrError.includes('timeout') || xhrErr.name === 'AbortError';
-            if (isTimeout && attempt < MAX_XHR_ATTEMPTS) {
-              chrome.runtime.sendMessage({
-                type: 'LOG', level: 'warn',
-                msg: `⏱ XHR timeout — retry ${attempt}/${MAX_XHR_ATTEMPTS - 1} dans 2s…`,
-              });
-              await sleep(2_000 + Math.random() * 1_000);
+            const isTimeout  = lastXhrError.includes('timeout') || xhrErr.name === 'AbortError';
+            const status     = xhrErr.httpStatus || 0;
+            const isServer5xx = status === 503 || status === 502 || status === 504;
+
+            if (attempt < MAX_XHR_ATTEMPTS && (isTimeout || isServer5xx)) {
+              const pauseMs = isServer5xx
+                ? 8_000 + Math.random() * 4_000   // 503/502/504 → 8-12s (serveur surchargé)
+                : 2_000 + Math.random() * 1_000;   // timeout réseau → 2-3s
+
+              const label = isServer5xx
+                ? `🔴 Serveur VOWINT ${status} — retry ${attempt}/${MAX_XHR_ATTEMPTS - 1} dans ${Math.round(pauseMs / 1000)}s…`
+                : `⏱ XHR timeout — retry ${attempt}/${MAX_XHR_ATTEMPTS - 1} dans ${Math.round(pauseMs / 1000)}s…`;
+
+              chrome.runtime.sendMessage({ type: 'LOG', level: 'warn', msg: label });
+              await sleep(pauseMs);
               continue;
             }
-            // Erreur non-timeout ou dernière tentative → on sort
+            // Erreur non-retriable (401, 410, 404…) ou dernière tentative → on sort
             break;
           }
         }
