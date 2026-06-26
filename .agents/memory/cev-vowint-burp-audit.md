@@ -39,14 +39,20 @@ Burp Suite intercept on real Chrome 146 Windows, screentapinc@gmail.com, 2026-06
 - XHR/AJAX: `Priority: u=1, i`
 Appears after Accept-Encoding in Chrome's header list.
 
-## Fixes applied (2026-06-26)
+## Fixes applied (2026-06-26, audit #1)
 1. **GetAllVisaStatusTypes added** to cevHttpSetup.ts in `resolveVowintRefViaMyList` and `resolveFirstAppIdFromMyList` fallback — inserted between DataTables and MyList calls.
 2. **Priority header added** to all 3 branches of `getCevBrowserHeaders` in cev-shared-impit.ts:
    - Form POST branch: `"Priority": "u=0, i"`
    - Document navigate branch: `"Priority": "u=0, i"`
    - XHR/AJAX branch: `"Priority": "u=1, i"`
 
+## Fixes applied (2026-06-26, audit #2 — second Burp session)
+3. **`_culture=en-US` initialized before first GET /** — `vowintCookies` now starts as `"_culture=en-US"` instead of `""`, matching real browser behavior (persistent cookie from previous visit). Passed in `cookie:` override to `getCevBrowserHeaders`.
+4. **DataTables: removed Cache-Control + If-Modified-Since** — Burp Chrome 146 confirms DataTables (`/VisaApplication/DataTables`) has NO Cache-Control and NO If-Modified-Since, unlike GetAllVisaStatusTypes which has both. Fixed in both `resolveVowintRefViaMyList` and `resolveFirstAppIdFromMyList`.
+
+**Why DataTables vs GetAllVisaStatusTypes differ**: DataTables appears to use plain `$.ajax` while GetAllVisaStatusTypes uses AngularJS `$http` (which adds `Cache-Control: max-age=0` + `If-Modified-Since: 0` as anti-304 behavior).
+
 ## Remaining minor gaps (not fixed — low impact)
-- `_culture=en-US` absent on 1st GET / (bot cold start) — server sets it via Set-Cookie at login
 - Double GET /en in redirect chain — bot follows once
 - Post-SetCaptchaToken probe: browser drops ASP.NET_SessionId, bot sends both — server uses URL token for auth anyway
+- Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146

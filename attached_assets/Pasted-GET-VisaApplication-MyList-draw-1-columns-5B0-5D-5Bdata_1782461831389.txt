@@ -1,0 +1,18 @@
+GET /VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=AppNum&columns%5B1%5D%5Bname%5D=ApplicationNumber&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=2&columns%5B2%5D%5Bname%5D=&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=false&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=false&columns%5B3%5D%5Borderable%5D=false&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B4%5D%5Bdata%5D%5BId%5D=Id&columns%5B4%5D%5Bname%5D=&columns%5B4%5D%5Bsearchable%5D=false&columns%5B4%5D%5Borderable%5D=false&columns%5B4%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B4%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=desc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false&_=1782456072058 HTTP/1.1
+Host: visaonweb.diplomatie.be
+Cookie: __RequestVerificationToken=OyRdoFtGjN4t9VICcXQb1wUCqbqTm4-AvYuDa-3NdrZZiJJD13AZVd1OFPd-rJ7lB0XJ7Zr22y9rktULk8RG4bQcsQwgkiM67eZKEnZJ2pk1; ServerId=dccfd37d58572639; TS0110ceb4=01f258f40142e998db358fa06b988e958fd1e4c2cccf4a460cf7e02e85d06a51b896170465e553a10446ddcc32e5cba32c5ac083d6; OSOnline=XimQK4fRFUGJKhqaI3BjOIFnaimIsBQsYtVgiWhb-ymqjvLEIPEWIq_yljCfq3gawDOlWmKHLbKom5xcgXgY9HsjbnrN8v8JuEuJbgjXiIevzqolsVadOvz8AH1T6iwB5mQTSCKcbmBsyWt_f_GgcNX2rI4mQVziYFIe80LK3NTSiX_MrBR3rpxxM6c99xaoiPw3AodTmmbGnjo5ZMx___eEmboC97jDqkCYZs6-TJBRKz124Pic624434Ntx0UYhXkvsvHSzDao9nwH_z0CYX-V4jQVIFaNOdmxqQEvkQWrVEpJFlFsEtBW9z_mqXbe2zv_F9uhHtYyo9L80P0Rt7onVUjJv0GNxJtSzxeIymUMbBAan74uGXpSr95AXKebqFvmjX1drr46UALCzBfHhrLhHmcpFDGBayX9yRGtNxsZTcg9X2mLa5YaGzqcsT-xulwpvomyXkQk3BnS63nFRkgKmqTfwkcNg4OYTIzMY9oKdI7_2oYsynkIsGhlFMaa7magTlDaB81CcsxU1fyH139eRREouC6Sy8syI_BR4oAkGQlW7L9QwtAJW0BNH24Ckn--_v7KgoGu96GE39QwdRxSrkIPG7P44iKHRgXXyLIM6JGoIpVPypgBwz0BnkgJd5ObNR1GkyPIuF9wFPcWOdywhoQyZpnV3IQbRaQv1Xqry6LzwYMyZsPLApvafw0v1P4BPlArV785lhK4WWEmYhJw9b6Oo2RLC_3OwfGsApblay9rnTO9Do8jFh_p8jNBK_J9RsRh5yc17_GYCGxQIqRoCYV__gwHhzP36iGJMkc; _culture=en-US
+Sec-Ch-Ua-Platform: "Windows"
+X-Requested-With: XMLHttpRequest
+Accept-Language: fr-FR,fr;q=0.9
+Accept: application/json, text/javascript, */*; q=0.01
+Sec-Ch-Ua: "Not-A.Brand";v="24", "Chromium";v="146"
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+Sec-Ch-Ua-Mobile: ?0
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: https://visaonweb.diplomatie.be/en/VisaApplication/IndexByUserId
+Accept-Encoding: gzip, deflate, br
+Priority: u=1, i
+Connection: keep-alive
+

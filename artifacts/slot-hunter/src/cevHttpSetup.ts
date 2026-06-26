@@ -195,13 +195,16 @@ async function getVowintSession(
     // disparaît et le bot envoie toutes les requêtes VOWINT sans lui.
     //
     // Fix : redirect:"manual" + suivi manuel des redirects, cookie-jar cumulatif.
-    let vowintCookies = "";
+    // Fix Burp 2026-06-26 : _culture=en-US présent dès le 1er GET / dans le vrai navigateur.
+    // Un utilisateur ayant déjà visité le site a ce cookie persistent. L'initialiser ici
+    // permet de reproduire ce comportement — le serveur le renvoie via Set-Cookie de toute façon.
+    let vowintCookies = "_culture=en-US";
     let loginHtml = "";
 
     // Premier hop GET / — peut répondre 302 (TS0110ceb4 posé ici) ou directement 200
     const initRes = await cevSetupFetch(`${VOWINT_BASE}/`, {
       method: "GET",
-      headers: getCevBrowserHeaders({ fetchSite: "none" }),
+      headers: getCevBrowserHeaders({ fetchSite: "none", cookie: vowintCookies }),
       redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
@@ -360,10 +363,11 @@ async function getVowintSession(
  * Ne consomme PAS de clic GetEAppointmentUrl — c'est une simple lecture.
  */
 async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: string): Promise<string | null> {
-  // GET DataTables init (AngularJS $http — Cache-Control + If-Modified-Since en position native)
+  // GET DataTables init — Burp Chrome 146 (2026-06-26) confirme l'absence de Cache-Control
+  // et If-Modified-Since sur cet endpoint (contrairement à GetAllVisaStatusTypes qui les a).
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
     signal: AbortSignal.timeout(20_000),
   }).then(r => r.text()).catch(() => {});
 
@@ -430,10 +434,11 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
     if (m) return m[1];
   }
 
-  // Fallback MyList — précédé de DataTables + GetAllVisaStatusTypes (Burp Chrome 146)
+  // Fallback MyList — précédé de DataTables + GetAllVisaStatusTypes (Burp Chrome 146 2026-06-26)
+  // DataTables n'a PAS Cache-Control ni If-Modified-Since (confirmé Burp Chrome 146).
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
-    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
     signal: AbortSignal.timeout(20_000),
   }).then(r => r.text()).catch(() => {});
   await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
