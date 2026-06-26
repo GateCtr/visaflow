@@ -367,6 +367,14 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
     signal: AbortSignal.timeout(20_000),
   }).then(r => r.text()).catch(() => {});
 
+  // GET GetAllVisaStatusTypes — Burp Chrome 146 confirme cet appel entre DataTables et MyList
+  // (AngularJS $http — même ordre exact que le vrai navigateur)
+  await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    signal: AbortSignal.timeout(15_000),
+  }).then(r => r.text()).catch(() => {});
+
   // GET MyList — length=50 pour voir tous les dossiers (AngularJS $http)
   const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=50&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes = await cevSetupFetch(dtUrl, {
@@ -422,7 +430,17 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
     if (m) return m[1];
   }
 
-  // Fallback MyList
+  // Fallback MyList — précédé de DataTables + GetAllVisaStatusTypes (Burp Chrome 146)
+  await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    signal: AbortSignal.timeout(20_000),
+  }).then(r => r.text()).catch(() => {});
+  await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
+    method: "GET",
+    headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
+    signal: AbortSignal.timeout(15_000),
+  }).then(r => r.text()).catch(() => {});
   const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes = await cevSetupFetch(dtUrl, {
     method: "GET",

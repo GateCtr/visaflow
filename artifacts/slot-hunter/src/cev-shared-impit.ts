@@ -425,6 +425,7 @@ export function getCevBrowserHeaders(overrides?: {
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
+      "Priority": "u=0, i",
     };
   } else if (!isAjax) {
     // ── Requête document (navigation GET) ──────────────────────────────────
@@ -467,6 +468,7 @@ export function getCevBrowserHeaders(overrides?: {
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
+      "Priority": "u=0, i",
     };
   } else {
     // ── Requête fetch/XHR (AJAX) ────────────────────────────────────────────
@@ -520,6 +522,7 @@ export function getCevBrowserHeaders(overrides?: {
       "sec-ch-ua": chUa,
       "sec-ch-ua-mobile": chUaMobile,
       "sec-ch-ua-platform": chUaPlatform,
+      "Priority": "u=1, i",
     };
   }
 

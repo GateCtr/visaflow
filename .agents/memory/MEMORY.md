@@ -6,3 +6,4 @@
 - [CEV One-Shot (Predator) strategy](cev-one-shot-strategy.md) — dossier loop v4: no more 5-click/h quota; wake every 2 min, click once per dossier, sleep; session reuse via existing VOWINT cache (4h TTL in cevHttpSetup); DEFAULT_INTERVAL_SEC=120; pool is pure round-robin; build: 0 TS errors.
 - [Spain Bookitit fingerprint fixes](spain-bookitit-fingerprint.md) — 4 JSONP callers had wrong Sec-Fetch (no-cors/script→cors/empty), wrong Accept, and 6 missing high-entropy CH hints; all fixed via Burp Chrome 146 audit 2026-06-25.
 - [Spain citaconsular session flow](spain-citaconsular-session-flow.md) — exact 8-step HTTP flow (GET entry→POST token→JSD oneshot→2nd POST widget→JSONP); cookie order, PHPSESSID forwarding, GA cookies, JSD oneshot extraction — confirmed by Burp 2026-06-25.
+- [CEV VOWINT Burp audit Chrome 146](cev-vowint-burp-audit.md) — forensic comparison Burp Chrome 146 vs bot; 2 fixes applied: GetAllVisaStatusTypes + Priority header.

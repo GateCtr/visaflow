@@ -1,0 +1,23 @@
+POST /getcaptcha/5f64399c-14a8-415e-ad1a-7ebccdc4943a HTTP/2
+Host: api.hcaptcha.com
+Cookie: hmt_id=e8e6ff06-3add-4a02-b65c-fdee19b3e091; __cf_bm=LGJqALPy.2WDg2ITkdjjHfhapTHVF0QOSnDkdCmx_p4-1782456035.2677217-1.0.1.1-pI.FvARsRsOknRWftJnGK6wiXcGLWqg7gDe8Fv6SKwncjd9k6R0ju4sYbqs.WjNtL2aANncvgPbz4vTa8sUrJUd.ZTnXd3KatLFKvNMb3u8BA3wnoNOZ8AToJL8ywO2.
+Content-Length: 50073
+Sec-Ch-Ua-Platform: "Windows"
+Accept-Language: fr-FR,fr;q=0.9
+Accept: application/json, application/octet-stream
+Sec-Ch-Ua: "Not-A.Brand";v="24", "Chromium";v="146"
+Content-Type: application/octet-stream
+Sec-Ch-Ua-Mobile: ?0
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+Origin: https://newassets.hcaptcha.com
+Sec-Fetch-Site: same-site
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Sec-Fetch-Storage-Access: active
+Referer: https://newassets.hcaptcha.com/
+Accept-Encoding: gzip, deflate, br
+Priority: u=1, i
+
+Úö{"type":"hsw","req":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJmIjowLCJzIjoyLCJ0IjoidyIsImQiOiIwVmFDenVsSVRURUlPY09kWnVCV3lWcGJkck9NZEtqbTdQVDRxQklkRVVlTHF6MFpEYngxaE4zd3kzMEttUzY2alVqZ3F4RlNYZW1RcmdmU1dmTkh5cmYzZlRtUHdsL25WNjMrZ0srSXR2L2x4d0Z3VHV5UFgxTzN3T2hwNXhYMU5sYWJtTjF6TEF3U2Y3Vko1cUpCRkVTOFJpbEJod256V1ZQYmdObFlKeXRLdS9SYml2dERXOXQvaUVDWWZPQ2s2RFFUR2ZnSW1OWTE3dTNxYWZ5UEttVi9EL2kzS0dGTkRQS056bjU1cml0NG1uSm9YaVpMZEdxMHdFSnptU0c0UTExWFdNOGNEM0dscFZpNXVUa0RwUT09Q25yck9PUjRZd1hhcUdkcSIsImwiOiIvYy84OGFlNDA2NmQzYzRjNTVmNjg4NWJiMmM4NmM4NzRlZThiMzY1MzkyNmJlNjIxYzNiN2NlYjliMWI4NjBiYmE5IiwiaSI6InNoYTI1Ni1IY1ZIUkt3RitiNXZBa3BCVkp6bWVQVkJVV3F6Rk42NENDOXNweXgyWW1ZPSIsImUiOjE3ODI0NTk2OTIsIm4iOiJoc3ciLCJjIjoxMDAwfQ.UgZ85kY--zfb8yF4dCiC1OnSPPPlYRNCAHnoKD1Ynxs"}ÈÀK­ðèhE»¼z®YRdÓx3&¹FDQ¸¦C½ÿ6Ðè/·ÊPPòg=û3_rj7ïðþ' øE:4^óý2QTD ÅFýÑYãÔ5Å©æîõ×³PÞÚÒ£Ý¶U
+i#þÖÖip¾£ÊîÀÔZÐÐÖZ^ÒÁë¦w¸øá^aµ®
+v«<ÿT|FO%St£Ëò1g ÍÅuÂqþ-à¿×M}FòkÙ[m6Ïîðó÷¥s}5¿Þi2ofuKc2%c\ÏG"é×z&#SÌ§uÜÊæ¶*Ir×$Cï¿=q¾Ýf§ùGÜ6KÚîÄvXú@¤`$ÇSÖÂý'g3Á.¦Je|û¨ÆÚÔ3²Ø aç#èÉÇ0pû¸¯S3Ë!¦o¹dxá¹©_Ì
