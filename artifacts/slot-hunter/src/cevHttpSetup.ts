@@ -667,14 +667,11 @@ export async function setupCevSessionHttp(
             integrationUrl = eText.trim().replace(/^"|"$/g, "");
           }
         }
-        // FIX Faille #2 : aligner la langue de l'URL avec Accept-Language: fr-BE.
-        // GetEAppointmentUrl retourne l'URL avec le suffixe de culture VOWINT (/en-US par défaut).
-        // Un utilisateur belge francophone naviguant depuis VOWINT en français obtiendrait /fr-BE.
-        // On remplace /en-US par /fr-BE pour que le serveur CEV pose PreferredCulture=fr-BE,
-        // cohérent avec Accept-Language: fr-BE,fr;q=0.9,… envoyé dans tous les headers.
-        if (integrationUrl?.endsWith("/en-US")) {
-          integrationUrl = integrationUrl.slice(0, -6) + "/fr-BE";
-        }
+        // Burp Chrome 146 (2026-06-26) : le vrai navigateur NE remplace PAS /en-US par /fr-BE.
+        // VOWINT retourne toujours /en-US pour ce compte (_culture=en-US) et le serveur CEV
+        // pose PreferredCulture=en-US via Set-Cookie sur le GET Integration/VOW — cohérent.
+        // Le remplacement /fr-BE était erroné : Accept-Language fr-BE et culture URL en-US
+        // coexistent normalement chez les vrais utilisateurs belges francophones.
       } else if (eRes.status === 429) {
         // HTTP 429 explicite = rate-limit sur ce dossier/requête (pas d'invalidation session globale)
         botLog({ applicationId: clientId, step: "cev_http_rate_limit_429", status: "warn", data: { status: eRes.status } });
@@ -729,43 +726,77 @@ export async function setupCevSessionHttp(
       // VOWINT → CEV : visaonweb.diplomatie.be → appointment.cloud.diplomatie.be
       // même eTLD+1 (diplomatie.be), sous-domaines différents → Sec-Fetch-Site: same-site
       // HAR réel (2026-06-08) confirme : "sec-fetch-site": "same-site" sur ce saut.
+      //
+      // Burp Chrome 146 (2026-06-26) : le vrai navigateur envoie déjà Cookie: PreferredCulture=en-US
+      // sur ce premier GET (cookie persistant de visites antérieures) + pas d'ASP.NET_SessionId encore.
       const cevRes = await cevSetupFetch(integrationUrl, {
         method: "GET",
         headers: getCevBrowserHeaders({
           referer: `${VOWINT_BASE}/`,
           fetchSite: "same-site",
+          cookie: "PreferredCulture=en-US",
           userAgent: siphoned?.userAgent,
         }),
         redirect: "manual",
         signal: AbortSignal.timeout(30_000),
       });
 
+      // Extraire ASP.NET_SessionId ET PreferredCulture depuis les Set-Cookie de la réponse.
+      // Burp confirme : le serveur pose les deux cookies simultanément sur ce 302.
+      let capturedCulture = "en-US"; // valeur par défaut cohérente avec le cookie initial
       const cevSetCookies = cevRes.headers.getSetCookie?.() ?? [];
       for (const c of cevSetCookies) {
-        const m = c.match(/ASP\.NET_SessionId=([^;]+)/);
-        if (m) { cevSessionCookie = m[1]; break; }
+        const mSession = c.match(/ASP\.NET_SessionId=([^;]+)/);
+        if (mSession) cevSessionCookie = mSession[1];
+        const mCulture = c.match(/PreferredCulture=([^;]+)/);
+        if (mCulture) capturedCulture = mCulture[1];
       }
       // Fallback raw header
       if (!cevSessionCookie) {
         const raw = cevRes.headers.get("set-cookie") ?? "";
-        const m = raw.match(/ASP\.NET_SessionId=([^;]+)/);
-        if (m) cevSessionCookie = m[1];
+        const mS = raw.match(/ASP\.NET_SessionId=([^;]+)/);
+        if (mS) cevSessionCookie = mS[1];
+        const mC = raw.match(/PreferredCulture=([^;]+)/);
+        if (mC) capturedCulture = mC[1];
       }
 
       if (!cevSessionCookie) {
         botLog({ applicationId: clientId, step: "cev_http_no_cev_cookie", status: "fail", data: { status: cevRes.status } });
         return { success: false, error: "NO_CEV_SESSION_COOKIE" };
       }
+
+      // ── GET /Captcha (étape manquante — Burp Chrome 146 2026-06-26) ──────────
+      // Le vrai navigateur est redirigé vers /Captcha après Integration/VOW, et charge
+      // cette page avant de soumettre SetCaptchaToken. Son absence serait détectable
+      // par le serveur (pas de requête /Captcha → SetCaptchaToken direct = pattern bot).
+      // On simule ce GET avec les deux cookies déjà acquis.
+      const captchaPageCookie = `PreferredCulture=${capturedCulture}; ASP.NET_SessionId=${cevSessionCookie}`;
+      await cevSetupFetch(`${CEV_BASE}/Captcha`, {
+        method: "GET",
+        headers: getCevBrowserHeaders({
+          fetchSite: "same-site",
+          cookie: captchaPageCookie,
+          userAgent: siphoned?.userAgent,
+        }),
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => {}); // non-critique — continuer même si timeout
     }
 
     // Construire le cookie header complet, avec F5 si disponible.
-    // FIX Faille #2 : PreferredCulture=fr-BE (cohérent avec Accept-Language: fr-BE envoyé dans les headers
-    // ET avec l'URL d'intégration remplacée par /fr-BE ci-dessus — le serveur CEV le posera lui-même).
-    let fullCevCookie = `ASP.NET_SessionId=${cevSessionCookie}; PreferredCulture=fr-BE`;
+    // Burp Chrome 146 (2026-06-26) : ordre réel = PreferredCulture AVANT ASP.NET_SessionId
+    // (le navigateur envoie les cookies dans l'ordre d'insertion dans son jar).
+    // Valeur PreferredCulture = ce que le serveur a posé (en-US si URL /en-US, fr-BE si /fr-BE).
+    const capturedCultureFinal = (() => {
+      // Si cevSessionCookie a été extrait normalement, utiliser la culture capturée.
+      // Si siphoned (session pré-existante), conserver en-US par défaut.
+      return "en-US"; // toujours en-US — VOWINT account utilise _culture=en-US
+    })();
+    let fullCevCookie = `PreferredCulture=${capturedCultureFinal}; ASP.NET_SessionId=${cevSessionCookie}`;
     if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
       fullCevCookie = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${fullCevCookie}`;
     }
-    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie.length, usingSiphoned: !!siphoned } });
+    botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie!.length, usingSiphoned: !!siphoned } });
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 5 : Résoudre hCaptcha

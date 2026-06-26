@@ -46,13 +46,25 @@ Appears after Accept-Encoding in Chrome's header list.
    - Document navigate branch: `"Priority": "u=0, i"`
    - XHR/AJAX branch: `"Priority": "u=1, i"`
 
-## Fixes applied (2026-06-26, audit #2 — second Burp session)
+## Fixes applied (2026-06-26, audit #2 — VOWINT flow: GET / through GetAllVisaStatusTypes)
 3. **`_culture=en-US` initialized before first GET /** — `vowintCookies` now starts as `"_culture=en-US"` instead of `""`, matching real browser behavior (persistent cookie from previous visit). Passed in `cookie:` override to `getCevBrowserHeaders`.
 4. **DataTables: removed Cache-Control + If-Modified-Since** — Burp Chrome 146 confirms DataTables (`/VisaApplication/DataTables`) has NO Cache-Control and NO If-Modified-Since, unlike GetAllVisaStatusTypes which has both. Fixed in both `resolveVowintRefViaMyList` and `resolveFirstAppIdFromMyList`.
 
 **Why DataTables vs GetAllVisaStatusTypes differ**: DataTables appears to use plain `$.ajax` while GetAllVisaStatusTypes uses AngularJS `$http` (which adds `Cache-Control: max-age=0` + `If-Modified-Since: 0` as anti-304 behavior).
 
+## Fixes applied (2026-06-26, audit #3 — GetEAppointmentUrl through SetCaptchaToken)
+5. **Removed /fr-BE URL replacement** — VOWINT returns `/en-US` (matching `_culture=en-US` account cookie), browser keeps it as-is. Server sets `PreferredCulture=en-US` via Set-Cookie. The previous `/fr-BE` replacement was inconsistent with the `/en-US` account culture.
+6. **`PreferredCulture=en-US` cookie on first GET /Integration/VOW/** — real browser has this persistent cookie before the server sends it. Bot now initializes `cookie: "PreferredCulture=en-US"` on this request.
+7. **PreferredCulture now captured from server Set-Cookie** — extracted alongside ASP.NET_SessionId; used for consistency in subsequent requests.
+8. **Cookie order fixed** — Burp shows `PreferredCulture=en-US; ASP.NET_SessionId=…` (PreferredCulture FIRST). Bot now constructs `fullCevCookie` in this order (matching browser jar insertion order).
+9. **GET /Captcha added** — Burp shows browser does GET /Captcha between Integration/VOW and SetCaptchaToken. Bot was skipping this step; now fires GET /Captcha with the two CEV cookies (non-critical, catches errors silently).
+
+## Confirmed correct (no changes needed)
+- GetEAppointmentUrl: Cache-Control + If-Modified-Since + X-Requested-With + Accept: application/json, text/plain, */* ✅
+- SetCaptchaToken: Accept: */* (XHR default), no Referer, X-Requested-With, Origin, Sec-Fetch-Site: same-origin ✅
+- Integration/VOW Sec-Fetch-Site: same-site (both on diplomatie.be) ✅
+
 ## Remaining minor gaps (not fixed — low impact)
 - Double GET /en in redirect chain — bot follows once
-- Post-SetCaptchaToken probe: browser drops ASP.NET_SessionId, bot sends both — server uses URL token for auth anyway
 - Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146
+- 2nd GET /Integration/VOW/{tokenId}/en-US (browser does this post-captcha-solve from /Captcha page) — bot replaces this by following SetCaptchaToken redirectUrl directly
