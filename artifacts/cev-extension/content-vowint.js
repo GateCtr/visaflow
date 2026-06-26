@@ -47,51 +47,72 @@ function detectVowintPageType() {
  * Retourne [{ appId, ref, label }] — ref = numéro VOWINT, label = texte affiché.
  */
 function extractAllDossiers() {
-  const html     = document.documentElement.innerHTML;
-  const appIds   = new Set();
+  const html  = document.documentElement.innerHTML;
+  const htmlL = html.toLowerCase();
+  // Map uuid_lowercase → position dans html (première occurrence significative)
+  const seen  = new Map();
 
   // 1. GetEAppointmentUrl?id= dans attributs / scripts
   for (const m of html.matchAll(/GetEAppointmentUrl\?id=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi)) {
-    appIds.add(m[1]);
+    const id = m[1].toLowerCase();
+    if (!seen.has(id)) seen.set(id, m.index + m[0].length - id.length);
   }
 
   // 2. ng-click="groupVAEapp('uuid')" ou pattern similaire
   for (const m of html.matchAll(/ng-click="[^"]*\('([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'/gi)) {
-    appIds.add(m[1]);
+    const id = m[1].toLowerCase();
+    if (!seen.has(id)) seen.set(id, m.index + m[0].length - id.length);
   }
 
   // 3. data-id / data-app-id / data-application-id
   for (const el of document.querySelectorAll('[data-id],[data-app-id],[data-application-id]')) {
-    const id = el.getAttribute('data-id') ||
-               el.getAttribute('data-app-id') ||
-               el.getAttribute('data-application-id') || '';
-    if (/^[a-f0-9]{8}-[a-f0-9]{4}-/i.test(id)) appIds.add(id);
+    const raw = el.getAttribute('data-id') ||
+                el.getAttribute('data-app-id') ||
+                el.getAttribute('data-application-id') || '';
+    if (/^[a-f0-9]{8}-[a-f0-9]{4}-/i.test(raw)) {
+      const id  = raw.toLowerCase();
+      if (!seen.has(id)) seen.set(id, htmlL.indexOf(id));
+    }
   }
 
-  if (!appIds.size) return [];
+  if (!seen.size) return [];
 
-  // Enrichir chaque appId avec ref VOWINT + label
-  return [...appIds].map(appId => {
-    // Chercher un numéro VOWINT dans un rayon de 1500 chars autour de l'UUID
-    const idx = html.indexOf(appId);
-    const ctx = idx !== -1
-      ? html.slice(Math.max(0, idx - 1500), Math.min(html.length, idx + 1500))
-      : '';
+  // Enrichir chaque appId : ref VOWINT LA PLUS PROCHE de l'UUID (pas le 1er match)
+  const enriched = [...seen.entries()].map(([appId, idx]) => {
+    const ctxStart     = Math.max(0, idx - 800);
+    const ctxEnd       = Math.min(html.length, idx + 800);
+    const ctx          = idx !== -1 ? html.slice(ctxStart, ctxEnd) : '';
+    const uuidPosInCtx = idx - ctxStart;
 
-    const refMatch = ctx.match(/VOWINT(\d{6,10})/i);
-    const ref = refMatch ? `VOWINT${refMatch[1]}` : null;
+    let closestRef = null;
+    let minDist    = Infinity;
+    for (const m of ctx.matchAll(/VOWINT(\d{6,10})/gi)) {
+      const dist = Math.abs(m.index - uuidPosInCtx);
+      if (dist < minDist) { minDist = dist; closestRef = m; }
+    }
+    const ref = closestRef ? `VOWINT${closestRef[1]}` : null;
 
-    // Texte visible le plus proche (nom du pays / type de visa)
     let label = '';
     if (idx !== -1) {
-      // Chercher un texte lisible en cherchant des spans/td proches
       const stripped = ctx.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       const labelMatch = stripped.match(/\b([A-Z][a-zÀ-ÿ]{3,}\s+[a-zÀ-ÿA-Z ]{2,30})\b/);
       if (labelMatch) label = labelMatch[1].trim().slice(0, 40);
     }
 
-    return { appId, ref, label };
+    return { appId, ref, label, _refDist: minDist };
   });
+
+  // Dédupliquer par ref : si deux UUIDs ont le même ref VOWINT, garder
+  // celui dont l'UUID est physiquement le plus proche du ref (= le vrai bouton)
+  const refMap = new Map();
+  for (const d of enriched) {
+    if (!d.ref) continue;
+    const existing = refMap.get(d.ref);
+    if (!existing || d._refDist < existing._refDist) refMap.set(d.ref, d);
+  }
+  const noRef = enriched.filter(d => !d.ref);
+
+  return [...refMap.values(), ...noRef].map(({ appId, ref, label }) => ({ appId, ref, label }));
 }
 
 /**
