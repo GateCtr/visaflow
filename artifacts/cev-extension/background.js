@@ -538,25 +538,6 @@ async function navigateToApplicationsPage(tabId, lang) {
   await sleep(randDelay(2_000, 3_500));
 }
 
-async function refreshMesApplications(context, tabId) {
-  try {
-    let id = tabId;
-    if (!id) {
-      const tab = await getVowintTab();
-      if (!tab) { log(`🔄 Rafraîchissement [${context}] : aucun onglet VOWINT`); return; }
-      id = tab.id;
-    }
-    log(`🔄 Rafraîchissement Mes Applications [${context}]…`);
-    const lang = await getStoredVowintLang();
-    const targetUrl = getApplicationsUrl(lang);
-    await new Promise(resolve => chrome.tabs.update(id, { url: targetUrl }, () => resolve()));
-    await waitForTabLoad(id, 20_000);
-    await sleep(randDelay(1_000, 2_000));
-    log(`✅ Mes Applications rechargée [${context}]`);
-  } catch (err) {
-    warn(`⚠️ Rafraîchissement [${context}] échoué : ${err}`);
-  }
-}
 
 function isVowintLoginPage(url) {
   if (!url) return false;
@@ -567,22 +548,6 @@ function isVowintLoginPage(url) {
   return !isKnownRoute && isRoot;
 }
 
-async function reloadAndWaitVowintTab(tabId) {
-  return new Promise(resolve => {
-    function onUpdated(updTabId, changeInfo) {
-      if (updTabId !== tabId) return;
-      if (changeInfo.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(onUpdated);
-        resolve(true);
-      }
-    }
-    chrome.tabs.onUpdated.addListener(onUpdated);
-    chrome.tabs.reload(tabId, { bypassCache: true }, () => {
-      if (chrome.runtime.lastError) { chrome.tabs.onUpdated.removeListener(onUpdated); resolve(false); return; }
-      setTimeout(() => { chrome.tabs.onUpdated.removeListener(onUpdated); resolve(false); }, 30_000);
-    });
-  });
-}
 
 async function openVowintTab() {
   return new Promise(resolve => {
@@ -642,11 +607,6 @@ async function ensureVowintSession() {
     vowintTab = await openVowintTab();
     if (!vowintTab) { error('❌ Impossible d\'ouvrir l\'onglet VOWINT'); return null; }
     await sleep(1_500);
-  } else {
-    setPhase('clicking', '🔄 Rechargement VOWINT…');
-    const reloaded = await reloadAndWaitVowintTab(vowintTab.id);
-    if (reloaded) await sleep(randDelay(2_000, 4_000));
-    else warn('⚠️ Rechargement timeout — tentative sans refresh');
   }
 
   if (!state.running) return null;
@@ -771,7 +731,6 @@ async function runLoop() {
         `⏱ Pause ${dMin}m${String(dSec).padStart(2,'0')}s${nextLabel} (humaine)`);
       await countdownWait(delay);
       if (!state.running) break;
-      await refreshMesApplications('après pause');
     }
     if (!state.running) break;
 
@@ -883,7 +842,6 @@ async function runLoop() {
       // traité via SERVER_ERROR message
     } else if (['no_availability', 'tab_closed', 'timeout'].includes(result)) {
       setPhase('retry', `❌ Essai #${state.attempts} ${dossierLabel} : aucune dispo`);
-      if (vowintTab) await refreshMesApplications('après scan', vowintTab.id);
     } else {
       warn(`⚠️ Résultat: ${result}`);
     }
