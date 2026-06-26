@@ -396,11 +396,34 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         // Délai "clic humain" (temps de pointer le bouton)
         await sleep(350 + Math.random() * 700);
 
-        const lang   = detectLang();
-        const cevUrl = await getEAppointmentUrl(dossier.appId, lang);
+        const lang = detectLang();
+        const MAX_XHR_ATTEMPTS = 3;
+        let cevUrl = null;
+        let lastXhrError = null;
+
+        for (let attempt = 1; attempt <= MAX_XHR_ATTEMPTS; attempt++) {
+          try {
+            cevUrl = await getEAppointmentUrl(dossier.appId, lang);
+            if (cevUrl) break;
+            lastXhrError = 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV';
+          } catch (xhrErr) {
+            lastXhrError = xhrErr.message || String(xhrErr);
+            const isTimeout = lastXhrError.includes('timeout') || xhrErr.name === 'AbortError';
+            if (isTimeout && attempt < MAX_XHR_ATTEMPTS) {
+              chrome.runtime.sendMessage({
+                type: 'LOG', level: 'warn',
+                msg: `⏱ XHR timeout — retry ${attempt}/${MAX_XHR_ATTEMPTS - 1} dans 2s…`,
+              });
+              await sleep(2_000 + Math.random() * 1_000);
+              continue;
+            }
+            // Erreur non-timeout ou dernière tentative → on sort
+            break;
+          }
+        }
 
         if (!cevUrl) {
-          sendResponse({ ok: false, error: 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV', dossiers });
+          sendResponse({ ok: false, error: lastXhrError || 'GetEAppointmentUrl n\'a pas retourné d\'URL CEV', dossiers });
           return;
         }
 
