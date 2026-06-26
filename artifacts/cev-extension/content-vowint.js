@@ -259,6 +259,12 @@ function detectLang() {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
+  // ── Ping (détection content script actif) ─────────────────────────────────
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true });
+    return;
+  }
+
   // ── Login automatique ──────────────────────────────────────────────────────
   if (msg.type === 'AUTO_LOGIN') {
     const emailIn = document.querySelector('#UserName, input[name="UserName"], input[type="email"]:not([readonly])');

@@ -9,7 +9,8 @@
     "activeTab",
     "tabs",
     "alarms",
-    "offscreen"
+    "offscreen",
+    "scripting"
   ],
   "host_permissions": [
     "https://visaonweb.diplomatie.be/*",

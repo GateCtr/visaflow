@@ -655,6 +655,40 @@ async function ensureVowintSession() {
 // ─── Sonde dossiers (pré-scan) ────────────────────────────────────────────────
 
 /**
+ * S'assure que content-vowint.js est bien injecté dans l'onglet.
+ * Si le ping échoue ("Receiving end does not exist"), injecte le script
+ * via chrome.scripting et attend qu'il soit prêt (max 5s).
+ */
+async function ensureContentScript(tabId) {
+  const ping = () => new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { type: 'PING' }, resp => {
+      resolve(!chrome.runtime.lastError && resp?.ok);
+    });
+  });
+
+  if (await ping()) return true;
+
+  // Content script absent → injection programmatique
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files:  ['content-vowint.js'],
+    });
+  } catch (e) {
+    warn(`⚠️ Injection content script échouée : ${e.message}`);
+    return false;
+  }
+
+  // Attendre jusqu'à 5s qu'il soit prêt
+  for (let i = 0; i < 10; i++) {
+    await sleep(500);
+    if (await ping()) { ok('✅ Content script injecté'); return true; }
+  }
+  warn('⚠️ Content script injecté mais pas de réponse au ping');
+  return false;
+}
+
+/**
  * Demande au content-vowint de lister tous les appIds sans déclencher de scan.
  * Met à jour le pool si la réponse contient des dossiers.
  */
@@ -737,6 +771,13 @@ async function runLoop() {
     // ── Session VOWINT ────────────────────────────────────────────────────────
     const vowintTab = await ensureVowintSession();
     if (!vowintTab || !state.running) break;
+
+    // ── S'assurer que le content script est actif (injection si besoin) ───────
+    const csReady = await ensureContentScript(vowintTab.id);
+    if (!csReady) {
+      error('❌ Content script VOWINT introuvable — onglet non compatible ?');
+      state.running = false; state.phase = 'idle'; broadcastState(); break;
+    }
 
     // ── Sonde le pool de dossiers si vide ou premier scan ─────────────────────
     if (state.dossierPool.length === 0 || state.attempts === 0) {
