@@ -42,12 +42,12 @@ args = "artifacts/proxy-service: Proxy Service"
 name = "artifacts/slot-hunter: Slot Hunter"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/slot-hunter run dev"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[workflows.workflow]]
 name = "Start application"
