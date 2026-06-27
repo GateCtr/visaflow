@@ -362,14 +362,21 @@ function updateDossierPool(dossiers) {
   if (!Array.isArray(dossiers) || !dossiers.length) return;
 
   const prev = state.dossierPool.length;
-  // Fusionner : conserver les entrées existantes (pour garder le rrIndex stable)
-  // Ajouter les nouvelles, supprimer les disparues
-  const newPool = dossiers.filter(d => d.appId);
+
+  // Dédupliquer : clé = ref VOWINT si disponible, sinon appId
+  // Garantit qu'un même numéro VOWINT n'entre jamais deux fois dans le pool
+  // (peut arriver si le HTML contient deux UUIDs proches du même ref)
+  const seen = new Map();
+  for (const d of dossiers) {
+    if (!d.appId) continue;
+    const key = d.ref || d.appId;
+    if (!seen.has(key)) seen.set(key, d);
+  }
+  const newPool = [...seen.values()];
   if (newPool.length === 0) return;
 
   state.dossierPool = newPool;
-  // Ajuster rrIndex si hors bornes
-  if (state.rrIndex >= state.dossierPool.length) state.rrIndex = 0;
+  if (state.rrIndex >= newPool.length) state.rrIndex = 0;
 
   if (prev !== newPool.length) {
     log(`📋 Pool dossiers mis à jour : ${newPool.length} dossier(s) — ${newPool.map(d => d.ref || d.appId.slice(0,8)).join(', ')}`);
