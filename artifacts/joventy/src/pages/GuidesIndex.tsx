@@ -37,11 +37,20 @@ export default function GuidesIndex() {
     <>
       <Helmet>
         <title>Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy</title>
-        <meta
-          name="description"
-          content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir."
-        />
+        <meta name="description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
         <link rel="canonical" href="https://joventy.cd/guides" />
+        <meta property="og:title" content="Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy" />
+        <meta property="og:description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
+        <meta property="og:url" content="https://joventy.cd/guides" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy" />
+        <meta name="twitter:description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
+        <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(schemaArticleList)}</script>
       </Helmet>
 

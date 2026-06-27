@@ -6,9 +6,15 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
+const FLAG_NAMES: Record<string, string> = {
+  us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
+  es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
+};
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
-  return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={code} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
+  const altText = FLAG_NAMES[code.toLowerCase()] ?? `Drapeau ${code.toUpperCase()}`;
+  return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={altText} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
 }
 
 const PRICING = [
@@ -54,7 +60,7 @@ export default function Prix() {
     "offers": {
       "@type": "AggregateOffer",
       "priceCurrency": "USD",
-      "lowPrice": "250",
+      "lowPrice": "100",
       "highPrice": "1000",
       "offerCount": PRICING.length.toString(),
     },
@@ -103,6 +109,11 @@ export default function Prix() {
         <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
+        <meta name="twitter:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
+        <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
       </Helmet>
 

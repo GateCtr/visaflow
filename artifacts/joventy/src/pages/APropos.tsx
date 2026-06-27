@@ -7,19 +7,16 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 export default function APropos() {
   const orgSchema = {
     "@context": "https://schema.org",
-    "@type": "AboutPage",
-    "mainEntity": {
-      "@type": "Organization",
-      "name": "Joventy",
-      "legalName": "Akollad Groupe",
-      "url": "https://joventy.cd",
-      "foundingDate": "2024",
-      "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
-      "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
-      "address": { "@type": "PostalAddress", "addressLocality": "Kinshasa", "addressCountry": "CD" },
-      "contactPoint": { "@type": "ContactPoint", "telephone": "+243840808122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
-      "sameAs": ["https://akollad.com", "https://wa.me/243840808122"],
-    },
+    "@type": "Organization",
+    "name": "Joventy",
+    "legalName": "Akollad Groupe",
+    "url": "https://joventy.cd",
+    "foundingDate": "2024",
+    "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
+    "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
+    "address": { "@type": "PostalAddress", "addressLocality": "Kinshasa", "addressCountry": "CD" },
+    "contactPoint": { "@type": "ContactPoint", "telephone": "+243840808122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
+    "sameAs": ["https://akollad.com", "https://wa.me/243840808122"],
   };
 
   return (

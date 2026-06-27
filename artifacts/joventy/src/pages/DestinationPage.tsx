@@ -12,15 +12,21 @@ const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
   return FLAG_SIZES.find((s) => s >= n) ?? 80;
 }
+const FLAG_NAMES: Record<string, string> = {
+  us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
+  es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
+};
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
   const snapped2x = snapFlagSize(size * 2);
+  const altText = FLAG_NAMES[code.toLowerCase()] ?? `Drapeau ${code.toUpperCase()}`;
   return (
     <img
       src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`}
       srcSet={`https://flagcdn.com/w${snapped2x}/${code.toLowerCase()}.png 2x`}
       width={snapped}
-      alt={code}
+      alt={altText}
       className={`rounded-sm object-cover flex-shrink-0 ${className}`}
     />
   );
