@@ -190,6 +190,14 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- Spain visa guide — high-priority (550+ impressions, 0% CTR cluster) -->
+  <url>
+    <loc>https://joventy.cd/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026</loc>
+    <lastmod>2026-06-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
   <!-- Pricing & About pages -->
   <url>
     <loc>https://joventy.cd/prix</loc>

@@ -791,6 +791,149 @@ const guides: Guide[] = [
     relatedSlugs: ["travel-advisory-level-4-rdc-visa-usa-2026", "coupe-du-monde-2026-visa-usa-kinshasa", "suspension-visa-canada-rdc-ebola-2026"],
     relatedDestination: "visa-usa-kinshasa",
   },
+
+  {
+    slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+    title: "Visa Espagne depuis Kinshasa 2026 — Comment prendre rendez-vous à l'Ambassade (guide complet)",
+    metaTitle: "Rendez-vous Visa Espagne Kinshasa 2026 — Email Ambassade & citaconsular.es | Joventy",
+    metaDescription: "Guide officiel pour prendre rendez-vous visa Espagne depuis Kinshasa en 2026 : email à emb.kinshasa.citasvis@maec.es, portail citaconsular.es, documents requis, frais 90€. L'Espagne ne passe pas par le CEV.",
+    publishedDate: "2026-06-27",
+    updatedDate: "2026-06-27",
+    readingTime: 8,
+    category: "Visa Schengen",
+    coverEmoji: "🇪🇸",
+    intro: "Vous cherchez à prendre un rendez-vous visa Espagne depuis Kinshasa ? Attention : l'Espagne ne passe PAS par le Centre Européen des Visas (CEV), contrairement à la France ou la Belgique. La procédure est entièrement gérée par l'Ambassade d'Espagne à Kinshasa et se fait en deux étapes : une inscription par email, puis une réservation de créneau sur le portail citaconsular.es. Ce guide vous explique la procédure exacte, les documents à préparer, et comment Joventy peut s'occuper de tout à votre place.",
+    sections: [
+      {
+        heading: "Étape 1 — Inscription par email à l'Ambassade d'Espagne",
+        body: "La première étape est obligatoire avant toute prise de rendez-vous. Vous (ou Joventy en votre nom) devez envoyer un email d'inscription à l'adresse officielle de l'ambassade :",
+        list: [
+          "Adresse email : emb.kinshasa.citasvis@maec.es",
+          "Objet (sujet) de l'email : RENDEZ-VOUS VISA EST (exactement, sans modification)",
+          "Corps de l'email : vos données dans l'ordre suivant, en MAJUSCULES, sans accents ni apostrophes, séparées par des points-virgules — Nom;Prénom;Numéro de passeport;Date de voyage (JJMMAAAA);EST",
+          "Exemple : MBUYI KALALA;JEAN;AB1234567;15082026;EST",
+          "Pièces jointes obligatoires (limite totale : 1 Mo) : photo de vous tenant votre passeport ouvert (détails lisibles, visage visible, pas de lunettes ni couvre-chef), formulaire de demande de visa rempli et signé, réservation de vol aller-retour, assurance santé",
+          "⚠️ N'envoyez PAS l'email deux fois avant 14 jours — cela peut entraîner un délai supplémentaire de 2 mois",
+          "⚠️ Chaque demandeur (y compris les mineurs) doit envoyer un email séparé",
+        ],
+      },
+      {
+        heading: "Étape 2 — Réservation du créneau sur citaconsular.es",
+        body: "Après traitement de votre email (délai variable : quelques jours à 2 semaines), l'ambassade vous envoie des identifiants (nom d'utilisateur + mot de passe). Avec ces identifiants :",
+        list: [
+          "Connectez-vous au portail : citaconsular.es",
+          "Choisissez une date et une heure disponibles pour votre rendez-vous à l'Ambassade d'Espagne de Kinshasa",
+          "Vous recevez un email de confirmation de rendez-vous",
+          "Vous pouvez annuler votre rendez-vous jusqu'à 3 jours avant la date — maximum 5 annulations par an",
+          "Le créneau réservé est valable pour vous seul — ne le partagez pas",
+          "Joventy peut réserver ce créneau pour vous dès réception des identifiants",
+        ],
+      },
+      {
+        heading: "Ambassade d'Espagne à Kinshasa — Adresse et horaires",
+        body: "Une fois votre créneau réservé, vous vous rendez physiquement à l'ambassade pour déposer votre dossier et fournir vos données biométriques :",
+        list: [
+          "Adresse : Boulevard Colonel Tshatshi n°37, Gombe, Kinshasa",
+          "Horaires : Lundi au vendredi, 08h30 à 14h00",
+          "Biométrie : vos empreintes digitales et photo seront prises sur place (obligatoire pour les plus de 12 ans, sauf si déjà collectées dans les 59 derniers mois)",
+          "Vous recevez un récépissé avec un code pour suivre l'état de votre dossier sur sutramiteconsular.maec.es",
+          "Le délai légal de traitement est de 15 jours calendaires (peut aller jusqu'à 45 jours si des documents complémentaires sont demandés)",
+          "⚠️ Présentez-vous à l'heure exacte de votre rendez-vous — les retards ne sont pas tolérés",
+        ],
+      },
+      {
+        heading: "Documents complets à préparer pour le dossier",
+        body: "Voici la liste officielle des pièces à apporter le jour du rendez-vous à l'ambassade. Joventy vérifie et prépare l'intégralité de votre dossier :",
+        list: [
+          "Passeport original en cours de validité (valable au moins 6 mois après la date d'expiration du visa demandé) + photocopies de toutes les pages avec tampons",
+          "Formulaire officiel de demande de visa Schengen, dûment rempli en lettres capitales et signé",
+          "2 photos d'identité biométriques récentes (fond blanc, visage dégagé, format conforme aux normes Schengen)",
+          "Réservation de vol aller-retour confirmée (avec dates, numéros de vol et nom du demandeur)",
+          "Preuve d'hébergement : réservation hôtel confirmée OU lettre d'hébergement d'un particulier avec copie de son titre de séjour/passeport",
+          "Assurance voyage couvrant les frais médicaux et de rapatriement, valable dans tout l'espace Schengen, minimum 30 000 € de couverture, pour toute la durée du séjour",
+          "Relevés bancaires des 3 derniers mois (compte personnel ou professionnel) — solde suffisant pour couvrir le séjour",
+          "Justificatifs professionnels : attestation de travail avec congé approuvé, ordre de mission (pour les voyages d'affaires) ou RCCM (pour les indépendants)",
+          "Pour les mineurs : acte de naissance, autorisation parentale des deux parents, copie des passeports des parents",
+        ],
+      },
+      {
+        heading: "Frais de visa et modalités de paiement",
+        body: "Les frais consulaires sont payés directement à l'Ambassade d'Espagne le jour du rendez-vous. Ils ne sont pas inclus dans les frais Joventy :",
+        list: [
+          "Adulte (12 ans et plus) : 90 €",
+          "Enfant de 6 à 12 ans : 45 €",
+          "Enfant de moins de 6 ans : GRATUIT",
+          "Modalité de paiement : renseignez-vous auprès de l'ambassade pour la devise acceptée (CDF, USD ou carte bancaire selon les cas)",
+          "Frais Joventy séparés : 150 USD d'engagement (à la création du dossier) + 450 USD de prime de succès (à la confirmation du créneau uniquement)",
+          "La prime de succès n'est DUE que lorsque votre rendez-vous à l'ambassade est confirmé",
+        ],
+      },
+      {
+        heading: "Fenêtre de dépôt — quand faire la demande ?",
+        body: "L'ambassade impose une fenêtre temporelle stricte pour le dépôt des demandes. Hors de cette fenêtre, votre dossier sera refusé :",
+        list: [
+          "Minimum : 15 jours avant la date prévue de départ (vous devez déposer votre dossier au moins 15 jours avant votre vol)",
+          "Maximum : 6 mois avant la date de départ (vous ne pouvez pas demander le visa plus de 6 mois à l'avance)",
+          "Exception : les gens de mer peuvent déposer jusqu'à 9 mois avant le voyage",
+          "Conseil Joventy : lancez le processus 2 à 3 mois avant votre départ pour avoir le temps d'obtenir le créneau et de traiter le dossier",
+          "En cas d'urgence : contactez Joventy sur WhatsApp — nous optimisons le calendrier selon votre date de voyage",
+        ],
+      },
+      {
+        heading: "Ce que Joventy fait pour vous (service complet)",
+        body: "Joventy prend en charge l'intégralité de la procédure visa Espagne depuis Kinshasa, de A à Z :",
+        list: [
+          "Préparation complète de votre dossier : formulaire Schengen, vérification des documents, conseils sur les relevés bancaires et justificatifs",
+          "Envoi de l'email d'inscription à emb.kinshasa.citasvis@maec.es en votre nom, avec toutes les pièces jointes au bon format",
+          "Réservation du créneau sur citaconsular.es dès réception des identifiants de l'ambassade",
+          "Confirmation par WhatsApp avec la date, l'heure et les instructions pour le jour J",
+          "Suivi de l'état du dossier via sutramiteconsular.maec.es",
+          "Prime de succès (450 USD) payable uniquement à la confirmation du créneau — aucun résultat, aucun solde dû",
+          "Paiement via M-Pesa, Airtel Money ou Orange Money",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "L'Espagne passe-t-elle par le CEV (Centre Européen des Visas) à Kinshasa ?",
+        a: "Non. L'Espagne ne traite PAS ses visas via le CEV. Contrairement à la France, la Belgique ou l'Allemagne, le visa Espagne depuis Kinshasa passe directement par l'Ambassade d'Espagne (Boulevard Colonel Tshatshi n°37, Gombe). La prise de rendez-vous se fait via email + portail citaconsular.es.",
+      },
+      {
+        q: "Comment prendre rendez-vous visa Espagne depuis Kinshasa en 2026 ?",
+        a: "La procédure est en deux étapes : 1) Envoyer un email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec vos données et pièces jointes. 2) Une fois les identifiants reçus, réserver votre créneau sur citaconsular.es. Joventy peut gérer ces deux étapes pour vous.",
+      },
+      {
+        q: "Combien de temps faut-il pour avoir un rendez-vous visa Espagne à Kinshasa ?",
+        a: "L'ambassade répond généralement à l'email d'inscription en 1 à 14 jours. La disponibilité des créneaux sur citaconsular.es varie selon la période. Joventy surveille et réserve dès qu'un créneau s'ouvre. En pratique, comptez 2 à 6 semaines entre la création du dossier et le rendez-vous.",
+      },
+      {
+        q: "Joventy peut-il envoyer l'email d'inscription à ma place ?",
+        a: "Oui. Joventy envoie l'email d'inscription à emb.kinshasa.citasvis@maec.es en votre nom avec vos données exactes et toutes les pièces jointes requises. Joventy réserve également le créneau sur citaconsular.es dès réception de vos identifiants. C'est inclus dans le service.",
+      },
+      {
+        q: "Quels documents faut-il joindre à l'email d'inscription ?",
+        a: "L'email d'inscription doit contenir (en pièces jointes, limite 1 Mo au total) : une photo de vous tenant votre passeport ouvert (face lisible, visage visible), le formulaire de demande de visa rempli, une réservation de vol aller-retour, et une assurance santé valable en Europe.",
+      },
+      {
+        q: "Combien coûte le visa Espagne depuis Kinshasa ?",
+        a: "Les frais consulaires payés à l'ambassade sont : 90 € pour un adulte, 45 € pour un enfant de 6-12 ans, gratuit pour les moins de 6 ans. Les frais Joventy sont : 150 USD d'engagement à la création du dossier + 450 USD de prime de succès uniquement à la confirmation du rendez-vous.",
+      },
+      {
+        q: "Que faire si mon email à l'ambassade reste sans réponse ?",
+        a: "N'envoyez pas de deuxième email avant 14 jours — l'ambassade indique qu'un renvoi anticipé peut entraîner un délai supplémentaire de 2 mois. Si après 14 jours vous n'avez pas de réponse, vous pouvez renvoyer l'email. Joventy gère cette communication en votre nom et surveille les délais.",
+      },
+      {
+        q: "Puis-je entrer en France ou en Belgique avec un visa espagnol ?",
+        a: "Oui. Un visa Schengen délivré par l'Ambassade d'Espagne vous permet de circuler librement dans les 27 pays de l'espace Schengen (France, Belgique, Allemagne, Italie, Pays-Bas, etc.) pendant 90 jours sur 180.",
+      },
+    ],
+    relatedSlugs: [
+      "documents-visa-schengen-kinshasa",
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+      "delais-visa-usa-canada-schengen-kinshasa-2025",
+    ],
+    relatedDestination: "visa-espagne-kinshasa",
+  },
 ];
 
 export function getAllGuides(): Guide[] {
