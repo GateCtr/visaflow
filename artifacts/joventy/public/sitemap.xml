@@ -5,7 +5,7 @@
   <!-- Homepage -->
   <url>
     <loc>https://www.joventy.cd/</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <xhtml:link rel="alternate" hreflang="fr" href="https://www.joventy.cd/" />
@@ -14,85 +14,92 @@
   <!-- Destination pages (high SEO value) -->
   <url>
     <loc>https://www.joventy.cd/visa-usa-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-canada-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-royaume-uni-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-schengen-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-espagne-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-suisse-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/e-visa-dubai-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-turquie-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/e-visa-inde-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/visa-maroc-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/e-visa-egypte-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.joventy.cd/visa-chine-kinshasa</loc>
+    <lastmod>2026-06-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 
   <!-- Guides index -->
   <url>
     <loc>https://www.joventy.cd/guides</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
@@ -100,42 +107,42 @@
   <!-- Individual guides — existing (updated 2026) -->
   <url>
     <loc>https://www.joventy.cd/guides/comment-obtenir-creneau-visa-usa-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/documents-visa-schengen-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/entretien-visa-usa-b1-b2-questions</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/visa-usa-refuse-que-faire</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/payer-frais-mrv-visa-usa-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/delais-visa-usa-canada-schengen-kinshasa-2025</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -143,42 +150,42 @@
   <!-- NEW guides — high priority (Ebola/World Cup 2026 actualité) -->
   <url>
     <loc>https://www.joventy.cd/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/suspension-visa-canada-rdc-ebola-2026</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/coupe-du-monde-2026-visa-usa-kinshasa</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/travel-advisory-level-4-rdc-visa-usa-2026</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/ees-schengen-2026-controle-biometrique</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/guides/visa-schengen-digital-2026</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -186,14 +193,14 @@
   <!-- Pricing & About pages -->
   <url>
     <loc>https://www.joventy.cd/prix</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://www.joventy.cd/a-propos</loc>
-    <lastmod>2026-05-31</lastmod>
+    <lastmod>2026-06-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
