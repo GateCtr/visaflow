@@ -125,7 +125,7 @@ const guides: Guide[] = [
     title: "Documents visa Schengen depuis Kinshasa : liste complète par ambassade (France, Belgique, Allemagne) — 2026",
     metaTitle: "Documents Visa Schengen Kinshasa 2026 — France, Belgique, Allemagne | Joventy",
     metaDescription:
-      "Liste exacte des documents à fournir pour un visa Schengen depuis Kinshasa en 2026, ambassade par ambassade (France via TLS Contact, Belgique, Allemagne). Erreurs fréquentes qui entraînent un refus et comment les éviter.",
+      "Liste exacte des documents à fournir pour un visa Schengen depuis Kinshasa en 2026, ambassade par ambassade (France, Belgique, Allemagne) — tous via le CEV. Erreurs fréquentes qui entraînent un refus et comment les éviter.",
     publishedDate: "2026-06-01",
     updatedDate: "2026-06-15",
     readingTime: 10,
@@ -146,9 +146,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Ambassade de France à Kinshasa — liste des documents (via TLS Contact, 2026)",
+        heading: "Ambassade de France à Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "En 2026, les demandes de visa Schengen pour la France depuis Kinshasa se déposent exclusivement via TLS Contact (centre de dépôt situé à Kinshasa, quartier Gombe). La prise de rendez-vous TLS Contact est obligatoire en ligne sur tlscontact.com. Les frais TLS s'élèvent à environ 35 USD en supplément des droits de visa (80 € pour un adulte).",
+          "En 2026, les demandes de visa Schengen pour la France depuis Kinshasa se déposent via le Centre Européen des Visas (CEV), situé à Kinshasa. La prise de rendez-vous CEV est obligatoire en ligne. Les frais de service CEV s'ajoutent aux droits de visa (80 € pour un adulte).",
         list: [
           "Passeport ordinaire valide au moins 3 mois après la fin du séjour prévu, avec au moins 2 pages vierges et émis il y a moins de 10 ans",
           "Copie de toutes les pages utilisées du passeport actuel + copie intégrale des anciens passeports",
@@ -165,9 +165,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Ambassade de Belgique à Kinshasa — liste des documents (dépôt direct, 2026)",
+        heading: "Ambassade de Belgique à Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "L'Ambassade de Belgique à Kinshasa (avenue de l'Équateur, Gombe) traite les demandes directement, sans intermédiaire VFS ni TLS. Les rendez-vous se prennent via le portail en ligne de l'ambassade. Les frais de visa s'élèvent à 80 € pour un adulte, 40 € pour les 6-12 ans, gratuit sous 6 ans. La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux des dossiers.",
+          "Les demandes de visa Schengen pour la Belgique depuis Kinshasa se déposent également via le Centre Européen des Visas (CEV). La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux des dossiers. Frais : 80 € pour un adulte, 40 € pour les 6-12 ans, gratuit sous 6 ans.",
         list: [
           "Passeport valide au moins 3 mois après la date de retour prévue, avec 2 pages vierges minimum",
           "Copie de tous les visas et tampons d'entrée antérieurs (visas refusés compris)",
@@ -184,9 +184,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Ambassade d'Allemagne à Kinshasa — liste des documents (via VFS Global, 2026)",
+        heading: "Ambassade d'Allemagne à Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "Depuis 2023, l'Ambassade d'Allemagne à Kinshasa délègue la réception des dossiers de visa Schengen à VFS Global (centre situé à Kinshasa). La prise de rendez-vous se fait sur vfsglobal.com. Les frais VFS s'ajoutent aux droits de visa (80 €). L'Allemagne applique une checklist très structurée et refuse systématiquement les dossiers incomplets.",
+          "Les demandes de visa Schengen pour l'Allemagne depuis Kinshasa se déposent via le Centre Européen des Visas (CEV). Les frais de service CEV s'ajoutent aux droits de visa (80 €). L'Allemagne applique une checklist très structurée et refuse systématiquement les dossiers incomplets.",
         list: [
           "Passeport valide au moins 6 mois après la date de retour (exigence plus stricte que France et Belgique), avec 2 pages vierges",
           "Anciens passeports contenant des visas ou des tampons d'entrée dans des pays tiers",
@@ -223,9 +223,9 @@ const guides: Guide[] = [
         body:
           "En juin 2026, voici les données actualisées pour chaque ambassade à Kinshasa :",
         list: [
-          "🇫🇷 France (TLS Contact) : délai standard 15 jours ouvrables. En période estivale (juin-août), compter 20 à 25 jours. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + environ 35 USD de frais TLS Contact",
-          "🇧🇪 Belgique (dépôt direct) : délai standard 15 jours ouvrables. La Belgique peut convoquer à un entretien consulaire supplémentaire — prévoir la disponibilité. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans",
-          "🇩🇪 Allemagne (VFS Global) : délai standard 10 à 15 jours ouvrables. VFS Global peut refuser la prise en charge si un document manque — vérifier la checklist avant le rendez-vous. Frais : 80 € adulte + frais VFS (~25-30 USD)",
+          "🇫🇷 France (via CEV) : délai standard 15 jours ouvrables. En période estivale (juin-août), compter 20 à 25 jours. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais de service CEV",
+          "🇧🇪 Belgique (via CEV) : délai standard 15 jours ouvrables. La Belgique peut convoquer à un entretien consulaire supplémentaire — prévoir la disponibilité. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV",
+          "🇩🇪 Allemagne (via CEV) : délai standard 10 à 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque — vérifier la checklist avant le rendez-vous. Frais : 80 € adulte + frais CEV",
           "Paiement : les frais de visa se règlent en euros ou en USD selon le taux du jour affiché au guichet. Les frais ne sont pas remboursables en cas de refus.",
           "Voie de recours : en cas de refus, vous avez le droit de demander les motifs écrits et de déposer un appel dans les 15 jours auprès de la même ambassade.",
         ],
@@ -239,7 +239,7 @@ const guides: Guide[] = [
           "Sélection de la bonne ambassade en fonction de votre itinéraire réel",
           "Rédaction de la lettre de motivation personnalisée selon le profil et le but du voyage",
           "Aide à l'obtention d'une assurance voyage conforme aux exigences Schengen depuis Kinshasa",
-          "Prise de rendez-vous TLS Contact / VFS Global et suivi du traitement",
+          "Prise de rendez-vous CEV et suivi du traitement",
           "Accompagnement en cas de refus : analyse du motif et préparation du dossier d'appel ou d'une nouvelle demande renforcée",
         ],
       },
@@ -267,7 +267,7 @@ const guides: Guide[] = [
       },
       {
         q: "Dois-je me présenter en personne pour déposer mon dossier ?",
-        a: "Oui, la présence physique est obligatoire dans tous les cas (France via TLS Contact, Belgique en direct, Allemagne via VFS) car vos empreintes digitales biométriques sont relevées à chaque nouvelle demande. Seuls les enfants de moins de 12 ans peuvent en être dispensés.",
+        a: "Oui, la présence physique est obligatoire dans tous les cas — France, Belgique et Allemagne passent toutes par le CEV à Kinshasa. Vos empreintes digitales biométriques y sont relevées à chaque nouvelle demande. Seuls les enfants de moins de 12 ans peuvent en être dispensés.",
       },
     ],
     relatedSlugs: [
