@@ -125,30 +125,33 @@ const guides: Guide[] = [
     title: "Documents visa Schengen depuis Kinshasa : liste complète par ambassade (France, Belgique, Allemagne) — 2026",
     metaTitle: "Documents Visa Schengen Kinshasa 2026 — France, Belgique, Allemagne | Joventy",
     metaDescription:
-      "Liste exacte des documents à fournir pour un visa Schengen depuis Kinshasa en 2026, ambassade par ambassade (France, Belgique, Allemagne) — tous via le CEV. Erreurs fréquentes qui entraînent un refus et comment les éviter.",
+      "Visa Schengen Kinshasa 2026 : tout passe par le CEV (cev-kin.eu), pas TLS Contact ni VFS Global. Documents requis par ambassade (France, Belgique, Allemagne), 10 erreurs de refus, délais officiels.",
     publishedDate: "2026-06-01",
     updatedDate: "2026-06-15",
     readingTime: 10,
     category: "Visa Schengen",
     coverEmoji: "🇪🇺",
     intro:
-      "Obtenir un visa Schengen depuis Kinshasa en 2026 demande une préparation rigoureuse : chaque ambassade a ses propres exigences documentaires, ses propres canaux de dépôt et ses propres critères d'évaluation. Une erreur sur un seul document — une assurance sous-dimensionnée, un relevé bancaire trop récent, une photo non conforme — suffit à déclencher un refus. Ce guide détaille, ambassade par ambassade (France, Belgique, Allemagne), la liste exacte des pièces à fournir en juin 2026, les spécificités à connaître et les 10 erreurs les plus fréquentes qui coûtent leur dossier aux demandeurs kinois.",
+      "Obtenir un visa Schengen depuis Kinshasa en 2026 : une règle essentielle que peu de demandeurs connaissent. Ni l'Ambassade de France, ni l'Ambassade d'Allemagne ne reçoivent directement les dossiers des ressortissants congolais pour les visas court séjour. Tout passe par un guichet unique : le Centre Européen des Visas (CEV), géré par l'Ambassade de Belgique à Kinshasa (cev-kin.eu). Ce guide détaille les documents exigés selon l'ambassade de destination (France, Belgique, Allemagne), les spécificités du CEV, et les 10 erreurs qui causent le plus de refus.",
     sections: [
       {
-        heading: "Ce que couvre le visa Schengen — et pourquoi choisir la bonne ambassade",
+        heading: "Le CEV — guichet unique pour tous les visas Schengen court séjour depuis Kinshasa",
         body:
-          "Le visa Schengen (type C, court séjour) autorise jusqu'à 90 jours de présence sur 180 dans les 29 pays de l'espace Schengen (France, Belgique, Allemagne, Italie, Espagne, Pays-Bas, Suisse, etc.). La règle est claire : vous devez déposer votre dossier auprès de l'ambassade du pays de destination principale. Si vous séjournez 7 jours en France et 3 jours en Belgique, c'est l'ambassade de France qui est compétente. En cas de durées égales, c'est l'ambassade du premier pays d'entrée. Déposer auprès de la mauvaise ambassade entraîne un refus immédiat sans remboursement des frais.",
+          "Le Centre Européen des Visas (CEV) est le seul centre habilité à recevoir les demandes de visa Schengen court séjour des ressortissants congolais à Kinshasa. Il est géré par l'Ambassade de Belgique. Ni TLS Contact, ni VFS Global ne sont utilisés à Kinshasa pour les Congolais. Le CEV représente plusieurs ambassades — France, Belgique, Allemagne, Pays-Bas, et d'autres — pour toutes les demandes de visa court séjour (type C). Point crucial : l'Ambassade de France à Kinshasa et l'Ambassade d'Allemagne à Kinshasa ne reçoivent pas directement les dossiers Schengen des ressortissants congolais ; elles sont compétentes uniquement pour les visas long séjour ou pour les ressortissants d'autres nationalités.",
         list: [
-          "Destination principale = pays où vous passez le plus de nuits",
-          "Durées égales = ambassade du premier pays d'entrée",
-          "Transit uniquement (moins de 24h) = visa de transit aéroportuaire (type A) ou Transit Schengen (type B)",
+          "📍 Site officiel du CEV : www.cev-kin.eu — prise de rendez-vous en ligne obligatoire",
+          "📍 Adresse : Avenue du 24 novembre (Pierre Mulele), Kinshasa (Gombe)",
+          "Dépôt possible aussi à Lubumbashi via le Consulat Général de Belgique",
+          "Le CEV décide quelle ambassade est compétente selon votre destination principale",
+          "Délai de rendez-vous : 1 à 4 semaines d'attente selon la période",
           "Délai de dépôt : entre 15 jours et 6 mois avant la date de départ prévue",
+          "Les frais de service CEV s'ajoutent aux droits de visa de l'ambassade concernée",
         ],
       },
       {
-        heading: "Ambassade de France à Kinshasa — liste des documents (via CEV, 2026)",
+        heading: "Visa France depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "En 2026, les demandes de visa Schengen pour la France depuis Kinshasa se déposent via le Centre Européen des Visas (CEV), situé à Kinshasa. La prise de rendez-vous CEV est obligatoire en ligne. Les frais de service CEV s'ajoutent aux droits de visa (80 € pour un adulte).",
+          "⚠️ L'Ambassade de France à Kinshasa ne délivre PAS de visa Schengen court séjour. Les demandes pour la France sont instruites par l'Ambassade de Belgique via le CEV — seul habilité à prendre les décisions. Le formulaire officiel reste celui de france-visas.gouv.fr. Les frais de visa France sont de 80 € adulte.",
         list: [
           "Passeport ordinaire valide au moins 3 mois après la fin du séjour prévu, avec au moins 2 pages vierges et émis il y a moins de 10 ans",
           "Copie de toutes les pages utilisées du passeport actuel + copie intégrale des anciens passeports",
@@ -165,9 +168,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Ambassade de Belgique à Kinshasa — liste des documents (via CEV, 2026)",
+        heading: "Visa Belgique depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "Les demandes de visa Schengen pour la Belgique depuis Kinshasa se déposent également via le Centre Européen des Visas (CEV). La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux des dossiers. Frais : 80 € pour un adulte, 40 € pour les 6-12 ans, gratuit sous 6 ans.",
+          "Le CEV étant géré par l'Ambassade de Belgique, les demandes de visa Schengen pour la Belgique suivent exactement le même guichet — le CEV. L'Ambassade de Belgique est l'autorité décisionnaire pour les visas Belgique et, par délégation, pour les autres pays Schengen représentés. La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV.",
         list: [
           "Passeport valide au moins 3 mois après la date de retour prévue, avec 2 pages vierges minimum",
           "Copie de tous les visas et tampons d'entrée antérieurs (visas refusés compris)",
@@ -184,9 +187,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Ambassade d'Allemagne à Kinshasa — liste des documents (via CEV, 2026)",
+        heading: "Visa Allemagne depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "Les demandes de visa Schengen pour l'Allemagne depuis Kinshasa se déposent via le Centre Européen des Visas (CEV). Les frais de service CEV s'ajoutent aux droits de visa (80 €). L'Allemagne applique une checklist très structurée et refuse systématiquement les dossiers incomplets.",
+          "⚠️ L'Ambassade d'Allemagne à Kinshasa NE traite PAS les demandes de visa Schengen des ressortissants congolais. Source officielle : kinshasa.diplo.de. Les demandes pour l'Allemagne se déposent exclusivement au CEV (anciennement appelé « Maison Schengen »). L'Ambassade d'Allemagne reste compétente uniquement pour les ressortissants d'autres nationalités. Frais de visa Allemagne : 80 € adulte + frais CEV. L'Allemagne applique une checklist très structurée.",
         list: [
           "Passeport valide au moins 6 mois après la date de retour (exigence plus stricte que France et Belgique), avec 2 pages vierges",
           "Anciens passeports contenant des visas ou des tampons d'entrée dans des pays tiers",
@@ -223,9 +226,9 @@ const guides: Guide[] = [
         body:
           "En juin 2026, voici les données actualisées pour chaque ambassade à Kinshasa :",
         list: [
-          "🇫🇷 France (via CEV) : délai standard 15 jours ouvrables. En période estivale (juin-août), compter 20 à 25 jours. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais de service CEV",
-          "🇧🇪 Belgique (via CEV) : délai standard 15 jours ouvrables. La Belgique peut convoquer à un entretien consulaire supplémentaire — prévoir la disponibilité. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV",
-          "🇩🇪 Allemagne (via CEV) : délai standard 10 à 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque — vérifier la checklist avant le rendez-vous. Frais : 80 € adulte + frais CEV",
+          "🇫🇷 France (via CEV) : délai réglementaire maximum de 15 jours ouvrables à compter du dépôt du dossier complet. En période estivale (juin-août), compter 20 à 25 jours. Frais visa : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV",
+          "🇧🇪 Belgique (via CEV — l'Ambassade de Belgique est l'autorité décisionnaire) : délai standard 15 jours ouvrables. Un entretien consulaire complémentaire peut être demandé. Frais : 80 € adulte, 40 € enfant, gratuit sous 6 ans + frais CEV",
+          "🇩🇪 Allemagne (via CEV — l'Ambassade d'Allemagne NE reçoit PAS les Congolais directement) : délai standard 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque. Frais : 80 € adulte + frais CEV",
           "Paiement : les frais de visa se règlent en euros ou en USD selon le taux du jour affiché au guichet. Les frais ne sont pas remboursables en cas de refus.",
           "Voie de recours : en cas de refus, vous avez le droit de demander les motifs écrits et de déposer un appel dans les 15 jours auprès de la même ambassade.",
         ],
@@ -247,7 +250,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Quelle ambassade Schengen est la plus facile à obtenir depuis Kinshasa ?",
-        a: "Il n'existe pas de réponse universelle : chaque ambassade applique les mêmes critères du Code des visas Schengen. Ce qui varie, c'est la rapidité de traitement et les documents spécifiques demandés. La clé est de déposer auprès de la bonne ambassade (pays de destination principale) avec un dossier complet et cohérent.",
+        a: "Important à savoir : depuis Kinshasa, tous les visas Schengen court séjour se déposent au même endroit — le CEV (cev-kin.eu), géré par l'Ambassade de Belgique. Il n'y a qu'un seul guichet. Ce qui varie selon l'ambassade de destination, c'est la liste de documents et les critères d'évaluation. Il n'existe pas d'ambassade objectivement 'plus facile' : toutes appliquent le même Code des visas Schengen.",
       },
       {
         q: "Peut-on déposer un dossier Schengen sans avoir les billets définitifs payés ?",
@@ -267,7 +270,7 @@ const guides: Guide[] = [
       },
       {
         q: "Dois-je me présenter en personne pour déposer mon dossier ?",
-        a: "Oui, la présence physique est obligatoire dans tous les cas — France, Belgique et Allemagne passent toutes par le CEV à Kinshasa. Vos empreintes digitales biométriques y sont relevées à chaque nouvelle demande. Seuls les enfants de moins de 12 ans peuvent en être dispensés.",
+        a: "Oui. Que vous demandiez un visa France, Belgique ou Allemagne, vous vous rendez physiquement au CEV (Centre Européen des Visas, Avenue du 24 novembre, Kinshasa). Vos empreintes digitales biométriques y sont enregistrées. Seuls les enfants de moins de 12 ans peuvent en être dispensés. Le site du CEV pour prendre rendez-vous est cev-kin.eu.",
       },
     ],
     relatedSlugs: [
