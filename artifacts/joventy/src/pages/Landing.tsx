@@ -407,11 +407,133 @@ export default function Landing() {
           "@context": "https://schema.org",
           "@type": "FAQPage",
           "mainEntity": [
-            { "@type": "Question", "name": "Joventy garantit-il l'obtention du visa ?", "acceptedAnswer": { "@type": "Answer", "text": "Non. Joventy garantit le service, pas le visa. La décision finale appartient exclusivement à l'ambassade ou au gouvernement étranger. En revanche, si nous n'obtenons pas de résultat (créneau de rendez-vous ou e-Visa), vous ne payez pas la prime de succès — seuls les frais d'engagement restent dus." } },
-            { "@type": "Question", "name": "Combien coûte le service Joventy pour un visa USA ?", "acceptedAnswer": { "@type": "Answer", "text": "Les frais d'engagement pour un visa USA sont de 250 USD, payés à la création du dossier via M-Pesa. La prime de succès (750 USD) n'est due que lorsque Joventy verrouille votre créneau consulaire. Les frais MRV (185-210 USD payés directement à l'ambassade) ne sont pas inclus." } },
-            { "@type": "Question", "name": "Que se passe-t-il si mon visa est refusé après un rendez-vous ?", "acceptedAnswer": { "@type": "Answer", "text": "Si vous avez obtenu un créneau de rendez-vous, Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy." } },
-            { "@type": "Question", "name": "Peut-on payer Joventy avec M-Pesa ou Airtel Money ?", "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy accepte exclusivement les paiements Mobile Money : M-Pesa (Vodacom), Airtel Money et Orange Money. Aucun virement bancaire international ni carte étrangère n'est requis." } },
-            { "@type": "Question", "name": "Combien de temps prend le traitement d'un dossier visa ?", "acceptedAnswer": { "@type": "Answer", "text": "Pour les e-Visas (Dubaï, Inde) : résultat en 48 à 72 heures ouvrables. Pour les créneaux consulaires (USA, Canada, Europe) : le délai dépend de la disponibilité sur le portail officiel. Joventy surveille en continu et vous notifie dès qu'un créneau est capturé." } }
+            {
+              "@type": "Question",
+              "name": "Qu'est-ce que Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy est une agence d'assistance visa premium basée à Kinshasa, en République Démocratique du Congo. Elle aide les ressortissants congolais à obtenir des visas pour les États-Unis, le Canada, le Royaume-Uni, l'espace Schengen (France, Belgique, Allemagne, Espagne, Suisse), Dubaï, la Turquie, l'Inde, le Maroc et l'Égypte. Joventy n'est pas une ambassade : c'est un service professionnel qui gère les formulaires, recherche les créneaux consulaires et soumet les e-Visas à la place de ses clients." }
+            },
+            {
+              "@type": "Question",
+              "name": "Joventy garantit-il l'obtention du visa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Non. Joventy garantit le service, pas le visa. La décision finale d'accorder ou de refuser un visa appartient exclusivement à l'ambassade ou au gouvernement étranger. En revanche, Joventy applique un modèle « paiement au résultat » : la prime de succès n'est due que si le créneau consulaire est obtenu ou si l'e-Visa est accordé. Si aucun résultat n'est obtenu, seuls les frais d'engagement restent dus." }
+            },
+            {
+              "@type": "Question",
+              "name": "Combien coûte le service Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy facture des frais d'engagement (payés à la création du dossier) et une prime de succès (due uniquement si le résultat est obtenu). Tarifs : USA — 250 $ engagement + 750 $ succès ; Canada — 250 $ + 750 $ ; Royaume-Uni — 200 $ + 600 $ ; Schengen / Espagne / Suisse — 150 $ + 450 $ ; e-Visa Dubaï / Turquie / Maroc / Égypte — 150 $ + 200 $. Les frais consulaires gouvernementaux (MRV USA ≈185-210 $, CEV Schengen ≈90 €, UKVI UK ≈115 £, portail Dubaï ≈90 $) ne sont pas inclus et sont payés directement au gouvernement concerné." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment fonctionne le processus Joventy étape par étape ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "1. Création du dossier en ligne sur joventy.cd et paiement des frais d'engagement via M-Pesa, Airtel Money ou Orange Money. 2. Envoi des documents requis (passeport, photos, justificatifs) via WhatsApp ou l'espace client. 3. Remplissage des formulaires officiels (DS-160 pour USA, IMM5257 pour Canada, VLS pour UK, etc.) par l'équipe Joventy. 4. Surveillance continue des portails officiels pour trouver un créneau disponible. 5. Verrouillage du créneau et notification immédiate via WhatsApp. 6. Paiement de la prime de succès. 7. Préparation à l'entretien consulaire (pour USA, Canada, UK) ou réception de l'e-Visa (pour Dubaï, Inde, Turquie)." }
+            },
+            {
+              "@type": "Question",
+              "name": "Peut-on payer Joventy avec M-Pesa, Airtel Money ou Orange Money ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy accepte exclusivement les paiements via Mobile Money congolais : M-Pesa (Vodacom), Airtel Money et Orange Money. Aucune carte bancaire internationale, aucun virement SWIFT ni compte étranger n'est requis. C'est la seule agence visa premium en RDC à fonctionner 100 % en Mobile Money." }
+            },
+            {
+              "@type": "Question",
+              "name": "Combien de temps faut-il pour obtenir un visa avec Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Les délais varient selon la destination. E-Visa Dubaï : 48 à 72 heures ouvrables. E-Visa Inde : 3 à 5 jours ouvrables. E-Visa Turquie : 24 à 48 heures. Visa Maroc / Égypte : 72 heures. Pour les créneaux consulaires (USA, Canada, Schengen, UK), le délai dépend de la disponibilité sur le portail officiel, qui varie selon la saison et la demande. Joventy surveille les portails en continu 24h/24, 7j/7, et vous notifie dès qu'un créneau est capturé." }
+            },
+            {
+              "@type": "Question",
+              "name": "Que se passe-t-il si mon visa est refusé après le rendez-vous ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Le rôle de Joventy est d'obtenir le créneau consulaire ou l'e-Visa. Si ce résultat est atteint, la prime de succès est due, même si le consulat refuse ensuite le visa lors de l'entretien. Le refus consulaire est une décision souveraine de l'ambassade, indépendante du service Joventy. En cas de refus, Joventy vous conseille gratuitement sur les étapes suivantes et les chances d'un nouveau dossier." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment obtenir un visa USA depuis Kinshasa en 2026 ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "En juin 2026, les services visa de l'ambassade américaine à Kinshasa sont suspendus en raison de l'épidémie d'Ebola (depuis le 18 mai 2026). Pour voyager aux USA, les ressortissants congolais doivent d'abord passer 21 jours dans un pays neutre (Maroc, Égypte, Dubaï, Turquie ou Europe) hors RDC, obtenir un rendez-vous dans ce pays, puis demander leur visa. Joventy peut obtenir le visa transit (Maroc, Égypte) et coordonner l'ensemble de la procédure depuis Kinshasa." }
+            },
+            {
+              "@type": "Question",
+              "name": "Puis-je aller aux USA ou au Canada depuis Kinshasa malgré l'Ebola en 2026 ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui, mais avec une procédure spéciale. Les USA et le Canada interdisent l'entrée aux personnes ayant séjourné en RDC dans les 21 jours précédents (ordre CDC USA valide depuis mai 2026 ; Canada : suspension totale du 27 mai au 28 août 2026). La solution consiste à « purger » ces 21 jours dans un pays neutre (Maroc, Égypte, Dubaï, Turquie, Maurice ou Europe) avant d'entrer aux USA ou au Canada. Joventy prend en charge le visa pour le pays de transit en 24 à 72h." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment aller aux USA pour la Coupe du Monde 2026 depuis la RDC ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Les Léopards de la RDC sont qualifiés pour la Coupe du Monde 2026 aux USA. Pour les supporters congolais, la procédure nécessite : 1. Obtenir un visa USA (entretien dans un pays tiers, hors RDC). 2. Passer 21 jours dans un pays neutre (Maroc, Égypte, Dubaï) avant d'entrer aux USA. 3. Acheter les billets FIFA. Joventy accompagne tout le processus : visa pays de transit + coordination du dossier USA." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment obtenir un visa Schengen depuis Kinshasa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le système CEV (Centre d'Encodage des Visas) géré par l'ambassade belge. Les créneaux sont très limités et pris d'assaut. Joventy surveille le portail CEV en continu et verrouille un créneau dès qu'il est disponible. Frais Joventy : 150 $ engagement + 450 $ succès. Frais CEV (≈90 €) payés séparément. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment obtenir un e-Visa Dubaï depuis Kinshasa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "L'e-Visa Dubaï (Émirats Arabes Unis) se demande en ligne via le portail officiel ICP des EAU. Le résultat est généralement obtenu en 48 à 72 heures ouvrables. Joventy prend en charge toute la procédure de soumission. Frais Joventy : 150 $ engagement + 200 $ prime de succès. Les frais officiels du gouvernement des EAU (environ 90 $) sont payés séparément par le client." }
+            },
+            {
+              "@type": "Question",
+              "name": "Joventy peut-il aider pour un visa Canada depuis Kinshasa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy prend en charge les dossiers IRCC (Immigration, Réfugiés et Citoyenneté Canada) pour les visas visiteur, permis d'études et permis de travail. Attention : en 2026, le Canada a suspendu la délivrance de visas aux résidents de la RDC du 27 mai au 28 août 2026 suite à l'épidémie d'Ebola. Les demandes reprennent après cette période. Frais Joventy : 250 $ engagement + 750 $ succès. Frais IRCC (85 CAD+) non inclus." }
+            },
+            {
+              "@type": "Question",
+              "name": "Quels documents faut-il fournir pour un visa USA avec Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa USA B1/B2 depuis Kinshasa avec Joventy, vous devrez fournir : passeport valide (minimum 6 mois de validité, 2 pages vierges), photo récente au format biométrique, justificatif de domicile en RDC, justificatifs financiers (relevés bancaires des 3 derniers mois), justificatif d'emploi ou d'activité, preuve de liens forts avec la RDC (famille, propriété, emploi). Joventy vous guide sur chaque document et remplit le formulaire DS-160 à votre place." }
+            },
+            {
+              "@type": "Question",
+              "name": "Les frais consulaires sont-ils inclus dans le prix Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Non. Les frais consulaires gouvernementaux ne sont jamais inclus dans les tarifs Joventy. Ils sont payés directement par le client auprès du gouvernement ou de l'organisme officiel : frais MRV USA (185-210 $, payés via une banque partenaire), frais CEV Schengen (90 €, payés au portail CEV), frais UKVI Royaume-Uni (à partir de 115 £), frais portail EAU pour Dubaï (environ 90 $), frais e-Visa Turquie (environ 50 $). Joventy vous indique précisément quoi payer et comment." }
+            },
+            {
+              "@type": "Question",
+              "name": "Joventy est-il une agence officielle ou une ambassade ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy est une agence privée d'assistance visa, pas une ambassade ni un organisme gouvernemental. Joventy n'est affilié à aucune ambassade. Il s'agit d'un service professionnel qui aide les voyageurs congolais à naviguer les procédures administratives complexes : remplissage des formulaires officiels, surveillance des portails consulaires, soumission des e-Visas. La décision finale d'accorder un visa appartient toujours au gouvernement étranger concerné." }
+            },
+            {
+              "@type": "Question",
+              "name": "Mes données personnelles et documents sont-ils en sécurité chez Joventy ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy (Akollad Groupe) stocke vos données de manière chiffrée. Vos informations personnelles et copies de documents ne sont jamais partagées avec des tiers et sont utilisées uniquement pour constituer votre dossier visa. Joventy traite vos données avec le même niveau de confidentialité qu'une institution financière agréée." }
+            },
+            {
+              "@type": "Question",
+              "name": "Est-il possible d'obtenir un visa pour visiter la RDC (Visa Volant, e-Visa DRC) ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose également des services pour les voyageurs étrangers souhaitant visiter la République Démocratique du Congo : e-Visa DRC (demande en ligne, résultat en 3 à 5 jours), Visa Volant (visa d'urgence délivré à l'arrivée pour les cas d'affaires urgents), et suivi physique des dossiers bloqués à la DGM (Direction Générale des Migrations) à Kinshasa." }
+            },
+            {
+              "@type": "Question",
+              "name": "Joventy peut-il aider pour un visa Turquie depuis Kinshasa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. La Turquie délivre des e-Visas en ligne aux détenteurs de visa USA, Schengen ou UK valide. Le résultat est généralement obtenu en 24 à 48 heures. Pour les ressortissants congolais ne disposant pas d'un visa USA/Schengen/UK, Joventy aide à obtenir le visa turc via l'ambassade de Turquie. Frais Joventy : 150 $ engagement + 200 $ succès. La Turquie est également un pays de transit idéal pour « purger » les 21 jours Ebola avant d'entrer aux USA." }
+            },
+            {
+              "@type": "Question",
+              "name": "Qu'est-ce que le système EES Schengen 2026 et comment ça m'affecte ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "L'EES (Entry/Exit System) est un nouveau système biométrique européen opérationnel depuis le 10 avril 2026. Il remplace les tampons physiques dans les passeports. À chaque entrée dans l'espace Schengen, les voyageurs non-UE (dont les Congolais) enregistrent leurs empreintes digitales et une photo au poste-frontière. Ce système permet de vérifier automatiquement la durée de séjour (maximum 90 jours sur 180). Votre visa Schengen reste valide comme avant ; l'EES change uniquement la procédure de contrôle à la frontière." }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment contacter Joventy pour commencer un dossier visa ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Vous pouvez contacter Joventy de plusieurs façons : via WhatsApp au +243 840 808 122 (réponse en moins de 2 heures, 7j/7), par email à contact@joventy.cd, ou directement en créant un dossier sur joventy.cd. L'équipe parle français et anglais, est disponible de 8h à 20h (heure de Kinshasa), et traite les urgences en dehors de ces horaires." }
+            },
+            {
+              "@type": "Question",
+              "name": "Joventy peut-il préparer mon dossier visa sans trouver le créneau ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe pour les clients qui ont déjà un créneau consulaire ou un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert. Ce service est facturé séparément, sans frais de succès." }
+            }
+          ]
+        })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "HowTo",
+          "name": "Comment obtenir un visa USA depuis Kinshasa avec Joventy",
+          "description": "Guide étape par étape pour obtenir un créneau de rendez-vous visa USA (B1/B2) depuis Kinshasa, RDC, via le service d'assistance Joventy.",
+          "estimatedCost": { "@type": "MonetaryAmount", "currency": "USD", "value": "250", "description": "Frais d'engagement Joventy (prime de succès 750 $ due uniquement si créneau obtenu)" },
+          "totalTime": "P14D",
+          "step": [
+            { "@type": "HowToStep", "position": 1, "name": "Créer le dossier", "text": "Inscrivez-vous sur joventy.cd et créez votre dossier visa USA. Payez les frais d'engagement (250 $) via M-Pesa, Airtel Money ou Orange Money." },
+            { "@type": "HowToStep", "position": 2, "name": "Envoyer les documents", "text": "Transmettez vos documents via WhatsApp ou l'espace client : passeport, photo biométrique, relevés bancaires (3 mois), justificatif d'emploi, justificatif de domicile en RDC." },
+            { "@type": "HowToStep", "position": 3, "name": "Remplissage du formulaire DS-160", "text": "L'équipe Joventy remplit le formulaire DS-160 à votre place et vous soumet le brouillon pour vérification et signature électronique." },
+            { "@type": "HowToStep", "position": 4, "name": "Surveillance du portail et capture du créneau", "text": "Joventy surveille le portail usvisaappt.com 24h/24. Dès qu'un créneau est disponible à Kinshasa (ou dans un pays tiers si nécessaire), il est verrouillé et vous êtes notifié immédiatement via WhatsApp." },
+            { "@type": "HowToStep", "position": 5, "name": "Paiement de la prime de succès", "text": "Une fois le créneau confirmé, vous payez la prime de succès (750 $) via Mobile Money." },
+            { "@type": "HowToStep", "position": 6, "name": "Préparation à l'entretien consulaire", "text": "Joventy vous fournit un guide de préparation personnalisé pour l'entretien B1/B2 : questions probables, documents à apporter, conseils de présentation." },
+            { "@type": "HowToStep", "position": 7, "name": "Se rendre à l'entretien", "text": "Présentez-vous à l'ambassade américaine à la date et l'heure indiquées. Si le visa est accordé, vous le recevez dans votre passeport sous 3 à 5 jours ouvrables." }
           ]
         })}</script>
       </Helmet>
