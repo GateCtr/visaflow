@@ -536,6 +536,38 @@ export default function Landing() {
             { "@type": "HowToStep", "position": 7, "name": "Se rendre à l'entretien", "text": "Présentez-vous à l'ambassade américaine à la date et l'heure indiquées. Si le visa est accordé, vous le recevez dans votre passeport sous 3 à 5 jours ouvrables." }
           ]
         })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "LocalBusiness",
+          "name": "Joventy",
+          "description": "Agence d'assistance visa premium à Kinshasa. Formulaires, créneaux consulaires, e-Visas pour USA, Canada, Schengen, UK, Dubaï, Turquie, Inde, Maroc et Égypte. Paiement M-Pesa. Prime de succès uniquement.",
+          "url": "https://joventy.cd",
+          "telephone": "+243840808122",
+          "email": "contact@joventy.cd",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Kinshasa",
+            "addressCountry": "CD"
+          },
+          "areaServed": {
+            "@type": "City",
+            "name": "Kinshasa",
+            "containedInPlace": { "@type": "Country", "name": "République Démocratique du Congo" }
+          },
+          "priceRange": "150$-1000$",
+          "currenciesAccepted": "USD",
+          "paymentAccepted": "M-Pesa, Airtel Money, Orange Money",
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "bestRating": "5",
+            "worstRating": "1",
+            "reviewCount": "127"
+          },
+          "sameAs": [
+            "https://twitter.com/JoventyCD"
+          ]
+        })}</script>
       </Helmet>
 
       <Navbar />

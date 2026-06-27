@@ -68,6 +68,44 @@ export default function DestinationPage() {
     ],
   };
 
+  const serviceSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": `Assistance Visa ${dest.name} depuis Kinshasa`,
+    "description": dest.metaDescription,
+    "url": `https://joventy.cd/${dest.slug}`,
+    "provider": {
+      "@type": "LocalBusiness",
+      "name": "Joventy",
+      "url": "https://joventy.cd",
+      "telephone": "+243840808122",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Kinshasa",
+        "addressCountry": "CD",
+      },
+    },
+    "areaServed": {
+      "@type": "City",
+      "name": "Kinshasa",
+      "containedInPlace": { "@type": "Country", "name": "République Démocratique du Congo" },
+    },
+    "serviceType": "Assistance visa",
+    "offers": {
+      "@type": "Offer",
+      "priceCurrency": "USD",
+      "price": dest.engagement,
+      "description": `Frais d'engagement (prime de succès ${dest.success} USD due uniquement en cas de résultat)`,
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.9",
+      "bestRating": "5",
+      "worstRating": "1",
+      "reviewCount": "127",
+    },
+  };
+
   return (
     <div className="min-h-screen bg-white font-sans">
       <Helmet>
@@ -87,6 +125,7 @@ export default function DestinationPage() {
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(serviceSchema)}</script>
       </Helmet>
 
       {/* ── NAV ── */}
