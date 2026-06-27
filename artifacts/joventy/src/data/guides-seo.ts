@@ -151,7 +151,7 @@ const guides: Guide[] = [
       {
         heading: "Visa France depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "⚠️ L'Ambassade de France à Kinshasa ne délivre PAS de visa Schengen court séjour. Les demandes pour la France sont instruites par l'Ambassade de Belgique via le CEV — seul habilité à prendre les décisions. Le formulaire officiel reste celui de france-visas.gouv.fr. Les frais de visa France sont de 80 € adulte.",
+          "⚠️ L'Ambassade de France à Kinshasa ne délivre PAS de visa Schengen court séjour. Les demandes pour la France sont instruites par l'Ambassade de Belgique via le CEV — seul habilité à prendre les décisions. Le formulaire officiel reste celui de france-visas.gouv.fr. Les frais de visa France sont de 90 € adulte.",
         list: [
           "Passeport ordinaire valide au moins 3 mois après la fin du séjour prévu, avec au moins 2 pages vierges et émis il y a moins de 10 ans",
           "Copie de toutes les pages utilisées du passeport actuel + copie intégrale des anciens passeports",
@@ -170,7 +170,7 @@ const guides: Guide[] = [
       {
         heading: "Visa Belgique depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "Le CEV étant géré par l'Ambassade de Belgique, les demandes de visa Schengen pour la Belgique suivent exactement le même guichet — le CEV. L'Ambassade de Belgique est l'autorité décisionnaire pour les visas Belgique et, par délégation, pour les autres pays Schengen représentés. La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux. Frais : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV.",
+          "Le CEV étant géré par l'Ambassade de Belgique, les demandes de visa Schengen pour la Belgique suivent exactement le même guichet — le CEV. L'Ambassade de Belgique est l'autorité décisionnaire pour les visas Belgique et, par délégation, pour les autres pays Schengen représentés. La Belgique est le pays Schengen le plus demandé depuis Kinshasa en raison des nombreux liens familiaux — ce qui signifie aussi un contrôle plus rigoureux. Frais : 90 € adulte, 45 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV.",
         list: [
           "Passeport valide au moins 3 mois après la date de retour prévue, avec 2 pages vierges minimum",
           "Copie de tous les visas et tampons d'entrée antérieurs (visas refusés compris)",
@@ -189,7 +189,7 @@ const guides: Guide[] = [
       {
         heading: "Visa Allemagne depuis Kinshasa — liste des documents (via CEV, 2026)",
         body:
-          "⚠️ L'Ambassade d'Allemagne à Kinshasa NE traite PAS les demandes de visa Schengen des ressortissants congolais. Source officielle : kinshasa.diplo.de. Les demandes pour l'Allemagne se déposent exclusivement au CEV (anciennement appelé « Maison Schengen »). L'Ambassade d'Allemagne reste compétente uniquement pour les ressortissants d'autres nationalités. Frais de visa Allemagne : 80 € adulte + frais CEV. L'Allemagne applique une checklist très structurée.",
+          "⚠️ L'Ambassade d'Allemagne à Kinshasa NE traite PAS les demandes de visa Schengen des ressortissants congolais. Source officielle : kinshasa.diplo.de. Les demandes pour l'Allemagne se déposent exclusivement au CEV (anciennement appelé « Maison Schengen »). L'Ambassade d'Allemagne reste compétente uniquement pour les ressortissants d'autres nationalités. Frais de visa Allemagne : 90 € adulte + frais CEV. L'Allemagne applique une checklist très structurée.",
         list: [
           "Passeport valide au moins 6 mois après la date de retour (exigence plus stricte que France et Belgique), avec 2 pages vierges",
           "Anciens passeports contenant des visas ou des tampons d'entrée dans des pays tiers",
@@ -226,9 +226,9 @@ const guides: Guide[] = [
         body:
           "En juin 2026, voici les données actualisées pour chaque ambassade à Kinshasa :",
         list: [
-          "🇫🇷 France (via CEV) : délai réglementaire maximum de 15 jours ouvrables à compter du dépôt du dossier complet. En période estivale (juin-août), compter 20 à 25 jours. Frais visa : 80 € adulte, 40 € enfant 6-12 ans, gratuit sous 6 ans + frais CEV",
-          "🇧🇪 Belgique (via CEV — l'Ambassade de Belgique est l'autorité décisionnaire) : délai standard 15 jours ouvrables. Un entretien consulaire complémentaire peut être demandé. Frais : 80 € adulte, 40 € enfant, gratuit sous 6 ans + frais CEV",
-          "🇩🇪 Allemagne (via CEV — l'Ambassade d'Allemagne NE reçoit PAS les Congolais directement) : délai standard 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque. Frais : 80 € adulte + frais CEV",
+          "🇫🇷 France (via CEV) : délai réglementaire maximum de 15 jours ouvrables à compter du dépôt du dossier complet. En période estivale (juin-août), compter 20 à 25 jours. Frais visa : 90 € adulte, 45 € enfant 6-12 ans, gratuit sous 6 ans",
+          "🇧🇪 Belgique (via CEV — l'Ambassade de Belgique est l'autorité décisionnaire) : délai standard 15 jours ouvrables. Un entretien consulaire complémentaire peut être demandé. Frais : 90 € adulte, 45 € enfant, gratuit sous 6 ans",
+          "🇩🇪 Allemagne (via CEV — l'Ambassade d'Allemagne NE reçoit PAS les Congolais directement) : délai standard 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque. Frais : 90 € adulte",
           "Paiement : les frais de visa se règlent en euros ou en USD selon le taux du jour affiché au guichet. Les frais ne sont pas remboursables en cas de refus.",
           "Voie de recours : en cas de refus, vous avez le droit de demander les motifs écrits et de déposer un appel dans les 15 jours auprès de la même ambassade.",
         ],
@@ -985,6 +985,165 @@ const guides: Guide[] = [
       "delais-visa-usa-canada-schengen-kinshasa-2025",
     ],
     relatedDestination: "visa-espagne-kinshasa",
+  },
+
+  {
+    slug: "rendez-vous-cev-kinshasa-visa-schengen",
+    title: "Comment prendre rendez-vous au CEV Kinshasa pour un visa Schengen — Guide complet 2026",
+    metaTitle: "Rendez-vous CEV Kinshasa Visa Schengen 2026 — Étapes & Délais | Joventy",
+    metaDescription:
+      "Comment prendre rendez-vous au CEV (Centre Européen des Visas, cev-kin.eu) à Kinshasa pour un visa Schengen en 2026 : compte Visa On Web, étapes, délais d'attente, frais, erreurs à éviter.",
+    publishedDate: "2026-06-15",
+    updatedDate: "2026-06-27",
+    readingTime: 8,
+    category: "Visa Schengen",
+    coverEmoji: "🏛️",
+    intro:
+      "Le Centre Européen des Visas (CEV) à Kinshasa est le seul guichet où les ressortissants congolais peuvent déposer une demande de visa Schengen court séjour. Il représente la France, la Belgique, l'Allemagne, les Pays-Bas et d'autres États Schengen. Mais sa procédure de prise de rendez-vous en ligne — via le portail Visa On Web — est souvent source de confusion et de blocage. Ce guide vous explique les étapes exactes, les délais réels et les erreurs fréquentes.",
+    sections: [
+      {
+        heading: "Le CEV en bref — ce qu'il faut savoir avant de commencer",
+        body:
+          "Le CEV n'est ni une ambassade ni un centre privé comme VFS ou TLS Contact ailleurs dans le monde. C'est un centre commun officiel, géré par l'Ambassade de Belgique, qui reçoit et instruit les demandes pour le compte de plusieurs pays Schengen. Toute la procédure commence en ligne, mais la dépose du dossier et la prise d'empreintes se font obligatoirement en personne.",
+        list: [
+          "🌐 Site officiel : www.cev-kin.eu",
+          "📍 Adresse : Avenue Pierre Mulele (ex-24 Novembre), Gombe – Kinshasa",
+          "📞 Téléphone : +243 819 700 231",
+          "📧 Email : cev.kinshasa@diplobel.fed.be",
+          "Dépôt possible aussi à Lubumbashi : Consulat Général de Belgique à Lubumbashi",
+          "Pays représentés : France, Belgique, Allemagne, Pays-Bas, Luxembourg, et d'autres États Schengen",
+          "Compétence : uniquement les visas court séjour (type C, 90 jours max sur 180) pour les ressortissants congolais",
+        ],
+      },
+      {
+        heading: "Étape 1 — Créer votre compte sur Visa On Web (VOW)",
+        body:
+          "Visa On Web (visaonweb.be) est le portail officiel du gouvernement belge pour les demandes de visa Schengen. C'est la première étape obligatoire — sans compte Visa On Web actif, vous ne pouvez pas prendre rendez-vous au CEV.",
+        list: [
+          "Rendez-vous sur visaonweb.be et créez un compte avec une adresse email valide",
+          "Vérifiez votre email et activez le compte (vérifier les spams si vous ne recevez pas l'email)",
+          "Connectez-vous et cliquez sur « Introduire une nouvelle demande »",
+          "Sélectionnez « Visa de court séjour (type C) » et choisissez le pays de destination principale",
+          "Remplissez le formulaire en ligne : informations personnelles, motif du voyage, itinéraire prévu",
+          "Une fois le formulaire soumis, le système génère un numéro de dossier VOW — conservez-le",
+          "Important : le formulaire VOW ne remplace pas le formulaire papier que vous signerez au guichet du CEV",
+        ],
+      },
+      {
+        heading: "Étape 2 — Prendre rendez-vous en ligne sur cev-kin.eu",
+        body:
+          "Une fois votre dossier VOW créé, vous pouvez prendre rendez-vous sur le site du CEV. Les créneaux disponibles s'affichent en temps réel et partent rapidement, surtout en période de forte demande (mai-septembre).",
+        list: [
+          "Rendez-vous sur www.cev-kin.eu et cliquez sur « Prendre rendez-vous »",
+          "Connectez-vous avec vos identifiants Visa On Web",
+          "Sélectionnez le nombre de personnes (si dépôt groupé pour une famille)",
+          "Choisissez une date et un créneau horaire disponibles — les créneaux du matin partent en premier",
+          "Confirmez le rendez-vous : vous recevez un email de confirmation avec votre numéro de rendez-vous",
+          "Imprimez ou enregistrez la confirmation — elle est exigée à l'entrée du CEV",
+          "Si aucun créneau n'est disponible : revenez sur le portail les matins en semaine, les annulations libèrent des places en cours de journée",
+        ],
+      },
+      {
+        heading: "Étape 3 — Préparer et déposer votre dossier physiquement au CEV",
+        body:
+          "Le jour de votre rendez-vous, vous vous présentez au CEV avec l'intégralité de votre dossier papier. Le CEV n'accepte pas les dossiers incomplets — si un document manque, votre dossier est refusé à l'accueil et vous devez reprendre un rendez-vous.",
+        list: [
+          "Arrivez 15 à 20 minutes avant votre créneau — le CEV est strict sur les horaires",
+          "Présentez votre confirmation de rendez-vous (papier ou téléphone) et votre passeport à l'entrée",
+          "L'agent du CEV vérifie que votre dossier est complet avant d'ouvrir le dossier",
+          "Vos empreintes digitales biométriques sont prises sur place — présence physique obligatoire pour tous les demandeurs de plus de 12 ans",
+          "Vous recevez un récépissé de dépôt avec un numéro de suivi — conservez-le précieusement",
+          "Le suivi du dossier se fait ensuite sur le portail Visa On Web avec votre numéro de dossier",
+        ],
+      },
+      {
+        heading: "Délais d'attente pour un rendez-vous CEV en 2026",
+        body:
+          "Les délais varient considérablement selon la période. En 2026, voici les tendances observées sur le portail CEV :",
+        list: [
+          "Janvier – mars (basse saison) : rendez-vous disponible sous 1 à 2 semaines",
+          "Avril – juin (montée en charge) : 2 à 4 semaines d'attente",
+          "Juillet – septembre (haute saison) : 3 à 6 semaines, parfois plus — planifiez en avance",
+          "Octobre – décembre : retour à 2 à 3 semaines",
+          "Après obtention du rendez-vous, délai de traitement : 15 jours ouvrables réglementaires maximum",
+          "Déposez votre dossier entre 15 jours et 6 mois avant votre date de départ prévue",
+          "Conseil : si votre voyage est urgent, prenez rendez-vous dès que possible — les créneaux ne s'améliorent pas à court terme",
+        ],
+      },
+      {
+        heading: "Frais officiels du CEV en 2026",
+        body:
+          "Les frais de visa Schengen sont uniformes pour tous les États Schengen représentés au CEV. Ils sont fixés par le Code des visas européen et s'appliquent en euros, convertis en francs congolais ou en USD au taux du jour.",
+        list: [
+          "💶 Adulte (tarif standard) : 90 € ≈ 105 USD",
+          "💶 Enfant de 6 à 12 ans : 45 €",
+          "💶 Enfant de moins de 6 ans : gratuit",
+          "Les frais sont réglés directement au CEV au moment du dépôt — pas de paiement en ligne",
+          "Modes de paiement acceptés : USD cash, euros cash, francs congolais au taux du jour",
+          "⚠️ Les frais ne sont pas remboursables en cas de refus — c'est une règle du Code des visas Schengen",
+          "Voie de recours gratuite : en cas de refus, vous pouvez demander les motifs écrits et déposer un recours dans les 15 jours",
+        ],
+      },
+      {
+        heading: "Les 5 erreurs qui bloquent dès le guichet CEV",
+        body:
+          "Ces erreurs entraînent un refus de prise en charge au guichet — sans rembourser les frais. Elles s'ajoutent aux erreurs documentaires classiques.",
+        list: [
+          "❌ Pas de confirmation de rendez-vous imprimée ou accessible : le CEV refuse l'entrée sans justificatif de rendez-vous",
+          "❌ Dossier incomplet à l'accueil : l'agent fait un contrôle rapide — si une pièce manque, le dossier est retourné et vous perdez votre créneau",
+          "❌ Nom ou date de naissance différent entre le passeport et le compte Visa On Web : les deux doivent être strictement identiques",
+          "❌ Arrivée en retard : passé votre créneau, vous n'êtes plus admis. Les retards de plus de 10 minutes entraînent l'annulation du rendez-vous",
+          "❌ Formulaire Visa On Web non soumis avant le rendez-vous : le numéro VOW est vérifié à l'accueil",
+        ],
+      },
+      {
+        heading: "Comment Joventy accompagne votre dossier CEV",
+        body:
+          "Chez Joventy, nos conseillers prennent en charge l'intégralité de la procédure CEV pour vous — de la création du compte Visa On Web jusqu'au suivi après dépôt :",
+        list: [
+          "Création et configuration du compte Visa On Web à votre place",
+          "Veille quotidienne des créneaux disponibles sur cev-kin.eu et réservation dès qu'une date correspond à votre planning",
+          "Vérification complète de votre dossier papier avant le rendez-vous — aucun document manquant",
+          "Préparation du formulaire de demande et de la lettre de motivation personnalisée selon votre profil",
+          "Accompagnement au CEV le jour J si nécessaire",
+          "Suivi du dossier sur Visa On Web après dépôt et transmission des résultats",
+          "En cas de refus : analyse du motif et conseil pour le recours ou la nouvelle demande",
+          "📱 Contactez notre équipe sur WhatsApp : +243 840 808 122",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Peut-on prendre rendez-vous au CEV sans compte Visa On Web ?",
+        a: "Non. La création d'un compte sur visaonweb.be est obligatoire avant toute prise de rendez-vous au CEV. C'est le portail officiel belge qui génère votre numéro de dossier, vérifié à l'accueil du CEV.",
+      },
+      {
+        q: "Le CEV à Kinshasa traite-t-il les visas pour tous les pays Schengen ?",
+        a: "Non, pas tous. Le CEV représente plusieurs États Schengen — notamment la France, la Belgique, l'Allemagne, les Pays-Bas — mais pas l'Espagne ni la Suisse, qui gèrent leurs visas directement via leurs propres ambassades à Kinshasa. Vérifiez sur cev-kin.eu la liste des pays représentés avant de prendre rendez-vous.",
+      },
+      {
+        q: "Que se passe-t-il si je rate mon rendez-vous CEV ?",
+        a: "Si vous ratez votre créneau (retard, absence), le rendez-vous est annulé et vous devez en reprendre un nouveau sur cev-kin.eu. Aucun remboursement n'est prévu si les frais ont déjà été réglés. Il est donc essentiel d'arriver 15 minutes avant l'heure prévue.",
+      },
+      {
+        q: "Peut-on déposer un dossier pour plusieurs membres d'une famille au même rendez-vous ?",
+        a: "Oui, sous conditions. Lors de la prise de rendez-vous sur cev-kin.eu, vous pouvez indiquer le nombre de personnes. Chaque membre de la famille doit avoir son propre compte Visa On Web et son propre dossier. Les empreintes de chaque personne de plus de 12 ans sont prises individuellement.",
+      },
+      {
+        q: "Le CEV de Lubumbashi accepte-t-il les mêmes demandes que celui de Kinshasa ?",
+        a: "Oui. Le Consulat Général de Belgique à Lubumbashi accepte les demandes de visa Schengen dans les mêmes conditions que le CEV de Kinshasa. Si vous résidez au Katanga ou dans les provinces de l'est, c'est l'option la plus pratique.",
+      },
+      {
+        q: "Quel est le délai entre la prise de rendez-vous et le résultat final ?",
+        a: "En 2026 : comptez entre 3 et 8 semaines au total — délai d'attente pour le rendez-vous (1 à 6 semaines selon la saison) + délai de traitement (15 jours ouvrables réglementaires après le dépôt). Planifiez votre demande au minimum 2 mois avant votre date de voyage.",
+      },
+    ],
+    relatedSlugs: [
+      "documents-visa-schengen-kinshasa",
+      "delais-visa-usa-canada-schengen-kinshasa-2025",
+      "ees-schengen-2026-controle-biometrique",
+    ],
+    relatedDestination: "visa-schengen-kinshasa",
   },
 ];
 export function getAllGuides(): Guide[] {
