@@ -29,7 +29,7 @@ export default function GuidesIndex() {
       "@type": "ListItem",
       position: i + 1,
       name: g.title,
-      url: `https://www.joventy.cd/guides/${g.slug}`,
+      url: `https://joventy.cd/guides/${g.slug}`,
     })),
   };
 
@@ -41,7 +41,7 @@ export default function GuidesIndex() {
           name="description"
           content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir."
         />
-        <link rel="canonical" href="https://www.joventy.cd/guides" />
+        <link rel="canonical" href="https://joventy.cd/guides" />
         <script type="application/ld+json">{JSON.stringify(schemaArticleList)}</script>
       </Helmet>
 

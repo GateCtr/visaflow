@@ -63,8 +63,8 @@ export default function DestinationPage() {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://www.joventy.cd/" },
-      { "@type": "ListItem", position: 2, name: dest.name, item: `https://www.joventy.cd/${dest.slug}` },
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: dest.name, item: `https://joventy.cd/${dest.slug}` },
     ],
   };
 
@@ -73,12 +73,12 @@ export default function DestinationPage() {
       <Helmet>
         <title>{dest.title}</title>
         <meta name="description" content={dest.metaDescription} />
-        <link rel="canonical" href={`https://www.joventy.cd/${dest.slug}`} />
+        <link rel="canonical" href={`https://joventy.cd/${dest.slug}`} />
         <meta property="og:title" content={dest.title} />
         <meta property="og:description" content={dest.metaDescription} />
-        <meta property="og:url" content={`https://www.joventy.cd/${dest.slug}`} />
+        <meta property="og:url" content={`https://joventy.cd/${dest.slug}`} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />

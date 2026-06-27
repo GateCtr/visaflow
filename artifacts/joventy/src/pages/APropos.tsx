@@ -12,7 +12,7 @@ export default function APropos() {
       "@type": "Organization",
       "name": "Joventy",
       "legalName": "Akollad Groupe",
-      "url": "https://www.joventy.cd",
+      "url": "https://joventy.cd",
       "foundingDate": "2024",
       "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
       "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
@@ -27,12 +27,12 @@ export default function APropos() {
       <Helmet>
         <title>À propos de Joventy — Assistance Visa Kinshasa, RDC | Qui sommes-nous ?</title>
         <meta name="description" content="Joventy est un service d'assistance visa premium basé à Kinshasa (RDC). Fondé par Akollad Groupe, nous aidons les voyageurs congolais à obtenir leurs visas USA, Canada, Europe, Dubaï. Paiement M-Pesa, résultat garanti." />
-        <link rel="canonical" href="https://www.joventy.cd/a-propos" />
+        <link rel="canonical" href="https://joventy.cd/a-propos" />
         <meta property="og:title" content="À propos de Joventy — Assistance Visa Kinshasa, RDC" />
         <meta property="og:description" content="Service d'assistance visa premium basé à Kinshasa. Paiement M-Pesa, prime de succès uniquement si résultat." />
-        <meta property="og:url" content="https://www.joventy.cd/a-propos" />
+        <meta property="og:url" content="https://joventy.cd/a-propos" />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <script type="application/ld+json">{JSON.stringify(orgSchema)}</script>

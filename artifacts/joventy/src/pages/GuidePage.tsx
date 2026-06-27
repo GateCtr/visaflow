@@ -41,13 +41,13 @@ export default function GuidePage() {
     description: guide.metaDescription,
     datePublished: guide.publishedDate,
     dateModified: guide.updatedDate,
-    author: { "@type": "Organization", name: "Joventy", url: "https://www.joventy.cd" },
+    author: { "@type": "Organization", name: "Joventy", url: "https://joventy.cd" },
     publisher: {
       "@type": "Organization",
       name: "Joventy",
-      logo: { "@type": "ImageObject", url: "https://www.joventy.cd/logo.png" },
+      logo: { "@type": "ImageObject", url: "https://joventy.cd/logo.png" },
     },
-    mainEntityOfPage: { "@type": "WebPage", "@id": `https://www.joventy.cd/guides/${guide.slug}` },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `https://joventy.cd/guides/${guide.slug}` },
   };
 
   const faqSchema = guide.faq.length > 0
@@ -66,9 +66,9 @@ export default function GuidePage() {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://www.joventy.cd/" },
-      { "@type": "ListItem", position: 2, name: "Guides", item: "https://www.joventy.cd/guides" },
-      { "@type": "ListItem", position: 3, name: guide.title, item: `https://www.joventy.cd/guides/${guide.slug}` },
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: "Guides", item: "https://joventy.cd/guides" },
+      { "@type": "ListItem", position: 3, name: guide.title, item: `https://joventy.cd/guides/${guide.slug}` },
     ],
   };
 
@@ -77,12 +77,12 @@ export default function GuidePage() {
       <Helmet>
         <title>{guide.metaTitle}</title>
         <meta name="description" content={guide.metaDescription} />
-        <link rel="canonical" href={`https://www.joventy.cd/guides/${guide.slug}`} />
+        <link rel="canonical" href={`https://joventy.cd/guides/${guide.slug}`} />
         <meta property="og:title" content={guide.metaTitle} />
         <meta property="og:description" content={guide.metaDescription} />
         <meta property="og:type" content="article" />
-        <meta property="og:url" content={`https://www.joventy.cd/guides/${guide.slug}`} />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:url" content={`https://joventy.cd/guides/${guide.slug}`} />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <meta property="article:published_time" content={guide.publishedDate} />

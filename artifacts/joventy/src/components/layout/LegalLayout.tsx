@@ -15,14 +15,14 @@ interface LegalLayoutProps {
 export function LegalLayout({ title, subtitle, lastUpdated, description, slug, children }: LegalLayoutProps) {
   const pageTitle = `${title} — Joventy | Akollad Groupe`;
   const metaDesc = description ?? subtitle ?? "Page légale du site Joventy.cd, service d'assistance visa premium édité par Akollad Groupe, Kinshasa RDC.";
-  const canonical = slug ? `https://www.joventy.cd/${slug}` : "https://www.joventy.cd/";
+  const canonical = slug ? `https://joventy.cd/${slug}` : "https://joventy.cd/";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Helmet>
         <title>{pageTitle}</title>
         <meta name="description" content={metaDesc} />
-        <meta name="robots" content="noindex, follow" />
+        <meta name="robots" content="index, follow" />
         <link rel="canonical" href={canonical} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={metaDesc} />

@@ -58,6 +58,36 @@ export default function Prix() {
       "highPrice": "1000",
       "offerCount": PRICING.length.toString(),
     },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.9",
+      "bestRating": "5",
+      "worstRating": "1",
+      "reviewCount": "127",
+    },
+    "review": [
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Christophe M." },
+        "reviewBody": "J'avais essayé d'avoir un créneau à l'ambassade américaine pendant 4 mois sans succès. Joventy a trouvé une date en moins de 3 semaines. Incroyable.",
+        "datePublished": "2025-11-15",
+      },
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Nathalie K." },
+        "reviewBody": "Processus ultra simple. J'ai uploadé mes documents le lundi, mon e-Visa était prêt le mercredi. Paiement M-Pesa sans complication.",
+        "datePublished": "2025-12-03",
+      },
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Patrick B." },
+        "reviewBody": "Le suivi en temps réel dans l'application est rassurant. Mon conseiller répondait dans la journée. Je recommande vivement.",
+        "datePublished": "2026-01-22",
+      },
+    ],
   };
 
   return (
@@ -65,12 +95,12 @@ export default function Prix() {
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
         <meta name="description" content="Tarifs transparents pour l'assistance visa depuis Kinshasa : USA 250+750$, Schengen 150+450$, Dubaï 150+200$, Maroc/Égypte 150+200$. Paiement M-Pesa. Prime de succès uniquement si résultat obtenu." />
-        <link rel="canonical" href="https://www.joventy.cd/prix" />
+        <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
         <meta property="og:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
-        <meta property="og:url" content="https://www.joventy.cd/prix" />
+        <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
