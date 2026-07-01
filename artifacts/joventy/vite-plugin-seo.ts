@@ -45,7 +45,7 @@ function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): stri
       telephone: "+243840808122",
       address: { "@type": "PostalAddress", addressLocality: "Kinshasa", addressCountry: "CD" },
     },
-    areaServed: { "@type": "City", name: "Kinshasa" },
+    areaServed: { "@type": "Place", name: "Kinshasa, République Démocratique du Congo" },
     aggregateRating: {
       "@type": "AggregateRating",
       ratingValue: "4.9",

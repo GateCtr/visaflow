@@ -557,9 +557,8 @@ export default function Landing() {
             "addressCountry": "CD"
           },
           "areaServed": {
-            "@type": "City",
-            "name": "Kinshasa",
-            "containedInPlace": { "@type": "Country", "name": "République Démocratique du Congo" }
+            "@type": "Place",
+            "name": "Kinshasa, République Démocratique du Congo"
           },
           "priceRange": "150$-1000$",
           "currenciesAccepted": "USD",

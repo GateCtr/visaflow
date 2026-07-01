@@ -79,9 +79,9 @@ export default function DestinationPage() {
     "@type": "Service",
     "name": `Assistance Visa ${dest.name} depuis Kinshasa`,
     "description": dest.metaDescription,
-    "url": `https://joventy.cd/${dest.slug}`,
+    "@id": `https://joventy.cd/${dest.slug}`,
     "provider": {
-      "@type": "LocalBusiness",
+      "@type": "Organization",
       "name": "Joventy",
       "url": "https://joventy.cd",
       "telephone": "+243840808122",
@@ -92,9 +92,8 @@ export default function DestinationPage() {
       },
     },
     "areaServed": {
-      "@type": "City",
-      "name": "Kinshasa",
-      "containedInPlace": { "@type": "Country", "name": "République Démocratique du Congo" },
+      "@type": "Place",
+      "name": "Kinshasa, République Démocratique du Congo",
     },
     "serviceType": "Assistance visa",
     "offers": {
