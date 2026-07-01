@@ -47,7 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/slot-hunter run dev"
+args = "cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -70,8 +70,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3001 pnpm --filter @workspace/captcha-service run dev"
-waitForPort = 3001
+args = "cd artifacts/captcha-service && PORT=3001 node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/proxy-service: Proxy Service"
@@ -82,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3002 pnpm --filter @workspace/proxy-service run dev"
+args = "cd artifacts/proxy-service && PORT=3002 node_modules/.bin/tsx watch src/index.ts"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -107,10 +106,6 @@ HUNTER_API_KEY = "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef2403
 [[ports]]
 localPort = 3001
 externalPort = 3001
-
-[[ports]]
-localPort = 3002
-externalPort = 3002
 
 [[ports]]
 localPort = 5000
