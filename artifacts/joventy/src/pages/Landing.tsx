@@ -11,6 +11,7 @@ import {
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
   Calendar, ClipboardList, ChevronRight, XCircle, HelpCircle,
   Landmark, CreditCard, BadgeCheck, AlertTriangle, BookOpen,
+  Monitor, Building2, Wifi,
 } from "lucide-react";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
@@ -396,7 +397,7 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy</title>
-        <meta name="description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa — Formulaires remplis, créneaux consulaires, e-Visas. Vous payez uniquement si ça marche. Paiement M-Pesa ✓" />
+        <meta name="description" content="✅ Service 100% en ligne — aucun bureau à visiter. Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa. Formulaires remplis, créneaux, e-Visas. Payez uniquement si ça marche. M-Pesa ✓" />
         <link rel="canonical" href="https://joventy.cd/" />
         <meta property="og:title" content="Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy" />
         <meta property="og:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa — Formulaires remplis, créneaux consulaires, e-Visas. Vous payez uniquement si ça marche. Paiement M-Pesa." />
@@ -606,9 +607,15 @@ export default function Landing() {
         </div>
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-semibold mb-8 shadow-lg">
-            <Star className="w-4 h-4 text-secondary fill-secondary" />
-            <span>Assistance visa premium · Kinshasa, RDC</span>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-semibold shadow-lg">
+              <Star className="w-4 h-4 text-secondary fill-secondary" />
+              <span>Assistance visa premium · Kinshasa, RDC</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-400/40 text-emerald-200 text-sm font-bold shadow-lg">
+              <Monitor className="w-4 h-4 flex-shrink-0" />
+              <span>100% en ligne — aucun bureau à visiter</span>
+            </div>
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-semibold text-white tracking-tight leading-[1.05] mb-6 text-balance">
@@ -655,11 +662,11 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground font-medium">
             {[
+              { icon: Monitor, label: "Service 100% en ligne" },
               { icon: ShieldCheck, label: "Paiement au résultat" },
               { icon: Phone, label: "M-Pesa, Airtel & Orange Money" },
               { icon: Clock, label: "Suivi en temps réel" },
               { icon: MessageCircle, label: "Chat conseiller inclus" },
-              { icon: Award, label: "Données 100% confidentielles" },
             ].map((t) => (
               <div key={t.label} className="flex items-center gap-2">
                 <t.icon className="w-4 h-4 text-secondary flex-shrink-0" />
@@ -679,8 +686,8 @@ export default function Landing() {
               Joventy, c'est quoi exactement ?
             </h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Nous sommes une <strong>agence d'assistance visa</strong> basée à Kinshasa — pas un consulat, pas une ambassade.
-              Notre rôle est de vous accompagner dans votre démarche, pas de vous délivrer un visa.
+              Nous sommes une <strong>agence d'assistance visa 100% en ligne</strong> — pas un consulat, pas une ambassade, pas une agence avec un bureau physique à visiter.
+              Tout se passe à distance : vous soumettez vos documents via WhatsApp ou l'espace client, et notre équipe traite votre dossier sans que vous n'ayez à vous déplacer.
             </p>
           </div>
 
@@ -773,6 +780,96 @@ export default function Landing() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ JOVENTY VS AGENCE PHYSIQUE ═══ */}
+      <section className="py-20 bg-primary text-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-widest mb-4">
+              <Monitor className="w-3.5 h-3.5" />
+              Pourquoi 100% digital ?
+            </div>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-white mb-4">
+              Joventy n'a pas de bureau — c'est un avantage
+            </h2>
+            <p className="text-white/65 text-lg max-w-2xl mx-auto">
+              Beaucoup de nos clients nous contactent après avoir cherché une "agence de visa" ou une "ambassade" à Kinshasa. Voici la différence.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            {/* Agence physique traditionnelle */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-5 h-5 text-white/50" />
+                </div>
+                <div>
+                  <p className="text-xs text-white/40 uppercase font-bold tracking-wide">Agence physique traditionnelle</p>
+                  <h3 className="text-white/70 font-bold">Bureau à Kinshasa</h3>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                {[
+                  "Vous devez vous déplacer en personne",
+                  "Horaires limités (lundi–vendredi, 9h–17h)",
+                  "File d'attente, transport, perte de temps",
+                  "Tarifs opaques, frais non affichés",
+                  "Difficile à joindre hors bureau",
+                  "Résultat incertain, pas de garantie contractuelle",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-white/55">
+                    <XCircle className="w-4 h-4 text-white/25 flex-shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Joventy — digital */}
+            <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <Monitor className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="text-xs text-emerald-400 uppercase font-bold tracking-wide">Joventy — service en ligne</p>
+                  <h3 className="text-white font-bold">Depuis votre téléphone</h3>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                {[
+                  "Démarrez en 5 min depuis votre smartphone",
+                  "Disponible 7j/7, y compris le week-end",
+                  "Documents envoyés par WhatsApp ou espace client",
+                  "Tarifs affichés, aucune surprise",
+                  "Réponse WhatsApp en moins de 2h",
+                  "Prime de succès due uniquement si résultat obtenu",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-emerald-100">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Wifi className="w-8 h-8 text-secondary flex-shrink-0" />
+              <p className="text-white/80 text-sm leading-relaxed">
+                <strong className="text-white">Joventy ne remplace pas l'ambassade.</strong> Nous sommes l'intermédiaire digital entre vous et les portails officiels (usvisaappt.com, cev-kin.eu, portail ICP Dubaï...) — sans que vous ayez à comprendre ces systèmes complexes.
+              </p>
+            </div>
+            <Link href="/register" className="flex-shrink-0">
+              <Button className="bg-secondary hover:bg-orange-500 text-primary font-bold whitespace-nowrap">
+                Commencer en ligne <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

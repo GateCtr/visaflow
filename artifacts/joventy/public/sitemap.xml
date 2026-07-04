@@ -206,6 +206,22 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- UK visa guide — high CTR signal (7.69% on "demande de visa angleterre en rdc") -->
+  <url>
+    <loc>https://joventy.cd/guides/visa-angleterre-kinshasa-rdv-2026</loc>
+    <lastmod>2026-07-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- China visa guide — "centre de visa chine kinshasa" 50 imp + "visaforchina kinshasa" 29 imp -->
+  <url>
+    <loc>https://joventy.cd/guides/centre-visa-chine-kinshasa-2026</loc>
+    <lastmod>2026-07-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
   <!-- Pricing & About pages -->
   <url>
     <loc>https://joventy.cd/prix</loc>

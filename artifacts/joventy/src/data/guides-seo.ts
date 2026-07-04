@@ -1145,6 +1145,273 @@ const guides: Guide[] = [
     ],
     relatedDestination: "visa-schengen-kinshasa",
   },
+
+  {
+    slug: "visa-angleterre-kinshasa-rdv-2026",
+    title: "Visa Angleterre depuis Kinshasa : UKVI, rendez-vous biométrique et procédure complète 2026",
+    metaTitle: "Visa Angleterre Kinshasa 2026 — Rendez-vous UKVI, Documents, Prix | Joventy",
+    metaDescription:
+      "Visa Royaume-Uni depuis Kinshasa en 2026 : prise de rendez-vous UKVI, biométrie BLS International, documents exacts, coûts réels (£115+). Guide complet par Joventy.",
+    publishedDate: "2026-07-01",
+    updatedDate: "2026-07-04",
+    readingTime: 9,
+    category: "Visa Royaume-Uni",
+    coverEmoji: "🇬🇧",
+    intro:
+      "Obtenir un visa pour le Royaume-Uni (Angleterre, Écosse, Pays de Galles, Irlande du Nord) depuis Kinshasa en 2026 demande une préparation rigoureuse. Contrairement aux visas Schengen ou aux e-Visas simples, la procédure UK est entièrement gérée par UK Visas and Immigration (UKVI) — le service d'immigration britannique — et passe par BLS International à Kinshasa pour la biométrie. Ce guide détaille chaque étape : de la création du compte UKVI à la prise de rendez-vous biométrique, en passant par les documents exacts exigés et les erreurs les plus fréquentes qui causent les refus pour les demandeurs congolais.",
+    sections: [
+      {
+        heading: "Qui gère les visas UK à Kinshasa ? UKVI et BLS International",
+        body:
+          "Depuis 2023, les demandes de visa UK depuis Kinshasa passent par BLS International — le prestataire mandaté par UK Visas and Immigration (UKVI) pour collecter les biométries et dossiers en Afrique subsaharienne. Il n'y a plus de High Commission britannique qui reçoit directement les demandeurs à Kinshasa pour les visas visiteur.",
+        list: [
+          "📍 BLS International Kinshasa : collecte biométrique et dépôt de dossier — vérifiez l'adresse actuelle sur blsinternational.com (elle peut changer)",
+          "Le formulaire de demande se remplit intégralement en ligne sur le portail UKVI (gov.uk/apply-uk-visa)",
+          "Les frais consulaires UK sont payés en ligne en livres sterling (£) par carte",
+          "Le dossier papier est remis uniquement lors du rendez-vous biométrique chez BLS",
+          "UKVI prend la décision finale — BLS ne fait que collecter les biométries et transmettre",
+          "Les demandeurs DRC ne bénéficient pas d'exemption de visa — le Standard Visitor Visa est obligatoire même pour 1 jour au UK",
+        ],
+      },
+      {
+        heading: "Les types de visa UK disponibles depuis Kinshasa",
+        body:
+          "Le type de visa dépend de la raison de votre voyage. Le plus demandé depuis Kinshasa est le Standard Visitor Visa (tourisme, famille, affaires courtes). Voici les principaux types disponibles :",
+        list: [
+          "🏖️ Standard Visitor Visa — tourisme, famille, affaires ≤6 mois : £115 (court séjour), £432 (2 ans multiple), £796 (5 ans), £963 (10 ans)",
+          "🎓 Student Visa — études longue durée (cours >6 mois) : £490 — exige lettre CAS de l'université",
+          "👨‍👩‍👧 Family Visa — rejoindre un conjoint/parent au UK : £1 846",
+          "💼 Skilled Worker Visa — travail qualifié avec employeur sponsorisé : £719",
+          "🔁 Transit Visa — si vous avez une escale au UK sans visa valide USA/Schengen/Canadien : £64",
+          "⚠️ Le visa le plus fréquemment demandé — et refusé — depuis Kinshasa est le Standard Visitor Visa. Le taux de refus pour les passeports DRC est l'un des plus élevés d'Afrique subsaharienne en raison des contrôles d'immigration stricts.",
+        ],
+      },
+      {
+        heading: "Documents requis pour le Standard Visitor Visa depuis Kinshasa (2026)",
+        body:
+          "La liste suivante est basée sur les exigences UKVI 2026 et les spécificités de la situation des demandeurs congolais. Un dossier incomplet ou insuffisamment documenté est la première cause de refus.",
+        list: [
+          "Passeport valide au moins 6 mois après la date de retour prévue, avec 2 pages vierges minimum",
+          "Photo biométrique récente (35×45 mm, fond blanc ou gris clair, moins de 6 mois — identique aux normes Schengen)",
+          "Relevés bancaires des 6 derniers mois (solde minimum recommandé ≥ équivalent de 3 000 USD) — les relevés en FC doivent être accompagnés du taux de conversion officiel",
+          "Justificatif d'emploi ou d'activité : attestation de travail avec salaire, contrat CDI, ou extrait RCCM pour les indépendants",
+          "Lettre de motivation personnelle expliquant clairement le but du voyage, les dates, et le lien avec l'invitation (si applicable)",
+          "Preuve d'hébergement : réservation hôtel confirmée (Booking.com accepté) ou lettre d'invitation notariée d'un proche résidant au UK",
+          "Billets aller-retour (réservation ferme ou achetés — le UK est plus strict que Schengen sur ce point)",
+          "Assurance voyage médicale valable au UK (le UK n'est plus dans l'espace Schengen depuis le Brexit)",
+          "Preuve de liens forts avec la RDC : contrat de travail, titre foncier, acte de mariage, pièces d'identité des enfants en RDC",
+          "Si voyage pour affaires : lettre d'invitation de la société britannique sur papier à en-tête, avec nom, adresse et numéro d'enregistrement Companies House",
+          "Si mineur voyageant seul ou avec un seul parent : autorisation de sortie du territoire légalisée par les deux parents ou tuteur légal",
+        ],
+      },
+      {
+        heading: "Comment prendre rendez-vous pour un visa UK à Kinshasa — procédure étape par étape",
+        body:
+          "La procédure UK est entièrement en ligne avant le rendez-vous physique. Voici les étapes dans l'ordre exact à suivre :",
+        list: [
+          "Étape 1 : Créez un compte sur gov.uk/apply-uk-visa et choisissez le type de visa",
+          "Étape 2 : Remplissez le formulaire en ligne (environ 45-60 minutes) — questions sur vos voyages passés, situation financière, famille, liens avec le Royaume-Uni",
+          "Étape 3 : Payez les frais consulaires en ligne par carte (£115 pour le Standard Visitor) — le paiement est non remboursable",
+          "Étape 4 : Prenez rendez-vous pour la biométrie chez BLS International Kinshasa via le portail UKVI (après le paiement)",
+          "Étape 5 : Le jour du rendez-vous BLS — apportez votre formulaire imprimé, vos photos, et l'intégralité de votre dossier papier",
+          "Étape 6 : BLS collecte vos empreintes digitales et votre photo (biométrie) et transmet votre dossier à UKVI",
+          "Étape 7 : Délai de traitement UKVI : 3 à 8 semaines en standard (payez £500+ pour le traitement prioritaire en 5 jours ouvrables)",
+          "Étape 8 : Résultat communiqué par email — en cas d'accord, votre vignette visa est apposée sur votre passeport envoyé par courrier ou à récupérer chez BLS",
+        ],
+      },
+      {
+        heading: "Pourquoi les visas UK sont-ils souvent refusés pour les demandeurs congolais ?",
+        body:
+          "UKVI applique une politique d'immigration très stricte envers les passeports DRC. Comprendre les raisons de refus permet de préparer un dossier solide. Ces refus sont quasi systématiquement liés à :",
+        list: [
+          "❌ Manque de preuves de retour en RDC : UKVI doit être convaincu que vous reviendrez au Congo après votre visite — un emploi stable, une famille, un bien immobilier sont essentiels",
+          "❌ Finances insuffisantes ou non documentées : des relevés montrant des transactions irrégulières ou un solde insuffisant sont rédhibitoires",
+          "❌ Lettre de motivation vague ou générique : 'je veux visiter Londres' ne suffit pas — UKVI veut le détail du programme, des contacts, des raisons concrètes",
+          "❌ Incohérences entre le formulaire et les documents : dates de voyage, noms, adresses doivent être strictement identiques partout",
+          "❌ Antécédents de refus non déclarés : le formulaire UKVI demande explicitement si des visas ont déjà été refusés — une fausse déclaration = ban automatique",
+          "❌ Absence d'assurance voyage valide pour le UK (post-Brexit, la carte CEAM européenne n'est plus valable au Royaume-Uni)",
+          "✅ Solution : un dossier béton avec preuves de retour, finances documentées sur 6 mois, programme de voyage précis, et lettre de motivation personnalisée",
+        ],
+      },
+      {
+        heading: "Comment Joventy accompagne votre demande de visa UK depuis Kinshasa",
+        body:
+          "Joventy prend en charge l'intégralité de votre dossier visa UK de A à Z, en ligne, sans que vous n'ayez à vous déplacer avant votre rendez-vous BLS :",
+        list: [
+          "Analyse préalable de votre profil : finances, emploi, situation familiale — identification des points faibles",
+          "Remplissage complet du formulaire UKVI en ligne à votre place (évite les erreurs qui entraînent un refus immédiat)",
+          "Rédaction de la lettre de motivation personnalisée selon votre situation spécifique",
+          "Vérification et organisation de votre dossier papier avant le rendez-vous BLS — aucun document manquant",
+          "Conseil sur les relevés bancaires : quels mois montrer, comment les présenter",
+          "Accompagnement jusqu'au dépôt et suivi du dossier post-rendez-vous",
+          "📱 Tout se passe par WhatsApp : +243 840 808 122",
+          "💳 Paiement via M-Pesa, Airtel Money ou Orange Money — frais d'engagement 200 $ + prime de succès 600 $",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Faut-il se déplacer chez BLS International pour un visa UK depuis Kinshasa ?",
+        a: "Oui, une fois uniquement — pour la biométrie (empreintes digitales + photo). Tout le reste de la procédure (formulaire, paiement) se fait en ligne. Joventy prépare tout votre dossier à distance avant ce rendez-vous unique.",
+      },
+      {
+        q: "Combien coûte un visa UK (Angleterre) depuis Kinshasa en 2026 ?",
+        a: "Les frais consulaires UK pour un Standard Visitor Visa sont de £115 (6 mois). Pour un visa multi-entrées 2 ans : £432, 5 ans : £796, 10 ans : £963. S'ajoutent les frais de service BLS (~50-80 USD) et les frais Joventy (200 $ engagement + 600 $ prime de succès). Le traitement prioritaire UKVI (5 jours ouvrables) coûte environ £500 supplémentaires.",
+      },
+      {
+        q: "Quel est le délai pour obtenir un visa UK depuis Kinshasa ?",
+        a: "En traitement standard : 3 à 8 semaines après le rendez-vous biométrique. En traitement prioritaire (payant, £500+) : 5 jours ouvrables. Planifiez votre demande au minimum 2 mois avant votre date de voyage.",
+      },
+      {
+        q: "Peut-on obtenir un visa UK multi-entrées depuis Kinshasa ?",
+        a: "Oui. UKVI propose des visas Standard Visitor multi-entrées valables 2, 5 ou 10 ans. Cependant, pour un premier visa UK, UKVI accorde souvent un visa court séjour (6 mois) pour évaluer le profil du demandeur. Un antécédent de respect des conditions de séjour augmente les chances d'obtenir un multi-entrées lors des demandes suivantes.",
+      },
+      {
+        q: "Faut-il un visa pour transiter par le Royaume-Uni avec un passeport congolais ?",
+        a: "Oui. Les titulaires d'un passeport DRC ont besoin d'un Direct Airside Transit Visa (DATV) pour transiter par un aéroport britannique, même sans quitter la zone de transit. Exception : si vous avez un visa valide USA, Canada, Australie, Nouvelle-Zélande, Schengen ou irlandais, le DATV peut ne pas être requis — vérifiez sur gov.uk/check-uk-visa.",
+      },
+    ],
+    relatedSlugs: [
+      "documents-visa-schengen-kinshasa",
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+    ],
+    relatedDestination: "visa-royaume-uni-kinshasa",
+  },
+
+  {
+    slug: "centre-visa-chine-kinshasa-2026",
+    title: "Centre de visa Chine à Kinshasa : VFS/CVSC, procédure complète et documents 2026",
+    metaTitle: "Centre Visa Chine Kinshasa 2026 — VFS, Procédure, Documents, Prix | Joventy",
+    metaDescription:
+      "Visa Chine depuis Kinshasa en 2026 : Centre CVSC/VFS, portail visaforchina.org, documents requis, coûts réels (~170$), e-Visa court séjour. Guide complet par Joventy.",
+    publishedDate: "2026-07-01",
+    updatedDate: "2026-07-04",
+    readingTime: 8,
+    category: "Visa Chine",
+    coverEmoji: "🇨🇳",
+    intro:
+      "Obtenir un visa pour la Chine depuis Kinshasa en 2026 : la procédure est plus complexe qu'il n'y paraît. La Chine a introduit un e-Visa court séjour (≤15 jours) en 2024 pour certaines nationalités — mais les passeports DRC ne figurent pas encore dans la liste des pays éligibles. Les ressortissants congolais doivent passer par le China Visa Application Service Center (CVSC), opéré par VFS Global à Kinshasa. Ce guide détaille la procédure exacte, les documents requis, les coûts réels et les particularités que peu de sources en français expliquent clairement.",
+    sections: [
+      {
+        heading: "Où faire sa demande de visa Chine à Kinshasa ? Le CVSC/VFS",
+        body:
+          "Le China Visa Application Service Center (CVSC) à Kinshasa est opéré par VFS Global — le même prestataire qui gère les visas UK et d'autres pays. Ce centre collecte les dossiers et biométries au nom du Consulat Général de Chine à Kinshasa, qui prend la décision finale.",
+        list: [
+          "📍 CVSC Kinshasa (VFS Global) : vérifiez l'adresse actuelle sur visaforchina.org ou vfs-china-kinshasa.com avant de vous déplacer",
+          "Horaires habituels : lundi–vendredi, 9h–12h pour le dépôt, 14h–16h pour le retrait des passeports",
+          "Rendez-vous conseillé mais pas toujours obligatoire — vérifiez sur le site VFS Chine Kinshasa",
+          "Le Consulat de Chine à Kinshasa (Avenue du 24 novembre, Gombe) ne reçoit pas directement les demandeurs pour les visas courants",
+          "visaforchina.org : portail officiel chinois pour remplir le formulaire de demande de visa (V.2013)",
+          "⚠️ Attention aux sites non officiels : 'visaforchina.com' (sans .org) ou les variantes sont des sites privés qui facturent des frais supplémentaires — utilisez uniquement .org",
+        ],
+      },
+      {
+        heading: "Types de visa chinois disponibles depuis Kinshasa",
+        body:
+          "La Chine utilise un système de lettres pour classer les visas selon le motif du séjour. Voici les types les plus demandés depuis Kinshasa :",
+        list: [
+          "🏖️ Visa L (Lǚyóu — Tourisme) : le plus demandé — séjour touristique, familial. Durée : 30 ou 90 jours. Validité : 3 mois ou 6 mois selon le profil",
+          "💼 Visa M (Màoyì — Affaires/Commerce) : pour les commerçants, importateurs, foires commerciales. Très demandé depuis Kinshasa pour le commerce avec la Chine",
+          "🔬 Visa F (Fǎng wèn — Échanges) : visite d'entreprise, invitation officielle, formations",
+          "🎓 Visa X2 (Études ≤6 mois) : études courtes ou stage linguistique",
+          "🔁 Visa G (Transit) : transit par la Chine sans visa valide pour la destination finale",
+          "💡 E-Visa court séjour (≤15 jours) : disponible depuis 2024 pour certains pays — les passeports DRC NE sont PAS encore dans la liste éligible en juillet 2026. Vérifiez visaforchina.org pour les mises à jour.",
+        ],
+      },
+      {
+        heading: "Documents requis pour un visa Chine (visa L tourisme) depuis Kinshasa",
+        body:
+          "La liste suivante correspond aux exigences du Consulat de Chine à Kinshasa pour un visa L (tourisme) en 2026. Les exigences peuvent varier légèrement selon le type de visa.",
+        list: [
+          "Formulaire de demande V.2013 : rempli en ligne sur visaforchina.org, imprimé et signé (2 pages recto-verso en couleur)",
+          "Passeport ordinaire valide au moins 6 mois après la fin du séjour prévu, avec au moins 2 pages vierges",
+          "Copie de la page d'identité du passeport",
+          "2 photos d'identité biométriques récentes (48×33 mm, fond blanc, sans lunettes — dimensions différentes du format Schengen !)",
+          "Confirmation de réservation d'hôtel (ou invitation d'hébergement si logé chez un proche)",
+          "Billet d'avion aller-retour (réservation ferme ou achetés)",
+          "Relevés bancaires des 3 derniers mois (solde recommandé ≥ 1 500 USD, ou équivalent yuan CNY)",
+          "Justificatif d'emploi ou d'activité en RDC (attestation de travail, extrait RCCM)",
+          "Justificatif de domicile en RDC (facture eau/électricité)",
+          "Pour les visas M (affaires) : lettre d'invitation de la société chinoise sur papier à en-tête avec cachet rouge officiel (obligatoire)",
+          "Pour les mineurs : acte de naissance + autorisation des deux parents légalisée",
+        ],
+      },
+      {
+        heading: "Procédure étape par étape : visa Chine à Kinshasa",
+        body:
+          "Voici les étapes dans l'ordre exact, de la préparation à la réception du passeport avec visa :",
+        list: [
+          "Étape 1 : Remplissez le formulaire V.2013 sur visaforchina.org — créez un compte, complétez le formulaire, imprimez-le en couleur",
+          "Étape 2 : Rassemblez tous les documents requis (voir liste ci-dessus) — le CVSC fait un contrôle strict à l'accueil",
+          "Étape 3 : Prenez rendez-vous (si obligatoire) sur le site VFS Chine Kinshasa ou présentez-vous directement selon les instructions du moment",
+          "Étape 4 : Déposez votre dossier au CVSC/VFS Kinshasa — payez les frais sur place en USD cash",
+          "Étape 5 : Biométrie : empreintes digitales des 10 doigts (obligatoire pour la plupart des demandeurs, sauf enfants <12 ans et personnes >70 ans)",
+          "Étape 6 : Délai de traitement : 4 à 5 jours ouvrables standard (traitement express : 2-3 jours moyennant frais supplémentaires)",
+          "Étape 7 : Récupérez votre passeport au CVSC ou demandez un envoi par courrier",
+        ],
+      },
+      {
+        heading: "Coûts réels du visa Chine depuis Kinshasa en 2026",
+        body:
+          "Le coût total d'un visa chinois depuis Kinshasa comprend plusieurs postes que peu de sources détaillent clairement :",
+        list: [
+          "💰 Frais consulaires Chine (payés au CVSC) :",
+          "→ Visa simple entrée : 140 USD",
+          "→ Visa double entrée : 140 USD",
+          "→ Visa multi-entrées (6 mois) : 140 USD",
+          "→ Visa multi-entrées (12 mois) : 140 USD",
+          "💰 Frais de service VFS/CVSC : environ 30 USD supplémentaires",
+          "💰 Frais de traitement express (+2-3 jours) : environ 25-30 USD",
+          "💰 Total indicatif pour un visa L tourisme standard : ~170 USD",
+          "⚠️ Ces frais sont payés en USD cash au comptoir — aucune carte, aucun virement",
+          "💳 Les frais Joventy (120 $ engagement + 180 $ prime de succès) sont séparés et payés via M-Pesa, Airtel ou Orange Money",
+        ],
+      },
+      {
+        heading: "Comment Joventy gère votre visa Chine depuis Kinshasa",
+        body:
+          "Joventy prend en charge toute la préparation à distance, de sorte que votre passage au CVSC soit le seul déplacement nécessaire :",
+        list: [
+          "Remplissage du formulaire V.2013 sur visaforchina.org à votre place (les erreurs de formulaire causent 40% des refus au guichet)",
+          "Vérification complète du dossier avant le dépôt : dimensions photos, conformité des relevés, lettre d'invitation vérifiée",
+          "Conseil sur le type de visa optimal selon votre profil (L tourisme vs M affaires vs F échanges)",
+          "Pour les visas affaires (M) : vérification de la lettre d'invitation chinoise (cachet rouge, mentions obligatoires)",
+          "Accompagnement post-dépôt : suivi du dossier et récupération du passeport",
+          "📱 Contact WhatsApp : +243 840 808 122",
+          "💳 Paiement M-Pesa, Airtel Money ou Orange Money",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Peut-on obtenir un visa Chine sans se déplacer au CVSC/VFS à Kinshasa ?",
+        a: "Non. Le dépôt du dossier et la biométrie (empreintes digitales) doivent être effectués en personne au CVSC/VFS Kinshasa. Joventy prépare tout votre dossier à distance en amont — votre passage au CVSC se limite au dépôt et à la biométrie, sans avoir à remplir quoi que ce soit sur place.",
+      },
+      {
+        q: "Combien de temps faut-il pour obtenir un visa Chine depuis Kinshasa ?",
+        a: "En traitement standard : 4 à 5 jours ouvrables après le dépôt au CVSC. En traitement express : 2 à 3 jours ouvrables (frais supplémentaires d'environ 25-30 USD). Planifiez votre demande au minimum 3 semaines avant votre date de départ pour avoir de la marge.",
+      },
+      {
+        q: "Le visa Chine permet-il d'entrer en Chine plusieurs fois ?",
+        a: "Cela dépend du type de visa accordé. Un visa simple entrée (S) n'autorise qu'une seule entrée. Les visas multi-entrées (M) permettent plusieurs entrées pendant leur validité (3, 6 ou 12 mois). Pour un premier visa depuis Kinshasa, le Consulat accorde généralement un simple ou double entrée — les multi-entrées longue durée sont accordés aux demandeurs avec des antécédents de voyages en Chine.",
+      },
+      {
+        q: "Les ressortissants congolais peuvent-ils utiliser l'e-Visa Chine ?",
+        a: "Pas encore en juillet 2026. L'e-Visa court séjour (≤15 jours) lancé par la Chine en 2024 est disponible pour certains pays, mais la RDC ne figure pas dans la liste des nationalités éligibles. Vérifiez visaforchina.org régulièrement — la liste s'étend progressivement.",
+      },
+      {
+        q: "Faut-il une invitation d'une entreprise chinoise pour un visa affaires (M) ?",
+        a: "Oui, c'est obligatoire. Pour un visa M (commerce/affaires), le Consulat de Chine exige une lettre d'invitation officielle de votre partenaire commercial chinois, imprimée sur papier à en-tête de l'entreprise et tamponnée avec le cachet rouge officiel. La lettre doit mentionner : votre nom complet, le motif de la visite, les dates, l'entreprise hôte avec son numéro d'enregistrement. Joventy vérifie la conformité de ces lettres avant dépôt.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "documents-visa-schengen-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+    ],
+    relatedDestination: "visa-chine-kinshasa",
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;
