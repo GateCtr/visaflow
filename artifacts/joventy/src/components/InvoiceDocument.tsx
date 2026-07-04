@@ -584,7 +584,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
                   </span>
                 </div>
                 <div className="text-slate-400 text-xs mt-0.5 ml-3.5">
-                  contact@akollad.com · joventy.cd · WhatsApp : +243 840 808 122
+                  contact@akollad.com · joventy.cd · WhatsApp : +243840808122
                 </div>
               </div>
               <div className="text-slate-400 text-[10px] leading-relaxed space-y-0.5 sm:text-right flex-shrink-0">

@@ -517,7 +517,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Comment contacter Joventy pour commencer un dossier visa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Vous pouvez contacter Joventy de plusieurs façons : via WhatsApp au +243 840 808 122 (réponse en moins de 2 heures, 7j/7), par email à contact@joventy.cd, ou directement en créant un dossier sur joventy.cd. L'équipe parle français et anglais, est disponible de 8h à 20h (heure de Kinshasa), et traite les urgences en dehors de ces horaires." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Vous pouvez contacter Joventy de plusieurs façons : via WhatsApp au +243840808122 (réponse en moins de 2 heures, 7j/7), par email à contact@joventy.cd, ou directement en créant un dossier sur joventy.cd. L'équipe parle français et anglais, est disponible de 8h à 20h (heure de Kinshasa), et traite les urgences en dehors de ces horaires." }
             },
             {
               "@type": "Question",
@@ -1193,7 +1193,7 @@ export default function Landing() {
                 Contact us on WhatsApp
               </Button>
             </a>
-            <p className="text-white/50 text-xs mt-4">+243 840 808 122 · Response within 2 hours</p>
+            <p className="text-white/50 text-xs mt-4">+243840808122 · Response within 2 hours</p>
           </div>
         </div>
       </section>
@@ -1243,7 +1243,7 @@ export default function Landing() {
               {
                 icon: MessageCircle,
                 label: "WhatsApp",
-                value: "+243 840 808 122",
+                value: "+243840808122",
                 sub: "Réponse en moins de 2h",
                 href: "https://wa.me/243840808122",
                 cta: "Écrire sur WhatsApp",
@@ -1306,7 +1306,7 @@ export default function Landing() {
               </p>
               <div className="mt-5 flex flex-col gap-1.5 text-xs text-white/40">
                 <a href="mailto:contact@joventy.cd" className="hover:text-white transition-colors">✉ contact@joventy.cd</a>
-                <a href="https://wa.me/243840808122" className="hover:text-white transition-colors">📱 +243 840 808 122</a>
+                <a href="https://wa.me/243840808122" className="hover:text-white transition-colors">📱 +243840808122</a>
               </div>
             </div>
 

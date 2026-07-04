@@ -157,7 +157,7 @@ export default function APropos() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 text-sm">
             <div className="bg-white/10 rounded-xl p-4">
               <p className="font-bold text-white">WhatsApp</p>
-              <p className="text-white/60">+243 840 808 122</p>
+              <p className="text-white/60">+243840808122</p>
               <p className="text-white/40 text-xs">Réponse en moins de 2h</p>
             </div>
             <div className="bg-white/10 rounded-xl p-4">

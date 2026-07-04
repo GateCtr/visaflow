@@ -23,7 +23,7 @@ export default function MentionsLegales() {
         <li><strong>Identifiant National :</strong> 01-J6100-N86614P</li>
         <li><strong>Site groupe :</strong> <a href="https://akollad.com" target="_blank" rel="noreferrer">akollad.com</a></li>
         <li><strong>Email :</strong> <a href="mailto:contact@joventy.cd">contact@joventy.cd</a></li>
-        <li><strong>WhatsApp :</strong> <a href="https://wa.me/243840808122">+243 840 808 122</a></li>
+        <li><strong>WhatsApp :</strong> <a href="https://wa.me/243840808122">+243840808122</a></li>
       </ul>
 
       <h2>2. Directeur de la publication</h2>
@@ -113,7 +113,7 @@ export default function MentionsLegales() {
       </p>
       <ul>
         <li>Par e-mail : <a href="mailto:contact@joventy.cd">contact@joventy.cd</a></li>
-        <li>Via WhatsApp : <a href="https://wa.me/243840808122">+243 840 808 122</a></li>
+        <li>Via WhatsApp : <a href="https://wa.me/243840808122">+243840808122</a></li>
       </ul>
     </LegalLayout>
   );

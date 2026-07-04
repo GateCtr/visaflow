@@ -89,7 +89,7 @@ export function LegalLayout({ title, subtitle, lastUpdated, description, slug, c
               <Mail className="w-3.5 h-3.5" /> contact@joventy.cd
             </a>
             <a href="https://wa.me/243840808122" className="flex items-center gap-1.5 hover:text-white transition-colors">
-              <Phone className="w-3.5 h-3.5" /> +243 840 808 122
+              <Phone className="w-3.5 h-3.5" /> +243840808122
             </a>
           </div>
         </div>

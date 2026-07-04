@@ -143,7 +143,7 @@ export default function Remboursement() {
       <ul>
         <li>Via le chat dans votre espace client Joventy</li>
         <li>Par e-mail à : <a href="mailto:contact@joventy.cd">contact@joventy.cd</a></li>
-        <li>Via WhatsApp : <a href="https://wa.me/243840808122">+243 840 808 122</a></li>
+        <li>Via WhatsApp : <a href="https://wa.me/243840808122">+243840808122</a></li>
       </ul>
       <p>
         Précisez dans votre message : votre nom complet, votre numéro de référence de dossier

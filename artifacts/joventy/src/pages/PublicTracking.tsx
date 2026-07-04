@@ -280,7 +280,7 @@ export default function PublicTracking() {
             · Akollad Groupe
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Questions ? WhatsApp : <a href="https://wa.me/243840808122" className="text-blue-600 hover:underline">+243 840 808 122</a>
+            Questions ? WhatsApp : <a href="https://wa.me/243840808122" className="text-blue-600 hover:underline">+243840808122</a>
           </p>
         </div>
       </div>

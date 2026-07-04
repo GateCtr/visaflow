@@ -98,7 +98,7 @@ export default function NotFound() {
           <p className="text-white/70 text-sm mb-4">Contactez Joventy sur WhatsApp — réponse en moins de 2h.</p>
           <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
             <Button className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold">
-              <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp +243 840 808 122
+              <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp +243840808122
             </Button>
           </a>
         </div>
