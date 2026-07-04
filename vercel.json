@@ -3,6 +3,9 @@
   "outputDirectory": "artifacts/joventy/dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
+  "redirects": [
+    { "source": "/:path+/", "destination": "/:path+", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],

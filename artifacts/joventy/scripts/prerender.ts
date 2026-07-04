@@ -26,7 +26,6 @@ console.log("🔧 Pre-rendering pages…\n");
 for (const dest of DESTINATIONS_SEO) {
   const html = injectSeoMeta(template, `/${dest.slug}`);
   write(path.join(DIST, `${dest.slug}.html`), html);
-  write(path.join(DIST, dest.slug, "index.html"), html);
   console.log(`  ✓ /${dest.slug}`);
   count++;
 }
@@ -37,7 +36,6 @@ fs.mkdirSync(guidesDir, { recursive: true });
 for (const guide of getAllGuides()) {
   const html = injectSeoMeta(template, `/guides/${guide.slug}`);
   write(path.join(guidesDir, `${guide.slug}.html`), html);
-  write(path.join(guidesDir, guide.slug, "index.html"), html);
   console.log(`  ✓ /guides/${guide.slug}`);
   count++;
 }
