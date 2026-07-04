@@ -1147,6 +1147,143 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "rendez-vous-espagne-kinshasa-2026",
+    title: "Rendez-vous visa Espagne Kinshasa 2026 : prendre RDV au CEV étape par étape",
+    metaTitle: "Rendez-vous Espagne Kinshasa 2026 — Comment prendre RDV au CEV | Joventy",
+    metaDescription:
+      "Comment prendre un rendez-vous pour un visa Espagne depuis Kinshasa en 2026 ? Portail CEV (cev-kin.eu), Visa On Web, documents, délais, coûts — guide complet étape par étape.",
+    publishedDate: "2026-07-04",
+    updatedDate: "2026-07-04",
+    readingTime: 8,
+    category: "Visa Espagne",
+    coverEmoji: "🇪🇸",
+    intro:
+      "Prendre un rendez-vous pour un visa Espagne depuis Kinshasa est l'une des démarches les plus cherchées — et les plus mal documentées — en 2026. Contrairement à ce que beaucoup pensent, l'Ambassade d'Espagne à Kinshasa ne reçoit pas directement les demandeurs de visa court séjour. Tout passe par le Centre Européen des Visas (CEV), géré par l'Ambassade de Belgique. Ce guide vous explique exactement comment prendre un rendez-vous, ce que vous devez préparer avant, et pourquoi les créneaux sont si difficiles à obtenir seul.",
+    sections: [
+      {
+        heading: "Point clé : l'Ambassade d'Espagne ne donne pas les rendez-vous visa",
+        body:
+          "C'est la source de confusion numéro 1 pour les demandeurs congolais. En 2026, l'Ambassade d'Espagne à Kinshasa (Avenue du 24 novembre, Gombe) n'accepte PAS les demandes de visa Schengen court séjour directement. Elle transfère ces dossiers au CEV.",
+        list: [
+          "📍 CEV = Centre Européen des Visas — géré par l'Ambassade de Belgique à Kinshasa",
+          "Le CEV représente plusieurs pays Schengen, dont l'Espagne, pour les visas court séjour (Type C)",
+          "Site officiel du CEV : www.cev-kin.eu — c'est là que se prennent les rendez-vous",
+          "L'Ambassade d'Espagne à Kinshasa reste compétente uniquement pour les visas long séjour (Type D) : regroupement familial, études longue durée, travail",
+          "⚠️ Si quelqu'un vous demande de l'argent pour 'contacter l'ambassade d'Espagne directement' pour un RDV : c'est une arnaque — le système est entièrement public et gratuit via cev-kin.eu",
+          "L'adresse email de l'Ambassade d'Espagne (emb.kinshasa.citasvis@maec.es) ne répond pas aux demandes de rendez-vous Schengen — passez par le CEV uniquement",
+        ],
+      },
+      {
+        heading: "Comment prendre un rendez-vous au CEV pour un visa Espagne — procédure 2026",
+        body:
+          "La procédure complète, dans l'ordre exact. Ne sautez pas les étapes : le CEV vérifie chaque prérequis avant d'autoriser la prise de rendez-vous.",
+        list: [
+          "Étape 1 — Créez un compte sur visaonweb.be (Visa On Web) : c'est le portail officiel belge lié au CEV. Votre compte VOW génère un numéro de dossier unique, vérifié à l'accueil du CEV",
+          "Étape 2 — Remplissez le formulaire de demande de visa Schengen sur le compte VOW : données personnelles, dates de voyage, destination principale (Espagne), motif",
+          "Étape 3 — Accédez à cev-kin.eu pour prendre le rendez-vous : le site vous demande votre numéro de dossier VOW. Sans VOW = pas de rendez-vous possible",
+          "Étape 4 — Choisissez une date disponible au CEV : les créneaux s'affichent selon la disponibilité réelle. En 2026, les délais varient de 1 à 6 semaines selon la période",
+          "Étape 5 — Confirmez le rendez-vous et imprimez (ou téléchargez) la confirmation : obligatoire pour être admis à l'entrée du CEV le jour J",
+          "Étape 6 — Le jour du rendez-vous : présentez-vous 10-15 minutes avant. Apportez votre dossier complet, votre confirmation imprimée et votre passeport",
+          "⚠️ Délai réglementaire : vous devez prendre rendez-vous au minimum 15 jours et au maximum 6 mois avant votre date de départ prévue",
+        ],
+      },
+      {
+        heading: "Pourquoi est-il si difficile d'obtenir un rendez-vous au CEV Kinshasa ?",
+        body:
+          "Les créneaux au CEV sont limités et très demandés. En 2026, plusieurs facteurs aggravent la situation :",
+        list: [
+          "Le CEV traite les visas de plusieurs pays Schengen (France, Belgique, Allemagne, Espagne, Pays-Bas...) sur un seul et même calendrier",
+          "La demande de visa Espagne a fortement augmenté depuis 2024, notamment pour les voyages de commerce et les regroupements familiaux",
+          "Les créneaux s'affichent et se réservent en quelques minutes sur cev-kin.eu — un retard de quelques secondes suffit pour perdre la date",
+          "Il n'existe pas de liste d'attente officielle : si vous ratez un créneau, vous devez recommencer à surveiller le site",
+          "Certains créneaux se libèrent le matin très tôt (7h-8h) suite à des annulations — heure à laquelle peu de demandeurs sont connectés",
+          "En période de pointe (juillet–août, décembre), les délais peuvent dépasser 8 semaines",
+          "✅ Joventy surveille cev-kin.eu en continu 24h/24 et prend le créneau dès qu'il correspond à votre profil et vos dates",
+        ],
+      },
+      {
+        heading: "Documents à préparer avant votre rendez-vous CEV (visa Espagne)",
+        body:
+          "Le CEV effectue un contrôle documentaire rapide à l'accueil. Un dossier incomplet = refus de dépôt et perte du créneau. Voici la liste pour un visa tourisme/affaires Espagne (Type C) :",
+        list: [
+          "Passeport ordinaire valide au moins 3 mois après la fin du séjour prévu, avec au moins 2 pages vierges, émis il y a moins de 10 ans",
+          "Copie de la page d'identité du passeport + copies des pages visas/tampons des passeports précédents",
+          "2 photos biométriques récentes (35×45 mm, fond blanc ou gris clair, moins de 6 mois, sans lunettes)",
+          "Formulaire de demande de visa Schengen (formulaire unifié, signé à la main — disponible sur le site de l'Ambassade d'Espagne ou du CEV)",
+          "Assurance voyage médicale valable dans tout l'espace Schengen, minimum 30 000 € de couverture, couvrant l'intégralité du séjour",
+          "Réservation de billet d'avion aller-retour (réservation ferme, pas nécessairement payée) et réservation d'hôtel",
+          "Relevés bancaires des 3 derniers mois (solde minimum recommandé : équivalent de 1 500 USD) avec l'en-tête de la banque",
+          "Justificatif d'emploi ou d'activité : attestation de travail avec salaire, ou extrait RCCM pour les indépendants",
+          "Justificatif de domicile en RDC (facture eau, électricité, téléphone — moins de 3 mois)",
+          "Frais CEV : 90 € adulte (payés en cash le jour du dépôt), 45 € enfant 6-12 ans, gratuit sous 6 ans",
+        ],
+      },
+      {
+        heading: "Délais : combien de temps pour un visa Espagne depuis Kinshasa en 2026 ?",
+        body:
+          "Le délai total se décompose en deux parties : le délai pour obtenir le rendez-vous, puis le délai de traitement après le dépôt.",
+        list: [
+          "⏳ Délai pour le rendez-vous CEV : 1 à 6 semaines (parfois plus en haute saison)",
+          "⏳ Délai de traitement après dépôt : 15 jours ouvrables réglementaires (en pratique : 2 à 4 semaines)",
+          "⏳ Délai total minimum : compter 6 à 10 semaines entre le début de la démarche et l'obtention du visa",
+          "📅 Règle de base : commencez votre demande au minimum 3 mois avant votre date de voyage prévue",
+          "📅 En période de basse saison (janvier–mars, septembre–octobre) : délais souvent réduits à 3-4 semaines au total",
+          "📅 En période de pointe (juin–août, décembre) : prévoyez 10 à 12 semaines",
+          "✅ Joventy capte en moyenne un créneau CEV en 48 à 96 heures pour ses clients — grâce à la surveillance continue du portail",
+        ],
+      },
+      {
+        heading: "Joventy et le rendez-vous visa Espagne : comment ça fonctionne",
+        body:
+          "Joventy prend en charge l'intégralité du processus depuis votre téléphone, sans que vous n'ayez à surveiller cev-kin.eu vous-même :",
+        list: [
+          "Création et configuration de votre compte Visa On Web (VOW) — indispensable avant tout rendez-vous CEV",
+          "Surveillance continue de cev-kin.eu 24h/24, 7j/7, y compris tôt le matin quand les créneaux se libèrent",
+          "Réservation immédiate du créneau dès qu'une date compatible avec votre voyage est disponible",
+          "Vérification complète de votre dossier papier avant le rendez-vous (aucun document manquant)",
+          "Notification WhatsApp dès que le créneau est verrouillé, avec les détails exacts",
+          "Accompagnement post-rendez-vous : suivi de la décision sur Visa On Web",
+          "💳 Tarifs : 150 $ frais d'engagement + 450 $ prime de succès (uniquement si créneau obtenu)",
+          "📱 Contact : +243 840 808 122 sur WhatsApp",
+          "💰 Paiement : M-Pesa, Airtel Money ou Orange Money — 100% en ligne, aucun déplacement",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Peut-on prendre rendez-vous au CEV pour un visa Espagne sans compte Visa On Web ?",
+        a: "Non. Le compte Visa On Web (visaonweb.be) est le prérequis absolu : il génère votre numéro de dossier unique, vérifié par le CEV avant toute attribution de créneau. Joventy crée et configure ce compte à votre place.",
+      },
+      {
+        q: "L'Ambassade d'Espagne à Kinshasa donne-t-elle directement des rendez-vous visa ?",
+        a: "Non, pas pour les visas court séjour (Type C). L'Ambassade d'Espagne délègue la réception des dossiers Schengen au CEV (Centre Européen des Visas), géré par l'Ambassade de Belgique à Kinshasa. L'adresse email citasvis@maec.es est réservée aux urgences diplomatiques, pas aux demandes de visa courantes.",
+      },
+      {
+        q: "Combien coûte le rendez-vous visa Espagne au CEV de Kinshasa ?",
+        a: "Les frais CEV sont de 90 € par adulte, payés en espèces le jour du dépôt (USD accepté au taux du jour). Les enfants de 6 à 12 ans paient 45 €. Les moins de 6 ans sont exemptés. Ces frais s'ajoutent aux frais de service Joventy (150 $ engagement + 450 $ prime de succès).",
+      },
+      {
+        q: "Que faire si tous les créneaux du CEV sont pris pour les semaines qui viennent ?",
+        a: "Les annulations libèrent régulièrement des créneaux, souvent tôt le matin (7h-8h) ou en soirée. Il faut surveiller cev-kin.eu en continu. Joventy fait cette surveillance à votre place 24h/24 et prend le créneau dès qu'il apparaît — sans que vous ayez à rester devant l'écran.",
+      },
+      {
+        q: "Peut-on obtenir un rendez-vous visa Espagne en urgence à Kinshasa ?",
+        a: "Le CEV ne propose pas de créneau d'urgence officiel pour les visas courants. Pour les cas d'urgence réelle (décès, hospitalisation d'un proche en Espagne), il existe une procédure exceptionnelle via l'Ambassade d'Espagne directement — mais elle nécessite des justificatifs stricts. Contactez Joventy sur WhatsApp pour analyser votre situation : +243 840 808 122.",
+      },
+      {
+        q: "Joventy peut-il prendre le rendez-vous CEV à ma place depuis Kinshasa ?",
+        a: "Oui — c'est exactement le service Joventy. Notre équipe surveille cev-kin.eu 24h/24, crée votre compte Visa On Web, et réserve le créneau disponible dès qu'il correspond à votre situation. Vous recevez la confirmation sur WhatsApp. Service 100% en ligne, paiement M-Pesa.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+      "documents-visa-schengen-kinshasa",
+    ],
+    relatedDestination: "visa-espagne-kinshasa",
+  },
+
+  {
     slug: "visa-angleterre-kinshasa-rdv-2026",
     title: "Visa Angleterre depuis Kinshasa : UKVI, rendez-vous biométrique et procédure complète 2026",
     metaTitle: "Visa Angleterre Kinshasa 2026 — Rendez-vous UKVI, Documents, Prix | Joventy",
