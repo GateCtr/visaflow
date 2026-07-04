@@ -175,7 +175,7 @@ export default function Confidentialite() {
       </p>
       <ul>
         <li>E-mail : <a href="mailto:contact@joventy.cd">contact@joventy.cd</a></li>
-        <li>WhatsApp : <a href="https://wa.me/243840808122">+243840808122</a></li>
+        <li>WhatsApp : <a href="https://wa.me/243840808122">+243 840 808 122</a></li>
       </ul>
     </LegalLayout>
   );

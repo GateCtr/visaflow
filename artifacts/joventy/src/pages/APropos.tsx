@@ -15,7 +15,7 @@ export default function APropos() {
     "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
     "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
     "address": { "@type": "PostalAddress", "addressLocality": "Kinshasa", "addressCountry": "CD" },
-    "contactPoint": { "@type": "ContactPoint", "telephone": "+243840808122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
+    "contactPoint": { "@type": "ContactPoint", "telephone": "+243 840 808 122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
     "sameAs": ["https://akollad.com", "https://wa.me/243840808122"],
   };
 
@@ -157,7 +157,7 @@ export default function APropos() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 text-sm">
             <div className="bg-white/10 rounded-xl p-4">
               <p className="font-bold text-white">WhatsApp</p>
-              <p className="text-white/60">+243840808122</p>
+              <p className="text-white/60">+243 840 808 122</p>
               <p className="text-white/40 text-xs">Réponse en moins de 2h</p>
             </div>
             <div className="bg-white/10 rounded-xl p-4">

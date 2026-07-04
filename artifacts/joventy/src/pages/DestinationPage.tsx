@@ -84,7 +84,7 @@ export default function DestinationPage() {
       "@type": "Organization",
       "name": "Joventy",
       "url": "https://joventy.cd",
-      "telephone": "+243840808122",
+      "telephone": "+243 840 808 122",
       "address": {
         "@type": "PostalAddress",
         "addressLocality": "Kinshasa",
