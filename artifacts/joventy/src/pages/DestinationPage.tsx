@@ -163,9 +163,25 @@ export default function DestinationPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-5 max-w-3xl text-white">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-4 max-w-3xl text-white">
             {dest.h1}
           </h1>
+
+          <div className="flex flex-wrap gap-2 mb-6">
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-secondary rounded-full flex-shrink-0" />
+              100% en ligne — aucun bureau à visiter
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
+              M-Pesa · Airtel · Orange Money
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" />
+              Paiement au résultat uniquement
+            </span>
+          </div>
+
           <p className="text-white/75 text-lg max-w-2xl leading-relaxed mb-8">{dest.intro}</p>
 
           <div className="flex flex-wrap gap-4">
