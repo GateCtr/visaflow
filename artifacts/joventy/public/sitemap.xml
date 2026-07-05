@@ -206,14 +206,6 @@
     <priority>0.9</priority>
   </url>
 
-  <!-- Spain RDV guide — "rendez-vous espagne" 981 imp pos 5.5 0% CTR — highest opportunity -->
-  <url>
-    <loc>https://joventy.cd/guides/rendez-vous-espagne-kinshasa-2026</loc>
-    <lastmod>2026-07-04</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.95</priority>
-  </url>
-
   <!-- UK visa guide — high CTR signal (7.69% on "demande de visa angleterre en rdc") -->
   <url>
     <loc>https://joventy.cd/guides/visa-angleterre-kinshasa-rdv-2026</loc>
