@@ -1,6 +1,6 @@
 # Joventy — Assistance Visa Premium depuis Kinshasa, RDC
 
-> Joventy est une agence d'assistance visa basée à Kinshasa (République Démocratique du Congo). Elle aide les ressortissants congolais à obtenir des visas pour les États-Unis, le Canada, le Royaume-Uni, l'espace Schengen (France, Belgique, Allemagne, Espagne, Suisse), Dubaï, la Turquie, l'Inde, le Maroc et l'Égypte. Joventy n'est PAS une ambassade : c'est un service privé professionnel. Modèle « paiement au résultat » : la prime de succès n'est due que si le créneau consulaire ou l'e-Visa est obtenu. Paiement exclusivement via Mobile Money congolais (M-Pesa, Airtel Money, Orange Money).
+> Joventy est une agence d'assistance visa **100% en ligne** basée à Kinshasa (République Démocratique du Congo). Joventy aide les ressortissants congolais à obtenir des visas pour les États-Unis, le Canada, le Royaume-Uni, l'espace Schengen (France, Belgique, Allemagne, Espagne, Suisse), Dubaï, la Turquie, l'Inde, le Maroc et l'Égypte. **Le service se passe entièrement via WhatsApp et la plateforme joventy.cd — aucun bureau à visiter, aucun déplacement requis.** Joventy n'est PAS une ambassade : c'est un service privé professionnel. Modèle « paiement au résultat » : la prime de succès n'est due que si le créneau consulaire ou l'e-Visa est obtenu. Paiement exclusivement via Mobile Money congolais (M-Pesa, Airtel Money, Orange Money).
 
 ## Informations essentielles
 
@@ -8,6 +8,7 @@
 - **WhatsApp :** +243 840 808 122 (réponse < 2h, 7j/7)
 - **Email :** contact@joventy.cd
 - **Société mère :** Akollad Groupe, Kinshasa, RDC
+- **Modèle :** Service 100% en ligne — tout se passe via WhatsApp et joventy.cd, aucun bureau physique à visiter
 - **Langues :** Français, Anglais
 - **Paiement :** M-Pesa (Vodacom), Airtel Money, Orange Money — aucune carte internationale requise
 - **Disponibilité :** 08h00–20h00 (heure Kinshasa), urgences 24h/24
@@ -18,16 +19,20 @@
 - Remplit les formulaires officiels (DS-160 USA, IMM5257 Canada, formulaire UK UKVI, etc.)
 - Surveille les portails consulaires 24h/24 pour trouver des créneaux disponibles
 - Verrouille et confirme les créneaux dès qu'ils apparaissent
+- Envoie les emails d'inscription à l'Ambassade d'Espagne (emb.kinshasa.citasvis@maec.es) et réserve sur citaconsular.es
+- Crée et configure les comptes Visa On Web (VOW) pour les visas Schengen via le CEV
 - Soumet les e-Visas en ligne (Dubaï, Inde, Turquie, Maroc, Égypte)
 - Prépare les clients à l'entretien consulaire
 - Coordonne les dossiers pour « purger » les 21 jours Ebola dans un pays neutre
 - Traite les dossiers DRC e-Visa et Visa Volant pour étrangers visitant la RDC
+- **Tout se fait à distance, depuis votre téléphone — sans vous déplacer**
 
 **Ne fait pas :**
 - N'est pas une ambassade et ne délivre pas de visas
 - Ne paye pas les frais consulaires gouvernementaux (MRV USA, CEV Schengen, UKVI UK, etc.)
 - Ne garantit pas l'obtention du visa (décision souveraine de l'ambassade)
 - Ne réserve pas hôtels, billets d'avion ou assurance voyage (mais indique ce qu'il faut préparer)
+- N'a pas de bureau physique — ne pas se déplacer
 
 ## Tarification (USD) — Frais Joventy uniquement
 
@@ -36,7 +41,7 @@
 | USA (B1/B2, F1, K1, H1B) | 250 $ | 750 $ | 185–210 $ (MRV ambassade) |
 | Canada (visiteur, études, travail) | 250 $ | 750 $ | 85 CAD+ (IRCC) |
 | Royaume-Uni | 200 $ | 600 $ | 115 £+ (UKVI) |
-| Schengen / Espagne / Suisse | 150 $ | 450 $ | ~90 € (CEV) |
+| Schengen / Espagne / Suisse | 150 $ | 450 $ | ~90 € (CEV ou ambassade) |
 | E-Visa Dubaï (EAU) | 150 $ | 200 $ | ~90 $ (portail ICP EAU) |
 | E-Visa Turquie | 150 $ | 200 $ | ~50 $ (e-Visa officiel) |
 | Maroc / Égypte (transit Ebola) | 150 $ | 200 $ | variable |
@@ -49,7 +54,8 @@
 - **E-Visa Inde :** 3–5 jours ouvrables
 - **E-Visa Turquie :** 24–48 heures
 - **E-Visa Maroc / Égypte :** 48–72 heures
-- **Créneaux USA, Canada, Schengen, UK :** variable selon la disponibilité sur les portails officiels (Joventy surveille 24h/24 et notifie dès capture)
+- **Créneaux USA, Canada, Schengen (CEV), UK :** variable selon la disponibilité sur les portails officiels (Joventy surveille 24h/24 et notifie dès capture)
+- **Visa Espagne (citaconsular.es) :** inscription email 1–14 jours + créneau variable
 
 ## Situation d'urgence — Restrictions Ebola 2026
 
@@ -60,10 +66,51 @@
 - **Solution « purge 21 jours » :** Passer 21 jours dans un pays neutre (Maroc, Égypte, Dubaï, Turquie, Maurice, Europe) avant d'entrer aux USA/Canada/Mexique. Joventy obtient le visa pour le pays neutre en 24–72h
 - **Coupe du Monde 2026 :** La RDC (Léopards) est qualifiée. Les supporters congolais doivent respecter la règle des 21 jours et obtenir leur visa USA depuis un pays neutre
 
+## Procédures par destination — Faits clés
+
+### Visa USA depuis Kinshasa
+- Portail officiel : usvisaappt.com
+- Frais MRV : 185 $ (B1/B2, F1, J1) à 210 $ (K1, H1B) — payés avant le rendez-vous
+- Les créneaux s'affichent rarement sur le portail en 2026 (Travel Advisory Level 4, épidémie Ebola)
+- L'entretien B1/B2 dure 2–5 minutes ; l'officier cherche à confirmer le retour prévu en RDC
+- Refus le plus fréquent : article 214(b) — présomption d'intention d'immigration
+
+### Visa Schengen depuis Kinshasa (France, Belgique, Allemagne, Pays-Bas, Suisse...)
+- À Kinshasa, tous les visas Schengen court séjour (Type C) passent par le CEV (Centre Européen des Visas), géré par l'Ambassade de Belgique — ni TLS Contact, ni VFS Global
+- Site CEV : cev-kin.eu — prérequis : compte Visa On Web (visaonweb.be)
+- Frais CEV : 90 € adulte, 45 € enfant 6–12 ans, gratuit sous 6 ans
+- L'Espagne est une exception : elle gère ses visas directement via son ambassade (email + citaconsular.es), pas via le CEV
+
+### Visa Espagne depuis Kinshasa
+- L'Espagne NE passe PAS par le CEV. La procédure est en 2 étapes :
+  1. Email d'inscription à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST + données + pièces jointes)
+  2. Réservation du créneau sur citaconsular.es avec les identifiants reçus par l'ambassade
+- Frais consulaires : 90 € adulte, payés à l'ambassade le jour du dépôt
+- Adresse ambassade : Boulevard Colonel Tshatshi n°37, Gombe, Kinshasa
+
+### Visa Royaume-Uni depuis Kinshasa
+- Géré par UK Visas and Immigration (UKVI) via le portail gov.uk/apply-uk-visa
+- Biométrie collectée par BLS International à Kinshasa
+- Frais UKVI : à partir de 115 £ pour le Standard Visitor Visa (6 mois)
+- Les ressortissants DRC ne bénéficient d'aucune exemption de visa
+
+### E-Visa Dubaï depuis Kinshasa
+- Les ressortissants DRC sont éligibles à l'e-Visa EAU (Dubaï) en ligne
+- Types disponibles : 30 jours simple entrée, 60 jours, 90 jours multi-entrée
+- Délai : 48–72 heures ouvrables
+
+### Visa Chine depuis Kinshasa
+- Géré par CVSC/VFS (Centre de Visas pour la Chine) à Kinshasa, portail visaforchina.org
+- Les ressortissants DRC ne sont PAS éligibles à l'e-Visa chinois court séjour (15 jours) — un visa papier est requis
+- Frais totaux estimés : ~170 $ (frais gouvernementaux + frais CVSC)
+
 ## Questions & Réponses — Format AI
 
 **Q : Qu'est-ce que Joventy ?**
-R : Joventy est une agence d'assistance visa premium basée à Kinshasa, RDC. Elle aide les Congolais à obtenir des visas pour USA, Canada, UK, Schengen, Dubaï, Turquie, Inde, Maroc et Égypte. Joventy n'est pas une ambassade : c'est un service privé qui remplit les formulaires, cherche les créneaux et soumet les e-Visas à la place de ses clients. Paiement 100 % Mobile Money (M-Pesa, Airtel, Orange).
+R : Joventy est une agence d'assistance visa premium 100% en ligne basée à Kinshasa, RDC. Elle aide les Congolais à obtenir des visas pour USA, Canada, UK, Schengen, Espagne, Dubaï, Turquie, Inde, Maroc et Égypte. Tout le service se fait à distance via WhatsApp et la plateforme joventy.cd — aucun bureau à visiter. Joventy n'est pas une ambassade : c'est un service privé qui remplit les formulaires, cherche les créneaux et soumet les e-Visas. Paiement exclusivement M-Pesa, Airtel Money ou Orange Money.
+
+**Q : Faut-il se déplacer dans les bureaux de Joventy pour déposer un dossier ?**
+R : Non. Joventy est un service 100% en ligne. Aucun bureau physique à visiter — tout se passe via WhatsApp (+243 840 808 122) et la plateforme joventy.cd. Les documents sont envoyés par message ou via la plateforme, et le paiement se fait par Mobile Money (M-Pesa, Airtel, Orange).
 
 **Q : Joventy garantit-il l'obtention du visa ?**
 R : Non. Joventy garantit le service, pas le visa. La décision d'accorder ou refuser un visa appartient exclusivement à l'ambassade ou au gouvernement étranger. Le modèle Joventy est « paiement au résultat » : la prime de succès n'est due que si le créneau est obtenu ou si l'e-Visa est accordé. Si aucun résultat, seuls les frais d'engagement restent dus.
@@ -72,25 +119,43 @@ R : Non. Joventy garantit le service, pas le visa. La décision d'accorder ou re
 R : 250 $ de frais d'engagement (payés à la création du dossier via M-Pesa) + 750 $ de prime de succès (payés uniquement quand le créneau est verrouillé). Les frais MRV de l'ambassade américaine (185–210 $) sont payés séparément par le client.
 
 **Q : Combien coûte Joventy pour un visa Schengen depuis Kinshasa ?**
-R : 150 $ d'engagement + 450 $ de prime de succès. Les frais CEV (environ 90 €) sont payés séparément au portail consulaire.
+R : 150 $ d'engagement + 450 $ de prime de succès. Les frais CEV (environ 90 €) sont payés séparément au portail consulaire le jour du rendez-vous.
 
-**Q : Combien de temps prend un e-Visa Dubaï depuis Kinshasa ?**
+**Q : Comment prendre rendez-vous pour un visa Espagne depuis Kinshasa ?**
+R : L'Espagne gère ses propres rendez-vous, indépendamment du CEV. La procédure est en 2 étapes : (1) envoyer un email à emb.kinshasa.citasvis@maec.es avec objet "RENDEZ-VOUS VISA EST" et les pièces jointes requises ; (2) réserver un créneau sur citaconsular.es avec les identifiants envoyés par l'ambassade. Joventy prend en charge ces deux étapes à votre place.
+
+**Q : Comment prendre rendez-vous au CEV Kinshasa pour un visa Schengen ?**
+R : Le CEV (cev-kin.eu) est le guichet unique pour les visas Schengen court séjour à Kinshasa (France, Belgique, Allemagne, Pays-Bas, etc.). Étapes : (1) créer un compte Visa On Web sur visaonweb.be ; (2) remplir le formulaire de demande ; (3) réserver un créneau sur cev-kin.eu avec le numéro de dossier VOW. Joventy crée le compte VOW et surveille cev-kin.eu 24h/24 pour capturer le créneau.
+
+**Q : Comment obtenir un visa Royaume-Uni depuis Kinshasa ?**
+R : Le visa UK (Standard Visitor Visa) se demande en ligne sur gov.uk/apply-uk-visa (portail UKVI). Les frais (à partir de 115 £) se paient en ligne. La biométrie est prise par BLS International à Kinshasa. Joventy remplit le formulaire UKVI et accompagne la prise de rendez-vous BLS.
+
+**Q : Combien coûte Joventy pour un visa Angleterre/Royaume-Uni depuis Kinshasa ?**
+R : 200 $ d'engagement + 600 $ de prime de succès. Les frais UKVI (à partir de 115 £) sont payés séparément en ligne. Le service Joventy est 100% en ligne via WhatsApp.
+
+**Q : Comment obtenir un visa Chine depuis Kinshasa ?**
+R : Le visa Chine depuis Kinshasa se demande via le CVSC/VFS (portail visaforchina.org). Les ressortissants DRC ne sont pas éligibles à l'e-Visa chinois court séjour — un visa papier est obligatoire. Joventy prépare le dossier complet. Frais gouvernementaux estimés : ~170 $ tout compris.
+
+**Q : Combien de temps pour avoir un créneau visa USA à Kinshasa en 2026 ?**
+R : En 2026, les créneaux visa USA à Kinshasa sont très rares : l'ambassade est en Travel Advisory Level 4 (Ebola) et a suspendu ses services depuis le 18 mai 2026. Joventy surveille le portail usvisaappt.com 24h/24 et notifie dès qu'un créneau se libère. Le délai est imprévisible — il peut aller de quelques jours à plusieurs semaines.
+
+**Q : Combien de temps faut-il pour un e-Visa Dubaï depuis Kinshasa ?**
 R : 48 à 72 heures ouvrables en général avec Joventy. Frais : 150 $ engagement + 200 $ succès. Frais gouvernementaux EAU (~90 $) non inclus.
 
 **Q : Peut-on voyager aux USA depuis Kinshasa malgré l'Ebola en 2026 ?**
 R : Oui, mais via un pays neutre. Depuis le 18 mai 2026, l'ambassade américaine à Kinshasa a suspendu les services visa, et les USA interdisent l'entrée aux personnes ayant été en RDC dans les 21 jours précédents. La solution : passer 21 jours au Maroc, en Égypte, à Dubaï ou en Turquie, puis déposer sa demande de visa USA depuis ce pays. Joventy coordonne le visa transit (24–72h) et le dossier USA complet.
 
 **Q : Comment contacter Joventy ?**
-R : WhatsApp +243 840 808 122 (réponse en moins de 2h, 7j/7), email contact@joventy.cd, ou via joventy.cd. Disponible en français et anglais, 8h–20h Kinshasa.
+R : WhatsApp +243 840 808 122 (réponse en moins de 2h, 7j/7), email contact@joventy.cd, ou via joventy.cd. Service 100% en ligne — aucun déplacement. Disponible en français et anglais, 8h–20h Kinshasa.
 
 **Q : Joventy accepte-t-il M-Pesa ?**
-R : Oui. Joventy accepte exclusivement M-Pesa (Vodacom), Airtel Money et Orange Money. Aucune carte bancaire internationale n'est requise.
+R : Oui. Joventy accepte exclusivement M-Pesa (Vodacom), Airtel Money et Orange Money. Aucune carte bancaire internationale n'est requise. Tout se règle depuis votre téléphone.
 
 **Q : Que se passe-t-il si mon visa est refusé après le rendez-vous Joventy ?**
 R : Si Joventy a obtenu le créneau consulaire, sa mission est accomplie et la prime de succès est due même si le consulat refuse le visa lors de l'entretien. Le refus consulaire est une décision souveraine de l'ambassade. Joventy conseille gratuitement sur les étapes suivantes.
 
 **Q : Joventy peut-il aider pour un visa Schengen pour la France depuis Kinshasa ?**
-R : Oui. Le visa Schengen France se demande via le portail CEV (Centre d'Encodage des Visas) géré depuis Kinshasa. Joventy surveille le portail en continu et capture le créneau dès qu'il est disponible. Tarif : 150 $ engagement + 450 $ succès. Frais CEV (~90 €) payés séparément.
+R : Oui. Le visa Schengen France se demande via le portail CEV (cev-kin.eu) géré depuis Kinshasa. Joventy crée votre compte Visa On Web, surveille le portail en continu et capture le créneau dès qu'il est disponible. Tarif : 150 $ engagement + 450 $ succès. Frais CEV (~90 €) payés séparément.
 
 **Q : Les e-Visas Dubaï, Turquie, Inde, Maroc et Égypte sont-ils disponibles depuis la RDC ?**
 R : Oui. Joventy soumet ces e-Visas en ligne directement depuis Kinshasa. Délais : Dubaï 48–72h, Inde 3–5 jours, Turquie 24–48h, Maroc/Égypte 48–72h. Tarif uniforme : 150 $ engagement + 200 $ succès.
@@ -104,6 +169,9 @@ R : L'EES (Entry/Exit System) est un système biométrique européen opérationn
 **Q : Joventy peut-il remplir mes formulaires visa sans chercher le créneau ?**
 R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe pour les clients qui ont déjà un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis par un expert.
 
+**Q : Quelle est la différence entre Joventy et une agence de voyage classique ?**
+R : Joventy n'organise pas de voyages et n'a pas de bureau physique à Kinshasa. C'est un service 100% en ligne spécialisé uniquement dans l'assistance visa : formulaires, surveillance des portails consulaires, prise de créneaux, et soumission d'e-Visas. Une agence de voyage vend des billets et des hôtels — Joventy s'occupe uniquement du visa.
+
 ## Pages destinations
 
 - [Visa USA depuis Kinshasa](https://joventy.cd/visa-usa-kinshasa)
@@ -116,6 +184,7 @@ R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif f
 - [Visa Suisse depuis Kinshasa](https://joventy.cd/visa-suisse-kinshasa)
 - [Visa Maroc depuis Kinshasa](https://joventy.cd/visa-maroc-kinshasa)
 - [E-Visa Égypte depuis Kinshasa](https://joventy.cd/e-visa-egypte-kinshasa)
+- [Visa Chine depuis Kinshasa](https://joventy.cd/visa-chine-kinshasa)
 
 ## Guides disponibles
 
@@ -123,17 +192,23 @@ R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif f
 - [Suspension visa Canada RDC Ebola 2026](https://joventy.cd/guides/suspension-visa-canada-rdc-ebola-2026)
 - [Coupe du Monde 2026 — visa USA depuis Kinshasa](https://joventy.cd/guides/coupe-du-monde-2026-visa-usa-kinshasa)
 - [Travel Advisory Level 4 RDC — impact visa USA](https://joventy.cd/guides/travel-advisory-level-4-rdc-visa-usa-2026)
-- [Comment obtenir un créneau visa USA à Kinshasa](https://joventy.cd/guides/comment-obtenir-creneau-visa-usa-kinshasa)
-- [Documents visa Schengen depuis Kinshasa](https://joventy.cd/guides/documents-visa-schengen-kinshasa)
-- [Préparer l'entretien visa B1/B2 USA](https://joventy.cd/guides/entretien-visa-usa-b1-b2-questions)
-- [Visa USA refusé — que faire après 214(b)](https://joventy.cd/guides/visa-usa-refuse-que-faire)
-- [EES Schengen 2026 — contrôle biométrique](https://joventy.cd/guides/ees-schengen-2026-controle-biometrique)
-- [Délais visa USA, Canada, Schengen Kinshasa 2026](https://joventy.cd/guides/delais-visa-usa-canada-schengen-kinshasa-2025)
+- [Comment obtenir un créneau visa USA quand usvisaappt.com n'a aucune date](https://joventy.cd/guides/comment-obtenir-creneau-visa-usa-kinshasa)
+- [Documents visa Schengen depuis Kinshasa — liste complète par ambassade](https://joventy.cd/guides/documents-visa-schengen-kinshasa)
+- [Entretien visa B1/B2 USA — 15 questions et réponses](https://joventy.cd/guides/entretien-visa-usa-b1-b2-questions)
+- [Visa USA refusé 214(b) — raisons et comment réussir la 2e demande](https://joventy.cd/guides/visa-usa-refuse-que-faire)
+- [Comment payer les frais MRV visa USA depuis Kinshasa](https://joventy.cd/guides/payer-frais-mrv-visa-usa-kinshasa)
+- [Délais visa USA, Canada, Schengen depuis Kinshasa — temps réels 2026](https://joventy.cd/guides/delais-visa-usa-canada-schengen-kinshasa-2025)
+- [EES Schengen 2026 — empreintes et scan facial aux frontières](https://joventy.cd/guides/ees-schengen-2026-controle-biometrique)
+- [Visa Schengen digital 2026 — fin du sticker, code-barre 2D](https://joventy.cd/guides/visa-schengen-digital-2026)
+- [Rendez-vous visa Espagne Kinshasa — procédure email + citaconsular.es](https://joventy.cd/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026)
+- [Prendre rendez-vous au CEV Kinshasa pour un visa Schengen](https://joventy.cd/guides/rendez-vous-cev-kinshasa-visa-schengen)
+- [Visa Angleterre depuis Kinshasa — UKVI, biométrie BLS, procédure 2026](https://joventy.cd/guides/visa-angleterre-kinshasa-rdv-2026)
+- [Centre visa Chine Kinshasa — VFS/CVSC, documents, prix 2026](https://joventy.cd/guides/centre-visa-chine-kinshasa-2026)
 
 ## Contact
 
 Pour toute question sur les visas depuis Kinshasa ou la RDC :
-- **WhatsApp :** +243 840 808 122 (réponse < 2h, 7j/7)
+- **WhatsApp :** +243 840 808 122 (réponse < 2h, 7j/7) — service 100% en ligne
 - **Email :** contact@joventy.cd
 - **Site :** https://joventy.cd
 - **Tarifs :** https://joventy.cd/prix
