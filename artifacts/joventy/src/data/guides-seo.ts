@@ -24,10 +24,10 @@ export interface Guide {
 const guides: Guide[] = [
   {
     slug: "comment-obtenir-creneau-visa-usa-kinshasa",
-    title: "Comment obtenir un créneau visa USA à Kinshasa en 2026",
-    metaTitle: "Créneau Visa USA Kinshasa 2026 — Guide Complet | Joventy",
+    title: "Comment obtenir un créneau visa USA à Kinshasa en 2026 — Solution quand usvisaappt.com n'a aucune date",
+    metaTitle: "Créneau Visa USA Kinshasa 2026 — Que faire quand « aucune date disponible » ? | Joventy",
     metaDescription:
-      "Le portail usvisaappt.com affiche souvent « aucune date disponible ». Découvrez comment obtenir un créneau d'entretien visa américain à Kinshasa rapidement grâce au suivi permanent de notre équipe.",
+      "usvisaappt.com affiche 'aucune date disponible' à Kinshasa ? Voici comment obtenir un créneau entretien visa USA rapidement : surveiller les annulations, meilleurs horaires, et solution Joventy 24h/24.",
     publishedDate: "2025-05-01",
     updatedDate: "2026-05-31",
     readingTime: 7,
@@ -122,10 +122,10 @@ const guides: Guide[] = [
 
   {
     slug: "documents-visa-schengen-kinshasa",
-    title: "Documents visa Schengen depuis Kinshasa : liste complète par ambassade (France, Belgique, Allemagne) — 2026",
-    metaTitle: "Documents Visa Schengen Kinshasa 2026 — France, Belgique, Allemagne | Joventy",
+    title: "Documents visa Schengen depuis Kinshasa 2026 : liste complète par pays (France, Belgique, Allemagne, Espagne)",
+    metaTitle: "Documents Visa Schengen Kinshasa 2026 — Liste complète par ambassade + 10 erreurs à éviter | Joventy",
     metaDescription:
-      "Visa Schengen Kinshasa 2026 : tout passe par le CEV (cev-kin.eu), pas TLS Contact ni VFS Global. Documents requis par ambassade (France, Belgique, Allemagne), 10 erreurs de refus, délais officiels.",
+      "Liste exacte des documents pour un visa Schengen depuis Kinshasa en 2026 : formulaire, photos, relevés bancaires, assurance, hébergement — par ambassade. + les 10 erreurs qui causent un refus.",
     publishedDate: "2026-06-01",
     updatedDate: "2026-06-15",
     readingTime: 10,
@@ -283,10 +283,10 @@ const guides: Guide[] = [
 
   {
     slug: "entretien-visa-usa-b1-b2-questions",
-    title: "Préparer l'entretien visa B1/B2 USA : 15 questions fréquentes et comment y répondre",
-    metaTitle: "Entretien Visa B1/B2 USA Kinshasa — 15 Questions & Réponses | Joventy",
+    title: "Entretien visa B1/B2 USA à Kinshasa : 15 questions posées par l'officier et les bonnes réponses",
+    metaTitle: "Questions Entretien Visa USA Kinshasa 2026 — 15 Questions + Réponses pour éviter le refus | Joventy",
     metaDescription:
-      "L'officier consulaire américain de Kinshasa pose toujours les mêmes questions. Découvrez les 15 questions les plus fréquentes de l'entretien visa B1/B2 et comment y répondre pour maximiser vos chances.",
+      "Quelles questions pose l'officier consulaire USA à Kinshasa ? Les 15 questions les plus fréquentes de l'entretien B1/B2, les réponses qui convainquent, et les erreurs qui déclenchent un refus 214(b).",
     publishedDate: "2025-05-15",
     updatedDate: "2026-05-31",
     readingTime: 9,
@@ -384,10 +384,10 @@ const guides: Guide[] = [
 
   {
     slug: "visa-usa-refuse-que-faire",
-    title: "Visa USA refusé depuis Kinshasa : que faire après un refus 214(b) ?",
-    metaTitle: "Visa USA Refusé Kinshasa — Que Faire ? Guide 214(b) | Joventy",
+    title: "Visa USA refusé à Kinshasa (214b) : les vraies raisons et comment réussir la deuxième demande",
+    metaTitle: "Visa USA Refusé Kinshasa — Raisons du refus 214(b) et comment réussir la 2e demande | Joventy",
     metaDescription:
-      "Votre visa américain a été refusé sous l'article 214(b) à Kinshasa ? Ce guide vous explique pourquoi, comment renforcer votre dossier, et quand représenter votre demande.",
+      "Visa USA refusé 214(b) à Kinshasa ? Les vraies raisons de refus, ce qu'il faut changer dans votre dossier, et dans quel délai représenter votre demande pour maximiser vos chances d'acceptation.",
     publishedDate: "2025-05-20",
     updatedDate: "2026-05-31",
     readingTime: 6,
@@ -481,10 +481,10 @@ const guides: Guide[] = [
 
   {
     slug: "payer-frais-mrv-visa-usa-kinshasa",
-    title: "Comment payer les frais de visa USA depuis la RDC (guide 2026)",
-    metaTitle: "Payer Frais Visa USA depuis RDC 2026 — Guide Complet | Joventy",
+    title: "Comment payer les frais MRV visa USA depuis Kinshasa en 2026 — Étapes exactes sur usvisaappt.com",
+    metaTitle: "Payer Frais MRV Visa USA depuis Kinshasa 2026 — Montants exacts + étapes | Joventy",
     metaDescription:
-      "Les frais de visa américain (185 à 210 USD selon le type) se paient via des canaux spécifiques en RDC. Guide étape par étape pour payer correctement les frais de visa USA depuis Kinshasa via usvisaappt.com.",
+      "Comment payer les frais MRV visa USA depuis la RDC en 2026 : montants exacts (185$–210$ selon le type), méthodes de paiement disponibles à Kinshasa, guide étape par étape sur usvisaappt.com.",
     publishedDate: "2025-05-25",
     updatedDate: "2026-05-31",
     readingTime: 5,
@@ -572,10 +572,10 @@ const guides: Guide[] = [
 
   {
     slug: "delais-visa-usa-canada-schengen-kinshasa-2025",
-    title: "Délais d'attente visa USA, Canada et Schengen à Kinshasa en 2026",
-    metaTitle: "Délais Visa USA Canada Schengen Kinshasa 2026 | Joventy",
+    title: "Délais réels visa USA, Canada et Schengen depuis Kinshasa en 2026 — Semaines d'attente par destination",
+    metaTitle: "Délais Visa USA, Canada, Schengen depuis Kinshasa 2026 — Temps d'attente réels | Joventy",
     metaDescription:
-      "Combien de temps pour obtenir un visa USA, Canada ou Schengen depuis Kinshasa en 2026 ? Délais réels constatés, périodes à éviter, suspension Canada Ebola, et comment réduire l'attente.",
+      "Combien de semaines pour un visa USA, Canada ou Schengen depuis Kinshasa en 2026 ? Délais réels constatés par type de visa, périodes à éviter, et comment réduire l'attente de plusieurs semaines.",
     publishedDate: "2025-06-01",
     updatedDate: "2026-05-31",
     readingTime: 6,
@@ -733,9 +733,9 @@ const guides: Guide[] = [
 
   {
     slug: "ees-schengen-2026-controle-biometrique",
-    title: "EES Schengen 2026 : le nouveau contrôle biométrique aux frontières européennes",
-    metaTitle: "EES Schengen 2026 — Contrôle Biométrique Frontières Europe | Joventy",
-    metaDescription: "Le système EES est opérationnel depuis avril 2026 aux frontières Schengen. Empreintes, scan facial, fin des tampons. Ce que les voyageurs congolais doivent savoir.",
+    title: "EES Schengen 2026 : empreintes et scan facial obligatoires aux frontières — ce que ça change pour les Congolais",
+    metaTitle: "EES Schengen 2026 — Empreintes, Scan Facial & Fin des Tampons : ce que ça change | Joventy",
+    metaDescription: "L'EES (Entry/Exit System) est actif depuis avril 2026 aux frontières Schengen : empreintes digitales, reconnaissance faciale, fin des tampons passeport. Ce que les voyageurs congolais doivent savoir avant de partir.",
     publishedDate: "2026-05-29",
     updatedDate: "2026-05-31",
     readingTime: 5,
@@ -989,10 +989,10 @@ const guides: Guide[] = [
 
   {
     slug: "rendez-vous-cev-kinshasa-visa-schengen",
-    title: "Comment prendre rendez-vous au CEV Kinshasa pour un visa Schengen — Guide complet 2026",
-    metaTitle: "Rendez-vous CEV Kinshasa Visa Schengen 2026 — Étapes & Délais | Joventy",
+    title: "Prendre rendez-vous au CEV Kinshasa pour un visa Schengen 2026 — Procédure complète (Visa On Web + cev-kin.eu)",
+    metaTitle: "Rendez-vous CEV Kinshasa Visa Schengen 2026 — Comment prendre RDV étape par étape | Joventy",
     metaDescription:
-      "Comment prendre rendez-vous au CEV (Centre Européen des Visas, cev-kin.eu) à Kinshasa pour un visa Schengen en 2026 : compte Visa On Web, étapes, délais d'attente, frais, erreurs à éviter.",
+      "Comment prendre rendez-vous au CEV Kinshasa (cev-kin.eu) pour un visa Schengen en 2026 : créer votre compte Visa On Web, réserver un créneau, délais réels, frais, et erreurs qui font perdre le rendez-vous.",
     publishedDate: "2026-06-15",
     updatedDate: "2026-06-27",
     readingTime: 8,
