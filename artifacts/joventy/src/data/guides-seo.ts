@@ -846,11 +846,11 @@ const guides: Guide[] = [
 
   {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
-    title: "Visa Espagne depuis Kinshasa 2026 — Comment prendre rendez-vous à l'Ambassade (guide complet)",
-    metaTitle: "Rendez-vous Visa Espagne Kinshasa 2026 — Email Ambassade & citaconsular.es | Joventy",
-    metaDescription: "Guide officiel pour prendre rendez-vous visa Espagne depuis Kinshasa en 2026 : email à emb.kinshasa.citasvis@maec.es, portail citaconsular.es, documents requis, frais 90€. L'Espagne ne passe pas par le CEV.",
+    title: "Rendez-vous visa Espagne Kinshasa 2026 — Procédure officielle étape par étape (email + citaconsular.es)",
+    metaTitle: "Rendez-vous Visa Espagne Kinshasa 2026 — Procédure officielle étape par étape | Joventy",
+    metaDescription: "Prendre rendez-vous visa Espagne depuis Kinshasa en 2026 : email à emb.kinshasa.citasvis@maec.es puis créneau sur citaconsular.es. Documents requis, frais 90€, délais réels — guide complet.",
     publishedDate: "2026-06-27",
-    updatedDate: "2026-06-27",
+    updatedDate: "2026-07-05",
     readingTime: 8,
     category: "Visa Schengen",
     coverEmoji: "🇪🇸",
