@@ -538,6 +538,47 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     ],
     relatedSlugs: ["visa-maroc-kinshasa", "e-visa-egypte-kinshasa", "e-visa-dubai-kinshasa"],
   },
+  {
+    slug: "visa-bresil-kinshasa",
+    flagCode: "br",
+    name: "Brésil",
+    nameShort: "Brésil",
+    model: "appointment",
+    engagement: 200,
+    success: 400,
+    externalFees: "Frais consulaires brésiliens (variable selon type de visa, payés directement à l'ambassade)",
+    processingTime: "Variable selon disponibilité du rendez-vous consulaire",
+    title: "Visa Brésil depuis Kinshasa 2026 — Rendez-vous consulaire & Dossier | Joventy",
+    metaDescription: "Visa Brésil depuis Kinshasa 2026 : dossier complet préparé, rendez-vous consulaire obtenu à l'ambassade du Brésil. Service 100% en ligne, paiement M-Pesa.",
+    h1: "Visa Brésil depuis Kinshasa 2026 — Rendez-vous consulaire & Dossier",
+    intro: "Obtenir un visa brésilien depuis Kinshasa nécessite un dossier complet et un rendez-vous à l'Ambassade du Brésil. Joventy prend en charge l'intégralité du processus — préparation du dossier, vérification des pièces justificatives et prise en charge de votre rendez-vous consulaire.",
+    visaTypes: [
+      { name: "Tourisme — VITUR", desc: "Pour les séjours touristiques au Brésil. Dossier avec justificatifs financiers et itinéraire de voyage." },
+      { name: "Affaires — VITEM II", desc: "Pour les voyages professionnels, réunions et négociations commerciales au Brésil." },
+      { name: "Études — VITEM IV", desc: "Pour suivre un programme d'études dans un établissement brésilien. Lettre d'admission requise." },
+    ],
+    requirements: [
+      "Passeport valide 6 mois au-delà de la date d'entrée souhaitée",
+      "Formulaire de demande de visa consulaire rempli",
+      "Photo d'identité récente fond blanc",
+      "Justificatifs de situation professionnelle / financière",
+      "Réservation d'hôtel ou lettre d'invitation (selon le motif du voyage)",
+      "Billet d'avion aller-retour ou itinéraire de voyage",
+    ],
+    steps: [
+      { title: "Dossier Joventy", desc: "Choisissez 'Brésil', sélectionnez le type de visa et payez 200 USD d'engagement via M-Pesa." },
+      { title: "Préparation du dossier", desc: "Joventy remplit le formulaire officiel, vérifie et rassemble toutes vos pièces justificatives selon les exigences consulaires." },
+      { title: "Rendez-vous consulaire", desc: "Joventy organise votre rendez-vous à l'Ambassade du Brésil à Kinshasa et vous accompagne dans la préparation de l'entretien." },
+      { title: "Prime de succès", desc: "400 USD payés M-Pesa uniquement à l'obtention du visa. Aucun résultat = aucun solde." },
+    ],
+    faqs: [
+      { q: "Comment obtenir un visa Brésil depuis Kinshasa ?", a: "Le visa brésilien nécessite un dossier complet déposé sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy prépare votre dossier et organise ce rendez-vous." },
+      { q: "Combien coûte le visa Brésil avec Joventy ?", a: "Frais Joventy : 200 USD d'engagement + 400 USD de prime de succès (à l'obtention uniquement). Les frais consulaires brésiliens sont payés séparément directement à l'ambassade." },
+      { q: "Quels types de visa Brésil sont disponibles depuis Kinshasa ?", a: "Les principaux types sont : tourisme (VITUR), affaires (VITEM II) et études (VITEM IV). Joventy vous aide à identifier le type adapté à votre situation." },
+      { q: "Quel est le délai pour obtenir un visa Brésil depuis Kinshasa ?", a: "Le délai dépend de la disponibilité des rendez-vous consulaires et du type de visa demandé. Joventy suit votre dossier de près et vous informe à chaque étape." },
+    ],
+    relatedSlugs: ["visa-maroc-kinshasa", "visa-chine-kinshasa", "e-visa-egypte-kinshasa"],
+  },
 ];
 
 export function getDestinationBySlug(slug: string): DestinationSEO | undefined {

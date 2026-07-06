@@ -1412,6 +1412,75 @@ const guides: Guide[] = [
     ],
     relatedDestination: "visa-chine-kinshasa",
   },
+  {
+    slug: "guide-visa-bresil-kinshasa-2026",
+    title: "Visa Brésil depuis Kinshasa 2026 — Guide complet du dossier et du rendez-vous consulaire",
+    metaTitle: "Visa Brésil Kinshasa 2026 — Dossier, Rendez-vous & Documents | Joventy",
+    metaDescription:
+      "Guide complet pour obtenir un visa Brésil depuis Kinshasa en 2026 : types de visa, documents requis, prise de rendez-vous consulaire et frais Joventy.",
+    publishedDate: "2026-06-01",
+    updatedDate: "2026-06-01",
+    readingTime: 6,
+    category: "Visa Brésil",
+    coverEmoji: "🇧🇷",
+    intro:
+      "Le Brésil attire de plus en plus de voyageurs congolais pour le tourisme, les affaires et les études. Contrairement aux e-Visas de certains pays, la demande de visa brésilien depuis Kinshasa nécessite un dossier complet déposé sur rendez-vous à l'Ambassade du Brésil. Ce guide détaille les types de visa disponibles, les documents à préparer et comment Joventy accompagne chaque étape de votre demande.",
+    sections: [
+      {
+        heading: "Quels types de visa Brésil sont disponibles depuis Kinshasa ?",
+        body: "Le Brésil propose plusieurs catégories de visa selon le motif du séjour :",
+        list: [
+          "VITUR — Tourisme : pour les séjours touristiques, valable pour des visites de courte durée",
+          "VITEM II — Affaires : pour les voyages professionnels, réunions et négociations commerciales",
+          "VITEM IV — Études : pour suivre un programme d'études dans un établissement brésilien, nécessite une lettre d'admission",
+        ],
+      },
+      {
+        heading: "Quels documents sont nécessaires pour un visa Brésil ?",
+        body: "Le dossier de demande de visa brésilien doit inclure les pièces suivantes :",
+        list: [
+          "Passeport valide 6 mois au-delà de la date d'entrée souhaitée",
+          "Formulaire de demande de visa consulaire dûment rempli",
+          "Photo d'identité récente fond blanc",
+          "Justificatifs de situation professionnelle ou financière",
+          "Réservation d'hôtel ou lettre d'invitation selon le motif du voyage",
+          "Billet d'avion aller-retour ou itinéraire de voyage",
+        ],
+      },
+      {
+        heading: "Comment se déroule le rendez-vous consulaire ?",
+        body: "La demande de visa brésilien se dépose exclusivement sur rendez-vous à l'Ambassade du Brésil à Kinshasa (Gombe). Une fois le dossier complet constitué, un rendez-vous est fixé pour le dépôt et, selon le cas, un entretien consulaire. Les délais de traitement varient selon la période de l'année et le type de visa demandé.",
+      },
+      {
+        heading: "Comment Joventy vous accompagne pour votre visa Brésil",
+        body: "Joventy prend en charge l'intégralité du processus, de la constitution du dossier jusqu'à l'obtention du visa :",
+        list: [
+          "Préparation et vérification complète de votre dossier",
+          "Remplissage du formulaire de demande consulaire",
+          "Prise en charge du rendez-vous à l'Ambassade du Brésil à Kinshasa",
+          "Suivi de votre dossier jusqu'à l'obtention du visa",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Combien coûte le visa Brésil avec Joventy ?",
+        a: "Frais Joventy : 200 USD d'engagement + 400 USD de prime de succès (payés uniquement à l'obtention du visa). Les frais consulaires brésiliens sont payés séparément directement à l'ambassade.",
+      },
+      {
+        q: "Faut-il un rendez-vous pour déposer une demande de visa Brésil à Kinshasa ?",
+        a: "Oui, le dépôt de dossier se fait exclusivement sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy organise ce rendez-vous une fois votre dossier complet.",
+      },
+      {
+        q: "Quel est le délai de traitement du visa Brésil depuis Kinshasa ?",
+        a: "Le délai dépend de la disponibilité des rendez-vous consulaires et du type de visa demandé. Joventy suit votre dossier de près et vous informe à chaque étape.",
+      },
+    ],
+    relatedSlugs: [
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+    ],
+    relatedDestination: "visa-bresil-kinshasa",
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;

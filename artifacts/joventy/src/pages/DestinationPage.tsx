@@ -16,7 +16,7 @@ function snapFlagSize(n: number) {
 const FLAG_NAMES: Record<string, string> = {
   us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
   es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
-  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo", br: "Brésil",
 };
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);

@@ -485,6 +485,41 @@ export const VISA_PRICING = {
     },
     notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 120 USD engagement + 180 USD prime de succès.",
   },
+  brazil: {
+    label: "Brésil",
+    flag: "🇧🇷",
+    engagementFee: 200,
+    successFee: 400,
+    total: 600,
+    successModel: "appointment" as const,
+    visaTypes: [
+      "VITUR — Tourisme",
+      "VITEM II — Affaires",
+      "VITEM IV — Études",
+    ],
+    requiredDocuments: [
+      { key: "passport_scan", label: "Passeport valide (scan HD, 2 pages bio)", required: true },
+      { key: "photo_id", label: "Photo d'identité fond blanc", required: true },
+      { key: "hotel_booking", label: "Réservation d'hôtel ou lettre d'invitation", required: true },
+      { key: "flight_booking", label: "Billet d'avion aller-retour ou itinéraire de voyage", required: true },
+      { key: "proof_of_funds", label: "Relevés bancaires (3 derniers mois)", required: true },
+      { key: "employment_letter", label: "Attestation de travail / RCCM", required: false },
+    ],
+    embassyAddress: "Ambassade du Brésil — Gombe, Kinshasa (adresse exacte communiquée sur rendez-vous)",
+    portalUrl: "",
+    portalName: "Ambassade du Brésil à Kinshasa (rendez-vous consulaire)",
+    portalDashboardUrl: "",
+    portalAppointmentUrl: "",
+    portalScheduleUrl: "",
+    processingType: "appointment",
+    successCopy: {
+      triggerLabel: "Visa obtenu",
+      clientCtaTitle: "Votre visa Brésil est prêt !",
+      clientCtaBody: "Joventy a obtenu votre visa brésilien. Réglez la prime de succès pour recevoir votre document officiel.",
+      completedNote: "Votre visa Brésil est disponible ci-dessous. Imprimez-le avant l'embarquement.",
+    },
+    notes: "Le visa Brésil (tourisme VITUR, affaires VITEM II ou études VITEM IV) se dépose sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy prépare votre dossier complet et organise votre rendez-vous consulaire. Frais Joventy : 200 USD engagement + 400 USD prime de succès.",
+  },
 } as const;
 
 export type Destination = keyof typeof VISA_PRICING;
@@ -551,7 +586,7 @@ export const SERVICE_PACKAGES = {
     tagline: "Dossier prêt",
     description: "Vos formulaires sont remplis et vos pièces prêtes ? Joventy se concentre uniquement sur l'obtention d'un créneau de rendez-vous consulaire.",
     hasSuccessFee: true,
-    availableFor: ["usa", "canada", "uk", "switzerland", "turkey", "schengen", "spain", "germany"] as const,
+    availableFor: ["usa", "canada", "uk", "switzerland", "turkey", "schengen", "spain", "germany", "brazil"] as const,
   },
   dossier_only: {
     key: "dossier_only" as const,

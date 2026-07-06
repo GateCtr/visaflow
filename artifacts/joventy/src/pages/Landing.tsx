@@ -23,7 +23,7 @@ const FLAG_NAMES: Record<string, string> = {
   us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
   es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
   in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
-  fr: "France", be: "Belgique", de: "Allemagne",
+  fr: "France", be: "Belgique", de: "Allemagne", br: "Brésil",
 };
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
@@ -169,6 +169,16 @@ const DESTINATIONS = [
     success: 180,
     model: "hybrid",
     note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
+    badge: "Nouveau",
+  },
+  {
+    code: "br",
+    name: "Brésil",
+    visaTypes: ["Tourisme (VITUR)", "Affaires (VITEM II)", "Études (VITEM IV)"],
+    engagement: 200,
+    success: 400,
+    model: "appointment",
+    note: "Frais consulaires brésiliens non inclus",
     badge: "Nouveau",
   },
 ];
@@ -1422,6 +1432,7 @@ export default function Landing() {
                   { code: "in", label: "E-Visa Inde", href: "/e-visa-inde-kinshasa" },
                   { code: "ma", label: "Visa Maroc", href: "/visa-maroc-kinshasa" },
                   { code: "eg", label: "Visa Égypte", href: "/e-visa-egypte-kinshasa" },
+                  { code: "br", label: "Visa Brésil", href: "/visa-bresil-kinshasa" },
                 ] as { code: string; label: string; href: string }[]).map((d) => (
                   <li key={d.code}>
                     <Link href={d.href} className="hover:text-white transition-colors flex items-center gap-2">
@@ -1443,6 +1454,7 @@ export default function Landing() {
                   { code: "fr", label: "Ambassade France", href: "/ambassade-schengen-france-kinshasa" },
                   { code: "es", label: "Ambassade Espagne", href: "/ambassade-espagne-kinshasa" },
                   { code: "cn", label: "Ambassade Chine", href: "/ambassade-chine-kinshasa" },
+                  { code: "br", label: "Ambassade Brésil", href: "/ambassade-bresil-kinshasa" },
                   { code: "cd", label: "Toutes les ambassades →", href: "/ambassades" },
                 ] as { code: string; label: string; href: string }[]).map((d) => (
                   <li key={d.code}>

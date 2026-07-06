@@ -144,6 +144,7 @@ function Router() {
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
       <Route path="/visa-chine-kinshasa" component={DestinationPage} />
+      <Route path="/visa-bresil-kinshasa" component={DestinationPage} />
 
       {/* Embassy SEO pages */}
       <Route path="/ambassades" component={EmbassiesIndex} />
@@ -160,6 +161,7 @@ function Router() {
       <Route path="/ambassade-maroc-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-egypte-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-chine-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-bresil-kinshasa" component={EmbassyPage} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
