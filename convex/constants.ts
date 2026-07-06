@@ -451,8 +451,8 @@ export const VISA_PRICING = {
     label: "Chine",
     flag: "🇨🇳",
     engagementFee: 120,
-    successFee: 180,
-    total: 300,
+    successFee: 380,
+    total: 500,
     successModel: "evisa" as const,
     visaTypes: [
       "E-Visa Chine (portail officiel — court séjour)",
@@ -483,7 +483,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa chinois. Réglez la prime de succès pour recevoir votre passeport avec le visa apposé.",
       completedNote: "Votre visa Chine est disponible ci-dessous. Vérifiez les dates de validité avant l'embarquement.",
     },
-    notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 120 USD engagement + 180 USD prime de succès.",
+    notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 120 USD engagement + 380 USD prime de succès.",
   },
   brazil: {
     label: "Brésil",

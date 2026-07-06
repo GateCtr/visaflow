@@ -59,7 +59,7 @@ const DESTINATIONS = [
     success: 750,
     model: "appointment",
     note: "Frais IRCC (85 CAD+) non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "gb",
@@ -69,7 +69,7 @@ const DESTINATIONS = [
     success: 600,
     model: "appointment",
     note: "Frais UKVI (£115+) non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "ch",
@@ -79,7 +79,7 @@ const DESTINATIONS = [
     success: 450,
     model: "appointment",
     note: "Frais consulaires (90€+) non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "eu",
@@ -89,7 +89,7 @@ const DESTINATIONS = [
     success: 450,
     model: "appointment",
     note: "Frais consulaires CEV 90€/adulte non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "ae",
@@ -129,7 +129,7 @@ const DESTINATIONS = [
     success: 450,
     model: "appointment",
     note: "Frais consulaires 90€/adulte non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "de",
@@ -139,7 +139,7 @@ const DESTINATIONS = [
     success: 450,
     model: "appointment",
     note: "Frais consulaires (75-80€) non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "ma",
@@ -149,7 +149,7 @@ const DESTINATIONS = [
     success: 200,
     model: "hybrid",
     note: "E-Visa 77-110$ ou consulaire 15-25$ non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "eg",
@@ -159,17 +159,17 @@ const DESTINATIONS = [
     success: 200,
     model: "hybrid",
     note: "E-Visa 25-60$ ou consulaire ~60$ non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "cn",
     name: "Chine",
     visaTypes: ["E-Visa court séjour ≤15j", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
     engagement: 120,
-    success: 180,
+    success: 380,
     model: "hybrid",
     note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
-    badge: "Nouveau",
+    badge: null,
   },
   {
     code: "br",
