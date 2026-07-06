@@ -55,6 +55,16 @@ export function Navbar() {
               </a>
             ))}
             <Link
+              href="/prix"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Tarifs
+            </Link>
+            <Link
               href="/ambassades"
               className={`text-sm font-medium transition-colors cursor-pointer ${
                 solid
@@ -164,6 +174,11 @@ export function Navbar() {
               </span>
             </a>
           ))}
+          <Link href="/prix" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Tarifs
+            </span>
+          </Link>
           <Link href="/ambassades" onClick={close}>
             <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
               Ambassades

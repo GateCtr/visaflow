@@ -235,7 +235,12 @@ export default function DestinationPage() {
               </div>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground max-w-xs">{dest.externalFees}</p>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground max-w-xs">{dest.externalFees}</p>
+            <Link href="/prix" className="text-xs font-semibold text-primary hover:underline whitespace-nowrap">
+              Voir tous nos tarifs →
+            </Link>
+          </div>
         </div>
       </section>
 
