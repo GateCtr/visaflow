@@ -447,7 +447,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
       { q: "Combien coûte le visa Maroc depuis Kinshasa avec Joventy ?", a: "Frais Joventy : 150 USD d'engagement + 200 USD de prime de succès (à l'obtention uniquement). Frais gouvernementaux : 77-110 USD pour l'e-Visa OU 15-25 USD pour le consulaire, payés séparément." },
       { q: "Peut-on voler directement de Casablanca vers les USA après 21 jours ?", a: "Oui. Royal Air Maroc propose des vols directs Casablanca → New York (JFK) et Miami. Après 21 jours complets au Maroc, vous pouvez embarquer sans restriction. Conservez vos preuves de séjour (hôtel, relevés bancaires)." },
     ],
-    relatedSlugs: ["e-visa-egypte-kinshasa", "visa-chine-kinshasa", "e-visa-dubai-kinshasa"],
+    relatedSlugs: ["e-visa-egypte-kinshasa", "visa-chine-kinshasa", "visa-bresil-kinshasa"],
   },
   {
     slug: "e-visa-egypte-kinshasa",
@@ -490,7 +490,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
       { q: "Y a-t-il des vols directs Le Caire - USA après les 21 jours ?", a: "EgyptAir propose des vols directs Le Caire → New York (JFK). De nombreuses correspondances via Istanbul, Doha ou Dubaï sont également disponibles. L'Égypte offre d'excellentes connexions vers l'Amérique du Nord." },
       { q: "L'Égypte a-t-elle des restrictions Ebola pour les Congolais ?", a: "Non. L'Égypte n'impose aucune restriction d'entrée liée à Ebola aux voyageurs congolais en 2026. C'est un pays neutre et sûr pour votre transit de 21 jours avant les USA, le Canada ou le Mexique." },
     ],
-    relatedSlugs: ["visa-maroc-kinshasa", "visa-chine-kinshasa", "e-visa-dubai-kinshasa"],
+    relatedSlugs: ["visa-maroc-kinshasa", "visa-chine-kinshasa", "visa-bresil-kinshasa"],
   },
   {
     slug: "visa-chine-kinshasa",
@@ -536,7 +536,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
       { q: "Quel est le délai pour obtenir un visa Chine depuis Kinshasa ?", a: "En général 4 à 7 jours ouvrables après dépôt du dossier complet au centre VFS Global ou soumission de l'e-Visa. Un service accéléré (Express) est disponible moyennant un supplément." },
       { q: "La Chine impose-t-elle des restrictions particulières aux ressortissants congolais ?", a: "Non. Les ressortissants de la RDC peuvent demander un visa chinois dans les mêmes conditions que la plupart des nationalités africaines. Joventy s'assure que votre dossier répond à toutes les exigences du consulat de Chine à Kinshasa." },
     ],
-    relatedSlugs: ["visa-maroc-kinshasa", "e-visa-egypte-kinshasa", "e-visa-dubai-kinshasa"],
+    relatedSlugs: ["visa-maroc-kinshasa", "e-visa-egypte-kinshasa", "visa-bresil-kinshasa"],
   },
   {
     slug: "visa-bresil-kinshasa",

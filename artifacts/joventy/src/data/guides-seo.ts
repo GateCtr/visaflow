@@ -274,7 +274,7 @@ const guides: Guide[] = [
       },
     ],
     relatedSlugs: [
-      "comment-obtenir-creneau-visa-espagne-kinshasa",
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
       "comment-obtenir-creneau-visa-usa-kinshasa",
       "delais-visa-usa-canada-schengen-kinshasa-2025",
     ],
@@ -472,7 +472,7 @@ const guides: Guide[] = [
       },
     ],
     relatedSlugs: [
-      "comment-obtenir-creneau-visa-usa-kinshasa",
+      "visa-angleterre-kinshasa-rdv-2026",
       "entretien-visa-usa-b1-b2-questions",
       "documents-visa-schengen-kinshasa",
     ],
@@ -808,7 +808,7 @@ const guides: Guide[] = [
       { q: "La même restriction s'applique-t-elle au Canada et au Mexique ?", a: "Oui. Le Canada a suspendu tous les visas pour les résidents RDC et impose une quarantaine de 21 jours. Le Mexique restreint l'entrée par avion pour toute personne ayant séjourné en RDC dans les 21 derniers jours. Les trois pays hôtes de la Coupe du Monde appliquent la règle des 21 jours." },
       { q: "Comment obtenir un visa USA si l'ambassade de Kinshasa est suspendue ?", a: "Si vous êtes hors de la RDC depuis 21+ jours, vous pouvez demander un visa USA dans un pays tiers (Third Country National). Ambassades possibles : Casablanca, Le Caire, Paris, Nairobi. Joventy vous accompagne : WhatsApp +243 840 808 122." },
     ],
-    relatedSlugs: ["comment-obtenir-creneau-visa-usa-kinshasa", "coupe-du-monde-2026-visa-usa-kinshasa", "visa-usa-refuse-que-faire"],
+    relatedSlugs: ["comment-obtenir-creneau-visa-usa-kinshasa", "purger-21-jours-ebola-pays-neutre-visa-usa-2026", "visa-usa-refuse-que-faire"],
     relatedDestination: "visa-usa-kinshasa",
   },
 
@@ -1408,7 +1408,7 @@ const guides: Guide[] = [
     relatedSlugs: [
       "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
       "documents-visa-schengen-kinshasa",
-      "rendez-vous-cev-kinshasa-visa-schengen",
+      "guide-visa-bresil-kinshasa-2026",
     ],
     relatedDestination: "visa-chine-kinshasa",
   },
@@ -1478,6 +1478,7 @@ const guides: Guide[] = [
     ],
     relatedSlugs: [
       "comment-obtenir-creneau-visa-usa-kinshasa",
+      "centre-visa-chine-kinshasa-2026",
     ],
     relatedDestination: "visa-bresil-kinshasa",
   },
