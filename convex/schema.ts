@@ -549,6 +549,7 @@ export default defineSchema({
     path: v.string(),
     month: v.string(),      // "YYYY-MM" pour grouper par mois
     timestamp: v.number(),
+    referrer: v.optional(v.string()), // document.referrer capturé au 1er chargement de la session
   })
     .index("by_month", ["month"])
     .index("by_session_month", ["sessionId", "month"]),

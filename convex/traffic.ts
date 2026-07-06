@@ -20,11 +20,12 @@ export const recordPageView = mutation({
   args: {
     sessionId: v.string(),
     path: v.string(),
+    referrer: v.optional(v.string()),
   },
-  handler: async (ctx, { sessionId, path }) => {
+  handler: async (ctx, { sessionId, path, referrer }) => {
     const now = Date.now();
     const month = monthKey(now);
-    await ctx.db.insert("pageViews", { sessionId, path, month, timestamp: now });
+    await ctx.db.insert("pageViews", { sessionId, path, month, timestamp: now, referrer });
   },
 });
 
@@ -77,6 +78,99 @@ export const getLiveVisitors = query({
         .slice(0, 5)
         .map(([path, count]) => ({ path, count })),
     };
+  },
+});
+
+function classifyReferrerSource(referrer: string | undefined): string {
+  if (!referrer) return "Direct";
+  let host: string;
+  try {
+    host = new URL(referrer).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "Direct";
+  }
+  if (!host || host.includes("joventy")) return "Direct";
+  if (host.includes("google")) return "Google";
+  if (host.includes("bing")) return "Bing";
+  if (host.includes("yahoo")) return "Yahoo";
+  if (host.includes("duckduckgo")) return "DuckDuckGo";
+  if (host.includes("facebook") || host.includes("fb.com") || host.includes("l.facebook")) return "Facebook";
+  if (host.includes("instagram")) return "Instagram";
+  if (host.includes("wa.me") || host.includes("whatsapp")) return "WhatsApp";
+  if (host.includes("t.co") || host.includes("twitter") || host.includes("x.com")) return "Twitter/X";
+  if (host.includes("tiktok")) return "TikTok";
+  if (host.includes("linkedin")) return "LinkedIn";
+  if (host.includes("youtube")) return "YouTube";
+  return host;
+}
+
+async function collectRecentPageViews(
+  ctx: { db: { query: (t: "pageViews") => any } },
+  days: number
+) {
+  const now = Date.now();
+  const cutoff = now - days * 24 * 60 * 60 * 1000;
+  const months = new Set([monthKey(now), monthKey(cutoff)]);
+
+  const batches = await Promise.all(
+    Array.from(months).map((month) =>
+      ctx.db
+        .query("pageViews")
+        .withIndex("by_month", (q: any) => q.eq("month", month))
+        .collect()
+    )
+  );
+
+  return batches.flat().filter((r: any) => r.timestamp >= cutoff);
+}
+
+export const getTopPages = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") return null;
+
+    const rows = await collectRecentPageViews(ctx, 30);
+
+    const byPath: Record<string, { views: number; sessions: Set<string> }> = {};
+    for (const row of rows) {
+      if (!byPath[row.path]) byPath[row.path] = { views: 0, sessions: new Set() };
+      byPath[row.path].views += 1;
+      byPath[row.path].sessions.add(row.sessionId);
+    }
+
+    return Object.entries(byPath)
+      .map(([path, v]) => ({ path, views: v.views, visitors: v.sessions.size }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 10);
+  },
+});
+
+export const getTrafficSources = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") return null;
+
+    const rows = await collectRecentPageViews(ctx, 30);
+
+    const bySource: Record<string, Set<string>> = {};
+    for (const row of rows) {
+      const source = classifyReferrerSource(row.referrer);
+      if (!bySource[source]) bySource[source] = new Set();
+      bySource[source].add(row.sessionId);
+    }
+
+    const total = Object.values(bySource).reduce((s, set) => s + set.size, 0) || 1;
+
+    return Object.entries(bySource)
+      .map(([source, set]) => ({
+        source,
+        visitors: set.size,
+        pct: Math.round((set.size / total) * 100),
+      }))
+      .sort((a, b) => b.visitors - a.visitors)
+      .slice(0, 8);
   },
 });
 
