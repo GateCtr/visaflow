@@ -1395,7 +1395,7 @@ export default function Landing() {
       {/* ═══ FOOTER ═══ */}
       <footer className="bg-primary text-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-10 mb-10">
             <div className="md:col-span-1">
               <JoventyLogo variant="dark" size="md" />
               <p className="mt-4 text-white/55 text-sm leading-relaxed max-w-xs">
@@ -1422,6 +1422,28 @@ export default function Landing() {
                   { code: "in", label: "E-Visa Inde", href: "/e-visa-inde-kinshasa" },
                   { code: "ma", label: "Visa Maroc", href: "/visa-maroc-kinshasa" },
                   { code: "eg", label: "Visa Égypte", href: "/e-visa-egypte-kinshasa" },
+                ] as { code: string; label: string; href: string }[]).map((d) => (
+                  <li key={d.code}>
+                    <Link href={d.href} className="hover:text-white transition-colors flex items-center gap-2">
+                      <FlagImg code={d.code} size={20} className="opacity-90" />
+                      {d.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-sm uppercase tracking-wider text-white/65 mb-4">Ambassades à Kinshasa</h4>
+              <ul className="space-y-2 text-sm text-white/50">
+                {([
+                  { code: "us", label: "Ambassade USA", href: "/ambassade-usa-kinshasa" },
+                  { code: "ca", label: "Ambassade Canada", href: "/ambassade-canada-kinshasa" },
+                  { code: "gb", label: "Ambassade Royaume-Uni", href: "/ambassade-royaume-uni-kinshasa" },
+                  { code: "fr", label: "Ambassade France", href: "/ambassade-schengen-france-kinshasa" },
+                  { code: "es", label: "Ambassade Espagne", href: "/ambassade-espagne-kinshasa" },
+                  { code: "cn", label: "Ambassade Chine", href: "/ambassade-chine-kinshasa" },
+                  { code: "cd", label: "Toutes les ambassades →", href: "/ambassades" },
                 ] as { code: string; label: string; href: string }[]).map((d) => (
                   <li key={d.code}>
                     <Link href={d.href} className="hover:text-white transition-colors flex items-center gap-2">

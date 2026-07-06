@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { DESTINATIONS_SEO } from "../src/data/destinations-seo";
 import { getAllGuides } from "../src/data/guides-seo";
+import { EMBASSIES_SEO } from "../src/data/embassies-seo";
 import { injectSeoMeta } from "../vite-plugin-seo";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,13 @@ for (const dest of DESTINATIONS_SEO) {
   const html = injectSeoMeta(template, `/${dest.slug}`);
   write(path.join(DIST, `${dest.slug}.html`), html);
   console.log(`  ✓ /${dest.slug}`);
+  count++;
+}
+
+for (const embassy of EMBASSIES_SEO) {
+  const html = injectSeoMeta(template, `/${embassy.slug}`);
+  write(path.join(DIST, `${embassy.slug}.html`), html);
+  console.log(`  ✓ /${embassy.slug}`);
   count++;
 }
 

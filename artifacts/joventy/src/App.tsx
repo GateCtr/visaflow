@@ -25,6 +25,8 @@ import PublicTracking from "@/pages/PublicTracking";
 import DestinationPage from "@/pages/DestinationPage";
 import GuidesIndex from "@/pages/GuidesIndex";
 import GuidePage from "@/pages/GuidePage";
+import EmbassiesIndex from "@/pages/EmbassiesIndex";
+import EmbassyPage from "@/pages/EmbassyPage";
 
 import Prix from "@/pages/Prix";
 import APropos from "@/pages/APropos";
@@ -142,6 +144,22 @@ function Router() {
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
       <Route path="/visa-chine-kinshasa" component={DestinationPage} />
+
+      {/* Embassy SEO pages */}
+      <Route path="/ambassades" component={EmbassiesIndex} />
+      <Route path="/ambassade-usa-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-canada-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-royaume-uni-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-schengen-france-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-belgique-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-espagne-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-suisse-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-emirats-arabes-unis-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-turquie-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-inde-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-maroc-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-egypte-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-chine-kinshasa" component={EmbassyPage} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />

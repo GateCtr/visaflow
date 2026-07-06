@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getDestinationBySlug, DESTINATIONS_SEO } from "@/data/destinations-seo";
+import { getEmbassiesForDestination } from "@/data/embassies-seo";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -54,6 +55,7 @@ export default function DestinationPage() {
   }
 
   const relatedDests = DESTINATIONS_SEO.filter((d) => dest.relatedSlugs.includes(d.slug));
+  const relatedEmbassies = getEmbassiesForDestination(dest.slug);
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -294,6 +296,32 @@ export default function DestinationPage() {
             ))}
           </ul>
         </section>
+
+        {/* ── EMBASSY LINK ── */}
+        {relatedEmbassies.length > 0 && (
+          <section className="bg-white border border-border rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div>
+              <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Adresse officielle</p>
+              <h2 className="text-lg font-bold text-primary mb-1">
+                {relatedEmbassies.length === 1
+                  ? `Adresse de ${relatedEmbassies[0].officialName}`
+                  : `Adresses des ambassades concernées`}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Retrouvez l'adresse exacte, le téléphone et les horaires à Kinshasa avant tout déplacement.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {relatedEmbassies.map((e) => (
+                <Link key={e.slug} href={`/${e.slug}`}>
+                  <Button variant="outline" size="sm" className="border-primary/20 text-primary hover:bg-primary/5">
+                    Voir l'adresse — {e.country} <ChevronRight className="ml-1 w-3.5 h-3.5" />
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── WHY JOVENTY ── */}
         <section>

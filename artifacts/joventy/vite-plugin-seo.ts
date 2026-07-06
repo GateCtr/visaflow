@@ -1,9 +1,10 @@
 import type { Plugin, IndexHtmlTransformContext } from "vite";
 import { DESTINATIONS_SEO } from "./src/data/destinations-seo";
 import { getGuideBySlug, getAllGuides } from "./src/data/guides-seo";
+import { EMBASSIES_SEO, getEmbassyBySlug } from "./src/data/embassies-seo";
 
 export type { Guide } from "./src/data/guides-seo";
-export { getAllGuides, DESTINATIONS_SEO };
+export { getAllGuides, DESTINATIONS_SEO, EMBASSIES_SEO };
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -58,6 +59,44 @@ function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): stri
     `<script type="application/ld+json">${faq}</script>`,
     `<script type="application/ld+json">${breadcrumb}</script>`,
     `<script type="application/ld+json">${service}</script>`,
+  ].join("\n");
+}
+
+function buildEmbassySchemas(embassy: NonNullable<ReturnType<typeof getEmbassyBySlug>>, url: string): string {
+  const faq = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: embassy.faqs.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  });
+  const breadcrumb = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: embassy.officialName, item: url },
+    ],
+  });
+  const govOffice = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "GovernmentOffice",
+    name: embassy.officialName,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: embassy.address,
+      addressLocality: "Kinshasa",
+      addressCountry: "CD",
+    },
+    telephone: embassy.phones[0]?.split(" (")[0],
+    url: embassy.website,
+  });
+  return [
+    `<script type="application/ld+json">${faq}</script>`,
+    `<script type="application/ld+json">${breadcrumb}</script>`,
+    `<script type="application/ld+json">${govOffice}</script>`,
   ].join("\n");
 }
 
@@ -125,6 +164,23 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace("</head>", `${schemas}\n</head>`);
   }
 
+  const embassySlug = clean.replace(/^\//, "");
+  const embassy = EMBASSIES_SEO.find((e) => e.slug === embassySlug);
+  if (embassy) {
+    const url = `https://joventy.cd/${embassy.slug}`;
+    const schemas = buildEmbassySchemas(embassy, url);
+    return html
+      .replace(/<title>[^<]*<\/title>/, `<title>${esc(embassy.title)}</title>`)
+      .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(embassy.metaDescription)}"`)
+      .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
+      .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${esc(embassy.title)}"`)
+      .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${esc(embassy.metaDescription)}"`)
+      .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
+      .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(embassy.title)}"`)
+      .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(embassy.metaDescription)}"`)
+      .replace("</head>", `${schemas}\n</head>`);
+  }
+
   const guideMatch = clean.match(/^\/guides\/([^/?]+)$/);
   if (guideMatch) {
     const guide = getGuideBySlug(guideMatch[1]);
@@ -161,7 +217,8 @@ export function seoMetaInjectPlugin(): Plugin {
           !pathname.includes(".") ||
           pathname.endsWith(".html");
         const isSemanticRoute =
-          /^\/visa-/.test(pathname) || /^\/guides\//.test(pathname);
+          /^\/visa-/.test(pathname) || /^\/guides\//.test(pathname) ||
+          /^\/e-visa-/.test(pathname) || /^\/ambassade/.test(pathname);
 
         if (!isHtmlRoute || !isSemanticRoute) return next();
 
