@@ -9,3 +9,4 @@
 - [CEV VOWINT Burp audit Chrome 146](cev-vowint-burp-audit.md) — forensic comparison Burp Chrome 146 vs bot; 2 fixes applied: GetAllVisaStatusTypes + Priority header.
 - [CEV Extension v4.0](cev-extension-v4.md) — round-robin pool, selectDossier strict mode, server-error backoff via serverPauseUntil, Priority header, page detection.
 - [SEO SSR meta injection](seo-ssr-meta-injection.md) — fixes SPA invisibility to Googlebot: Vite configureServer middleware intercept (dev) + build-time prerender script (prod/Vercel). 26 pages with correct title/meta/canonical/schemas. Deploy triggers full rebuild.
+- [Convex prod deploy flow](convex-prod-deploy-flow.md) — no local `convex dev` sync; schema/function edits need explicit `npx convex deploy` with `CONVEX_DEPLOY_KEY` or client calls hit "Server Error".
