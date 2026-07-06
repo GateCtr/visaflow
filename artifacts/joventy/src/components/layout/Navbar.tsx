@@ -54,6 +54,16 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
+            <Link
+              href="/ambassades"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Ambassades
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -154,6 +164,11 @@ export function Navbar() {
               </span>
             </a>
           ))}
+          <Link href="/ambassades" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Ambassades
+            </span>
+          </Link>
         </nav>
 
         <div className="p-4 flex flex-col gap-3">

@@ -125,6 +125,8 @@ export default function Prix() {
             <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">Tarifs</span>
+            <ChevronRight className="w-3 h-3" />
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">

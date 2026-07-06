@@ -64,6 +64,7 @@ export default function GuidesIndex() {
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
             <Link href="/#destinations" className="hover:text-primary transition-colors">Destinations</Link>
             <Link href="/guides" className="text-primary font-medium">Guides</Link>
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
             <Link href="/#contact" className="hover:text-primary transition-colors">Contact</Link>
           </nav>
           <Link href="/register">
