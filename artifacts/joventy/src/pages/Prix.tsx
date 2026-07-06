@@ -9,7 +9,7 @@ function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; 
 const FLAG_NAMES: Record<string, string> = {
   us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
   es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
-  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo", br: "Brésil",
 };
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
@@ -28,8 +28,9 @@ const PRICING = [
   { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", engagement: 150, success: 200, external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
   { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
   { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
-  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 180, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 380, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
   { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
+  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", engagement: 200, success: 400, external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null },
 ];
 
 const INCLUDES = [
@@ -125,8 +126,10 @@ export default function Prix() {
             <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">Tarifs</span>
-            <ChevronRight className="w-3 h-3" />
+          </nav>
+          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
             <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
+            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">

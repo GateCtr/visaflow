@@ -49,3 +49,58 @@ for (const guide of getAllGuides()) {
 }
 
 console.log(`\n🚀 Pre-rendered ${count} pages into dist/public`);
+
+const SITE = "https://joventy.cd";
+const today = new Date().toISOString().slice(0, 10);
+
+type SitemapEntry = { loc: string; changefreq: string; priority: string; lastmod?: string };
+
+const staticEntries: SitemapEntry[] = [
+  { loc: `${SITE}/`, changefreq: "weekly", priority: "1.0" },
+  { loc: `${SITE}/ambassades`, changefreq: "monthly", priority: "0.8" },
+  { loc: `${SITE}/guides`, changefreq: "daily", priority: "0.8" },
+  { loc: `${SITE}/prix`, changefreq: "monthly", priority: "0.8" },
+  { loc: `${SITE}/a-propos`, changefreq: "monthly", priority: "0.7" },
+  { loc: `${SITE}/mentions-legales`, changefreq: "yearly", priority: "0.3" },
+  { loc: `${SITE}/confidentialite`, changefreq: "yearly", priority: "0.3" },
+  { loc: `${SITE}/conditions`, changefreq: "yearly", priority: "0.3" },
+  { loc: `${SITE}/remboursement`, changefreq: "yearly", priority: "0.3" },
+];
+
+const destEntries: SitemapEntry[] = DESTINATIONS_SEO.map((d) => ({
+  loc: `${SITE}/${d.slug}`,
+  changefreq: "weekly",
+  priority: "0.9",
+}));
+
+const embassyEntries: SitemapEntry[] = EMBASSIES_SEO.map((e) => ({
+  loc: `${SITE}/${e.slug}`,
+  changefreq: "monthly",
+  priority: "0.75",
+}));
+
+const guideEntries: SitemapEntry[] = getAllGuides().map((g) => ({
+  loc: `${SITE}/guides/${g.slug}`,
+  changefreq: "weekly",
+  priority: "0.85",
+}));
+
+const allEntries = [...staticEntries, ...destEntries, ...embassyEntries, ...guideEntries];
+
+const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${allEntries
+  .map(
+    (e) => `  <url>
+    <loc>${e.loc}</loc>
+    <lastmod>${e.lastmod ?? today}</lastmod>
+    <changefreq>${e.changefreq}</changefreq>
+    <priority>${e.priority}</priority>
+  </url>`
+  )
+  .join("\n")}
+</urlset>
+`;
+
+write(path.join(DIST, "sitemap.xml"), sitemapXml);
+console.log(`🗺️  sitemap.xml régénéré automatiquement (${allEntries.length} URLs) — synchronisé avec destinations-seo.ts, embassies-seo.ts, guides-seo.ts`);

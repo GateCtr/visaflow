@@ -120,6 +120,10 @@ export default function EmbassyPage() {
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">{embassy.countryShort}</span>
           </nav>
+          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
+            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
+          </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
               Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />

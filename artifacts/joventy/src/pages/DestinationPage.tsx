@@ -145,8 +145,11 @@ export default function DestinationPage() {
             <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">Visa {dest.nameShort}</span>
-            <ChevronRight className="w-3 h-3" />
+          </nav>
+          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
             <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
+            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
