@@ -44,15 +44,15 @@ function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): stri
       url: "https://joventy.cd",
       telephone: "+243840808122",
       address: { "@type": "PostalAddress", addressLocality: "Kinshasa", addressCountry: "CD" },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.9",
+        bestRating: "5",
+        worstRating: "1",
+        reviewCount: "127",
+      },
     },
     areaServed: { "@type": "Place", name: "Kinshasa, République Démocratique du Congo" },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.9",
-      bestRating: "5",
-      worstRating: "1",
-      reviewCount: "127",
-    },
   });
   return [
     `<script type="application/ld+json">${faq}</script>`,

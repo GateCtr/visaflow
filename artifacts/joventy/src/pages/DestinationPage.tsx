@@ -90,6 +90,13 @@ export default function DestinationPage() {
         "addressLocality": "Kinshasa",
         "addressCountry": "CD",
       },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "bestRating": "5",
+        "worstRating": "1",
+        "reviewCount": "127",
+      },
     },
     "areaServed": {
       "@type": "Place",
@@ -101,13 +108,6 @@ export default function DestinationPage() {
       "priceCurrency": "USD",
       "price": dest.engagement,
       "description": `Frais d'engagement (prime de succès ${dest.success} USD due uniquement en cas de résultat)`,
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.9",
-      "bestRating": "5",
-      "worstRating": "1",
-      "reviewCount": "127",
     },
   };
 
