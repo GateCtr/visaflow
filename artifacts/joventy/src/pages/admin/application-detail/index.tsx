@@ -222,8 +222,8 @@ export default function ApplicationDetailPage() {
               <ChatPanel
                 appId={appId!}
                 messages={messages as any}
-                firstName={app.userFirstName}
-                lastName={app.userLastName}
+                firstName={app.userFirstName ?? ""}
+                lastName={app.userLastName ?? ""}
               />
             </aside>
           </>
