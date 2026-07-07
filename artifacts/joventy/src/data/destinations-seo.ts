@@ -204,8 +204,8 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     success: 450,
     externalFees: "Frais consulaires 90 €/adulte (payés directement à l'Ambassade d'Espagne)",
     processingTime: "15 jours (jusqu'à 45 jours si dossier incomplet)",
-    title: "Visa Espagne Kinshasa 2026 — Rendez-vous obtenu en 48h | Joventy",
-    metaDescription: "Rendez-vous à l'Ambassade d'Espagne de Kinshasa obtenu en 48h. Joventy gère l'email + citaconsular.es à votre place. Dossier Schengen complet. Paiement M-Pesa.",
+    title: "Visa Espagne Kinshasa 2026 — Rendez-vous Ambassade pris en charge | Joventy",
+    metaDescription: "Obtenez votre visa Espagne depuis Kinshasa : Joventy gère l'email ambassade et la réservation citaconsular.es à votre place. Dossier Schengen complet. Paiement M-Pesa.",
     h1: "Rendez-vous Visa Espagne Kinshasa 2026 — Email + citaconsular.es, service 100% en ligne",
     intro: "L'Espagne traite les visas Schengen directement via son Ambassade à Kinshasa — et non par le Centre Européen des Visas (CEV). La procédure passe par une inscription par email auprès de l'ambassade, puis une prise de créneau sur le portail citaconsular.es. Joventy gère l'intégralité du processus : email d'inscription, réservation du créneau et préparation du dossier complet.",
     visaTypes: [
