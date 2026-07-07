@@ -12,6 +12,14 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://joventy.cd/$1",
+      "permanent": true,
+      "has": [{ "type": "host", "value": "www.joventy.cd" }]
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
