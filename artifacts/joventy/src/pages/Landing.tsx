@@ -204,8 +204,8 @@ const STEPS = [
   },
   {
     num: "04",
-    title: "Résultat garanti ou vous ne payez pas",
-    desc: "La prime de succès n'est due qu'une fois le résultat obtenu : créneau verrouillé ou visa électronique accordé. Zéro risque.",
+    title: "Vous ne payez qu'à la réussite",
+    desc: "La prime de succès n'est due qu'une fois le résultat obtenu : créneau verrouillé ou visa électronique accordé. Aucun résultat, aucun solde.",
     icon: CheckCircle2,
   },
 ];
@@ -466,7 +466,7 @@ export default function Landing() {
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy" />
-        <meta name="twitter:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa. Formulaires, créneaux, e-Visas. Paiement M-Pesa. Résultat garanti ou remboursé." />
+        <meta name="twitter:description" content="✅ Visa USA, Canada, Espagne, Schengen, Dubaï depuis Kinshasa. Formulaires, créneaux, e-Visas. Paiement M-Pesa. Prime de succès uniquement à la réussite." />
         <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify({
@@ -682,7 +682,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, le Canada, le Royaume-Uni, la Suisse, l'Espagne, Dubaï et plus encore. Paiement via M-Pesa, Airtel Money ou Orange Money, résultat garanti.
+            Joventy remplit vos formulaires, cherche vos créneaux consulaires et soumet vos e-Visas pour l'USA, le Canada, le Royaume-Uni, la Suisse, l'Espagne, Dubaï et plus encore. Paiement via M-Pesa, Airtel Money ou Orange Money. Vous ne payez la prime qu'à la réussite.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
@@ -1366,7 +1366,7 @@ export default function Landing() {
             <span className="text-secondary">Créez votre dossier en 5 minutes.</span>
           </h2>
           <p className="text-white/70 text-lg mb-10">
-            Rejoignez les voyageurs congolais qui font confiance à Joventy. Paiement via M-Pesa, Airtel Money ou Orange Money, sans paperasse, résultat garanti.
+            Rejoignez les voyageurs congolais qui font confiance à Joventy. Paiement via M-Pesa, Airtel Money ou Orange Money, sans paperasse. Vous ne payez la prime qu'à la réussite.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/register">

@@ -23,7 +23,7 @@ export default function APropos() {
     <div className="min-h-screen bg-white font-sans">
       <Helmet>
         <title>À propos de Joventy — Assistance Visa Kinshasa, RDC | Qui sommes-nous ?</title>
-        <meta name="description" content="Joventy est un service d'assistance visa premium basé à Kinshasa (RDC). Fondé par Akollad Groupe, nous aidons les voyageurs congolais à obtenir leurs visas USA, Canada, Europe, Dubaï. Paiement M-Pesa, résultat garanti." />
+        <meta name="description" content="Joventy est un service d'assistance visa premium basé à Kinshasa (RDC). Fondé par Akollad Groupe, nous aidons les voyageurs congolais à obtenir leurs visas USA, Canada, Europe, Dubaï. Paiement M-Pesa, prime de succès uniquement à la réussite." />
         <link rel="canonical" href="https://joventy.cd/a-propos" />
         <meta property="og:title" content="À propos de Joventy — Assistance Visa Kinshasa, RDC" />
         <meta property="og:description" content="Service d'assistance visa premium basé à Kinshasa. Paiement M-Pesa, prime de succès uniquement si résultat." />

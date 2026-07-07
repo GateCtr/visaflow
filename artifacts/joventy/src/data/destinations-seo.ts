@@ -75,7 +75,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     externalFees: "Frais IRCC 185 CAD+ (biométrie + visa visiteur)",
     processingTime: "2 à 8 semaines selon le type de visa",
     title: "Visa Canada depuis Kinshasa 2026 — Dossier IRCC, Biométrie VAC & Délais Réels | Joventy",
-    metaDescription: "Visa Canada pour Congolais depuis Kinshasa 2026 (visiteur, études, travail) : Joventy prépare le dossier IRCC et organise la biométrie au centre VAC. Résultat garanti ou remboursé.",
+    metaDescription: "Visa Canada pour Congolais depuis Kinshasa 2026 (visiteur, études, travail) : Joventy prépare le dossier IRCC et organise la biométrie au centre VAC. Prime de succès payée uniquement à la réussite.",
     h1: "Visa Canada depuis Kinshasa 2026 — Biométrie IRCC, Visiteur & Études",
     intro: "Les demandes de visa Canada pour les ressortissants congolais nécessitent une biométrie et un dossier complet soumis en ligne via le portail IRCC (canada.ca). Joventy prend en charge la préparation de votre dossier, la soumission en ligne et la prise de rendez-vous biométrie depuis Kinshasa.",
     visaTypes: [
