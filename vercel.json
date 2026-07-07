@@ -1,24 +1,25 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @workspace/joventy run build",
   "outputDirectory": "artifacts/joventy/dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
-  "headers": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://clerk.joventy.cd; connect-src 'self' https://*.convex.cloud https://*.clerk.accounts.dev https://clerk.joventy.cd; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'" }
-      ]
-    }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+      "src": "/(.*)",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://clerk.joventy.cd; connect-src 'self' https://*.convex.cloud https://*.clerk.accounts.dev https://clerk.joventy.cd; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"
+      },
+      "continue": true
+    },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "env": {
     "NODE_ENV": "production",
