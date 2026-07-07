@@ -677,7 +677,7 @@ export default function Landing() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-semibold text-white tracking-tight leading-[1.05] mb-6 text-balance">
-            Votre visa, géré par des experts.{" "}
+            Votre visa depuis Kinshasa, géré par des experts.{" "}
             <span className="italic text-secondary drop-shadow-md">Vous payez si ça marche.</span>
           </h1>
 
@@ -1249,7 +1249,7 @@ export default function Landing() {
           </div>
 
           <div className="text-center mt-8">
-            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer nofollow">
               <Button className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold">
                 <MessageCircle className="mr-2 w-4 h-4" /> Besoin d'aide urgente ? WhatsApp Joventy
               </Button>
@@ -1341,7 +1341,7 @@ export default function Landing() {
             <a
               href="https://wa.me/243840808122"
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noopener noreferrer nofollow"
             >
               <Button size="lg" className="h-14 px-8 text-lg bg-green-500 hover:bg-green-600 text-white font-bold shadow-xl rounded-xl transition-all hover:scale-105">
                 <MessageCircle className="mr-2 w-5 h-5" />
@@ -1437,7 +1437,7 @@ export default function Landing() {
                 </div>
               );
               return isExternal ? (
-                <a key={c.label} href={c.href} target="_blank" rel="noopener noreferrer" className="flex flex-col">
+                <a key={c.label} href={c.href} target="_blank" rel="noopener noreferrer nofollow" className="flex flex-col">
                   {Inner}
                 </a>
               ) : (
@@ -1461,7 +1461,7 @@ export default function Landing() {
               </p>
               <div className="mt-5 flex flex-col gap-1.5 text-xs text-white/40">
                 <a href="mailto:contact@joventy.cd" className="hover:text-white transition-colors">✉ contact@joventy.cd</a>
-                <a href="https://wa.me/243840808122" className="hover:text-white transition-colors">📱 +243 840 808 122</a>
+                <a href="https://wa.me/243840808122" rel="noopener noreferrer nofollow" className="hover:text-white transition-colors">📱 +243 840 808 122</a>
               </div>
             </div>
 
@@ -1548,7 +1548,7 @@ export default function Landing() {
           </div>
 
           <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/35">
-            <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/60 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
+            <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="hover:text-white/60 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
             <p>Paiement via M-Pesa, Airtel Money & Orange Money 🇨🇩</p>
           </div>
         </div>

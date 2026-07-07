@@ -138,7 +138,7 @@ export default function APropos() {
         <div className="bg-primary/5 border border-primary/10 rounded-3xl p-8 sm:p-10">
           <h2 className="text-2xl font-bold text-primary mb-4">Akollad Groupe — Notre société mère</h2>
           <p className="text-muted-foreground leading-relaxed mb-4">
-            Joventy est un service de <a href="https://akollad.com" target="_blank" rel="noreferrer" className="text-primary font-semibold hover:underline">Akollad Groupe</a>, une entreprise technologique basée à Kinshasa spécialisée dans le développement de solutions numériques pour l'Afrique centrale.
+            Joventy est un service de <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="text-primary font-semibold hover:underline">Akollad Groupe</a>, une entreprise technologique basée à Kinshasa spécialisée dans le développement de solutions numériques pour l'Afrique centrale.
           </p>
           <p className="text-muted-foreground leading-relaxed mb-4">
             Akollad Groupe développe des plateformes technologiques qui résolvent des problèmes concrets pour les Congolais : accès aux services consulaires, digitalisation de processus administratifs, et solutions de paiement mobile.
@@ -177,7 +177,7 @@ export default function APropos() {
                 Créer mon dossier <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
-            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer nofollow">
               <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 font-semibold">
                 <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp
               </Button>
@@ -189,7 +189,7 @@ export default function APropos() {
       {/* FOOTER */}
       <footer className="bg-slate-900 text-white/50 py-8 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
+          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
           <div className="flex gap-4">
             <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
             <Link href="/prix" className="hover:text-white transition-colors">Tarifs</Link>

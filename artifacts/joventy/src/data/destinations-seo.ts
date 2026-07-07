@@ -75,7 +75,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     externalFees: "Frais IRCC 185 CAD+ (biométrie + visa visiteur)",
     processingTime: "2 à 8 semaines selon le type de visa",
     title: "Visa Canada depuis Kinshasa 2026 — Dossier IRCC, Biométrie VAC & Délais Réels | Joventy",
-    metaDescription: "Visa Canada pour Congolais depuis Kinshasa 2026 (visiteur, études, travail) : Joventy prépare le dossier IRCC et organise la biométrie au centre VAC. Prime de succès payée uniquement à la réussite.",
+    metaDescription: "Visa Canada depuis Kinshasa 2026 : dossier IRCC préparé, biométrie VAC organisée. Visiteur, études ou travail. Prime de succès uniquement à la réussite.",
     h1: "Visa Canada depuis Kinshasa 2026 — Biométrie IRCC, Visiteur & Études",
     intro: "Les demandes de visa Canada pour les ressortissants congolais nécessitent une biométrie et un dossier complet soumis en ligne via le portail IRCC (canada.ca). Joventy prend en charge la préparation de votre dossier, la soumission en ligne et la prise de rendez-vous biométrie depuis Kinshasa.",
     visaTypes: [
@@ -205,7 +205,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     externalFees: "Frais consulaires 90 €/adulte (payés directement à l'Ambassade d'Espagne)",
     processingTime: "15 jours (jusqu'à 45 jours si dossier incomplet)",
     title: "Visa Espagne Kinshasa 2026 — Rendez-vous Ambassade pris en charge | Joventy",
-    metaDescription: "Obtenez votre visa Espagne depuis Kinshasa : Joventy gère l'email ambassade et la réservation citaconsular.es à votre place. Dossier Schengen complet. Paiement M-Pesa.",
+    metaDescription: "Visa Espagne depuis Kinshasa : Joventy gère l'email ambassade et citaconsular.es à votre place. Dossier Schengen complet. Paiement M-Pesa.",
     h1: "Rendez-vous Visa Espagne Kinshasa 2026 — Email + citaconsular.es, service 100% en ligne",
     intro: "L'Espagne traite les visas Schengen directement via son Ambassade à Kinshasa — et non par le Centre Européen des Visas (CEV). La procédure passe par une inscription par email auprès de l'ambassade, puis une prise de créneau sur le portail citaconsular.es. Joventy gère l'intégralité du processus : email d'inscription, réservation du créneau et préparation du dossier complet.",
     visaTypes: [
@@ -503,7 +503,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     externalFees: "~140 USD (frais consulaires) + ~30 USD (frais VFS Global)",
     processingTime: "4 à 7 jours ouvrables",
     title: "Visa Chine depuis Kinshasa 2026 — E-Visa en 4j ou VFS Global sans RDV | Joventy",
-    metaDescription: "Obtenez votre visa Chine depuis Kinshasa en 4 à 7 jours : e-Visa en ligne (≤15j) ou visa L/M via VFS Global sans rendez-vous. Joventy prépare tout le dossier. M-Pesa.",
+    metaDescription: "Visa Chine depuis Kinshasa en 4-7 jours : e-Visa ≤15j ou visa L/M via VFS Global sans rendez-vous. Joventy prépare le dossier complet. M-Pesa.",
     h1: "Visa Chine depuis Kinshasa 2026 — E-Visa & Dépôt VFS Global sans Rendez-vous",
     intro: "La Chine propose deux voies pour les ressortissants congolais en 2026 : l'e-Visa court séjour entièrement en ligne via le portail officiel visaforchina.cn (étendu à la RDC depuis l'expansion 2025), et le visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct). Types principaux : L (tourisme), M (affaires), F (échange/visite), X2 (études ≤ 180 jours). Joventy prépare l'intégralité du dossier et gère les démarches.",
     visaTypes: [
