@@ -493,4 +493,11 @@
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
+  <!-- Guide formulaire mal rempli — juillet 2026 -->
+  <url>
+    <loc>https://joventy.cd/guides/formulaire-visa-mal-rempli-erreurs-refus</loc>
+    <lastmod>2026-07-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
 </urlset>

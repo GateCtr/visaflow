@@ -1902,7 +1902,7 @@ const guides: Guide[] = [
     relatedSlugs: [
       "documents-visa-schengen-kinshasa",
       "justifier-attaches-rdc-consulat-visa",
-      "que-faire-apres-refus-visa-kinshasa-recours",
+      "formulaire-visa-mal-rempli-erreurs-refus",
     ],
     auditCtaAfterSection: 0,
     relatedDestination: "visa-schengen-kinshasa",
@@ -2189,7 +2189,7 @@ const guides: Guide[] = [
     relatedSlugs: [
       "prouver-capacites-financieres-visa-etudiant-canada",
       "lettre-explication-canada-ircc-origine-fonds",
-      "suspension-visa-canada-rdc-ebola-2026",
+      "formulaire-visa-mal-rempli-erreurs-refus",
     ],
     auditCtaAfterSection: 1,
     relatedDestination: "visa-canada-kinshasa",
@@ -2366,7 +2366,7 @@ const guides: Guide[] = [
     ],
     relatedSlugs: [
       "visa-usa-refuse-que-faire",
-      "motifs-refus-visa-schengen-kinshasa",
+      "formulaire-visa-mal-rempli-erreurs-refus",
       "lettre-invitation-officielle-vs-reservation-hotel",
     ],
     auditCtaAfterSection: 0,
@@ -2428,6 +2428,77 @@ const guides: Guide[] = [
       "documents-visa-schengen-kinshasa",
       "garant-europe-prise-en-charge-visa-schengen",
     ],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+  {
+    slug: "formulaire-visa-mal-rempli-erreurs-refus",
+    title: "Formulaire de visa mal rempli : les erreurs de saisie qui font refuser un dossier",
+    metaTitle: "Formulaire Visa Mal Rempli — Erreurs de Saisie qui Causent un Refus 2026 | Joventy",
+    metaDescription:
+      "DS-160, formulaire Schengen, IMM Canada : les erreurs de saisie les plus fréquentes qui font refuser un dossier de visa depuis Kinshasa, et comment les corriger avant dépôt.",
+    publishedDate: "2026-07-09",
+    updatedDate: "2026-07-09",
+    readingTime: 7,
+    category: "Recours & Urgences",
+    coverEmoji: "📝",
+    intro:
+      "Un dossier de visa parfaitement documenté peut être refusé pour une seule raison : le formulaire officiel (DS-160 pour les USA, formulaire Schengen, IMM pour le Canada) mal rempli. Ce n'est pas une pièce annexe — c'est le document que le consul ou l'algorithme de tri lit en premier, et la moindre incohérence y est immédiatement relevée. Voici les erreurs de saisie les plus fréquentes chez les demandeurs de Kinshasa et comment les éviter.",
+    sections: [
+      {
+        heading: "Pourquoi une simple erreur de saisie peut coûter un visa",
+        body:
+          "Le formulaire est le squelette de tout le dossier : chaque champ (identité, itinéraire, emploi, historique de voyage) doit correspondre exactement aux pièces jointes. Une différence, même mineure, entre le formulaire et un document justificatif est interprétée comme une incohérence du dossier, pas comme une simple faute de frappe.",
+        list: [
+          "Le formulaire est souvent le seul document entièrement structuré que lit un agent ou un système de tri automatisé (cas d'IRCC) — les erreurs y sont donc les plus visibles",
+          "Une réponse « non » à une question sur un refus antérieur alors qu'un refus existe est traitée comme une fausse déclaration, sanctionnée bien plus sévèrement qu'un refus classique",
+          "Les champs de dates de voyage doivent correspondre aux billets et à la lettre de motivation au jour près",
+        ],
+      },
+      {
+        heading: "Les erreurs de saisie les plus fréquentes à Kinshasa",
+        body:
+          "Sur la base des dossiers analysés par Joventy, ces erreurs se répètent d'un demandeur à l'autre, quelle que soit la destination :",
+        list: [
+          "❌ Nom et prénom saisis dans un ordre différent de celui du passeport, ou accents/tirets omis (ex. nom composé mal orthographié)",
+          "❌ Adresse ou numéro de téléphone erroné ou obsolète, rendant impossible toute vérification ou convocation",
+          "❌ Historique de voyages incomplet — un séjour Schengen ou un visa USA antérieur non mentionné, alors qu'il apparaît dans le passeport",
+          "❌ Situation professionnelle mal décrite : indépendant déclaré 'sans emploi', ou fonction indiquée différente de celle sur l'attestation d'emploi jointe",
+          "❌ Case 'objet du voyage' ne correspondant pas exactement au motif détaillé dans la lettre de motivation",
+          "❌ Pour le DS-160 : réponses aux questions de sécurité et d'éligibilité cochées trop vite, sans relecture — certaines erreurs de case sont irréversibles après soumission",
+          "❌ Pour l'IMM Canada : champs numériques (montants, dates) mal formatés selon les exigences du portail, entraînant un rejet technique avant même l'examen du dossier",
+        ],
+      },
+      {
+        heading: "Comment éviter ces erreurs avant de soumettre",
+        body:
+          "La quasi-totalité de ces erreurs sont évitables avec une relecture croisée entre le formulaire et les pièces du dossier, avant tout paiement ou soumission finale — car la correction est souvent impossible après envoi.",
+        list: [
+          "Remplir le formulaire en dernier, une fois toutes les pièces réunies, pour garantir la cohérence des informations",
+          "Relire chaque champ en le comparant directement au passeport, aux billets et à la lettre de motivation",
+          "Faire relire le formulaire par une deuxième personne avant soumission, en particulier pour le DS-160 dont les erreurs ne sont pas corrigibles après validation",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Peut-on corriger un formulaire après l'avoir soumis ?",
+        a: "Cela dépend de la destination. Le DS-160 (USA) ne peut généralement pas être modifié après validation — une nouvelle demande est nécessaire. Le portail IRCC bloque toute modification après paiement des frais. Pour le formulaire Schengen papier, une correction est possible jusqu'au dépôt physique au CEV.",
+      },
+      {
+        q: "Une simple faute de frappe peut-elle vraiment entraîner un refus ?",
+        a: "Rarement seule, mais elle peut déclencher une vérification renforcée ou semer le doute si elle s'ajoute à d'autres incohérences. C'est l'accumulation de petites erreurs qui fragilise un dossier, pas une faute isolée.",
+      },
+      {
+        q: "Comment savoir si mon formulaire contient des erreurs avant de le soumettre ?",
+        a: "Un audit du dossier avant dépôt permet de vérifier la cohérence entre le formulaire et l'ensemble des pièces jointes, poste par poste, avant qu'il ne soit trop tard pour corriger.",
+      },
+    ],
+    relatedSlugs: [
+      "motifs-refus-visa-schengen-kinshasa",
+      "erreurs-fatales-portail-ircc-refus-congo",
+      "que-faire-apres-refus-visa-kinshasa-recours",
+    ],
+    auditCtaAfterSection: 1,
     relatedDestination: "visa-schengen-kinshasa",
   },
 ];
