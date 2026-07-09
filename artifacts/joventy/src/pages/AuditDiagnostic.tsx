@@ -20,6 +20,11 @@ const RISKS = [
     desc: "Fiches de paie qui ne concordent pas, dates de voyage en décalage avec vos réservations, documents obligatoires oubliés.",
   },
   {
+    icon: FileSearch,
+    title: "Formulaire mal rempli ou incohérent",
+    desc: "DS-160, formulaire Schengen, IMM Canada : nom mal orthographié, historique de voyage incomplet, dates ou emploi qui ne correspondent pas aux pièces jointes — la première chose que vérifie l'agent consulaire.",
+  },
+  {
     icon: AlertTriangle,
     title: "Risque de non-retour perçu",
     desc: "Attaches insuffisantes en RDC (emploi, famille, biens) : le motif numéro un des refus Schengen et Canada.",
@@ -30,6 +35,7 @@ const CHECKLIST_INCLUDES = [
   "Vérification visuelle de toutes les pièces obligatoires exigées par le consulat, le CEV ou l'ambassade",
   "Contrôle des validités techniques : dates du passeport, conformité des photos, validité de l'assurance voyage Schengen",
   "Vérification de la concordance des dates logistiques (vol et hôtel)",
+  "Relecture du formulaire (DS-160, Schengen, IMM) pour repérer les erreurs de saisie évidentes avant soumission",
   "Livrable : validation ou alerte rapide envoyée par texte sur WhatsApp",
 ];
 
@@ -37,6 +43,7 @@ const PROFILAGE_INCLUDES = [
   "L'intégralité de la formule Check-list",
   "Audit de fond des documents financiers : dépôts massifs ou suspects de dernière minute",
   "Évaluation du risque de refus lié à vos attaches en RDC (travail, famille, biens)",
+  "Contrôle approfondi de la cohérence du formulaire avec l'ensemble du dossier : identité, historique de voyage, emploi, dates",
   "Aide à l'optimisation et à la cohérence de votre lettre explicative ou de motivation",
   "Livrable : débriefing complet et personnalisé sous 48h par note vocale WhatsApp, avec échanges pour répondre à vos questions",
 ];
@@ -47,7 +54,7 @@ export default function AuditDiagnostic() {
     "@type": "Service",
     name: "Audit & Diagnostic de dossier de visa — Joventy",
     description:
-      "Analyse et diagnostic de dossier de visa (Schengen, Canada, Dubaï...) depuis Kinshasa avant votre rendez-vous consulaire. Vérification des pièces, audit des flux financiers, cohérence des attaches en RDC.",
+      "Analyse et diagnostic de dossier de visa (Schengen, Canada, Dubaï...) depuis Kinshasa avant votre rendez-vous consulaire. Vérification des pièces, du formulaire, audit des flux financiers, cohérence des attaches en RDC.",
     provider: { "@type": "Organization", name: "Joventy" },
     areaServed: "CD",
     offers: [
@@ -143,7 +150,7 @@ export default function AuditDiagnostic() {
         <p className="text-muted-foreground text-center max-w-2xl mx-auto mb-10">
           Les demandeurs de visa depuis Kinshasa subissent des taux de refus massifs — souvent pour des erreurs évitables.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {RISKS.map((r) => (
             <div key={r.title} className="bg-red-50 border border-red-200 rounded-2xl p-6">
               <r.icon className="w-8 h-8 text-red-600 mb-4" />
@@ -240,15 +247,16 @@ export default function AuditDiagnostic() {
 
       {/* GUIDES LIÉS — maillage interne */}
       <section className="bg-muted py-14 px-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h2 className="text-xl font-bold text-primary text-center mb-2">Pour aller plus loin</h2>
           <p className="text-muted-foreground text-center text-sm mb-8">
             Les erreurs les plus fréquentes, expliquées en détail dans nos guides.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { slug: "motifs-refus-visa-schengen-kinshasa", label: "Les 5 motifs de refus visa Schengen" },
               { slug: "erreurs-releves-bancaires-depot-suspect-visa", label: "Dépôt suspect sur relevé bancaire" },
+              { slug: "formulaire-visa-mal-rempli-erreurs-refus", label: "Formulaire mal rempli : erreurs fréquentes" },
               { slug: "justifier-attaches-rdc-consulat-visa", label: "Justifier ses attaches en RDC" },
               { slug: "que-faire-apres-refus-visa-kinshasa-recours", label: "Que faire après un refus de visa" },
               { slug: "erreurs-fatales-portail-ircc-refus-congo", label: "Erreurs fatales sur le portail IRCC" },
