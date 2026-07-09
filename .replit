@@ -28,10 +28,6 @@ args = "artifacts/slot-hunter: Slot Hunter"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "artifacts/captcha-service: Captcha Service"
 
 [[workflows.workflow.tasks]]
@@ -48,18 +44,6 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/joventy run dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow]]
 name = "artifacts/captcha-service: Captcha Service"
