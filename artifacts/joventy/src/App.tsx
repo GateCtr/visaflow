@@ -29,6 +29,7 @@ import EmbassiesIndex from "@/pages/EmbassiesIndex";
 import EmbassyPage from "@/pages/EmbassyPage";
 
 import Prix from "@/pages/Prix";
+import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
@@ -165,6 +166,7 @@ function Router() {
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
+      <Route path="/audit-diagnostic" component={AuditDiagnostic} />
       <Route path="/a-propos" component={APropos} />
 
       <Route path="/mentions-legales" component={MentionsLegales} />

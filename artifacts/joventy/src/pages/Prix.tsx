@@ -130,6 +130,7 @@ export default function Prix() {
           <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
             <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
             <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
+            <Link href="/audit-diagnostic" className="hover:text-primary transition-colors">Audit & Diagnostic</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">

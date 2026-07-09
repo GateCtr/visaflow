@@ -74,6 +74,16 @@ export function Navbar() {
             >
               Ambassades
             </Link>
+            <Link
+              href="/audit-diagnostic"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Audit & Diagnostic
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -182,6 +192,11 @@ export function Navbar() {
           <Link href="/ambassades" onClick={close}>
             <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
               Ambassades
+            </span>
+          </Link>
+          <Link href="/audit-diagnostic" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Audit & Diagnostic
             </span>
           </Link>
         </nav>
