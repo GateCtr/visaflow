@@ -101,6 +101,7 @@ export default function AuditDiagnostic() {
           <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
             <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
             <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
+            <Link href="/guides/motifs-refus-visa-schengen-kinshasa" className="hover:text-primary transition-colors">Pourquoi les dossiers sont refusés</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
@@ -234,6 +235,33 @@ export default function AuditDiagnostic() {
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-8">
           <Clock className="w-3.5 h-3.5" />
           Résultat livré sous 48h, généralement par note vocale WhatsApp.
+        </div>
+      </section>
+
+      {/* GUIDES LIÉS — maillage interne */}
+      <section className="bg-muted py-14 px-4">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-xl font-bold text-primary text-center mb-2">Pour aller plus loin</h2>
+          <p className="text-muted-foreground text-center text-sm mb-8">
+            Les erreurs les plus fréquentes, expliquées en détail dans nos guides.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { slug: "motifs-refus-visa-schengen-kinshasa", label: "Les 5 motifs de refus visa Schengen" },
+              { slug: "erreurs-releves-bancaires-depot-suspect-visa", label: "Dépôt suspect sur relevé bancaire" },
+              { slug: "justifier-attaches-rdc-consulat-visa", label: "Justifier ses attaches en RDC" },
+              { slug: "que-faire-apres-refus-visa-kinshasa-recours", label: "Que faire après un refus de visa" },
+              { slug: "erreurs-fatales-portail-ircc-refus-congo", label: "Erreurs fatales sur le portail IRCC" },
+              { slug: "lettre-motivation-visa-schengen-kinshasa-refus", label: "Bien rédiger sa lettre de motivation" },
+            ].map((g) => (
+              <Link key={g.slug} href={`/guides/${g.slug}`} className="group block">
+                <div className="bg-white border border-border rounded-xl p-4 hover:shadow-md hover:border-primary/20 transition-all h-full flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">{g.label}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 

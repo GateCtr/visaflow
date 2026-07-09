@@ -10,6 +10,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
   "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
+  "Visa Business": "bg-amber-100 text-amber-700",
+  "Recours & Urgences": "bg-rose-100 text-rose-700",
 };
 
 function getCategoryColor(cat: string) {

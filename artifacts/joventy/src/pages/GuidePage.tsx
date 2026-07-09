@@ -4,12 +4,16 @@ import { Clock, ChevronRight, ArrowRight, BookOpen, MessageCircle } from "lucide
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
+import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
+import { ShieldCheck } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
   "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
+  "Visa Business": "bg-amber-100 text-amber-700",
+  "Recours & Urgences": "bg-rose-100 text-rose-700",
 };
 function getCategoryColor(cat: string) {
   return CATEGORY_COLORS[cat] ?? "bg-slate-100 text-slate-600";
@@ -166,9 +170,35 @@ export default function GuidePage() {
                   ))}
                 </ul>
               )}
+              {guide.auditCtaAfterSection === i && (
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
+                  <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800 mb-1">Un doute sur votre dossier ?</p>
+                    <p className="text-slate-600 text-sm">
+                      Faites vérifier vos documents par un expert avant de déposer — verdict par WhatsApp sous 48h, à partir de 25 $.
+                    </p>
+                  </div>
+                  <WhatsAppAuditCTA className="flex-shrink-0" />
+                </div>
+              )}
             </section>
           ))}
         </div>
+
+        {/* Fallback Audit & Diagnostic CTA for guides without a designated risk section */}
+        {guide.auditCtaAfterSection === undefined && (
+          <div className="my-10 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
+            <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-bold text-slate-800 mb-1">Un doute sur votre dossier ?</p>
+              <p className="text-slate-600 text-sm">
+                Faites vérifier vos documents par un expert avant de déposer — verdict par WhatsApp sous 48h, à partir de 25 $.
+              </p>
+            </div>
+            <WhatsAppAuditCTA className="flex-shrink-0" />
+          </div>
+        )}
 
         {/* CTA inline */}
         <div className="my-12 bg-gradient-to-r from-primary to-blue-700 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center gap-4">
@@ -258,7 +288,7 @@ export default function GuidePage() {
 
       <footer className="bg-slate-900 text-white/50 py-8 px-4 mt-10">
         <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-6 mb-8 text-xs">
             <div>
               <p className="font-semibold text-white/70 mb-2">Destinations</p>
               <ul className="space-y-1">
@@ -276,6 +306,15 @@ export default function GuidePage() {
                 <li><Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026" className="hover:text-white transition-colors">Purger 21 jours</Link></li>
                 <li><Link href="/guides/suspension-visa-canada-rdc-ebola-2026" className="hover:text-white transition-colors">Suspension Canada</Link></li>
                 <li><Link href="/guides/coupe-du-monde-2026-visa-usa-kinshasa" className="hover:text-white transition-colors">World Cup 2026</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Éviter le refus</p>
+              <ul className="space-y-1">
+                <li><Link href="/guides/motifs-refus-visa-schengen-kinshasa" className="hover:text-white transition-colors">Motifs de refus Schengen</Link></li>
+                <li><Link href="/guides/erreurs-releves-bancaires-depot-suspect-visa" className="hover:text-white transition-colors">Dépôt suspect bancaire</Link></li>
+                <li><Link href="/guides/que-faire-apres-refus-visa-kinshasa-recours" className="hover:text-white transition-colors">Après un refus</Link></li>
+                <li><Link href="/audit-diagnostic" className="hover:text-white transition-colors">Audit & Diagnostic</Link></li>
               </ul>
             </div>
             <div>
