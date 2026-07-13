@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getDestinationBySlug, DESTINATIONS_SEO } from "@/data/destinations-seo";
 import { getEmbassiesForDestination } from "@/data/embassies-seo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { Why100PercentOnline } from "@/components/Why100PercentOnline";
+import { TrustFAQ } from "@/components/TrustFAQ";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -206,6 +209,9 @@ export default function DestinationPage() {
         </div>
       </section>
 
+      {/* ── POURQUOI 100% EN LIGNE ── */}
+      <Why100PercentOnline />
+
       {/* ── PRICING BANNER ── */}
       <section className="bg-amber-50 border-b border-amber-200 py-5">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-4">
@@ -359,6 +365,9 @@ export default function DestinationPage() {
           </div>
         </section>
 
+        {/* ── SOMMES-NOUS FIABLES ── */}
+        <TrustFAQ />
+
         {/* ── CTA ── */}
         <section className="bg-primary rounded-3xl p-8 sm:p-12 text-center text-white">
           <FlagImg code={dest.flagCode} size={64} className="mx-auto mb-5 shadow-lg rounded-xl" />
@@ -443,6 +452,9 @@ export default function DestinationPage() {
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
             <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
           </div>
+        </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 mt-5 border-t border-white/10 text-white/40">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

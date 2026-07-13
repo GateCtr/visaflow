@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 interface LegalLayoutProps {
   title: string;
@@ -98,6 +99,9 @@ export function LegalLayout({ title, subtitle, lastUpdated, description, slug, c
           <Link href="/confidentialite" className="hover:text-white transition-colors">Confidentialité</Link>
           <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
           <Link href="/remboursement" className="hover:text-white transition-colors">Remboursements</Link>
+        </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-4 text-white/30">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

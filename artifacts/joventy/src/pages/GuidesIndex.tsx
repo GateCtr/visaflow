@@ -4,6 +4,7 @@ import { Clock, ChevronRight, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getAllGuides } from "@/data/guides-seo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
@@ -150,6 +151,9 @@ export default function GuidesIndex() {
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </>

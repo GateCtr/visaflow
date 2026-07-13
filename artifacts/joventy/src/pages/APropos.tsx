@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, MessageCircle, ChevronRight, ShieldCheck, Users, Globe, Zap, Award, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 export default function APropos() {
   const orgSchema = {
@@ -196,6 +197,9 @@ export default function APropos() {
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

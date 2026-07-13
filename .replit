@@ -34,6 +34,10 @@ args = "artifacts/captcha-service: Captcha Service"
 task = "workflow.run"
 args = "artifacts/proxy-service: Proxy Service"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/joventy: web"
+
 [[workflows.workflow]]
 name = "artifacts/slot-hunter: Slot Hunter"
 author = "agent"
@@ -66,6 +70,18 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/proxy-service && PORT=3002 node_modules/.bin/tsx watch src/index.ts"
+
+[[workflows.workflow]]
+name = "artifacts/joventy: web"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/joventy && pnpm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"

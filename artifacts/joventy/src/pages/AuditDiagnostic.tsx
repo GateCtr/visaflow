@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const RISKS = [
   {
@@ -300,6 +301,9 @@ export default function AuditDiagnostic() {
             <Link href="/prix" className="hover:text-white transition-colors">Tarifs</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

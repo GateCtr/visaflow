@@ -6,6 +6,7 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
 import { ShieldCheck } from "lucide-react";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
@@ -342,6 +343,9 @@ export default function GuidePage() {
               <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
               <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
             </div>
+          </div>
+          <div className="mt-5 pt-5 border-t border-white/10">
+            <LegalFooterNote />
           </div>
         </div>
       </footer>

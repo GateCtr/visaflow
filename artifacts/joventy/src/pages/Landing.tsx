@@ -4,6 +4,9 @@ import { api } from "@convex/_generated/api";
 import { Helmet } from "react-helmet-async";
 import { ConvexErrorBoundary } from "@/components/ConvexErrorBoundary";
 import { Navbar } from "@/components/layout/Navbar";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { Why100PercentOnline } from "@/components/Why100PercentOnline";
+import { TrustFAQ } from "@/components/TrustFAQ";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import {
@@ -968,6 +971,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══ POURQUOI 100% EN LIGNE ═══ */}
+      <Why100PercentOnline />
+
       {/* ═══ PACKAGES ═══ */}
       <section id="services" className="py-24 bg-primary text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,152,0,0.08),transparent_60%)]" />
@@ -1384,6 +1390,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══ SOMMES-NOUS FIABLES ═══ */}
+      <TrustFAQ />
+
       {/* ═══ CONTACT ═══ */}
       <section id="contact" className="py-24 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1550,6 +1559,9 @@ export default function Landing() {
           <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/35">
             <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="hover:text-white/60 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
             <p>Paiement via M-Pesa, Airtel Money & Orange Money 🇨🇩</p>
+          </div>
+          <div className="pt-5 mt-5 border-t border-white/10 text-white/35">
+            <LegalFooterNote />
           </div>
         </div>
       </footer>

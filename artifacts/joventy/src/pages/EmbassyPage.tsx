@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getEmbassyBySlug, EMBASSIES_SEO } from "@/data/embassies-seo";
 import { getDestinationBySlug } from "@/data/destinations-seo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -375,6 +376,9 @@ export default function EmbassyPage() {
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
             <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
           </div>
+        </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 mt-5 border-t border-white/10 text-white/40">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

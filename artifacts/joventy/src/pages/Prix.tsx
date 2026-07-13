@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, CheckCircle2, MessageCircle, ChevronRight, AlertTriangle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
@@ -307,6 +308,9 @@ export default function Prix() {
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

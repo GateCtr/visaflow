@@ -295,6 +295,14 @@ See `CLERK_SETUP.md` for detailed instructions including:
 - JWT Template "convex" with `role` claim
 - Admin role assignment via publicMetadata
 
+## Footer legal disclosure & "100% online" reassurance block (2026-07-13)
+
+- `artifacts/joventy/src/components/LegalFooterNote.tsx` — shared "Transparence & Légalité" line (Akollad Groupe RCCM/Impôt/ID Nat) added to the bottom of all 10 public-page footers (Landing, DestinationPage, GuidePage, GuidesIndex, Prix, APropos, AuditDiagnostic, EmbassiesIndex, EmbassyPage, LegalLayout).
+- `artifacts/joventy/src/components/Why100PercentOnline.tsx` — "Un service moderne, 100% à distance" section (gain de temps / économie / traçabilité), placed just before the pricing/packages section on the homepage (`Landing.tsx`) and just before the pricing banner on destination pages (`DestinationPage.tsx`, used by all visa destinations incl. Espagne and Dubaï).
+- Footer JSX is still duplicated per-page (not yet a single `<Footer />` component) — see follow-up task about consolidating it.
+- `artifacts/joventy/src/components/TrustFAQ.tsx` — "Sommes-nous fiables ?" accordion (bureau physique, RCCM/légalité, garantie paiement au résultat, avis clients), placed just before the WhatsApp/contact CTA on the homepage (`Landing.tsx`) and destination pages (`DestinationPage.tsx`). Added 2026-07-13 after 12 WhatsApp leads → 0 conversions, objections being "pas d'adresse physique" and "hésite à payer avant résultat".
+- `artifacts/joventy: web` workflow (port 5000) configured to preview the frontend — was missing from `.replit` despite having an `artifact.toml`.
+
 ## TypeScript & Composite Projects
 
 Every package extends `tsconfig.base.json`. The root `tsconfig.json` lists packages as project references. Convex types are in `convex/_generated/` (auto-generated, `.d.ts` + `.js`).
