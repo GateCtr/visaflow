@@ -47,7 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
+args = "redis-server --daemonize yes --logfile /tmp/redis.log; cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/captcha-service: Captcha Service"
@@ -103,6 +103,7 @@ PORT = "5000"
 BASE_PATH = "/"
 HUNTER_API_KEY = "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384"
 VITE_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuam92ZW50eS5jZCQ"
+REDIS_URL = "redis://localhost:6379"
 
 [[ports]]
 localPort = 3001
