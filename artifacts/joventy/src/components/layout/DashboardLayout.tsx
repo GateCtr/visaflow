@@ -79,6 +79,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
     { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal, badge: botFailCount },
     { href: "/admin/bot-settings", label: "Config Bot", icon: Settings },
+    { href: "/admin/victor", label: "Agent Victor", icon: Bot },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;

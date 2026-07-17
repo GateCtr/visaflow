@@ -1,3 +1,4 @@
+- [Joventy project setup](joventy-project-setup.md) — structure 4 services, règles Convex deploy, agent Victor IA, pièges critiques (svix, Redis, http.ts complet obligatoire).
 - [CEV bot detection audit](cev-detection-audit.md) — full analysis of real Chrome 148 traffic dumps vs. bot; fixes #2-#8 applied; what's confirmed safe vs. remaining risks.
 - [CEV UA pool rules](cev-ua-pool-rules.md) — rules for maintaining the UA pool: always use real build numbers, always include "Google Chrome" brand for stable Chrome, no Linux profiles.
 - [CEV implementation plan](cev-impl-plan.md) — complete anti-shadow-ban overhaul plan written to CEV_BOT_IMPLEMENTATION_PLAN.md (1259 lines); 15 detection vectors from real captures; full Puppeteer flow replaces HTTP-only setup; 6 phases ~20-27h effort.

@@ -8,13 +8,69 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
+import type * as applications from "../applications.js";
+import type * as botLogs from "../botLogs.js";
+import type * as cevSessions from "../cevSessions.js";
+import type * as chat from "../chat.js";
+import type * as constants from "../constants.js";
+import type * as contracts from "../contracts.js";
+import type * as crons from "../crons.js";
+import type * as documents from "../documents.js";
+import type * as emails from "../emails.js";
+import type * as http from "../http.js";
+import type * as hunter from "../hunter.js";
+import type * as messages from "../messages.js";
+import type * as notifications from "../notifications.js";
+import type * as relay from "../relay.js";
+import type * as reviews from "../reviews.js";
+import type * as slotBroadcast from "../slotBroadcast.js";
+import type * as slotDiscoveries from "../slotDiscoveries.js";
+import type * as slotFoundHelper from "../slotFoundHelper.js";
+import type * as spainOtp from "../spainOtp.js";
+import type * as spainWatcher from "../spainWatcher.js";
+import type * as traffic from "../traffic.js";
+import type * as users from "../users.js";
+import type * as victor from "../victor.js";
+import type * as visaClassifications from "../visaClassifications.js";
+import type * as visaDocuments from "../visaDocuments.js";
+import type * as whatsapp from "../whatsapp.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  applications: typeof applications;
+  botLogs: typeof botLogs;
+  cevSessions: typeof cevSessions;
+  chat: typeof chat;
+  constants: typeof constants;
+  contracts: typeof contracts;
+  crons: typeof crons;
+  documents: typeof documents;
+  emails: typeof emails;
+  http: typeof http;
+  hunter: typeof hunter;
+  messages: typeof messages;
+  notifications: typeof notifications;
+  relay: typeof relay;
+  reviews: typeof reviews;
+  slotBroadcast: typeof slotBroadcast;
+  slotDiscoveries: typeof slotDiscoveries;
+  slotFoundHelper: typeof slotFoundHelper;
+  spainOtp: typeof spainOtp;
+  spainWatcher: typeof spainWatcher;
+  traffic: typeof traffic;
+  users: typeof users;
+  victor: typeof victor;
+  visaClassifications: typeof visaClassifications;
+  visaDocuments: typeof visaDocuments;
+  whatsapp: typeof whatsapp;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.
