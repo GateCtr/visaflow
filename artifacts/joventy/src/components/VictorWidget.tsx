@@ -317,13 +317,26 @@ export function VictorWidget() {
   const handleCTA = useCallback(
     async (label: string, href: string) => {
       // Enregistre l'intention (clic CTA) — ne marque PAS l'utilisateur comme "convaincu"
-      // markConvinced est appelé uniquement quand l'action est réellement complétée
+      const ctaKey = `cta_click_${label.toLowerCase().replace(/\s+/g, "_")}`;
       try {
-        await recordCTAClick({
-          sessionId,
-          cta: `cta_click_${label.toLowerCase().replace(/\s+/g, "_")}`,
-        });
+        await recordCTAClick({ sessionId, cta: ctaKey });
       } catch { /* non bloquant */ }
+
+      // Suivi du funnel auth : si le CTA mène vers login/register,
+      // on stocke la session en attente pour tracker la complétion dans le dashboard
+      if (href === "/login" || href === "/register") {
+        try {
+          localStorage.setItem(
+            "victor_auth_pending",
+            JSON.stringify({
+              sessionId,
+              action: href === "/register" ? "register" : "login",
+              ts: Date.now(),
+            })
+          );
+        } catch { /* non bloquant */ }
+      }
+
       navigate(href);
       setIsOpen(false);
     },
