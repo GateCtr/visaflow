@@ -124,6 +124,8 @@ export default defineSchema({
     role: v.string(),
     createdAt: v.number(),
     onboardingCompletedAt: v.optional(v.number()),
+    /** Suivi des relances d'engagement (ex: "no_app_3d") */
+    remindersSent: v.optional(v.array(v.string())),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"]),

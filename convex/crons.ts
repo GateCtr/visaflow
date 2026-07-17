@@ -3,6 +3,7 @@ import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const H = 3_600_000;
+const D = 24 * H;
 
 // ── Mutation interne : envoyer les relances dues ──────────────────────────────
 export const sendDueReminders = internalMutation({
@@ -11,11 +12,12 @@ export const sendDueReminders = internalMutation({
     const all = await ctx.db.query("applications").collect();
 
     for (const app of all) {
+      if (!app.userEmail) continue;
+      const sent = app.remindersSent ?? [];
+
       // ── 1. Relances frais d'engagement (dossier créé mais non payé) ──────────
-      if (app.status === "awaiting_engagement_payment" && app.userEmail) {
-        const ageMs = now - app._creationTime;
-        const ageHours = ageMs / H;
-        const sent = app.remindersSent ?? [];
+      if (app.status === "awaiting_engagement_payment") {
+        const ageHours = (now - app._creationTime) / H;
 
         // Relance 1 : après 24h
         if (ageHours >= 24 && !sent.includes("engagement_24h")) {
@@ -29,13 +31,11 @@ export const sendDueReminders = internalMutation({
             hoursElapsed: Math.round(ageHours),
             reminderNumber: 1,
           });
-          await ctx.db.patch(app._id, {
-            remindersSent: [...sent, "engagement_24h"],
-          });
-          console.log(`[Cron] Relance engagement_24h → ${app._id} (${app.applicantName})`);
+          await ctx.db.patch(app._id, { remindersSent: [...sent, "engagement_24h"] });
+          console.log(`[Cron] engagement_24h → ${app._id}`);
         }
 
-        // Relance 2 : après 48h
+        // Relance 2 : après 48h (urgente)
         if (ageHours >= 48 && !sent.includes("engagement_48h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendPaymentReminderClient, {
             to: app.userEmail,
@@ -47,26 +47,99 @@ export const sendDueReminders = internalMutation({
             hoursElapsed: Math.round(ageHours),
             reminderNumber: 2,
           });
-          await ctx.db.patch(app._id, {
-            remindersSent: [...(app.remindersSent ?? []), "engagement_48h"],
-          });
-          console.log(`[Cron] Relance engagement_48h → ${app._id} (${app.applicantName})`);
+          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "engagement_48h"] });
+          console.log(`[Cron] engagement_48h → ${app._id}`);
         }
       }
 
-      // ── 2. Relances prime de succès (créneau trouvé mais prime non payée) ───
+      // ── 2. Relances documents en attente ──────────────────────────────────────
+      if (app.status === "documents_pending") {
+        // updatedAt = moment où l'engagement a été validé (statut changé)
+        const ageHours = (now - app.updatedAt) / H;
+
+        // Relance 1 : après 48h
+        if (ageHours >= 48 && !sent.includes("docs_48h")) {
+          await ctx.scheduler.runAfter(0, internal.emails.sendDocumentsPendingReminderClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            destination: app.destination,
+            applicationId: app._id,
+            daysElapsed: Math.round(ageHours / 24),
+            reminderNumber: 1,
+          });
+          await ctx.db.patch(app._id, { remindersSent: [...sent, "docs_48h"] });
+          console.log(`[Cron] docs_48h → ${app._id}`);
+        }
+
+        // Relance 2 : après 5 jours (urgente)
+        if (ageHours >= 120 && !sent.includes("docs_5d")) {
+          await ctx.scheduler.runAfter(0, internal.emails.sendDocumentsPendingReminderClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            destination: app.destination,
+            applicationId: app._id,
+            daysElapsed: Math.round(ageHours / 24),
+            reminderNumber: 2,
+          });
+          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "docs_5d"] });
+          console.log(`[Cron] docs_5d → ${app._id}`);
+        }
+      }
+
+      // ── 3. Mise à jour dossier en traitement (in_review) ─────────────────────
+      if (app.status === "in_review") {
+        const ageDays = (now - app.updatedAt) / D;
+
+        // Point de situation à J+3
+        if (ageDays >= 3 && !sent.includes("review_3d")) {
+          await ctx.scheduler.runAfter(0, internal.emails.sendInReviewUpdateClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            destination: app.destination,
+            applicationId: app._id,
+            daysElapsed: Math.round(ageDays),
+          });
+          await ctx.db.patch(app._id, { remindersSent: [...sent, "review_3d"] });
+          console.log(`[Cron] review_3d → ${app._id}`);
+        }
+      }
+
+      // ── 4. Points de situation pendant la chasse (slot_hunting) ──────────────
+      if (app.status === "slot_hunting") {
+        const ageDays = (now - app.updatedAt) / D;
+
+        const weekChecks: Array<{ days: number; key: string; week: number }> = [
+          { days: 7,  key: "hunt_w1", week: 1 },
+          { days: 14, key: "hunt_w2", week: 2 },
+          { days: 21, key: "hunt_w3", week: 3 },
+          { days: 28, key: "hunt_w4", week: 4 },
+        ];
+
+        for (const wc of weekChecks) {
+          if (ageDays >= wc.days && !sent.includes(wc.key)) {
+            await ctx.scheduler.runAfter(0, internal.emails.sendSlotHuntingUpdateClient, {
+              to: app.userEmail,
+              applicantName: app.applicantName,
+              destination: app.destination,
+              applicationId: app._id,
+              daysHunting: Math.round(ageDays),
+              weekNumber: wc.week,
+            });
+            await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), wc.key] });
+            console.log(`[Cron] ${wc.key} → ${app._id}`);
+            break; // une seule relance par passage de cron
+          }
+        }
+      }
+
+      // ── 5. Relances prime de succès (créneau trouvé mais prime non payée) ────
       if (
         app.status === "slot_found_awaiting_success_fee" &&
-        app.userEmail &&
         app.slotExpiresAt &&
         app.appointmentDetails?.date
       ) {
-        const slotFoundAt = app.updatedAt; // updatedAt = moment où le créneau a été enregistré
-        const ageMs = now - slotFoundAt;
-        const ageHours = ageMs / H;
-        const sent = app.remindersSent ?? [];
+        const ageHours = (now - app.updatedAt) / H;
 
-        // Relance 1 : après 6h
         if (ageHours >= 6 && !sent.includes("slot_6h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendSuccessFeeReminderClient, {
             to: app.userEmail,
@@ -81,13 +154,10 @@ export const sendDueReminders = internalMutation({
             slotExpiresAt: app.slotExpiresAt,
             reminderNumber: 1,
           });
-          await ctx.db.patch(app._id, {
-            remindersSent: [...sent, "slot_6h"],
-          });
-          console.log(`[Cron] Relance slot_6h → ${app._id} (${app.applicantName})`);
+          await ctx.db.patch(app._id, { remindersSent: [...sent, "slot_6h"] });
+          console.log(`[Cron] slot_6h → ${app._id}`);
         }
 
-        // Relance 2 : après 24h (urgente)
         if (ageHours >= 24 && !sent.includes("slot_24h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendSuccessFeeReminderClient, {
             to: app.userEmail,
@@ -102,13 +172,10 @@ export const sendDueReminders = internalMutation({
             slotExpiresAt: app.slotExpiresAt,
             reminderNumber: 2,
           });
-          await ctx.db.patch(app._id, {
-            remindersSent: [...(app.remindersSent ?? []), "slot_24h"],
-          });
-          console.log(`[Cron] Relance slot_24h → ${app._id} (${app.applicantName})`);
+          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "slot_24h"] });
+          console.log(`[Cron] slot_24h → ${app._id}`);
         }
 
-        // Relance 3 : à 36h (dernière chance, 12h avant expiration)
         if (ageHours >= 36 && !sent.includes("slot_36h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendSuccessFeeReminderClient, {
             to: app.userEmail,
@@ -123,17 +190,42 @@ export const sendDueReminders = internalMutation({
             slotExpiresAt: app.slotExpiresAt,
             reminderNumber: 3,
           });
-          await ctx.db.patch(app._id, {
-            remindersSent: [...(app.remindersSent ?? []), "slot_36h"],
-          });
-          console.log(`[Cron] Relance slot_36h → ${app._id} (${app.applicantName})`);
+          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "slot_36h"] });
+          console.log(`[Cron] slot_36h → ${app._id}`);
         }
       }
+    }
+
+    // ── 6. Re-engagement utilisateurs sans aucun dossier ─────────────────────
+    const allUsers = await ctx.db.query("users").collect();
+    for (const user of allUsers) {
+      if (!user.email || user.role === "admin") continue;
+      const ageDays = (now - user.createdAt) / D;
+      if (ageDays < 3) continue; // trop tôt
+
+      const userSent = user.remindersSent ?? [];
+      if (userSent.includes("no_app_3d")) continue; // déjà envoyé
+
+      // Vérifier si l'utilisateur a au moins un dossier
+      const apps = await ctx.db
+        .query("applications")
+        .withIndex("by_user", (q) => q.eq("userId", user.clerkId))
+        .first();
+
+      if (apps !== null) continue; // a déjà un dossier
+
+      await ctx.scheduler.runAfter(0, internal.emails.sendReEngagementNoApplicationClient, {
+        to: user.email,
+        firstName: user.firstName,
+        daysSinceSignup: Math.round(ageDays),
+      });
+      await ctx.db.patch(user._id, { remindersSent: [...userSent, "no_app_3d"] });
+      console.log(`[Cron] no_app_3d → user ${user._id} (${user.email})`);
     }
   },
 });
 
-// ── Planification : toutes les heures ─────────────────────────────────────────
+// ── Planification : toutes les heures (à :15) ─────────────────────────────────
 const crons = cronJobs();
 crons.hourly("send-due-reminders", { minuteUTC: 15 }, internal.crons.sendDueReminders);
 
