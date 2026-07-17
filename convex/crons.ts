@@ -1,6 +1,7 @@
 import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { CONTRACT_VERSION } from "./contracts";
 
 const H = 3_600_000;
 const D = 24 * H;
@@ -196,23 +197,71 @@ export const sendDueReminders = internalMutation({
       }
     }
 
-    // ── 6. Re-engagement utilisateurs sans aucun dossier ─────────────────────
+    // ── 6. Relances contrat non signé + re-engagement sans dossier ───────────
     const allUsers = await ctx.db.query("users").collect();
     for (const user of allUsers) {
       if (!user.email || user.role === "admin") continue;
       const ageDays = (now - user.createdAt) / D;
-      if (ageDays < 3) continue; // trop tôt
-
       const userSent = user.remindersSent ?? [];
-      if (userSent.includes("no_app_3d")) continue; // déjà envoyé
 
-      // Vérifier si l'utilisateur a au moins un dossier
-      const apps = await ctx.db
+      // ── 6a. Relances contrat non signé ──────────────────────────────────────
+      // Cherche une signature pour le contrat courant (le userId peut avoir
+      // plusieurs formats selon la méthode de connexion).
+      const sigVariants = [
+        user.clerkId,
+        `https://clerk.joventy.cd|${user.clerkId}`,
+        `https://active-midge-3.clerk.accounts.dev|${user.clerkId}`,
+      ];
+      let hasSigned = false;
+      for (const variant of sigVariants) {
+        const sig = await ctx.db
+          .query("contractSignatures")
+          .withIndex("by_user_version", (q) =>
+            q.eq("userId", variant).eq("contractVersion", CONTRACT_VERSION)
+          )
+          .first();
+        if (sig) { hasSigned = true; break; }
+      }
+
+      if (!hasSigned) {
+        // Relance 1 : J+3
+        if (ageDays >= 3 && !userSent.includes("contract_3d")) {
+          await ctx.scheduler.runAfter(0, internal.emails.sendContractReminderClient, {
+            to: user.email,
+            firstName: user.firstName,
+            daysSinceSignup: Math.round(ageDays),
+            reminderNumber: 1,
+          });
+          const next = [...userSent, "contract_3d"];
+          await ctx.db.patch(user._id, { remindersSent: next });
+          userSent.push("contract_3d");
+          console.log(`[Cron] contract_3d → user ${user._id} (${user.email})`);
+        }
+
+        // Relance 2 : J+7 (urgente)
+        if (ageDays >= 7 && !userSent.includes("contract_7d")) {
+          await ctx.scheduler.runAfter(0, internal.emails.sendContractReminderClient, {
+            to: user.email,
+            firstName: user.firstName,
+            daysSinceSignup: Math.round(ageDays),
+            reminderNumber: 2,
+          });
+          await ctx.db.patch(user._id, { remindersSent: [...userSent, "contract_7d"] });
+          userSent.push("contract_7d");
+          console.log(`[Cron] contract_7d → user ${user._id} (${user.email})`);
+        }
+      }
+
+      // ── 6b. Re-engagement utilisateurs sans aucun dossier ───────────────────
+      if (ageDays < 3) continue;
+      if (userSent.includes("no_app_3d")) continue;
+
+      const firstApp = await ctx.db
         .query("applications")
         .withIndex("by_user", (q) => q.eq("userId", user.clerkId))
         .first();
 
-      if (apps !== null) continue; // a déjà un dossier
+      if (firstApp !== null) continue; // a déjà un dossier
 
       await ctx.scheduler.runAfter(0, internal.emails.sendReEngagementNoApplicationClient, {
         to: user.email,

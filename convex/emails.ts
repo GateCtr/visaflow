@@ -899,6 +899,69 @@ export const sendSpainOtpGuideClient = internalAction({
   },
 });
 
+/* ─────────────── R0. RELANCE SIGNATURE CONTRAT → CLIENT ─── */
+export const sendContractReminderClient = internalAction({
+  args: {
+    to: v.string(),
+    firstName: v.optional(v.string()),
+    daysSinceSignup: v.number(),
+    reminderNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const prenom = args.firstName ? escHtml(args.firstName) : "là";
+    const isUrgent = args.reminderNumber >= 2;
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        ${isUrgent ? "⚠️ Action requise — Contrat non signé" : "📝 Rappel — Votre contrat vous attend"}
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Bonjour <strong>${prenom !== "là" ? prenom : ""}</strong>${prenom !== "là" ? ",<br/><br/>" : "<br/><br/>"}
+        ${isUrgent
+          ? `Votre compte Joventy est actif depuis <strong>${args.daysSinceSignup} jours</strong>, mais votre contrat de prestation de services n'a <strong>pas encore été signé</strong>.<br/><br/>Sans signature, votre dossier ne pourra pas être traité — c'est une étape indispensable.`
+          : `Pour activer pleinement votre espace et permettre à notre équipe de traiter votre dossier, il vous reste une dernière étape : <strong>signer votre contrat de prestation de services</strong>.<br/><br/>La signature est entièrement en ligne et prend moins d'une minute.`
+        }
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Ce que couvre votre contrat</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Engagement de Joventy à traiter votre demande</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Conditions tarifaires et modalités de paiement</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Politique de remboursement et de confidentialité</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Responsabilités et délais de traitement</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      ${isUrgent ? urgentBanner("Sans signature de contrat, aucun dossier ne peut être ouvert ni traité par notre équipe.") : ""}
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+            <p style="margin:0;color:#64748b;font-size:13px;line-height:1.8;">
+              🖊&nbsp; Signature électronique sécurisée — aucun papier à imprimer<br/>
+              ⏱&nbsp; Moins d'une minute pour compléter<br/>
+              🔒&nbsp; Vos données sont protégées conformément au RGPD
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${cta(`${APP_URL}/dashboard/contrat`, "Signer mon contrat maintenant")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Des questions sur le contrat ? Écrivez-nous via WhatsApp au <strong>+243 840 808 122</strong> ou via la messagerie de votre espace.
+      </p>
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `${isUrgent ? "⚠️ Action requise" : "📝 Rappel"} — Votre contrat Joventy n'est pas encore signé`,
+      html: htmlWrapper("Signature de contrat — Joventy", body),
+    });
+  },
+});
+
 /* ─────────────── R1. RELANCE DOCUMENTS EN ATTENTE → CLIENT ─── */
 export const sendDocumentsPendingReminderClient = internalAction({
   args: {
