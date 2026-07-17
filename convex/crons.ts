@@ -17,11 +17,27 @@ export const sendDueReminders = internalMutation({
       const sent = app.remindersSent ?? [];
 
       // ── 1. Relances frais d'engagement (dossier créé mais non payé) ──────────
+      // Règle : on n'envoie qu'UNE relance par passage. Si l'utilisateur atteint
+      // directement le seuil J+2, on saute J+1 et on envoie uniquement l'urgente.
       if (app.status === "awaiting_engagement_payment") {
         const ageHours = (now - app._creationTime) / H;
 
-        // Relance 1 : après 24h
-        if (ageHours >= 24 && !sent.includes("engagement_24h")) {
+        if (ageHours >= 48 && !sent.includes("engagement_48h")) {
+          // Saut de palier : marque la première comme traitée pour ne pas la renvoyer ensuite
+          const nextSent = [...new Set([...sent, "engagement_24h", "engagement_48h"])];
+          await ctx.scheduler.runAfter(0, internal.emails.sendPaymentReminderClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            destination: app.destination,
+            visaType: app.visaType,
+            engagementFee: app.priceDetails?.engagementFee ?? (app.price ?? 0),
+            applicationId: app._id,
+            hoursElapsed: Math.round(ageHours),
+            reminderNumber: 2,
+          });
+          await ctx.db.patch(app._id, { remindersSent: nextSent });
+          console.log(`[Cron] engagement_48h (saut palier si besoin) → ${app._id}`);
+        } else if (ageHours >= 24 && !sent.includes("engagement_24h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendPaymentReminderClient, {
             to: app.userEmail,
             applicantName: app.applicantName,
@@ -35,31 +51,27 @@ export const sendDueReminders = internalMutation({
           await ctx.db.patch(app._id, { remindersSent: [...sent, "engagement_24h"] });
           console.log(`[Cron] engagement_24h → ${app._id}`);
         }
-
-        // Relance 2 : après 48h (urgente)
-        if (ageHours >= 48 && !sent.includes("engagement_48h")) {
-          await ctx.scheduler.runAfter(0, internal.emails.sendPaymentReminderClient, {
-            to: app.userEmail,
-            applicantName: app.applicantName,
-            destination: app.destination,
-            visaType: app.visaType,
-            engagementFee: app.priceDetails?.engagementFee ?? (app.price ?? 0),
-            applicationId: app._id,
-            hoursElapsed: Math.round(ageHours),
-            reminderNumber: 2,
-          });
-          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "engagement_48h"] });
-          console.log(`[Cron] engagement_48h → ${app._id}`);
-        }
       }
 
       // ── 2. Relances documents en attente ──────────────────────────────────────
+      // Même règle : une seule relance par passage, saut de palier si nécessaire.
       if (app.status === "documents_pending") {
-        // updatedAt = moment où l'engagement a été validé (statut changé)
         const ageHours = (now - app.updatedAt) / H;
 
-        // Relance 1 : après 48h
-        if (ageHours >= 48 && !sent.includes("docs_48h")) {
+        if (ageHours >= 120 && !sent.includes("docs_5d")) {
+          // Saut de palier : pas de double email le même jour
+          const nextSent = [...new Set([...sent, "docs_48h", "docs_5d"])];
+          await ctx.scheduler.runAfter(0, internal.emails.sendDocumentsPendingReminderClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            destination: app.destination,
+            applicationId: app._id,
+            daysElapsed: Math.round(ageHours / 24),
+            reminderNumber: 2,
+          });
+          await ctx.db.patch(app._id, { remindersSent: nextSent });
+          console.log(`[Cron] docs_5d (saut palier si besoin) → ${app._id}`);
+        } else if (ageHours >= 48 && !sent.includes("docs_48h")) {
           await ctx.scheduler.runAfter(0, internal.emails.sendDocumentsPendingReminderClient, {
             to: app.userEmail,
             applicantName: app.applicantName,
@@ -70,20 +82,6 @@ export const sendDueReminders = internalMutation({
           });
           await ctx.db.patch(app._id, { remindersSent: [...sent, "docs_48h"] });
           console.log(`[Cron] docs_48h → ${app._id}`);
-        }
-
-        // Relance 2 : après 5 jours (urgente)
-        if (ageHours >= 120 && !sent.includes("docs_5d")) {
-          await ctx.scheduler.runAfter(0, internal.emails.sendDocumentsPendingReminderClient, {
-            to: app.userEmail,
-            applicantName: app.applicantName,
-            destination: app.destination,
-            applicationId: app._id,
-            daysElapsed: Math.round(ageHours / 24),
-            reminderNumber: 2,
-          });
-          await ctx.db.patch(app._id, { remindersSent: [...(app.remindersSent ?? []), "docs_5d"] });
-          console.log(`[Cron] docs_5d → ${app._id}`);
         }
       }
 
@@ -224,31 +222,31 @@ export const sendDueReminders = internalMutation({
       }
 
       if (!hasSigned) {
-        // Relance 1 : J+3
-        if (ageDays >= 3 && !userSent.includes("contract_3d")) {
-          await ctx.scheduler.runAfter(0, internal.emails.sendContractReminderClient, {
-            to: user.email,
-            firstName: user.firstName,
-            daysSinceSignup: Math.round(ageDays),
-            reminderNumber: 1,
-          });
-          const next = [...userSent, "contract_3d"];
-          await ctx.db.patch(user._id, { remindersSent: next });
-          userSent.push("contract_3d");
-          console.log(`[Cron] contract_3d → user ${user._id} (${user.email})`);
-        }
-
-        // Relance 2 : J+7 (urgente)
+        // Une seule relance par passage — saut de palier pour les utilisateurs
+        // existants qui dépassent J+7 dès le premier contrôle.
         if (ageDays >= 7 && !userSent.includes("contract_7d")) {
+          // Marque aussi contract_3d pour ne pas l'envoyer au prochain passage
+          const nextSent = [...new Set([...userSent, "contract_3d", "contract_7d"])];
           await ctx.scheduler.runAfter(0, internal.emails.sendContractReminderClient, {
             to: user.email,
             firstName: user.firstName,
             daysSinceSignup: Math.round(ageDays),
             reminderNumber: 2,
           });
-          await ctx.db.patch(user._id, { remindersSent: [...userSent, "contract_7d"] });
-          userSent.push("contract_7d");
-          console.log(`[Cron] contract_7d → user ${user._id} (${user.email})`);
+          await ctx.db.patch(user._id, { remindersSent: nextSent });
+          userSent.length = 0; userSent.push(...nextSent); // sync local ref
+          console.log(`[Cron] contract_7d (saut palier si besoin) → ${user.email}`);
+        } else if (ageDays >= 3 && !userSent.includes("contract_3d")) {
+          const nextSent = [...userSent, "contract_3d"];
+          await ctx.scheduler.runAfter(0, internal.emails.sendContractReminderClient, {
+            to: user.email,
+            firstName: user.firstName,
+            daysSinceSignup: Math.round(ageDays),
+            reminderNumber: 1,
+          });
+          await ctx.db.patch(user._id, { remindersSent: nextSent });
+          userSent.length = 0; userSent.push(...nextSent);
+          console.log(`[Cron] contract_3d → ${user.email}`);
         }
       }
 
