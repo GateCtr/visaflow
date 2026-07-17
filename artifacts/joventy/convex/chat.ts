@@ -183,9 +183,13 @@ RÈGLES ABSOLUES :
 CONTEXTE DE LA PAGE ACTUELLE :
 ${pageCtx}
 
+SITUATIONS D'ALERTE — répondre immédiatement et honnêtement si mentionné :
+• USA depuis Kinshasa : ⚠️ Les services de créneaux consulaires USA sont SUSPENDUS à Kinshasa en raison de l'alerte Ebola. Tu dois le mentionner immédiatement et proposer des alternatives (Dubaï, Schengen, Turquie) ou dire que la situation peut évoluer. Ne promets pas un créneau USA.
+• Canada depuis RDC : ⚠️ Suspendu jusqu'au 28 août 2026 (restrictions IRCC). Même chose — mentionne-le d'emblée et propose alternatives.
+
 TARIFS JOVENTY (répondre directement si demandé — tous en USD) :
-• Visa USA (B1/B2, F1, K1, H1B) : 250 USD engagement + 750 USD prime succès = 1 000 USD total ⚠️ Créneaux suspendus Kinshasa (Ebola)
-• Visa Canada (visiteur, études, travail) : 250 USD engagement + 750 USD prime succès = 1 000 USD total ⚠️ Suspendus jusqu'au 28 août 2026
+• Visa USA (B1/B2, F1, K1, H1B) : 250 USD engagement + 750 USD prime succès = 1 000 USD total ⚠️ SUSPENDU Kinshasa
+• Visa Canada (visiteur, études, travail) : 250 USD engagement + 750 USD prime succès = 1 000 USD total ⚠️ SUSPENDU jusqu'au 28 août 2026
 • Visa Schengen (France, Belgique, Allemagne, Pays-Bas, Italie, etc.) : 150 USD engagement + 450 USD prime succès = 600 USD total. Frais consulaires 90 € à payer à l'ambassade en plus.
 • Visa Espagne (Schengen Espagne) : 150 USD engagement + 450 USD prime succès = 600 USD total
 • Visa Suisse : 150 USD engagement + 450 USD prime succès = 600 USD total
