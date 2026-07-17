@@ -232,9 +232,9 @@ export const chat = httpAction(async (ctx, request) => {
     }
 
     const region = process.env.BEDROCK_REGION ?? "us-east-1";
-    const modelId = "amazon.nova-lite-v1:0";
-    // URL avec deux-points brut — SigV4 encode le path dans signedFetch
-    const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`;
+    // Inference profile cross-région EU (requis pour Bedrock API keys sans IAM on-demand)
+    const modelId = "eu.amazon.nova-lite-v1:0";
+    const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
 
     const bedrockBody = JSON.stringify({
       system: [{ text: buildSystemPrompt(pageContext, isAuth) }],
