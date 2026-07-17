@@ -64,40 +64,105 @@ function getConvexSiteUrl(): string {
   return cloudUrl?.replace(".convex.cloud", ".convex.site") ?? "";
 }
 
-/** Extrait les boutons CTA du texte Victor et retourne le texte nettoyé + boutons */
+/** Extrait les boutons CTA du texte Victor et retourne le texte nettoyé + boutons.
+ *  Supporte les deux formats que le modèle peut générer :
+ *    [CTA:Label:/chemin]  (format officiel)
+ *    [Label:/chemin]      (format alternatif sans préfixe CTA:)
+ *  Si un CTA est au milieu d'une phrase (du texte suit), le label est conservé
+ *  dans le texte pour éviter les phrases coupées.
+ */
 function parseCTAs(text: string): { clean: string; buttons: { label: string; href: string }[] } {
   const buttons: { label: string; href: string }[] = [];
-  const clean = text.replace(/\[CTA:([^\]|:]+):([^\]]+)\]/g, (_match, label, href) => {
-    buttons.push({ label: label.trim(), href: href.trim() });
-    return "";
-  }).trim();
+
+  // Regex : [CTA:Label:/path] ou [Label:/path] – le chemin doit commencer par /
+  const regex = /\[(?:CTA:)?([^\]|:\n]+):(\/[^\]\n]+)\]/g;
+
+  // Collecter tous les CTA avec leur position
+  const found: { match: string; label: string; href: string; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    found.push({ match: m[0], label: m[1].trim(), href: m[2].trim(), index: m.index });
+  }
+
+  // Traiter en ordre inverse pour préserver les indices lors du remplacement
+  let clean = text;
+  for (let i = found.length - 1; i >= 0; i--) {
+    const cta = found[i];
+    const afterCTA = text.slice(cta.index + cta.match.length).trim();
+    // Si du texte substantiel suit le CTA, conserver le label dans la phrase
+    const isAtEnd = /^[.!?…\s]*$/.test(afterCTA) || afterCTA === "";
+    const replacement = isAtEnd ? "" : cta.label;
+    clean = clean.slice(0, cta.index) + replacement + clean.slice(cta.index + cta.match.length);
+    // Ajouter le bouton (sans doublon sur le même href)
+    if (!buttons.find((b) => b.href === cta.href)) {
+      buttons.unshift({ label: cta.label, href: cta.href });
+    }
+  }
+
+  // Nettoyer espaces multiples et ponctuation orpheline en fin de texte
+  clean = clean.replace(/\s{2,}/g, " ").replace(/\s+([.,!?])/g, "$1").trim();
+
   return { clean, buttons };
 }
 
-/** Message d'ouverture contextualisé par page */
+/** Message d'ouverture contextualisé par page.
+ *  Pour les pages /guides/:slug, le slug est analysé pour adapter le message
+ *  au sujet exact du guide (rendez-vous Espagne, visa USA, etc.)
+ */
 function getOpeningMessage(page: string, isAuth: boolean): string {
   if (page === "/" || page === "") {
-    return "Bonjour ! Je suis Victor, conseiller Joventy. En 30 secondes, dites-moi : pour quel pays souhaitez-vous obtenir un visa ?";
+    return "Bonjour ! Je suis Victor, conseiller Joventy. Vous cherchez un visa pour quelle destination ?";
   }
   if (page === "/prix") {
-    return "Je vois que vous comparez nos formules. Ce qui fait vraiment la différence ici, c'est notre taux d'acceptation à 94 %. Quelle destination vous intéresse ?";
+    return "Vous comparez nos formules ? Notre taux d'acceptation est à 94 %. Dites-moi la destination qui vous intéresse, je vous donne le tarif exact.";
   }
   if (page === "/audit-diagnostic") {
-    return "Vous souhaitez faire le point sur votre dossier ? Dites-moi votre destination et votre situation actuelle — je vous donne une évaluation précise en 2 minutes.";
+    return "Vous voulez faire le point sur votre situation ? Dites-moi la destination et où vous en êtes — je vous donne une évaluation précise.";
   }
   if (page === "/dashboard/contrat") {
-    return "Votre contrat n'est pas encore signé. C'est la seule chose qui bloque le démarrage de votre dossier. Voulez-vous que je vous guide en 2 minutes ?";
+    return "Votre contrat n'est pas encore signé — c'est le seul blocage avant le démarrage. Je vous guide en 2 minutes ?";
   }
-  if (isAuth) {
-    return "Bienvenue ! Votre compte est prêt. Il ne manque plus que votre dossier pour commencer. Par où souhaitez-vous partir ?";
+  if (page === "/dashboard/applications/new") {
+    return "Vous ouvrez un nouveau dossier. Quelle destination ? Je vous explique ce qu'il faut préparer.";
   }
+
+  // Pages guides : adapter au slug
   if (page.startsWith("/guides")) {
-    return "Ce guide vous intéresse ? Je peux vous donner les informations spécifiques à votre situation. Quel est votre pays de destination ?";
+    const slug = page.replace("/guides/", "").toLowerCase();
+
+    if (slug.includes("espagne") || slug.includes("spain") || slug.includes("cev")) {
+      return "Vous cherchez à obtenir un RDV pour l'Espagne ? La première étape c'est l'email à l'ambassade. Vous l'avez déjà envoyé ?";
+    }
+    if (slug.includes("usa") || slug.includes("etats-unis") || slug.includes("amerique")) {
+      return "Attention — les créneaux USA sont suspendus à Kinshasa (alerte Ebola en cours). Je peux vous proposer des alternatives si vous le souhaitez.";
+    }
+    if (slug.includes("canada")) {
+      return "Les services Canada sont suspendus jusqu'au 28 août 2026 (restrictions IRCC). On peut regarder des alternatives en attendant ?";
+    }
+    if (slug.includes("schengen") || slug.includes("france") || slug.includes("belgique") || slug.includes("allemagne")) {
+      return "Vous vous renseignez sur le visa Schengen ? C'est notre spécialité — 94 % d'acceptation. Quel pays Schengen vous intéresse ?";
+    }
+    if (slug.includes("dubai") || slug.includes("eau") || slug.includes("emirats")) {
+      return "L'e-Visa Dubaï c'est rapide — 48 à 72h. Vous en êtes où dans votre démarche ?";
+    }
+    if (slug.includes("rendezvous") || slug.includes("rendez-vous") || slug.includes("creneau") || slug.includes("créneau")) {
+      return "Vous cherchez un créneau consulaire ? Dites-moi pour quelle ambassade, je vous explique comment ça marche.";
+    }
+    // Guide générique
+    return "Ce guide vous intéresse ? Dites-moi votre situation concrète, je vous oriente directement.";
   }
+
+  // Pages destinations/ambassades
   if (page.startsWith("/ambassade") || page.startsWith("/destinations")) {
-    return "Vous vous renseignez sur cette destination ? Dites-moi votre nationalité et le type de visa — je vous donne les vraies informations en direct.";
+    return "Vous vous renseignez sur cette destination ? Dites-moi votre type de visa et je vous donne les vraies informations.";
   }
-  return "Bonjour ! Je suis Victor, conseiller Joventy. Comment puis-je vous aider aujourd'hui ?";
+
+  // Dashboard authentifié
+  if (page.startsWith("/dashboard") && isAuth) {
+    return "Besoin d'aide sur votre dossier ? Je suis là.";
+  }
+
+  return "Bonjour, je suis Victor. Comment puis-je vous aider ?";
 }
 
 /** Délai avant ouverture automatique selon la page */
