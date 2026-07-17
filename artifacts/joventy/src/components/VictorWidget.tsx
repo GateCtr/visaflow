@@ -115,12 +115,23 @@ function getConvexSiteUrl(): string {
  */
 function parseCTAs(text: string): { clean: string; buttons: { label: string; href: string }[] } {
   const buttons: { label: string; href: string }[] = [];
-  const regex = /\[(?:CTA:)?([^\]|:\n]+):(\/[^\]\n]+)\]/g;
+
+  // Regex robuste :
+  //   [CTA:Label:/path]        format strict
+  //   [CTA:Label : /path]      avec espaces autour du séparateur (Claude en produit parfois)
+  //   [Label:/path]            sans préfixe CTA:
+  // Le quantifier lazy +? + \s* gère les espaces avant le séparateur (:)
+  // Le \s* après le séparateur absorbe les espaces avant le path (/ ...)
+  const regex = /\[(?:CTA:)?([^\]|:\n]+?)\s*:\s*(\/[^\]\n]+?)\s*\]/g;
 
   const found: { match: string; label: string; href: string; index: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = regex.exec(text)) !== null) {
-    found.push({ match: m[0], label: m[1].trim(), href: m[2].trim(), index: m.index });
+    const label = m[1].trim();
+    const href = m[2].trim();
+    // Ignorer si le href ne ressemble pas à un chemin valide
+    if (!href.startsWith("/")) continue;
+    found.push({ match: m[0], label, href, index: m.index });
   }
 
   let clean = text;
@@ -135,7 +146,14 @@ function parseCTAs(text: string): { clean: string; buttons: { label: string; hre
     }
   }
 
-  clean = clean.replace(/\s{2,}/g, " ").replace(/\s+([.,!?])/g, "$1").trim();
+  // Cleanup : préserver les sauts de ligne (\n) pour le rendu par paragraphes
+  // Ne collapsons QUE les espaces horizontaux — pas les \n
+  clean = clean
+    .replace(/[^\S\n]{2,}/g, " ")        // espaces multiples → un seul (sans toucher \n)
+    .replace(/\n{3,}/g, "\n\n")           // max 2 sauts de ligne consécutifs
+    .replace(/[^\S\n]+([.,!?])/g, "$1")  // supprimer espaces avant ponctuation
+    .trim();
+
   return { clean, buttons };
 }
 
