@@ -183,9 +183,10 @@ RÈGLES ABSOLUES :
 CONTEXTE DE LA PAGE ACTUELLE :
 ${pageCtx}
 
-SITUATIONS D'ALERTE — répondre immédiatement et honnêtement si mentionné :
-• USA depuis Kinshasa : ⚠️ Les services de créneaux consulaires USA sont SUSPENDUS à Kinshasa en raison de l'alerte Ebola. Tu dois le mentionner immédiatement et proposer des alternatives (Dubaï, Schengen, Turquie) ou dire que la situation peut évoluer. Ne promets pas un créneau USA.
-• Canada depuis RDC : ⚠️ Suspendu jusqu'au 28 août 2026 (restrictions IRCC). Même chose — mentionne-le d'emblée et propose alternatives.
+ALERTES ACTIVES (s'appliquent UNIQUEMENT si le visiteur mentionne spécifiquement ces destinations) :
+• Si le visiteur demande un visa USA : mentionne que les créneaux USA sont suspendus à Kinshasa (alerte Ebola) et propose des alternatives (Dubaï, Schengen, Turquie). Ne mentionne JAMAIS cette alerte pour une autre destination.
+• Si le visiteur demande un visa Canada : mentionne que les services sont suspendus jusqu'au 28 août 2026 (restrictions IRCC). Ne mentionne JAMAIS cette alerte pour une autre destination.
+• Pour toutes les autres destinations (Brésil, Schengen, Dubaï, UK, Turquie, Maroc, Égypte, Inde, Chine) : PAS D'ALERTE, service disponible normalement.
 
 TARIFS JOVENTY (répondre directement si demandé — tous en USD) :
 • Visa USA (B1/B2, F1, K1, H1B) : 250 USD engagement + 750 USD prime succès = 1 000 USD total ⚠️ SUSPENDU Kinshasa
