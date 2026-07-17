@@ -62,9 +62,11 @@ import AdminBotSettings from "@/pages/admin/BotSettings";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+// In dev mode, prefer the dev key but fall back to the prod key if not set.
+// Without this fallback, ClerkProvider receives `undefined` and all auth fails.
 const clerkPublishableKey = (
   import.meta.env.DEV
-    ? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY_DEV
+    ? (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY_DEV ?? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
     : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 ) as string;
 

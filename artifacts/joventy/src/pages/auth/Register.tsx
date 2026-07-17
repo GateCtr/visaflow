@@ -165,15 +165,28 @@ export default function Register() {
 
       if (verifyErr) { setError(verifyErr.longMessage || verifyErr.message); return; }
 
+      // Auto-fill any non-interactive required fields (username, legal, name)
       if (signUp.status === "missing_requirements") {
         const missing = signUp.missingFields ?? [];
-        const updates: Record<string, string> = {};
-        if (missing.includes("username")) {
-          updates.username = "user_" + Math.random().toString(36).slice(2, 10);
-        }
+        const updates: Record<string, unknown> = {};
+        if (missing.includes("username"))      updates.username = "user_" + Math.random().toString(36).slice(2, 10);
+        if (missing.includes("legal_accepted")) updates.legalAccepted = true;
+        if (missing.includes("first_name"))    updates.firstName = firstName || "Utilisateur";
+        if (missing.includes("last_name"))     updates.lastName = lastName || "Joventy";
+
         if (Object.keys(updates).length > 0) {
-          const { error: updateErr } = await signUp.update(updates);
+          const { error: updateErr } = await signUp.update(updates as Parameters<typeof signUp.update>[0]);
           if (updateErr) { setError(updateErr.longMessage || updateErr.message); return; }
+        }
+
+        // If Clerk still has unhandled missing fields, surface them clearly
+        if (signUp.status === "missing_requirements") {
+          const known = ["username", "legal_accepted", "first_name", "last_name"];
+          const unhandled = (signUp.missingFields ?? []).filter((f) => !known.includes(f));
+          if (unhandled.length > 0) {
+            setError(`Champ(s) requis non géré(s) : ${unhandled.join(", ")}. Vérifiez la configuration dans Clerk Dashboard.`);
+            return;
+          }
         }
       }
 
@@ -181,6 +194,9 @@ export default function Register() {
         setStep("done");
         await signUp.finalize();
         setLocation("/dashboard");
+      } else {
+        // Unexpected state — give feedback rather than silently hanging
+        setError("Une erreur est survenue lors de la finalisation du compte. Veuillez réessayer.");
       }
     } catch (e: any) {
       setError(e?.errors?.[0]?.message || "Code invalide ou expiré");
@@ -545,11 +561,15 @@ export default function Register() {
                         if (!signUp) return;
                         try {
                           if (method === "phone") {
-                            await signUp.verifications.sendPhoneCode();
+                            const { error: resendErr } = await signUp.verifications.sendPhoneCode();
+                            if (resendErr) setError(resendErr.longMessage || resendErr.message);
                           } else {
-                            await signUp.verifications.sendEmailCode();
+                            const { error: resendErr } = await signUp.verifications.sendEmailCode();
+                            if (resendErr) setError(resendErr.longMessage || resendErr.message);
                           }
-                        } catch {}
+                        } catch (e: any) {
+                          setError(e?.errors?.[0]?.message || "Impossible de renvoyer le code.");
+                        }
                       }}
                       className="font-semibold text-primary hover:text-accent transition-colors"
                     >

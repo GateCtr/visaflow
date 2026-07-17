@@ -54,7 +54,7 @@ const OAUTH_STRATEGIES = [
 ];
 
 type Method = "email-password" | "phone";
-type Step = "credentials" | "otp";
+type Step = "credentials" | "otp" | "forgot-email" | "forgot-otp" | "forgot-new-password";
 
 export default function Login() {
   const { signIn } = useSignIn();
@@ -71,6 +71,12 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingOAuth, setLoadingOAuth] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // --- Forgot password state ---
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const handleOAuth = async (strategy: "oauth_google" | "oauth_apple" | "oauth_facebook", isDisabled?: boolean) => {
     if (isDisabled) return;
@@ -124,6 +130,68 @@ export default function Login() {
       }
     } catch (e: any) {
       setError(e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || "Identifiants incorrects");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ---- FORGOT PASSWORD : step 1 — identifier le compte, envoyer le code ---- */
+  const handleForgotSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signIn) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      // Identify the account first (no strategy = just lookup)
+      const { error: createErr } = await signIn.create({ identifier: resetEmail });
+      if (createErr) { setError(createErr.longMessage || createErr.message); return; }
+      // Then send the reset code via email
+      const { error: sendErr } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendErr) { setError(sendErr.longMessage || sendErr.message); return; }
+      setStep("forgot-otp");
+    } catch (e: any) {
+      setError(e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || "Aucun compte trouvé avec cet email.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ---- FORGOT PASSWORD : step 2 — vérifier le code ---- */
+  const handleForgotVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signIn) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      const { error: err } = await signIn.resetPasswordEmailCode.verifyCode({ code: resetCode });
+      if (err) { setError(err.longMessage || err.message); return; }
+      // After verification, signIn.status becomes 'needs_new_password'
+      setStep("forgot-new-password");
+    } catch (e: any) {
+      setError(e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || "Code invalide ou expiré.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ---- FORGOT PASSWORD : step 3 — définir le nouveau mot de passe ---- */
+  const handleForgotSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signIn) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      const { error: err } = await signIn.resetPasswordEmailCode.submitPassword({
+        password: newPassword,
+        signOutOfOtherSessions: true,
+      });
+      if (err) { setError(err.longMessage || err.message); return; }
+      if (signIn.status === "complete") {
+        await signIn.finalize();
+        setLocation("/dashboard");
+      }
+    } catch (e: any) {
+      setError(e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || "Erreur lors de la mise à jour du mot de passe.");
     } finally {
       setIsLoading(false);
     }
@@ -342,7 +410,11 @@ export default function Login() {
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-sm font-medium text-primary">Mot de passe</label>
-                      <button type="button" className="text-xs text-secondary hover:text-secondary/70 font-medium transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => { setResetEmail(email); setStep("forgot-email"); setError(""); }}
+                        className="text-xs text-secondary hover:text-secondary/70 font-medium transition-colors"
+                      >
                         Mot de passe oublié ?
                       </button>
                     </div>
@@ -413,7 +485,7 @@ export default function Login() {
                 </Link>
               </p>
             </>
-          ) : (
+          ) : step === "otp" ? (
             /* OTP Step */
             <>
               <div className="mb-8">
@@ -468,7 +540,121 @@ export default function Login() {
                 </button>
               </form>
             </>
-          )}
+
+          ) : step === "forgot-email" ? (
+            /* FORGOT PASSWORD — step 1 : saisie email */
+            <>
+              <div className="mb-8">
+                <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4">
+                  <KeyRound className="w-7 h-7 text-secondary" />
+                </div>
+                <h2 className="text-3xl font-serif font-bold text-primary">Mot de passe oublié</h2>
+                <p className="mt-2 text-slate-500">Entrez votre email pour recevoir un code de réinitialisation.</p>
+              </div>
+              <form onSubmit={handleForgotSendCode} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-primary mb-1.5">Adresse email</label>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="vous@exemple.com"
+                    required
+                    autoFocus
+                    className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
+                  />
+                </div>
+                {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 rounded-xl bg-primary hover:bg-primary/85 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Envoyer le code <ArrowRight className="w-4 h-4" /></>}
+                </button>
+                <button type="button" onClick={() => { setStep("credentials"); setError(""); }} className="w-full text-sm text-slate-500 hover:text-primary transition-colors">← Retour</button>
+              </form>
+            </>
+
+          ) : step === "forgot-otp" ? (
+            /* FORGOT PASSWORD — step 2 : saisie du code reçu par email */
+            <>
+              <div className="mb-8">
+                <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4">
+                  <Mail className="w-7 h-7 text-secondary" />
+                </div>
+                <h2 className="text-3xl font-serif font-bold text-primary">Vérification</h2>
+                <p className="mt-2 text-slate-500">
+                  Un code a été envoyé à <span className="font-semibold text-primary">{resetEmail}</span>
+                </p>
+              </div>
+              <form onSubmit={handleForgotVerifyCode} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-primary mb-1.5">Code de vérification</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    className="w-full h-14 px-4 rounded-xl border border-slate-200 bg-white text-primary text-center text-2xl font-mono tracking-[0.5em] placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
+                  />
+                </div>
+                {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+                <button
+                  type="submit"
+                  disabled={isLoading || resetCode.length < 6}
+                  className="w-full h-12 rounded-xl bg-primary hover:bg-primary/85 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Vérifier</>}
+                </button>
+                <button type="button" onClick={() => { setStep("forgot-email"); setResetCode(""); setError(""); }} className="w-full text-sm text-slate-500 hover:text-primary transition-colors">← Retour</button>
+              </form>
+            </>
+
+          ) : step === "forgot-new-password" ? (
+            /* FORGOT PASSWORD — step 3 : nouveau mot de passe */
+            <>
+              <div className="mb-8">
+                <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4">
+                  <Lock className="w-7 h-7 text-secondary" />
+                </div>
+                <h2 className="text-3xl font-serif font-bold text-primary">Nouveau mot de passe</h2>
+                <p className="mt-2 text-slate-500">Choisissez un nouveau mot de passe pour votre compte.</p>
+              </div>
+              <form onSubmit={handleForgotSetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-primary mb-1.5">Nouveau mot de passe</label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 8 caractères"
+                      required
+                      minLength={8}
+                      autoFocus
+                      className="w-full h-12 px-4 pr-12 rounded-xl border border-slate-200 bg-white text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
+                    />
+                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">{error}</div>}
+                <button
+                  type="submit"
+                  disabled={isLoading || newPassword.length < 8}
+                  className="w-full h-12 rounded-xl bg-primary hover:bg-primary/85 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Enregistrer et se connecter</>}
+                </button>
+              </form>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
