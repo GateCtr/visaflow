@@ -1,6 +1,7 @@
 /**
- * VictorWidget — Agent commercial IA Joventy
+ * VictorWidget — Agent commercial Joventy
  * Page-aware, toujours en français, mobile-first
+ * v2 : mémoire conversationnelle, animation bulle, notification au survol
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -16,6 +17,31 @@ interface Message {
   content: string;
   ts: number;
   ctaButtons?: { label: string; href: string }[];
+}
+
+interface HistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+// ─── Son de notification (Web Audio API — sans dépendance) ────────────────────
+
+function playNotificationChime() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.55);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.55);
+    setTimeout(() => ctx.close(), 700);
+  } catch { /* AudioContext non disponible */ }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,7 +105,17 @@ function getAutoOpenDelay(page: string): number | null {
   if (page === "/dashboard/contrat") return 0;
   if (page === "/prix") return 8_000;
   if (page === "/" || page === "") return 15_000;
-  return null; // pas d'ouverture automatique
+  return null;
+}
+
+/** Extrait l'historique conversationnel depuis les messages (exclut le message d'accueil) */
+function buildHistory(messages: Message[]): HistoryTurn[] {
+  // Exclure le premier message (greeting Victor) et garder max 12 tours
+  const relevant = messages.slice(1);
+  return relevant.slice(-12).map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.content,
+  }));
 }
 
 // ─── Composant principal ──────────────────────────────────────────────────────
@@ -96,9 +132,12 @@ export function VictorWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId] = useState(getSessionId);
   const [showBubblePulse, setShowBubblePulse] = useState(false);
+  const [showHoverTooltip, setShowHoverTooltip] = useState(false);
+  const [hoverSoundPlayed, setHoverSoundPlayed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hoverTooltipTimer = useRef<ReturnType<typeof setTimeout>>();
   const siteUrl = getConvexSiteUrl();
 
   // Scroll to bottom
@@ -139,10 +178,27 @@ export function VictorWidget() {
     setHasOpened(true);
     setIsOpen(true);
     setShowBubblePulse(false);
+    setShowHoverTooltip(false);
     const greeting = getOpeningMessage(location, !!user);
     const { clean, buttons } = parseCTAs(greeting);
     setMessages([{ role: "victor", content: clean, ts: Date.now(), ctaButtons: buttons }]);
   }, [hasOpened, messages.length, location, user]);
+
+  // Survol de la bulle : notification + son
+  const handleBubbleMouseEnter = useCallback(() => {
+    if (isOpen) return;
+    // Son une seule fois par session
+    if (!hoverSoundPlayed) {
+      playNotificationChime();
+      setHoverSoundPlayed(true);
+    }
+    clearTimeout(hoverTooltipTimer.current);
+    setShowHoverTooltip(true);
+  }, [isOpen, hoverSoundPlayed]);
+
+  const handleBubbleMouseLeave = useCallback(() => {
+    hoverTooltipTimer.current = setTimeout(() => setShowHoverTooltip(false), 300);
+  }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
@@ -153,6 +209,9 @@ export function VictorWidget() {
     setIsTyping(true);
 
     try {
+      // Construire l'historique conversationnel (sans le msg courant)
+      const history = buildHistory([...messages]);
+
       const res = await fetch(`${siteUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -161,6 +220,7 @@ export function VictorWidget() {
           sessionId,
           pageContext: location,
           isAuth: !!user,
+          history, // mémoire conversationnelle
         }),
       });
 
@@ -184,11 +244,10 @@ export function VictorWidget() {
     } finally {
       setIsTyping(false);
     }
-  }, [isTyping, siteUrl, sessionId, location, user]);
+  }, [isTyping, siteUrl, sessionId, location, user, messages]);
 
   const handleCTA = useCallback(
     async (label: string, href: string) => {
-      // Marquer comme convaincu
       try {
         await markConvinced({
           sessionId,
@@ -212,34 +271,64 @@ export function VictorWidget() {
 
   return (
     <>
-      {/* Bulle flottante */}
+      {/* ── Bulle flottante ── */}
       {!isOpen && (
-        <button
-          onClick={openWithGreeting}
-          aria-label="Parler à Victor, conseiller Joventy"
-          className={`
-            fixed bottom-5 right-5 z-50
-            w-14 h-14 rounded-full bg-primary shadow-xl
-            flex items-center justify-center
-            transition-transform duration-200 hover:scale-110 active:scale-95
-            ${showBubblePulse ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}
-          `}
-        >
-          <MessageCircle className="w-6 h-6 text-white" />
-          {showBubblePulse && (
-            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white" />
+        <div className="fixed bottom-5 right-5 z-50">
+          {/* Tooltip de survol */}
+          {showHoverTooltip && (
+            <div
+              className="
+                absolute bottom-16 right-0 mb-1
+                bg-white border border-border shadow-xl rounded-xl
+                px-3.5 py-2.5 text-sm text-primary font-medium
+                whitespace-nowrap pointer-events-none
+                animate-in fade-in slide-in-from-bottom-2 duration-200
+              "
+            >
+              <span className="text-base mr-1.5">👋</span>
+              Besoin d'aide pour votre visa ?
+              {/* Flèche */}
+              <span className="absolute -bottom-1.5 right-5 w-3 h-3 bg-white border-r border-b border-border rotate-45 block" />
+            </div>
           )}
-        </button>
+
+          {/* Anneaux d'animation */}
+          {showBubblePulse && (
+            <>
+              <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: "1.5s" }} />
+              <span className="absolute -inset-1 rounded-full border-2 border-primary/30 animate-pulse" />
+            </>
+          )}
+          {/* Anneau permanent subtil */}
+          <span className="absolute -inset-1 rounded-full border border-primary/20 animate-pulse" style={{ animationDuration: "3s" }} />
+
+          <button
+            onClick={openWithGreeting}
+            onMouseEnter={handleBubbleMouseEnter}
+            onMouseLeave={handleBubbleMouseLeave}
+            aria-label="Parler à Victor, conseiller Joventy"
+            className="
+              relative w-14 h-14 rounded-full bg-primary shadow-xl
+              flex items-center justify-center
+              transition-all duration-300
+              hover:scale-110 hover:shadow-primary/30 hover:shadow-2xl
+              active:scale-95
+            "
+          >
+            <MessageCircle className="w-6 h-6 text-white" />
+            {showBubblePulse && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-bounce" />
+            )}
+          </button>
+        </div>
       )}
 
-      {/* Panneau chat */}
+      {/* ── Panneau chat ── */}
       {isOpen && (
         <div
           className={`
             fixed z-50 bg-white shadow-2xl flex flex-col
-            /* Mobile : bottom sheet */
             bottom-0 left-0 right-0 h-[85dvh] rounded-t-2xl
-            /* Desktop : bulle fixe */
             sm:bottom-5 sm:right-5 sm:left-auto sm:w-[380px] sm:h-[560px] sm:rounded-2xl
             border border-border
             animate-in slide-in-from-bottom-4 duration-300
@@ -287,7 +376,6 @@ export function VictorWidget() {
                   >
                     {msg.content}
                   </div>
-                  {/* CTA Buttons */}
                   {msg.ctaButtons && msg.ctaButtons.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {msg.ctaButtons.map((btn, bi) => (

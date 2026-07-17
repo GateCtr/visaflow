@@ -236,9 +236,21 @@ export const chat = httpAction(async (ctx, request) => {
     const modelId = "eu.amazon.nova-lite-v1:0";
     const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
 
+    // Construire le fil de conversation avec mémoire
+    const historyRaw = (body as { history?: { role: string; content: string }[] }).history ?? [];
+    const conversationMessages = [
+      // Historique des échanges précédents (max 12 tours)
+      ...historyRaw.slice(-12).map((turn) => ({
+        role: turn.role === "user" ? "user" : "assistant",
+        content: [{ text: turn.content }],
+      })),
+      // Message courant
+      { role: "user", content: [{ text: message }] },
+    ];
+
     const bedrockBody = JSON.stringify({
       system: [{ text: buildSystemPrompt(pageContext, isAuth) }],
-      messages: [{ role: "user", content: [{ text: message }] }],
+      messages: conversationMessages,
       inferenceConfig: { maxTokens: 400, temperature: 0.72, topP: 0.9 },
     });
 
