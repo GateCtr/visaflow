@@ -1,12 +1,35 @@
 /**
  * Victor — HTTP action /api/chat
- * Modèle : amazon.nova-lite-v2:0 via AWS Bedrock
+ * Modèle : amazon.nova-lite-v1:0 via AWS Bedrock
+ *
+ * Auth supportée (priorité ordre) :
+ *   1. Bedrock API key (Bearer token) → var BEDROCK_API_KEY
+ *      Doc : https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-use.html
+ *   2. IAM credentials (SigV4) → AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY
+ *
  * Rate limiting, system prompt page-aware, tracking des conversations
  */
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
-// ─── AWS Signature V4 (Web Crypto — compatible Convex runtime) ────────────────
+// ─── Option 1 : Bearer token (Bedrock API key) ───────────────────────────────
+
+async function bedrockBearerFetch(
+  url: string,
+  body: string,
+  apiKey: string
+): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body,
+  });
+}
+
+// ─── Option 2 : AWS Signature V4 (IAM credentials) ───────────────────────────
 
 async function hmac(key: ArrayBuffer | string, data: string): Promise<ArrayBuffer> {
   const rawKey =
@@ -49,7 +72,15 @@ async function getSigningKey(
   return hmac(kService, "aws4_request");
 }
 
-async function signedFetch(
+// SigV4 canonical path : encode chaque segment sauf les unreserved chars
+function sigV4EncodePath(rawPath: string): string {
+  return rawPath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+}
+
+async function bedrockSigV4Fetch(
   url: string,
   body: string,
   accessKeyId: string,
@@ -58,16 +89,15 @@ async function signedFetch(
 ): Promise<Response> {
   const service = "bedrock";
   const now = new Date();
-  const amzDate =
-    now
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .replace(/\.\d{3}/, "") + "Z";
+  const amzDate = now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   const dateStamp = amzDate.substring(0, 8);
 
   const parsed = new URL(url);
   const host = parsed.hostname;
-  const path = parsed.pathname;
+  const path = sigV4EncodePath(parsed.pathname);
 
   const payloadHash = await sha256Hex(body);
   const canonicalHeaders = `content-type:application/json\nhost:${host}\nx-amz-date:${amzDate}\n`;
@@ -201,46 +231,41 @@ export const chat = httpAction(async (ctx, request) => {
       );
     }
 
-    // Credentials AWS
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const region = process.env.AWS_REGION ?? "us-east-1";
+    const region = process.env.BEDROCK_REGION ?? "us-east-1";
+    const modelId = "amazon.nova-lite-v1:0";
+    // URL avec deux-points brut — SigV4 encode le path dans signedFetch
+    const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`;
 
-    if (!accessKeyId || !secretKey) {
+    const bedrockBody = JSON.stringify({
+      system: [{ text: buildSystemPrompt(pageContext, isAuth) }],
+      messages: [{ role: "user", content: [{ text: message }] }],
+      inferenceConfig: { maxTokens: 400, temperature: 0.72, topP: 0.9 },
+    });
+
+    // ── Choisir la méthode d'auth ─────────────────────────────────────────────
+    const bedrockApiKey = process.env.BEDROCK_API_KEY;  // Bedrock API key (Bearer)
+    const accessKeyId   = process.env.AWS_ACCESS_KEY_ID;
+    const secretKey     = process.env.AWS_SECRET_ACCESS_KEY;
+
+    let bedrockRes: Response;
+
+    if (bedrockApiKey) {
+      // Priorité 1 : Bedrock API key (Bearer token)
+      console.log("Victor: auth via Bedrock API key (Bearer)");
+      bedrockRes = await bedrockBearerFetch(endpoint, bedrockBody, bedrockApiKey);
+    } else if (accessKeyId && secretKey) {
+      // Priorité 2 : IAM SigV4
+      console.log("Victor: auth via IAM SigV4");
+      bedrockRes = await bedrockSigV4Fetch(endpoint, bedrockBody, accessKeyId, secretKey.trim(), region);
+    } else {
+      console.error("Victor: aucune credential Bedrock configurée");
       return new Response(
         JSON.stringify({
-          text: "Je rencontre un problème technique momentané. Pouvez-vous me recontacter dans quelques instants ? Un assistant validateur peut également prendre la relève si vous le souhaitez.",
+          text: "Je rencontre un problème technique momentané. Un assistant validateur peut prendre la relève si vous le souhaitez.",
         }),
         { status: 200, headers: corsHeaders }
       );
     }
-
-    // Appel AWS Bedrock — amazon.nova-lite-v1:0
-    const modelId = "amazon.nova-lite-v1:0";
-    const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
-
-    const bedrockBody = JSON.stringify({
-      system: [{ text: buildSystemPrompt(pageContext, isAuth) }],
-      messages: [
-        {
-          role: "user",
-          content: [{ text: message }],
-        },
-      ],
-      inferenceConfig: {
-        maxTokens: 400,
-        temperature: 0.72,
-        topP: 0.9,
-      },
-    });
-
-    const bedrockRes = await signedFetch(
-      endpoint,
-      bedrockBody,
-      accessKeyId,
-      secretKey,
-      region
-    );
 
     if (!bedrockRes.ok) {
       const errText = await bedrockRes.text();
