@@ -276,6 +276,7 @@ export default function NewApplication() {
   const { user } = useAuth();
 
   const createApplication = useMutation(api.applications.create);
+  const markConvinced = useMutation(api.victor.markConvinced);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -369,6 +370,13 @@ export default function NewApplication() {
         userWhatsapp: userWhatsapp.trim() || undefined,
       });
       toast({ title: "Dossier créé !", description: "Réglez les frais d'engagement pour démarrer le traitement." });
+      // Marquer la session Victor comme "convaincue" — action réellement complétée
+      try {
+        const victorSessionId = localStorage.getItem("victor_session_id");
+        if (victorSessionId) {
+          await markConvinced({ sessionId: victorSessionId, action: "dossier_created" });
+        }
+      } catch { /* non bloquant */ }
       setLocation(`/dashboard/applications/${id}/payment`);
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de créer le dossier." });

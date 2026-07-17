@@ -586,9 +586,14 @@ export default defineSchema({
         ts: v.number(),
       })
     ),
+    // convinced = true UNIQUEMENT si l'utilisateur a réellement complété une action (dossier créé, etc.)
+    // N'est PAS mis à true sur simple clic CTA
     convinced: v.boolean(),
     convincedAt: v.optional(v.number()),
+    // Actions réellement complétées (ex: "dossier_created", "contrat_signed")
     actionsTaken: v.optional(v.array(v.string())),
+    // Clics CTA (intention, non completion) — pour distinguer intent vs succès réel
+    ctaClicks: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_session", ["sessionId"]),

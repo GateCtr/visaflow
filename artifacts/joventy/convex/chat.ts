@@ -135,7 +135,14 @@ async function bedrockSigV4Fetch(
 
 // ─── System prompt Victor ─────────────────────────────────────────────────────
 
-function buildSystemPrompt(pageContext: string, isAuth: boolean): string {
+interface ProcessingStats {
+  avgDaysByDest: Record<string, number | null>;
+  activeCounts: Record<string, number>;
+  totalApps: number;
+  successRate: number;
+}
+
+function buildSystemPrompt(pageContext: string, isAuth: boolean, stats?: ProcessingStats): string {
   // ─── Contexte spécifique à la page ───────────────────────────────────────────
   let pageCtx: string;
 
@@ -193,6 +200,36 @@ Ne propose le CTA /dashboard/applications/new QUE si le visiteur a ses identifia
       : `Visiteur découvrant Joventy. Présente la valeur en 1 phrase, qualifie la destination, oriente vers l'action la plus adaptée.`;
   }
 
+  // ─── Statistiques de traitement dynamiques ────────────────────────────────
+  const destLabels: Record<string, string> = {
+    schengen: "Schengen", spain: "Espagne", germany: "Allemagne",
+    france: "France", belgium: "Belgique", uk: "Royaume-Uni",
+    dubai: "Dubaï", turkey: "Turquie", india: "Inde",
+    morocco: "Maroc", egypt: "Égypte", brazil: "Brésil", china: "Chine",
+  };
+
+  let processingStatsBlock = "";
+  if (stats && stats.totalApps > 5) {
+    const lines: string[] = [];
+    for (const [dest, avg] of Object.entries(stats.avgDaysByDest)) {
+      if (avg !== null && avg > 0) {
+        const label = destLabels[dest] ?? dest;
+        lines.push(`• ${label} : délai moyen observé ${avg} jour${avg > 1 ? "s" : ""} (sur ${stats.activeCounts[dest] ?? "?"} dossier${(stats.activeCounts[dest] ?? 0) > 1 ? "s" : ""} traités)`);
+      }
+    }
+    if (lines.length > 0) {
+      processingStatsBlock = `\nDÉLAIS RÉELS OBSERVÉS (basés sur ${stats.totalApps} dossiers Joventy — données en temps réel) :\n${lines.join("\n")}\nTaux de succès réel : ${stats.successRate} %\nPour les e-Visas (Dubaï, Turquie, Inde, Maroc, Égypte) : délai standard 24-72h, indépendant du volume.\n`;
+    }
+  }
+  if (!processingStatsBlock) {
+    processingStatsBlock = `\nDÉLAIS INDICATIFS (données en cours de constitution) :\n• Dubaï e-Visa : 48-72h\n• Turquie e-Visa : 24-48h\n• Inde e-Visa : 72-96h\n• Schengen consulaire : 2-6 semaines selon disponibilité des créneaux\n• UK : 3-8 semaines\n`;
+  }
+
+  // ─── CTAs selon statut auth ───────────────────────────────────────────────
+  const authCTANote = isAuth
+    ? `L'utilisateur est CONNECTÉ. CTAs disponibles : /dashboard/applications/new (créer dossier), /prix (tarifs), /audit-diagnostic, /a-propos.`
+    : `L'utilisateur N'EST PAS connecté. Si il veut créer un dossier ou passer à l'action : propose-lui d'abord de se connecter ou de créer un compte. CTAs disponibles : /register (créer un compte), /login (se connecter), /prix (tarifs), /audit-diagnostic, /a-propos. Ne propose JAMAIS /dashboard/applications/new à un utilisateur non connecté — il ne peut pas y accéder.`;
+
   return `Tu es Victor, conseiller senior en immigration chez Joventy.
 
 PERSONA :
@@ -225,10 +262,13 @@ RÈGLES CTAs — LIS ATTENTIVEMENT :
 • N'ajoute PAS de CTA à chaque message. Si tu viens de répondre à une question et que le visiteur n'est pas encore prêt à agir, ne mets pas de CTA.
 • Place les CTAs UNIQUEMENT à la fin du message, JAMAIS au milieu d'une phrase.
 • Format STRICT : [CTA:Texte du bouton:/chemin] — respecte exactement ce format.
-• CHEMINS VALIDES : /prix  /register  /audit-diagnostic  /dashboard/applications/new  /a-propos
+• ${authCTANote}
 • ❌ INTERDIT : "pour consulter [CTA:nos tarifs:/prix]" ou "vous pouvez [CTA:commencer:/register]" — le CTA au milieu casse la phrase
 • ✅ CORRECT : "Schengen c'est 600 USD au total, paiement au succès.\n[CTA:Démarrer mon dossier:/dashboard/applications/new]"
 • ✅ CORRECT (sans CTA) : "T'as déjà les identifiants CEV reçus par l'ambassade ?" — ici pas de CTA, on est en mode qualification
+
+STATUT AUTHENTIFICATION :
+${authCTANote}
 
 CONTEXTE DE LA PAGE ACTUELLE :
 ${pageCtx}
@@ -252,18 +292,37 @@ TARIFS JOVENTY (tous en USD — répondre directement si demandé) :
 • Visa Chine : 120 + 380 = 500 USD
 • E-Visa Inde : 100 + 150 = 250 USD (72-96h)
 • Visa Brésil : 200 + 400 = 600 USD
-• Service créneau uniquement (si client a déjà ses identifiants) : 100 USD
-
+• Service créneau uniquement (si client a déjà ses identifiants CEV) : 100 USD
+${processingStatsBlock}
 MODÈLE TARIFAIRE :
 - Frais d'engagement : payés à l'ouverture du dossier (non remboursables si résultat obtenu)
 - Prime de succès : payée UNIQUEMENT si Joventy obtient le résultat. Pas de résultat = remboursement garanti.
 - Paiement : M-Pesa, Airtel Money, Orange Money (pas de carte internationale)
 - Frais consulaires : séparés, payés directement au gouvernement
 
+POURQUOI LE FRAIS D'ENGAGEMENT ? — ARGUMENTS SOLIDES :
+Si on te demande pourquoi il y a des frais d'engagement (non remboursables) :
+1. "Le frais d'engagement couvre notre travail réel : vérification du dossier, préparation des formulaires officiels, paramétrage du suivi automatisé — travail qui est fait quelle que soit l'issue."
+2. "C'est une garantie de sérieux des deux côtés : les clients engagés ont de meilleurs dossiers, et nous on met 100 % des ressources dessus."
+3. "Compare avec une agence classique : eux prennent 200-400 USD sans aucune garantie de résultat. Nous, si on n'obtient rien, tu ne paies que les frais d'engagement — pas la prime."
+4. "Les frais d'engagement représentent 15-25 % du tarif total. Le reste (75-85 %) n'est dû qu'au succès."
+Si l'objection persiste : "Je comprends l'hésitation. WhatsApp-nous : +243 840 808 122, on peut en parler directement."
+
+JOVENTY N'A PAS DE BUREAU PHYSIQUE — RÉPONDRE AVEC PRÉCISION :
+Si on demande l'adresse physique ou un bureau où venir :
+"On n'a pas de bureau où venir — c'est intentionnel et c'est un avantage pour toi :
+- Pas de file d'attente, pas d'horaires fixes : tout se fait en ligne, 24h/24
+- Sans loyer de bureau à Gombe, nos tarifs restent compétitifs
+- Tu peux suivre ton dossier en temps réel depuis ton téléphone
+- Notre équipe est basée à Kinshasa (Akollad Groupe, RCCM CD/KNG/RCCM/25-A-07960) — entité légale congolaise reconnue
+Pour nous joindre : WhatsApp +243 840 808 122 ou contact@joventy.cd (réponse en 24h). Disponibles 7j/7, 8h-20h heure Kinshasa."
+
 INFORMATIONS JOVENTY :
-- Taux d'acceptation : 94 %
+- Entité légale : Akollad Groupe — RCCM CD/KNG/RCCM/25-A-07960, NIF A2557944L, Kinshasa, RDC
+- 150+ dossiers traités, 4.8/5 satisfaction (127 avis)
 - Service 100 % en ligne, 24h/24
-- WhatsApp : +243 840 808 122`;
+- WhatsApp : +243 840 808 122 | Email : contact@joventy.cd
+- Disponible : 7j/7, 8h-20h heure Kinshasa`;
 }
 
 // ─── HTTP Action ──────────────────────────────────────────────────────────────
@@ -325,8 +384,16 @@ export const chat = httpAction(async (ctx, request) => {
       { role: "user", content: [{ text: message }] },
     ];
 
+    // Récupérer les stats de traitement pour enrichir le prompt
+    let processingStats: Parameters<typeof buildSystemPrompt>[2] | undefined;
+    try {
+      processingStats = await ctx.runQuery(internal.victor.getProcessingStats, {}) as Parameters<typeof buildSystemPrompt>[2];
+    } catch {
+      // Non bloquant — le prompt fonctionnera sans stats
+    }
+
     const bedrockBody = JSON.stringify({
-      system: [{ text: buildSystemPrompt(pageContext, isAuth) }],
+      system: [{ text: buildSystemPrompt(pageContext, isAuth, processingStats) }],
       messages: conversationMessages,
       inferenceConfig: { maxTokens: 400, temperature: 0.72, topP: 0.9 },
     });

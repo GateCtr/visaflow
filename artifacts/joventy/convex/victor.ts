@@ -123,11 +123,40 @@ export const saveMessage = internalMutation({
   },
 });
 
-/** Marque une session comme "convaincue" avec l'action prise */
+/**
+ * Enregistre un clic CTA (intention) sans marquer l'utilisateur comme "convaincu".
+ * Un clic n'est qu'une intention — le succès réel est confirmé par markConvinced.
+ */
+export const recordCTAClick = mutation({
+  args: {
+    sessionId: v.string(),
+    cta: v.string(), // ex: "cta_register", "cta_new_application", "cta_prix"
+  },
+  handler: async (ctx, { sessionId, cta }) => {
+    const now = Date.now();
+    const conv = await ctx.db
+      .query("victorConversations")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .first();
+
+    if (!conv) return;
+
+    await ctx.db.patch(conv._id, {
+      ctaClicks: [...(conv.ctaClicks ?? []), cta],
+      updatedAt: now,
+    });
+  },
+});
+
+/**
+ * Marque une session comme "convaincue" — UNIQUEMENT lorsque l'utilisateur
+ * a réellement complété une action (dossier créé, contrat signé, etc.).
+ * Ne pas appeler sur simple clic CTA.
+ */
 export const markConvinced = mutation({
   args: {
     sessionId: v.string(),
-    action: v.string(), // ex: "click_cta_prix", "started_dossier", "contrat_signed"
+    action: v.string(), // ex: "dossier_created", "contrat_signed"
   },
   handler: async (ctx, { sessionId, action }) => {
     const now = Date.now();
@@ -144,6 +173,70 @@ export const markConvinced = mutation({
       actionsTaken: [...(conv.actionsTaken ?? []), action],
       updatedAt: now,
     });
+  },
+});
+
+// ─── Stats traitement (pour le prompt Victor) ─────────────────────────────────
+
+/**
+ * Calcule les statistiques de traitement réelles depuis la table applications.
+ * Utilisé par l'action HTTP chat.ts pour enrichir le prompt de Victor.
+ */
+export const getProcessingStats = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const apps = await ctx.db.query("applications").collect();
+    const now = Date.now();
+
+    // Regrouper par destination
+    const statsByDest: Record<string, { totalDays: number; count: number; completed: number }> = {};
+
+    for (const app of apps) {
+      const dest = (app as Record<string, unknown>).destination as string | undefined;
+      if (!dest) continue;
+      if (!statsByDest[dest]) statsByDest[dest] = { totalDays: 0, count: 0, completed: 0 };
+
+      statsByDest[dest].count++;
+
+      // Si le dossier a une date de RDV obtenu, calculer le délai
+      const apptDetails = (app as Record<string, unknown>).appointmentDetails as
+        | { date?: string } | undefined;
+      const createdAt = (app as Record<string, unknown>).createdAt as number | undefined;
+      if (apptDetails?.date && createdAt) {
+        const apptMs = new Date(apptDetails.date).getTime();
+        if (apptMs > createdAt) {
+          const days = Math.round((apptMs - createdAt) / (1000 * 60 * 60 * 24));
+          if (days > 0 && days < 365) {
+            statsByDest[dest].totalDays += days;
+            statsByDest[dest].completed++;
+          }
+        }
+      }
+    }
+
+    // Calculer la moyenne par destination
+    const avgDaysByDest: Record<string, number | null> = {};
+    for (const [dest, s] of Object.entries(statsByDest)) {
+      avgDaysByDest[dest] = s.completed > 0 ? Math.round(s.totalDays / s.completed) : null;
+    }
+
+    // Compter les dossiers actifs par destination
+    const activeCounts: Record<string, number> = {};
+    for (const app of apps) {
+      const dest = (app as Record<string, unknown>).destination as string | undefined;
+      const status = (app as Record<string, unknown>).status as string | undefined;
+      if (!dest || !status) continue;
+      const isActive = ["pending_payment", "in_progress", "docs_submitted"].includes(status);
+      if (isActive) activeCounts[dest] = (activeCounts[dest] ?? 0) + 1;
+    }
+
+    // Taux de succès global
+    const completed = apps.filter(
+      (a) => (a as Record<string, unknown>).status === "completed"
+    ).length;
+    const successRate = apps.length > 0 ? Math.round((completed / apps.length) * 100) : 94;
+
+    return { avgDaysByDest, activeCounts, totalApps: apps.length, successRate, _ts: now };
   },
 });
 
@@ -212,6 +305,7 @@ export const getVictorStats = query({
         convinced: c.convinced,
         convincedAt: c.convincedAt,
         actionsTaken: c.actionsTaken ?? [],
+        ctaClicks: c.ctaClicks ?? [],
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         preview:

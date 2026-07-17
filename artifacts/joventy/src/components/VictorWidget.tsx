@@ -188,7 +188,6 @@ function buildHistory(messages: Message[]): HistoryTurn[] {
 export function VictorWidget() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const markConvinced = useMutation(api.victor.markConvinced);
 
   const [isOpen, setIsOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
@@ -202,8 +201,12 @@ export function VictorWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const hoverTooltipTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hoverTooltipTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const siteUrl = getConvexSiteUrl();
+
+  // recordCTAClick : enregistre l'intention (clic) sans marquer "convaincu"
+  // markConvinced : appelé uniquement après action réellement complétée (depuis NewApplication, etc.)
+  const recordCTAClick = useMutation(api.victor.recordCTAClick);
 
   // Scroll to bottom
   useEffect(() => {
@@ -313,16 +316,18 @@ export function VictorWidget() {
 
   const handleCTA = useCallback(
     async (label: string, href: string) => {
+      // Enregistre l'intention (clic CTA) — ne marque PAS l'utilisateur comme "convaincu"
+      // markConvinced est appelé uniquement quand l'action est réellement complétée
       try {
-        await markConvinced({
+        await recordCTAClick({
           sessionId,
-          action: `cta_click_${label.toLowerCase().replace(/\s+/g, "_")}`,
+          cta: `cta_click_${label.toLowerCase().replace(/\s+/g, "_")}`,
         });
       } catch { /* non bloquant */ }
       navigate(href);
       setIsOpen(false);
     },
-    [markConvinced, navigate, sessionId]
+    [recordCTAClick, navigate, sessionId]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
