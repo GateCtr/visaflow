@@ -215,8 +215,8 @@ export const chat = httpAction(async (ctx, request) => {
       );
     }
 
-    // Appel AWS Bedrock — amazon.nova-lite-v2:0
-    const modelId = "amazon.nova-lite-v2:0";
+    // Appel AWS Bedrock — amazon.nova-lite-v1:0
+    const modelId = "amazon.nova-lite-v1:0";
     const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
 
     const bedrockBody = JSON.stringify({
