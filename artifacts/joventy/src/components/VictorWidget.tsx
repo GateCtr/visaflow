@@ -1,9 +1,9 @@
 /**
  * VictorWidget — Agent commercial Joventy
  * Page-aware, toujours en français, mobile-first
- * v2 : mémoire conversationnelle, animation bulle, notification au survol
+ * v3 : streaming progressif, rendu naturel des messages, tracking auth funnel
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -24,7 +24,52 @@ interface HistoryTurn {
   content: string;
 }
 
-// ─── Son de notification (Web Audio API — sans dépendance) ────────────────────
+// ─── Rendu des messages Victor ────────────────────────────────────────────────
+// Transforme le texte brut en JSX : sauts de ligne, gras, italique.
+// Pas de librairie externe — implémentation légère ciblée sur ce que Victor produit.
+
+function renderInline(text: string): React.ReactNode {
+  if (!text) return null;
+  const re = /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[1] !== undefined)
+      parts.push(<strong key={k++} className="font-semibold">{m[1]}</strong>);
+    else if (m[2] !== undefined)
+      parts.push(<em key={k++}>{m[2]}</em>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length === 0 ? null : parts.length === 1 ? parts[0] : <React.Fragment>{parts}</React.Fragment>;
+}
+
+function MessageContent({ text }: { text: string }) {
+  // Séparer par double saut de ligne (paragraphes)
+  const paragraphs = text.split(/\n{2,}/);
+  return (
+    <>
+      {paragraphs.map((para, pi) => {
+        const lines = para.split("\n");
+        return (
+          <p key={pi} className={pi > 0 ? "mt-2" : undefined}>
+            {lines.map((line, li) => (
+              <React.Fragment key={li}>
+                {li > 0 && <br />}
+                {renderInline(line)}
+              </React.Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
+// ─── Son de notification ──────────────────────────────────────────────────────
 
 function playNotificationChime() {
   try {
@@ -64,51 +109,37 @@ function getConvexSiteUrl(): string {
   return cloudUrl?.replace(".convex.cloud", ".convex.site") ?? "";
 }
 
-/** Extrait les boutons CTA du texte Victor et retourne le texte nettoyé + boutons.
- *  Supporte les deux formats que le modèle peut générer :
- *    [CTA:Label:/chemin]  (format officiel)
- *    [Label:/chemin]      (format alternatif sans préfixe CTA:)
- *  Si un CTA est au milieu d'une phrase (du texte suit), le label est conservé
- *  dans le texte pour éviter les phrases coupées.
+/**
+ * Extrait les boutons CTA du texte et retourne le texte nettoyé + boutons.
+ * Supporte : [CTA:Label:/chemin]  et  [Label:/chemin]
  */
 function parseCTAs(text: string): { clean: string; buttons: { label: string; href: string }[] } {
   const buttons: { label: string; href: string }[] = [];
-
-  // Regex : [CTA:Label:/path] ou [Label:/path] – le chemin doit commencer par /
   const regex = /\[(?:CTA:)?([^\]|:\n]+):(\/[^\]\n]+)\]/g;
 
-  // Collecter tous les CTA avec leur position
   const found: { match: string; label: string; href: string; index: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = regex.exec(text)) !== null) {
     found.push({ match: m[0], label: m[1].trim(), href: m[2].trim(), index: m.index });
   }
 
-  // Traiter en ordre inverse pour préserver les indices lors du remplacement
   let clean = text;
   for (let i = found.length - 1; i >= 0; i--) {
     const cta = found[i];
     const afterCTA = text.slice(cta.index + cta.match.length).trim();
-    // Si du texte substantiel suit le CTA, conserver le label dans la phrase
     const isAtEnd = /^[.!?…\s]*$/.test(afterCTA) || afterCTA === "";
     const replacement = isAtEnd ? "" : cta.label;
     clean = clean.slice(0, cta.index) + replacement + clean.slice(cta.index + cta.match.length);
-    // Ajouter le bouton (sans doublon sur le même href)
     if (!buttons.find((b) => b.href === cta.href)) {
       buttons.unshift({ label: cta.label, href: cta.href });
     }
   }
 
-  // Nettoyer espaces multiples et ponctuation orpheline en fin de texte
   clean = clean.replace(/\s{2,}/g, " ").replace(/\s+([.,!?])/g, "$1").trim();
-
   return { clean, buttons };
 }
 
-/** Message d'ouverture contextualisé par page.
- *  Pour les pages /guides/:slug, le slug est analysé pour adapter le message
- *  au sujet exact du guide (rendez-vous Espagne, visa USA, etc.)
- */
+/** Message d'ouverture contextualisé par page. */
 function getOpeningMessage(page: string, isAuth: boolean): string {
   if (page === "/" || page === "") {
     return "Bonjour ! Je suis Victor, conseiller Joventy. Vous cherchez un visa pour quelle destination ?";
@@ -125,43 +156,26 @@ function getOpeningMessage(page: string, isAuth: boolean): string {
   if (page === "/dashboard/applications/new") {
     return "Vous ouvrez un nouveau dossier. Quelle destination ? Je vous explique ce qu'il faut préparer.";
   }
-
-  // Pages guides : adapter au slug
   if (page.startsWith("/guides")) {
     const slug = page.replace("/guides/", "").toLowerCase();
-
-    if (slug.includes("espagne") || slug.includes("spain") || slug.includes("cev")) {
+    if (slug.includes("espagne") || slug.includes("spain") || slug.includes("cev"))
       return "Vous cherchez à obtenir un RDV pour l'Espagne ? La première étape c'est l'email à l'ambassade. Vous l'avez déjà envoyé ?";
-    }
-    if (slug.includes("usa") || slug.includes("etats-unis") || slug.includes("amerique")) {
+    if (slug.includes("usa") || slug.includes("etats-unis") || slug.includes("amerique"))
       return "Attention — les créneaux USA sont suspendus à Kinshasa (alerte Ebola en cours). Je peux vous proposer des alternatives si vous le souhaitez.";
-    }
-    if (slug.includes("canada")) {
+    if (slug.includes("canada"))
       return "Les services Canada sont suspendus jusqu'au 28 août 2026 (restrictions IRCC). On peut regarder des alternatives en attendant ?";
-    }
-    if (slug.includes("schengen") || slug.includes("france") || slug.includes("belgique") || slug.includes("allemagne")) {
+    if (slug.includes("schengen") || slug.includes("france") || slug.includes("belgique") || slug.includes("allemagne"))
       return "Vous vous renseignez sur le visa Schengen ? C'est notre spécialité — 94 % d'acceptation. Quel pays Schengen vous intéresse ?";
-    }
-    if (slug.includes("dubai") || slug.includes("eau") || slug.includes("emirats")) {
+    if (slug.includes("dubai") || slug.includes("eau") || slug.includes("emirats"))
       return "L'e-Visa Dubaï c'est rapide — 48 à 72h. Vous en êtes où dans votre démarche ?";
-    }
-    if (slug.includes("rendezvous") || slug.includes("rendez-vous") || slug.includes("creneau") || slug.includes("créneau")) {
+    if (slug.includes("rendezvous") || slug.includes("rendez-vous") || slug.includes("creneau") || slug.includes("créneau"))
       return "Vous cherchez un créneau consulaire ? Dites-moi pour quelle ambassade, je vous explique comment ça marche.";
-    }
-    // Guide générique
     return "Ce guide vous intéresse ? Dites-moi votre situation concrète, je vous oriente directement.";
   }
-
-  // Pages destinations/ambassades
-  if (page.startsWith("/ambassade") || page.startsWith("/destinations")) {
+  if (page.startsWith("/ambassade") || page.startsWith("/destinations"))
     return "Vous vous renseignez sur cette destination ? Dites-moi votre type de visa et je vous donne les vraies informations.";
-  }
-
-  // Dashboard authentifié
-  if (page.startsWith("/dashboard") && isAuth) {
+  if (page.startsWith("/dashboard") && isAuth)
     return "Besoin d'aide sur votre dossier ? Je suis là.";
-  }
-
   return "Bonjour, je suis Victor. Comment puis-je vous aider ?";
 }
 
@@ -173,9 +187,8 @@ function getAutoOpenDelay(page: string): number | null {
   return null;
 }
 
-/** Extrait l'historique conversationnel depuis les messages (exclut le message d'accueil) */
+/** Extrait l'historique conversationnel (sans le greeting) */
 function buildHistory(messages: Message[]): HistoryTurn[] {
-  // Exclure le premier message (greeting Victor) et garder max 12 tours
   const relevant = messages.slice(1);
   return relevant.slice(-12).map((m) => ({
     role: m.role === "user" ? "user" : "assistant",
@@ -199,45 +212,92 @@ export function VictorWidget() {
   const [showHoverTooltip, setShowHoverTooltip] = useState(false);
   const [hoverSoundPlayed, setHoverSoundPlayed] = useState(false);
 
+  // Streaming : révélation progressive du texte de Victor
+  const [streamingMsg, setStreamingMsg] = useState<{
+    full: string;
+    shown: string;
+    buttons: { label: string; href: string }[];
+  } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hoverTooltipTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const siteUrl = getConvexSiteUrl();
 
-  // recordCTAClick : enregistre l'intention (clic) sans marquer "convaincu"
-  // markConvinced : appelé uniquement après action réellement complétée (depuis NewApplication, etc.)
   const recordCTAClick = useMutation(api.victor.recordCTAClick);
 
-  // Scroll to bottom
+  // ── Scroll automatique ────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, streamingMsg?.shown]);
 
-  // Focus input when open
+  // ── Focus à l'ouverture ────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen]);
 
-  // Auto-ouverture selon la page
+  // ── Ouverture automatique selon la page ───────────────────────────────────
   useEffect(() => {
     const delay = getAutoOpenDelay(location);
-    if (delay === null) {
-      // Pulse la bulle après 20s pour attirer l'attention
-      const pulseTimer = setTimeout(() => setShowBubblePulse(true), 20_000);
-      return () => clearTimeout(pulseTimer);
+    if (delay === null) return;
+    if (delay === 0) {
+      if (!hasOpened) openWithGreeting();
+      return;
     }
-
     const timer = setTimeout(() => {
-      if (!hasOpened) {
-        openWithGreeting();
-      }
+      if (!hasOpened) openWithGreeting();
     }, delay);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
+  // ── Streaming progressif ──────────────────────────────────────────────────
+  // Révèle le texte de Victor caractère par caractère avec des pauses naturelles
+  // après la ponctuation, simulant une frappe humaine.
+  useEffect(() => {
+    if (!streamingMsg) return;
+
+    if (streamingMsg.shown.length >= streamingMsg.full.length) {
+      // Streaming terminé — enregistre le message dans la liste
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "victor",
+          content: streamingMsg.full,
+          ts: Date.now(),
+          ctaButtons: streamingMsg.buttons,
+        },
+      ]);
+      setStreamingMsg(null);
+      return;
+    }
+
+    const pos = streamingMsg.shown.length;
+    const ch = streamingMsg.full[pos];
+
+    // Pauses naturelles selon le caractère courant
+    const isPause = ".!?\n".includes(ch);      // pause longue après ponctuation forte
+    const isBrief = ",;:".includes(ch);         // pause courte après virgule/deux-points
+
+    // Nombre de caractères révélés en une fois (plus rapide sur texte courant)
+    const reveal = isPause || isBrief ? 1 : Math.floor(Math.random() * 4) + 3;
+    // Délai en ms (varie légèrement pour le naturel)
+    const delay = isPause ? 115 : isBrief ? 52 : 18 + Math.random() * 14;
+
+    const t = setTimeout(() => {
+      setStreamingMsg((prev) => {
+        if (!prev) return null;
+        const newLen = Math.min(prev.shown.length + reveal, prev.full.length);
+        return { ...prev, shown: prev.full.slice(0, newLen) };
+      });
+    }, delay);
+
+    return () => clearTimeout(t);
+  }, [streamingMsg]);
+
+  // ── Ouverture avec message d'accueil ──────────────────────────────────────
   const openWithGreeting = useCallback(() => {
     if (hasOpened && messages.length > 0) {
       setIsOpen(true);
@@ -252,10 +312,9 @@ export function VictorWidget() {
     setMessages([{ role: "victor", content: clean, ts: Date.now(), ctaButtons: buttons }]);
   }, [hasOpened, messages.length, location, user]);
 
-  // Survol de la bulle : notification + son
+  // ── Survol de la bulle ────────────────────────────────────────────────────
   const handleBubbleMouseEnter = useCallback(() => {
     if (isOpen) return;
-    // Son une seule fois par session
     if (!hoverSoundPlayed) {
       playNotificationChime();
       setHoverSoundPlayed(true);
@@ -268,62 +327,70 @@ export function VictorWidget() {
     hoverTooltipTimer.current = setTimeout(() => setShowHoverTooltip(false), 300);
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isTyping) return;
-    setInput("");
+  // ── Envoi de message ──────────────────────────────────────────────────────
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isTyping) return;
 
-    const userMsg: Message = { role: "user", content: text, ts: Date.now() };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsTyping(true);
+      // Si un streaming est en cours, on le complète immédiatement avant d'envoyer
+      if (streamingMsg) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "victor", content: streamingMsg.full, ts: Date.now(), ctaButtons: streamingMsg.buttons },
+        ]);
+        setStreamingMsg(null);
+      }
 
-    try {
-      // Construire l'historique conversationnel (sans le msg courant)
-      const history = buildHistory([...messages]);
+      setInput("");
+      const userMsg: Message = { role: "user", content: text, ts: Date.now() };
+      setMessages((prev) => [...prev, userMsg]);
+      setIsTyping(true);
 
-      const res = await fetch(`${siteUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          sessionId,
-          pageContext: location,
-          isAuth: !!user,
-          history, // mémoire conversationnelle
-        }),
-      });
+      try {
+        const history = buildHistory([...messages]);
+        const res = await fetch(`${siteUrl}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            sessionId,
+            pageContext: location,
+            isAuth: !!user,
+            history,
+          }),
+        });
 
-      const data = await res.json() as { text?: string };
-      const raw = data.text ?? "Je suis momentanément indisponible. Veuillez réessayer.";
-      const { clean, buttons } = parseCTAs(raw);
+        const data = (await res.json()) as { text?: string };
+        const raw = data.text ?? "Je suis momentanément indisponible. Veuillez réessayer.";
+        const { clean, buttons } = parseCTAs(raw);
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "victor", content: clean, ts: Date.now(), ctaButtons: buttons },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "victor",
-          content: "Une erreur est survenue. Veuillez réessayer dans un instant.",
-          ts: Date.now(),
-        },
-      ]);
-    } finally {
-      setIsTyping(false);
-    }
-  }, [isTyping, siteUrl, sessionId, location, user, messages]);
+        // Arrêter l'indicateur de frappe et démarrer le streaming progressif
+        setIsTyping(false);
+        setStreamingMsg({ full: clean, shown: "", buttons });
+      } catch {
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "victor",
+            content: "Une erreur est survenue. Veuillez réessayer dans un instant.",
+            ts: Date.now(),
+          },
+        ]);
+      }
+    },
+    [isTyping, streamingMsg, siteUrl, sessionId, location, user, messages]
+  );
 
+  // ── CTA click ─────────────────────────────────────────────────────────────
   const handleCTA = useCallback(
     async (label: string, href: string) => {
-      // Enregistre l'intention (clic CTA) — ne marque PAS l'utilisateur comme "convaincu"
       const ctaKey = `cta_click_${label.toLowerCase().replace(/\s+/g, "_")}`;
       try {
         await recordCTAClick({ sessionId, cta: ctaKey });
       } catch { /* non bloquant */ }
 
-      // Suivi du funnel auth : si le CTA mène vers login/register,
-      // on stocke la session en attente pour tracker la complétion dans le dashboard
+      // Suivi funnel auth : stocke la session pour tracker la complétion dans le dashboard
       if (href === "/login" || href === "/register") {
         try {
           localStorage.setItem(
@@ -346,7 +413,7 @@ export function VictorWidget() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(input);
+      void sendMessage(input);
     }
   };
 
@@ -357,7 +424,6 @@ export function VictorWidget() {
       {/* ── Bulle flottante ── */}
       {!isOpen && (
         <div className="fixed bottom-5 right-5 z-50">
-          {/* Tooltip de survol */}
           {showHoverTooltip && (
             <div
               className="
@@ -370,19 +436,16 @@ export function VictorWidget() {
             >
               <span className="text-base mr-1.5">👋</span>
               Besoin d'aide pour votre visa ?
-              {/* Flèche */}
               <span className="absolute -bottom-1.5 right-5 w-3 h-3 bg-white border-r border-b border-border rotate-45 block" />
             </div>
           )}
 
-          {/* Anneaux d'animation */}
           {showBubblePulse && (
             <>
               <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: "1.5s" }} />
               <span className="absolute -inset-1 rounded-full border-2 border-primary/30 animate-pulse" />
             </>
           )}
-          {/* Anneau permanent subtil */}
           <span className="absolute -inset-1 rounded-full border border-primary/20 animate-pulse" style={{ animationDuration: "3s" }} />
 
           <button
@@ -440,49 +503,35 @@ export function VictorWidget() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scroll-smooth">
+            {/* Messages définitifs */}
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-2`}>
-                {msg.role === "victor" && (
-                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-primary font-bold text-xs">V</span>
-                  </div>
-                )}
-                <div className={`max-w-[80%] flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                  <div
-                    className={`
-                      px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed
-                      ${msg.role === "user"
-                        ? "bg-primary text-white rounded-br-sm"
-                        : "bg-slate-100 text-primary rounded-bl-sm"
-                      }
-                    `}
-                  >
-                    {msg.content}
-                  </div>
-                  {msg.ctaButtons && msg.ctaButtons.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {msg.ctaButtons.map((btn, bi) => (
-                        <button
-                          key={bi}
-                          onClick={() => handleCTA(btn.label, btn.href)}
-                          className="
-                            inline-flex items-center gap-1 px-3 py-1.5 rounded-full
-                            bg-primary text-white text-xs font-semibold
-                            hover:bg-primary/90 active:scale-95 transition-all duration-150
-                          "
-                        >
-                          {btn.label}
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <MessageBubble
+                key={i}
+                msg={msg}
+                onCTA={handleCTA}
+              />
             ))}
 
-            {/* Indicateur de frappe */}
-            {isTyping && (
+            {/* Message en cours de streaming (révélation progressive) */}
+            {streamingMsg && (
+              <div className="flex justify-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-primary font-bold text-xs">V</span>
+                </div>
+                <div className="max-w-[80%]">
+                  <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-slate-100 text-primary">
+                    <MessageContent text={streamingMsg.shown} />
+                    {/* Curseur clignotant pendant le streaming */}
+                    {streamingMsg.shown.length < streamingMsg.full.length && (
+                      <span className="inline-block w-0.5 h-3.5 bg-primary/60 ml-0.5 align-middle animate-pulse" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Indicateur de frappe (pendant le fetch API) */}
+            {isTyping && !streamingMsg && (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <span className="text-primary font-bold text-xs">V</span>
@@ -494,6 +543,7 @@ export function VictorWidget() {
                 </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -511,7 +561,7 @@ export function VictorWidget() {
                 maxLength={500}
               />
               <button
-                onClick={() => sendMessage(input)}
+                onClick={() => void sendMessage(input)}
                 disabled={!input.trim() || isTyping}
                 className="
                   w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0
@@ -533,5 +583,60 @@ export function VictorWidget() {
         </div>
       )}
     </>
+  );
+}
+
+// ─── Bulle de message individuelle ────────────────────────────────────────────
+
+function MessageBubble({
+  msg,
+  onCTA,
+}: {
+  msg: Message;
+  onCTA: (label: string, href: string) => void;
+}) {
+  return (
+    <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-2`}>
+      {msg.role === "victor" && (
+        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-primary font-bold text-xs">V</span>
+        </div>
+      )}
+      <div className={`max-w-[80%] flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+        <div
+          className={`
+            px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed
+            ${msg.role === "user"
+              ? "bg-primary text-white rounded-br-sm"
+              : "bg-slate-100 text-primary rounded-bl-sm"
+            }
+          `}
+        >
+          {msg.role === "victor" ? (
+            <MessageContent text={msg.content} />
+          ) : (
+            msg.content
+          )}
+        </div>
+        {msg.ctaButtons && msg.ctaButtons.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {msg.ctaButtons.map((btn, bi) => (
+              <button
+                key={bi}
+                onClick={() => onCTA(btn.label, btn.href)}
+                className="
+                  inline-flex items-center gap-1 px-3 py-1.5 rounded-full
+                  bg-primary text-white text-xs font-semibold
+                  hover:bg-primary/90 active:scale-95 transition-all duration-150
+                "
+              >
+                {btn.label}
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
