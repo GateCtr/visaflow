@@ -98,7 +98,10 @@ export const listClients = query({
       return [];
     }
 
-    const all = await ctx.db.query("applications").collect();
+    // Start from the users table so every registered user appears,
+    // even those who haven't created an application yet.
+    const allUsers = await ctx.db.query("users").collect();
+    const allApps = await ctx.db.query("applications").collect();
 
     const getClerkId = (subject: string) => {
       if (subject.includes("|")) {
@@ -107,6 +110,32 @@ export const listClients = query({
       return subject;
     };
 
+    // Build application stats keyed by clerkId
+    const appStats = new Map<
+      string,
+      { applicationCount: number; firstSeen: number; lastSeen: number }
+    >();
+    for (const app of allApps) {
+      const clerkId = getClerkId(app.userId);
+      const existing = appStats.get(clerkId);
+      if (!existing) {
+        appStats.set(clerkId, {
+          applicationCount: 1,
+          firstSeen: app._creationTime,
+          lastSeen: app.updatedAt,
+        });
+      } else {
+        existing.applicationCount += 1;
+        if (app._creationTime < existing.firstSeen) {
+          existing.firstSeen = app._creationTime;
+        }
+        if (app.updatedAt > existing.lastSeen) {
+          existing.lastSeen = app.updatedAt;
+        }
+      }
+    }
+
+    // Build the client list from users
     const clientMap = new Map<
       string,
       {
@@ -122,30 +151,19 @@ export const listClients = query({
       }
     >();
 
-    for (const app of all) {
-      const clerkId = getClerkId(app.userId);
-      if (!clientMap.has(clerkId)) {
-        clientMap.set(clerkId, {
-          userId: app.userId,
-          firstName: app.userFirstName || "",
-          lastName: app.userLastName || "",
-          email: app.userEmail || "",
-          applicationCount: 1,
-          firstSeen: app._creationTime,
-          lastSeen: app.updatedAt,
-          contractSignedAt: null,
-          contractSignedName: null,
-        });
-      } else {
-        const existing = clientMap.get(clerkId)!;
-        existing.applicationCount += 1;
-        if (app._creationTime < existing.firstSeen) {
-          existing.firstSeen = app._creationTime;
-        }
-        if (app.updatedAt > existing.lastSeen) {
-          existing.lastSeen = app.updatedAt;
-        }
-      }
+    for (const user of allUsers) {
+      const stats = appStats.get(user.clerkId);
+      clientMap.set(user.clerkId, {
+        userId: user.clerkId,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email,
+        applicationCount: stats?.applicationCount ?? 0,
+        firstSeen: user._creationTime,
+        lastSeen: stats?.lastSeen ?? user._creationTime,
+        contractSignedAt: null,
+        contractSignedName: null,
+      });
     }
 
     // Enrich with contract signature data
