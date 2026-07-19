@@ -148,6 +148,7 @@ type QuestionFocus =
   | "appointment_price"
   | "appointment_only"
   | "price_only"
+  | "budget_qualification"
   | "document"
   | "timeline"
   | "eligibility"
@@ -201,6 +202,41 @@ function buildDestinationPricingReply(destination: Destination): string {
   return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul n'est pas proposé pour cette destination.`;
 }
 
+function extractBudgetAmount(message: string): number | null {
+  const normalized = stripAccents(message.toLowerCase()).replace(/\s+/g, "");
+  const budgetMatch = normalized.match(/(?:budget(?:de)?|enveloppe(?:de)?|j'aiunbudgetde|jepeuxmettre)(\d[\d.,]*)/);
+  if (budgetMatch?.[1]) {
+    const value = Number.parseInt(budgetMatch[1].replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const currencyMatch = normalized.match(/(\d[\d.,]*)(?:usd|dollars|\$|eur|euros)/);
+  if (currencyMatch?.[1]) {
+    const value = Number.parseInt(currencyMatch[1].replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  return null;
+}
+
+function buildBudgetQualificationReply(destination: Destination | null, budgetAmount: number | null): string {
+  const budgetLabel = budgetAmount ? `${budgetAmount.toLocaleString("en-US")} USD` : "ce budget";
+
+  if (!destination) {
+    return `Avec ${budgetLabel}, on peut te proposer la bonne formule, mais il me manque la destination. Dis-moi juste le pays visé et je te dis tout de suite si tu pars sur service complet, créneau seul ou formulaires seulement.`;
+  }
+
+  const pricing = VISA_PRICING[destination];
+  const slotAvailable = getAvailablePackages(destination).includes("slot_only");
+  const slotSummary = buildSlotOnlyPricingSummary();
+
+  if (slotAvailable) {
+    return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD; si tu veux seulement le créneau consulaire, on passe par le barème d'urgence : ${slotSummary}. Tu as déjà ton dossier prêt ou tu veux qu'on s'occupe de tout ?`;
+  }
+
+  return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD. Il n'y a pas d'option créneau seul pour cette destination, donc si tu veux aller vite je te conseille le service complet. Tu veux tourisme, affaires ou études ?`;
+}
+
 function buildPricingCatalogBlock(): string {
   return (Object.entries(VISA_PRICING) as Array<[Destination, (typeof VISA_PRICING)[Destination]]>)
     .map(([destination, pricing]) => {
@@ -212,10 +248,46 @@ function buildPricingCatalogBlock(): string {
     .join("\n");
 }
 
+function extractBudgetAmount(message: string): number | null {
+  const normalized = stripAccents(message.toLowerCase()).replace(/\s+/g, "");
+  const budgetMatch = normalized.match(/(?:budget(?:de)?|enveloppe(?:de)?|j'aiunbudgetde|jepeuxmettre)(\d[\d.,]*)/);
+  if (budgetMatch?.[1]) {
+    const value = Number.parseInt(budgetMatch[1].replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const currencyMatch = normalized.match(/(\d[\d.,]*)(?:usd|dollars|\$|eur|euros)/);
+  if (currencyMatch?.[1]) {
+    const value = Number.parseInt(currencyMatch[1].replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  return null;
+}
+
+function buildBudgetQualificationReply(destination: Destination | null, budgetAmount: number | null): string {
+  const budgetLabel = budgetAmount ? `${budgetAmount.toLocaleString("en-US")} USD` : "ce budget";
+
+  if (!destination) {
+    return `Avec ${budgetLabel}, on peut te proposer la bonne formule, mais il me manque la destination. Dis-moi juste le pays visé et je te dis tout de suite si tu pars sur service complet, créneau seul ou formulaires seulement.`;
+  }
+
+  const pricing = VISA_PRICING[destination];
+  const slotAvailable = getAvailablePackages(destination).includes("slot_only");
+  const slotSummary = buildSlotOnlyPricingSummary();
+
+  if (slotAvailable) {
+    return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD; si tu veux seulement le créneau consulaire, on passe par le barème d'urgence : ${slotSummary}. Tu as déjà ton dossier prêt ou tu veux qu'on s'occupe de tout ?`;
+  }
+
+  return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD. Il n'y a pas d'option créneau seul pour cette destination, donc si tu veux aller vite je te conseille le service complet. Tu veux tourisme, affaires ou études ?`;
+}
+
 function inferQuestionFocus(message: string): QuestionFocus {
   const normalized = stripAccents(message.toLowerCase());
   const mentionsAppointment = /(rendez[- ]?vous|creneau|rdv|appointment|slot)/.test(normalized);
   const mentionsPrice = /(prix|tarif|cout|combien|frais|payer|paye|combien ca coute)/.test(normalized);
+  const mentionsBudget = /(budget|enveloppe|je peux mettre|j'ai .*?\$|j'ai .*?usd|j'ai .*?dollars)/.test(normalized);
   const mentionsDocument = /(document|passeport|visa|formulaire|ds-160|vowint|sevis|mrv|assurance|photo|dossier)/.test(normalized);
   const mentionsTimeline = /(delai|temps|quand|combien de temps|attente|disponibilit|date)/.test(normalized);
   const mentionsEligibility = /(eligib|peux[- ]?je|est[- ]?ce que|peut[- ]?on|conditions|conditions d[' ]?acces)/.test(normalized);
@@ -224,6 +296,7 @@ function inferQuestionFocus(message: string): QuestionFocus {
   if (mentionsAppointment && mentionsPrice) return "appointment_price";
   if (mentionsAppointment) return "appointment_only";
   if (mentionsPrice) return "price_only";
+  if (mentionsBudget) return "budget_qualification";
   if (mentionsDocument) return "document";
   if (mentionsTimeline) return "timeline";
   if (mentionsEligibility) return "eligibility";
@@ -239,6 +312,8 @@ function buildQuestionFocusBlock(message: string): string {
       return "La demande porte sur un rendez-vous, un créneau ou une prise de slot. Réponds uniquement sur ce sujet et ne bascule pas vers le visa complet sauf si le visiteur le demande ensuite.";
     case "price_only":
       return "La demande porte sur un prix ou un tarif. Donne le prix de l'objet demandé précisément, sans élargir à un autre service.";
+    case "budget_qualification":
+      return "La demande mentionne un budget. Utilise ce budget pour qualifier le besoin: si la destination est déjà donnée, recommande le service adapté; sinon demande la destination ou le type de visa avec une seule question.";
     case "document":
       return "La demande porte sur un document, un formulaire ou une pièce à fournir. Réponds uniquement sur ce point précis, pas sur le dossier complet.";
     case "timeline":
@@ -388,6 +463,8 @@ ${questionFocus}
 RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
 - Rendez-vous, créneau, slot, RDV, appointment => si le service créneau existe pour la destination, donne son vrai barème et précise les conditions d'accès. Sinon, donne le tarif du service complet et dis clairement que le créneau seul n'est pas proposé.
 - Si le visiteur dit "chez vous" ou "en personne", corrige-le: chez Joventy il n'y a pas de rendez-vous physique. Parle toujours de créneau consulaire ou de service complet, jamais d'un rendez-vous en personne chez Joventy.
+- Si le visiteur donne son prénom + la destination + un budget, traite ça comme une qualification commerciale: valide le budget, recommende la bonne formule, puis pose une seule question sur le motif, le type de visa ou si le dossier est déjà prêt.
+- Si le budget est donné sans destination, demande d'abord la destination avant de parler du service. Ne force pas la vente.
 - Formulaire, document, pièce, délai, disponibilité => réponds sur ce sous-sujet précis
 - Prix, tarif, coût, combien, frais => donne le prix de l'objet demandé, pas celui d'un autre service
 - Paiement, quand payer, avant ou après, avant le rendez-vous => réponds uniquement sur le moment du paiement lié au rendez-vous
@@ -534,8 +611,27 @@ export const chat = httpAction(async (ctx, request) => {
     const normalizedMessage = stripAccents(message.toLowerCase());
     const mentionsPricing = /(prix|tarif|combien|cout|coût|coute|frais)/.test(normalizedMessage);
     const destinationKey = inferDestinationFromMessage(message);
+    const budgetAmount = extractBudgetAmount(message);
+    const mentionsBudget = /(budget|enveloppe|je peux mettre|j'ai .*?\$|j'ai .*?usd|j'ai .*?dollars)/.test(normalizedMessage) || budgetAmount !== null;
     if (destinationKey && mentionsPricing) {
       const directReply = buildDestinationPricingReply(destinationKey);
+
+      await ctx.runMutation(internal.victor.saveMessage, {
+        sessionId,
+        userMessage: message,
+        victorResponse: directReply,
+        pageContext,
+        isAuth,
+      });
+
+      return new Response(JSON.stringify({ text: directReply }), {
+        status: 200,
+        headers: corsHeaders,
+      });
+    }
+
+    if (mentionsBudget && destinationKey && !mentionsPricing) {
+      const directReply = buildBudgetQualificationReply(destinationKey, budgetAmount);
 
       await ctx.runMutation(internal.victor.saveMessage, {
         sessionId,
