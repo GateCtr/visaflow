@@ -331,7 +331,7 @@ FOCUS DU MESSAGE ACTUEL :
 ${questionFocus}
 
 RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
-- Rendez-vous, créneau, slot, RDV, appointment => service créneau uniquement
+- Rendez-vous, créneau, slot, RDV, appointment => service créneau uniquement seulement si le visiteur dit explicitement qu'il a déjà ses identifiants CEV ou qu'il veut uniquement surveiller un créneau déjà prêt. Sinon, donne le tarif standard de la destination ou du visa demandé.
 - Formulaire, document, pièce, délai, disponibilité => réponds sur ce sous-sujet précis
 - Prix, tarif, coût, combien, frais => donne le prix de l'objet demandé, pas celui d'un autre service
 - Paiement, quand payer, avant ou après, avant le rendez-vous => réponds uniquement sur le moment du paiement lié au rendez-vous
@@ -364,6 +364,7 @@ TARIFS JOVENTY (tous en USD — répondre directement si demandé) :
 • Visa Canada : 250 + 750 = 1 000 USD ⚠️ SUSPENDU jusqu'au 28 août 2026
 • Visa Schengen (France, Belgique, Allemagne, Pays-Bas, Italie…) : 150 + 450 = 600 USD + 90 € frais consulaires à l'ambassade
 • Visa Espagne : 150 + 450 = 600 USD
+• Service créneau uniquement Espagne (si client a déjà ses identifiants CEV) : 100 USD. Si le visiteur demande simplement "rendez-vous Espagne" ou "combien coûte l'Espagne", répondre d'abord avec 600 USD et préciser que 100 USD ne concerne que l'option créneau seule.
 • Visa Suisse : 150 + 450 = 600 USD
 • Visa Royaume-Uni : 200 + 600 = 800 USD
 • E-Visa Dubaï : 150 + 200 = 350 USD (48-72h)
@@ -486,6 +487,28 @@ export const chat = httpAction(async (ctx, request) => {
         JSON.stringify({ text: rateCheck.reason }),
         { status: 200, headers: corsHeaders }
       );
+    }
+
+    const normalizedMessage = stripAccents(message.toLowerCase());
+    const mentionsSpain = /(espagne|espagnol)/.test(normalizedMessage);
+    const mentionsPricing = /(prix|tarif|combien|cout|coût|coute|frais|rendez[- ]?vous|rdv|appointment|creneau|créneau)/.test(normalizedMessage);
+    const mentionsSlotOnly = /(cev|identifiant|identifiants|login|mot de passe|créneau seul|slot seul)/.test(normalizedMessage);
+    if (mentionsSpain && mentionsPricing && !mentionsSlotOnly) {
+      const directReply =
+        "Le tarif standard du visa Espagne depuis Kinshasa est 600 USD, soit 150 USD d'engagement et 450 USD de prime de succès. Le service créneau seul coûte 100 USD uniquement si tu as déjà tes identifiants CEV et que tu veux juste la surveillance du slot.";
+
+      await ctx.runMutation(internal.victor.saveMessage, {
+        sessionId,
+        userMessage: message,
+        victorResponse: directReply,
+        pageContext,
+        isAuth,
+      });
+
+      return new Response(JSON.stringify({ text: directReply }), {
+        status: 200,
+        headers: corsHeaders,
+      });
     }
 
     const region = process.env.BEDROCK_REGION ?? "us-east-1";
