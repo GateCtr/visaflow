@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { Webhook } from "svix";
+import { chat as victorChat } from "./chat";
 
 const http = httpRouter();
 
@@ -1613,5 +1614,9 @@ http.route({
     });
   }),
 });
+
+// Victor — assistant commercial Joventy
+http.route({ path: "/api/chat", method: "POST", handler: victorChat });
+http.route({ path: "/api/chat", method: "OPTIONS", handler: victorChat });
 
 export default http;

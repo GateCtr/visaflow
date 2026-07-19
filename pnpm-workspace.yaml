@@ -6,7 +6,7 @@ packages:
 
 allowBuilds:
   core-js: false
-  esbuild: false
+  esbuild: true
   impit: false
   puppeteer: false
 
