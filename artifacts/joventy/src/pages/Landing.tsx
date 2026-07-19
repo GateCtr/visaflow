@@ -167,10 +167,10 @@ const DESTINATIONS = [
   {
     code: "cn",
     name: "Chine",
-    visaTypes: ["E-Visa court séjour ≤15j", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
+    visaTypes: ["Visa papier via CVSC/VFS", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
     engagement: 120,
     success: 380,
-    model: "hybrid",
+    model: "appointment",
     note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
     badge: null,
   },
@@ -1101,6 +1101,58 @@ export default function Landing() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ ESPAGNE / CEV ═══ */}
+      <section className="py-20 bg-slate-50 border-y border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <p className="section-label">Espagne & Schengen</p>
+            <h2 className="section-title">Espagne ne passe pas par le CEV à Kinshasa</h2>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Pour éviter les confusions, voici les pages utiles selon votre cas : la procédure visa Espagne, l'adresse de l'ambassade et le guide CEV pour la France, la Belgique ou l'Allemagne.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+            {[
+              {
+                icon: Landmark,
+                title: "Visa Espagne Kinshasa",
+                desc: "Rendez-vous ambassade, email officiel et réservation citaconsular.es. La page la plus utile si votre dossier concerne l'Espagne.",
+                href: "/visa-espagne-kinshasa",
+              },
+              {
+                icon: Building2,
+                title: "Ambassade d'Espagne",
+                desc: "Adresse exacte, horaires et contact à Gombe. Pratique avant tout déplacement ou pour vérifier vos coordonnées.",
+                href: "/ambassade-espagne-kinshasa",
+              },
+              {
+                icon: BookOpen,
+                title: "Rendez-vous CEV Schengen",
+                desc: "Procédure Visa On Web et réservation au CEV pour la France, la Belgique, l'Allemagne et les autres pays représentés.",
+                href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href}>
+                  <div className="bg-white border border-border rounded-2xl p-6 shadow-premium hover-lift h-full flex flex-col">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                      <Icon className="w-6 h-6 text-primary" />
+                    </div>
+                    <h3 className="font-bold text-primary text-lg mb-2">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">{item.desc}</p>
+                    <div className="mt-5 flex items-center gap-1 text-secondary text-sm font-semibold">
+                      Ouvrir la page <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>

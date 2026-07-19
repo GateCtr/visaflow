@@ -26,8 +26,8 @@ export interface Guide {
 const guides: Guide[] = [
   {
     slug: "comment-obtenir-creneau-visa-usa-kinshasa",
-    title: "Comment obtenir un créneau visa USA à Kinshasa en 2026 — Solution quand usvisaappt.com n'a aucune date",
-    metaTitle: "Créneau Visa USA Kinshasa 2026 — Que faire quand « aucune date disponible » ? | Joventy",
+    title: "Rendez-vous visa USA à Kinshasa en 2026 — Comment obtenir une date sur usvisaappt.com",
+    metaTitle: "Rendez-vous Visa USA Kinshasa 2026 — Aucune date sur usvisaappt.com ? | Joventy",
     metaDescription:
       "usvisaappt.com affiche 'aucune date disponible' à Kinshasa ? Voici comment obtenir un créneau entretien visa USA rapidement : surveiller les annulations, meilleurs horaires, et solution Joventy 24h/24.",
     publishedDate: "2025-05-01",
@@ -115,9 +115,10 @@ const guides: Guide[] = [
       },
     ],
     relatedSlugs: [
-      "documents-visa-schengen-kinshasa",
-      "payer-frais-mrv-visa-usa-kinshasa",
+      "comment-obtenir-creneau-visa-usa-kinshasa",
       "entretien-visa-usa-b1-b2-questions",
+      "visa-usa-221g-kinshasa",
+      "visa-usa-renouvellement-sans-entretien-kinshasa",
     ],
     relatedDestination: "visa-usa-kinshasa",
   },
@@ -284,6 +285,88 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "visa-schengen-assurance-voyage-30k-kinshasa",
+    title: "Assurance voyage Schengen 30 000 € : choisir la bonne police depuis Kinshasa",
+    metaTitle: "Assurance Voyage Schengen 30 000€ Kinshasa 2026 — Règles officielles | Joventy",
+    metaDescription:
+      "La couverture minimale Schengen est de 30 000 € et doit couvrir rapatriement, urgences médicales et hospitalisation. Découvrez les erreurs à éviter et les polices acceptées.",
+    publishedDate: "2026-07-19",
+    updatedDate: "2026-07-19",
+    readingTime: 6,
+    category: "Visa Schengen",
+    coverEmoji: "🛡️",
+    intro:
+      "Pour un visa Schengen depuis Kinshasa, l'assurance voyage n'est pas un simple détail: c'est une exigence légale. La police doit couvrir au minimum 30 000 € et rester valable dans tout l'espace Schengen pendant la totalité du séjour ou du transit. Un document incomplet ou mal libellé peut suffire à bloquer un dossier pourtant solide.",
+    sections: [
+      {
+        heading: "Ce que la règle Schengen exige vraiment",
+        body:
+          "Le Code des visas Schengen impose une assurance adaptée et valide pour couvrir les frais de rapatriement pour raison médicale, les soins médicaux d'urgence et l'hospitalisation d'urgence. La couverture minimale est de 30 000 € et l'assurance doit être valable sur tout le territoire des États membres.",
+        list: [
+          "Couverture minimale: 30 000 €",
+          "Validité sur l'ensemble de l'espace Schengen",
+          "Couverture de toute la durée du séjour ou du transit",
+          "Rapatriement médical, urgence médicale et hospitalisation d'urgence doivent être couverts",
+        ],
+      },
+      {
+        heading: "Comment choisir une police acceptable",
+        body:
+          "L'objectif n'est pas seulement d'acheter une assurance, mais d'acheter la bonne assurance. Le consulat doit pouvoir vérifier facilement les dates, le nom du demandeur et les garanties.",
+        list: [
+          "Le nom du demandeur doit correspondre exactement au passeport",
+          "Les dates doivent couvrir l'intégralité du voyage annoncé",
+          "La police doit être vérifiable et émise par un assureur reconnu",
+          "En cas de voyage à entrées multiples, la première visite doit être couverte au minimum",
+        ],
+      },
+      {
+        heading: "Les erreurs qui font bloquer un dossier",
+        body:
+          "Une assurance rejetée n'est pas toujours insuffisante sur le fond; elle est souvent mal présentée ou mal alignée avec le reste du dossier.",
+        list: [
+          "Couverture inférieure à 30 000 €",
+          "Police non valable dans tout l'espace Schengen",
+          "Dates qui ne couvrent pas tout le séjour",
+          "Nom du titulaire différent du passeport",
+          "Assureur difficile à vérifier par le consulat",
+        ],
+      },
+      {
+        heading: "Checklist avant le dépôt",
+        body:
+          "Avant de prendre le rendez-vous ou de déposer au CEV, vérifiez ces points simples pour éviter un aller-retour inutile.",
+        list: [
+          "Le certificat mentionne clairement le pays ou la zone couverte",
+          "La durée couvre l'aller, le séjour et le retour",
+          "La police est imprimée ou téléchargeable en PDF officiel",
+          "Les coordonnées de l'assureur figurent sur le document",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Puis-je utiliser une assurance congolaise locale ?",
+        a: "Seulement si elle est reconnue, vérifiable et conforme aux exigences Schengen. En pratique, les consulats privilégient souvent les assureurs internationaux facilement contrôlables.",
+      },
+      {
+        q: "L'assurance doit-elle couvrir exactement 30 000 € ?",
+        a: "Le minimum réglementaire est de 30 000 €. Une couverture plus élevée est acceptable si tout le reste du document est conforme.",
+      },
+      {
+        q: "Faut-il acheter l'assurance avant ou après le rendez-vous ?",
+        a: "Avant le dépôt. L'assurance doit être prête au moment où le dossier est examiné, avec des dates cohérentes avec votre voyage déclaré.",
+      },
+    ],
+    relatedSlugs: [
+      "documents-visa-schengen-kinshasa",
+      "visa-schengen-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+    ],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
     slug: "entretien-visa-usa-b1-b2-questions",
     title: "Entretien visa B1/B2 USA à Kinshasa : 15 questions posées par l'officier et les bonnes réponses",
     metaTitle: "Questions Entretien Visa USA Kinshasa 2026 — 15 Questions + Réponses pour éviter le refus | Joventy",
@@ -379,7 +462,7 @@ const guides: Guide[] = [
     relatedSlugs: [
       "comment-obtenir-creneau-visa-usa-kinshasa",
       "visa-usa-refuse-que-faire",
-      "payer-frais-mrv-visa-usa-kinshasa",
+      "visa-usa-221g-kinshasa",
     ],
     relatedDestination: "visa-usa-kinshasa",
   },
@@ -482,6 +565,95 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "visa-usa-221g-kinshasa",
+    title: "Visa USA 221(g) à Kinshasa : que faire après l'entretien et le refus administratif 2026",
+    metaTitle: "Visa USA 221(g) Kinshasa 2026 — Administrative Processing, Documents et délais | Joventy",
+    metaDescription:
+      "Après un 221(g), le dossier n'est pas toujours terminé. Découvrez ce que signifie le refus administratif, quels documents fournir, comment suivre votre CEAC et quand relancer l'ambassade.",
+    publishedDate: "2026-07-19",
+    updatedDate: "2026-07-19",
+    readingTime: 7,
+    category: "Visa USA",
+    coverEmoji: "⏳",
+    intro:
+      "Un 221(g) à Kinshasa n'est pas forcément un refus définitif. Dans beaucoup de cas, l'officier consulaire a besoin d'un document complémentaire, d'une vérification supplémentaire ou d'un traitement administratif plus poussé avant de prendre sa décision finale. Ce guide vous aide à comprendre la situation, à répondre correctement et à éviter de transformer une attente temporaire en refus durable.",
+    sections: [
+      {
+        heading: "221(g) : refus définitif ou attente administrative ?",
+        body:
+          "Le 221(g) est utilisé quand l'officier ne peut pas conclure immédiatement que vous êtes éligible au visa demandé. Cela peut vouloir dire qu'un document manque, qu'une vérification complémentaire est nécessaire ou que votre dossier doit passer en traitement administratif. Le point essentiel : ce n'est pas toujours la fin du dossier.",
+        list: [
+          "Le consulat n'a pas encore rendu une décision finale complète",
+          "Le plus souvent, il manque un document, une précision ou une vérification",
+          "Le statut CEAC peut rester en attente pendant plusieurs jours ou semaines",
+          "Le traitement administratif dépend du cas et peut varier fortement d'un dossier à l'autre",
+        ],
+      },
+      {
+        heading: "Les causes les plus fréquentes à Kinshasa",
+        body:
+          "À Kinshasa, les 221(g) sont souvent liés à des incohérences documentaires ou à des éléments qui méritent clarification avant décision.",
+        list: [
+          "Pièce financière insuffisante ou difficile à relier à votre situation réelle",
+          "Objet du voyage qui n'est pas expliqué de façon assez claire",
+          "Photo, passeport ou document DS-160 avec incohérence technique",
+          "Vérification administrative supplémentaire sur le profil du demandeur",
+          "Réponse partielle à une question de l'officier pendant l'entretien",
+          "Refus antérieur ou historique de voyage qui mérite une explication plus solide",
+        ],
+      },
+      {
+        heading: "Que faire dans les 48 premières heures",
+        body:
+          "Les premières heures après un 221(g) comptent beaucoup. Il faut répondre exactement à ce qui est demandé, sans surcharger le dossier avec des pièces inutiles.",
+        list: [
+          "Relisez la feuille remise par le consulat ligne par ligne",
+          "Notez les documents demandés et la manière exacte de les transmettre",
+          "N'envoyez que les pièces réclamées, dans le format attendu",
+          "Conservez votre numéro CEAC, votre DS-160 et tous les reçus de dépôt",
+          "Ne reprenez pas immédiatement un autre rendez-vous sauf consigne explicite",
+        ],
+      },
+      {
+        heading: "Quand faut-il repartir sur un nouveau dossier ?",
+        body:
+          "Parfois, il vaut mieux corriger le fond du dossier avant de relancer quoi que ce soit. Si votre situation a changé ou si le consulat a clôturé le dossier, une nouvelle demande peut être plus pertinente.",
+        list: [
+          "Si l'officier a expliqué qu'une nouvelle demande est préférable",
+          "Si vos pièces d'origine ne peuvent pas être complétées de façon crédible",
+          "Si votre situation professionnelle, financière ou familiale a changé",
+          "Si vous devez corriger plusieurs incohérences majeures à la fois",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Un 221(g) est-il un refus définitif ?",
+        a: "Pas forcément. Dans beaucoup de cas, il s'agit d'une attente administrative ou d'une demande de documents complémentaires. Le dossier peut encore aboutir favorablement si vous répondez correctement à la demande du consulat.",
+      },
+      {
+        q: "Combien de temps dure un 221(g) ?",
+        a: "Le délai varie selon le cas. Certains dossiers se débloquent vite, d'autres prennent plus de temps selon la vérification demandée. Le plus important est de répondre vite et précisément aux instructions reçues.",
+      },
+      {
+        q: "Puis-je repayer les frais de visa pour recommencer immédiatement ?",
+        a: "Pas sans stratégie. Avant de représenter une nouvelle demande, il faut comprendre ce qui a bloqué le dossier initial pour éviter de reproduire le même résultat.",
+      },
+      {
+        q: "Joventy peut-il m'aider après un 221(g) ?",
+        a: "Oui. Joventy peut relire la demande, structurer les documents complémentaires et vous aider à préparer une nouvelle stratégie si le consulat vous demande de repartir sur un autre dossier.",
+      },
+    ],
+    relatedSlugs: [
+      "entretien-visa-usa-b1-b2-questions",
+      "visa-usa-refuse-que-faire",
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+    ],
+    auditCtaAfterSection: 2,
+    relatedDestination: "visa-usa-kinshasa",
+  },
+
+  {
     slug: "payer-frais-mrv-visa-usa-kinshasa",
     title: "Comment payer les frais MRV visa USA depuis Kinshasa en 2026 — Étapes exactes sur usvisaappt.com",
     metaTitle: "Payer Frais MRV Visa USA depuis Kinshasa 2026 — Montants exacts + étapes | Joventy",
@@ -567,6 +739,91 @@ const guides: Guide[] = [
     relatedSlugs: [
       "comment-obtenir-creneau-visa-usa-kinshasa",
       "entretien-visa-usa-b1-b2-questions",
+      "visa-usa-refuse-que-faire",
+    ],
+    relatedDestination: "visa-usa-kinshasa",
+  },
+
+  {
+    slug: "visa-usa-renouvellement-sans-entretien-kinshasa",
+    title: "Renouvellement visa USA sans entretien à Kinshasa : conditions et dossier 2026",
+    metaTitle: "Renouvellement Visa USA Sans Entretien Kinshasa 2026 — Interview Waiver | Joventy",
+    metaDescription:
+      "B1/B2 renouvelable sans entretien ? Découvrez les règles d'Interview Waiver en vigueur, les critères d'éligibilité et les pièges qui font perdre la dispense.",
+    publishedDate: "2026-07-19",
+    updatedDate: "2026-07-19",
+    readingTime: 7,
+    category: "Visa USA",
+    coverEmoji: "🧾",
+    intro:
+      "Le renouvellement sans entretien attire beaucoup de demandeurs, mais il n'est pas automatique. Selon les règles en vigueur, certains renouvellements B1/B2 peuvent être traités sans entretien si vous remplissez des critères précis. Le bon réflexe consiste à vérifier votre éligibilité avant de lancer la demande pour éviter une perte de temps sur un dossier inadapté.",
+    sections: [
+      {
+        heading: "Qui peut être dispensé d'entretien ?",
+        body:
+          "Le Département d'État américain prévoit une dispense d'entretien pour certaines catégories et, sous conditions, pour certains renouvellements de visas non-immigrants. Pour les dossiers B1/B2, la règle la plus utile concerne les renouvellements récents.",
+        list: [
+          "Le visa renouvelé doit être de catégorie B1, B2 ou B1/B2",
+          "La demande doit être déposée dans le pays de nationalité ou de résidence",
+          "Le visa précédent doit avoir été délivré pour sa validité complète",
+          "Le demandeur devait avoir au moins 18 ans lors de la délivrance du visa précédent",
+          "Le visa précédent doit généralement être expiré depuis moins de 12 mois",
+          "Le dossier ne doit présenter ni refus antérieur non résolu ni inéligibilité apparente",
+        ],
+      },
+      {
+        heading: "Les documents à préparer avant de lancer le dossier",
+        body:
+          "Même sans entretien, le dossier doit rester solide. L'objectif est d'éviter qu'un simple renouvellement soit bloqué par une pièce manquante ou incohérente.",
+        list: [
+          "Passeport actuel et ancien passeport contenant le visa USA précédent",
+          "DS-160 rempli avec des informations cohérentes et à jour",
+          "Photo récente conforme aux normes américaines",
+          "Preuve de résidence ou de nationalité si le dépôt se fait hors du pays d'origine",
+          "Justificatifs de voyage, si le portail ou le consulat les demande",
+        ],
+      },
+      {
+        heading: "Ce qui fait perdre la dispense",
+        body:
+          "Beaucoup de dossiers échouent parce qu'ils ressemblent à un renouvellement simple alors qu'ils contiennent en réalité un changement important.",
+        list: [
+          "Un refus antérieur non correctement déclaré",
+          "Un changement de catégorie de visa",
+          "Un visa précédent trop ancien",
+          "Une situation professionnelle ou familiale devenue incohérente",
+          "Une résidence qui ne correspond pas au pays de dépôt",
+        ],
+      },
+      {
+        heading: "Comment Joventy sécurise un renouvellement",
+        body:
+          "Joventy vérifie l'éligibilité, prépare le DS-160, organise les pièces et vous évite de pousser un renouvellement sans entretien alors qu'un entretien serait en réalité nécessaire.",
+        list: [
+          "Vérification préalable de l'éligibilité à l'Interview Waiver",
+          "Préparation et cohérence du DS-160",
+          "Contrôle des pièces du précédent visa et du passeport actuel",
+          "Orientation vers un entretien si la dispense n'est pas solide",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Un renouvellement B1/B2 est-il toujours sans entretien ?",
+        a: "Non. La dispense dépend de critères précis et peut être retirée par le consulat. Il faut toujours vérifier l'éligibilité avant de compter sur un dépôt sans entretien.",
+      },
+      {
+        q: "Le visa précédent doit-il être encore valide ?",
+        a: "Pas forcément. La règle vise généralement les renouvellements dans les 12 mois suivant l'expiration du visa précédent, mais il faut vérifier le cas précis au moment du dépôt.",
+      },
+      {
+        q: "Joventy peut-il préparer le dossier sans rendez-vous ?",
+        a: "Oui. Joventy peut préparer le dossier et vérifier si vous entrez dans la catégorie dispensée d'entretien, puis vous orienter vers la bonne voie.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-usa-kinshasa",
+      "payer-frais-mrv-visa-usa-kinshasa",
       "visa-usa-refuse-que-faire",
     ],
     relatedDestination: "visa-usa-kinshasa",
@@ -701,7 +958,7 @@ const guides: Guide[] = [
       { q: "Peut-on quand même voyager au Canada avec un visa déjà obtenu ?", a: "Non. Même les visas déjà approuvés sont suspendus pendant la période. Si vous vous présentez à la frontière canadienne, vous serez soumis à 21 jours d'isolation obligatoire et votre entrée pourrait être refusée." },
       { q: "Quand la suspension sera-t-elle levée ?", a: "La date officielle est le 28 août 2026, mais elle peut être prolongée si l'épidémie n'est pas maîtrisée, ou raccourcie si la situation s'améliore. Joventy suit les annonces IRCC et vous notifie immédiatement." },
     ],
-    relatedSlugs: ["delais-visa-usa-canada-schengen-kinshasa-2025", "comment-obtenir-creneau-visa-usa-kinshasa", "documents-visa-schengen-kinshasa"],
+    relatedSlugs: ["visa-canada-kinshasa", "prouver-capacites-financieres-visa-etudiant-canada", "lettre-explication-canada-ircc-origine-fonds"],
     relatedDestination: "visa-canada-kinshasa",
   },
 
@@ -755,7 +1012,7 @@ const guides: Guide[] = [
       { q: "Mes empreintes seront-elles prises à chaque entrée dans l'espace Schengen ?", a: "Complètement lors de la première entrée (4 doigts + photo faciale). Pour les entrées suivantes dans les 3 ans, une vérification simplifiée suffit." },
       { q: "Que se passe-t-il si je dépasse mes 90 jours ?", a: "Le système EES vous signale automatiquement. Vous risquez une interdiction d'entrée future, une amende, et un refus de visa lors de votre prochaine demande. Ne dépassez jamais vos 90 jours." },
     ],
-    relatedSlugs: ["documents-visa-schengen-kinshasa", "visa-schengen-digital-2026", "delais-visa-usa-canada-schengen-kinshasa-2025"],
+    relatedSlugs: ["documents-visa-schengen-kinshasa", "visa-schengen-digital-2026", "visa-schengen-kinshasa"],
     relatedDestination: "visa-schengen-kinshasa",
   },
 
@@ -781,7 +1038,7 @@ const guides: Guide[] = [
       { q: "Dois-je faire ma demande de visa en ligne maintenant ?", a: "Pas obligatoirement. Le CEV de Kinshasa accepte toujours les dossiers physiques. Cependant, certains consulats (France, Italie) offrent déjà la possibilité d'uploader des documents en ligne pour gagner du temps au rendez-vous." },
       { q: "La biométrie sera-t-elle toujours nécessaire ?", a: "Oui pour les premiers demandeurs. Si vos empreintes ont déjà été collectées dans les 59 derniers mois, vous n'aurez pas besoin de les refaire — ce qui ouvre la voie à une demande 100% en ligne pour les renouvellements." },
     ],
-    relatedSlugs: ["ees-schengen-2026-controle-biometrique", "documents-visa-schengen-kinshasa", "delais-visa-usa-canada-schengen-kinshasa-2025"],
+    relatedSlugs: ["ees-schengen-2026-controle-biometrique", "documents-visa-schengen-kinshasa", "visa-schengen-kinshasa"],
     relatedDestination: "visa-schengen-kinshasa",
   },
 
@@ -848,9 +1105,9 @@ const guides: Guide[] = [
 
   {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
-    title: "Rendez-vous visa Espagne Kinshasa 2026 — Procédure officielle étape par étape (email + citaconsular.es)",
-    metaTitle: "Rendez-vous Visa Espagne Kinshasa 2026 — Procédure Complète en 2 Étapes | Joventy",
-    metaDescription: "Obtenez votre rendez-vous visa Espagne à Kinshasa : email officiel + réservation citaconsular.es. Procédure exacte, documents requis, frais 90€ et délais réels 2026.",
+    title: "Rendez-vous Espagne Kinshasa 2026 — Procédure officielle étape par étape (email + citaconsular.es)",
+    metaTitle: "Rendez-vous Espagne Kinshasa 2026 — Email ambassade + citaconsular.es | Joventy",
+    metaDescription: "Comment prendre rendez-vous visa Espagne à Kinshasa : email officiel de l'ambassade, réservation citaconsular.es, documents requis et délais réels 2026.",
     publishedDate: "2026-06-27",
     updatedDate: "2026-07-05",
     readingTime: 8,
@@ -983,8 +1240,8 @@ const guides: Guide[] = [
     ],
     relatedSlugs: [
       "documents-visa-schengen-kinshasa",
-      "comment-obtenir-creneau-visa-usa-kinshasa",
-      "delais-visa-usa-canada-schengen-kinshasa-2025",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+      "guide-cev-kinshasa-reservation-rdv-depot",
     ],
     relatedDestination: "visa-espagne-kinshasa",
   },
@@ -1141,11 +1398,11 @@ const guides: Guide[] = [
       },
     ],
     relatedSlugs: [
-      "documents-visa-schengen-kinshasa",
-      "delais-visa-usa-canada-schengen-kinshasa-2025",
-      "ees-schengen-2026-controle-biometrique",
+      "visa-royaume-uni-kinshasa",
+      "ambassade-royaume-uni-kinshasa",
+      "que-faire-apres-refus-visa-kinshasa-recours",
     ],
-    relatedDestination: "visa-schengen-kinshasa",
+    relatedDestination: "visa-royaume-uni-kinshasa",
   },
 
   {
@@ -2017,7 +2274,90 @@ const guides: Guide[] = [
     ],
     relatedSlugs: [
       "documents-visa-schengen-kinshasa",
-      "rendez-vous-cev-kinshasa-visa-schengen",
+      "visa-schengen-assurance-voyage-30k-kinshasa",
+      "visa-schengen-mineur-kinshasa",
+    ],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
+    slug: "visa-schengen-mineur-kinshasa",
+    title: "Visa Schengen pour mineur à Kinshasa : autorisation parentale, acte de naissance et dossier complet",
+    metaTitle: "Visa Schengen Mineur Kinshasa 2026 — Autorisation Parentale & Dossier | Joventy",
+    metaDescription:
+      "Comment déposer un visa Schengen pour un enfant depuis Kinshasa : signature du parent, pièces d'identité, acte de naissance et précautions au CEV.",
+    publishedDate: "2026-07-19",
+    updatedDate: "2026-07-19",
+    readingTime: 7,
+    category: "Visa Schengen",
+    coverEmoji: "🧒",
+    intro:
+      "Un visa Schengen pour mineur se prépare différemment d'un dossier adulte. Les consulats et le CEV veulent voir qui exerce l'autorité parentale, qui signe la demande et qui accompagne l'enfant pendant le voyage. Quand un détail manque, le dossier peut être rejeté même si le reste est propre.",
+    sections: [
+      {
+        heading: "Qui signe la demande d'un mineur ?",
+        body:
+          "Le formulaire Schengen d'un mineur doit être signé par une personne exerçant l'autorité parentale ou la tutelle légale. Si l'enfant voyage seul ou avec un adulte autre que son parent, d'autres autorisations peuvent être demandées selon le pays de destination.",
+        list: [
+          "Le formulaire doit être signé par le parent ou le tuteur légal",
+          "Chaque enfant doit avoir son propre dossier et son propre rendez-vous",
+          "Les documents d'identité du ou des parents doivent être joints",
+          "Le pays Schengen de destination peut demander une autorisation supplémentaire de sortie",
+        ],
+      },
+      {
+        heading: "Documents à préparer pour un enfant",
+        body:
+          "Le dossier mineur doit être particulièrement cohérent. Les noms, dates et filiations doivent correspondre sur toutes les pièces.",
+        list: [
+          "Passeport du mineur",
+          "Acte de naissance ou document établissant clairement la filiation",
+          "Autorisation parentale légalisée si l'enfant voyage avec un seul parent ou un tiers",
+          "Copie des pièces d'identité des parents ou du tuteur",
+          "Photos conformes aux normes Schengen",
+          "Preuve d'hébergement et itinéraire cohérents avec le voyage familial",
+        ],
+      },
+      {
+        heading: "Quand les consulats deviennent plus stricts",
+        body:
+          "Les dossiers de mineurs sont souvent analysés avec davantage d'attention, surtout si l'un des parents reste en RDC.",
+        list: [
+          "Voyage avec un seul parent et absence d'autorisation de l'autre parent",
+          "Noms différents entre l'acte de naissance et le passeport",
+          "Autorisation parentale non légalisée ou trop ancienne",
+          "Hébergement ou itinéraire qui ne correspond pas au voyage familial déclaré",
+        ],
+      },
+      {
+        heading: "Comment préparer le dépôt au CEV",
+        body:
+          "Pour éviter un refus administratif, il faut anticiper les pièces familiales et présenter un dossier lisible dès le premier passage.",
+        list: [
+          "Classer les documents du mineur à part dans le dossier",
+          "Ajouter une note de contexte si un parent n'accompagne pas le voyage",
+          "Vérifier que la police d'assurance couvre bien l'enfant",
+          "Prévoir des copies supplémentaires de chaque document familial",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Un mineur peut-il voyager avec un seul parent ?",
+        a: "Oui, mais il faut souvent une autorisation écrite du parent absent, et parfois une légalisation selon le pays de destination. Le mieux est de vérifier les règles du pays Schengen ciblé avant le dépôt.",
+      },
+      {
+        q: "L'autorisation parentale doit-elle être légalisée ?",
+        a: "Souvent oui, surtout si le voyage est familial ou si un seul parent accompagne l'enfant. Les exigences exactes varient selon l'ambassade et le pays de destination.",
+      },
+      {
+        q: "Le CEV demande-t-il un dossier séparé pour chaque enfant ?",
+        a: "Oui. Chaque mineur a son propre dossier et son propre rendez-vous, même si la famille voyage ensemble.",
+      },
+    ],
+    relatedSlugs: [
+      "documents-visa-schengen-kinshasa",
+      "guide-cev-kinshasa-reservation-rdv-depot",
       "motifs-refus-visa-schengen-kinshasa",
     ],
     relatedDestination: "visa-schengen-kinshasa",
@@ -2073,10 +2413,91 @@ const guides: Guide[] = [
     ],
     relatedSlugs: [
       "lettre-explication-canada-ircc-origine-fonds",
-      "erreurs-fatales-portail-ircc-refus-congo",
-      "suspension-visa-canada-rdc-ebola-2026",
+      "visa-canada-etudiant-caq-gic-kinshasa",
+      "visa-canada-kinshasa",
     ],
     auditCtaAfterSection: 1,
+    relatedDestination: "visa-canada-kinshasa",
+  },
+
+  {
+    slug: "visa-canada-etudiant-caq-gic-kinshasa",
+    title: "Visa étudiant Canada à Kinshasa : CAQ, GIC et preuve de fonds 2026",
+    metaTitle: "Visa Étudiant Canada Kinshasa 2026 — CAQ, GIC, Preuve de Fonds | Joventy",
+    metaDescription:
+      "Guide concret pour un permis d'études Canada depuis Kinshasa: CAQ pour le Québec, GIC, preuve de fonds et dossier cohérent pour IRCC.",
+    publishedDate: "2026-07-19",
+    updatedDate: "2026-07-19",
+    readingTime: 8,
+    category: "Visa Canada",
+    coverEmoji: "🎓",
+    intro:
+      "Pour un visa étudiant Canada depuis Kinshasa, IRCC regarde rarement un seul document isolé. Il veut un ensemble cohérent: admission, fonds disponibles, origine de l'argent, et si vous partez au Québec, le CAQ en plus. Ce guide aide à structurer un dossier crédible avant le dépôt.",
+    sections: [
+      {
+        heading: "CAQ pour le Québec: quand il devient indispensable",
+        body:
+          "Si vous partez étudier au Québec, le CAQ est une pièce essentielle avant même de finaliser votre demande de permis d'études. Sans lui, le dossier est incomplet pour la province concernée.",
+        list: [
+          "Le CAQ concerne les études au Québec",
+          "Le document doit être cohérent avec votre lettre d'admission",
+          "Vérifiez que les dates d'admission et de début des cours s'alignent",
+          "Conservez une copie claire du CAQ dans le dossier IRCC",
+        ],
+      },
+      {
+        heading: "GIC et preuve de fonds: ce qu'IRCC veut voir",
+        body:
+          "Le GIC peut renforcer un dossier, mais il ne remplace pas une preuve de fonds lisible. IRCC veut comprendre d'où vient l'argent et comment il a été accumulé.",
+        list: [
+          "Un GIC accepté par une institution canadienne reconnue",
+          "Relevés bancaires récents montrant la disponibilité réelle des fonds",
+          "Preuve de scolarité ou de paiement partiel si déjà réglée",
+          "Justificatifs de revenus du garant ou du parrain financier",
+        ],
+      },
+      {
+        heading: "Construire un dossier cohérent",
+        body:
+          "Le meilleur dossier est celui qui raconte la même histoire du début à la fin: parcours académique, capacité de paiement et projet de retour.",
+        list: [
+          "Lettre d'explication claire sur le choix du programme et de l'école",
+          "Lien entre le parcours scolaire ou professionnel et la formation choisie",
+          "Relevés et pièces financières qui correspondent aux montants annoncés",
+          "Explications courtes si un dépôt important apparaît dans le compte",
+        ],
+      },
+      {
+        heading: "Erreurs qui affaiblissent un dossier d'étudiant",
+        body:
+          "Les refus arrivent souvent quand le dossier semble bricolé ou trop récent. La cohérence compte plus qu'un gros solde ponctuel.",
+        list: [
+          "Dépôt bancaire important sans origine documentée",
+          "Programme choisi sans lien avec le parcours précédent",
+          "Documents financiers incomplets ou datés",
+          "CAQ, admission et budget qui ne racontent pas la même histoire",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Le GIC suffit-il à lui seul pour IRCC ?",
+        a: "Non. Il aide, mais IRCC veut aussi des relevés bancaires, une origine des fonds claire et un dossier académique cohérent.",
+      },
+      {
+        q: "Le CAQ est-il obligatoire pour tous les étudiants au Canada ?",
+        a: "Non, il concerne le Québec. Pour les autres provinces, vous devez surtout prouver votre admission et vos fonds selon les exigences IRCC.",
+      },
+      {
+        q: "Faut-il une lettre d'explication si le compte a reçu un gros dépôt récent ?",
+        a: "Oui, c'est fortement recommandé. Une explication courte, datée et appuyée par des preuves aide à éviter une lecture négative du dossier.",
+      },
+    ],
+    relatedSlugs: [
+      "prouver-capacites-financieres-visa-etudiant-canada",
+      "lettre-explication-canada-ircc-origine-fonds",
+      "visa-canada-kinshasa",
+    ],
     relatedDestination: "visa-canada-kinshasa",
   },
 

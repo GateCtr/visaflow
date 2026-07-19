@@ -84,6 +84,7 @@ const guideEntries: SitemapEntry[] = getAllGuides().map((g) => ({
   loc: `${SITE}/guides/${g.slug}`,
   changefreq: "weekly",
   priority: "0.85",
+  lastmod: g.updatedDate,
 }));
 
 const allEntries = [...staticEntries, ...destEntries, ...embassyEntries, ...guideEntries];

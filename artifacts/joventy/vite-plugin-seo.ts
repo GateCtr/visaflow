@@ -10,9 +10,9 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-function replaceMeta(html: string, tag: string, newContent: string): string {
-  const re = new RegExp(`<meta\\s+${tag}\\s+content="[^"]*"`);
-  return html.replace(re, `<meta ${tag} content="${newContent}"`);
+function appendBeforeHeadClose(html: string, tags: string[]): string {
+  if (tags.length === 0) return html;
+  return html.replace("</head>", `${tags.join("\n")}\n</head>`);
 }
 
 function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): string {
@@ -60,6 +60,13 @@ function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): stri
     `<script type="application/ld+json">${breadcrumb}</script>`,
     `<script type="application/ld+json">${service}</script>`,
   ].join("\n");
+}
+
+function buildArticleMeta(publishedTime: string, modifiedTime: string): string[] {
+  return [
+    `<meta property="article:published_time" content="${publishedTime}" />`,
+    `<meta property="article:modified_time" content="${modifiedTime}" />`,
+  ];
 }
 
 function buildEmbassySchemas(embassy: NonNullable<ReturnType<typeof getEmbassyBySlug>>, url: string): string {
@@ -161,6 +168,9 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
       .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(dest.title)}"`)
       .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(dest.metaDescription)}"`)
+      .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="https://joventy.cd/opengraph.jpg"`)
+      .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`${dest.name} depuis Kinshasa avec Joventy`)}"`)
+      .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
       .replace("</head>", `${schemas}\n</head>`);
   }
 
@@ -178,6 +188,9 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
       .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(embassy.title)}"`)
       .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(embassy.metaDescription)}"`)
+      .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="https://joventy.cd/opengraph.jpg"`)
+      .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`${embassy.officialName} à Kinshasa`)}"`)
+      .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
       .replace("</head>", `${schemas}\n</head>`);
   }
 
@@ -187,7 +200,8 @@ export function injectSeoMeta(html: string, pathname: string): string {
     if (guide) {
       const url = `https://joventy.cd/guides/${guide.slug}`;
       const schemas = buildGuideSchemas(guide, url);
-      return html
+      const articleMeta = buildArticleMeta(guide.publishedDate, guide.updatedDate);
+      const updated = html
         .replace(/<title>[^<]*<\/title>/, `<title>${esc(guide.metaTitle)}</title>`)
         .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(guide.metaDescription)}"`)
         .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
@@ -197,7 +211,10 @@ export function injectSeoMeta(html: string, pathname: string): string {
         .replace(/<meta property="og:type" content="[^"]*"/, `<meta property="og:type" content="article"`)
         .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(guide.metaTitle)}"`)
         .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(guide.metaDescription)}"`)
-        .replace("</head>", `${schemas}\n</head>`);
+        .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="https://joventy.cd/opengraph.jpg"`)
+        .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(guide.title)}"`)
+        .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
+      return appendBeforeHeadClose(updated, [...articleMeta, schemas]);
     }
   }
 
