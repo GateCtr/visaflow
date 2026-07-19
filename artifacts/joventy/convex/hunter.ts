@@ -1,0 +1,1008 @@
+import { internalMutation, mutation, internalQuery, query, action } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { v } from "convex/values";
+import { coreMarkSlotFound } from "./slotFoundHelper";
+import { VISA_PRICING } from "./constants";
+import type { Doc, Id } from "./_generated/dataModel";
+
+function getRole(identity: { [key: string]: unknown } | null): string {
+  if (!identity) return "client";
+  // Direct claim: "role": "{{user.public_metadata.role}}"
+  if (identity.role) return identity.role as string;
+  // camelCase nested object: "publicMetadata": "{{user.public_metadata}}"
+  const pub = identity.publicMetadata as { role?: string } | undefined;
+  if (pub?.role) return pub.role;
+  // snake_case nested object: "public_metadata": "{{user.public_metadata}}"
+  const pubSnake = identity["public_metadata"] as { role?: string } | undefined;
+  if (pubSnake?.role) return pubSnake.role;
+  return "client";
+}
+
+function requireAdmin(identity: { [key: string]: unknown } | null) {
+  if (!identity || getRole(identity) !== "admin") {
+    throw new Error("Accès refusé — réservé aux administrateurs Joventy");
+  }
+}
+
+
+export const setHunterConfig = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    embassyUsername: v.string(),
+    embassyPassword: v.string(),
+    isActive: v.boolean(),
+    twoCaptchaApiKey: v.optional(v.string()),
+    scheduleUrl: v.optional(v.string()),
+    portalApplicationId: v.optional(v.string()),
+    slotDateFrom: v.optional(v.string()),
+    slotDateDeadline: v.optional(v.string()),
+    // CEV / Schengen
+    vowintAppId: v.optional(v.string()),
+    // Mode reporter USA
+    rescheduleMode: v.optional(v.boolean()),
+    rescheduleExistingDate: v.optional(v.string()),
+    // Proxy résidentiel USA (sticky 60 min — désactivé par défaut car IP binding JWT)
+    useResidentialProxy: v.optional(v.boolean()),
+    // ═══ V3 Chasseur — champs par dossier ═══
+    accountRole: v.optional(v.union(v.literal("eclaireur"), v.literal("confine"), v.literal("hybride"))),
+    currentAppointmentDate: v.optional(v.string()),
+    maxLoginsPerDay: v.optional(v.number()),
+    rushWindows: v.optional(v.string()),
+    blindBookingEnabled: v.optional(v.boolean()),
+    slotPriorityDates: v.optional(v.string()),
+    maxMonthsToScan: v.optional(v.number()),
+    nightModeEnabled: v.optional(v.boolean()),
+    preferredProxy: v.optional(v.string()),
+    // CEV Dossier Loop v3 - Multi-comptes
+    cevDossierPool: v.optional(v.string()),
+    cevUseProxy: v.optional(v.boolean()),
+    cevScanIntervalSec: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const existing = (app as { hunterConfig?: { 
+      checkCount?: number; 
+      lastCheckAt?: number; 
+      lastResult?: string; 
+      twoCaptchaApiKey?: string; 
+      scheduleUrl?: string; 
+      portalApplicationId?: string; 
+      slotDateFrom?: string; 
+      slotDateDeadline?: string; 
+      vowintAppId?: string; 
+      cevClickCount?: number; 
+      cevClickWindowStart?: number;
+      // V3 Chasseur fields
+      accountRole?: "eclaireur" | "confine" | "hybride";
+      currentAppointmentDate?: string;
+      maxLoginsPerDay?: number;
+      rushWindows?: string;
+      blindBookingEnabled?: boolean;
+      slotPriorityDates?: string[];
+      maxMonthsToScan?: number;
+      nightModeEnabled?: boolean;
+      preferredProxy?: string;
+      // CEV Dossier Loop v3 - Multi-comptes
+      cevDossierPool?: string;
+      cevUseProxy?: boolean;
+      cevScanIntervalSec?: number;
+    } }).hunterConfig;
+
+    const existingFull = existing as (typeof existing & {
+      cevActiveSessionCookie?: string;
+      cevActiveSessionValidUntil?: string;
+      cevActiveSessionRedirectUrl?: string;
+    }) | undefined;
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        embassyUsername: args.embassyUsername,
+        embassyPassword: args.embassyPassword,
+        isActive: args.isActive,
+        twoCaptchaApiKey: args.twoCaptchaApiKey ?? existing?.twoCaptchaApiKey,
+        scheduleUrl: args.scheduleUrl || existing?.scheduleUrl,
+        portalApplicationId: args.portalApplicationId || existing?.portalApplicationId,
+        slotDateFrom: args.slotDateFrom || undefined,
+        slotDateDeadline: args.slotDateDeadline || undefined,
+        lastCheckAt: existing?.lastCheckAt,
+        checkCount: existing?.checkCount ?? 0,
+        lastResult: existing?.lastResult,
+        vowintAppId: args.vowintAppId || existing?.vowintAppId,
+        cevClickCount: existing?.cevClickCount,
+        cevClickWindowStart: existing?.cevClickWindowStart,
+        // Préserver la session CEV active — ne pas l'écraser lors des mises à jour admin
+        cevActiveSessionCookie: existingFull?.cevActiveSessionCookie,
+        cevActiveSessionValidUntil: existingFull?.cevActiveSessionValidUntil,
+        cevActiveSessionRedirectUrl: existingFull?.cevActiveSessionRedirectUrl,
+        // Mode reporter USA — défini explicitement par l'admin (pas préservé, toujours écrasé)
+        rescheduleMode: args.rescheduleMode ?? undefined,
+        rescheduleExistingDate: args.rescheduleExistingDate || undefined,
+        // Proxy résidentiel USA
+        useResidentialProxy: args.useResidentialProxy ?? undefined,
+        // ═══ V3 Chasseur — champs par dossier ═══
+        accountRole: args.accountRole ?? existing?.accountRole ?? undefined,
+        currentAppointmentDate: args.currentAppointmentDate || existing?.currentAppointmentDate || undefined,
+        maxLoginsPerDay: args.maxLoginsPerDay ?? existing?.maxLoginsPerDay ?? undefined,
+        rushWindows: args.rushWindows || existing?.rushWindows || undefined,
+        blindBookingEnabled: args.blindBookingEnabled ?? existing?.blindBookingEnabled ?? undefined,
+        slotPriorityDates: args.slotPriorityDates
+          ? args.slotPriorityDates.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : existing?.slotPriorityDates,
+        maxMonthsToScan: args.maxMonthsToScan ?? existing?.maxMonthsToScan ?? undefined,
+        nightModeEnabled: args.nightModeEnabled ?? existing?.nightModeEnabled ?? undefined,
+        preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
+        // CEV Dossier Loop v3 - Multi-comptes
+        cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
+        cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
+        cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
+      },
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+// ─── INTERNAL: persister la session CEV du cevPollingLoop (survie crashs/redémarrages) ─
+export const internalPersistCevLoopSession = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    sessionCookie: v.string(),
+    validUntil: v.string(),
+    redirectUrl: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const hc = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig ?? {};
+    // Create updated hunterConfig by merging existing fields with new CEV session fields
+    const updatedHunterConfig = {
+      ...hc,
+      cevActiveSessionCookie: args.sessionCookie,
+      cevActiveSessionValidUntil: args.validUntil,
+      cevActiveSessionRedirectUrl: args.redirectUrl,
+    };
+    
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: updatedHunterConfig as any,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// ─── INTERNAL: lire la session CEV persistée du cevPollingLoop ────────────────
+export const internalGetCevLoopSession = internalQuery({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return null;
+    const hc = (app as { hunterConfig?: Record<string, unknown> }).hunterConfig;
+    if (!hc) return null;
+    const cookie = hc.cevActiveSessionCookie as string | undefined;
+    const validUntil = hc.cevActiveSessionValidUntil as string | undefined;
+    const redirectUrl = hc.cevActiveSessionRedirectUrl as string | undefined;
+    if (!cookie || !validUntil || !redirectUrl) return null;
+    return { cookies: cookie, validUntil, redirectUrl };
+  },
+});
+
+export const resetHunterConfig = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return args.applicationId;
+  },
+});
+
+export const getActiveJobs = internalQuery({
+  handler: async (ctx) => {
+    const apps = await ctx.db
+      .query("applications")
+      .withIndex("by_status", (q) => q.eq("status", "slot_hunting"))
+      .collect();
+
+    return apps
+      .filter((app) => {
+        const hc = (app as { hunterConfig?: { isActive?: boolean } }).hunterConfig;
+        return hc?.isActive === true;
+      })
+      .map((app) => {
+        const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
+        const hc = (app as { hunterConfig?: any }).hunterConfig;
+        return {
+          id: app._id,
+          destination: app.destination,
+          visaType: app.visaType,
+          applicantName: app.applicantName,
+          travelDate: app.travelDate,
+          urgencyTier: (app as { slotUrgencyTier?: string }).slotUrgencyTier ?? "standard",
+          slotBookingRefs: (app as { slotBookingRefs?: unknown }).slotBookingRefs,
+          hunterConfig: {
+            ...hc,
+            // Include siphoned cookie fields
+            cevSiphonedF5CookieValue: hc?.cevSiphonedF5CookieValue,
+            cevSiphonedF5CookieName: hc?.cevSiphonedF5CookieName,
+            cevSiphonedAspNetSessionId: hc?.cevSiphonedAspNetSessionId,
+            cevSiphonedUserAgent: hc?.cevSiphonedUserAgent,
+            cevSiphonedAt: hc?.cevSiphonedAt,
+            cevSiphonedValidUntil: hc?.cevSiphonedValidUntil,
+          },
+          // Segmentation visa class pour micro-meutes homogènes
+          broadcastVisaClass: (app as { broadcastVisaClass?: string }).broadcastVisaClass ?? null,
+          portalUrl: (pricing as { portalUrl?: string } | undefined)?.portalUrl ?? null,
+          portalName: (pricing as { portalName?: string } | undefined)?.portalName ?? null,
+          portalDashboardUrl: (pricing as { portalDashboardUrl?: string } | undefined)?.portalDashboardUrl ?? null,
+          portalAppointmentUrl: (pricing as { portalAppointmentUrl?: string } | undefined)?.portalAppointmentUrl ?? null,
+          portalScheduleUrl: (pricing as { portalScheduleUrl?: string } | undefined)?.portalScheduleUrl ?? null,
+          lastCheckAt: (app as { hunterConfig?: { lastCheckAt?: number } }).hunterConfig?.lastCheckAt ?? null,
+          spainOtpConfig: (app as { spainOtpConfig?: unknown }).spainOtpConfig ?? null,
+        };
+      });
+  },
+});
+
+export const getApplicationHunterKey = internalQuery({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return null;
+    const hc = (app as { hunterConfig?: { twoCaptchaApiKey?: string } }).hunterConfig;
+    return { twoCaptchaApiKey: hc?.twoCaptchaApiKey ?? null };
+  },
+});
+
+export const attachConfirmationDoc = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    storageId: v.string(),
+    docKey: v.string(),
+    label: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    const existing = await ctx.db
+      .query("documents")
+      .withIndex("by_application_key", (q) =>
+        q.eq("applicationId", args.applicationId).eq("docKey", args.docKey),
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        storageId: args.storageId,
+        uploadedAt: Date.now(),
+        verifiedByAdmin: true,
+      });
+      return existing._id;
+    }
+
+    const docId = await ctx.db.insert("documents", {
+      applicationId: args.applicationId,
+      docKey: args.docKey,
+      label: args.label,
+      storageId: args.storageId,
+      uploadedBy: "hunter-bot",
+      uploadedAt: Date.now(),
+      verifiedByAdmin: true,
+      isAdminUpload: true,
+    });
+
+    await ctx.db.patch(args.applicationId, {
+      updatedAt: Date.now(),
+      logs: [
+        ...((app as { logs?: Array<{ msg: string; time: number; author?: string }> }).logs ?? []),
+        { msg: "📄 PDF de confirmation généré par le bot et attaché au dossier.", time: Date.now(), author: "Joventy Hunter" },
+      ],
+    });
+
+    return docId;
+  },
+});
+
+export const markSlotFoundByHunter = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    date: v.string(),
+    time: v.string(),
+    location: v.string(),
+    confirmationCode: v.optional(v.string()),
+    screenshotStorageId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
+
+    const app = await ctx.db.get(args.applicationId);
+    const existing = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; checkCount?: number; lastCheckAt?: number; lastResult?: string; twoCaptchaApiKey?: string } } | null)?.hunterConfig;
+    if (existing) {
+      await ctx.db.patch(args.applicationId, {
+        hunterConfig: {
+          ...existing,
+          isActive: false,
+          lastResult: "slot_captured",
+          lastCheckAt: Date.now(),
+          checkCount: (existing.checkCount ?? 0) + 1,
+        },
+        updatedAt: Date.now(),
+      });
+    }
+
+    return args.applicationId;
+  },
+});
+
+export const recordHeartbeat = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    result: v.union(
+      v.literal("not_found"),
+      v.literal("captcha"),
+      v.literal("error"),
+      v.literal("payment_required"),
+    ),
+    errorMessage: v.optional(v.string()),
+    shouldPause: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+
+    const existing = (app as { hunterConfig?: { embassyUsername: string; embassyPassword: string; isActive: boolean; checkCount?: number; lastCheckAt?: number; lastResult?: string } }).hunterConfig;
+    if (!existing) return;
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        isActive: args.shouldPause ? false : existing.isActive,
+        lastCheckAt: Date.now(),
+        checkCount: (existing.checkCount ?? 0) + 1,
+        lastResult: args.result,
+      },
+      updatedAt: Date.now(),
+    });
+
+    if (args.shouldPause) {
+      const pauseReason = args.errorMessage ?? "Hunter auto-paused";
+      await ctx.db.patch(args.applicationId, {
+        logs: [
+          ...((app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? []),
+          { msg: pauseReason, time: Date.now(), author: "Joventy Hunter" },
+        ],
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (args.result === "payment_required") {
+      const msg = args.errorMessage
+        ? `⚠️ Paiement portail requis : ${args.errorMessage}`
+        : "⚠️ Le portail exige le paiement des frais consulaires avant d'accéder au calendrier des créneaux.";
+      await ctx.db.patch(args.applicationId, {
+        logs: [
+          ...((app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? []),
+          { msg, time: Date.now(), author: "Joventy Hunter" },
+        ],
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const recordCevClick = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    windowStart: v.number(),
+    clickCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const existing = (app as { hunterConfig?: { 
+      embassyUsername: string; 
+      embassyPassword: string; 
+      isActive: boolean;
+      [key: string]: unknown;
+    } }).hunterConfig;
+    if (!existing) return;
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        cevClickWindowStart: args.windowStart,
+        cevClickCount: args.clickCount,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const resetCevClickCount = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return;
+    const existing = (app as { hunterConfig?: { 
+      embassyUsername: string; 
+      embassyPassword: string; 
+      isActive: boolean;
+      [key: string]: unknown;
+    } }).hunterConfig;
+    if (!existing) return;
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        cevClickWindowStart: 0,
+        cevClickCount: 0,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Extrait un code OTP depuis un texte brut (corps d'email ou SMS).
+ * Essaie les patterns du plus spécifique au plus générique.
+ */
+function extractOtpFromText(raw: string): string | null {
+  if (!raw) return null;
+  const t = raw.replace(/\s+/g, " ").trim();
+  const patterns: RegExp[] = [
+    // Mot-clé suivi du code (multi-langue)
+    /(?:code|otp|código|clave|contraseña|pin|token|codi|verif\w*|confirm\w*|secreto|acceso|access)[\s:«»'"→\-–—=]+(\d{4,8})/i,
+    // Code en fin de phrase
+    /[\s:«»'"](\d{6})\s*[.,!?]?\s*$/m,
+    // 6 chiffres (longueur OTP la plus courante)
+    /\b(\d{6})\b/,
+    // 4–8 chiffres en dernier recours
+    /\b(\d{4,8})\b/,
+  ];
+  for (const pattern of patterns) {
+    const m = t.match(pattern);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Ingère un OTP reçu par webhook (email forward ou SMS forwarder).
+ * Cherche le défi en cours pour cet applicationId (ou globalement si absent).
+ * Ne nécessite aucune intervention humaine.
+ */
+export const ingestOtp = internalMutation({
+  args: {
+    rawText: v.string(),
+    applicationId: v.optional(v.id("applications")),
+    flow: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const code = extractOtpFromText(args.rawText);
+    if (!code) return { ok: false as const, reason: "no_otp_found" };
+
+    const now = Date.now();
+    const targetFlow = args.flow ?? "spain";
+
+    let challenge: Doc<"otpChallenges"> | undefined;
+
+    if (args.applicationId) {
+      const rows = (await ctx.db
+        .query("otpChallenges")
+        .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId!))
+        .order("desc")
+        .take(10)) as Doc<"otpChallenges">[];
+      challenge = rows.find(
+        (r) =>
+          (r.status === "pending" || r.status === "submitted") &&
+          r.expiresAt > now &&
+          r.flow === targetFlow,
+      );
+    }
+
+    if (!challenge) {
+      // Fallback global : défi le plus récent en cours toutes applications confondues
+      const pending = (await ctx.db
+        .query("otpChallenges")
+        .withIndex("by_status", (q) => q.eq("status", "pending"))
+        .order("desc")
+        .take(30)) as Doc<"otpChallenges">[];
+      challenge = pending.find((r) => r.expiresAt > now && r.flow === targetFlow);
+    }
+
+    if (!challenge) return { ok: false as const, reason: "no_active_challenge" };
+    
+    // Type assertion for otpChallenges document
+    const otpChallenge = challenge as Doc<"otpChallenges">;
+    
+    if (otpChallenge.expiresAt <= now) {
+      await ctx.db.patch(otpChallenge._id, { status: "expired" });
+      return { ok: false as const, reason: "challenge_expired" };
+    }
+
+    await ctx.db.patch(otpChallenge._id, {
+      status: "submitted",
+      code,
+      submittedAt: now,
+    });
+
+    console.log(`[OTP ingest] ✅ Code ${code} soumis pour challenge ${otpChallenge._id} (app ${otpChallenge.applicationId})`);
+    return { ok: true as const, challengeId: otpChallenge._id, code, applicationId: otpChallenge.applicationId };
+  },
+});
+
+export const requestOtpChallenge = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+    channel: v.optional(v.string()),
+    ttlMs: v.optional(v.number()),
+    chatId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const ttlMs = Math.max(30_000, Math.min(args.ttlMs ?? 120_000, 10 * 60_000));
+
+    const existing = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(10);
+
+    for (const row of existing) {
+      if (row.flow !== args.flow) continue;
+      if (row.status === "pending" || row.status === "submitted") {
+        await ctx.db.patch(row._id, {
+          status: row.expiresAt <= now ? "expired" : "cancelled",
+        });
+      }
+    }
+
+    const challengeId = await ctx.db.insert("otpChallenges", {
+      applicationId: args.applicationId,
+      flow: args.flow,
+      channel: args.channel ?? "telegram",
+      status: "pending",
+      chatId: args.chatId,
+      createdAt: now,
+      expiresAt: now + ttlMs,
+    });
+
+    return { challengeId, expiresAt: now + ttlMs };
+  },
+});
+
+export const submitOtpCode = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+    code: v.string(),
+    chatId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(20);
+
+    const target = rows.find(
+      (r) =>
+        r.flow === args.flow &&
+        (r.status === "pending" || r.status === "submitted"),
+    ) as Doc<"otpChallenges"> | undefined;
+
+    if (!target) return { ok: false, reason: "no_active_challenge" as const };
+    if (target.expiresAt <= now) {
+      await ctx.db.patch(target._id, { status: "expired" });
+      return { ok: false, reason: "challenge_expired" as const };
+    }
+
+    await ctx.db.patch(target._id, {
+      status: "submitted",
+      code: args.code.trim(),
+      chatId: args.chatId ?? target.chatId,
+      submittedAt: now,
+    });
+    return { ok: true, challengeId: target._id };
+  },
+});
+
+export const consumeOtpCode = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    flow: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("otpChallenges")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .order("desc")
+      .take(20);
+
+    const target = rows.find(
+      (r) =>
+        r.flow === args.flow &&
+        (r.status === "pending" || r.status === "submitted"),
+    ) as Doc<"otpChallenges"> | undefined;
+    if (!target) return { status: "none" as const };
+    if (target.expiresAt <= now) {
+      await ctx.db.patch(target._id, { status: "expired" });
+      return { status: "expired" as const };
+    }
+    if (target.status !== "submitted" || !target.code) {
+      return { status: "pending" as const, expiresAt: target.expiresAt };
+    }
+
+    await ctx.db.patch(target._id, {
+      status: "consumed",
+      consumedAt: now,
+    });
+    return {
+      status: "ok" as const,
+      code: target.code,
+      challengeId: target._id,
+    };
+  },
+});
+
+export const checkTwoCaptchaBalance: ReturnType<typeof action> = action({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const app = await ctx.runQuery(internal.hunter.getApplicationHunterKey, {
+      applicationId: args.applicationId,
+    });
+
+    if (!app) throw new Error("Dossier introuvable");
+
+    // Priorité : clé par dossier → clé globale Railway (TWOCAPTCHA_API_KEY)
+    const apiKey = app.twoCaptchaApiKey ?? process.env.TWOCAPTCHA_API_KEY ?? null;
+    if (!apiKey) throw new Error("Aucune clé 2captcha configurée (ni par dossier, ni en variable Railway)");
+
+    const res = await fetch(
+      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(apiKey)}`
+    );
+    const text = (await res.text()).trim();
+    const balance = parseFloat(text);
+
+    if (isNaN(balance)) {
+      throw new Error(`Réponse 2captcha: ${text}`);
+    }
+
+    return { balance, checkedAt: Date.now(), keySource: app.twoCaptchaApiKey ? "dossier" : "global" };
+  },
+});
+
+export const checkTwoCaptchaBalanceRaw = action({
+  args: { apiKey: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const res = await fetch(
+      `https://2captcha.com/res.php?action=getbalance&key=${encodeURIComponent(args.apiKey.trim())}`
+    );
+    const text = (await res.text()).trim();
+    const balance = parseFloat(text);
+
+    if (isNaN(balance)) {
+      return { ok: false, error: text, balance: null };
+    }
+
+    return { ok: true, error: null, balance };
+  },
+});
+
+export const checkCapsolverBalanceRaw = action({
+  args: { apiKey: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const res = await fetch("https://api.capsolver.com/getBalance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientKey: args.apiKey.trim() }),
+    });
+
+    const data = await res.json() as { errorId: number; errorCode?: string; errorDescription?: string; balance?: number };
+
+    if (data.errorId !== 0) {
+      return { ok: false, error: data.errorDescription ?? data.errorCode ?? `CapSolver error ${data.errorId}`, balance: null };
+    }
+
+    return { ok: true, error: null, balance: data.balance ?? 0 };
+  },
+});
+
+export const checkAntiCaptchaBalanceRaw = action({
+  args: { apiKey: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const res = await fetch("https://api.anti-captcha.com/getBalance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientKey: args.apiKey.trim() }),
+    });
+
+    const data = await res.json() as { errorId: number; errorCode?: string; errorDescription?: string; balance?: number };
+
+    if (data.errorId !== 0) {
+      return { ok: false, error: data.errorDescription ?? data.errorCode ?? `Anti-Captcha error ${data.errorId}`, balance: null };
+    }
+
+    return { ok: true, error: null, balance: data.balance ?? 0 };
+  },
+});
+
+export const pingPortal = action({
+  args: { destination: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const pricing = VISA_PRICING[args.destination as keyof typeof VISA_PRICING];
+    if (!pricing) throw new Error("Destination inconnue");
+
+    const url = (pricing as { portalUrl: string }).portalUrl;
+    const portalName = (pricing as { portalName: string }).portalName;
+    const startMs = Date.now();
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+      const res = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        redirect: "follow",
+      });
+
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - startMs;
+
+      return {
+        ok: res.status < 500,
+        status: res.status,
+        latencyMs,
+        url,
+        portalName,
+        error: null as string | null,
+      };
+    } catch (err) {
+      const latencyMs = Date.now() - startMs;
+      const errMsg = err instanceof Error ? err.message : "Unknown error";
+      const isTimeout = errMsg.includes("abort") || errMsg.includes("timeout") || errMsg.includes("timed out");
+      return {
+        ok: false,
+        status: null as number | null,
+        latencyMs,
+        url,
+        portalName,
+        error: isTimeout ? "Timeout (>9s) — portail inaccessible ou très lent" : errMsg,
+      };
+    }
+  },
+});
+
+export const createBotTest = mutation({
+  args: {
+    destination: v.string(),
+    testUsername: v.optional(v.string()),
+    testPassword: v.optional(v.string()),
+    twoCaptchaApiKey: v.optional(v.string()),
+    testType: v.optional(v.string()),  // "login" (défaut) | "logout"
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const pricing = VISA_PRICING[args.destination as keyof typeof VISA_PRICING];
+    if (!pricing) throw new Error("Destination inconnue");
+
+    const testId = await ctx.db.insert("botTests", {
+      destination: args.destination,
+      portalUrl: (pricing as { portalUrl: string }).portalUrl,
+      portalName: (pricing as { portalName: string }).portalName,
+      testUsername: args.testUsername,
+      testPassword: args.testPassword,
+      twoCaptchaApiKey: args.twoCaptchaApiKey,
+      testType: args.testType ?? "login",
+      status: "pending",
+      requestedAt: Date.now(),
+      requestedBy: identity!.subject,
+    });
+
+    return testId;
+  },
+});
+
+export const listBotTests = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as { [key: string]: unknown } | null);
+
+    const tests = await ctx.db
+      .query("botTests")
+      .withIndex("by_requested")
+      .order("desc")
+      .take(50);
+
+    return tests;
+  },
+});
+
+export const claimPendingBotTest = internalMutation({
+  handler: async (ctx) => {
+    const pending = await ctx.db
+      .query("botTests")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .order("asc")
+      .first();
+
+    if (!pending) return null;
+
+    await ctx.db.patch(pending._id, { status: "running" });
+    return pending;
+  },
+});
+
+export const completeBotTest = internalMutation({
+  args: {
+    testId: v.id("botTests"),
+    result: v.string(),
+    latencyMs: v.optional(v.number()),
+    httpStatus: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.testId, {
+      status: "done",
+      result: args.result,
+      latencyMs: args.latencyMs,
+      httpStatus: args.httpStatus,
+      errorMessage: args.errorMessage,
+      completedAt: Date.now(),
+    });
+  },
+});
+
+// ─── Bot Config (key-value store auto-découvert) ────────────────────────────
+
+export const internalGetBotConfig = internalQuery({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const row = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    return row ? row.value : null;
+  },
+});
+
+export const internalSaveBotConfig = internalMutation({
+  args: { key: v.string(), value: v.string() },
+  handler: async (ctx, { key, value }) => {
+    const existing = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { value, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("botConfig", { key, value, updatedAt: Date.now() });
+    }
+  },
+});
+
+// ─── INTERNAL: injecter des cookies F5 siphonnés dans un dossier (application) ───────────────
+export const internalInjectF5CookiesToApplication = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    f5CookieValue: v.string(),
+    f5CookieName: v.string(),
+    aspNetSessionId: v.optional(v.string()),
+    userAgent: v.string(),
+    validityMinutes: v.optional(v.number()),
+    // Also support original name for backwards compatibility
+    f5TsCookieValue: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) return { ok: false, error: "Application not found" };
+
+    const now = Date.now();
+    const actualF5Value = args.f5CookieValue ?? args.f5TsCookieValue;
+    const actualF5Name = args.f5CookieName ?? "TS0110ceb4";
+    const validityMs = (args.validityMinutes ?? 480) * 60 * 1000; // default 8h = 480 min
+
+    if (!actualF5Value) {
+      return { ok: false, error: "f5CookieValue or f5TsCookieValue is required" };
+    }
+
+    const existingHunterConfig = (app as any).hunterConfig || {};
+    const updatedHunterConfig = {
+      ...existingHunterConfig,
+      cevSiphonedF5CookieValue: actualF5Value,
+      cevSiphonedF5CookieName: actualF5Name,
+      cevSiphonedAspNetSessionId: args.aspNetSessionId,
+      cevSiphonedUserAgent: args.userAgent,
+      cevSiphonedAt: now,
+      cevSiphonedValidUntil: now + validityMs,
+    };
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: updatedHunterConfig,
+      updatedAt: now,
+    });
+
+    return { ok: true };
+  },
+});
+
+
+
+// ─── Bot Config: Admin-facing queries/mutations (authenticated) ──────────────
+
+export const getBotConfig = query({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    const row = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    return row ? row.value : null;
+  },
+});
+
+export const setBotConfig = mutation({
+  args: { key: v.string(), value: v.string() },
+  handler: async (ctx, { key, value }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    const existing = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { value, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("botConfig", { key, value, updatedAt: Date.now() });
+    }
+  },
+});
+
+export const listBotConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+    return await ctx.db.query("botConfig").collect();
+  },
+});

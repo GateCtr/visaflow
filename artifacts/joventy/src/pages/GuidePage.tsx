@@ -4,12 +4,17 @@ import { Clock, ChevronRight, ArrowRight, BookOpen, MessageCircle } from "lucide
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
+import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
+import { ShieldCheck } from "lucide-react";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
   "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
+  "Visa Business": "bg-amber-100 text-amber-700",
+  "Recours & Urgences": "bg-rose-100 text-rose-700",
 };
 function getCategoryColor(cat: string) {
   return CATEGORY_COLORS[cat] ?? "bg-slate-100 text-slate-600";
@@ -41,13 +46,13 @@ export default function GuidePage() {
     description: guide.metaDescription,
     datePublished: guide.publishedDate,
     dateModified: guide.updatedDate,
-    author: { "@type": "Organization", name: "Joventy", url: "https://www.joventy.cd" },
+    author: { "@type": "Organization", name: "Joventy", url: "https://joventy.cd" },
     publisher: {
       "@type": "Organization",
       name: "Joventy",
-      logo: { "@type": "ImageObject", url: "https://www.joventy.cd/logo.png" },
+      logo: { "@type": "ImageObject", url: "https://joventy.cd/logo.png" },
     },
-    mainEntityOfPage: { "@type": "WebPage", "@id": `https://www.joventy.cd/guides/${guide.slug}` },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `https://joventy.cd/guides/${guide.slug}` },
   };
 
   const faqSchema = guide.faq.length > 0
@@ -66,9 +71,9 @@ export default function GuidePage() {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://www.joventy.cd/" },
-      { "@type": "ListItem", position: 2, name: "Guides", item: "https://www.joventy.cd/guides" },
-      { "@type": "ListItem", position: 3, name: guide.title, item: `https://www.joventy.cd/guides/${guide.slug}` },
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: "Guides", item: "https://joventy.cd/guides" },
+      { "@type": "ListItem", position: 3, name: guide.title, item: `https://joventy.cd/guides/${guide.slug}` },
     ],
   };
 
@@ -77,12 +82,12 @@ export default function GuidePage() {
       <Helmet>
         <title>{guide.metaTitle}</title>
         <meta name="description" content={guide.metaDescription} />
-        <link rel="canonical" href={`https://www.joventy.cd/guides/${guide.slug}`} />
+        <link rel="canonical" href={`https://joventy.cd/guides/${guide.slug}`} />
         <meta property="og:title" content={guide.metaTitle} />
         <meta property="og:description" content={guide.metaDescription} />
         <meta property="og:type" content="article" />
-        <meta property="og:url" content={`https://www.joventy.cd/guides/${guide.slug}`} />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:url" content={`https://joventy.cd/guides/${guide.slug}`} />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <meta property="article:published_time" content={guide.publishedDate} />
@@ -102,6 +107,7 @@ export default function GuidePage() {
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
             <Link href="/#destinations" className="hover:text-primary transition-colors">Destinations</Link>
             <Link href="/guides" className="text-primary font-medium">Guides</Link>
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
             <Link href="/#contact" className="hover:text-primary transition-colors">Contact</Link>
           </nav>
           <Link href="/register">
@@ -165,9 +171,35 @@ export default function GuidePage() {
                   ))}
                 </ul>
               )}
+              {guide.auditCtaAfterSection === i && (
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
+                  <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800 mb-1">Un doute sur votre dossier ?</p>
+                    <p className="text-slate-600 text-sm">
+                      Faites vérifier vos documents par un expert avant de déposer — verdict par WhatsApp sous 48h, à partir de 25 $.
+                    </p>
+                  </div>
+                  <WhatsAppAuditCTA className="flex-shrink-0" />
+                </div>
+              )}
             </section>
           ))}
         </div>
+
+        {/* Fallback Audit & Diagnostic CTA for guides without a designated risk section */}
+        {guide.auditCtaAfterSection === undefined && (
+          <div className="my-10 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
+            <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-bold text-slate-800 mb-1">Un doute sur votre dossier ?</p>
+              <p className="text-slate-600 text-sm">
+                Faites vérifier vos documents par un expert avant de déposer — verdict par WhatsApp sous 48h, à partir de 25 $.
+              </p>
+            </div>
+            <WhatsAppAuditCTA className="flex-shrink-0" />
+          </div>
+        )}
 
         {/* CTA inline */}
         <div className="my-12 bg-gradient-to-r from-primary to-blue-700 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center gap-4">
@@ -257,7 +289,7 @@ export default function GuidePage() {
 
       <footer className="bg-slate-900 text-white/50 py-8 px-4 mt-10">
         <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-6 mb-8 text-xs">
             <div>
               <p className="font-semibold text-white/70 mb-2">Destinations</p>
               <ul className="space-y-1">
@@ -275,6 +307,15 @@ export default function GuidePage() {
                 <li><Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026" className="hover:text-white transition-colors">Purger 21 jours</Link></li>
                 <li><Link href="/guides/suspension-visa-canada-rdc-ebola-2026" className="hover:text-white transition-colors">Suspension Canada</Link></li>
                 <li><Link href="/guides/coupe-du-monde-2026-visa-usa-kinshasa" className="hover:text-white transition-colors">World Cup 2026</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-white/70 mb-2">Éviter le refus</p>
+              <ul className="space-y-1">
+                <li><Link href="/guides/motifs-refus-visa-schengen-kinshasa" className="hover:text-white transition-colors">Motifs de refus Schengen</Link></li>
+                <li><Link href="/guides/erreurs-releves-bancaires-depot-suspect-visa" className="hover:text-white transition-colors">Dépôt suspect bancaire</Link></li>
+                <li><Link href="/guides/que-faire-apres-refus-visa-kinshasa-recours" className="hover:text-white transition-colors">Après un refus</Link></li>
+                <li><Link href="/audit-diagnostic" className="hover:text-white transition-colors">Audit & Diagnostic</Link></li>
               </ul>
             </div>
             <div>
@@ -302,6 +343,9 @@ export default function GuidePage() {
               <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
               <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
             </div>
+          </div>
+          <div className="mt-5 pt-5 border-t border-white/10">
+            <LegalFooterNote />
           </div>
         </div>
       </footer>

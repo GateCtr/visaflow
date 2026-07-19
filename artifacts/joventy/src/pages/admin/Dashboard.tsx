@@ -12,6 +12,8 @@ import {
   MessageCircle,
   Eye,
   Radio,
+  Globe,
+  FileBarChart,
 } from "lucide-react";
 import {
   BarChart,
@@ -43,6 +45,8 @@ export default function AdminDashboard() {
   const unreadTotal = useQuery(api.messages.getUnreadTotal) ?? 0;
   const liveVisitors = useQuery(api.traffic.getLiveVisitors);
   const monthlyStats = useQuery(api.traffic.getMonthlyStats);
+  const topPages = useQuery(api.traffic.getTopPages);
+  const trafficSources = useQuery(api.traffic.getTrafficSources);
   const isLoading = stats === undefined;
 
   if (isLoading)
@@ -288,6 +292,85 @@ export default function AdminDashboard() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">Visiteurs uniques ce mois</p>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Pages visitées + Sources de trafic ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pages les plus visitées */}
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <FileBarChart className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-bold text-primary">Pages les plus visitées</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-5">30 derniers jours</p>
+
+          {topPages === undefined ? (
+            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+              Chargement…
+            </div>
+          ) : topPages && topPages.length > 0 ? (
+            <div className="divide-y divide-border">
+              {topPages.map((p, i) => (
+                <div key={p.path} className="flex items-center gap-3 py-2.5">
+                  <span className="text-xs font-bold text-muted-foreground/50 w-4 flex-shrink-0">
+                    {i + 1}
+                  </span>
+                  <span className="text-sm text-primary font-medium truncate flex-1">
+                    {p.path === "/" ? "Accueil" : p.path}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                    {p.visitors} visiteur{p.visitors > 1 ? "s" : ""}
+                  </span>
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex-shrink-0 tabular-nums">
+                    {p.views}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+              Les données s'accumulent au fil des visites…
+            </div>
+          )}
+        </div>
+
+        {/* Sources de trafic */}
+        <div className="bg-card rounded-2xl border border-border shadow-premium p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-bold text-primary">Sources de trafic</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-5">D'où viennent vos visiteurs — 30 derniers jours</p>
+
+          {trafficSources === undefined ? (
+            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+              Chargement…
+            </div>
+          ) : trafficSources && trafficSources.length > 0 ? (
+            <div className="space-y-3">
+              {trafficSources.map((s) => (
+                <div key={s.source}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-primary">{s.source}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {s.visitors} · {s.pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-secondary rounded-full"
+                      style={{ width: `${s.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+              Les données s'accumulent au fil des visites…
             </div>
           )}
         </div>

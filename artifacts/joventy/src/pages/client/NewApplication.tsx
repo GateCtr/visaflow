@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany", "morocco", "egypt", "china"]),
+  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany", "morocco", "egypt", "china", "brazil"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -43,6 +43,7 @@ const DESTINATIONS = [
   { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F — dépôt sans rendez-vous",            processType: "hybrid" as const },
   { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou consulaire sans rendez-vous",               processType: "hybrid" as const },
   { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou consulaire sans rendez-vous",                        processType: "hybrid" as const },
+  { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Rendez-vous consulaire — ambassade du Brésil à Kinshasa",              processType: "appointment" as const },
 ];
 
 const CEV_COUNTRIES = [
@@ -130,6 +131,8 @@ function getPackageInfo(
         ? `créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es — Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
         : destination === "germany"
         ? "créneau à l'ambassade d'Allemagne à Kinshasa (portail RK-Termin — visa national ou Schengen)"
+        : destination === "brazil"
+        ? "rendez-vous à l'ambassade du Brésil à Kinshasa"
         : "créneau de dépôt au centre VFS Global Kinshasa";
     return {
       label: base.label,
@@ -212,6 +215,14 @@ function getPackageInfo(
         slotNote: "Prérequis : passeport valide, documents selon catégorie visa. Frais consulaires (75-80€) payés séparément.",
       };
     }
+    if (destination === "brazil") {
+      return {
+        label: "Rendez-vous Ambassade",
+        tagline: "Rendez-vous uniquement",
+        description: "Votre dossier est prêt ? Joventy prend en charge la prise de rendez-vous à l'Ambassade du Brésil à Kinshasa dès qu'une disponibilité apparaît.",
+        slotNote: "Prérequis : dossier complet (formulaire, justificatifs financiers, hébergement). Frais consulaires brésiliens payés séparément.",
+      };
+    }
     return { label: base.label, tagline: base.tagline, description: base.description };
   }
 
@@ -243,6 +254,8 @@ function getPackageInfo(
         ? "au centre TLScontact France de Kinshasa (Visa D long séjour)"
         : destination === "schengen"
         ? "au Centre Européen des Visas (CEV)"
+        : destination === "brazil"
+        ? "à l'ambassade du Brésil"
         : "au centre VFS Global";
     return {
       label: base.label,
@@ -263,6 +276,7 @@ export default function NewApplication() {
   const { user } = useAuth();
 
   const createApplication = useMutation(api.applications.create);
+  const markConvinced = useMutation(api.victor.markConvinced);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -356,6 +370,13 @@ export default function NewApplication() {
         userWhatsapp: userWhatsapp.trim() || undefined,
       });
       toast({ title: "Dossier créé !", description: "Réglez les frais d'engagement pour démarrer le traitement." });
+      // Marquer la session Victor comme "convaincue" — action réellement complétée
+      try {
+        const victorSessionId = localStorage.getItem("victor_session_id");
+        if (victorSessionId) {
+          await markConvinced({ sessionId: victorSessionId, action: "dossier_created" });
+        }
+      } catch { /* non bloquant */ }
       setLocation(`/dashboard/applications/${id}/payment`);
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de créer le dossier." });

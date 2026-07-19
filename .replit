@@ -28,15 +28,15 @@ args = "artifacts/slot-hunter: Slot Hunter"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "artifacts/captcha-service: Captcha Service"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "artifacts/proxy-service: Proxy Service"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/joventy: web"
 
 [[workflows.workflow]]
 name = "artifacts/slot-hunter: Slot Hunter"
@@ -47,19 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/slot-hunter run dev"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/joventy run dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
+args = "redis-server --daemonize yes --logfile /tmp/redis.log; cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/captcha-service: Captcha Service"
@@ -70,8 +58,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3001 pnpm --filter @workspace/captcha-service run dev"
-waitForPort = 3001
+args = "cd artifacts/captcha-service && PORT=3001 node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/proxy-service: Proxy Service"
@@ -82,7 +69,19 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3002 pnpm --filter @workspace/proxy-service run dev"
+args = "cd artifacts/proxy-service && PORT=3002 node_modules/.bin/tsx watch src/index.ts"
+
+[[workflows.workflow]]
+name = "artifacts/joventy: web"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/joventy && pnpm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -103,6 +102,10 @@ CONVEX_SITE_URL = "https://famous-albatross-420.convex.site"
 PORT = "5000"
 BASE_PATH = "/"
 HUNTER_API_KEY = "fc6f65c04608b2a5fd30dbda700ec4a57718f86e402e1980898320bfef240384"
+VITE_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuam92ZW50eS5jZCQ"
+REDIS_URL = "redis://localhost:6379"
+CAPTCHA_SERVICE_API_KEY = "df63860f0d94b8a8fe28c2cd49964cc183e78df3a3838a2bfac0033f2f460c98"
+PROXY_SERVICE_API_KEY = "88fdc5aa2028737e8fc371cdda9a69dd185bd782d72e487dd04062cda1c5c112"
 
 [[ports]]
 localPort = 3001

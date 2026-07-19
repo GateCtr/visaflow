@@ -209,7 +209,6 @@ function buildSystemPrompt(pageContext: string, isAuth: boolean, message: string
 
   } else if (pageContext === "/audit-diagnostic") {
     pageCtx = `Page d'audit. Réponds à la question précise, puis qualifie le besoin si nécessaire (destination, type de visa, situation actuelle). CTA utile : /dashboard/applications/new.`;
-
   } else if (pageContext === "/dashboard/contrat") {
     pageCtx = `URGENT — Le contrat n'est pas signé, c'est le seul blocage. Sois direct et rassurant : explique que les délais d'ambassade ne s'arrêtent pas, chaque jour compte. Pousse à signer maintenant.`;
 
@@ -339,7 +338,6 @@ RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
 - Paiement partiel, total, acompte, solde => réponds uniquement sur la structure du paiement
 - Dossier complet, service complet, accompagnement complet => seulement dans ce cas parle de la prise en charge globale
 - Si plusieurs sujets sont mélangés sans priorité claire, réponds au premier sujet cité en une phrase, puis pose une seule question de clarification.
-
 RÈGLES CTAs — LIS ATTENTIVEMENT :
 • Les CTAs sont des boutons cliquables. Utilise-les AVEC PARCIMONIE — seulement quand c'est le bon moment pour passer à l'action.
 • N'ajoute PAS de CTA à chaque message. Si tu viens de répondre à une question et que le visiteur n'est pas encore prêt à agir, ne mets pas de CTA.

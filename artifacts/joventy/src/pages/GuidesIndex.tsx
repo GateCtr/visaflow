@@ -4,12 +4,15 @@ import { Clock, ChevronRight, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getAllGuides } from "@/data/guides-seo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
   "Visa Schengen": "bg-indigo-100 text-indigo-700",
   "Visa Canada": "bg-red-100 text-red-700",
   "Comparatif": "bg-violet-100 text-violet-700",
+  "Visa Business": "bg-amber-100 text-amber-700",
+  "Recours & Urgences": "bg-rose-100 text-rose-700",
 };
 
 function getCategoryColor(cat: string) {
@@ -29,7 +32,7 @@ export default function GuidesIndex() {
       "@type": "ListItem",
       position: i + 1,
       name: g.title,
-      url: `https://www.joventy.cd/guides/${g.slug}`,
+      url: `https://joventy.cd/guides/${g.slug}`,
     })),
   };
 
@@ -37,11 +40,20 @@ export default function GuidesIndex() {
     <>
       <Helmet>
         <title>Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy</title>
-        <meta
-          name="description"
-          content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir."
-        />
-        <link rel="canonical" href="https://www.joventy.cd/guides" />
+        <meta name="description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
+        <link rel="canonical" href="https://joventy.cd/guides" />
+        <meta property="og:title" content="Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy" />
+        <meta property="og:description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
+        <meta property="og:url" content="https://joventy.cd/guides" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta property="og:locale" content="fr_CD" />
+        <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy" />
+        <meta name="twitter:description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
+        <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(schemaArticleList)}</script>
       </Helmet>
 
@@ -55,6 +67,8 @@ export default function GuidesIndex() {
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
             <Link href="/#destinations" className="hover:text-primary transition-colors">Destinations</Link>
             <Link href="/guides" className="text-primary font-medium">Guides</Link>
+            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
             <Link href="/#contact" className="hover:text-primary transition-colors">Contact</Link>
           </nav>
           <Link href="/register">
@@ -137,6 +151,9 @@ export default function GuidesIndex() {
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </>

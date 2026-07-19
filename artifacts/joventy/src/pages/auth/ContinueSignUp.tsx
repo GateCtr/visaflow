@@ -144,9 +144,21 @@ export default function ContinueSignUp() {
       const { error } = await signUp.verifications.verifyPhoneCode({ code: otpCode });
       if (error) { setFieldError(error.longMessage || error.message); return; }
 
-      // After verification, session is auto-created if all requirements met
-      setPhase("done");
-      setLocation("/dashboard");
+      // Finalize the signup to activate the session after all requirements are met
+      if (signUp.status === "complete") {
+        await signUp.finalize();
+        setPhase("done");
+        setLocation("/dashboard");
+      } else if (signUp.status === "missing_requirements") {
+        // Shouldn't happen at this point, but surface it clearly
+        setFieldError(
+          `Champs requis manquants : ${(signUp.missingFields ?? []).join(", ")}. ` +
+          `Vérifiez la configuration dans Clerk Dashboard.`
+        );
+      } else {
+        // Unexpected state
+        setFieldError(`Erreur inattendue (status: ${signUp.status}). Veuillez réessayer.`);
+      }
     } catch (e: unknown) {
       setFieldError(e instanceof Error ? e.message : "Code invalide");
     } finally {

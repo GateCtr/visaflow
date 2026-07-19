@@ -256,7 +256,6 @@ Ne propose le CTA /dashboard/applications/new QUE si le visiteur a ses identifia
   }
 
   const questionFocus = buildSharedQuestionFocusBlock(message);
-
   // ─── Statistiques de traitement dynamiques ────────────────────────────────
   const destLabels: Record<string, string> = {
     schengen: "Schengen", spain: "Espagne", germany: "Allemagne",
@@ -339,7 +338,6 @@ RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
 - Paiement partiel, total, acompte, solde => réponds uniquement sur la structure du paiement
 - Dossier complet, service complet, accompagnement complet => seulement dans ce cas parle de la prise en charge globale
 - Si plusieurs sujets sont mélangés sans priorité claire, réponds au premier sujet cité en une phrase, puis pose une seule question de clarification.
-
 RÈGLES CTAs — LIS ATTENTIVEMENT :
 • Les CTAs sont des boutons cliquables. Utilise-les AVEC PARCIMONIE — seulement quand c'est le bon moment pour passer à l'action.
 • N'ajoute PAS de CTA à chaque message. Si tu viens de répondre à une question et que le visiteur n'est pas encore prêt à agir, ne mets pas de CTA.

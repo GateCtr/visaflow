@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build:vite": "vite build --config vite.config.ts",
+    "build:prerender": "../../scripts/node_modules/.bin/tsx scripts/prerender.ts",
+    "build": "pnpm run build:vite && pnpm run build:prerender",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -78,6 +80,7 @@
     "@clerk/react": "^6.7.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
-    "react-helmet-async": "^3.0.0"
+    "react-helmet-async": "^3.0.0",
+    "svix": "^1.89.0"
   }
 }

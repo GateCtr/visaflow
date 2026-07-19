@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 interface LegalLayoutProps {
   title: string;
@@ -15,14 +16,14 @@ interface LegalLayoutProps {
 export function LegalLayout({ title, subtitle, lastUpdated, description, slug, children }: LegalLayoutProps) {
   const pageTitle = `${title} — Joventy | Akollad Groupe`;
   const metaDesc = description ?? subtitle ?? "Page légale du site Joventy.cd, service d'assistance visa premium édité par Akollad Groupe, Kinshasa RDC.";
-  const canonical = slug ? `https://www.joventy.cd/${slug}` : "https://www.joventy.cd/";
+  const canonical = slug ? `https://joventy.cd/${slug}` : "https://joventy.cd/";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Helmet>
         <title>{pageTitle}</title>
         <meta name="description" content={metaDesc} />
-        <meta name="robots" content="noindex, follow" />
+        <meta name="robots" content="index, follow" />
         <link rel="canonical" href={canonical} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={metaDesc} />
@@ -98,6 +99,9 @@ export function LegalLayout({ title, subtitle, lastUpdated, description, slug, c
           <Link href="/confidentialite" className="hover:text-white transition-colors">Confidentialité</Link>
           <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
           <Link href="/remboursement" className="hover:text-white transition-colors">Remboursements</Link>
+        </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-4 text-white/30">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

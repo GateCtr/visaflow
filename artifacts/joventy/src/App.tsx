@@ -25,8 +25,11 @@ import PublicTracking from "@/pages/PublicTracking";
 import DestinationPage from "@/pages/DestinationPage";
 import GuidesIndex from "@/pages/GuidesIndex";
 import GuidePage from "@/pages/GuidePage";
+import EmbassiesIndex from "@/pages/EmbassiesIndex";
+import EmbassyPage from "@/pages/EmbassyPage";
 
 import Prix from "@/pages/Prix";
+import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
@@ -56,12 +59,16 @@ import AdminCevSessions from "@/pages/admin/CevSessions";
 import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminCalendar from "@/pages/admin/Calendar";
 import AdminBotSettings from "@/pages/admin/BotSettings";
+import VictorAnalytics from "@/pages/admin/VictorAnalytics";
+import { VictorWidget } from "@/components/VictorWidget";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+// In dev mode, prefer the dev key but fall back to the prod key if not set.
+// Without this fallback, ClerkProvider receives `undefined` and all auth fails.
 const clerkPublishableKey = (
   import.meta.env.DEV
-    ? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY_DEV
+    ? (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY_DEV ?? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
     : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 ) as string;
 
@@ -142,9 +149,28 @@ function Router() {
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
       <Route path="/visa-chine-kinshasa" component={DestinationPage} />
+      <Route path="/visa-bresil-kinshasa" component={DestinationPage} />
+
+      {/* Embassy SEO pages */}
+      <Route path="/ambassades" component={EmbassiesIndex} />
+      <Route path="/ambassade-usa-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-canada-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-royaume-uni-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-schengen-france-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-belgique-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-espagne-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-suisse-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-emirats-arabes-unis-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-turquie-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-inde-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-maroc-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-egypte-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-chine-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-bresil-kinshasa" component={EmbassyPage} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
+      <Route path="/audit-diagnostic" component={AuditDiagnostic} />
       <Route path="/a-propos" component={APropos} />
 
       <Route path="/mentions-legales" component={MentionsLegales} />
@@ -216,9 +242,13 @@ function Router() {
       <Route path="/admin/bot-settings">
         {() => <ProtectedRoute adminOnly component={AdminBotSettings} />}
       </Route>
+      <Route path="/admin/victor">
+        {() => <ProtectedRoute adminOnly component={VictorAnalytics} />}
+      </Route>
 
       <Route component={NotFound} />
     </Switch>
+    <VictorWidget />
     </>
   );
 }

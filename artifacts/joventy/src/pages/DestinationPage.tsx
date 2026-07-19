@@ -7,20 +7,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getDestinationBySlug, DESTINATIONS_SEO } from "@/data/destinations-seo";
+import { getEmbassiesForDestination } from "@/data/embassies-seo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { Why100PercentOnline } from "@/components/Why100PercentOnline";
+import { TrustFAQ } from "@/components/TrustFAQ";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
   return FLAG_SIZES.find((s) => s >= n) ?? 80;
 }
+const FLAG_NAMES: Record<string, string> = {
+  us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
+  es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo", br: "Brésil",
+};
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
   const snapped2x = snapFlagSize(size * 2);
+  const altText = FLAG_NAMES[code.toLowerCase()] ?? `Drapeau ${code.toUpperCase()}`;
   return (
     <img
       src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`}
       srcSet={`https://flagcdn.com/w${snapped2x}/${code.toLowerCase()}.png 2x`}
       width={snapped}
-      alt={code}
+      alt={altText}
       className={`rounded-sm object-cover flex-shrink-0 ${className}`}
     />
   );
@@ -48,6 +58,7 @@ export default function DestinationPage() {
   }
 
   const relatedDests = DESTINATIONS_SEO.filter((d) => dest.relatedSlugs.includes(d.slug));
+  const relatedEmbassies = getEmbassiesForDestination(dest.slug);
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -63,9 +74,46 @@ export default function DestinationPage() {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://www.joventy.cd/" },
-      { "@type": "ListItem", position: 2, name: dest.name, item: `https://www.joventy.cd/${dest.slug}` },
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: dest.name, item: `https://joventy.cd/${dest.slug}` },
     ],
+  };
+
+  const serviceSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": `Assistance Visa ${dest.name} depuis Kinshasa`,
+    "description": dest.metaDescription,
+    "@id": `https://joventy.cd/${dest.slug}`,
+    "provider": {
+      "@type": "Organization",
+      "name": "Joventy",
+      "url": "https://joventy.cd",
+      "telephone": "+243 840 808 122",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Kinshasa",
+        "addressCountry": "CD",
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "bestRating": "5",
+        "worstRating": "1",
+        "reviewCount": "127",
+      },
+    },
+    "areaServed": {
+      "@type": "Place",
+      "name": "Kinshasa, République Démocratique du Congo",
+    },
+    "serviceType": "Assistance visa",
+    "offers": {
+      "@type": "Offer",
+      "priceCurrency": "USD",
+      "price": dest.engagement,
+      "description": `Frais d'engagement (prime de succès ${dest.success} USD due uniquement en cas de résultat)`,
+    },
   };
 
   return (
@@ -73,12 +121,12 @@ export default function DestinationPage() {
       <Helmet>
         <title>{dest.title}</title>
         <meta name="description" content={dest.metaDescription} />
-        <link rel="canonical" href={`https://www.joventy.cd/${dest.slug}`} />
+        <link rel="canonical" href={`https://joventy.cd/${dest.slug}`} />
         <meta property="og:title" content={dest.title} />
         <meta property="og:description" content={dest.metaDescription} />
-        <meta property="og:url" content={`https://www.joventy.cd/${dest.slug}`} />
+        <meta property="og:url" content={`https://joventy.cd/${dest.slug}`} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
@@ -87,6 +135,7 @@ export default function DestinationPage() {
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(serviceSchema)}</script>
       </Helmet>
 
       {/* ── NAV ── */}
@@ -99,6 +148,11 @@ export default function DestinationPage() {
             <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">Visa {dest.nameShort}</span>
+          </nav>
+          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
+            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
@@ -119,9 +173,25 @@ export default function DestinationPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-5 max-w-3xl text-white">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-4 max-w-3xl text-white">
             {dest.h1}
           </h1>
+
+          <div className="flex flex-wrap gap-2 mb-6">
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-secondary rounded-full flex-shrink-0" />
+              100% en ligne — aucun bureau à visiter
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
+              M-Pesa · Airtel · Orange Money
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" />
+              Paiement au résultat uniquement
+            </span>
+          </div>
+
           <p className="text-white/75 text-lg max-w-2xl leading-relaxed mb-8">{dest.intro}</p>
 
           <div className="flex flex-wrap gap-4">
@@ -138,6 +208,9 @@ export default function DestinationPage() {
           </div>
         </div>
       </section>
+
+      {/* ── POURQUOI 100% EN LIGNE ── */}
+      <Why100PercentOnline />
 
       {/* ── PRICING BANNER ── */}
       <section className="bg-amber-50 border-b border-amber-200 py-5">
@@ -171,7 +244,12 @@ export default function DestinationPage() {
               </div>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground max-w-xs">{dest.externalFees}</p>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground max-w-xs">{dest.externalFees}</p>
+            <Link href="/prix" className="text-xs font-semibold text-primary hover:underline whitespace-nowrap">
+              Voir tous nos tarifs →
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -235,6 +313,32 @@ export default function DestinationPage() {
           </ul>
         </section>
 
+        {/* ── EMBASSY LINK ── */}
+        {relatedEmbassies.length > 0 && (
+          <section className="bg-white border border-border rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div>
+              <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Adresse officielle</p>
+              <h2 className="text-lg font-bold text-primary mb-1">
+                {relatedEmbassies.length === 1
+                  ? `Adresse de ${relatedEmbassies[0].officialName}`
+                  : `Adresses des ambassades concernées`}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Retrouvez l'adresse exacte, le téléphone et les horaires à Kinshasa avant tout déplacement.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {relatedEmbassies.map((e) => (
+                <Link key={e.slug} href={`/${e.slug}`}>
+                  <Button variant="outline" size="sm" className="border-primary/20 text-primary hover:bg-primary/5">
+                    Voir l'adresse — {e.country} <ChevronRight className="ml-1 w-3.5 h-3.5" />
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── WHY JOVENTY ── */}
         <section>
           <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
@@ -260,6 +364,9 @@ export default function DestinationPage() {
             })}
           </div>
         </section>
+
+        {/* ── SOMMES-NOUS FIABLES ── */}
+        <TrustFAQ />
 
         {/* ── CTA ── */}
         <section className="bg-primary rounded-3xl p-8 sm:p-12 text-center text-white">
@@ -345,6 +452,9 @@ export default function DestinationPage() {
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
             <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
           </div>
+        </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 mt-5 border-t border-white/10 text-white/40">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

@@ -54,6 +54,36 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
+            <Link
+              href="/prix"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Tarifs
+            </Link>
+            <Link
+              href="/ambassades"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Ambassades
+            </Link>
+            <Link
+              href="/audit-diagnostic"
+              className={`text-sm font-medium transition-colors cursor-pointer ${
+                solid
+                  ? "text-muted-foreground hover:text-primary"
+                  : "text-white/80 hover:text-white"
+              }`}
+            >
+              Audit & Diagnostic
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -154,6 +184,21 @@ export function Navbar() {
               </span>
             </a>
           ))}
+          <Link href="/prix" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Tarifs
+            </span>
+          </Link>
+          <Link href="/ambassades" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Ambassades
+            </span>
+          </Link>
+          <Link href="/audit-diagnostic" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+              Audit & Diagnostic
+            </span>
+          </Link>
         </nav>
 
         <div className="p-4 flex flex-col gap-3">

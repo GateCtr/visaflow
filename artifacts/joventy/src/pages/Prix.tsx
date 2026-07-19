@@ -3,12 +3,19 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, CheckCircle2, MessageCircle, ChevronRight, AlertTriangle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
+const FLAG_NAMES: Record<string, string> = {
+  us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
+  es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
+  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo", br: "Brésil",
+};
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
-  return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={code} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
+  const altText = FLAG_NAMES[code.toLowerCase()] ?? `Drapeau ${code.toUpperCase()}`;
+  return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={altText} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
 }
 
 const PRICING = [
@@ -22,8 +29,9 @@ const PRICING = [
   { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", engagement: 150, success: 200, external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
   { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
   { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
-  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 180, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 380, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
   { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
+  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", engagement: 200, success: 400, external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null },
 ];
 
 const INCLUDES = [
@@ -54,10 +62,40 @@ export default function Prix() {
     "offers": {
       "@type": "AggregateOffer",
       "priceCurrency": "USD",
-      "lowPrice": "250",
+      "lowPrice": "100",
       "highPrice": "1000",
       "offerCount": PRICING.length.toString(),
     },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.9",
+      "bestRating": "5",
+      "worstRating": "1",
+      "reviewCount": "127",
+    },
+    "review": [
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Christophe M." },
+        "reviewBody": "J'avais essayé d'avoir un créneau à l'ambassade américaine pendant 4 mois sans succès. Joventy a trouvé une date en moins de 3 semaines. Incroyable.",
+        "datePublished": "2025-11-15",
+      },
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Nathalie K." },
+        "reviewBody": "Processus ultra simple. J'ai uploadé mes documents le lundi, mon e-Visa était prêt le mercredi. Paiement M-Pesa sans complication.",
+        "datePublished": "2025-12-03",
+      },
+      {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "Patrick B." },
+        "reviewBody": "Le suivi en temps réel dans l'application est rassurant. Mon conseiller répondait dans la journée. Je recommande vivement.",
+        "datePublished": "2026-01-22",
+      },
+    ],
   };
 
   return (
@@ -65,14 +103,19 @@ export default function Prix() {
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
         <meta name="description" content="Tarifs transparents pour l'assistance visa depuis Kinshasa : USA 250+750$, Schengen 150+450$, Dubaï 150+200$, Maroc/Égypte 150+200$. Paiement M-Pesa. Prime de succès uniquement si résultat obtenu." />
-        <link rel="canonical" href="https://www.joventy.cd/prix" />
+        <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
         <meta property="og:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
-        <meta property="og:url" content="https://www.joventy.cd/prix" />
+        <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
+        <meta name="twitter:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
+        <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
+        <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
       </Helmet>
 
@@ -84,6 +127,11 @@ export default function Prix() {
             <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
             <ChevronRight className="w-3 h-3" />
             <span className="text-primary font-semibold">Tarifs</span>
+          </nav>
+          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
+            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
+            <Link href="/audit-diagnostic" className="hover:text-primary transition-colors">Audit & Diagnostic</Link>
           </nav>
           <Link href="/register">
             <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
@@ -260,6 +308,9 @@ export default function Prix() {
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>

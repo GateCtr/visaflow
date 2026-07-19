@@ -125,4 +125,4 @@ Disallow: /
 User-agent: DotBot
 Disallow: /
 
-Sitemap: https://www.joventy.cd/sitemap.xml
+Sitemap: https://joventy.cd/sitemap.xml

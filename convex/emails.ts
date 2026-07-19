@@ -899,6 +899,273 @@ export const sendSpainOtpGuideClient = internalAction({
   },
 });
 
+/* ─────────────── R0. RELANCE SIGNATURE CONTRAT → CLIENT ─── */
+export const sendContractReminderClient = internalAction({
+  args: {
+    to: v.string(),
+    firstName: v.optional(v.string()),
+    daysSinceSignup: v.number(),
+    reminderNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const prenom = args.firstName ? escHtml(args.firstName) : "là";
+    const isUrgent = args.reminderNumber >= 2;
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        ${isUrgent ? "⚠️ Action requise — Contrat non signé" : "📝 Rappel — Votre contrat vous attend"}
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Bonjour <strong>${prenom !== "là" ? prenom : ""}</strong>${prenom !== "là" ? ",<br/><br/>" : "<br/><br/>"}
+        ${isUrgent
+          ? `Votre compte Joventy est actif depuis <strong>${args.daysSinceSignup} jours</strong>, mais votre contrat de prestation de services n'a <strong>pas encore été signé</strong>.<br/><br/>Sans signature, votre dossier ne pourra pas être traité — c'est une étape indispensable.`
+          : `Pour activer pleinement votre espace et permettre à notre équipe de traiter votre dossier, il vous reste une dernière étape : <strong>signer votre contrat de prestation de services</strong>.<br/><br/>La signature est entièrement en ligne et prend moins d'une minute.`
+        }
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Ce que couvre votre contrat</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Engagement de Joventy à traiter votre demande</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Conditions tarifaires et modalités de paiement</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Politique de remboursement et de confidentialité</td></tr>
+              <tr><td style="padding:3px 0;color:#166534;font-size:14px;line-height:1.6;">✅&nbsp; Responsabilités et délais de traitement</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      ${isUrgent ? urgentBanner("Sans signature de contrat, aucun dossier ne peut être ouvert ni traité par notre équipe.") : ""}
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+            <p style="margin:0;color:#64748b;font-size:13px;line-height:1.8;">
+              🖊&nbsp; Signature électronique sécurisée — aucun papier à imprimer<br/>
+              ⏱&nbsp; Moins d'une minute pour compléter<br/>
+              🔒&nbsp; Vos données sont protégées conformément au RGPD
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${cta(`${APP_URL}/dashboard/contrat`, "Signer mon contrat maintenant")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Des questions sur le contrat ? Écrivez-nous via WhatsApp au <strong>+243 840 808 122</strong> ou via la messagerie de votre espace.
+      </p>
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `${isUrgent ? "⚠️ Action requise" : "📝 Rappel"} — Votre contrat Joventy n'est pas encore signé`,
+      html: htmlWrapper("Signature de contrat — Joventy", body),
+    });
+  },
+});
+
+/* ─────────────── R1. RELANCE DOCUMENTS EN ATTENTE → CLIENT ─── */
+export const sendDocumentsPendingReminderClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    applicationId: v.string(),
+    daysElapsed: v.number(),
+    reminderNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const isUrgent = args.reminderNumber >= 2;
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        ${isUrgent ? "⚠️ Action requise — Documents manquants" : "📂 Rappel — Vos documents sont attendus"}
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Votre paiement d'engagement pour le visa <strong>${destLabel(args.destination)}</strong> a bien été validé — merci !<br/><br/>
+        ${isUrgent
+          ? `Cependant, <strong>votre dossier est bloqué</strong> depuis ${args.daysElapsed} jours en attente de vos documents. Sans eux, notre équipe ne peut pas commencer le traitement.`
+          : `L'étape suivante est de <strong>téléverser vos documents</strong> dans votre espace client pour que notre équipe puisse examiner votre dossier.`
+        }
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#1e40af;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Documents généralement requis</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:13px;line-height:1.6;">📄&nbsp; Passeport valide (pages principales + dernière page)</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:13px;line-height:1.6;">🖼&nbsp; Photo d'identité récente (fond blanc, 35×45 mm)</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:13px;line-height:1.6;">📋&nbsp; Formulaire de demande de visa (si applicable)</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:13px;line-height:1.6;">🏦&nbsp; Relevé bancaire (3 derniers mois)</td></tr>
+            </table>
+            <p style="margin:10px 0 0;color:#3b82f6;font-size:12px;">La liste exacte des documents figure dans votre espace dossier.</p>
+          </td>
+        </tr>
+      </table>
+      ${isUrgent ? urgentBanner("Plus tôt vos documents sont fournis, plus tôt votre dossier avance. Notre équipe traite les dossiers complets en priorité.") : ""}
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Téléverser mes documents")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Des questions sur les documents requis ? Écrivez-nous via la messagerie de votre dossier.
+      </p>
+    `;
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `${isUrgent ? "⚠️ Action requise" : "📂 Rappel"} — Documents en attente (dossier ${destLabel(args.destination)})`,
+      html: htmlWrapper("Documents en attente — Joventy", body),
+    });
+  },
+});
+
+/* ─────────────── R2. POINT DE SITUATION CHASSE CRÉNEAUX → CLIENT ─── */
+export const sendSlotHuntingUpdateClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    applicationId: v.string(),
+    daysHunting: v.number(),
+    weekNumber: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🔍 Point de situation — Semaine ${args.weekNumber}</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Notre système surveille en continu les créneaux disponibles à l'ambassade pour votre visa <strong>${destLabel(args.destination)}</strong> depuis <strong>${args.daysHunting} jours</strong>.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:20px 24px;">
+            <p style="margin:0 0 12px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Ce que fait notre système en ce moment</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">🤖&nbsp; Vérification automatique toutes les 2 minutes</td></tr>
+              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">📡&nbsp; Surveillance 24h/24, 7j/7</td></tr>
+              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">⚡&nbsp; Saisie instantanée dès qu'un créneau s'ouvre</td></tr>
+              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">🔔&nbsp; Alerte immédiate par email dès la capture</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 16px;">
+        Les créneaux d'ambassade peuvent être rares et s'ouvrent parfois très brièvement. Notre robot est configuré pour réagir <strong>immédiatement</strong> dès qu'une opportunité apparaît. Votre dossier est prioritaire dans notre file d'attente.
+      </p>
+      <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0 0 4px;">
+        Avez-vous des questions ou souhaitez-vous mettre à jour votre dossier ? Écrivez-nous directement.
+      </p>
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Suivre mon dossier")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `🔍 Point hebdo — Surveillance ${destLabel(args.destination)} en cours (J+${args.daysHunting})`,
+      html: htmlWrapper("Point de situation — Chasse créneaux", body),
+    });
+  },
+});
+
+/* ─────────────── R3. MISE À JOUR EN COURS DE TRAITEMENT → CLIENT ─── */
+export const sendInReviewUpdateClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    applicationId: v.string(),
+    daysElapsed: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">⚙️ Votre dossier est en cours de traitement</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
+        Votre dossier visa <strong>${destLabel(args.destination)}</strong> est en cours de traitement par notre équipe depuis <strong>${args.daysElapsed} jours</strong>. Nous tenons à vous tenir informé de l'avancement.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#faf5ff;border:1px solid #d8b4fe;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#581c87;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Ce que nous vérifions</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#4c1d95;font-size:14px;line-height:1.6;">✔️&nbsp; Conformité et complétude de vos documents</td></tr>
+              <tr><td style="padding:3px 0;color:#4c1d95;font-size:14px;line-height:1.6;">✔️&nbsp; Validité et lisibilité de votre passeport</td></tr>
+              <tr><td style="padding:3px 0;color:#4c1d95;font-size:14px;line-height:1.6;">✔️&nbsp; Concordance avec les exigences consulaires ${destLabel(args.destination)}</td></tr>
+              <tr><td style="padding:3px 0;color:#4c1d95;font-size:14px;line-height:1.6;">✔️&nbsp; Préparation de votre dossier de candidature</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 16px;">
+        Si notre équipe a besoin d'informations complémentaires, vous serez contacté directement via la messagerie de votre espace client. Pensez à vérifier vos messages régulièrement.
+      </p>
+      ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Voir mon dossier")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Vous avez une question urgente ? Utilisez la messagerie de votre dossier ou contactez-nous sur WhatsApp au +243 840 808 122.
+      </p>
+    `;
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `⚙️ Point de situation — Dossier ${destLabel(args.destination)} en traitement (J+${args.daysElapsed})`,
+      html: htmlWrapper("Dossier en traitement — Joventy", body),
+    });
+  },
+});
+
+/* ─────────────── R4. RE-ENGAGEMENT — INSCRIT SANS DOSSIER → CLIENT ─── */
+export const sendReEngagementNoApplicationClient = internalAction({
+  args: {
+    to: v.string(),
+    firstName: v.optional(v.string()),
+    daysSinceSignup: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const prenom = args.firstName ? escHtml(args.firstName) : "là";
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+        Votre espace Joventy vous attend${prenom !== "là" ? `, ${prenom}` : ""} ✈️
+      </h2>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.7;">
+        Vous avez créé votre compte Joventy il y a <strong>${args.daysSinceSignup} jours</strong> — mais votre première demande de visa n'a pas encore été déposée.<br/><br/>
+        Déposer votre dossier prend moins de 5 minutes. Notre équipe prend ensuite le relais pour tout gérer.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#1e40af;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Destinations disponibles</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:14px;line-height:1.6;">🇺🇸&nbsp; États-Unis (visa B1/B2, F1, H, K…)</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:14px;line-height:1.6;">🇪🇸&nbsp; Espagne &amp; espace Schengen</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:14px;line-height:1.6;">🇦🇪&nbsp; Dubaï / Émirats Arabes Unis</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:14px;line-height:1.6;">🇹🇷&nbsp; Turquie</td></tr>
+              <tr><td style="padding:3px 0;color:#1e3a5f;font-size:14px;line-height:1.6;">🇮🇳&nbsp; Inde</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;">
+            <p style="margin:0 0 10px;color:#475569;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Comment ça marche</p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">1️⃣&nbsp; Vous déposez votre demande en ligne (5 min)</td></tr>
+              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">2️⃣&nbsp; Vous réglez les frais d'engagement</td></tr>
+              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">3️⃣&nbsp; Notre équipe &amp; notre robot gèrent le reste</td></tr>
+              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">4️⃣&nbsp; Vous recevez votre créneau ou votre visa</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      ${cta(`${APP_URL}/dashboard/new`, "Déposer ma demande de visa")}
+      <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Des questions avant de démarrer ? Contactez-nous sur WhatsApp au <strong>+243 840 808 122</strong> — nous répondons rapidement.
+      </p>
+    `;
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "Joventy — Votre première demande de visa en 5 minutes ✈️",
+      html: htmlWrapper("Déposez votre demande — Joventy", body),
+    });
+  },
+});
+
 /* ───────────────────────────── 11. BIENVENUE NOUVELLE INSCRIPTION ─── */
 export const sendWelcomeClient = internalAction({
   args: {

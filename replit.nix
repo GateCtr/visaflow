@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.redis
     pkgs.systemd
     pkgs.xorg.libxcb
     pkgs.libgbm

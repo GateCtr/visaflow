@@ -3,36 +3,34 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, MessageCircle, ChevronRight, ShieldCheck, Users, Globe, Zap, Award, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { LegalFooterNote } from "@/components/LegalFooterNote";
 
 export default function APropos() {
   const orgSchema = {
     "@context": "https://schema.org",
-    "@type": "AboutPage",
-    "mainEntity": {
-      "@type": "Organization",
-      "name": "Joventy",
-      "legalName": "Akollad Groupe",
-      "url": "https://www.joventy.cd",
-      "foundingDate": "2024",
-      "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
-      "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
-      "address": { "@type": "PostalAddress", "addressLocality": "Kinshasa", "addressCountry": "CD" },
-      "contactPoint": { "@type": "ContactPoint", "telephone": "+243840808122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
-      "sameAs": ["https://akollad.com", "https://wa.me/243840808122"],
-    },
+    "@type": "Organization",
+    "name": "Joventy",
+    "legalName": "Akollad Groupe",
+    "url": "https://joventy.cd",
+    "foundingDate": "2024",
+    "foundingLocation": { "@type": "Place", "name": "Kinshasa, RDC" },
+    "description": "Joventy est un service d'assistance visa premium basé à Kinshasa, en République Démocratique du Congo. Fondé par Akollad Groupe, Joventy aide les voyageurs congolais à obtenir leurs visas pour les USA, le Canada, l'Europe, Dubaï, la Turquie et l'Inde grâce à une approche technologique et un modèle de paiement au résultat.",
+    "address": { "@type": "PostalAddress", "addressLocality": "Kinshasa", "addressCountry": "CD" },
+    "contactPoint": { "@type": "ContactPoint", "telephone": "+243 840 808 122", "contactType": "customer service", "availableLanguage": ["French", "English"] },
+    "sameAs": ["https://akollad.com", "https://wa.me/243840808122"],
   };
 
   return (
     <div className="min-h-screen bg-white font-sans">
       <Helmet>
         <title>À propos de Joventy — Assistance Visa Kinshasa, RDC | Qui sommes-nous ?</title>
-        <meta name="description" content="Joventy est un service d'assistance visa premium basé à Kinshasa (RDC). Fondé par Akollad Groupe, nous aidons les voyageurs congolais à obtenir leurs visas USA, Canada, Europe, Dubaï. Paiement M-Pesa, résultat garanti." />
-        <link rel="canonical" href="https://www.joventy.cd/a-propos" />
+        <meta name="description" content="Joventy est un service d'assistance visa premium basé à Kinshasa (RDC). Fondé par Akollad Groupe, nous aidons les voyageurs congolais à obtenir leurs visas USA, Canada, Europe, Dubaï. Paiement M-Pesa, prime de succès uniquement à la réussite." />
+        <link rel="canonical" href="https://joventy.cd/a-propos" />
         <meta property="og:title" content="À propos de Joventy — Assistance Visa Kinshasa, RDC" />
         <meta property="og:description" content="Service d'assistance visa premium basé à Kinshasa. Paiement M-Pesa, prime de succès uniquement si résultat." />
-        <meta property="og:url" content="https://www.joventy.cd/a-propos" />
+        <meta property="og:url" content="https://joventy.cd/a-propos" />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://www.joventy.cd/opengraph.jpg" />
+        <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
         <meta property="og:locale" content="fr_CD" />
         <meta property="og:site_name" content="Joventy" />
         <script type="application/ld+json">{JSON.stringify(orgSchema)}</script>
@@ -141,7 +139,7 @@ export default function APropos() {
         <div className="bg-primary/5 border border-primary/10 rounded-3xl p-8 sm:p-10">
           <h2 className="text-2xl font-bold text-primary mb-4">Akollad Groupe — Notre société mère</h2>
           <p className="text-muted-foreground leading-relaxed mb-4">
-            Joventy est un service de <a href="https://akollad.com" target="_blank" rel="noreferrer" className="text-primary font-semibold hover:underline">Akollad Groupe</a>, une entreprise technologique basée à Kinshasa spécialisée dans le développement de solutions numériques pour l'Afrique centrale.
+            Joventy est un service de <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="text-primary font-semibold hover:underline">Akollad Groupe</a>, une entreprise technologique basée à Kinshasa spécialisée dans le développement de solutions numériques pour l'Afrique centrale.
           </p>
           <p className="text-muted-foreground leading-relaxed mb-4">
             Akollad Groupe développe des plateformes technologiques qui résolvent des problèmes concrets pour les Congolais : accès aux services consulaires, digitalisation de processus administratifs, et solutions de paiement mobile.
@@ -180,7 +178,7 @@ export default function APropos() {
                 Créer mon dossier <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
-            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer nofollow">
               <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 font-semibold">
                 <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp
               </Button>
@@ -192,13 +190,16 @@ export default function APropos() {
       {/* FOOTER */}
       <footer className="bg-slate-900 text-white/50 py-8 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
+          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer nofollow" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
           <div className="flex gap-4">
             <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
             <Link href="/prix" className="hover:text-white transition-colors">Tarifs</Link>
             <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
             <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
+          <LegalFooterNote />
         </div>
       </footer>
     </div>
