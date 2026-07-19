@@ -12,6 +12,7 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildQuestionFocusBlock as buildSharedQuestionFocusBlock } from "../../../convex/victorIntent.js";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination } from "./constants";
 
 // ─── Option 1 : Bearer token (Bedrock API key) ───────────────────────────────
 
@@ -157,6 +158,60 @@ function stripAccents(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+function inferDestinationFromMessage(message: string): Destination | null {
+  const normalized = stripAccents(message.toLowerCase());
+
+  const candidates: Array<[Destination, RegExp]> = [
+    ["usa", /(usa|etats[- ]unis|etats unis|united states|america|amerique)/],
+    ["canada", /\bcanada\b/],
+    ["uk", /(royaume[- ]uni|uk|angleterre|britain|britique)/],
+    ["spain", /(espagne|espagnol|spain|cita(?:consular|consular\.es)?)/],
+    ["switzerland", /(suisse|switzerland)/],
+    ["germany", /(allemagne|germany|allemand)/],
+    ["dubai", /(duba[iï]|emirats|eau|uae)/],
+    ["turkey", /(turquie|turkey|turc)/],
+    ["india", /(inde|india|indien)/],
+    ["china", /(chine|china|chinois)/],
+    ["morocco", /(maroc|morocco)/],
+    ["egypt", /(egypte|egypt)/],
+    ["brazil", /(bresil|brésil|brazil)/],
+    ["schengen", /(schengen|cev|europe|france|belgique|italie|pays[- ]?bas)/],
+  ];
+
+  for (const [destination, pattern] of candidates) {
+    if (pattern.test(normalized)) return destination;
+  }
+
+  return null;
+}
+
+function buildSlotOnlyPricingSummary(): string {
+  return `Standard ${SLOT_URGENCY_TIERS.standard.total} USD, Prioritaire ${SLOT_URGENCY_TIERS.prioritaire.total} USD, Urgent ${SLOT_URGENCY_TIERS.urgent.total} USD, Très Urgent ${SLOT_URGENCY_TIERS.tres_urgent.total} USD`;
+}
+
+function buildDestinationPricingReply(destination: Destination): string {
+  const pricing = VISA_PRICING[destination];
+  const slotAvailable = getAvailablePackages(destination).includes("slot_only");
+  const slotSummary = buildSlotOnlyPricingSummary();
+
+  if (slotAvailable) {
+    return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul existe aussi et suit le barème d'urgence : ${slotSummary}.`;
+  }
+
+  return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul n'est pas proposé pour cette destination.`;
+}
+
+function buildPricingCatalogBlock(): string {
+  return (Object.entries(VISA_PRICING) as Array<[Destination, (typeof VISA_PRICING)[Destination]]>)
+    .map(([destination, pricing]) => {
+      const slotAvailable = getAvailablePackages(destination).includes("slot_only");
+      const slotSummary = buildSlotOnlyPricingSummary();
+      const slotLine = slotAvailable ? `Créneau seul : ${slotSummary}.` : "Créneau seul : indisponible.";
+      return `• ${pricing.label} : service complet ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Formulaires & Vérification ${pricing.engagementFee} USD. ${slotLine}`;
+    })
+    .join("\n");
+}
+
 function inferQuestionFocus(message: string): QuestionFocus {
   const normalized = stripAccents(message.toLowerCase());
   const mentionsAppointment = /(rendez[- ]?vous|creneau|rdv|appointment|slot)/.test(normalized);
@@ -223,7 +278,7 @@ function buildSystemPrompt(pageContext: string, isAuth: boolean, message: string
 1. Demande s'il a déjà envoyé l'email de demande à l'ambassade d'Espagne à Kinshasa (visa.kinshasa@maec.es)
 2. Si NON : explique qu'il faut d'abord envoyer un email avec passeport + photo + motif + dates souhaitées, et attendre les identifiants CEV (peut prendre 2-4 semaines)
 3. Si OUI mais pas encore reçu les identifiants : demande combien de temps il attend, rassure, explique que Joventy peut accélérer en suivant la file d'attente
-4. Si OUI et il a ses identifiants CEV (login + mot de passe) : explique que Joventy peut utiliser ces identifiants pour surveiller les créneaux 24h/24 et réserver automatiquement dès qu'un slot s'ouvre — c'est le service créneau à 100 USD. Pousse vers /dashboard/applications/new
+4. Si OUI et il a ses identifiants CEV (login + mot de passe) : explique que Joventy peut utiliser ces identifiants pour surveiller les créneaux 24h/24 et réserver automatiquement dès qu'un slot s'ouvre — c'est le service créneau au barème d'urgence (250 USD standard, puis 350, 450 ou 600 USD). Pousse vers /dashboard/applications/new
 Ne propose le CTA /dashboard/applications/new QUE si le visiteur a ses identifiants CEV. Sinon, guide-le d'abord vers l'email à l'ambassade.`;
 
     } else if (slug.includes("usa") || slug.includes("etats-unis")) {
@@ -331,7 +386,7 @@ FOCUS DU MESSAGE ACTUEL :
 ${questionFocus}
 
 RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
-- Rendez-vous, créneau, slot, RDV, appointment => service créneau uniquement seulement si le visiteur dit explicitement qu'il a déjà ses identifiants CEV ou qu'il veut uniquement surveiller un créneau déjà prêt. Sinon, donne le tarif standard de la destination ou du visa demandé.
+- Rendez-vous, créneau, slot, RDV, appointment => si le service créneau existe pour la destination, donne son vrai barème et précise les conditions d'accès. Sinon, donne le tarif du service complet et dis clairement que le créneau seul n'est pas proposé.
 - Formulaire, document, pièce, délai, disponibilité => réponds sur ce sous-sujet précis
 - Prix, tarif, coût, combien, frais => donne le prix de l'objet demandé, pas celui d'un autre service
 - Paiement, quand payer, avant ou après, avant le rendez-vous => réponds uniquement sur le moment du paiement lié au rendez-vous
@@ -359,22 +414,8 @@ ALERTES ACTIVES (UNIQUEMENT si le visiteur mentionne ces destinations) :
 • Visa Canada → suspendu jusqu'au 28 août 2026 (restrictions IRCC).
 • Toutes autres destinations : service disponible normalement, pas d'alerte.
 
-TARIFS JOVENTY (tous en USD — répondre directement si demandé) :
-• Visa USA : 250 + 750 = 1 000 USD ⚠️ SUSPENDU Kinshasa
-• Visa Canada : 250 + 750 = 1 000 USD ⚠️ SUSPENDU jusqu'au 28 août 2026
-• Visa Schengen (France, Belgique, Allemagne, Pays-Bas, Italie…) : 150 + 450 = 600 USD + 90 € frais consulaires à l'ambassade
-• Visa Espagne : 150 + 450 = 600 USD
-• Service créneau uniquement Espagne (si client a déjà ses identifiants CEV) : 100 USD. Si le visiteur demande simplement "rendez-vous Espagne" ou "combien coûte l'Espagne", répondre d'abord avec 600 USD et préciser que 100 USD ne concerne que l'option créneau seule.
-• Visa Suisse : 150 + 450 = 600 USD
-• Visa Royaume-Uni : 200 + 600 = 800 USD
-• E-Visa Dubaï : 150 + 200 = 350 USD (48-72h)
-• Visa Turquie e-Visa : 150 + 200 = 350 USD (24-48h)
-• Visa Maroc : 150 + 200 = 350 USD (24-72h)
-• Visa Égypte : 150 + 200 = 350 USD (24-72h)
-• Visa Chine : 120 + 380 = 500 USD
-• E-Visa Inde : 100 + 150 = 250 USD (72-96h)
-• Visa Brésil : 200 + 400 = 600 USD
-• Service créneau uniquement (si client a déjà ses identifiants CEV) : 100 USD
+TARIFS RÉELS DU SITE (tous en USD, hors frais consulaires) :
+${buildPricingCatalogBlock()}
 ${processingStatsBlock}
 MODÈLE TARIFAIRE :
 - Frais d'engagement : payés à l'ouverture du dossier (non remboursables si résultat obtenu)
@@ -490,12 +531,10 @@ export const chat = httpAction(async (ctx, request) => {
     }
 
     const normalizedMessage = stripAccents(message.toLowerCase());
-    const mentionsSpain = /(espagne|espagnol)/.test(normalizedMessage);
-    const mentionsPricing = /(prix|tarif|combien|cout|coût|coute|frais|rendez[- ]?vous|rdv|appointment|creneau|créneau)/.test(normalizedMessage);
-    const mentionsSlotOnly = /(cev|identifiant|identifiants|login|mot de passe|créneau seul|slot seul)/.test(normalizedMessage);
-    if (mentionsSpain && mentionsPricing && !mentionsSlotOnly) {
-      const directReply =
-        "Le tarif standard du visa Espagne depuis Kinshasa est 600 USD, soit 150 USD d'engagement et 450 USD de prime de succès. Le service créneau seul coûte 100 USD uniquement si tu as déjà tes identifiants CEV et que tu veux juste la surveillance du slot.";
+    const mentionsPricing = /(prix|tarif|combien|cout|coût|coute|frais)/.test(normalizedMessage);
+    const destinationKey = inferDestinationFromMessage(message);
+    if (destinationKey && mentionsPricing) {
+      const directReply = buildDestinationPricingReply(destinationKey);
 
       await ctx.runMutation(internal.victor.saveMessage, {
         sessionId,

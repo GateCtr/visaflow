@@ -176,7 +176,7 @@ R : Oui. Joventy propose l'e-Visa DRC (délai 3–5 jours), le Visa Volant (visa
 R : L'EES (Entry/Exit System) est un système biométrique européen opérationnel depuis le 10 avril 2026. Il remplace les tampons physiques dans les passeports. À chaque entrée dans l'espace Schengen, les voyageurs non-UE (dont les Congolais) enregistrent leurs empreintes et une photo au poste frontière. Les visas Schengen restent valides comme avant ; seul le contrôle à la frontière change.
 
 **Q : Joventy peut-il remplir mes formulaires visa sans chercher le créneau ?**
-R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe pour les clients qui ont déjà un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis par un expert.
+R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe : il correspond aux frais d'engagement de la destination, sans prime de succès. Ce service est pour les clients qui veulent seulement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert.
 
 **Q : Quelle est la différence entre Joventy et une agence de voyage classique ?**
 R : Joventy n'organise pas de voyages et n'a pas de bureau physique à Kinshasa. C'est un service 100% en ligne spécialisé uniquement dans l'assistance visa : formulaires, surveillance des portails consulaires, prise de créneaux, et soumission d'e-Visas. Une agence de voyage vend des billets et des hôtels — Joventy s'occupe uniquement du visa.
