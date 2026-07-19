@@ -248,41 +248,6 @@ function buildPricingCatalogBlock(): string {
     .join("\n");
 }
 
-function extractBudgetAmount(message: string): number | null {
-  const normalized = stripAccents(message.toLowerCase()).replace(/\s+/g, "");
-  const budgetMatch = normalized.match(/(?:budget(?:de)?|enveloppe(?:de)?|j'aiunbudgetde|jepeuxmettre)(\d[\d.,]*)/);
-  if (budgetMatch?.[1]) {
-    const value = Number.parseInt(budgetMatch[1].replace(/[^\d]/g, ""), 10);
-    return Number.isFinite(value) ? value : null;
-  }
-
-  const currencyMatch = normalized.match(/(\d[\d.,]*)(?:usd|dollars|\$|eur|euros)/);
-  if (currencyMatch?.[1]) {
-    const value = Number.parseInt(currencyMatch[1].replace(/[^\d]/g, ""), 10);
-    return Number.isFinite(value) ? value : null;
-  }
-
-  return null;
-}
-
-function buildBudgetQualificationReply(destination: Destination | null, budgetAmount: number | null): string {
-  const budgetLabel = budgetAmount ? `${budgetAmount.toLocaleString("en-US")} USD` : "ce budget";
-
-  if (!destination) {
-    return `Avec ${budgetLabel}, on peut te proposer la bonne formule, mais il me manque la destination. Dis-moi juste le pays visé et je te dis tout de suite si tu pars sur service complet, créneau seul ou formulaires seulement.`;
-  }
-
-  const pricing = VISA_PRICING[destination];
-  const slotAvailable = getAvailablePackages(destination).includes("slot_only");
-  const slotSummary = buildSlotOnlyPricingSummary();
-
-  if (slotAvailable) {
-    return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD; si tu veux seulement le créneau consulaire, on passe par le barème d'urgence : ${slotSummary}. Tu as déjà ton dossier prêt ou tu veux qu'on s'occupe de tout ?`;
-  }
-
-  return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD. Il n'y a pas d'option créneau seul pour cette destination, donc si tu veux aller vite je te conseille le service complet. Tu veux tourisme, affaires ou études ?`;
-}
-
 function inferQuestionFocus(message: string): QuestionFocus {
   const normalized = stripAccents(message.toLowerCase());
   const mentionsAppointment = /(rendez[- ]?vous|creneau|rdv|appointment|slot)/.test(normalized);
