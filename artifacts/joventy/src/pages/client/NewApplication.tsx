@@ -134,7 +134,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: "Clé en main",
-      description: `Joventy remplit les formulaires, vérifie les pièces que vous fournissez et recherche activement un ${creneauLabel}. Vous n'avez qu'à vous présenter le jour J.`,
+      description: `Joventy remplit les formulaires, vérifie les pièces que vous fournissez et recherche activement un ${creneauLabel}. Vous voulez seulement le rendez-vous et le dossier est déjà prêt ? Choisissez plutôt "Créneau Uniquement".`,
     };
   }
 
@@ -192,7 +192,7 @@ function getPackageInfo(
       return {
         label: "Créneau CEV",
         tagline: "Rendez-vous uniquement",
-        description: "Vous avez déjà un dossier VOWINT en cours ? Joventy surveille activement le Centre Européen des Visas et capture un créneau dès qu'une place est disponible pour votre pays cible.",
+        description: "Vous avez déjà un dossier VOWINT en cours ou vous voulez seulement le rendez-vous ? Joventy surveille activement le Centre Européen des Visas et capture un créneau dès qu'une place est disponible pour votre pays cible.",
         slotNote: "Prérequis : dossier VOWINT déjà créé avec vos pièces. Frais consulaires CEV (90 €/adulte) payés au guichet — non inclus.",
       };
     }

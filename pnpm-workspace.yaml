@@ -4,6 +4,12 @@ packages:
   - lib/integrations/*
   - scripts
 
+allowBuilds:
+  core-js: false
+  esbuild: false
+  impit: false
+  puppeteer: false
+
 autoInstallPeers: false
 
 catalog:

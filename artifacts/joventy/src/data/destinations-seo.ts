@@ -187,6 +187,7 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     ],
     faqs: [
       { q: "Combien coûte le visa Schengen depuis Kinshasa avec Joventy ?", a: "Frais Joventy : 150 USD d'engagement + 450 USD de prime de succès (à la réussite). À cela s'ajoutent les frais consulaires CEV de 90 €/adulte, payés directement au Centre Européen des Visas." },
+      { q: "Je veux juste un rendez-vous, pas le dossier complet. Que dois-je choisir ?", a: "Dans ce cas, choisissez le package 'Créneau Uniquement'. C'est le package dédié au rendez-vous seul, différent du 'Service Complet'. Le tarif dépend de l'urgence de votre demande et commence généralement à 250 USD au total pour une date très éloignée, puis augmente selon le délai souhaité." },
       { q: "Faut-il une assurance voyage pour le visa Schengen ?", a: "Oui, obligatoirement. L'assurance voyage doit couvrir l'ensemble de l'espace Schengen pour un minimum de 30 000 € et être valable pendant toute la durée du séjour. Elle est exigée lors du dépôt du dossier." },
       { q: "Peut-on voyager dans tous les pays Schengen avec un seul visa ?", a: "Oui. Un visa Schengen de court séjour (type C) permet de circuler librement dans les 27 États membres de l'espace Schengen pendant 90 jours maximum sur toute période de 180 jours." },
       { q: "Quel est le délai pour obtenir un créneau CEV à Kinshasa ?", a: "Les disponibilités au Centre Européen des Visas de Kinshasa varient selon les périodes. L'équipe Joventy suit de près les ouvertures de créneaux et prend en main la réservation dès qu'une date est disponible." },
