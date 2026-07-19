@@ -38,6 +38,7 @@ export const setHunterConfig = mutation({
     slotDateDeadline: v.optional(v.string()),
     // CEV / Schengen
     vowintAppId: v.optional(v.string()),
+    cevCountry: v.optional(v.string()),
     // Mode reporter USA
     rescheduleMode: v.optional(v.boolean()),
     rescheduleExistingDate: v.optional(v.string()),
@@ -75,6 +76,7 @@ export const setHunterConfig = mutation({
       slotDateFrom?: string; 
       slotDateDeadline?: string; 
       vowintAppId?: string; 
+      cevCountry?: string;
       cevClickCount?: number; 
       cevClickWindowStart?: number;
       // V3 Chasseur fields
@@ -113,6 +115,7 @@ export const setHunterConfig = mutation({
         checkCount: existing?.checkCount ?? 0,
         lastResult: existing?.lastResult,
         vowintAppId: args.vowintAppId || existing?.vowintAppId,
+        cevCountry: args.cevCountry || existing?.cevCountry || undefined,
         cevClickCount: existing?.cevClickCount,
         cevClickWindowStart: existing?.cevClickWindowStart,
         // Préserver la session CEV active — ne pas l'écraser lors des mises à jour admin

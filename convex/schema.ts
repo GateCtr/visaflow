@@ -124,6 +124,8 @@ export default defineSchema({
     role: v.string(),
     createdAt: v.number(),
     onboardingCompletedAt: v.optional(v.number()),
+    /** Suivi des relances d'engagement (ex: "no_app_3d") */
+    remindersSent: v.optional(v.array(v.string())),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"]),
@@ -549,6 +551,7 @@ export default defineSchema({
     path: v.string(),
     month: v.string(),      // "YYYY-MM" pour grouper par mois
     timestamp: v.number(),
+    referrer: v.optional(v.string()), // document.referrer capturé au 1er chargement de la session
   })
     .index("by_month", ["month"])
     .index("by_session_month", ["sessionId", "month"]),
@@ -560,4 +563,38 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_lastSeen", ["lastSeen"]),
+
+  // ─── Agent Victor ─────────────────────────────────────────────────────────
+  chatSessions: defineTable({
+    sessionId: v.string(),
+    messagesLastMinute: v.number(),
+    messagesLastHour: v.number(),
+    windowMinuteStart: v.number(),
+    windowHourStart: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_session", ["sessionId"]),
+
+  victorConversations: defineTable({
+    sessionId: v.string(),
+    pageContext: v.string(),
+    isAuth: v.boolean(),
+    messages: v.array(
+      v.object({
+        role: v.union(v.literal("user"), v.literal("victor")),
+        content: v.string(),
+        ts: v.number(),
+      })
+    ),
+    // convinced = true UNIQUEMENT si l'utilisateur a réellement complété une action (dossier créé, etc.)
+    // N'est PAS mis à true sur simple clic CTA
+    convinced: v.boolean(),
+    convincedAt: v.optional(v.number()),
+    // Actions réellement complétées (ex: "dossier_created", "contrat_signed")
+    actionsTaken: v.optional(v.array(v.string())),
+    // Clics CTA (intention, non completion) — pour distinguer intent vs succès réel
+    ctaClicks: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_session", ["sessionId"]),
 });

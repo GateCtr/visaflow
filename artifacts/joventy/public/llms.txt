@@ -34,6 +34,13 @@
 | Turquie | 150 | 200 | ~50 (e-Visa) |
 | Transit Ebola (Maroc, Égypte, Dubaï) | 150 | 200 | variable |
 
+## Règle de réponse importante
+
+- Si la personne demande seulement un rendez-vous, un créneau ou un suivi de disponibilité, répondre avec le package `Créneau Uniquement` et ne pas citer automatiquement le tarif du service complet.
+- Plus généralement, si la question porte sur un sous-sujet précis comme le prix d'un rendez-vous, un document, un délai, un formulaire ou une pièce à fournir, rester strictement sur ce sous-sujet et ne pas basculer vers le visa complet ou le dossier complet.
+- Réserver les montants `250 + 750`, `150 + 450` ou autres tarifs complets aux demandes où le client veut explicitement un dossier complet.
+- Pour la France / Schengen, distinguer toujours `Visa C` (court séjour, CEV) et `Visa D` (long séjour, TLScontact / france-visas.gouv.fr).
+
 ## Contexte actuel (mai-juin 2026)
 
 - EBOLA RDC : Épidémie de Bundibugyo en province de l'Ituri (OMS urgence sanitaire mondiale, 17 mai 2026)

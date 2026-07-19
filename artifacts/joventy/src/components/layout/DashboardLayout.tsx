@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -36,6 +36,24 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
   const { user, logout } = useAuth();
   const unreadTotal = useQuery(api.messages.getUnreadTotal) ?? 0;
   const [mobileOpen, setMobileOpen] = useState(false);
+  const recordCTAClick = useMutation(api.victor.recordCTAClick);
+
+  // Tracking funnel auth Victor : quand un visiteur clique /login ou /register depuis Victor,
+  // on stocke la session en localStorage. Ici, dès que l'utilisateur est authentifié dans le dashboard,
+  // on enregistre la conversion "auth_completed" pour mesurer où le funnel se ferme.
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const raw = localStorage.getItem("victor_auth_pending");
+      if (!raw) return;
+      localStorage.removeItem("victor_auth_pending");
+      const { sessionId, action, ts } = JSON.parse(raw) as { sessionId: string; action: string; ts: number };
+      // Ignorer si le flag date de plus de 2h (session trop ancienne)
+      if (Date.now() - ts > 2 * 60 * 60 * 1000) return;
+      void recordCTAClick({ sessionId, cta: `auth_completed_${action}` });
+    } catch { /* non bloquant */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const clientLinks = [
     { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
@@ -79,6 +97,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/bot-test", label: "Bot & Portails", icon: Bot },
     { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal, badge: botFailCount },
     { href: "/admin/bot-settings", label: "Config Bot", icon: Settings },
+    { href: "/admin/victor", label: "Agent Victor", icon: Bot },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;
