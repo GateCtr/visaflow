@@ -195,7 +195,7 @@ function buildDestinationPricingReply(destination: Destination): string {
   const slotSummary = buildSlotOnlyPricingSummary();
 
   if (slotAvailable) {
-    return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul existe aussi et suit le barème d'urgence : ${slotSummary}.`;
+    return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul est un créneau consulaire, pas un rendez-vous en personne chez Joventy. Son barème d'urgence est : ${slotSummary}.`;
   }
 
   return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul n'est pas proposé pour cette destination.`;
@@ -206,7 +206,7 @@ function buildPricingCatalogBlock(): string {
     .map(([destination, pricing]) => {
       const slotAvailable = getAvailablePackages(destination).includes("slot_only");
       const slotSummary = buildSlotOnlyPricingSummary();
-      const slotLine = slotAvailable ? `Créneau seul : ${slotSummary}.` : "Créneau seul : indisponible.";
+      const slotLine = slotAvailable ? `Créneau consulaire seul : ${slotSummary}.` : "Créneau consulaire seul : indisponible.";
       return `• ${pricing.label} : service complet ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Formulaires & Vérification ${pricing.engagementFee} USD. ${slotLine}`;
     })
     .join("\n");
@@ -387,6 +387,7 @@ ${questionFocus}
 
 RÈGLE DE CORRESPONDANCE ENTRE DEMANDE ET OFFRE :
 - Rendez-vous, créneau, slot, RDV, appointment => si le service créneau existe pour la destination, donne son vrai barème et précise les conditions d'accès. Sinon, donne le tarif du service complet et dis clairement que le créneau seul n'est pas proposé.
+- Si le visiteur dit "chez vous" ou "en personne", corrige-le: chez Joventy il n'y a pas de rendez-vous physique. Parle toujours de créneau consulaire ou de service complet, jamais d'un rendez-vous en personne chez Joventy.
 - Formulaire, document, pièce, délai, disponibilité => réponds sur ce sous-sujet précis
 - Prix, tarif, coût, combien, frais => donne le prix de l'objet demandé, pas celui d'un autre service
 - Paiement, quand payer, avant ou après, avant le rendez-vous => réponds uniquement sur le moment du paiement lié au rendez-vous
