@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Helmet } from "react-helmet-async";
 import {
   ArrowRight, CheckCircle2, Clock, FileText, HelpCircle,
-  MessageCircle, Star, ChevronRight, BadgeCheck, Zap,
+  MessageCircle, Star, ChevronRight, BadgeCheck, Zap, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
@@ -59,6 +59,19 @@ export default function DestinationPage() {
 
   const relatedDests = DESTINATIONS_SEO.filter((d) => dest.relatedSlugs.includes(d.slug));
   const relatedEmbassies = getEmbassiesForDestination(dest.slug);
+  const officialPortal = dest.slug === "visa-espagne-kinshasa"
+    ? {
+        label: "Portail officiel des rendez-vous Espagne",
+        href: "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services",
+        description: "Portail citaconsular.es pour rechercher et confirmer un rendez-vous après réception des accès de l'ambassade.",
+      }
+    : dest.slug === "visa-schengen-kinshasa"
+      ? {
+          label: "Visa On Web — portail officiel belge",
+          href: "https://visaonweb.diplomatie.be/",
+          description: "Portail officiel à utiliser pour préparer une demande belge avant les étapes de rendez-vous et de dépôt.",
+        }
+      : null;
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -336,6 +349,23 @@ export default function DestinationPage() {
                 </Link>
               ))}
             </div>
+          </section>
+        )}
+
+        {officialPortal && (
+          <section className="bg-amber-50/70 border border-amber-200 rounded-2xl p-6 sm:p-8">
+            <p className="text-amber-700 font-semibold text-xs uppercase tracking-widest mb-1">Portail officiel</p>
+            <h2 className="text-lg font-bold text-primary mb-1">{officialPortal.label}</h2>
+            <p className="text-sm text-muted-foreground mb-4 max-w-2xl">{officialPortal.description}</p>
+            <a
+              href={officialPortal.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-secondary hover:underline break-all"
+            >
+              {officialPortal.href.replace(/^https?:\/\//, "")}
+              <ExternalLink className="w-4 h-4 flex-shrink-0" />
+            </a>
           </section>
         )}
 

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { Clock, ChevronRight, ArrowRight, BookOpen, MessageCircle } from "lucide-react";
+import { Clock, ChevronRight, ArrowRight, BookOpen, MessageCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
@@ -38,6 +38,24 @@ export default function GuidePage() {
   }
 
   const relatedGuides = getRelatedGuides(guide.relatedSlugs);
+  const isSpainGuide = guide.relatedDestination === "visa-espagne-kinshasa";
+  const isCevGuide = guide.slug.includes("cev");
+  const officialLinks = [
+    ...(isSpainGuide
+      ? [{
+          label: "Portail officiel des rendez-vous Espagne",
+          href: "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services",
+          description: "Accéder directement au portail citaconsular.es utilisé pour rechercher et confirmer votre rendez-vous.",
+        }]
+      : []),
+    ...(isCevGuide
+      ? [{
+          label: "Visa On Web — portail officiel belge",
+          href: "https://visaonweb.diplomatie.be/",
+          description: "Créer ou ouvrir votre demande officielle Visa On Web avant la réservation et le dépôt au CEV.",
+        }]
+      : []),
+  ];
 
   const articleSchema = {
     "@context": "https://schema.org",
@@ -291,6 +309,35 @@ export default function GuidePage() {
           </section>
         )}
 
+        {officialLinks.length > 0 && (
+          <section className="my-10 rounded-2xl border border-amber-200 bg-amber-50/70 p-6">
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Ressources officielles</p>
+              <h2 className="mt-1 text-lg font-bold text-primary">Accéder au portail de votre démarche</h2>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                Utilisez uniquement ces adresses officielles pour vous connecter ou prendre rendez-vous.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {officialLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-start gap-3 rounded-xl border border-amber-200 bg-white p-4 transition-colors hover:border-amber-400 hover:shadow-sm"
+                >
+                  <ExternalLink className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700" />
+                  <span>
+                    <span className="font-semibold text-slate-800 transition-colors group-hover:text-primary">{link.label}</span>
+                    <span className="mt-1 block text-sm leading-relaxed text-slate-500">{link.description}</span>
+                  </span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Related destination */}
         {guide.relatedDestination && (
           <div className="mb-10 bg-slate-50 border border-slate-200 rounded-xl p-5 flex items-center justify-between gap-4">
@@ -334,7 +381,7 @@ export default function GuidePage() {
         href="https://wa.me/243840808122"
         target="_blank"
         rel="noreferrer"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#25D366] text-white text-sm font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-[#1ebe5d] transition-colors"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#25D366] text-white text-sm font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-[#1ebe5d] transition-colors sm:right-24"
       >
         <MessageCircle className="w-5 h-5" />
         WhatsApp

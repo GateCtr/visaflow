@@ -640,22 +640,6 @@ export default function Landing() {
 
       <Navbar />
 
-      {/* ═══ ALERTE EBOLA — BANNIÈRE URGENCE ═══ */}
-      <div className="bg-red-600 text-white py-3 px-4 relative z-40">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 animate-pulse" />
-            <p className="text-sm font-medium">
-              <span className="font-bold">ALERTE EBOLA :</span> USA, Canada et Mexique interdisent l'entrée aux personnes ayant été en RDC dans les 21 derniers jours. Services visa USA suspendus à Kinshasa.
-            </p>
-          </div>
-          <Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026">
-            <Button size="sm" className="bg-white text-red-700 hover:bg-red-50 font-bold text-xs whitespace-nowrap flex-shrink-0">
-              Voir les solutions <ArrowRight className="ml-1 w-3 h-3" />
-            </Button>
-          </Link>
-        </div>
-      </div>
       {/* ═══ HERO ═══ */}
       <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden">
         <div className="absolute inset-0 z-0">

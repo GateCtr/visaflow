@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Helmet } from "react-helmet-async";
 import {
   ArrowRight, MapPin, Phone, Mail, Clock, ChevronRight,
-  MessageCircle, CheckCircle2, HelpCircle, Building2,
+  MessageCircle, CheckCircle2, HelpCircle, Building2, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
@@ -52,6 +52,9 @@ export default function EmbassyPage() {
   const destination = embassy.destinationSlug ? getDestinationBySlug(embassy.destinationSlug) : undefined;
   const relatedEmbassies = EMBASSIES_SEO.filter((e) => e.slug !== embassy.slug).slice(0, 3);
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(embassy.mapsQuery)}`;
+  const spainPortal = embassy.slug === "ambassade-espagne-kinshasa"
+    ? "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services"
+    : null;
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -280,6 +283,25 @@ export default function EmbassyPage() {
             ))}
           </ul>
         </section>
+
+        {spainPortal && (
+          <section className="bg-amber-50/70 border border-amber-200 rounded-2xl p-6 sm:p-8">
+            <p className="text-amber-700 font-semibold text-xs uppercase tracking-widest mb-1">Portail officiel Espagne</p>
+            <h2 className="text-xl font-bold text-primary mb-2">Réserver votre rendez-vous sur citaconsular.es</h2>
+            <p className="text-sm text-muted-foreground mb-4 max-w-2xl">
+              Après réception des accès transmis par l’ambassade, utilisez ce lien officiel pour rechercher et confirmer votre créneau.
+            </p>
+            <a
+              href={spainPortal}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-secondary hover:underline break-all"
+            >
+              {spainPortal}
+              <ExternalLink className="w-4 h-4 flex-shrink-0" />
+            </a>
+          </section>
+        )}
 
         {/* ── VISA NOTE / CTA ── */}
         <section className="bg-primary rounded-3xl p-8 sm:p-12 text-center text-white">
