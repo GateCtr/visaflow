@@ -13,6 +13,15 @@ export interface GuideInternalLink {
   description: string;
 }
 
+export interface GuideConversion {
+  heading: string;
+  body: string;
+  primaryLabel: string;
+  primaryHref: string;
+  whatsappLabel: string;
+  whatsappMessage: string;
+}
+
 export interface Guide {
   slug: string;
   title: string;
@@ -29,6 +38,7 @@ export interface Guide {
   relatedSlugs: string[];
   relatedDestination?: string;
   internalLinks?: GuideInternalLink[];
+  conversion?: GuideConversion;
   /** Index of the section (0-based) after which to insert the Audit & Diagnostic CTA — placed right after the section that lists refusal risks/mistakes. */
   auditCtaAfterSection?: number;
 }
@@ -1150,6 +1160,31 @@ const guides: Guide[] = [
         ],
       },
       {
+        heading: "Comment choisir correctement votre date de voyage",
+        body:
+          "Ne choisissez pas votre date de voyage uniquement en fonction d’un billet ou d’une date espérée. Il faut remonter depuis le départ et additionner chaque étape : réponse de l’ambassade, temps de recherche d’un créneau, attente jusqu’au rendez-vous, instruction du visa et marge de sécurité.",
+        list: [
+          "Délai d’inscription : prévoyez jusqu’à 14 jours pour recevoir l’accès après l’email à l’ambassade",
+          "Recherche du créneau : durée variable ; tant qu’aucun créneau n’est visible, ajoutez ce temps à votre calendrier au lieu de considérer la procédure comme bloquée",
+          "Entre la réservation et le rendez-vous : environ 36 jours en moyenne selon les observations disponibles",
+          "Après le rendez-vous : environ 15 jours d’instruction, parfois davantage si l’ambassade demande des documents ou des vérifications",
+          "Marge recommandée : ajoutez au moins 7 à 14 jours après le délai d’instruction avant de prévoir le départ",
+          "Règle pratique : prévoyez au moins 11 semaines entre le début de la démarche et le voyage, puis ajoutez toute période pendant laquelle vous cherchez encore un créneau",
+        ],
+      },
+      {
+        heading: "Exemple concret de planification",
+        body:
+          "Supposons que vous commenciez l’inscription le 1er juin. Si l’accès arrive le 15 juin et qu’un créneau est trouvé le même jour, un rendez-vous situé autour du 21 juillet correspondrait à la moyenne observée de 36 jours. Avec environ 15 jours d’instruction et une marge de 7 à 14 jours, un départ prudent se situerait au plus tôt à la mi-août.",
+        list: [
+          "Si vous cherchez encore un créneau pendant 7 jours, décalez votre date de voyage d’au moins 7 jours",
+          "Si le créneau est trouvé 3 semaines plus tard, décalez également le départ : le délai de recherche s’ajoute, il ne disparaît pas",
+          "Si votre voyage est prévu dans moins de 8 semaines, le calendrier est risqué sauf si le rendez-vous est déjà confirmé et que le dossier est prêt",
+          "Entre 8 et 12 semaines, le projet peut être possible mais dépend fortement de la rapidité d’obtention du créneau",
+          "À partir d’environ 12 semaines, vous disposez d’une marge plus prudente, sans garantie de décision favorable",
+        ],
+      },
+      {
         heading: "Avant de rechercher un créneau : préparez les bonnes informations",
         body:
           "Une recherche efficace commence avant la connexion. Préparez les informations utilisées lors de l’inscription et vérifiez-les avec votre passeport. Pour accéder au portail, les identifiants de connexion sont uniquement le numéro de passeport et le mot de passe transmis par l’ambassade.",
@@ -1269,6 +1304,14 @@ const guides: Guide[] = [
         description: "Vérifier les pièces à préparer avant le dépôt.",
       },
     ],
+    conversion: {
+      heading: "Vous avez une date de voyage à planifier ?",
+      body: "Joventy peut vous aider à préparer le dossier Espagne, envoyer l’inscription à l’ambassade et suivre la recherche du rendez-vous. La date de voyage est ensuite ajustée selon le créneau réellement confirmé et les délais d’instruction.",
+      primaryLabel: "Créer mon dossier Espagne — 150 USD",
+      primaryHref: "/register",
+      whatsappLabel: "Calculer mon calendrier sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je prépare un visa Espagne depuis Kinshasa. Je veux calculer une date de voyage réaliste selon le délai d'inscription, la recherche du créneau, les 36 jours moyens jusqu'au rendez-vous et le délai d'instruction.",
+    },
   },
 
   {
@@ -1416,6 +1459,36 @@ const guides: Guide[] = [
       "guide-cev-kinshasa-reservation-rdv-depot",
     ],
     relatedDestination: "visa-espagne-kinshasa",
+    internalLinks: [
+      {
+        href: "/visa-espagne-kinshasa",
+        label: "Visa Espagne depuis Kinshasa",
+        description: "Voir les tarifs, les types de visa et les étapes prises en charge.",
+      },
+      {
+        href: "/ambassade-espagne-kinshasa",
+        label: "Ambassade d’Espagne à Kinshasa",
+        description: "Consulter l’adresse et les coordonnées de l’ambassade.",
+      },
+      {
+        href: "/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+        label: "Calculer le délai et la date de voyage",
+        description: "Planifier le départ selon le créneau et le traitement du visa.",
+      },
+      {
+        href: "/guides/documents-visa-schengen-kinshasa",
+        label: "Documents visa Schengen",
+        description: "Préparer les pièces nécessaires avant le rendez-vous.",
+      },
+    ],
+    conversion: {
+      heading: "Besoin d’un accompagnement pour l’Espagne ?",
+      body: "Joventy prépare le dossier, envoie l’inscription à l’ambassade et vous accompagne pour la réservation du créneau. Les frais d’engagement sont de 150 USD ; la prime de succès de 450 USD est due uniquement lorsque le rendez-vous est confirmé.",
+      primaryLabel: "Créer mon dossier Espagne — 150 USD",
+      primaryHref: "/register",
+      whatsappLabel: "Poser une question sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je souhaite préparer un dossier de visa Espagne depuis Kinshasa et comprendre les délais de rendez-vous.",
+    },
   },
 
   {

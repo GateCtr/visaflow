@@ -216,20 +216,35 @@ export default function GuidePage() {
           </div>
         )}
 
-        {/* CTA inline */}
-        <div className="my-12 bg-gradient-to-r from-primary to-blue-700 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center gap-4">
-          <div className="flex-1">
-            <p className="font-bold text-lg mb-1">Pas envie de tout gérer seul ?</p>
-            <p className="text-white/70 text-sm">
-              Joventy s'occupe de tout — dossier, DS-160, paiement, créneau et suivi en temps réel.
-            </p>
-          </div>
-          <Link href="/register" className="flex-shrink-0">
-            <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">
-              Créer mon dossier <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
+        {/* Conversion CTA */}
+        {guide.conversion && (
+          <section className="my-12 bg-gradient-to-r from-primary to-blue-700 rounded-2xl p-6 sm:p-8 text-white">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="flex-1">
+                <p className="font-bold text-lg mb-2">{guide.conversion.heading}</p>
+                <p className="text-white/75 text-sm leading-relaxed">
+                  {guide.conversion.body}
+                </p>
+              </div>
+              <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
+                <Link href={guide.conversion.primaryHref}>
+                  <Button className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold">
+                    {guide.conversion.primaryLabel} <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+                <a
+                  href={`https://wa.me/243840808122?text=${encodeURIComponent(guide.conversion.whatsappMessage)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center text-sm font-semibold text-white/90 hover:text-white underline underline-offset-4"
+                >
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  {guide.conversion.whatsappLabel}
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* FAQ */}
         {guide.faq.length > 0 && (
