@@ -23,6 +23,20 @@ Joventy est une plateforme de gestion de dossiers visa (RDC → monde entier) co
 
 Tous les services se lancent automatiquement via les workflows Replit. Le bouton Run démarre tout en parallèle.
 
+Pour démarrer uniquement l'interface web dans le workspace :
+
+```bash
+pnpm install --frozen-lockfile
+cd artifacts/joventy
+PORT=5000 BASE_PATH=/ pnpm run dev
+```
+
+Le workflow principal Replit `artifacts/joventy: web` exécute déjà cette commande et expose l'interface sur le port 5000. Le contrôle TypeScript se lance avec `pnpm --filter @workspace/joventy run typecheck`; le build de production se lance avec `pnpm --filter @workspace/joventy run build:vite`.
+
+### Authentification dans l'aperçu Replit
+
+La clé Clerk de production configurée pour le site fonctionne sur `joventy.cd`, mais Clerk refuse les requêtes provenant du domaine de prévisualisation Replit. La page publique reste consultable, mais la connexion et l'inscription nécessitent soit un domaine autorisé par Clerk, soit une clé Clerk de développement dédiée à l'aperçu.
+
 ### Dépendances pré-installées
 - `artifacts/joventy` → `pnpm install` ✓
 - `artifacts/slot-hunter` → `npm install` ✓ + Chromium téléchargé
