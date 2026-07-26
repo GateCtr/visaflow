@@ -171,6 +171,21 @@ export default function GuidePage() {
                   ))}
                 </ul>
               )}
+              {section.imageSrc && (
+                <figure className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <img
+                    src={section.imageSrc}
+                    alt={section.imageAlt ?? section.heading}
+                    className="mx-auto max-h-[680px] w-auto max-w-full rounded-xl object-contain"
+                    loading="lazy"
+                  />
+                  {section.imageCaption && (
+                    <figcaption className="px-2 pt-3 text-center text-xs leading-relaxed text-slate-500">
+                      {section.imageCaption}
+                    </figcaption>
+                  )}
+                </figure>
+              )}
               {guide.auditCtaAfterSection === i && (
                 <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
                   <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
@@ -233,6 +248,29 @@ export default function GuidePage() {
                     {item.a}
                   </div>
                 </details>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Internal links */}
+        {guide.internalLinks && guide.internalLinks.length > 0 && (
+          <section className="my-10 rounded-2xl border border-blue-100 bg-blue-50/60 p-6">
+            <h2 className="mb-4 text-lg font-bold text-primary">Pour poursuivre votre démarche</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {guide.internalLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="group rounded-xl border border-blue-100 bg-white p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
+                >
+                  <span className="font-semibold text-slate-800 transition-colors group-hover:text-primary">
+                    {link.label}
+                  </span>
+                  <span className="mt-1 block text-sm leading-relaxed text-slate-500">
+                    {link.description}
+                  </span>
+                </Link>
               ))}
             </div>
           </section>

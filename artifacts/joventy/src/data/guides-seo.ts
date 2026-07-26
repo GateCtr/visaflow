@@ -2,6 +2,15 @@ export interface GuideSection {
   heading: string;
   body: string;
   list?: string[];
+  imageSrc?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+}
+
+export interface GuideInternalLink {
+  href: string;
+  label: string;
+  description: string;
 }
 
 export interface Guide {
@@ -19,6 +28,7 @@ export interface Guide {
   faq: { q: string; a: string }[];
   relatedSlugs: string[];
   relatedDestination?: string;
+  internalLinks?: GuideInternalLink[];
   /** Index of the section (0-based) after which to insert the Audit & Diagnostic CTA — placed right after the section that lists refusal risks/mistakes. */
   auditCtaAfterSection?: number;
 }
@@ -1115,12 +1125,12 @@ const guides: Guide[] = [
     category: "Visa Schengen",
     coverEmoji: "🇪🇸",
     intro:
-      "À Kinshasa, le délai entre la réservation d’un rendez-vous visa Espagne et la date du rendez-vous est souvent la principale difficulté. Les observations disponibles indiquent une moyenne d’environ 36 jours, soit près de cinq semaines, mais ce chiffre n’est ni un délai garanti ni une promesse de disponibilité. Ce guide explique comment planifier votre demande et rechercher correctement un créneau sur le parcours officiel Espagne — email de l’ambassade puis portail Bookitit/citaconsular.es.",
+      "À Kinshasa, le délai entre la réservation d’un rendez-vous visa Espagne et la date du rendez-vous est souvent la principale difficulté. Les observations disponibles indiquent une moyenne d’environ 36 jours, soit près de cinq semaines, mais ce chiffre n’est ni un délai garanti ni une promesse de disponibilité. Ce guide explique comment planifier votre demande et rechercher correctement un créneau sur le parcours Espagne — inscription auprès de l’ambassade, puis accès au portail de réservation Bookitit/citaconsular.es. Joventy peut vous accompagner dans cette démarche d’intermédiation et de préparation, sans remplacer l’ambassade ni garantir une date.",
     sections: [
       {
         heading: "Le délai réel à prévoir : environ 36 jours en moyenne",
         body:
-          "Pour les demandes observées à l’Ambassade d’Espagne à Kinshasa, le délai entre la réservation du rendez-vous et le jour du rendez-vous est d’environ 36 jours en moyenne. Cela représente environ cinq semaines. La date obtenue peut toutefois être plus proche ou plus éloignée selon les ouvertures de calendrier, les annulations, la période de l’année et la catégorie choisie.",
+          "Pour les demandes observées à l’Ambassade d’Espagne à Kinshasa, le délai entre la réservation du rendez-vous et le jour du rendez-vous est d’environ 36 jours en moyenne. Cela représente environ cinq semaines. La date obtenue peut toutefois être plus proche ou plus éloignée selon les ouvertures de calendrier, les annulations et la période de l’année.",
         list: [
           "36 jours est une moyenne observée, pas un délai officiel garanti par l’ambassade",
           "Ajoutez le temps nécessaire pour l’inscription par email et la réception des identifiants",
@@ -1142,11 +1152,10 @@ const guides: Guide[] = [
       {
         heading: "Avant de rechercher un créneau : préparez les bonnes informations",
         body:
-          "Une recherche efficace commence avant la connexion. Préparez les informations utilisées lors de l’inscription et vérifiez-les avec votre passeport afin de ne pas sélectionner un créneau qui ne correspond pas à votre dossier.",
+          "Une recherche efficace commence avant la connexion. Préparez les informations utilisées lors de l’inscription et vérifiez-les avec votre passeport. Pour accéder au portail, les identifiants de connexion sont uniquement le numéro de passeport et le mot de passe transmis par l’ambassade.",
         list: [
           "Passeport du demandeur et numéro saisi lors de l’inscription",
-          "Identifiants reçus après le traitement de l’email envoyé à l’ambassade",
-          "Type de demande : court séjour Schengen ou long séjour, selon votre projet",
+          "Mot de passe reçu après le traitement de l’email envoyé à l’ambassade",
           "Date de voyage réaliste, avec une marge suffisante pour le rendez-vous et l’instruction",
           "Adresse email accessible pour recevoir la confirmation et les éventuelles instructions",
           "Documents de base déjà préparés : formulaire, assurance, hébergement, transport et justificatifs",
@@ -1155,28 +1164,31 @@ const guides: Guide[] = [
       {
         heading: "Comment rechercher correctement un rendez-vous sur Bookitit/citaconsular.es",
         body:
-          "Une fois vos identifiants reçus, utilisez uniquement le lien officiel communiqué par l’ambassade ou le portail citaconsular.es. Le nom Bookitit peut désigner le système de réservation utilisé derrière le portail : vérifiez toujours le domaine avant de saisir vos informations.",
+          "Une fois vos accès reçus, ouvrez le lien officiel communiqué par l’ambassade. Le parcours utilise l’interface Bookitit derrière le portail citaconsular.es. Il n’y a pas de liste de catégories à sélectionner dans cette étape : vous consultez directement les disponibilités de l’agenda.",
         list: [
-          "1. Ouvrez le portail officiel et connectez-vous avec les identifiants reçus, sans les partager",
-          "2. Sélectionnez l’Ambassade d’Espagne à Kinshasa et la catégorie correspondant exactement à votre demande",
-          "3. Vérifiez le nom, le numéro de passeport et le type de rendez-vous avant d’ouvrir le calendrier",
-          "4. Consultez les jours disponibles dans le calendrier ; une date grisée ou absente ne constitue pas une disponibilité",
-          "5. Comparez la date proposée avec votre date de voyage et le délai d’instruction estimé",
-          "6. Sélectionnez un créneau réellement disponible, validez une seule fois et attendez la confirmation",
-          "7. Téléchargez ou imprimez la confirmation avec la date, l’heure et l’identité du demandeur",
+          "1. Ouvrez le portail officiel de réservation Bookitit/citaconsular.es",
+          "2. Saisissez votre numéro de passeport et votre mot de passe, puis connectez-vous",
+          "3. Lorsqu’aucun créneau n’est ouvert, le portail affiche simplement qu’il n’y a pas de disponibilité au moment de votre recherche",
+          "4. Lorsqu’un créneau apparaît, une page d’instructions s’affiche : lisez-la puis cliquez sur « Confirmar »",
+          "5. Après confirmation des instructions, l’agenda affiche les jours et les horaires disponibles",
+          "6. Sélectionnez la date et l’heure souhaitées, ou utilisez l’icône calendrier située en haut à gauche pour changer de jour",
+          "7. Saisissez à nouveau vos identifiants si le portail le demande, puis connectez-vous pour confirmer le rendez-vous",
+          "8. Attendez l’email de confirmation et conservez-le avec la date et l’heure du rendez-vous",
         ],
+        imageSrc: "/images/espagne-bookitit-creneau.jpeg",
+        imageAlt: "Exemple d’un créneau disponible dans l’agenda Bookitit de l’Ambassade d’Espagne à Kinshasa",
+        imageCaption: "Exemple d’affichage : le calendrier indique le jour sélectionné et l’horaire disponible (« 1 hueco libre »).",
       },
       {
         heading: "Que faire lorsqu’aucun créneau n’apparaît ?",
         body:
-          "L’absence de créneau ne signifie pas nécessairement que la procédure est bloquée. Le calendrier peut être complet ou temporairement fermé. Une recherche organisée est préférable aux tentatives répétées et aux paiements à des intermédiaires non vérifiés.",
+          "Si aucun créneau n’apparaît, cela signifie simplement qu’il n’y a pas de créneau disponible au moment précis de votre recherche. Ce n’est pas un message indiquant que votre dossier est refusé ou que vos identifiants sont nécessairement invalides.",
         list: [
-          "Vérifiez d’abord que vous utilisez les bons identifiants et la bonne catégorie",
-          "Reconnectez-vous plus tard à des intervalles raisonnables : les annulations et nouvelles ouvertures sont variables",
-          "Ne créez pas plusieurs comptes et ne soumettez pas plusieurs demandes identiques",
-          "Ne payez pas une personne qui promet une date garantie sans confirmation officielle",
-          "Conservez les captures d’écran ou messages d’erreur utiles si le problème persiste",
-          "Contactez l’ambassade via ses coordonnées officielles si vos identifiants expirent ou si votre dossier comporte une erreur",
+          "Revenez consulter le portail ultérieurement, car les créneaux peuvent apparaître à un autre moment",
+          "Utilisez le calendrier en haut à gauche pour vérifier les autres jours lorsqu’il est accessible",
+          "Ne créez pas plusieurs demandes identiques et ne modifiez pas vos informations au hasard",
+          "Si vos identifiants ne fonctionnent pas, vérifiez le numéro de passeport et le mot de passe transmis par l’ambassade",
+          "Contactez l’ambassade via ses coordonnées officielles si vos identifiants comportent une erreur",
         ],
       },
       {
@@ -1194,21 +1206,23 @@ const guides: Guide[] = [
       {
         heading: "Les erreurs qui font perdre du temps",
         body:
-          "La plupart des retards viennent d’une mauvaise catégorie, d’informations différentes entre l’email et le passeport, ou d’une planification trop courte. Une date obtenue rapidement n’est utile que si elle correspond au bon demandeur et au bon type de visa.",
+          "La plupart des retards viennent d’une planification trop courte, d’une erreur de connexion ou d’une confirmation incomplète. Une date obtenue rapidement n’est utile que si elle correspond au bon demandeur et si la confirmation finale est bien reçue.",
         list: [
-          "Choisir une catégorie de rendez-vous qui ne correspond pas au motif réel du voyage",
           "Saisir un numéro de passeport ou un nom différent de celui du document présenté",
+          "Confondre le numéro de passeport avec une adresse email lors de la connexion",
+          "Quitter la page d’instructions sans cliquer sur « Confirmar » lorsque des créneaux apparaissent",
+          "Oublier de sélectionner l’heure après avoir sélectionné le jour",
           "Attendre le dernier mois avant le départ pour commencer la procédure",
           "Confondre la date du rendez-vous avec la date de délivrance du visa",
           "Acheter un billet définitif avant d’avoir une décision ou une marge suffisante",
-          "Utiliser un faux portail, transmettre ses identifiants ou accepter une fausse confirmation",
+          "Ne pas conserver l’email de confirmation du rendez-vous",
         ],
       },
     ],
     faq: [
       {
         q: "Quel est le délai moyen pour un rendez-vous visa Espagne à Kinshasa ?",
-        a: "Les observations disponibles indiquent environ 36 jours entre la réservation du rendez-vous et le jour du rendez-vous, soit près de cinq semaines. Il s’agit d’une moyenne indicative : la disponibilité varie selon la période, les annulations et la catégorie demandée.",
+        a: "Les observations disponibles indiquent environ 36 jours entre la réservation du rendez-vous et le jour du rendez-vous, soit près de cinq semaines. Il s’agit d’une moyenne indicative : la disponibilité varie selon la période et les annulations.",
       },
       {
         q: "Combien de temps faut-il ajouter après le rendez-vous ?",
@@ -1216,11 +1230,11 @@ const guides: Guide[] = [
       },
       {
         q: "Bookitit et citaconsular.es, est-ce la même procédure ?",
-        a: "Bookitit désigne le système de réservation utilisé par certains portails consulaires. Pour l’Espagne à Kinshasa, suivez uniquement le lien officiel communiqué par l’ambassade et vérifiez que la réservation se fait bien sur le domaine citaconsular.es avant de saisir vos identifiants.",
+        a: "Bookitit est l’interface de réservation utilisée derrière le portail citaconsular.es. Pour l’Espagne à Kinshasa, suivez le lien officiel communiqué par l’ambassade et utilisez votre numéro de passeport ainsi que votre mot de passe.",
       },
       {
         q: "Que faire si aucun rendez-vous n’est disponible ?",
-        a: "Vérifiez la catégorie, vos identifiants et vos informations personnelles, puis consultez à nouveau le portail à des intervalles raisonnables. Les ouvertures et annulations sont variables. Ne créez pas plusieurs demandes identiques et ne payez pas un intermédiaire qui garantit une date sans confirmation officielle.",
+        a: "L’absence de créneau signifie simplement qu’aucun créneau n’est disponible au moment de votre recherche. Consultez à nouveau le portail plus tard. Lorsqu’un créneau apparaît, cliquez sur « Confirmar », choisissez la date et l’heure, puis reconnectez-vous avec votre numéro de passeport et votre mot de passe pour confirmer.",
       },
       {
         q: "Puis-je réserver un rendez-vous seulement quelques jours avant mon voyage ?",
@@ -1233,6 +1247,28 @@ const guides: Guide[] = [
       "rendez-vous-cev-kinshasa-visa-schengen",
     ],
     relatedDestination: "visa-espagne-kinshasa",
+    internalLinks: [
+      {
+        href: "/visa-espagne-kinshasa",
+        label: "Visa Espagne depuis Kinshasa",
+        description: "Voir les types de visa, les frais et les étapes générales.",
+      },
+      {
+        href: "/ambassade-espagne-kinshasa",
+        label: "Ambassade d’Espagne à Kinshasa",
+        description: "Retrouver l’adresse et les coordonnées officielles.",
+      },
+      {
+        href: "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+        label: "Procédure complète du rendez-vous Espagne",
+        description: "Lire la procédure d’inscription par email et les documents à préparer.",
+      },
+      {
+        href: "/guides/documents-visa-schengen-kinshasa",
+        label: "Documents visa Schengen",
+        description: "Vérifier les pièces à préparer avant le dépôt.",
+      },
+    ],
   },
 
   {
@@ -1262,11 +1298,14 @@ const guides: Guide[] = [
       },
       {
         heading: "Étape 2 — Réservation du créneau sur citaconsular.es",
-        body: "Après traitement de votre email (délai variable : quelques jours à 2 semaines), l'ambassade vous envoie des identifiants (nom d'utilisateur + mot de passe). Avec ces identifiants :",
+        body: "Après traitement de votre email (délai variable : quelques jours à 2 semaines), l'ambassade vous transmet les accès au portail. La connexion se fait avec votre numéro de passeport et votre mot de passe.",
         list: [
           "Connectez-vous au portail : citaconsular.es",
-          "Choisissez une date et une heure disponibles pour votre rendez-vous à l'Ambassade d'Espagne de Kinshasa",
-          "Vous recevez un email de confirmation de rendez-vous",
+           "Saisissez votre numéro de passeport et votre mot de passe",
+           "Lorsqu'un créneau apparaît, lisez la page d'instructions puis cliquez sur « Confirmar »",
+           "Sélectionnez la date et l'heure souhaitées, ou utilisez l'icône calendrier en haut à gauche pour changer de jour",
+           "Reconnectez-vous avec votre numéro de passeport et votre mot de passe pour confirmer le rendez-vous",
+           "Vous recevez un email de confirmation de rendez-vous",
           "Vous pouvez annuler votre rendez-vous jusqu'à 3 jours avant la date — maximum 5 annulations par an",
           "Le créneau réservé est valable pour vous seul — ne le partagez pas",
           "Joventy peut réserver ce créneau pour vous dès réception des identifiants",
@@ -1343,11 +1382,11 @@ const guides: Guide[] = [
       },
       {
         q: "Comment prendre rendez-vous visa Espagne depuis Kinshasa en 2026 ?",
-        a: "La procédure est en deux étapes : 1) Envoyer un email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec vos données et pièces jointes. 2) Une fois les identifiants reçus, réserver votre créneau sur citaconsular.es. Joventy peut gérer ces deux étapes pour vous.",
+        a: "La procédure est en deux étapes : 1) Envoyer un email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec vos données et pièces jointes. 2) Une fois les accès reçus, se connecter sur citaconsular.es avec le numéro de passeport et le mot de passe, puis confirmer un créneau disponible. Joventy peut vous accompagner dans ces deux étapes.",
       },
       {
         q: "Combien de temps faut-il pour avoir un rendez-vous visa Espagne à Kinshasa ?",
-        a: "L'ambassade répond généralement à l'email d'inscription en 1 à 14 jours. La disponibilité des créneaux sur citaconsular.es varie selon la période. Joventy surveille et réserve dès qu'un créneau s'ouvre. En pratique, comptez 2 à 6 semaines entre la création du dossier et le rendez-vous.",
+        a: "L'ambassade répond généralement à l'email d'inscription en 1 à 14 jours. Une moyenne observée est d'environ 36 jours entre la réservation et le jour du rendez-vous, mais la disponibilité varie selon la période. Ce délai n'est pas garanti.",
       },
       {
         q: "Joventy peut-il envoyer l'email d'inscription à ma place ?",
