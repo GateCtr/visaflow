@@ -1104,6 +1104,138 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+    title: "Délai rendez-vous Espagne à Kinshasa 2026 — Comment rechercher un créneau Bookitit",
+    metaTitle: "Délai Rendez-vous Espagne Kinshasa 2026 — Rechercher un créneau Bookitit | Joventy",
+    metaDescription:
+      "Combien de temps attendre pour un rendez-vous visa Espagne à Kinshasa ? Délai moyen observé de 36 jours, recherche correcte d'un créneau Bookitit et étapes à vérifier.",
+    publishedDate: "2026-07-26",
+    updatedDate: "2026-07-26",
+    readingTime: 7,
+    category: "Visa Schengen",
+    coverEmoji: "🇪🇸",
+    intro:
+      "À Kinshasa, le délai entre la réservation d’un rendez-vous visa Espagne et la date du rendez-vous est souvent la principale difficulté. Les observations disponibles indiquent une moyenne d’environ 36 jours, soit près de cinq semaines, mais ce chiffre n’est ni un délai garanti ni une promesse de disponibilité. Ce guide explique comment planifier votre demande et rechercher correctement un créneau sur le parcours officiel Espagne — email de l’ambassade puis portail Bookitit/citaconsular.es.",
+    sections: [
+      {
+        heading: "Le délai réel à prévoir : environ 36 jours en moyenne",
+        body:
+          "Pour les demandes observées à l’Ambassade d’Espagne à Kinshasa, le délai entre la réservation du rendez-vous et le jour du rendez-vous est d’environ 36 jours en moyenne. Cela représente environ cinq semaines. La date obtenue peut toutefois être plus proche ou plus éloignée selon les ouvertures de calendrier, les annulations, la période de l’année et la catégorie choisie.",
+        list: [
+          "36 jours est une moyenne observée, pas un délai officiel garanti par l’ambassade",
+          "Ajoutez le temps nécessaire pour l’inscription par email et la réception des identifiants",
+          "Prévoyez une marge avant votre départ : le rendez-vous n’est que l’étape du dépôt, pas la délivrance du visa",
+          "Ne réservez pas un billet non remboursable en vous basant uniquement sur une date espérée",
+        ],
+      },
+      {
+        heading: "Ajoutez le délai d’instruction du visa Schengen",
+        body:
+          "Après le rendez-vous, l’ambassade doit encore examiner le dossier. Le délai standard généralement annoncé pour l’instruction d’un visa Schengen est d’environ 15 jours calendaires, mais il peut être prolongé lorsque des vérifications ou des documents complémentaires sont nécessaires.",
+        list: [
+          "Planification indicative : environ 36 jours jusqu’au rendez-vous + environ 15 jours d’instruction",
+          "Le délai total indicatif approche donc 51 jours, sans compter l’inscription, les week-ends opérationnels, les demandes de pièces ou les retards",
+          "Un dossier incomplet, une vérification supplémentaire ou une forte demande peut prolonger le traitement",
+          "L’obtention d’un rendez-vous ne signifie pas que le visa sera accordé",
+        ],
+      },
+      {
+        heading: "Avant de rechercher un créneau : préparez les bonnes informations",
+        body:
+          "Une recherche efficace commence avant la connexion. Préparez les informations utilisées lors de l’inscription et vérifiez-les avec votre passeport afin de ne pas sélectionner un créneau qui ne correspond pas à votre dossier.",
+        list: [
+          "Passeport du demandeur et numéro saisi lors de l’inscription",
+          "Identifiants reçus après le traitement de l’email envoyé à l’ambassade",
+          "Type de demande : court séjour Schengen ou long séjour, selon votre projet",
+          "Date de voyage réaliste, avec une marge suffisante pour le rendez-vous et l’instruction",
+          "Adresse email accessible pour recevoir la confirmation et les éventuelles instructions",
+          "Documents de base déjà préparés : formulaire, assurance, hébergement, transport et justificatifs",
+        ],
+      },
+      {
+        heading: "Comment rechercher correctement un rendez-vous sur Bookitit/citaconsular.es",
+        body:
+          "Une fois vos identifiants reçus, utilisez uniquement le lien officiel communiqué par l’ambassade ou le portail citaconsular.es. Le nom Bookitit peut désigner le système de réservation utilisé derrière le portail : vérifiez toujours le domaine avant de saisir vos informations.",
+        list: [
+          "1. Ouvrez le portail officiel et connectez-vous avec les identifiants reçus, sans les partager",
+          "2. Sélectionnez l’Ambassade d’Espagne à Kinshasa et la catégorie correspondant exactement à votre demande",
+          "3. Vérifiez le nom, le numéro de passeport et le type de rendez-vous avant d’ouvrir le calendrier",
+          "4. Consultez les jours disponibles dans le calendrier ; une date grisée ou absente ne constitue pas une disponibilité",
+          "5. Comparez la date proposée avec votre date de voyage et le délai d’instruction estimé",
+          "6. Sélectionnez un créneau réellement disponible, validez une seule fois et attendez la confirmation",
+          "7. Téléchargez ou imprimez la confirmation avec la date, l’heure et l’identité du demandeur",
+        ],
+      },
+      {
+        heading: "Que faire lorsqu’aucun créneau n’apparaît ?",
+        body:
+          "L’absence de créneau ne signifie pas nécessairement que la procédure est bloquée. Le calendrier peut être complet ou temporairement fermé. Une recherche organisée est préférable aux tentatives répétées et aux paiements à des intermédiaires non vérifiés.",
+        list: [
+          "Vérifiez d’abord que vous utilisez les bons identifiants et la bonne catégorie",
+          "Reconnectez-vous plus tard à des intervalles raisonnables : les annulations et nouvelles ouvertures sont variables",
+          "Ne créez pas plusieurs comptes et ne soumettez pas plusieurs demandes identiques",
+          "Ne payez pas une personne qui promet une date garantie sans confirmation officielle",
+          "Conservez les captures d’écran ou messages d’erreur utiles si le problème persiste",
+          "Contactez l’ambassade via ses coordonnées officielles si vos identifiants expirent ou si votre dossier comporte une erreur",
+        ],
+      },
+      {
+        heading: "Le calendrier de planification recommandé",
+        body:
+          "Pour éviter de placer le voyage trop près du rendez-vous, commencez la préparation plusieurs semaines à l’avance. L’objectif est de conserver du temps pour le rendez-vous, l’instruction et une éventuelle demande de document complémentaire.",
+        list: [
+          "Dès que possible : réunir les documents et vérifier la date d’expiration du passeport",
+          "Environ 2 à 3 mois avant le voyage : lancer l’inscription et rechercher le rendez-vous",
+          "Après réservation : finaliser le dossier et vérifier chaque document avant le jour du dépôt",
+          "Après le rendez-vous : suivre le dossier et éviter de fixer un départ trop proche de la date estimée de décision",
+          "En cas de calendrier complet : revoir la date de voyage plutôt que de présenter des documents incohérents",
+        ],
+      },
+      {
+        heading: "Les erreurs qui font perdre du temps",
+        body:
+          "La plupart des retards viennent d’une mauvaise catégorie, d’informations différentes entre l’email et le passeport, ou d’une planification trop courte. Une date obtenue rapidement n’est utile que si elle correspond au bon demandeur et au bon type de visa.",
+        list: [
+          "Choisir une catégorie de rendez-vous qui ne correspond pas au motif réel du voyage",
+          "Saisir un numéro de passeport ou un nom différent de celui du document présenté",
+          "Attendre le dernier mois avant le départ pour commencer la procédure",
+          "Confondre la date du rendez-vous avec la date de délivrance du visa",
+          "Acheter un billet définitif avant d’avoir une décision ou une marge suffisante",
+          "Utiliser un faux portail, transmettre ses identifiants ou accepter une fausse confirmation",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Quel est le délai moyen pour un rendez-vous visa Espagne à Kinshasa ?",
+        a: "Les observations disponibles indiquent environ 36 jours entre la réservation du rendez-vous et le jour du rendez-vous, soit près de cinq semaines. Il s’agit d’une moyenne indicative : la disponibilité varie selon la période, les annulations et la catégorie demandée.",
+      },
+      {
+        q: "Combien de temps faut-il ajouter après le rendez-vous ?",
+        a: "Le délai standard d’instruction d’un visa Schengen est généralement d’environ 15 jours calendaires, mais il peut être plus long si des vérifications ou des documents complémentaires sont nécessaires. Le délai total indicatif doit donc inclure environ 36 jours avant le rendez-vous et environ 15 jours après.",
+      },
+      {
+        q: "Bookitit et citaconsular.es, est-ce la même procédure ?",
+        a: "Bookitit désigne le système de réservation utilisé par certains portails consulaires. Pour l’Espagne à Kinshasa, suivez uniquement le lien officiel communiqué par l’ambassade et vérifiez que la réservation se fait bien sur le domaine citaconsular.es avant de saisir vos identifiants.",
+      },
+      {
+        q: "Que faire si aucun rendez-vous n’est disponible ?",
+        a: "Vérifiez la catégorie, vos identifiants et vos informations personnelles, puis consultez à nouveau le portail à des intervalles raisonnables. Les ouvertures et annulations sont variables. Ne créez pas plusieurs demandes identiques et ne payez pas un intermédiaire qui garantit une date sans confirmation officielle.",
+      },
+      {
+        q: "Puis-je réserver un rendez-vous seulement quelques jours avant mon voyage ?",
+        a: "C’est risqué. Il faut prévoir le délai jusqu’au rendez-vous, puis le délai d’instruction du visa et une marge pour les demandes de documents complémentaires. Commencez idéalement deux à trois mois avant le voyage et ne basez pas votre plan sur une date non confirmée.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "documents-visa-schengen-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+    ],
+    relatedDestination: "visa-espagne-kinshasa",
+  },
+
+  {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
     title: "Rendez-vous Espagne Kinshasa 2026 — Procédure officielle étape par étape (email + citaconsular.es)",
     metaTitle: "Rendez-vous Espagne Kinshasa 2026 — Email ambassade + citaconsular.es | Joventy",
@@ -1239,6 +1371,7 @@ const guides: Guide[] = [
       },
     ],
     relatedSlugs: [
+      "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
       "documents-visa-schengen-kinshasa",
       "rendez-vous-cev-kinshasa-visa-schengen",
       "guide-cev-kinshasa-reservation-rdv-depot",
