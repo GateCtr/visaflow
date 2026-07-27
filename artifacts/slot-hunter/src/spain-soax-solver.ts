@@ -61,17 +61,10 @@ function browserSessionRequired(): boolean {
 }
 
 function hasCompatibleProxy(sessionProxyUrl: string, configuredProxyUrl: string | undefined): boolean {
-  if (!sessionProxyUrl) return false;
-
-  // Decodo ISP est utilisé tel quel et son IP doit rester celle du solve.
-  // Une session Redis créée avec SOAX (ou sans proxy) ne peut donc pas être
-  // réutilisée après le passage à Decodo.
-  if (process.env.DECODO_PROXY_URL) {
-    return sessionProxyUrl === configuredProxyUrl;
-  }
-
-  // Pour SOAX, l'URL contient une session sticky persistée avec le cookie.
-  return true;
+  // Une session CF ne peut être réutilisée qu'avec l'URL proxy exacte qui a
+  // servi à l'établir. Cela évite d'associer un cookie à une autre IP après
+  // un redéploiement ou un changement de fournisseur.
+  return Boolean(sessionProxyUrl && configuredProxyUrl && sessionProxyUrl === configuredProxyUrl);
 }
 const CAPSOLVER_POLL_MS = 5_000;
 const CAPSOLVER_MAX_POLLS = 60; // 5min max (CF challenge peut être lent)
@@ -612,24 +605,24 @@ export async function ensureSpainCfSession(
     return null;
   }
 
-  // ── Mode Decodo Direct ──────────────────────────────────────────────────────
-  // Si DECODO_PROXY_URL est défini, tenter un accès direct : l'IP ISP Decodo
-  // peut bypasser Cloudflare sans solve. Si la page répond 200 sans challenge,
-  // on crée la session directement avec le PHPSESSID obtenu (coût CapSolver = 0).
+  // ── Mode Decodo direct ──────────────────────────────────────────────────────
+  // Ce chemin n'est disponible qu'en mode de compatibilité explicite
+  // (browserSessionRequired() === false). Il ne simule aucun signal Cloudflare:
+  // on accepte uniquement une page applicative réellement retournée par le
+  // proxy et on conserve l'état de session obtenu.
   if (process.env.DECODO_PROXY_URL && !browserSessionRequired()) {
-    console.log(`[spain-soax] 🚀 Decodo ISP — tentative accès direct (bypass CF possible)…`);
+    console.log(`[spain-soax] 🚀 Decodo ISP — tentative d'accès applicatif direct…`);
     try {
       const directImpit = new Impit({
         browser: "chrome",
         proxyUrl: soaxProxyUrl,
-        ignoreTlsErrors: true,
       } as any);
 
       const directRes = await directImpit.fetch(targetUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+          "Accept-Language": "fr-FR,fr;q=0.9",
           "Accept-Encoding": "gzip, deflate, br",
           "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
           "Sec-Ch-Ua-Mobile": "?0",
@@ -675,7 +668,7 @@ export async function ensureSpainCfSession(
         _activeCfSession = directSession;
         syncSpainCfSessionToRedis(directSession as SerializableSpainCfSession);
         console.log(
-          `[spain-soax] 🎉 Session Decodo Direct établie (bypass CF) — PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 30min`,
+          `[spain-soax] 🎉 Session Decodo directe établie — PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 30min`,
         );
         return directSession;
       }
@@ -774,7 +767,6 @@ export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impi
 
   _spainImpit = new Impit({
     browser: "chrome",
-    ignoreTlsErrors: true,
     proxyUrl: session.soaxProxyUrl || undefined,
   } as any);
   _spainImpitProxyUrl = session.soaxProxyUrl;
@@ -802,12 +794,21 @@ export async function spainCfFetch(
 ): Promise<Response | null> {
   const impit = getSpainImpit(session);
 
-  const cookieParts = [`cf_clearance=${session.cfClearance}`];
+  // Keep the cookie order observed in the browser flow and place the
+  // Cloudflare cookie last. Callers that update PHPSESSID after a response
+  // may override this header with their current request-local jar.
+  const cookieParts: string[] = [];
+  const preferredCookieNames = ["_ga", "_ga_F3TYSDL945", "PHPSESSID"];
+  for (const name of preferredCookieNames) {
+    const cookie = session.allCookies.find((candidate) => candidate.name === name);
+    if (cookie) cookieParts.push(`${cookie.name}=${cookie.value}`);
+  }
   for (const c of session.allCookies) {
-    if (c.name !== "cf_clearance") {
+    if (c.name !== "cf_clearance" && !preferredCookieNames.includes(c.name)) {
       cookieParts.push(`${c.name}=${c.value}`);
     }
   }
+  if (session.cfClearance) cookieParts.push(`cf_clearance=${session.cfClearance}`);
 
   // Extract Chrome major version from UA
   const chromeMajor = session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136";
@@ -816,7 +817,7 @@ export async function spainCfFetch(
   const baseHeaders: Record<string, string> = {
     "User-Agent": session.userAgent,
     "Accept": "*/*",
-    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "fr-FR,fr;q=0.9",
     "Accept-Encoding": "gzip, deflate, br, zstd",
     "Cookie": cookieParts.join("; "),
     // Sec-Ch-Ua: ordre réel Chrome = "Not/A)Brand" first, then Chromium, then Google Chrome

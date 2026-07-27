@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.cairo
     pkgs.redis
     pkgs.systemd
     pkgs.xorg.libxcb

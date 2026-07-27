@@ -1,22 +1,20 @@
 /**
- * spain-http-scanner.ts — Scanner Espagne 100% HTTP (sans Playwright)
+ * spain-http-scanner.ts — Scanner HTTP Espagne avec session navigateur préalable
  *
  * ARCHITECTURE :
- *   1. Obtient cf_clearance via spain-soax-solver (CapSolver + proxy sticky/fixe)
+ *   1. Obtient une session Cloudflare via Playwright par défaut
+ *      (CapSolver reste un mode de compatibilité explicite)
  *   2. Charge la page widget citaconsular.es via impit pour extraire les params Bookitit
  *   3. Appelle les APIs JSONP Bookitit (getservices, getagendas, datetime) via impit
- *   4. Scanne en boucle toutes les 30-60s sans aucun navigateur
- *   5. Re-solve automatique quand le cookie expire (~2h)
+ *   4. Scanne en HTTP uniquement après établissement de la session
+ *   5. Renouvelle la session navigateur quand le cookie expire
  *
- * AVANTAGES vs Playwright :
- *   - 10x plus rapide (pas de rendu DOM, pas de JS)
- *   - 0 RAM navigateur (~500MB économisés)
- *   - Scan toutes les 30s au lieu de 3min
- *   - Détection + booking ultra-rapide
+ * Le navigateur n'est pas utilisé pour chaque scan, mais reste nécessaire pour
+ * exécuter les scripts Cloudflare et établir une session authentique.
  *
  * PRÉREQUIS :
- *   - SOAX_PROXY_URL configuré
- *   - CAPSOLVER_API_KEY configuré
+ *   - DECODO_PROXY_URL ou SOAX_PROXY_URL configuré
+ *   - CAPSOLVER_API_KEY uniquement pour le mode de compatibilité explicite
  *   - SPAIN_SOAX_COUNTRY optionnel (défaut: "es")
  */
 
@@ -425,14 +423,12 @@ async function fetchBookititConfig(
 
     console.log(`[spain-http] 🔘 Bouton "Continue" détecté — POST avec token vers ${postUrl}`);
 
-    console.log(`[spain-http] 🔘 Bouton "Continue" détecté — POST avec token vers ${postUrl}`);
-
     try {
       const postRes = await spainCfFetch(postUrl, session, {
         method: "POST",
         headers: {
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Accept-Language": "fr-FR,fr;q=0.9",
           "Content-Type": "application/x-www-form-urlencoded",
           "Origin": "https://www.citaconsular.es",
           "Referer": portalUrl,
@@ -702,10 +698,9 @@ function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
  * COOKIES (ordre confirmé par Burp 2026-06-25) :
  *   _ga=GA1.1.<clientId>.<ts>; _ga_F3TYSDL945=GS2.1.s<ts>...; PHPSESSID=<id>; cf_clearance=<token>
  *
- * JSD ONESHOT (Burp row 22) :
- *   POST /cdn-cgi/challenge-platform/h/b/jsd/oneshot/<siteKey>/<nonce>/<rayId>
- *   Retourne un nouveau cf_clearance — URL extraite du HTML de la 1ère réponse widget.
- *   Si extraction échoue → on continue avec le cf_clearance CapSolver existant.
+ * Les appels JSD/RUM Cloudflare ne sont pas rejoués par ce scanner HTTP.
+ * Le mode navigateur doit avoir établi cette partie de la session avant son
+ * transfert au scanner.
  */
 async function scanViaMainEndpoint(
   session: SpainCfSession,
@@ -779,6 +774,55 @@ async function scanViaMainEndpoint(
     return parts.join("; ");
   }
 
+  /**
+   * Fusionne les Set-Cookie du serveur dans la jar de cette exécution.
+   * Les attributs de cookie (Path, Secure, Max-Age...) ne doivent jamais être
+   * renvoyés dans l'en-tête Cookie : seule la paire name=value est conservée.
+   */
+  function mergeSetCookies(response: Response | null, source: string): void {
+    for (const setCookie of response?.headers?.getSetCookie?.() ?? []) {
+      const firstPart = setCookie.split(";", 1)[0] ?? "";
+      const separator = firstPart.indexOf("=");
+      if (separator <= 0) continue;
+
+      const name = firstPart.slice(0, separator).trim();
+      const value = firstPart.slice(separator + 1).trim();
+      if (!name) continue;
+
+      if (name === "cf_clearance") {
+        if (value) {
+          activeCfClearance = value;
+          console.log(`[spain-http] 🔑 cf_clearance mis à jour depuis ${source}`);
+        }
+        continue;
+      }
+
+      const existingIndex = browserCookies.findIndex((cookie) => cookie.name === name);
+      if (!value) {
+        if (existingIndex >= 0) browserCookies.splice(existingIndex, 1);
+        continue;
+      }
+
+      const cookie = { name, value };
+      if (existingIndex >= 0) browserCookies[existingIndex] = cookie;
+      else browserCookies.push(cookie);
+
+      if (name === "PHPSESSID") {
+        phpSessId = value;
+        console.log(`[spain-http] 🍪 PHPSESSID mis à jour depuis ${source}: ${value.slice(0, 12)}…`);
+      }
+    }
+
+    // Keep the shared session in sync as well. Other Bookitit helpers may use
+    // spainCfFetch without this request-local Cookie override later in the
+    // same scan cycle.
+    session.allCookies = [
+      ...browserCookies,
+      ...(activeCfClearance ? [{ name: "cf_clearance", value: activeCfClearance }] : []),
+    ];
+    session.cfClearance = activeCfClearance;
+  }
+
   // ─── Step 1: GET entry page → PHPSESSID + CSRF token ───────────────────
   // IMPORTANT: Use full Chrome header set — Cloudflare validates the fingerprint
   // Sec-Fetch-Site: none because it's a direct navigation (no Referer)
@@ -821,13 +865,8 @@ async function scanViaMainEndpoint(
     return null;
   }
 
-  // Capture PHPSESSID from Set-Cookie headers
-  for (const sc of (entryRes.headers?.getSetCookie?.() ?? [])) {
-    const nv = sc.split(";")[0] ?? "";
-    if (nv.startsWith("PHPSESSID=")) {
-      phpSessId = nv.slice("PHPSESSID=".length);
-    }
-  }
+  // Capture every server-side cookie before constructing the next request.
+  mergeSetCookies(entryRes, "GET portail");
   if (phpSessId) {
     console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
   }
@@ -910,14 +949,8 @@ async function scanViaMainEndpoint(
   // the browser JavaScript and cannot be reconstructed safely in HTTP-only.
   const widgetHtml1 = postRes ? await postRes.text() : "";
 
-  // Capture any new cf_clearance set by first POST widget response
-  for (const sc of (postRes?.headers?.getSetCookie?.() ?? [])) {
-    const nv = sc.split(";")[0] ?? "";
-    if (nv.startsWith("cf_clearance=")) {
-      activeCfClearance = nv.slice("cf_clearance=".length);
-      console.log(`[spain-http] 🔑 cf_clearance mis à jour depuis POST widget (row 15)`);
-    }
-  }
+  // Capture every cookie returned by the widget POST before JSONP requests.
+  mergeSetCookies(postRes, "POST widget");
 
   const widgetTitle = widgetHtml1.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
   console.log(
@@ -987,13 +1020,11 @@ async function scanViaMainEndpoint(
     _: String(tWidget + 2),
   });
 
-  // Séquence confirmée par Burp (tableau complet 2026-06-25) :
+  // Séquence applicative observée :
   //   main/                → t+0      (response immédiate, détection depuis ce body)
-  //   RUM #28              → t+3ms    ← LE PLUS CRITIQUE (CF corrèle direct avec main/)
   //   GTM script load      → t+2914ms (déclencheur des companions)
   //   getwidgetconfs/      → t+3046ms (132ms après GTM — callback GTM)
   //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
-  //   RUM #109             → t+3624ms (578ms après getwidgetconfs/)
   // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
   // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
   const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
@@ -1220,13 +1251,14 @@ async function scanViaMainEndpoint(
 /**
  * Effectue un scan HTTP-only des créneaux Espagne.
  *
- * Flow OPTIMISÉ (reverse-engineered de loadermaec.js) :
- *   1. ensureSpainCfSession() → obtient/réutilise le cookie CF
+ * Flow HTTP après établissement de session :
+ *   1. ensureSpainCfSession() → obtient/réutilise la session navigateur
  *   2. GET portal → POST Continue → GET /onlinebookings/main/
  *   3. Parse le HTML retourné pour détecter "No hay horas disponibles"
  *   4. Si pas de "No hay horas" visible → créneaux potentiels !
  *
- * UN SEUL appel API (au lieu de 9+ appels JSONP) → scan en ~2s au lieu de ~10s
+ * Les appels Cloudflare restent exécutés par le navigateur lors du bootstrap ;
+ * ce scanner ne rejoue que les requêtes applicatives Bookitit observées.
  *
  * @param portalUrl - URL du widget citaconsular.es
  */
@@ -1246,10 +1278,8 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   // 2. Scan via /onlinebookings/main/ (méthode optimisée — 1 seul appel)
   let mainResult = await scanViaMainEndpoint(session, portalUrl);
   if (!mainResult) {
-    // Un accès direct Decodo peut recevoir un challenge CF même si le
-    // pre-warm a obtenu une page 200. Après invalidation, une nouvelle
-    // session force ensureSpainCfSession() à passer par AntiCloudflareTask
-    // avec le même proxy, puis on rejoue le scan une seule fois.
+    // Après invalidation, une nouvelle session navigateur est demandée avec
+    // le même proxy, puis le scan est rejoué une seule fois.
     console.warn("[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique");
     session = await ensureSpainCfSession(portalUrl);
     if (session) {
@@ -1272,16 +1302,13 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
  * Variante probe pour le watcher (compatible avec SpainWatcherProbeResult).
  * Drop-in replacement pour runSpainWatcherProbe() quand SPAIN_HTTP_MODE=1.
  *
- * STRATÉGIE HYBRIDE :
- *   - Si une session Bookitit est déjà cachée (par un passage Playwright précédent) :
- *     → Scan direct via HTTP (impit + SOAX + cf_clearance) — ultra-rapide
- *   - Si pas de session cachée :
- *     → Le CF bypass est prêt, mais Bookitit nécessite un init JS
+ * STRATÉGIE :
+ *   - Une session navigateur doit d'abord établir l'état Cloudflare.
+ *   - Les scans suivants utilisent HTTP avec cette même session et ce même proxy.
  *     → Retourne "error" pour que la boucle fallback sur Playwright
  *
- * L'avantage principal : une fois la session Bookitit établie (25min TTL),
- * les scans suivants sont 100% HTTP avec le cookie CF pré-résolu.
- * Le CF bypass réduit le temps Playwright de 120s (attente passive) → 10s.
+ * L'avantage principal : une fois la session navigateur établie, les scans
+ * suivants sont HTTP avec la même jar de cookies et le même proxy.
  */
 export async function runSpainHttpProbe(portalUrl: string): Promise<{
   status: "found" | "not_found" | "error";
