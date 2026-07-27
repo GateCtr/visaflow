@@ -30,7 +30,37 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer";
-import { parseProxyForPuppeteer, randomUserAgent, randomViewport } from "./browser.js";
+import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
+
+// ─── UA Chrome/Edge exclusivement pour le persistent browser ─────────────────
+// Safari/Firefox UAs servis par un moteur Chromium sont détectables via JS engine
+// fingerprinting (propriétés Safari-only absentes, Gecko APIs manquantes, etc.).
+const CHROME_UA_POOL = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.103 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Safari/537.36 Edg/148.0.2849.68",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7231.96 Safari/537.36",
+];
+
+let _uaIdx = Math.floor(Math.random() * CHROME_UA_POOL.length);
+function randomChromeUA(): string {
+  const ua = CHROME_UA_POOL[_uaIdx % CHROME_UA_POOL.length];
+  _uaIdx++;
+  return ua;
+}
+
+/**
+ * Dérive navigator.platform depuis le UA pour éviter l'incohérence UA↔platform.
+ * CF détecte immédiatement un UA Macintosh avec platform="Linux x86_64".
+ */
+function platformFromUA(ua: string): string {
+  if (/Macintosh/i.test(ua)) return "MacIntel";
+  if (/Windows NT/i.test(ua)) return "Win32";
+  return "Linux x86_64";
+}
 import {
   type SpainCfSession,
   cloneSpainCfSessionForDossier,
@@ -39,6 +69,47 @@ import {
 import { syncSpainCfSessionToRedis, type SerializableSpainCfSession } from "./spain-redis-persistence.js";
 
 puppeteer.use(StealthPlugin());
+
+// ─── Proxy auth helper ────────────────────────────────────────────────────────
+
+/**
+ * Installe un handler CDP Fetch pour répondre aux challenges proxy 407.
+ *
+ * `page.authenticate()` ne fonctionne pas de façon fiable pour les proxies HTTP
+ * en mode headless dans Puppeteer v22+ : il cible la couche page-level auth
+ * (WWW-Authenticate) mais pas le proxy-level (Proxy-Authenticate / 407).
+ * La solution correcte est `Fetch.enable { handleAuthRequests: true }` via CDP.
+ */
+async function setupPageProxyAuth(
+  page: Page,
+  creds: { username: string; password: string },
+): Promise<void> {
+  const client = await (page as any).createCDPSession();
+  await client.send("Fetch.enable", { handleAuthRequests: true });
+  client.on("Fetch.authRequired", async (event: any) => {
+    const { requestId, authChallenge } = event;
+    if (authChallenge?.source === "Proxy") {
+      await client.send("Fetch.continueWithAuth", {
+        requestId,
+        authChallengeResponse: {
+          response: "ProvideCredentials",
+          username: creds.username,
+          password: creds.password,
+        },
+      }).catch(() => {});
+    } else {
+      // Pas un challenge proxy — continuer sans auth
+      await client.send("Fetch.continueWithAuth", {
+        requestId,
+        authChallengeResponse: { response: "Default" },
+      }).catch(() => {});
+    }
+  });
+  client.on("Fetch.requestPaused", async (event: any) => {
+    // Laisser passer toutes les requêtes non-auth interceptées
+    await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+  });
+}
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -65,7 +136,7 @@ const DEFAULT_WIDGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdef498.
 class SpainPersistentBrowserManager {
   private _browser: Browser | null = null;
   private _cachedSession: SpainCfSession | null = null;
-  private _ua: string = randomUserAgent();
+  private _ua: string = randomChromeUA();
   private _viewport = randomViewport();
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
@@ -85,7 +156,11 @@ class SpainPersistentBrowserManager {
       "--disable-blink-features=AutomationControlled",
       "--disable-infobars",
       "--disable-dev-shm-usage",
-      "--disable-gpu",
+      // Software WebGL via SwiftShader — exposer WebGL sans GPU physique.
+      // --disable-gpu supprime WebGL entièrement → signal bot détectable par CF.
+      "--use-gl=angle",
+      "--use-angle=swiftshader-webgl",
+      "--enable-webgl",
       `--window-size=${vp.width},${vp.height}`,
     ];
 
@@ -128,7 +203,7 @@ class SpainPersistentBrowserManager {
     const { args } = this.buildLaunchArgs(proxyUrl);
 
     // Rotate UA + viewport at each browser launch
-    this._ua = randomUserAgent();
+    this._ua = randomChromeUA();
     this._viewport = randomViewport();
 
     const maskedProxy = proxyUrl
@@ -206,13 +281,18 @@ class SpainPersistentBrowserManager {
     await page.setExtraHTTPHeaders({
       "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
     });
-    if (proxyAuth) await page.authenticate(proxyAuth);
+    // CDP Fetch handler remplace page.authenticate() — voir setupPageProxyAuth.
+    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
 
-    // Script d'init stealth identique à browser.ts (webdriver + chrome enrichi)
+    // Script d'init stealth : webdriver + platform + languages + chrome enrichi.
+    // navigator.platform DOIT correspondre au UA — CF détecte immédiatement
+    // un UA Macintosh avec platform="Linux x86_64" ou "Win32".
     const navLanguages = ["fr-FR", "fr", "en-US", "en"];
+    const navPlatform = platformFromUA(this._ua);
     await (page as any).evaluateOnNewDocument(
-      (langs: string[]) => {
+      (langs: string[], platform: string) => {
         Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        Object.defineProperty(navigator, "platform", { get: () => platform });
         Object.defineProperty(navigator, "languages", { get: () => langs });
         const noop = () => undefined;
         (window as any).chrome = {
@@ -254,6 +334,7 @@ class SpainPersistentBrowserManager {
         };
       },
       navLanguages,
+      navPlatform,
     );
 
     // Naviguer vers le widget
@@ -367,7 +448,7 @@ class SpainPersistentBrowserManager {
       await page.setExtraHTTPHeaders({
         "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
       });
-      if (proxyAuth) await page.authenticate(proxyAuth);
+      if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
 
       // Injecter les cookies CF dans le contexte incognito (sans PHPSESSID)
       const cookiesToInject = cfSession.allCookies
