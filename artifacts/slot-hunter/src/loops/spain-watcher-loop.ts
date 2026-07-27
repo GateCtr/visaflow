@@ -219,10 +219,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
       // l'override d'urgence pour un service déjà déployé sans nouveau champ.
       // Une ancienne valeur `intervalMin` ne doit pas ralentir le mode HTTP :
       // avant `intervalSec`, ce mode était explicitement cadencé à 60 secondes.
+      // Minimum 30s en HTTP (protège contre une valeur trop basse dans Convex).
       const configuredHttpIntervalSec = config.intervalSec
         ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = SPAIN_HTTP_MODE
-        ? Math.max(10, configuredHttpIntervalSec) * 1000
+        ? Math.max(30, configuredHttpIntervalSec) * 1000
         : (config.intervalMin ?? 3) * 60_000;
       const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
       log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
