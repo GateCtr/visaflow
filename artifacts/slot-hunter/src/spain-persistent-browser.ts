@@ -350,8 +350,9 @@ class SpainPersistentBrowserManager {
     const proxyUrl = this.getProxyUrl();
     const { proxyAuth } = this.buildLaunchArgs(proxyUrl);
 
-    // createIncognitoBrowserContext → cookie store totalement isolé du profil principal
-    const incognito = await (browser as any).createIncognitoBrowserContext();
+    // createBrowserContext (Puppeteer v20+) → cookie store totalement isolé du profil principal
+    // Remplace l'ancien createIncognitoBrowserContext() retiré dans Puppeteer v20.
+    const incognito = await (browser as any).createBrowserContext();
     try {
       const page: Page = await incognito.newPage();
 
