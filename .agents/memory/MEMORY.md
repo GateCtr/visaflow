@@ -13,3 +13,4 @@
 - [Spain guide planning and conversion](spain-guide-planning-conversion.md) — Spain appointment guides must plan travel dates from all delays and use Spain-specific destination conversion paths, not generic visa copy.
 - [Convex prod deploy flow](convex-prod-deploy-flow.md) — no local `convex dev` sync; schema/function edits need explicit `npx convex deploy` with `CONVEX_DEPLOY_KEY` or client calls hit "Server Error".
 - [Spain HTTP proxy binding](spain-http-proxy-binding.md) — HTTP-only sessions must solve and scan through the same Decodo/SOAX proxy; local CF cookies have unknown origin IPs and must not be reused.
+- [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
