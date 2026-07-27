@@ -738,6 +738,7 @@ export async function ensureSpainCfSession(
 
   // Tenter le solve CapSolver (max 2 essais avec rotation)
   const MAX_ATTEMPTS = 2;
+  let lastCapsolverError = "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     console.log(`[spain-soax] 🎯 Tentative ${attempt}/${MAX_ATTEMPTS}…`);
 
@@ -759,12 +760,94 @@ export async function ensureSpainCfSession(
       return result.session;
     }
 
-    console.warn(`[spain-soax] ⚠️ Tentative ${attempt} échouée: ${result.error}`);
+    lastCapsolverError = result.error ?? "";
+    console.warn(`[spain-soax] ⚠️ Tentative ${attempt} échouée: ${lastCapsolverError}`);
+
+    // Si CapSolver dit qu'il n'y a pas de challenge CF → inutile de réessayer
+    // Le site est accessible directement, on sort immédiatement du loop
+    if (/challenge not found/i.test(lastCapsolverError)) {
+      console.log(`[spain-soax] ℹ️ Pas de challenge CF détecté par CapSolver → tentative accès direct`);
+      break;
+    }
 
     // Rotation IP avant retry
     if (attempt < MAX_ATTEMPTS) {
       rotateSpainSoaxSession("spain-cf");
       await new Promise((r) => setTimeout(r, 5_000));
+    }
+  }
+
+  // ── Fallback accès direct (quand pas de challenge CF) ─────────────────────
+  // CapSolver signale "challenge not found" → le site est accessible directement
+  // via le proxy Decodo. On établit une session applicative courte durée (30min).
+  if (/challenge not found/i.test(lastCapsolverError) && soaxProxyUrl) {
+    console.log(`[spain-soax] 🚀 Fallback Decodo direct (pas de challenge CF)…`);
+    try {
+      const directImpit = new Impit({
+        browser: "chrome",
+        proxyUrl: soaxProxyUrl,
+      } as any);
+
+      const directRes = await directImpit.fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
+          "Sec-Ch-Ua-Mobile": "?0",
+          "Sec-Ch-Ua-Platform": '"Windows"',
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Upgrade-Insecure-Requests": "1",
+        },
+      } as any) as unknown as Response;
+
+      const directBody = await (directRes as any).text();
+      const isCfChallenge = /just a moment|jetzt einen moment|verifying|_cf_chl_opt/i.test(
+        (directBody as string).slice(0, 3000),
+      );
+
+      if ((directRes as any).status === 200 && !isCfChallenge) {
+        const setCookie = (directRes as any).headers?.get?.("set-cookie") ?? "";
+        const phpSessionMatch = setCookie.match(/PHPSESSID=([^;]+)/);
+        const phpSessionId = phpSessionMatch?.[1] ?? "";
+
+        const directUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+        const directCreatedAt = Date.now();
+        const directExpiresAt = directCreatedAt + 30 * 60_000; // 30min
+
+        const directAllCookies: Array<{ name: string; value: string }> = [];
+        if (phpSessionId) directAllCookies.push({ name: "PHPSESSID", value: phpSessionId });
+
+        const directSession: SpainCfSession = {
+          cfClearance: "",
+          cfDomain: ".citaconsular.es",
+          soaxProxyUrl,
+          userAgent: directUA,
+          createdAt: directCreatedAt,
+          expiresAt: directExpiresAt,
+          allCookies: directAllCookies,
+          extraHeaders: {},
+          source: "direct",
+        };
+
+        _activeCfSession = directSession;
+        syncSpainCfSessionToRedis(directSession as SerializableSpainCfSession);
+        console.log(
+          `[spain-soax] 🎉 Session directe établie ! PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 30min`,
+        );
+        return directSession;
+      }
+
+      if (isCfChallenge) {
+        console.warn(`[spain-soax] ⚠️ Fallback direct: challenge CF quand même présent → abandon`);
+      } else {
+        console.warn(`[spain-soax] ⚠️ Fallback direct: HTTP ${(directRes as any).status} inattendu`);
+      }
+    } catch (directErr) {
+      console.warn(`[spain-soax] ⚠️ Fallback direct échoué: ${directErr}`);
     }
   }
 
