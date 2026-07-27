@@ -889,7 +889,26 @@ async function scanViaMainEndpoint(
     },
   });
 
-  if (!entryRes || entryRes.status === 403) {
+  if (!entryRes) {
+    console.warn("[spain-http] ⚠️ GET portail sans réponse (erreur réseau ou proxy)");
+    invalidateSpainCfSession();
+    return null;
+  }
+
+  const entryStatus = entryRes.status;
+  const entryContentType = entryRes.headers.get("content-type") ?? "";
+  const entryBody = await entryRes.clone().text();
+  const entryTitle = entryBody.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+  const entryHasToken = /name=["']token["']/i.test(entryBody);
+  const entryHasCfChallenge = /un instant|just a moment|verifying|challenge/i.test(entryBody.slice(0, 5000));
+  console.log(
+    `[spain-http] GET portail → HTTP ${entryStatus} | ` +
+    `type=${entryContentType.split(";")[0] || "unknown"} | bytes=${entryBody.length} | ` +
+    `token=${entryHasToken ? "oui" : "non"} | cf-challenge=${entryHasCfChallenge ? "oui" : "non"} | ` +
+    `title="${entryTitle.slice(0, 100)}"`,
+  );
+
+  if (entryStatus === 403) {
     invalidateSpainCfSession();
     return null;
   }
@@ -905,7 +924,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
   }
 
-  const entryHtml = await entryRes.text();
+  const entryHtml = entryBody;
 
   // Check CF challenge
   if (/un instant|just a moment|verifying/i.test(entryHtml.slice(0, 2000))) {
