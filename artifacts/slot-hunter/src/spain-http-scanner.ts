@@ -861,7 +861,8 @@ async function scanViaMainEndpoint(
   );
 
   if (entryStatus === 403) {
-    invalidateSpainCfSession();
+    console.warn("[spain-http] 🔄 403 détecté sur portal → rotation proxy (IP flaggée par CF)");
+    rotateSpainSoaxSession();
     return null;
   }
 
@@ -875,7 +876,8 @@ async function scanViaMainEndpoint(
 
   // Check CF challenge
   if (/un instant|just a moment|verifying/i.test(entryHtml.slice(0, 2000))) {
-    invalidateSpainCfSession();
+    console.warn("[spain-http] 🔄 Challenge CF détecté sur portal → rotation proxy");
+    rotateSpainSoaxSession();
     return null;
   }
 
@@ -1290,10 +1292,12 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     return mainResult;
   }
 
-  // 3. Fallback: si /main/ échoue, erreur
+  // 3. Les deux tentatives ont échoué → rotation proxy pour le prochain cycle
+  console.warn("[spain-http] 🔄 Scan /main/ échoué après retry — rotation proxy pour le prochain cycle");
+  rotateSpainSoaxSession();
   return {
     status: "error",
-    errorMessage: "Scan /main/ échoué (CF cookie invalide ou erreur réseau)",
+    errorMessage: "Scan /main/ échoué après retry + rotation proxy déclenchée",
     scanDurationMs: Date.now() - t0,
   };
 }
