@@ -20,6 +20,11 @@ export interface SpainWidgetCookies {
   capturedAt: number;
 }
 
+export interface SeedCookie {
+  name: string;
+  value: string;
+}
+
 // Apply stealth plugin to Playwright Extra
 const chromiumStealth = chromium as any;
 chromiumStealth.use((StealthPlugin as any)());
@@ -70,14 +75,32 @@ async function forceClickTurnstile(page: any): Promise<boolean> {
 /**
  * Resolves Cloudflare using a semi-invisible Playwright browser window positioned off-screen.
  */
-export async function solveWithLocalPlaywright(portalUrl: string): Promise<boolean> {
+export async function solveWithLocalPlaywright(
+  portalUrl: string,
+  proxyUrl?: string,
+): Promise<boolean> {
   console.log("[PLAYWRIGHT-STEALTH] 👻 Lancement du faux-headless indétectable...");
 
   const domain = new URL(portalUrl).hostname;
+  let proxyConfig: PlaywrightProxy | undefined;
+  if (proxyUrl) {
+    try {
+      const parsed = new URL(proxyUrl);
+      proxyConfig = {
+        server: `http://${parsed.hostname}:${parsed.port || "5000"}`,
+        username: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+      };
+      console.log(`[PLAYWRIGHT-STEALTH] 🔌 Proxy: ${parsed.hostname}:${parsed.port}`);
+    } catch {
+      console.warn("[PLAYWRIGHT-STEALTH] ⚠️ Impossible de parser l'URL proxy");
+      return false;
+    }
+  }
 
   // Lancement en mode visible (headless: false) pour éviter la détection simple,
   // mais déplacé hors de l'écran principal pour rester invisible pour l'utilisateur
-  const browser = await chromiumStealth.launch({
+  const legacyLaunchOptions: Record<string, unknown> = {
     headless: false,
     args: [
       '--no-sandbox',
@@ -87,14 +110,17 @@ export async function solveWithLocalPlaywright(portalUrl: string): Promise<boole
       '--no-first-run',
       '--no-default-browser-check'
     ]
-  });
+  };
+  if (proxyConfig) legacyLaunchOptions.proxy = proxyConfig;
+  const browser = await chromiumStealth.launch(legacyLaunchOptions);
 
-  const context = await browser.newContext({
+  const contextOptions: Record<string, unknown> = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     viewport: { width: 1200, height: 800 },
     locale: 'fr-FR',
     timezoneId: 'Africa/Kinshasa'
-  });
+  };
+  const context = await browser.newContext(contextOptions);
 
   try {
     const page = await context.newPage();
@@ -183,6 +209,7 @@ export async function solveWithLocalPlaywright(portalUrl: string): Promise<boole
 export async function solveSpainWidgetSession(
   widgetUrl: string,
   soaxProxyUrl?: string,
+  seedCookies: SeedCookie[] = [],
 ): Promise<SpainWidgetCookies | null> {
   const UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
@@ -209,7 +236,7 @@ export async function solveSpainWidgetSession(
   const isHeadlessEnv =
     !!(process.env.RAILWAY_ENVIRONMENT || process.env.CI) || !process.env.DISPLAY;
 
-  const browser = await chromiumStealth.launch({
+  const launchOptions: Record<string, unknown> = {
     headless: isHeadlessEnv,
     args: [
       "--no-sandbox",
@@ -221,7 +248,9 @@ export async function solveSpainWidgetSession(
       "--no-first-run",
       "--no-default-browser-check",
     ],
-  });
+  };
+  if (proxyConfig) launchOptions.proxy = proxyConfig;
+  const browser = await chromiumStealth.launch(launchOptions);
 
   const contextOptions: Record<string, unknown> = {
     userAgent: UA,
@@ -229,12 +258,23 @@ export async function solveSpainWidgetSession(
     locale: "fr-FR",
     timezoneId: "Europe/Paris",
   };
-  if (proxyConfig) contextOptions["proxy"] = proxyConfig;
-
   const context = await browser.newContext(contextOptions);
 
   try {
     const page = await context.newPage();
+
+    if (seedCookies.length > 0) {
+      await context.addCookies(
+        seedCookies.map((cookie) => ({
+          ...cookie,
+          domain: ".citaconsular.es",
+          path: "/",
+        })),
+      );
+      console.log(
+        `[PLAYWRIGHT-WIDGET] 🍪 Session CapSolver injectée (${seedCookies.length} cookie(s))`,
+      );
+    }
 
     // ─── Patch fingerprint JS ─────────────────────────────────────────────
     // CF's challenge script lit plusieurs propriétés du navigateur pour détecter l'automation.

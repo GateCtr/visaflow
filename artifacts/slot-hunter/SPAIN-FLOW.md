@@ -241,6 +241,7 @@ via interception email (IMAP).
 | `SPAIN_SOAX_COUNTRY=es` | Pays du proxy SOAX pour le CF solve |
 | `SOAX_PROXY_URL` | URL base du proxy SOAX |
 | `CAPSOLVER_API_KEY` | Clé API CapSolver (AntiCloudflareTask) |
+| `SPAIN_HTTP_SESSION_MODE=playwright` | Diagnostic explicite uniquement ; le mode HTTP-only utilise CapSolver par défaut |
 | `REDIS_HOST/PORT/PASSWORD` | Redis pour persistance |
 | `RESEND_API_KEY` | Envoi emails d'alerte |
 | `CONVEX_SITE_URL` | URL du backend Convex |

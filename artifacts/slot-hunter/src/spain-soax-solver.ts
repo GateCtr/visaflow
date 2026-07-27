@@ -57,7 +57,9 @@ function httpModeRequiresProxy(): boolean {
 }
 
 function browserSessionRequired(): boolean {
-  return httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE !== "capsolver";
+  // HTTP-only must use CapSolver by default. A browser session is an explicit
+  // diagnostic/compatibility mode because it is not HTTP-only.
+  return httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE === "playwright";
 }
 
 function hasCompatibleProxy(sessionProxyUrl: string, configuredProxyUrl: string | undefined): boolean {
@@ -502,21 +504,52 @@ export async function ensureSpainCfSession(
     return session;
   }
 
-  // HTTP-only must use a browser-established session by default. The browser is
-  // the only component that can execute Cloudflare's JavaScript and produce the
-  // real JSD/RUM state. CapSolver remains available only as an explicit
-  // compatibility fallback for deployments that knowingly accept an
-  // approximate HTTP session.
+  // HTTP-only uses CapSolver by default. Playwright is an explicit diagnostic
+  // mode because a browser-established session is not HTTP-only.
   const browserSessionPreferred =
-    process.env.USE_LOCAL_STEALTH === "true" ||
-    (httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE !== "capsolver");
+    (!httpModeRequiresProxy() && process.env.USE_LOCAL_STEALTH === "true") ||
+    (httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE === "playwright");
   if (browserSessionPreferred) {
     console.log("[spain-soax] 🔍 Mode local stealth activé — solveSpainWidgetSession (JSD Oneshot natif)…");
 
     // Proxy actif (Decodo ou SOAX sticky) — DOIT être la même IP que les appels impit
     const soaxProxyForPlaywright = getSpainProxyUrl();
+    let capsolverSeedCookies: Array<{ name: string; value: string }> = [];
 
-    const widgetCookies = await solveSpainWidgetSession(targetUrl, soaxProxyForPlaywright);
+    // In explicit Playwright mode, CapSolver is still the source of the
+    // Cloudflare session. Playwright only loads the widget and enriches that
+    // same session; it must not solve through a separate direct/Turnstile path.
+    if (process.env.SPAIN_HTTP_SESSION_MODE === "playwright") {
+      const capsolverKey = process.env.CAPSOLVER_API_KEY;
+      if (!capsolverKey || !soaxProxyForPlaywright) {
+        console.error(
+          "[spain-soax] ❌ Le mode Playwright exige CAPSOLVER_API_KEY et le proxy Espagne configuré",
+        );
+        return null;
+      }
+      const capResult = await solveSpainCloudflare(
+        targetUrl,
+        capsolverKey,
+        soaxProxyForPlaywright,
+      );
+      if (!capResult.success || !capResult.session) {
+        console.error(
+          `[spain-soax] ❌ CapSolver n'a pas établi la session Playwright: ${capResult.error ?? "erreur inconnue"}`,
+        );
+        return null;
+      }
+      capsolverSeedCookies = capResult.session.allCookies;
+      console.log(
+        `[spain-soax] ✅ Session CapSolver prête pour Playwright ` +
+        `(proxy partagé, cookies=${capsolverSeedCookies.length})`,
+      );
+    }
+
+    const widgetCookies = await solveSpainWidgetSession(
+      targetUrl,
+      soaxProxyForPlaywright,
+      capsolverSeedCookies,
+    );
     if (widgetCookies) {
       const pwCreatedAt = Date.now();
       // Preserve the browser cookie jar exactly. In particular, replacing the
@@ -547,14 +580,14 @@ export async function ensureSpainCfSession(
       if (httpModeRequiresProxy() && process.env.SPAIN_HTTP_ALLOW_APPROXIMATE_SESSION !== "1") {
       console.error(
         "[spain-soax] ❌ Session navigateur indisponible. " +
-        "Le mode HTTP refuse le fallback CapSolver approximatif; " +
+        "Le mode HTTP refuse le fallback CapSolver; " +
         "définir SPAIN_HTTP_ALLOW_APPROXIMATE_SESSION=1 uniquement pour un test explicite.",
       );
       return null;
     }
-    console.warn("[spain-soax] ⚠️ solveSpainWidgetSession échoué — fallback CapSolver explicite…");
-    // Fallback : ancien solver simple (obtient cf_clearance #1 seulement, sans JSD Oneshot)
-    const localSolved = await solveWithLocalPlaywright(targetUrl);
+    console.warn("[spain-soax] ⚠️ solveSpainWidgetSession échoué — fallback Playwright legacy…");
+    // Fallback : ancien solver simple (obtient cf_clearance #1 seulement, sans JSD Oneshot).
+    const localSolved = await solveWithLocalPlaywright(targetUrl, soaxProxyForPlaywright);
     if (localSolved) {
       return ensureSpainCfSession(targetUrl);
     }
@@ -610,7 +643,10 @@ export async function ensureSpainCfSession(
   // (browserSessionRequired() === false). Il ne simule aucun signal Cloudflare:
   // on accepte uniquement une page applicative réellement retournée par le
   // proxy et on conserve l'état de session obtenu.
-  if (process.env.DECODO_PROXY_URL && !browserSessionRequired()) {
+  // Do not silently bypass CapSolver in HTTP-only mode. The direct Decodo
+  // bootstrap is retained only for the explicit legacy "direct" mode.
+  const sessionMode = process.env.SPAIN_HTTP_SESSION_MODE ?? (httpModeRequiresProxy() ? "capsolver" : "direct");
+  if (process.env.DECODO_PROXY_URL && !httpModeRequiresProxy() && sessionMode === "direct") {
     console.log(`[spain-soax] 🚀 Decodo ISP — tentative d'accès applicatif direct…`);
     try {
       const directImpit = new Impit({
