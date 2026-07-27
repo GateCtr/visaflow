@@ -33,6 +33,19 @@ import { applyStableGaProfile } from "./spain-redis-persistence.js";
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const CAPSOLVER_BASE = "https://api.capsolver.com";
+
+/**
+ * Retourne l'URL proxy active pour l'Espagne.
+ * Priorité : DECODO_PROXY_URL (ISP fixe, utilisé tel quel) → SOAX_PROXY_URL (sticky session builder).
+ * Decodo ISP utilise une IP fixe — pas besoin de session ID / rotation côté URL.
+ */
+function getSpainProxyUrl(identifier = "spain-cf", lifetime = SOAX_SPAIN_SESSION_LIFETIME_MIN): string | undefined {
+  const decodo = process.env.DECODO_PROXY_URL;
+  if (decodo) return decodo;
+  const soax = process.env.SOAX_PROXY_URL;
+  if (soax) return makeSpainSoaxStickyUrl(soax, lifetime, identifier);
+  return undefined;
+}
 const CAPSOLVER_POLL_MS = 5_000;
 const CAPSOLVER_MAX_POLLS = 60; // 5min max (CF challenge peut être lent)
 
@@ -413,10 +426,7 @@ export async function ensureSpainCfSession(
     console.log(`[spain-soax] ♻️ Cookie valide trouvé dans le pool (source: ${bestCookie.source}, reste ${remainMin}min)`);
     
     const isLocalStealth = process.env.USE_LOCAL_STEALTH === "true";
-    const soaxBaseUrl = process.env.SOAX_PROXY_URL;
-    const soaxProxyUrl = (!isLocalStealth && soaxBaseUrl) 
-      ? makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf")
-      : "";
+    const soaxProxyUrl = (!isLocalStealth ? getSpainProxyUrl() : undefined) ?? "";
 
     const sessionCreatedAt = Date.now() - (7200 - (bestCookie.expires - Math.floor(Date.now() / 1000))) * 1000;
     const poolAllCookies = await applyStableGaProfile(
@@ -441,11 +451,8 @@ export async function ensureSpainCfSession(
   if (process.env.USE_LOCAL_STEALTH === "true") {
     console.log("[spain-soax] 🔍 Mode local stealth activé — solveSpainWidgetSession (JSD Oneshot natif)…");
 
-    // Générer le proxy SOAX sticky si dispo — DOIT être la même IP que les appels impit
-    const soaxBaseUrl = process.env.SOAX_PROXY_URL;
-    const soaxProxyForPlaywright = soaxBaseUrl
-      ? makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf")
-      : undefined;
+    // Proxy actif (Decodo ou SOAX sticky) — DOIT être la même IP que les appels impit
+    const soaxProxyForPlaywright = getSpainProxyUrl();
 
     const widgetCookies = await solveSpainWidgetSession(targetUrl, soaxProxyForPlaywright);
     if (widgetCookies) {
@@ -506,11 +513,11 @@ export async function ensureSpainCfSession(
   }
 
   // Vérifier les prérequis
-  const soaxBaseUrl = process.env.SOAX_PROXY_URL;
   const capsolverKey = process.env.CAPSOLVER_API_KEY;
+  const soaxProxyUrl = getSpainProxyUrl();
 
-  if (!soaxBaseUrl) {
-    console.error(`[spain-soax] ❌ SOAX_PROXY_URL non configurée`);
+  if (!soaxProxyUrl) {
+    console.error(`[spain-soax] ❌ Aucun proxy configuré (DECODO_PROXY_URL ou SOAX_PROXY_URL requis)`);
     return null;
   }
   if (!capsolverKey) {
@@ -518,8 +525,7 @@ export async function ensureSpainCfSession(
     return null;
   }
 
-  // Générer le proxy SOAX sticky longue durée
-  const soaxProxyUrl = makeSpainSoaxStickyUrl(soaxBaseUrl, SOAX_SPAIN_SESSION_LIFETIME_MIN, "spain-cf");
+  const proxyLabel = process.env.DECODO_PROXY_URL ? "Decodo ISP" : "SOAX sticky";
 
   // Tenter le solve (max 2 essais avec rotation)
   const MAX_ATTEMPTS = 2;
@@ -534,7 +540,7 @@ export async function ensureSpainCfSession(
         result.session.createdAt,
       );
       _activeCfSession = result.session;
-      console.log(`[spain-soax] 🎉 Session CF établie! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
+      console.log(`[spain-soax] 🎉 Session CF établie via ${proxyLabel}! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
       console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
 
       // Persister dans Redis pour survivre aux redéploiements (inclut le GA stable)
