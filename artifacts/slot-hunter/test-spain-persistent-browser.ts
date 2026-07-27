@@ -20,9 +20,10 @@ dotenv.config();
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const PORTAL_URL = process.env.SPAIN_PORTAL_URL
-  ?? "https://www.citaconsular.es/es/hosteds/widgetdef498.html";
+  ?? "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 
-const CF_TARGET = "https://www.citaconsular.es/es/hosteds/widgetdef498.html";
+const CF_TARGET = process.env.SPAIN_CF_TARGET
+  ?? "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 
 if (process.env.DECODO_PROXY_URL) {
   const masked = process.env.DECODO_PROXY_URL.replace(/:([^:@]+)@/, ":***@");

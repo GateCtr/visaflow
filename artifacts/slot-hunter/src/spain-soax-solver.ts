@@ -77,7 +77,7 @@ const SOAX_SPAIN_SESSION_LIFETIME_MIN = 130; // ~2h10 (marge sur les 2h du cooki
 const CF_CLEARANCE_TTL_MS = 115 * 60_000; // 1h55 (marge de 5min sur les ~2h réelles)
 
 /** URL cible pour le challenge Cloudflare */
-const DEFAULT_SPAIN_TARGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdef498.html";
+const DEFAULT_SPAIN_TARGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 

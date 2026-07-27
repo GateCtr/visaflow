@@ -129,7 +129,7 @@ const CF_POLL_INTERVAL_MS = 2_000;
 const BROWSER_HEALTH_TIMEOUT_MS = 5_000;
 
 /** URL widget cible par défaut. */
-const DEFAULT_WIDGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdef498.html";
+const DEFAULT_WIDGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
