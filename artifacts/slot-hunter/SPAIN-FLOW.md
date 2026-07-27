@@ -197,7 +197,7 @@ Base URL : `https://www.citaconsular.es/onlinebookings/`
 
 | Clé | TTL | Contenu |
 |-----|-----|---------|
-| `visaflow:spain-cf:session` | ~2h (dynamique) | cf_clearance + proxy SOAX + UA + cookies |
+| `visaflow:spain-cf:session` | ~2h (dynamique) | cf_clearance + proxy Espagne + UA + cookies |
 | `visaflow:spain-soax:rotation` | 12h | Compteur rotation IP SOAX |
 | `visaflow:spain-bookitit:{url}` | 30min | Config widget extraite |
 
@@ -237,6 +237,7 @@ via interception email (IMAP).
 | Var | Rôle |
 |-----|------|
 | `SPAIN_HTTP_MODE=1` | Active le mode HTTP-only (pas de Playwright) |
+| `DECODO_PROXY_URL` | Proxy ISP Decodo prioritaire pour le scan HTTP |
 | `SPAIN_SOAX_COUNTRY=es` | Pays du proxy SOAX pour le CF solve |
 | `SOAX_PROXY_URL` | URL base du proxy SOAX |
 | `CAPSOLVER_API_KEY` | Clé API CapSolver (AntiCloudflareTask) |

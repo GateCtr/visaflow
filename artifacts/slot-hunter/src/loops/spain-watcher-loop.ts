@@ -3,9 +3,9 @@
 // Boucle indépendante, tourne en background.
 //
 // MODES :
-//   - SPAIN_HTTP_MODE=1 → scan HTTP pur (impit + SOAX + CapSolver CF cookie)
+//   - SPAIN_HTTP_MODE=1 → scan HTTP pur (impit + proxy + CapSolver CF cookie)
 //     ✅ 10x plus rapide, 0 RAM browser, scan toutes les 30-60s
-//     Prérequis : SOAX_PROXY_URL + CAPSOLVER_API_KEY
+//     Prérequis : DECODO_PROXY_URL (ou SOAX_PROXY_URL) + CAPSOLVER_API_KEY
 //   - SPAIN_HTTP_MODE=0 (défaut) → Playwright stealth (ancien mode)
 //
 // AUTO-BOOKING :
@@ -160,6 +160,16 @@ function getDateWindowReason(slotDate: string, dossier: SpainDossier): string {
 
 export async function startSpainWatcherLoop(): Promise<void> {
   log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright"}, auto-booking: Convex dossiers)`);
+  if (SPAIN_HTTP_MODE) {
+    const decodoConfigured = Boolean(process.env.DECODO_PROXY_URL);
+    const soaxConfigured = Boolean(process.env.SOAX_PROXY_URL);
+    log(
+      "INFO",
+      `[SPAIN-WATCHER] HTTP proxy: ` +
+      `${decodoConfigured ? "Decodo ISP ✅" : "Decodo ISP ❌ (DECODO_PROXY_URL absent)"}` +
+      `${!decodoConfigured && soaxConfigured ? " | SOAX fallback ✅" : ""}`,
+    );
+  }
 
   // En mode HTTP : initialiser Redis + restaurer l'état SOAX avant le pre-warm
   if (SPAIN_HTTP_MODE) {
@@ -178,7 +188,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
     });
 
     // 3. Pre-warm la session CF (Redis restore tenté automatiquement dans ensureSpainCfSession)
-    log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (SOAX + CapSolver)…");
+    log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (proxy Espagne + CapSolver)…");
     const preWarmConfig = await getSpainWatcherConfig().catch(() => null);
     const preWarmUrl = preWarmConfig?.portalUrl || undefined;
     const session = await ensureSpainCfSession(preWarmUrl).catch((e) => {

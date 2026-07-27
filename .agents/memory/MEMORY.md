@@ -12,3 +12,4 @@
 - [SEO SSR meta injection](seo-ssr-meta-injection.md) — fixes SPA invisibility to Googlebot: Vite configureServer middleware intercept (dev) + build-time prerender script (prod/Vercel). 26 pages with correct title/meta/canonical/schemas. Deploy triggers full rebuild.
 - [Spain guide planning and conversion](spain-guide-planning-conversion.md) — Spain appointment guides must plan travel dates from all delays and use Spain-specific destination conversion paths, not generic visa copy.
 - [Convex prod deploy flow](convex-prod-deploy-flow.md) — no local `convex dev` sync; schema/function edits need explicit `npx convex deploy` with `CONVEX_DEPLOY_KEY` or client calls hit "Server Error".
+- [Spain HTTP proxy binding](spain-http-proxy-binding.md) — HTTP-only sessions must solve and scan through the same Decodo/SOAX proxy; local CF cookies have unknown origin IPs and must not be reused.

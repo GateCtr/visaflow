@@ -178,12 +178,13 @@ async function main(): Promise<void> {
 
   const brightdataStatus = process.env.BRIGHTDATA_PROXY_URL ? "BrightData ✅ (CEV belge)" : null;
   const iproyalStatus    = process.env.IPROYAL_PROXY_URL    ? "iProyal ✅ (Espagne)"      : null;
+  const decodoStatus     = process.env.DECODO_PROXY_URL     ? "Decodo ✅ (Espagne HTTP)"  : null;
   const fallbackStatus   = proxyPool.isConfigured
     ? `2captcha gateway ✅ (eu.proxy.2captcha.com:2334 — auth user:pass, region=cd)`
     : process.env.PROXY_URL
       ? "statique (PROXY_URL)"
       : "aucun ⚠️ — IP fixe Railway exposée";
-  const proxyStatus = [brightdataStatus, iproyalStatus, fallbackStatus].filter(Boolean).join(" | ");
+  const proxyStatus = [brightdataStatus, iproyalStatus, decodoStatus, fallbackStatus].filter(Boolean).join(" | ");
   log("INFO", `Proxy: ${proxyStatus}`);
   log("INFO", "Intervalles tier — tres_urgent:5-10m (rush:3-4m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
   log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | stagger ${formatMs(SILENCE_RADIO_SAME_TIER_MIN_MS)}–${formatMs(SILENCE_RADIO_SAME_TIER_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);

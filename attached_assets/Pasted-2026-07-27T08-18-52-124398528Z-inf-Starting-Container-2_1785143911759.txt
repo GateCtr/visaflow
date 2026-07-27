@@ -1,0 +1,627 @@
+2026-07-27T08:18:52.124398528Z [inf]  Starting Container
+2026-07-27T08:18:53.020762658Z [inf]  
+2026-07-27T08:18:53.020768370Z [inf]  > @workspace/slot-hunter@1.0.0 start /app/artifacts/slot-hunter
+2026-07-27T08:18:53.020772268Z [inf]  > tsx src/index.ts
+2026-07-27T08:18:53.020775376Z [inf]  
+2026-07-27T08:18:53.690280161Z [inf]  [2026-07-27T08:18:53.674Z] [INFO] === Joventy Hunter démarrage (Joventy Shuffle v2) ===
+2026-07-27T08:18:53.690284239Z [inf]  [2026-07-27T08:18:53.675Z] [INFO] Mode: PRODUCTION
+2026-07-27T08:18:53.690288303Z [inf]  [2026-07-27T08:18:53.675Z] [INFO] Convex: configuré
+2026-07-27T08:18:53.690291686Z [inf]  [2026-07-27T08:18:53.675Z] [INFO] Hunter API Key: configurée
+2026-07-27T08:18:54.031879551Z [inf]  [2026-07-27T08:18:53.826Z] [INFO] ═══ CEV DOSSIER MODE v3 ACTIF ═══
+2026-07-27T08:18:54.031886865Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Multi-comptes via Applications 
+2026-07-27T08:18:54.031890803Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Stealth v2 et loops classiques DESACTIVES
+2026-07-27T08:18:54.031894335Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Cookies frais capturés par chaque compte, toutes les 30min
+2026-07-27T08:18:54.031897882Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Desactiver: bot-config Convex cev_dossier_mode = 0
+2026-07-27T08:18:54.031901457Z [inf]  [08:18:53] [35m[CEV-DOSSIER-v3][0m [34m[INFO][0m ═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══
+2026-07-27T08:18:54.031905418Z [inf]  [2026-07-27T08:18:53.828Z] [INFO] [SPAIN-WATCHER] Boucle démarrée (mode: HTTP-ONLY 🚀, auto-booking: Convex dossiers)
+2026-07-27T08:18:54.031909263Z [inf]  [2026-07-27T08:18:53.846Z] [germany-loop] [INFO] ═══ GERMANY RK-TERMIN LOOP DÉMARRÉE ═══
+2026-07-27T08:18:54.031912609Z [inf]  [2026-07-27T08:18:53.846Z] [germany-loop] [INFO]    → Scan périodique des créneaux ambassade allemande
+2026-07-27T08:18:54.031915822Z [inf]  [2026-07-27T08:18:53.846Z] [germany-loop] [INFO]    → Portail: service2.diplo.de/rktermin
+2026-07-27T08:18:54.031919212Z [inf]  [2026-07-27T08:18:53.846Z] [germany-loop] [INFO]    → Captcha: image JPEG base64 (2Captcha/CapSolver)
+2026-07-27T08:18:54.031922836Z [inf]  [spain-redis] ✅ Redis connecté pour persistance Spain CF
+2026-07-27T08:18:54.032001418Z [inf]  [2026-07-27T08:18:53.826Z] [INFO] ═══ PAS DE SESSION WORKER (cookies par compte) ═══
+2026-07-27T08:18:54.032004896Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Chaque compte capture ses propres cookies F5
+2026-07-27T08:18:54.032008370Z [inf]  [2026-07-27T08:18:53.826Z] [INFO]    → Cookies stockés dans hunterConfig de chaque application
+2026-07-27T08:18:54.032752814Z [inf]  [2026-07-27T08:18:53.881Z] [INFO] [SPAIN-WATCHER] ✅ Redis Spain connecté — session CF persistée entre redéploiements
+2026-07-27T08:18:54.032755642Z [inf]  [2026-07-27T08:18:53.884Z] [INFO] [SPAIN-WATCHER] Pre-warm session CF (SOAX + CapSolver)…
+2026-07-27T08:18:54.032758447Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413965min)
+2026-07-27T08:18:54.032761622Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #2
+2026-07-27T08:18:54.032767325Z [inf]  [2026-07-27T08:18:54.006Z] [INFO] [SPAIN-WATCHER] ✅ Session CF prête (expire: 2027-05-10T19:43:30.256Z)
+2026-07-27T08:18:54.054845945Z [inf]  [08:18:54] [35m[CEV-DOSSIER-v3][0m [33m[WARN][0m Aucune application CEV active trouvée (destination=schengen + hunterConfig.isActive=true)
+2026-07-27T08:18:54.054849415Z [inf]  [08:18:54] [35m[CEV-DOSSIER-v3][0m [34m[INFO][0m Attente configuration...
+2026-07-27T08:18:54.100815909Z [inf]  [2026-07-27T08:18:54.098Z] [germany-loop] [DEBUG] Aucun dossier Germany actif
+2026-07-27T08:18:54.100821600Z [inf]  [2026-07-27T08:18:54.098Z] [germany-loop] [DEBUG] Prochain cycle dans 29 min
+2026-07-27T08:18:54.113144711Z [inf]  [2026-07-27T08:18:54.112Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:18:54.113154650Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413965min)
+2026-07-27T08:18:54.114794634Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:18:54.150085602Z [inf]  [spain-soax] ✅ impit Espagne initialisé (Chrome TLS en direct / sans proxy)
+2026-07-27T08:18:54.150090271Z [inf]  [2026-07-27T08:18:54.146Z] [INFO] CEV auto-config: aucune config sauvegardée — discovery complète au premier booking
+2026-07-27T08:18:54.183181375Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:18:54.183186331Z [inf]  [2026-07-27T08:18:54.176Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:18:54.245723827Z [inf]  [ProxyPool] Public IP detected: 50.18.137.110
+2026-07-27T08:18:54.245730701Z [inf]  [2026-07-27T08:18:54.239Z] [INFO] IP serveur (Railway): 50.18.137.110
+2026-07-27T08:18:54.245733704Z [inf]  [ip-whitelist] 🌐 IPRoyal: Ajout IP 50.18.137.110 à la whitelist...
+2026-07-27T08:18:54.245736385Z [inf]  [ip-whitelist]    Config: _country-cd_city-kinshasa_session-EgSXavNl_lifetime-12h
+2026-07-27T08:18:55.043671636Z [inf]  [ip-whitelist] IPRoyal: 20 entrée(s) whitelist existante(s): 102.206.157.212, 102.206.157.96, 102.206.158.130, 102.206.158.166, 102.206.158.40, 102.206.159.132, 102.206.241.131, 102.208.121.156, 102.223.130.67, 13.52.208.167, 13.52.225.172, 13.52.69.143, 13.56.104.141, 13.57.4.136, 13.57.76.126, 152.55.176.11, 152.55.176.125, 152.55.176.146, 152.55.176.153, 152.55.176.16
+2026-07-27T08:18:56.044871103Z [inf]  [ProxyPool] ✅ Gateway mode: eu.proxy.2captcha.com:2334 (auth user:pass, region=cd)
+2026-07-27T08:18:56.044877659Z [inf]  [ProxyPool] Server IP: 50.18.137.110 (whitelist NON requise — auth par credentials)
+2026-07-27T08:18:56.044880182Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] [daily-report] Boucle activée — envoi prévu à 23h00 Kinshasa (22:00 UTC)
+2026-07-27T08:18:56.044883846Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] Proxy: iProyal ✅ (Espagne) | 2captcha gateway ✅ (eu.proxy.2captcha.com:2334 — auth user:pass, region=cd)
+2026-07-27T08:18:56.044888778Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] CEV hCaptcha solveurs: | AntiCaptcha ✅ | CapSolver ✅ (sitekey gov blacklistée en 2026-04 — peut échouer) | 2captcha ✅ (hCaptcha non supporté sur ce compte)
+2026-07-27T08:18:56.044891860Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] Intervalles tier — tres_urgent:5-10m (rush:3-4m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m
+2026-07-27T08:18:56.044900429Z [inf]  [ip-whitelist] ✅ BrightData: IP 50.18.137.110 ajoutée à la whitelist (zone: residential_proxy1)
+2026-07-27T08:18:56.044908085Z [inf]  [ip-whitelist] ✅ 2Captcha: Mode gateway — whitelist IP non requise (auth credentials)
+2026-07-27T08:18:56.044909005Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] Silence radio: normal 2m0s–3m0s | stagger 0m30s–1m0s | rush 0m45s–1m30s
+2026-07-27T08:18:56.044913040Z [inf]  [ip-whitelist] ✅ SOAX: Auth par credentials — whitelist IP non requise
+2026-07-27T08:18:56.044917452Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] IPRoyal whitelist: ✅ IP ajoutée (hash: 01KYHAFMZKQR63A62A02HMZG32)
+2026-07-27T08:18:56.044919318Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: non
+2026-07-27T08:18:56.044922284Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] 2Captcha whitelist: ✅ Gateway mode ✅ — auth user:pass via eu.proxy.2captcha.com:2334 (whitelist IP NON requise)
+2026-07-27T08:18:56.044925117Z [inf]  [2026-07-27T08:18:55.976Z] [INFO] Auto-pause après: 3 login_failed consécutifs
+2026-07-27T08:18:56.044935869Z [inf]  [ip-whitelist] ✅ IPRoyal: IP 50.18.137.110 ajoutée à la whitelist (hash: 01KYHAFMZKQR63A62A02HMZG32, port: 12321)
+2026-07-27T08:18:56.044939359Z [inf]  [ip-whitelist] 🌐 BrightData: Ajout IP 50.18.137.110 à la whitelist (zone: residential_proxy1)...
+2026-07-27T08:18:56.087637163Z [inf]  [2026-07-27T08:18:56.070Z] [INFO] [v3] ✅ Mode V3 Chasseur activé via bot-config Convex (v3_mode=1)
+2026-07-27T08:18:56.111445858Z [inf]  [redis-cache] ✅ Redis connecté — restauration des sessions...
+2026-07-27T08:18:56.111455466Z [inf]  [redis-cache] Aucune session en cache Redis
+2026-07-27T08:18:56.111459957Z [inf]  [redis-cache] ✅ 0 session(s) restaurée(s) depuis Redis
+2026-07-27T08:18:56.202744251Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T08:18:56.202748550Z [inf]  [v3] 🚀 Hunter V3 Chasseur — Initialisation...
+2026-07-27T08:18:56.202752511Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T08:18:56.202755928Z [inf]  [session-pool-redis] ✅ Redis connecté — aucun budget à restaurer
+2026-07-27T08:18:56.441923865Z [inf]  [v3] ✅ Hunter V3 Chasseur initialisé
+2026-07-27T08:18:56.441928358Z [inf]  [v3]    Budget: 9 logins/jour, rush allocation 4+3+2
+2026-07-27T08:18:56.441931833Z [inf]  [v3]    Scan: multi-mois (3), orchestrator chrono
+2026-07-27T08:18:56.441935227Z [inf]  [v3]    Booking: direct + blind cross-account
+2026-07-27T08:18:56.441938705Z [inf]  [v3]    Proxy: cascade 3-way avec budget protection
+2026-07-27T08:18:56.441942212Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T08:18:56.441946298Z [inf]  [2026-07-27T08:18:56.417Z] [INFO] ═══════════════════════════════════════════════════════════════
+2026-07-27T08:18:56.441951017Z [inf]  [2026-07-27T08:18:56.417Z] [INFO] 🎯 MODE V3 CHASSEUR ACTIVÉ (v3_mode=1)
+2026-07-27T08:18:56.441956017Z [inf]  [2026-07-27T08:18:56.417Z] [INFO]    → runScanSession complet : login → preflight → multi-mois → booking → discovery
+2026-07-27T08:18:56.441961710Z [inf]  [2026-07-27T08:18:56.417Z] [INFO]    → Intervalles pilotés par scan-orchestrator (rush/standard/night/burst)
+2026-07-27T08:18:56.441966867Z [inf]  [2026-07-27T08:18:56.417Z] [INFO] ═══════════════════════════════════════════════════════════════
+2026-07-27T08:18:56.631858515Z [inf]  [2026-07-27T08:18:56.612Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:18:56.631861656Z [inf]  [2026-07-27T08:18:56.628Z] [INFO] 🔍 Vérification bundle portail USA (quotidienne)...
+2026-07-27T08:18:57.035600196Z [inf]  [2026-07-27T08:18:56.927Z] [INFO] 🔍 Bundle check ✅ — clé AES inchangée (bundle: main.3bb4eff7eac5d83b.js)
+2026-07-27T08:18:57.035604025Z [inf]  [2026-07-27T08:18:57.021Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:19:46.893461743Z [inf]  [2026-07-27T08:19:42.364Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:19:54.393487009Z [inf]  [2026-07-27T08:19:54.392Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:19:54.393491824Z [inf]  [2026-07-27T08:19:54.392Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:19:54.393495877Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413964min)
+2026-07-27T08:19:54.400375033Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #3
+2026-07-27T08:19:54.400382251Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413964min)
+2026-07-27T08:19:54.400386408Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:19:54.402442829Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:19:54.402449826Z [inf]  [2026-07-27T08:19:54.402Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:19:57.073097121Z [inf]  [2026-07-27T08:19:56.797Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:20:36.800320242Z [inf]  [2026-07-27T08:20:27.713Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:20:56.407734102Z [inf]  [2026-07-27T08:20:54.604Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:20:56.407740344Z [inf]  [2026-07-27T08:20:54.604Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:20:56.407744156Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413963min)
+2026-07-27T08:20:56.407747437Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #4
+2026-07-27T08:20:56.407751019Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413963min)
+2026-07-27T08:20:56.407755162Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:20:56.407758901Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:20:56.407762658Z [inf]  [2026-07-27T08:20:54.612Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:20:57.166974963Z [inf]  [2026-07-27T08:20:56.978Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:21:16.993015716Z [inf]  [2026-07-27T08:21:13.064Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:21:57.692246543Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:21:57.692254207Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:21:57.692258865Z [inf]  [2026-07-27T08:21:54.841Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:21:57.692262197Z [inf]  [2026-07-27T08:21:57.187Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:21:57.692344542Z [inf]  [2026-07-27T08:21:54.833Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:21:57.692348386Z [inf]  [2026-07-27T08:21:54.833Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:21:57.692351908Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413962min)
+2026-07-27T08:21:57.692356720Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #5
+2026-07-27T08:21:57.692363903Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413962min)
+2026-07-27T08:21:58.697988715Z [inf]  [2026-07-27T08:21:58.364Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:22:48.855335834Z [inf]  [2026-07-27T08:22:43.748Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:22:55.054521446Z [inf]  [2026-07-27T08:22:55.054Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:22:55.054526581Z [inf]  [2026-07-27T08:22:55.054Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:22:55.054531065Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413961min)
+2026-07-27T08:22:55.062050437Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #6
+2026-07-27T08:22:55.062055140Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413961min)
+2026-07-27T08:22:55.062058574Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:22:55.068159069Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:22:55.068165311Z [inf]  [2026-07-27T08:22:55.064Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:22:57.399115473Z [inf]  [2026-07-27T08:22:57.397Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:23:37.743470071Z [inf]  [2026-07-27T08:23:29.091Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:23:57.485254373Z [inf]  [2026-07-27T08:23:55.273Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:23:57.485257950Z [inf]  [2026-07-27T08:23:55.273Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:23:57.485261948Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413960min)
+2026-07-27T08:23:57.485266031Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #7
+2026-07-27T08:23:57.485269743Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413960min)
+2026-07-27T08:23:57.485274235Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:23:57.485278944Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:23:57.485283678Z [inf]  [2026-07-27T08:23:55.281Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:23:57.603885996Z [inf]  [2026-07-27T08:23:57.596Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:24:17.602050710Z [inf]  [2026-07-27T08:24:14.443Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:24:57.683223491Z [inf]  [2026-07-27T08:24:55.494Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:24:57.683240163Z [inf]  [2026-07-27T08:24:55.485Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:24:57.683243529Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #8
+2026-07-27T08:24:57.683244327Z [inf]  [2026-07-27T08:24:55.485Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:24:57.683248470Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413959min)
+2026-07-27T08:24:57.683252862Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413959min)
+2026-07-27T08:24:57.683257086Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:24:57.683262104Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:24:57.804135278Z [inf]  [2026-07-27T08:24:57.799Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:24:59.738536347Z [inf]  [2026-07-27T08:24:59.737Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:25:49.600522275Z [inf]  [2026-07-27T08:25:45.085Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:25:55.712452998Z [inf]  [2026-07-27T08:25:55.710Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:25:55.712456472Z [inf]  [2026-07-27T08:25:55.710Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:25:55.712459450Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413958min)
+2026-07-27T08:25:55.713856913Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #9
+2026-07-27T08:25:55.713861691Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413958min)
+2026-07-27T08:25:55.713864711Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:25:55.723847214Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:25:55.723851368Z [inf]  [2026-07-27T08:25:55.723Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:25:57.993513424Z [inf]  [2026-07-27T08:25:57.986Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:26:38.020278951Z [inf]  [2026-07-27T08:26:30.446Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:26:58.016812571Z [inf]  [2026-07-27T08:26:55.963Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:26:58.016883278Z [inf]  [2026-07-27T08:26:55.955Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:26:58.016888246Z [inf]  [2026-07-27T08:26:55.955Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:26:58.016891284Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413957min)
+2026-07-27T08:26:58.016894363Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #10
+2026-07-27T08:26:58.016898706Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413957min)
+2026-07-27T08:26:58.016902155Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:26:58.016906501Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:26:58.190500504Z [inf]  [2026-07-27T08:26:58.188Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:27:18.241431643Z [inf]  [2026-07-27T08:27:15.863Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:27:58.022638674Z [inf]  [2026-07-27T08:27:56.179Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:27:58.022642072Z [inf]  [2026-07-27T08:27:56.179Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:27:58.022645339Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413956min)
+2026-07-27T08:27:58.022649019Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #11
+2026-07-27T08:27:58.022652055Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413956min)
+2026-07-27T08:27:58.022654902Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:27:58.022658479Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:27:58.022661603Z [inf]  [2026-07-27T08:27:56.187Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:27:58.651383075Z [inf]  [2026-07-27T08:27:58.374Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:28:01.133163078Z [inf]  [2026-07-27T08:28:01.128Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:28:51.234822574Z [inf]  [2026-07-27T08:28:46.489Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:28:56.403091256Z [inf]  [2026-07-27T08:28:56.400Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:28:56.403096072Z [inf]  [2026-07-27T08:28:56.401Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:28:56.403099994Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413955min)
+2026-07-27T08:28:56.405325744Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #12
+2026-07-27T08:28:56.405331216Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413955min)
+2026-07-27T08:28:56.405335171Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:28:56.411992753Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:28:56.411996371Z [inf]  [2026-07-27T08:28:56.410Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:28:58.590059528Z [inf]  [2026-07-27T08:28:58.575Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:29:38.635936198Z [inf]  [2026-07-27T08:29:31.960Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:29:58.353686858Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:29:58.353698127Z [inf]  [2026-07-27T08:29:56.634Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:29:58.353725292Z [inf]  [2026-07-27T08:29:56.626Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:29:58.353728839Z [inf]  [2026-07-27T08:29:56.626Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:29:58.353732750Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413954min)
+2026-07-27T08:29:58.353736231Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #13
+2026-07-27T08:29:58.353740061Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413954min)
+2026-07-27T08:29:58.353743483Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:29:58.775029252Z [inf]  [2026-07-27T08:29:58.773Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:30:18.440733033Z [inf]  [2026-07-27T08:30:17.305Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:30:58.454648939Z [inf]  [2026-07-27T08:30:56.853Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:30:58.454655661Z [inf]  [2026-07-27T08:30:56.853Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:30:58.454659718Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413953min)
+2026-07-27T08:30:58.454663508Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #14
+2026-07-27T08:30:58.454667595Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413953min)
+2026-07-27T08:30:58.454671448Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:30:58.454675052Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:30:58.454679491Z [inf]  [2026-07-27T08:30:56.861Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:30:59.177924615Z [inf]  [2026-07-27T08:30:58.974Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:31:02.613687912Z [inf]  [2026-07-27T08:31:02.607Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:31:53.139254790Z [inf]  [2026-07-27T08:31:47.992Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:31:57.236517705Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:31:57.236525391Z [inf]  [2026-07-27T08:31:57.086Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:31:57.236579817Z [inf]  [2026-07-27T08:31:57.078Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:31:57.236582894Z [inf]  [2026-07-27T08:31:57.078Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:31:57.236585961Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413952min)
+2026-07-27T08:31:57.236589027Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #15
+2026-07-27T08:31:57.236592219Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413952min)
+2026-07-27T08:31:57.236595215Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:31:59.253551877Z [inf]  [2026-07-27T08:31:59.169Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:32:39.863155342Z [inf]  [2026-07-27T08:32:33.331Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:32:59.611974314Z [inf]  [2026-07-27T08:32:57.300Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:32:59.611985818Z [inf]  [2026-07-27T08:32:57.300Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:32:59.611989894Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413951min)
+2026-07-27T08:32:59.611993751Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #16
+2026-07-27T08:32:59.611998863Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413951min)
+2026-07-27T08:32:59.612004230Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:32:59.612008607Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:32:59.612012367Z [inf]  [2026-07-27T08:32:57.308Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:32:59.612017467Z [inf]  [2026-07-27T08:32:59.372Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:33:19.615176696Z [inf]  [2026-07-27T08:33:18.664Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:33:59.232655013Z [inf]  [2026-07-27T08:33:57.521Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:33:59.232662605Z [inf]  [2026-07-27T08:33:57.521Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:33:59.232667568Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413950min)
+2026-07-27T08:33:59.232670907Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #17
+2026-07-27T08:33:59.232674452Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413950min)
+2026-07-27T08:33:59.232678409Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:33:59.232681788Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:33:59.232702659Z [inf]  [2026-07-27T08:33:57.532Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:33:59.571019620Z [inf]  [2026-07-27T08:33:59.561Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:34:04.062671810Z [inf]  [2026-07-27T08:34:03.981Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:34:53.819237098Z [inf]  [2026-07-27T08:34:49.341Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:34:57.791703611Z [inf]  [2026-07-27T08:34:57.789Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:34:57.791708680Z [inf]  [2026-07-27T08:34:57.789Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:34:57.791712193Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413949min)
+2026-07-27T08:34:57.793118013Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #18
+2026-07-27T08:34:57.793122476Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413949min)
+2026-07-27T08:34:57.793125576Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:34:57.799034751Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:34:57.799040775Z [inf]  [2026-07-27T08:34:57.798Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:34:59.924709588Z [inf]  [2026-07-27T08:34:59.894Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:35:39.626400876Z [inf]  [2026-07-27T08:35:34.849Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:35:59.628019170Z [inf]  [2026-07-27T08:35:58.009Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:35:59.628026621Z [inf]  [2026-07-27T08:35:58.009Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:35:59.628031297Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413948min)
+2026-07-27T08:35:59.628036087Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #19
+2026-07-27T08:35:59.628040034Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413948min)
+2026-07-27T08:35:59.628043951Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:35:59.628047643Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:35:59.628051335Z [inf]  [2026-07-27T08:35:58.019Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:36:00.459946180Z [inf]  [2026-07-27T08:36:00.092Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:36:30.153032827Z [inf]  [2026-07-27T08:36:20.172Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:37:00.181938063Z [inf]  [2026-07-27T08:36:58.233Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:37:00.181940914Z [inf]  [2026-07-27T08:36:58.233Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:37:00.181944914Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413947min)
+2026-07-27T08:37:00.181947716Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #20
+2026-07-27T08:37:00.181950381Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413947min)
+2026-07-27T08:37:00.181953163Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:37:00.181955998Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:37:00.181958701Z [inf]  [2026-07-27T08:36:58.242Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:37:00.296816288Z [inf]  [2026-07-27T08:37:00.288Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:37:05.493361285Z [inf]  [2026-07-27T08:37:05.489Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:37:56.015099153Z [inf]  [2026-07-27T08:37:50.864Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:37:58.444821351Z [inf]  [2026-07-27T08:37:58.442Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:37:58.444826101Z [inf]  [2026-07-27T08:37:58.442Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:37:58.444832078Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413946min)
+2026-07-27T08:37:58.446305450Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #21
+2026-07-27T08:37:58.446310504Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413946min)
+2026-07-27T08:37:58.446313962Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:37:58.452303662Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:37:58.452308386Z [inf]  [2026-07-27T08:37:58.450Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:38:00.479941417Z [inf]  [2026-07-27T08:38:00.473Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:38:40.912606368Z [inf]  [2026-07-27T08:38:36.243Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:39:00.665651305Z [inf]  [2026-07-27T08:38:58.653Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:39:00.665656393Z [inf]  [2026-07-27T08:38:58.653Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:39:00.665659616Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413945min)
+2026-07-27T08:39:00.665662599Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #22
+2026-07-27T08:39:00.665665392Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413945min)
+2026-07-27T08:39:00.665669350Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:39:00.665673368Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:39:00.665677136Z [inf]  [2026-07-27T08:38:58.661Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:39:00.667088074Z [inf]  [2026-07-27T08:39:00.665Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:39:30.698457612Z [inf]  [2026-07-27T08:39:21.556Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:40:00.480680029Z [inf]  [2026-07-27T08:39:58.887Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:40:00.480717763Z [inf]  [2026-07-27T08:39:58.887Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:40:00.480721982Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413944min)
+2026-07-27T08:40:00.480725872Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #23
+2026-07-27T08:40:00.480729503Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413944min)
+2026-07-27T08:40:00.480732808Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:40:00.480740189Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:40:00.480743516Z [inf]  [2026-07-27T08:39:58.895Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:40:00.879050349Z [inf]  [2026-07-27T08:40:00.873Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:40:06.875182758Z [inf]  [2026-07-27T08:40:06.873Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:40:56.942327657Z [inf]  [2026-07-27T08:40:52.233Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:40:59.125514717Z [inf]  [2026-07-27T08:40:59.114Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:40:59.125519144Z [inf]  [2026-07-27T08:40:59.114Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:40:59.125523650Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413943min)
+2026-07-27T08:40:59.125527860Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #24
+2026-07-27T08:40:59.125531858Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413943min)
+2026-07-27T08:40:59.125535457Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:40:59.125539359Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:40:59.125543650Z [inf]  [2026-07-27T08:40:59.122Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:41:01.077804988Z [inf]  [2026-07-27T08:41:01.061Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:41:41.359374111Z [inf]  [2026-07-27T08:41:37.745Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:42:01.068760456Z [inf]  [2026-07-27T08:41:59.346Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:42:01.068763907Z [inf]  [2026-07-27T08:41:59.346Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:42:01.068767409Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413942min)
+2026-07-27T08:42:01.068772500Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #25
+2026-07-27T08:42:01.068775816Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413942min)
+2026-07-27T08:42:01.068780185Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:42:01.068783573Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:42:01.068787032Z [inf]  [2026-07-27T08:41:59.393Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:42:01.514189594Z [inf]  [2026-07-27T08:42:01.241Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:42:31.333964621Z [inf]  [2026-07-27T08:42:23.098Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:43:01.079660648Z [inf]  [2026-07-27T08:42:59.605Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:43:01.079666136Z [inf]  [2026-07-27T08:42:59.605Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:43:01.079671437Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413941min)
+2026-07-27T08:43:01.079675696Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #26
+2026-07-27T08:43:01.079680590Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413941min)
+2026-07-27T08:43:01.079685265Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:43:01.079689651Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:43:01.079693983Z [inf]  [2026-07-27T08:42:59.613Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:43:01.638154175Z [inf]  [2026-07-27T08:43:01.422Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:43:08.816091623Z [inf]  [2026-07-27T08:43:08.560Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:43:59.055862031Z [inf]  [2026-07-27T08:43:53.937Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:44:00.054464997Z [inf]  [2026-07-27T08:43:59.839Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:44:00.054468327Z [inf]  [2026-07-27T08:43:59.839Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:44:00.054471337Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413940min)
+2026-07-27T08:44:00.054474169Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #27
+2026-07-27T08:44:00.054477049Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413940min)
+2026-07-27T08:44:00.054480211Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:44:00.054483421Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:44:00.054486785Z [inf]  [2026-07-27T08:43:59.847Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:44:01.668337046Z [inf]  [2026-07-27T08:44:01.622Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:44:41.669505160Z [inf]  [2026-07-27T08:44:39.283Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:45:01.575526231Z [inf]  [2026-07-27T08:45:00.065Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:45:01.575529486Z [inf]  [2026-07-27T08:45:00.065Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:45:01.575533167Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413939min)
+2026-07-27T08:45:01.575536339Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #28
+2026-07-27T08:45:01.575539141Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413939min)
+2026-07-27T08:45:01.575541926Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:45:01.575545196Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:45:01.575548390Z [inf]  [2026-07-27T08:45:00.074Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:45:01.818849008Z [inf]  [2026-07-27T08:45:01.813Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:45:31.830046459Z [inf]  [2026-07-27T08:45:24.633Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:46:01.557752924Z [inf]  [2026-07-27T08:46:00.281Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:46:01.557759356Z [inf]  [2026-07-27T08:46:00.281Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:46:01.557762442Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413937min)
+2026-07-27T08:46:01.557765185Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #29
+2026-07-27T08:46:01.557770496Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413937min)
+2026-07-27T08:46:01.557773508Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:46:01.557776248Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:46:01.557779114Z [inf]  [2026-07-27T08:46:00.290Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:46:02.286975649Z [inf]  [2026-07-27T08:46:02.010Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:46:09.945900847Z [inf]  [2026-07-27T08:46:09.941Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:46:59.966790204Z [inf]  [2026-07-27T08:46:55.315Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:47:00.697294927Z [inf]  [2026-07-27T08:47:00.491Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:47:00.697298078Z [inf]  [2026-07-27T08:47:00.491Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:47:00.697301576Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413936min)
+2026-07-27T08:47:00.697305058Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #30
+2026-07-27T08:47:00.697308650Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413936min)
+2026-07-27T08:47:00.697311908Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:47:00.697314982Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:47:00.697318099Z [inf]  [2026-07-27T08:47:00.499Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:47:02.218119503Z [inf]  [2026-07-27T08:47:02.208Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:47:42.605563624Z [inf]  [2026-07-27T08:47:40.707Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:48:02.285087961Z [inf]  [2026-07-27T08:48:00.727Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:48:02.285095937Z [inf]  [2026-07-27T08:48:00.727Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:48:02.285101767Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413935min)
+2026-07-27T08:48:02.285107028Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #31
+2026-07-27T08:48:02.285114209Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413935min)
+2026-07-27T08:48:02.285120024Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:48:02.285125572Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:48:02.285130407Z [inf]  [2026-07-27T08:48:00.737Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:48:02.426537701Z [inf]  [2026-07-27T08:48:02.401Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:48:03.186596966Z [inf]  [2026-07-27T08:48:03.170Z] [germany-loop] [DEBUG] Aucun dossier Germany actif
+2026-07-27T08:48:03.186599781Z [inf]  [2026-07-27T08:48:03.170Z] [germany-loop] [DEBUG] Prochain cycle dans 36 min
+2026-07-27T08:48:33.413565621Z [inf]  [2026-07-27T08:48:26.037Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:49:03.162720147Z [inf]  [2026-07-27T08:49:00.942Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:49:03.162723293Z [inf]  [2026-07-27T08:49:00.942Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:49:03.162726292Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413934min)
+2026-07-27T08:49:03.162729116Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #32
+2026-07-27T08:49:03.162731899Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413934min)
+2026-07-27T08:49:03.162734865Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:49:03.162737434Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:49:03.162740637Z [inf]  [2026-07-27T08:49:00.951Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:49:03.162743518Z [inf]  [2026-07-27T08:49:02.581Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:49:11.390579015Z [inf]  [2026-07-27T08:49:11.342Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:50:01.904149590Z [inf]  [2026-07-27T08:49:56.890Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:50:01.904155019Z [inf]  [2026-07-27T08:50:01.159Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:50:01.904160690Z [inf]  [2026-07-27T08:50:01.159Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:50:01.904166178Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413933min)
+2026-07-27T08:50:01.904173610Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #33
+2026-07-27T08:50:01.904177241Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413933min)
+2026-07-27T08:50:01.904181366Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:50:01.904185849Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:50:01.904189356Z [inf]  [2026-07-27T08:50:01.167Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:50:02.931702685Z [inf]  [2026-07-27T08:50:02.764Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:50:42.816678938Z [inf]  [2026-07-27T08:50:42.225Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:51:03.031918991Z [inf]  [2026-07-27T08:51:01.386Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:51:03.031922579Z [inf]  [2026-07-27T08:51:01.386Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:51:03.031926036Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413932min)
+2026-07-27T08:51:03.031929345Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #34
+2026-07-27T08:51:03.031932707Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413932min)
+2026-07-27T08:51:03.031935934Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:51:03.031939163Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:51:03.031942839Z [inf]  [2026-07-27T08:51:01.394Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:51:03.031945988Z [inf]  [2026-07-27T08:51:02.957Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:51:32.869473566Z [inf]  [2026-07-27T08:51:27.557Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:52:03.065149776Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:52:03.065156223Z [inf]  [2026-07-27T08:52:01.624Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:52:03.065178151Z [inf]  [2026-07-27T08:52:01.615Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:52:03.065179679Z [inf]  [2026-07-27T08:52:01.614Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:52:03.065191252Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413931min)
+2026-07-27T08:52:03.065197088Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #35
+2026-07-27T08:52:03.065202068Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413931min)
+2026-07-27T08:52:03.065206623Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:52:03.153392522Z [inf]  [2026-07-27T08:52:03.147Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:52:22.840946536Z [inf]  [2026-07-27T08:52:12.863Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:53:02.851680250Z [inf]  [2026-07-27T08:52:58.252Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:53:02.851686760Z [inf]  [2026-07-27T08:53:01.843Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:53:02.851692843Z [inf]  [2026-07-27T08:53:01.843Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:53:02.851697446Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413930min)
+2026-07-27T08:53:02.851701349Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #36
+2026-07-27T08:53:02.851705412Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413930min)
+2026-07-27T08:53:02.851709479Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:53:02.851713095Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:53:02.851716841Z [inf]  [2026-07-27T08:53:01.850Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:53:03.369035745Z [inf]  [2026-07-27T08:53:03.366Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:53:53.621135407Z [inf]  [2026-07-27T08:53:43.773Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:54:02.115147519Z [inf]  [2026-07-27T08:54:02.080Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:54:02.115151090Z [inf]  [2026-07-27T08:54:02.080Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:54:02.115154708Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413929min)
+2026-07-27T08:54:02.115158239Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #37
+2026-07-27T08:54:02.115161938Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413929min)
+2026-07-27T08:54:02.115165575Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:54:02.115169197Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:54:02.115172846Z [inf]  [2026-07-27T08:54:02.088Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:54:03.753329687Z [inf]  [2026-07-27T08:54:03.558Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:54:33.488875126Z [inf]  [2026-07-27T08:54:29.131Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:55:03.600982271Z [inf]  [2026-07-27T08:55:02.309Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:55:03.600984956Z [inf]  [2026-07-27T08:55:02.309Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:55:03.600987668Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413928min)
+2026-07-27T08:55:03.600991708Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #38
+2026-07-27T08:55:03.600995755Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413928min)
+2026-07-27T08:55:03.600998710Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:55:03.601001639Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:55:03.601004332Z [inf]  [2026-07-27T08:55:02.317Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:55:03.919161707Z [inf]  [2026-07-27T08:55:03.899Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:55:23.952738608Z [inf]  [2026-07-27T08:55:14.583Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:56:04.315493382Z [inf]  [2026-07-27T08:56:02.548Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:56:04.315500624Z [inf]  [2026-07-27T08:56:04.103Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:56:04.315589721Z [inf]  [2026-07-27T08:55:59.884Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:56:04.315592739Z [inf]  [2026-07-27T08:56:02.540Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:56:04.315596444Z [inf]  [2026-07-27T08:56:02.540Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:56:04.315599939Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413927min)
+2026-07-27T08:56:04.315603476Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #39
+2026-07-27T08:56:04.315606482Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413927min)
+2026-07-27T08:56:04.315609408Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:56:04.315614767Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:56:54.468142719Z [inf]  [2026-07-27T08:56:45.265Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:57:02.826154483Z [inf]  [2026-07-27T08:57:02.770Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:57:02.826159179Z [inf]  [2026-07-27T08:57:02.770Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:57:02.826163475Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413926min)
+2026-07-27T08:57:02.826167637Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #40
+2026-07-27T08:57:02.826171875Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413926min)
+2026-07-27T08:57:02.826175957Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:57:02.826182152Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:57:02.826186448Z [inf]  [2026-07-27T08:57:02.781Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:57:04.573649455Z [inf]  [2026-07-27T08:57:04.310Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:57:34.332254205Z [inf]  [2026-07-27T08:57:30.611Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:58:04.395374233Z [inf]  [2026-07-27T08:58:03.127Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:58:04.395386871Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #41
+2026-07-27T08:58:04.395397859Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413925min)
+2026-07-27T08:58:04.395398496Z [inf]  [2026-07-27T08:58:03.120Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:58:04.395404827Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:58:04.395408406Z [inf]  [2026-07-27T08:58:03.120Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:58:04.395413242Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:58:04.395415706Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413925min)
+2026-07-27T08:58:04.551824694Z [inf]  [2026-07-27T08:58:04.517Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:58:24.547814992Z [inf]  [2026-07-27T08:58:16.015Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:59:04.895210774Z [inf]  [2026-07-27T08:59:01.338Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T08:59:04.895214673Z [inf]  [2026-07-27T08:59:03.336Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T08:59:04.895218304Z [inf]  [2026-07-27T08:59:03.336Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T08:59:04.895221612Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413924min)
+2026-07-27T08:59:04.895225559Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #42
+2026-07-27T08:59:04.895230025Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413924min)
+2026-07-27T08:59:04.895233645Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T08:59:04.895237265Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T08:59:04.895240673Z [inf]  [2026-07-27T08:59:03.344Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T08:59:04.895243946Z [inf]  [2026-07-27T08:59:04.719Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T08:59:54.839455869Z [inf]  [2026-07-27T08:59:46.686Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:00:03.806818974Z [inf]  [2026-07-27T09:00:03.566Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:00:03.806822096Z [inf]  [2026-07-27T09:00:03.566Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:00:03.806825498Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413923min)
+2026-07-27T09:00:03.806828908Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #43
+2026-07-27T09:00:03.806832501Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413923min)
+2026-07-27T09:00:03.806835911Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:00:03.806839211Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:00:03.806842502Z [inf]  [2026-07-27T09:00:03.574Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:00:04.929461686Z [inf]  [2026-07-27T09:00:04.905Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:00:34.586565699Z [inf]  [2026-07-27T09:00:32.066Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:01:04.555840720Z [inf]  [2026-07-27T09:01:03.784Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:01:04.555844421Z [inf]  [2026-07-27T09:01:03.784Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:01:04.555847780Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413922min)
+2026-07-27T09:01:04.555851912Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #44
+2026-07-27T09:01:04.555855150Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413922min)
+2026-07-27T09:01:04.555858632Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:01:04.555862052Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:01:04.555865374Z [inf]  [2026-07-27T09:01:03.792Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:01:05.094758393Z [inf]  [2026-07-27T09:01:05.084Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:01:25.085228992Z [inf]  [2026-07-27T09:01:17.382Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:02:05.277438731Z [inf]  [2026-07-27T09:02:03.983Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:02:05.277448714Z [inf]  [2026-07-27T09:02:03.983Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:02:05.277453119Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413921min)
+2026-07-27T09:02:05.277456798Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #45
+2026-07-27T09:02:05.277460891Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413921min)
+2026-07-27T09:02:05.277464458Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:02:05.277467784Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:02:05.277471561Z [inf]  [2026-07-27T09:02:03.991Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:02:05.277475018Z [inf]  [2026-07-27T09:02:05.264Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:02:05.277499025Z [inf]  [2026-07-27T09:02:02.679Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:02:55.100993459Z [inf]  [2026-07-27T09:02:48.052Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:03:04.344228519Z [inf]  [2026-07-27T09:03:04.343Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:03:04.344233082Z [inf]  [2026-07-27T09:03:04.343Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:03:04.344236295Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413920min)
+2026-07-27T09:03:04.355784011Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #46
+2026-07-27T09:03:04.355787134Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413920min)
+2026-07-27T09:03:04.355789767Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:03:04.355792561Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:03:04.355796664Z [inf]  [2026-07-27T09:03:04.355Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:03:05.457910216Z [inf]  [2026-07-27T09:03:05.454Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:03:35.486384096Z [inf]  [2026-07-27T09:03:33.405Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:04:05.969508834Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #47
+2026-07-27T09:04:05.969516943Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413919min)
+2026-07-27T09:04:05.969521340Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:04:05.969526448Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:04:05.969530034Z [inf]  [2026-07-27T09:04:04.612Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:04:05.969534505Z [inf]  [2026-07-27T09:04:05.662Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:04:05.969581702Z [inf]  [2026-07-27T09:04:04.602Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:04:05.969585171Z [inf]  [2026-07-27T09:04:04.602Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:04:05.969588249Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413919min)
+2026-07-27T09:04:25.733424509Z [inf]  [2026-07-27T09:04:18.860Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:05:06.013142044Z [inf]  [2026-07-27T09:05:05.844Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:05:06.013148675Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413918min)
+2026-07-27T09:05:06.013155899Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:05:06.013161124Z [inf]  [2026-07-27T09:05:04.137Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:05:06.013165421Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:05:06.013169838Z [inf]  [2026-07-27T09:05:04.810Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:05:06.013172359Z [inf]  [2026-07-27T09:05:04.818Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:05:06.013175834Z [inf]  [2026-07-27T09:05:04.810Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:05:06.013180249Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413918min)
+2026-07-27T09:05:06.013185860Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #48
+2026-07-27T09:05:55.894383544Z [inf]  [2026-07-27T09:05:49.500Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:06:05.142000587Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #49
+2026-07-27T09:06:05.142009166Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413917min)
+2026-07-27T09:06:05.142013112Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:06:05.142016954Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:06:05.142022427Z [inf]  [2026-07-27T09:06:05.116Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:06:05.142051084Z [inf]  [2026-07-27T09:06:05.108Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:06:05.142054209Z [inf]  [2026-07-27T09:06:05.108Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:06:05.142057159Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413917min)
+2026-07-27T09:06:06.207109249Z [inf]  [2026-07-27T09:06:06.038Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:06:36.020371143Z [inf]  [2026-07-27T09:06:34.830Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:07:06.045456202Z [inf]  [2026-07-27T09:07:05.346Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:07:06.045459585Z [inf]  [2026-07-27T09:07:05.346Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:07:06.045463930Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413916min)
+2026-07-27T09:07:06.045467013Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #50
+2026-07-27T09:07:06.045470112Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413916min)
+2026-07-27T09:07:06.045473450Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:07:06.045480353Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:07:06.045483314Z [inf]  [2026-07-27T09:07:05.354Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:07:06.261657297Z [inf]  [2026-07-27T09:07:06.225Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:07:26.007633465Z [inf]  [2026-07-27T09:07:20.315Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:08:06.038852191Z [inf]  [2026-07-27T09:08:05.560Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:08:06.038855480Z [inf]  [2026-07-27T09:08:05.560Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:08:06.038859177Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413915min)
+2026-07-27T09:08:06.038862534Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #51
+2026-07-27T09:08:06.038865789Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413915min)
+2026-07-27T09:08:06.038868599Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:08:06.038871492Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:08:06.038875320Z [inf]  [2026-07-27T09:08:05.569Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:08:06.038878495Z [inf]  [2026-07-27T09:08:05.614Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:08:06.424906627Z [inf]  [2026-07-27T09:08:06.422Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:08:56.460622938Z [inf]  [2026-07-27T09:08:50.978Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:09:05.815788353Z [inf]  [2026-07-27T09:09:05.803Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:09:05.815792190Z [inf]  [2026-07-27T09:09:05.803Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:09:05.815795223Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413914min)
+2026-07-27T09:09:05.815797873Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #52
+2026-07-27T09:09:05.815800454Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413914min)
+2026-07-27T09:09:05.815803186Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:09:05.815805993Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:09:05.815808835Z [inf]  [2026-07-27T09:09:05.812Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:09:06.599979989Z [inf]  [2026-07-27T09:09:06.593Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:09:36.341185821Z [inf]  [2026-07-27T09:09:36.333Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:10:16.017429401Z [inf]  [2026-07-27T09:10:06.044Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+2026-07-27T09:10:16.017434658Z [inf]  [2026-07-27T09:10:06.044Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+2026-07-27T09:10:16.017437643Z [inf]  [spain-soax] ♻️ Cookie valide trouvé dans le pool (source: automatic, reste 413913min)
+2026-07-27T09:10:16.017440852Z [inf]  [spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #53
+2026-07-27T09:10:16.017443495Z [inf]  [spain-soax] ♻️ Session CF réutilisée (reste 413913min)
+2026-07-27T09:10:16.017446960Z [inf]  [spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+2026-07-27T09:10:16.017449820Z [inf]  [spain-soax] 🗑️ Session CF invalidée manuellement
+2026-07-27T09:10:16.017452483Z [inf]  [2026-07-27T09:10:06.053Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Scan /main/ échoué (CF cookie invalide ou erreur réseau))
+2026-07-27T09:10:16.017455691Z [inf]  [2026-07-27T09:10:06.802Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:10:21.837065571Z [inf]  [2026-07-27T09:10:21.671Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:11:11.708224636Z [inf]  [2026-07-27T09:11:06.974Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:11:11.708227570Z [inf]  [2026-07-27T09:11:07.000Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:12:02.388182896Z [inf]  [2026-07-27T09:11:52.339Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:12:07.464639761Z [inf]  [2026-07-27T09:12:07.218Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:12:47.252780154Z [inf]  [2026-07-27T09:12:37.702Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:13:07.615948756Z [inf]  [2026-07-27T09:13:07.410Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:13:27.614670115Z [inf]  [2026-07-27T09:13:23.047Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:14:07.695062638Z [inf]  [2026-07-27T09:14:07.601Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:14:08.768324860Z [inf]  [2026-07-27T09:14:08.368Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:14:58.735527834Z [inf]  [2026-07-27T09:14:53.719Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:15:07.793507624Z [inf]  [2026-07-27T09:15:07.782Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:15:48.308915822Z [inf]  [2026-07-27T09:15:39.193Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:16:18.005267888Z [inf]  [2026-07-27T09:16:07.992Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:16:24.566078401Z [inf]  [2026-07-27T09:16:24.565Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s

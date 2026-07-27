@@ -1,16 +1,16 @@
 /**
- * spain-soax-solver.ts — Cloudflare bypass pour citaconsular.es via SOAX + CapSolver
+ * spain-soax-solver.ts — Session Cloudflare citaconsular.es via proxy + CapSolver
  *
  * ARCHITECTURE :
- *   1. Génère une URL SOAX sticky longue durée (~2h = durée cf_clearance)
- *   2. Appelle CapSolver AntiCloudflareTask avec ce proxy SOAX
- *   3. Retourne le cookie cf_clearance + l'URL proxy SOAX (même IP)
- *   4. impit (Chrome TLS fingerprint) utilise la même IP SOAX + cookie → accès direct aux APIs Bookitit
+ *   1. Génère ou utilise l'URL proxy configurée (~2h = durée cf_clearance)
+ *   2. Appelle CapSolver AntiCloudflareTask avec ce proxy
+ *   3. Retourne le cookie cf_clearance + l'URL proxy (même IP)
+ *   4. impit (Chrome TLS fingerprint) utilise la même IP proxy + cookie → accès aux APIs Bookitit
  *
  * POURQUOI ça marche :
  *   - cf_clearance est lié à l'IP + fingerprint TLS
  *   - impit simule Chrome JA3/JA4 → même fingerprint que CapSolver (profil Chrome)
- *   - Même IP SOAX (sticky session longue) → le cookie est accepté
+ *   - Même IP proxy → le cookie est accepté
  *   - Résultat : scan HTTP pur toutes les 30-60s sans Playwright
  *
  * COÛT : ~$0.005 par solve CapSolver (vs $0.02+ pour Turnstile)
@@ -46,6 +46,29 @@ function getSpainProxyUrl(identifier = "spain-cf", lifetime = SOAX_SPAIN_SESSION
   if (soax) return makeSpainSoaxStickyUrl(soax, lifetime, identifier);
   return undefined;
 }
+
+/**
+ * En mode HTTP, une session sans proxy est inutilisable : le cookie CF est
+ * lié à l'IP qui a servi à le résoudre. Ne jamais transformer une variable
+ * d'environnement absente en requête directe silencieuse.
+ */
+function httpModeRequiresProxy(): boolean {
+  return process.env.SPAIN_HTTP_MODE === "1";
+}
+
+function hasCompatibleProxy(sessionProxyUrl: string, configuredProxyUrl: string | undefined): boolean {
+  if (!sessionProxyUrl) return false;
+
+  // Decodo ISP est utilisé tel quel et son IP doit rester celle du solve.
+  // Une session Redis créée avec SOAX (ou sans proxy) ne peut donc pas être
+  // réutilisée après le passage à Decodo.
+  if (process.env.DECODO_PROXY_URL) {
+    return sessionProxyUrl === configuredProxyUrl;
+  }
+
+  // Pour SOAX, l'URL contient une session sticky persistée avec le cookie.
+  return true;
+}
 const CAPSOLVER_POLL_MS = 5_000;
 const CAPSOLVER_MAX_POLLS = 60; // 5min max (CF challenge peut être lent)
 
@@ -65,7 +88,7 @@ export interface SpainCfSession {
   cfClearance: string;
   /** Domain du cookie (e.g. ".citaconsular.es") */
   cfDomain: string;
-  /** URL proxy SOAX sticky à utiliser pour les requêtes impit */
+  /** URL proxy à utiliser pour les requêtes impit */
   soaxProxyUrl: string;
   /** User-Agent retourné par CapSolver (à utiliser dans les requêtes) */
   userAgent: string;
@@ -91,7 +114,7 @@ export interface SolveResult {
 const _spainSoaxRotationCount = new Map<string, number>();
 
 /**
- * Génère une URL SOAX sticky longue durée pour l'Espagne.
+ * Génère une URL SOAX sticky longue durée pour l'Espagne (fallback).
  * Format Dashboard v2 : params dans le USERNAME.
  *
  * @param baseUrl - URL base SOAX (http://package-XXXXX:PASSWORD@proxy.soax.com:5000)
@@ -410,23 +433,50 @@ export function invalidateSpainCfSession(): void {
 export async function ensureSpainCfSession(
   targetUrl: string = DEFAULT_SPAIN_TARGET_URL,
 ): Promise<SpainCfSession | null> {
+  const configuredProxyUrl = getSpainProxyUrl();
+  if (httpModeRequiresProxy() && !configuredProxyUrl) {
+    console.error(
+      "[spain-soax] ❌ SPAIN_HTTP_MODE=1 exige DECODO_PROXY_URL (ou SOAX_PROXY_URL). " +
+      "Requête directe refusée.",
+    );
+    return null;
+  }
+
   // Session active et valide en mémoire ?
   const existing = getActiveSpainCfSession();
-  if (existing) {
+  if (existing && (!httpModeRequiresProxy() || hasCompatibleProxy(existing.soaxProxyUrl, configuredProxyUrl))) {
     const remainMin = Math.round((_activeCfSession!.expiresAt - Date.now()) / 60_000);
     console.log(`[spain-soax] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
     return existing;
   }
+  if (existing && httpModeRequiresProxy()) {
+    console.warn("[spain-soax] ⚠️ Session mémoire ignorée: proxy absent ou incompatible avec le proxy configuré");
+    _activeCfSession = undefined;
+  }
 
-  // 1. Tenter de récupérer un cookie valide depuis le pool
+  // 1. Les cookies du pool local n'embarquent pas l'IP qui les a générés.
+  // En HTTP-only, les réutiliser avec Decodo peut produire un couple
+  // cf_clearance/IP incohérent (notamment après un ancien solve SOAX).
+  // Ils restent utilisables uniquement par le mode Playwright legacy.
   const domain = new URL(targetUrl).hostname;
-  const bestCookie = cookieManager.getBestCookie(domain);
+  const bestCookie = httpModeRequiresProxy()
+    ? null
+    : cookieManager.getBestCookie(domain);
+  if (httpModeRequiresProxy() && cookieManager.getBestCookie(domain)) {
+    console.log("[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue");
+  }
   if (bestCookie) {
     const remainMin = Math.round((bestCookie.expires * 1000 - Date.now()) / 60_000);
     console.log(`[spain-soax] ♻️ Cookie valide trouvé dans le pool (source: ${bestCookie.source}, reste ${remainMin}min)`);
     
+    // Même avec USE_LOCAL_STEALTH=true, le cookie doit rester lié au proxy
+    // configuré lorsque le watcher tourne en HTTP-only.
     const isLocalStealth = process.env.USE_LOCAL_STEALTH === "true";
-    const soaxProxyUrl = (!isLocalStealth ? getSpainProxyUrl() : undefined) ?? "";
+    const soaxProxyUrl = (httpModeRequiresProxy() || !isLocalStealth ? configuredProxyUrl : undefined) ?? "";
+    if (httpModeRequiresProxy() && !soaxProxyUrl) {
+      console.error("[spain-soax] ❌ Cookie pool trouvé mais aucun proxy disponible — requête directe refusée");
+      return null;
+    }
 
     const sessionCreatedAt = Date.now() - (7200 - (bestCookie.expires - Math.floor(Date.now() / 1000))) * 1000;
     const poolAllCookies = await applyStableGaProfile(
@@ -491,29 +541,37 @@ export async function ensureSpainCfSession(
   try {
     const cached = await restoreSpainCfSessionFromRedis();
     if (cached) {
-      // Reconstruire la session en mémoire
-      const restoredAllCookies = await applyStableGaProfile(cached.allCookies, cached.createdAt);
-      const restored: SpainCfSession = {
-        cfClearance: cached.cfClearance,
-        cfDomain: cached.cfDomain,
-        soaxProxyUrl: cached.soaxProxyUrl,
-        userAgent: cached.userAgent,
-        createdAt: cached.createdAt,
-        expiresAt: cached.expiresAt,
-        allCookies: restoredAllCookies,
-        extraHeaders: cached.extraHeaders,
-      };
-      _activeCfSession = restored;
-      const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
-      console.log(`[spain-soax] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min)`);
-      return restored;
+      if (httpModeRequiresProxy() && !hasCompatibleProxy(cached.soaxProxyUrl, configuredProxyUrl)) {
+        console.warn(
+          "[spain-soax] ⚠️ Session Redis ignorée: elle a été créée sans proxy " +
+          "ou avec un proxy différent du proxy configuré",
+        );
+        removeSpainCfSessionFromRedis();
+      } else {
+        // Reconstruire la session en mémoire
+        const restoredAllCookies = await applyStableGaProfile(cached.allCookies, cached.createdAt);
+        const restored: SpainCfSession = {
+          cfClearance: cached.cfClearance,
+          cfDomain: cached.cfDomain,
+          soaxProxyUrl: cached.soaxProxyUrl,
+          userAgent: cached.userAgent,
+          createdAt: cached.createdAt,
+          expiresAt: cached.expiresAt,
+          allCookies: restoredAllCookies,
+          extraHeaders: cached.extraHeaders,
+        };
+        _activeCfSession = restored;
+        const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
+        console.log(`[spain-soax] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min)`);
+        return restored;
+      }
     }
   } catch (err) {
     console.warn(`[spain-soax] ⚠️ Redis restore échoué (non-fatal): ${err}`);
   }
 
   // Vérifier les prérequis proxy
-  const soaxProxyUrl = getSpainProxyUrl();
+  const soaxProxyUrl = configuredProxyUrl;
   if (!soaxProxyUrl) {
     console.error(`[spain-soax] ❌ Aucun proxy configuré (DECODO_PROXY_URL ou SOAX_PROXY_URL requis)`);
     return null;
@@ -663,10 +721,16 @@ let _spainImpit: InstanceType<typeof Impit> | undefined;
 let _spainImpitProxyUrl: string | undefined;
 
 /**
- * Retourne une instance impit configurée avec le proxy SOAX de la session CF active.
+ * Retourne une instance impit configurée avec le proxy de la session CF active.
  * Le fingerprint TLS Chrome garantit la cohérence avec le solve CapSolver.
  */
 export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impit> {
+  if (httpModeRequiresProxy() && !session.soaxProxyUrl) {
+    throw new Error(
+      "SPAIN_HTTP_MODE=1 refuse toute requête directe: session CF sans proxy",
+    );
+  }
+
   if (_spainImpit && _spainImpitProxyUrl === session.soaxProxyUrl) {
     return _spainImpit;
   }
@@ -680,9 +744,10 @@ export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impi
 
   if (session.soaxProxyUrl) {
     const masked = session.soaxProxyUrl.replace(/:([^:@]+)@/, ":***@");
-    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + SOAX: ${masked.slice(0, 60)}…)`);
+    const provider = process.env.DECODO_PROXY_URL ? "Decodo" : "proxy configuré";
+    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + ${provider}: ${masked.slice(0, 60)}…)`);
   } else {
-    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS en direct / sans proxy)`);
+    console.log(`[spain-soax] ✅ impit Espagne initialisé (Chrome TLS direct / sans proxy)`);
   }
   return _spainImpit;
 }

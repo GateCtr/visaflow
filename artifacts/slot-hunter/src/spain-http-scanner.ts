@@ -2,7 +2,7 @@
  * spain-http-scanner.ts — Scanner Espagne 100% HTTP (sans Playwright)
  *
  * ARCHITECTURE :
- *   1. Obtient cf_clearance via spain-soax-solver (CapSolver + SOAX sticky)
+ *   1. Obtient cf_clearance via spain-soax-solver (CapSolver + proxy sticky/fixe)
  *   2. Charge la page widget citaconsular.es via impit pour extraire les params Bookitit
  *   3. Appelle les APIs JSONP Bookitit (getservices, getagendas, datetime) via impit
  *   4. Scanne en boucle toutes les 30-60s sans aucun navigateur
