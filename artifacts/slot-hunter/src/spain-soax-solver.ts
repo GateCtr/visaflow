@@ -327,10 +327,19 @@ export async function solveSpainCloudflare(
 
       if (resultData.errorId !== 0) {
         const errCode = resultData.errorCode || `errorId=${resultData.errorId}`;
-        // Certaines erreurs sont fatales (pas de retry)
-        if (errCode.includes("ERROR_CAPTCHA_UNSOLVABLE") || errCode.includes("ERROR_PROXY")) {
+        // These errors describe an invalid task/request, not a task that is
+        // still processing. Retrying the same task only burns polling time and
+        // can hide the actual integration/configuration problem.
+        if (
+          errCode.includes("ERROR_INVALID_TASK_DATA") ||
+          errCode.includes("ERROR_CAPTCHA_UNSOLVABLE") ||
+          errCode.includes("ERROR_PROXY")
+        ) {
           console.error(`[spain-soax] ❌ Erreur fatale: ${errCode}`);
-          return { success: false, error: errCode, durationMs: Date.now() - t0 };
+          const details = resultData.errorDescription
+            ? `${errCode}: ${resultData.errorDescription}`
+            : errCode;
+          return { success: false, error: details, durationMs: Date.now() - t0 };
         }
         console.warn(`[spain-soax] ⚠️ Poll #${i + 1} erreur non-fatale: ${errCode}`);
         continue;
