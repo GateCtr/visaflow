@@ -575,6 +575,20 @@ export async function ensureSpainCfSession(
       // real Analytics cookies after a browser solve would create a session
       // that no longer matches the navigation that produced it.
       const pwAllCookies = widgetCookies.allCookies;
+
+      // Si le JSD n'a pas été observé (clearance CapSolver uniquement sans #2 post-Oneshot),
+      // on n'accepte pas cette session pour le mode HTTP. La clearance CapSolver fonctionne
+      // dans le navigateur Playwright (fingerprint Chrome réel) mais CF la rejette en HTTP
+      // impit (empreinte TLS différente / validation plus stricte).
+      // On force un nouveau solve au prochain cycle plutôt que de propager une session cassée.
+      if (!widgetCookies.jsdOneshotCaptured && widgetCookies.seededClearanceAccepted) {
+        console.error(
+          "[spain-soax] ❌ JSD Oneshot non observé après attente — clearance CapSolver uniquement. " +
+          "Session rejetée (évite HTTP 403 en cascade). Nouveau solve au prochain cycle.",
+        );
+        return null;
+      }
+
       const session: SpainCfSession = {
         cfClearance: widgetCookies.cfClearance,
         cfDomain: ".citaconsular.es",
@@ -590,6 +604,7 @@ export async function ensureSpainCfSession(
       syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
       console.log(
         `[spain-soax] 🎉 Session Playwright établie ! ` +
+        `JSD=${widgetCookies.jsdOneshotCaptured ? "✅ Oneshot#2" : "⚠️ clearance-only"} | ` +
         `PHPSESSID=${session.allCookies.find(c => c.name === "PHPSESSID") ? "✅" : "❌"} | ` +
         `Valide ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`
       );

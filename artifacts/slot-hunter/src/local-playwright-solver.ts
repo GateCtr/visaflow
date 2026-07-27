@@ -395,16 +395,22 @@ export async function solveSpainWidgetSession(
 
     // ─── Phase 2 : Attente JSD Oneshot (JS CF tournant dans le navigateur) ──
     // Le widget HTML est chargé, CF's JS s'exécute et déclenche JSD Oneshot ~3-8s après.
-    // On attend max 20s pour la capture via le listener response.
+    // On attend TOUJOURS le JSD, même si la clearance CapSolver a été acceptée.
+    //
+    // IMPORTANT: quand seededClearanceAccepted=true, CF sert le widget directement
+    // sans interstitiel, MAIS son JS continue de s'exécuter en arrière-plan et émet
+    // quand même le JSD Oneshot pour fingerprinter le client. Ce JSD produit une
+    // cf_clearance #2 liée à l'IP Decodo courante — indispensable pour les requêtes
+    // HTTP impit qui suivent. Skipper cette attente laisse seulement la clearance
+    // CapSolver (liée au contexte browser de CapSolver) qui est rejetée par CF en HTTP.
     console.log(
       seededClearanceAccepted
-        ? "[PLAYWRIGHT-WIDGET] ⏭️ JSD non attendu: clearance déjà acceptée"
+        ? "[PLAYWRIGHT-WIDGET] ⏳ Clearance CapSolver acceptée — attente JSD Oneshot arrière-plan (obligatoire pour HTTP)…"
         : "[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot (exécution JS CF dans le navigateur)…",
     );
     const ONESHOT_TIMEOUT_MS = 20_000;
     const tWait = Date.now();
     while (
-      !seededClearanceAccepted &&
       !jsdOneshotCaptured &&
       Date.now() - tWait < ONESHOT_TIMEOUT_MS
     ) {
@@ -417,6 +423,15 @@ export async function solveSpainWidgetSession(
       );
     }
 
+    if (!jsdOneshotCaptured && seededClearanceAccepted) {
+      // CF n'a pas émis de JSD Oneshot après 20s malgré la clearance CapSolver acceptée.
+      // La clearance retournée sera celle de CapSolver — peut échouer en HTTP impit.
+      console.warn(
+        "[PLAYWRIGHT-WIDGET] ⚠️ JSD Oneshot non observé après 20s (clearance CapSolver uniquement) — " +
+        "le scan HTTP risque un 403. Renouvellement forcé au prochain cycle.",
+      );
+    }
+
     // ─── Phase 3 : Extraction cookies finaux ─────────────────────────────
     const finalBrowserCookies = await context.cookies();
     const allCookies = finalBrowserCookies.map((c: any) => ({
@@ -424,19 +439,20 @@ export async function solveSpainWidgetSession(
       value: c.value as string,
     }));
 
-    // Un cookie #1 seul ne suffit pas: le JSD Oneshot doit avoir été observé.
+    // Priorité : cf_clearance #2 capturé depuis JSD Oneshot (lié à l'IP Decodo courante).
+    // Fallback : cf_clearance présent dans le jar navigateur (token CapSolver — peut échouer HTTP).
     const finalCfClearance =
       postOneshotCfClearance ??
       finalBrowserCookies.find((c: any) => c.name === "cf_clearance")?.value ??
       "";
     if (!finalCfClearance) {
-      throw new Error("JSD Oneshot observé mais aucun cf_clearance final capturé");
+      throw new Error("Aucun cf_clearance final capturé (ni JSD Oneshot ni cookie navigateur)");
     }
 
     const phpSessIdCookie = finalBrowserCookies.find((c: any) => c.name === "PHPSESSID");
     console.log(
       `[PLAYWRIGHT-WIDGET] 🎯 Session établie | ` +
-      `cf_clearance=${postOneshotCfClearance ? "#2 (post-Oneshot)" : "#2 (cookie navigateur)"} | ` +
+      `cf_clearance=${postOneshotCfClearance ? "#2 (post-Oneshot ✅)" : "#2 (cookie navigateur ⚠️CapSolver-only)"} | ` +
       `PHPSESSID=${phpSessIdCookie ? `✅ ${phpSessIdCookie.value.slice(0, 10)}…` : "❌ absent"} | ` +
       `Cookies total: ${allCookies.length}`
     );
