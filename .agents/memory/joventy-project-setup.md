@@ -45,3 +45,11 @@ description: Architecture, structure et pièges du projet Joventy importé de Gi
 
 **Why:** Éviter de re-déployer Convex sans le http.ts complet (catastrophique pour le slot-hunter).
 **How to apply:** Avant tout `npx convex deploy`, vérifier que `artifacts/joventy/convex/http.ts` contient toutes les routes `/hunter/*`.
+
+## Railway / Playwright
+
+L'image Docker Railway doit utiliser exactement la même version Playwright que la dépendance Node du slot-hunter. Une image plus ancienne peut contenir des binaires Chromium incompatibles et empêcher tout lancement du navigateur.
+
+**Why:** Railway a refusé de lancer Chromium lorsque le package Playwright 1.60.0 était exécuté dans l'image `mcr.microsoft.com/playwright:v1.58.2-jammy`.
+
+**How to apply:** Lors d'une mise à jour de `playwright`, mettre à jour simultanément le tag `mcr.microsoft.com/playwright:vX.Y.Z-jammy` dans les Dockerfiles Railway et effectuer un `docker build` avant le déploiement.
