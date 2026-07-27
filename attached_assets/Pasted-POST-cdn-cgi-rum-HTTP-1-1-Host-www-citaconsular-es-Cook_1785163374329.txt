@@ -1,0 +1,27 @@
+POST /cdn-cgi/rum? HTTP/1.1
+Host: www.citaconsular.es
+Cookie: _ga=GA1.1.467244596.1782320257; PHPSESSID=i1zLqQnIp-9MRtttISflbgCY; cf_clearance=fHscq46YzhdqwfaZR5AKYsLLEGfWryl2RlMrtGeg9L0-1785112549-1.2.1.1-lDnqRBvGlm1lv9RYnrkZFFRkfr8IcSogIF9rMPmGIySjqJFn5rS6nqUKt6tFZYCGb6DTU0QP4ZiMkQvbJOCV7fy0fHV6OBOOjHZTW.UslaWXFJ_LPPTJI8iQYv5Z_8_4O2NJ9hn35AOItkpNnmICq28JM7UxJVz7uAb4PPeDhIrclAZ2qJDl_PHnKmI256.kCJ1mmTf2ZrhW_qFdAAOsAq7S0xdgoegXzCD0uqOjijCRezwyAK_wEcwQ46EJqhmk_e3GXGchjEwHAgID1_mG6CVGi_397gNmarFBx2spte5PJxsyArbYpKUxRSHrmVjuaY7FfJS0xhyWvuVIUG8sFKLYqLa6rXtbDwynf56vIHjrhsNXb9XCluRKjPv_ErSb14ZBbucXxgDzhyNfwjY6D.pAM8wdwgU6ikSjIRlAfnqbGbhhByVewy9gpC0wupTC; _ga_F3TYSDL945=GS2.1.s1785112553$o18$g1$t1785112598$j15$l0$h0
+Content-Length: 1078
+Sec-Ch-Ua-Full-Version-List: 
+Sec-Ch-Ua-Platform: "Windows"
+Accept-Language: fr-FR,fr;q=0.9
+Sec-Ch-Ua: "Not;A=Brand";v="8", "Chromium";v="150"
+Sec-Ch-Ua-Bitness: ""
+Sec-Ch-Ua-Model: ""
+Sec-Ch-Ua-Mobile: ?0
+Sec-Ch-Ua-Arch: ""
+Sec-Ch-Ua-Full-Version: ""
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
+Content-Type: application/json
+Sec-Ch-Ua-Platform-Version: ""
+Accept: */*
+Origin: https://www.citaconsular.es
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+Accept-Encoding: gzip, deflate, br
+Priority: u=1, i
+Connection: keep-alive
+
+{"memory":{"totalJSHeapSize":10447270,"usedJSHeapSize":6465506,"jsHeapSizeLimit":4395630592},"resources":[],"referrer":"https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","eventType":1,"firstPaint":0,"firstContentfulPaint":0,"startTime":1785131138713.1,"versions":{"fl":"2024.11.0","js":"2026.6.0","timings":2},"pageloadId":"312b8df9-6748-4e3a-8549-f632ae8bca28","location":"https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/","nt":"navigate","timingsV2":{"nextHopProtocol":"h2","domainLookupStart":14.300000011920929,"domainLookupEnd":14.300000011920929,"connectStart":14.300000011920929,"connectEnd":14.300000011920929,"requestStart":44,"responseStart":51.5,"responseEnd":55.400000005960464,"domInteractive":242.80000001192093,"domComplete":273.80000001192093,"loadEventStart":273.80000001192093,"loadEventEnd":281.40000000596046,"finalResponseHeadersStart":0,"firstInterimResponseStart":51.5,"transferSize":0,"decodedBodySize":1560},"dt":"cache","siteToken":"cd9fdba4a6e847f9beaa09fc8dd7c1a7","st":2}

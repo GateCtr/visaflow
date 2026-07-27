@@ -20,6 +20,12 @@ export interface SpainWidgetCookies {
   capturedAt: number;
   /** True only when the browser observed Cloudflare's JSD Oneshot request. */
   jsdOneshotCaptured: boolean;
+  /**
+   * CapSolver can return a clearance that makes citaconsular serve the widget
+   * directly. In that branch Cloudflare does not load the intermediate JSD
+   * page, so there is no browser JSD request to wait for.
+   */
+  seededClearanceAccepted: boolean;
 }
 
 export interface SeedCookie {
@@ -303,6 +309,7 @@ export async function solveSpainWidgetSession(
     // La réponse contient Set-Cookie: cf_clearance=<nouveau_token>
     let postOneshotCfClearance: string | null = null;
     let jsdOneshotCaptured = false;
+    let seededClearanceAccepted = false;
     page.on("request", (request: any) => {
       const url: string = request.url();
       if (
@@ -377,19 +384,34 @@ export async function solveSpainWidgetSession(
       await new Promise<void>((r) => setTimeout(r, 2_000));
     } else {
       console.log("[PLAYWRIGHT-WIDGET] ℹ️ Formulaire token absent — page déjà sur le widget.");
+      if (seedCookies.some((cookie) => cookie.name === "cf_clearance")) {
+        seededClearanceAccepted = true;
+        console.log(
+          "[PLAYWRIGHT-WIDGET] ✅ Clearance CapSolver acceptée — " +
+            "widget servi directement, JSD intermédiaire absent",
+        );
+      }
     }
 
     // ─── Phase 2 : Attente JSD Oneshot (JS CF tournant dans le navigateur) ──
     // Le widget HTML est chargé, CF's JS s'exécute et déclenche JSD Oneshot ~3-8s après.
     // On attend max 20s pour la capture via le listener response.
-    console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot (exécution JS CF dans le navigateur)…");
+    console.log(
+      seededClearanceAccepted
+        ? "[PLAYWRIGHT-WIDGET] ⏭️ JSD non attendu: clearance déjà acceptée"
+        : "[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot (exécution JS CF dans le navigateur)…",
+    );
     const ONESHOT_TIMEOUT_MS = 20_000;
     const tWait = Date.now();
-    while (!jsdOneshotCaptured && Date.now() - tWait < ONESHOT_TIMEOUT_MS) {
+    while (
+      !seededClearanceAccepted &&
+      !jsdOneshotCaptured &&
+      Date.now() - tWait < ONESHOT_TIMEOUT_MS
+    ) {
       await new Promise<void>((r) => setTimeout(r, 500));
     }
 
-    if (!jsdOneshotCaptured) {
+    if (!jsdOneshotCaptured && !seededClearanceAccepted) {
       throw new Error(
         "JSD Oneshot requis mais non observé — aucun fallback cf_clearance #1",
       );
@@ -425,6 +447,7 @@ export async function solveSpainWidgetSession(
       userAgent: UA,
       capturedAt: Date.now(),
       jsdOneshotCaptured,
+      seededClearanceAccepted,
     };
   } catch (err: any) {
     console.error(`[PLAYWRIGHT-WIDGET] ❌ Échec solveSpainWidgetSession: ${err.message}`);

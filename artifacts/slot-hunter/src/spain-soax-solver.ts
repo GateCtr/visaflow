@@ -534,7 +534,7 @@ export async function ensureSpainCfSession(
       [],
     );
 
-    if (!widgetCookies?.jsdOneshotCaptured) {
+    if (!widgetCookies?.jsdOneshotCaptured && !widgetCookies?.seededClearanceAccepted) {
       const capsolverKey = process.env.CAPSOLVER_API_KEY;
       if (!capsolverKey || !soaxProxyForPlaywright) {
         console.error(
@@ -569,7 +569,7 @@ export async function ensureSpainCfSession(
       );
     }
 
-    if (widgetCookies?.jsdOneshotCaptured) {
+    if (widgetCookies?.jsdOneshotCaptured || widgetCookies?.seededClearanceAccepted) {
       const pwCreatedAt = Date.now();
       // Preserve the browser cookie jar exactly. In particular, replacing the
       // real Analytics cookies after a browser solve would create a session
@@ -598,7 +598,7 @@ export async function ensureSpainCfSession(
 
     console.error(
       "[spain-soax] ❌ Session navigateur refusée: JSD Oneshot non capturé " +
-      "même après le fallback CapSolver. Aucun fallback legacy.",
+      "et clearance CapSolver non acceptée. Aucun fallback legacy.",
     );
     return null;
   }
