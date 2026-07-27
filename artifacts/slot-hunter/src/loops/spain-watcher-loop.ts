@@ -201,7 +201,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
       // En mode HTTP : intervalle fixe 30s (ignore config Convex calibrée pour Playwright)
       const intervalMs = SPAIN_HTTP_MODE
-        ? 30_000
+        ? 60_000
         : (config.intervalMin ?? 3) * 60_000;
       const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
       log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
