@@ -1,0 +1,86 @@
+Oui, on peut reproduire une grande partie du profil navigateur, et surtout conserver un vrai profil Chromium au lieu de ne transférer que les cookies.
+
+La nuance importante est la suivante : il faut conserver le navigateur et son contexte, pas simplement copier cf_clearance vers impit.
+
+Ce que le profil persistant peut conserver
+cf_clearance et les autres cookies ;
+localStorage, sessionStorage, IndexedDB ;
+cache HTTP et service workers ;
+état JavaScript du challenge ;
+User-Agent et Client Hints ;
+viewport, écran, langue, timezone ;
+permissions, fonts, WebGL, canvas et caractéristiques Chromium ;
+même proxy et même IP Decodo ;
+continuité du profil entre les scans.
+Ce que fait actuellement le projet
+Le flux actuel :
+
+démarre Playwright ;
+résout Cloudflare ;
+extrait allCookies ;
+ferme le navigateur ;
+effectue les scans suivants avec impit.
+Donc seul l’état cookie est conservé. Le profil Chromium complet est perdu lorsque le navigateur est fermé. C’est la raison pour laquelle cette architecture est moins fidèle qu’un vrai navigateur persistant.
+
+Architecture correcte
+Je recommande :
+
+Un processus Chromium persistant
+        │
+        ├── profil CF principal
+        │     ├── cookies
+        │     ├── localStorage
+        │     ├── cache
+        │     └── état JavaScript
+        │
+        ├── contexte dossier A
+        │     └── PHPSESSID_A
+        │
+        ├── contexte dossier B
+        │     └── PHPSESSID_B
+        │
+        └── même proxy Decodo / même IP
+
+Le profil CF serait résolu une seule fois et conservé sur disque. Pour chaque dossier, on créerait ensuite un contexte isolé avec :
+
+le même état CF ;
+le même proxy ;
+un PHPSESSID propre ;
+un stockage applicatif séparé.
+Ainsi, on conserve la continuité Cloudflare tout en évitant le conflit Bookitit entre les dossiers.
+
+Limite de l’approche HTTP-only
+Même avec tous les cookies copiés, impit ne reproduira pas exactement :
+
+l’exécution JavaScript ;
+le fingerprint TLS/HTTP2 exact de Chromium ;
+WebGL/canvas ;
+les service workers ;
+les signaux comportementaux ;
+le cache interne Chromium.
+Pour reproduire réellement l’intégralité du profil, il faut donc garder les scans dans Chromium persistant. Le coût sera plus élevé en RAM et probablement en trafic, mais le comportement sera beaucoup plus proche du navigateur réel.
+
+Le bon compromis serait de conserver deux modes :
+
+SPAIN_SESSION_MODE=persistent-browser
+
+pour le mode fidèle avec Chromium persistant, et le mode HTTP actuel comme fallback économique.
+
+
+Worked for 19 seconds
+alors puppeter comme le fais cev?
+
+8 minutes ago
+Oui. La bonne approche est d’utiliser Puppeteer comme dans le flux CEV : un navigateur Chromium persistant derrière le même proxy Decodo, avec un profil conservé, puis une session Bookitit isolée par dossier. Je vais comparer le gestionnaire de profil CEV au solveur Espagne actuel pour reprendre le même modèle sans casser l’isolation des PHPSESSID.
+
+
+5 actions
+Oui, je vais passer le bootstrap Espagne sur Puppeteer comme le CEV, avec un profil Chromium persistant. Je vais conserver le proxy Decodo, réutiliser ce profil entre les scans et créer un contexte isolé par dossier pour garder un PHPSESSID distinct. Je vérifie d’abord les APIs Puppeteer déjà utilisées dans ce dépôt afin de rester compatible avec sa version actuelle.
+
+
+9 actions
+Oui. Je vais l’implémenter dans le service Espagne avec Puppeteer, sur le même principe que CEV, mais avec une différence indispensable : le profil Chromium partagé gardera l’état Cloudflare, tandis que chaque dossier aura son propre contexte/cookie PHPSESSID. Le scan et le booking resteront séquentiels pour éviter qu’un dossier ne réutilise la session applicative d’un autre.
+
+
+4 actions
+You've reached your daily free quota limit. It will reset at 12:00 AM

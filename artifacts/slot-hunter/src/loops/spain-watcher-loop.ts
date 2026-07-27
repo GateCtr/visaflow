@@ -19,6 +19,11 @@ import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherSca
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
+import {
+  ensureSpainPersistentBrowserSession,
+  isSpainPersistentBrowserSessionExpiringSoon,
+  getActiveSpainPersistentBrowserSession,
+} from "../spain-persistent-browser.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
 import { executeHttpBooking, extractServicesFromHtml, type SpainBookingConfig } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
@@ -31,6 +36,35 @@ const SPAIN_HTTP_SCAN_INTERVAL_SEC = (() => {
   if (!Number.isFinite(configured) || configured < 10) return 60;
   return Math.round(configured);
 })();
+
+// ─── Mode persistent-browser ──────────────────────────────────────────────────
+// SPAIN_SESSION_MODE=persistent-browser → Chromium persistant + profil disque
+//   Avantages : vrai fingerprint TLS/HTTP2, localStorage/cache conservés,
+//               pas de coût CapSolver pour résoudre CF
+//   Prérequis : DECODO_PROXY_URL (ou SOAX_PROXY_URL)
+// Toutes les autres valeurs → comportement HTTP-only existant (capsolver / playwright)
+const SPAIN_PERSISTENT_BROWSER = process.env.SPAIN_SESSION_MODE === "persistent-browser";
+
+/** Abstraction de isSpainCfSessionExpiringSoon selon le mode actif. */
+function isActiveSessionExpiringSoon(): boolean {
+  return SPAIN_PERSISTENT_BROWSER
+    ? isSpainPersistentBrowserSessionExpiringSoon()
+    : isSpainCfSessionExpiringSoon();
+}
+
+/** Abstraction de ensureSpainCfSession selon le mode actif. */
+async function ensureActiveSession(portalUrl: string) {
+  return SPAIN_PERSISTENT_BROWSER
+    ? ensureSpainPersistentBrowserSession(portalUrl)
+    : ensureSpainCfSession(portalUrl);
+}
+
+/** Abstraction de getActiveSpainCfSession selon le mode actif. */
+function getActiveSession() {
+  return SPAIN_PERSISTENT_BROWSER
+    ? getActiveSpainPersistentBrowserSession()
+    : getActiveSpainCfSession();
+}
 
 // ─── Types internes ──────────────────────────────────────────────────────────
 
@@ -164,7 +198,8 @@ function getDateWindowReason(slotDate: string, dossier: SpainDossier): string {
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 
 export async function startSpainWatcherLoop(): Promise<void> {
-  log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright"}, auto-booking: Convex dossiers)`);
+  const modeLabel = SPAIN_PERSISTENT_BROWSER ? "persistent-browser 🌐" : (SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright");
+  log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${modeLabel}, auto-booking: Convex dossiers)`);
   if (SPAIN_HTTP_MODE) {
     const decodoConfigured = Boolean(process.env.DECODO_PROXY_URL);
     const soaxConfigured = Boolean(process.env.SOAX_PROXY_URL);
@@ -176,8 +211,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
     );
   }
 
-  // En mode HTTP : initialiser Redis + restaurer l'état SOAX avant le pre-warm
-  if (SPAIN_HTTP_MODE) {
+  // En mode HTTP ou persistent-browser : initialiser Redis avant le pre-warm
+  if (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) {
     // 1. Connecter Redis (persistence CF session + SOAX rotation)
     const redisOk = await initSpainRedis().catch((e) => {
       log("WARN", `[SPAIN-WATCHER] Redis init échoué (non-fatal): ${e}`);
@@ -187,10 +222,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
       log("INFO", "[SPAIN-WATCHER] ✅ Redis Spain connecté — session CF persistée entre redéploiements");
     }
 
-    // 2. Restaurer le rotation count SOAX (évite collisions session ID)
-    await restoreSpainSoaxStateFromRedis().catch((e) => {
-      log("WARN", `[SPAIN-WATCHER] Restauration SOAX rotation échouée (non-fatal): ${e}`);
-    });
+    // 2. Restaurer le rotation count SOAX (seulement en mode HTTP-only, pas persistent-browser)
+    if (SPAIN_HTTP_MODE && !SPAIN_PERSISTENT_BROWSER) {
+      await restoreSpainSoaxStateFromRedis().catch((e) => {
+        log("WARN", `[SPAIN-WATCHER] Restauration SOAX rotation échouée (non-fatal): ${e}`);
+      });
+    }
 
     // 3. Pre-warm la session CF uniquement si un dossier Espagne peut réellement
     // déclencher un booking. Sans ce garde-fou, un watcher actif mais sans dossier
@@ -202,8 +239,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
     if (!preWarmConfig?.isActive || preWarmDossiers.length === 0) {
       log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — aucun dossier Espagne actif avec identifiants");
     } else {
-      log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) (proxy Espagne + CapSolver)…`);
-      const session = await ensureSpainCfSession(preWarmConfig.portalUrl).catch((e) => {
+      const preWarmLabel = SPAIN_PERSISTENT_BROWSER ? "Chromium persistant" : "proxy Espagne + CapSolver";
+      log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) (${preWarmLabel})…`);
+      const session = await ensureActiveSession(preWarmConfig.portalUrl).catch((e) => {
         log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
         return null;
       });
@@ -240,28 +278,30 @@ export async function startSpainWatcherLoop(): Promise<void> {
       // Minimum 30s en HTTP (protège contre une valeur trop basse dans Convex).
       const configuredHttpIntervalSec = config.intervalSec
         ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
-      const intervalMs = SPAIN_HTTP_MODE
+      const intervalMs = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
         ? Math.max(30, configuredHttpIntervalSec) * 1000
         : (config.intervalMin ?? 3) * 60_000;
-      const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
-      log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
+      const cycleModeLabel = SPAIN_PERSISTENT_BROWSER ? "PB" : (SPAIN_HTTP_MODE ? "HTTP" : "PW");
+      log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
 
-      // Proactive re-solve si le cookie CF expire bientôt (mode HTTP)
-      if (SPAIN_HTTP_MODE && isSpainCfSessionExpiringSoon()) {
+      // Proactive re-solve si le cookie CF expire bientôt
+      if ((SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) && isActiveSessionExpiringSoon()) {
         log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif");
-        await ensureSpainCfSession(config.portalUrl).catch((e) => {
+        await ensureActiveSession(config.portalUrl).catch((e) => {
           log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
         });
       }
 
       // Exécuter le probe selon le mode
-      const result = SPAIN_HTTP_MODE
+      // persistent-browser utilise le même probe HTTP que SPAIN_HTTP_MODE
+      // (la session CF vient du Chromium persistant mais les scans restent HTTP-only)
+      const result = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
         ? await runSpainHttpProbe(config.portalUrl)
         : await runSpainWatcherProbe(config.portalUrl);
 
       log(
         "INFO",
-        `[SPAIN-WATCHER] [${modeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
+        `[SPAIN-WATCHER] [${cycleModeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
       // ─── DIAGNOSTIC: quand found, toujours extraire et logger les services ──
@@ -269,7 +309,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
       let detectedServicesJson: string | undefined;
       let detectedSlotsJson: string | undefined;
       if (
-        SPAIN_HTTP_MODE &&
+        (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) &&
         result.status === "found" &&
         (result as any)._mainHtml
       ) {
@@ -285,7 +325,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
           }
 
           // ─── EXPLORATION: naviguer les dates/heures exactes pour chaque service ──
-          const cfSessionExplore = getActiveSpainCfSession();
+          const cfSessionExplore = getActiveSession();
           if (cfSessionExplore) {
             try {
               const exploration = await exploreAvailableSlots(cfSessionExplore, config.portalUrl, diagServices);
@@ -317,7 +357,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
           }
         }
 
-        const cfSession = getActiveSpainCfSession();
+        const cfSession = getActiveSession();
 
         if (!cfSession) {
           log("WARN", "[SPAIN-WATCHER] ❌ Auto-booking impossible — pas de session CF active");

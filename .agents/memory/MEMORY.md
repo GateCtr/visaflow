@@ -17,3 +17,4 @@
 - [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
 - [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.
 - [Spain challenge traffic budget](spain-challenge-traffic-budget.md) — never pre-warm or probe Cloudflare when no active Spain dossier can book; reuse Redis CF sessions until expiry.
+- [Spain persistent-browser mode](spain-persistent-browser.md) — SPAIN_SESSION_MODE=persistent-browser uses a long-lived Puppeteer Chromium (userDataDir) instead of CapSolver for CF; scans stay HTTP-only.
