@@ -1,0 +1,56 @@
+Je vais corriger les écarts de protocole réellement maîtrisables — ordre des étapes, cookies, headers, réponses des POST, synchronisation de session et diagnostic — sans fabriquer de télémétrie Cloudflare ni tenter de contourner ses contrôles. Pour le jsd/oneshot, la correction sûre est d’utiliser le navigateur Playwright déjà présent pour obtenir la session, puis de réutiliser cette session via le même proxy pour les appels HTTP.
+
+
+8 actions
+Je vais maintenant modifier le flux pour que le mode HTTP ne prétende plus reproduire les signaux générés par Cloudflare. La session sera établie par Playwright quand l’option navigateur est activée, avec les cookies et l’User-Agent réellement capturés, puis réutilisée par impit sur le même proxy. Je vais aussi corriger les points observables : lecture des réponses POST, cohérence des cookies après Set-Cookie, ordre des étapes et suppression des appels JSD/RUM synthétiques.
+
+
+7 actions
+La première correction est en place : en mode HTTP, le fallback CapSolver approximatif est désormais refusé par défaut et la session doit venir d’un vrai contexte navigateur, avec le même proxy. Je complète maintenant le flux navigateur et retire les faux appels RUM/JSD qui ne peuvent pas reproduire les corps Cloudflare authentiques.
+
+
+2 actions
+Je poursuis avec une vérification ciblée : compilation TypeScript, cohérence du nouveau mode de session, puis suppression des approximations Cloudflare dans le scanner HTTP. Je vais conserver les appels Bookitit nécessaires, mais le scanner ne déclenchera plus de faux RUM ni de faux JSD avec un corps qui n’est pas celui du navigateur.
+
+
+4 actions
+La compilation a été bloquée uniquement parce que les dépendances de slot-hunter ne sont pas installées dans ce workspace (tsc: command not found), pas par une erreur TypeScript observée. J’ai aussi identifié deux corrections supplémentaires nécessaires avant de valider : ne pas réécrire les cookies GA capturés par Playwright avec un profil synthétique, et ne pas rejouer un second POST widget qui n’apparaît pas dans les captures fournies.
+
+
+Edited spain-redis-persistence.ts
+Le patch intermédiaire n’a appliqué que l’ajout de type dans la persistance ; la modification principale a été refusée car le contexte avait changé. Je reprends proprement les écarts restants : conservation exacte des cookies Playwright, refus des sessions Redis sans origine navigateur en mode strict, désactivation du chemin « Decodo direct » dans ce mode, puis suppression du faux JSD/RUM et du second POST non présent dans la capture.
+
+
+3 actions
+Je corrige les derniers écarts sans ajouter de faux signaux : les cookies du vrai navigateur ne seront plus réécrits, les anciennes sessions Redis sans provenance navigateur seront rejetées en mode strict, et le chemin Decodo direct ne sera plus utilisé avant le bootstrap Playwright. Ensuite je retire le faux JSD/RUM du scanner HTTP ; le JSD authentique doit déjà avoir été exécuté par Playwright.
+
+
+2 actions
+Je supprime maintenant les références restantes aux faux beacons et au faux JSD, puis je remplace le second POST par une validation de la réponse du premier POST. Le flux HTTP gardera uniquement les requêtes applicatives observées (GET portail → POST token → JSONP Bookitit) et s’appuiera sur l’état Cloudflare authentique fourni par Playwright.
+
+
+2 actions
+Les écarts principaux sont maintenant corrigés. Je fais une passe de contrôle avant validation : rechercher les références restantes aux faux appels Cloudflare, vérifier que les sessions sérialisées restent compatibles, puis contrôler le diff et la compilation avec les dépendances effectivement disponibles dans le dépôt.
+
+
+4 actions
+Les changements sont cohérents et le diff ne présente pas d’erreur d’espacement. Il reste à valider l’exécution réelle : installer/réutiliser les dépendances locales si possible, redémarrer le workflow Slot Hunter, puis vérifier que le démarrage refuse bien les anciennes sessions non navigateur et ne génère plus de faux appels Cloudflare.
+
+
+4 actions
+J’ai trouvé un écart restant avant le redémarrage : même après une session Playwright, le scanner reconstruisait encore les cookies _ga de façon synthétique et ne conservait pas systématiquement toute la jar du navigateur. Je corrige cela maintenant, puis je relance le contrôle TypeScript et le workflow pour vérifier le comportement au démarrage.
+
+
+2 actions
+Il reste une vérification technique avant de redémarrer : le code doit être compilé avec les dépendances du service, qui ne sont pas présentes dans l’état local actuel. Je lance cette installation via le gestionnaire du projet, puis je corrige toute erreur de typage éventuelle avant de démarrer le workflow.
+
+
+3 actions
+L’installation a échoué parce que l’outil a ciblé la racine du monorepo au lieu de artifacts/slot-hunter; aucun fichier de dépendances n’a été modifié. Je relance l’installation dans le répertoire du service avec le lockfile existant, puis je compile et redémarre uniquement le workflow Slot Hunter.
+
+
+2 actions
+Les dépendances du service sont maintenant installées avec son lockfile. Je lance la compilation, nettoie les commentaires devenus obsolètes, puis je redémarre le workflow Slot Hunter pour vérifier le démarrage réel et les logs de session.
+
+
+3 actions
