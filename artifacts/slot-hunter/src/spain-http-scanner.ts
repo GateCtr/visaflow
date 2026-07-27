@@ -67,107 +67,6 @@ interface BookititConfig {
   extractedAt: number;
 }
 
-// ─── CF RUM Beacon ──────────────────────────────────────────────────────────
-//
-// Cloudflare injecte un script __cfBeacon dans chaque page protégée.
-// Ce script fire un POST /cdn-cgi/rum? avec des métriques de performance.
-// Si CF détecte qu'un client charge ses pages mais ne fire JAMAIS ce beacon,
-// c'est un signal fort que JavaScript ne s'exécute pas → bot HTTP.
-//
-// Pattern observé dans Burp (citaconsular.es, Chrome 146) :
-//   #20  POST /cdn-cgi/rum?  → ~3.6s après widget render   (beacon page principale)
-//   #24  POST /cdn-cgi/rum?  → ~4.3s après widget render
-//   #29  POST /cdn-cgi/rum?  → ~3ms après GET main/        ← LE PLUS CRITIQUE
-//   #109 POST /cdn-cgi/rum?  → ~578ms après getwidgetconfs/
-//   #114 POST /cdn-cgi/rum?  → ~6.7s après main/           (navigation beacon)
-
-function buildRumBody(pageUrl: string, rayId: string, transferSize: number): string {
-  // Valeurs performance.timing réalistes — générées avec jitter naturel
-  const tDns   = 4 + Math.floor(Math.random() * 8);           // 4-12ms DNS lookup
-  const tConn  = tDns + 40 + Math.floor(Math.random() * 60);  // 44-72ms TCP connect
-  const tTLS   = tConn - tDns + 110 + Math.floor(Math.random() * 40); // 150-190ms TLS
-  const tReq   = tConn + 8 + Math.floor(Math.random() * 12);  // 8-20ms request
-  const tFb    = tReq + 80 + Math.floor(Math.random() * 120); // 80-200ms first byte
-  const tTotal = tFb + 20 + Math.floor(Math.random() * 60);   // 20-80ms body transfer
-
-  const body = {
-    v: "1",
-    sv: "1",
-    r: rayId,
-    t: {
-      connectEnd: tConn,
-      connectStart: tDns,
-      domainLookupEnd: tDns,
-      domainLookupStart: 2,
-      fetchStart: 0,
-      requestStart: tReq,
-      responseEnd: tTotal,
-      responseStart: tFb,
-      secureConnectionStart: tDns + 2,
-      startTime: 0,
-    },
-    b: {
-      n: "",
-      sn: "",
-      t: pageUrl,
-      a: "",
-      s: 0,
-      cf: {
-        sTLS: tDns + 2,
-        tLS: tTLS,
-        tConnect: tConn,
-        tFirstByte: tFb,
-        tTotal,
-      },
-    },
-    meta: {
-      startTime: Date.now() - tTotal,
-      duration: tTotal,
-      transferSize,
-    },
-  };
-
-  return JSON.stringify(body);
-}
-
-/**
- * Fire CF RUM beacon en fire-and-forget.
- * Doit être appelé après chaque chargement de page/ressource citaconsular,
- * avec un délai optionnel qui simule le temps de traitement JS.
- *
- * @param cookieStr - Cookie header complet (Burp: _ga; _ga_F3; PHPSESSID; cf_clearance).
- *                    Si absent → spainCfFetch construit un cookie minimal (cf_clearance uniquement).
- */
-function fireRumBeacon(
-  session: SpainCfSession,
-  pageUrl: string,
-  opts: { delayMs?: number; rayId?: string; transferSize?: number; cookieStr?: string } = {}
-): void {
-  void (async () => {
-    if (opts.delayMs && opts.delayMs > 0) {
-      await new Promise<void>((r) => setTimeout(r, opts.delayMs));
-    }
-    const rayId = opts.rayId ?? Math.random().toString(36).slice(2, 18);
-    const body = buildRumBody(pageUrl, rayId, opts.transferSize ?? 3000);
-    const rumHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-      "Referer": pageUrl,
-      "Origin": "https://www.citaconsular.es",
-      "Accept-Language": "fr-FR,fr;q=0.9",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-      "Priority": "u=1, i",
-    };
-    if (opts.cookieStr) rumHeaders["Cookie"] = opts.cookieStr;
-    await spainCfFetch("https://www.citaconsular.es/cdn-cgi/rum?", session, {
-      method: "POST",
-      headers: rumHeaders,
-      body,
-    }).catch(() => null); // Silently ignore errors — beacon best-effort
-  })();
-}
-
 // ─── Bookitit Config Cache ──────────────────────────────────────────────────
 
 /** TTL de la config Bookitit (30min — aligné sur PHPSESSID). */
@@ -814,37 +713,36 @@ async function scanViaMainEndpoint(
 ): Promise<SpainHttpScanResult | null> {
   const t0 = Date.now();
 
-  // ─── GA cookies ────────────────────────────────────────────────────────
-  // Priorité 1 : GA cookies capturés par le vrai navigateur Playwright (GTM a tourné
-  //   dans le browser, Google Analytics a set les cookies → valeurs légitimes connues de GA).
-  // Priorité 2 : Génération synthétique (fallback si session CapSolver sans Playwright).
-  //
-  // POURQUOI c'est important : CF Analytics corrèle les valeurs _ga avec ses propres logs.
-  // Une valeur _ga aléatoire à chaque scan = "visiteur" jamais vu → signal bot potentiel.
-  // Une valeur _ga stable (réutilisée sur toute la durée de la sticky session) = profil cohérent.
-  const sessionGa    = session.allCookies.find((c) => c.name === "_ga")?.value;
-  const sessionGaF3  = session.allCookies.find((c) => c.name === "_ga_F3TYSDL945")?.value;
-
-  let gaCookies: string[];
-  if (sessionGa && sessionGaF3) {
-    // Cas Playwright : valeurs réelles capturées par GTM dans le navigateur
-    gaCookies = [`_ga=${sessionGa}`, `_ga_F3TYSDL945=${sessionGaF3}`];
-    console.log(`[spain-http] 🍪 GA réutilisé depuis session Playwright: ${sessionGa.slice(0, 20)}…`);
-  } else {
-    // Cas CapSolver : génération synthétique stable pour toute la session
-    // On seed le random sur session.createdAt pour garder les mêmes valeurs d'un scan à l'autre
-    // (même sticky session → même "profil" GA vu par CF)
-    const seedBase = session.createdAt;
-    const gaClientRnd = String(100_000_000 + (seedBase % 900_000_000));
-    const gaClientTs  = String(Math.floor(seedBase / 1000) - 15 * 24 * 3600); // "visiteur depuis 15j"
-    const gaSessionTs = String(Math.floor(session.createdAt / 1000));
-    gaCookies = [
-      `_ga=GA1.1.${gaClientRnd}.${gaClientTs}`,
-      `_ga_F3TYSDL945=GS2.1.s${gaSessionTs}$o1$g0$t${gaSessionTs}$j60$l0$h0`,
-    ];
+  // Preserve the browser cookie jar when the session came from Playwright.
+  // Never replace real browser cookies with generated Analytics values.
+  const browserCookies = session.allCookies.filter((c) => c.name !== "cf_clearance");
+  const sessionGa = browserCookies.find((c) => c.name === "_ga")?.value;
+  if (session.source === "playwright") {
+    console.log(
+      `[spain-http] 🍪 Jar navigateur réutilisée: ${browserCookies.length} cookies` +
+      `${sessionGa ? ` | _ga=${sessionGa.slice(0, 20)}…` : ""}`,
+    );
   }
 
-  // Current cf_clearance (may be updated after JSD oneshot)
+  // CapSolver compatibility mode is explicitly opt-in. Its session has no
+  // browser jar, so keep a stable fallback profile rather than changing values
+  // on every request.
+  if (session.source !== "playwright" && !browserCookies.some((c) => c.name === "_ga")) {
+    const seedBase = session.createdAt;
+    browserCookies.push({
+      name: "_ga",
+      value: `GA1.1.${100_000_000 + (seedBase % 900_000_000)}.${Math.floor(seedBase / 1000) - 15 * 24 * 3600}`,
+    });
+  }
+  if (session.source !== "playwright" && !browserCookies.some((c) => c.name === "_ga_F3TYSDL945")) {
+    const sessionTs = String(Math.floor(session.createdAt / 1000));
+    browserCookies.push({
+      name: "_ga_F3TYSDL945",
+      value: `GS2.1.s${sessionTs}$o1$g0$t${sessionTs}$j60$l0$h0`,
+    });
+  }
+
+  // Current cf_clearance (may be updated by a browser-established session).
   let activeCfClearance = session.cfClearance;
 
   // PHPSESSID : pré-initialisé depuis session.allCookies si la session a été établie
@@ -860,14 +758,24 @@ async function scanViaMainEndpoint(
   }
 
   /**
-   * Builds the full Cookie header string matching Burp order:
-   *   _ga; _ga_F3TYSDL945; [PHPSESSID;] cf_clearance
-   * Overrides the Cookie built by spainCfFetch so ALL cookies are present.
+   * Keep the browser cookie jar and place cf_clearance last, matching the
+   * observed request order while retaining any other site cookies.
    */
   function buildCookieStr(): string {
-    const parts = [...gaCookies];
-    if (phpSessId) parts.push(`PHPSESSID=${phpSessId}`);
-    parts.push(`cf_clearance=${activeCfClearance}`);
+    const preferredNames = ["_ga", "_ga_F3TYSDL945", "PHPSESSID"];
+    const parts: string[] = [];
+    for (const name of preferredNames) {
+      const value = name === "PHPSESSID"
+        ? phpSessId
+        : browserCookies.find((c) => c.name === name)?.value;
+      if (value) parts.push(`${name}=${value}`);
+    }
+    for (const cookie of browserCookies) {
+      if (!preferredNames.includes(cookie.name)) {
+        parts.push(`${cookie.name}=${cookie.value}`);
+      }
+    }
+    if (activeCfClearance) parts.push(`cf_clearance=${activeCfClearance}`);
     return parts.join("; ");
   }
 
@@ -997,7 +905,9 @@ async function scanViaMainEndpoint(
     console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
   }
 
-  // Read widget HTML — needed to extract JSD oneshot URL
+  // Read the widget HTML so structural failures are visible. Cloudflare's
+  // JSD oneshot is intentionally not replayed here: its body is generated by
+  // the browser JavaScript and cannot be reconstructed safely in HTTP-only.
   const widgetHtml1 = postRes ? await postRes.text() : "";
 
   // Capture any new cf_clearance set by first POST widget response
@@ -1009,107 +919,17 @@ async function scanViaMainEndpoint(
     }
   }
 
-  // ─── Step 3: JSD Oneshot (Burp row 22) ───────────────────────────────
-  //
-  // Cloudflare injecte un script dans le HTML du widget qui fire automatiquement
-  // POST /cdn-cgi/challenge-platform/h/b/jsd/oneshot/<siteKey>/<nonce>/<rayId>
-  // Ce call renouvelle le cf_clearance. Le nonce + rayId sont extraits du HTML.
-  //
-  // URL pattern : /cdn-cgi/challenge-platform/h/b/jsd/oneshot/<12hex>/<nonce>/<16hex>
-  // Burp: siteKey=25e6c66701a0, nonce=0.88...:ts:hash, rayId=a1139709ae5c740e
-  //
-  // Body : payload JS-calculé (telemetry CF) — on envoie le body du premier POST
-  //        CF flow qui était dans notre session (meilleure approximation HTTP-only).
-  //        Si CF rejette → on conserve l'ancien cf_clearance sans bloquer le scan.
-  //
-  const jsdOneshotMatch = widgetHtml1.match(
-    /\/cdn-cgi\/challenge-platform\/h\/b\/jsd\/oneshot\/([a-f0-9]{10,14})\/([^'"<\s]{10,})\/([a-f0-9]{14,18})/
+  const widgetTitle = widgetHtml1.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+  console.log(
+    `[spain-http] 📄 POST widget → HTTP ${postRes?.status ?? "no response"} | ` +
+    `bytes=${widgetHtml1.length} | title="${widgetTitle.slice(0, 100)}"`,
   );
-
-  if (jsdOneshotMatch) {
-    const jsdUrl = `https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/jsd/oneshot/${jsdOneshotMatch[1]}/${jsdOneshotMatch[2]}/${jsdOneshotMatch[3]}`;
-    console.log(`[spain-http] 🔐 JSD Oneshot détecté — fire: .../${jsdOneshotMatch[1]}/.../${jsdOneshotMatch[3]}`);
-
-    try {
-      const jsdRes = await spainCfFetch(jsdUrl, session, {
-        method: "POST",
-        headers: {
-          "Cookie": buildCookieStr(),
-          "Content-Type": "text/plain;charset=UTF-8",
-          "Accept": "*/*",
-          "Accept-Language": "fr-FR,fr;q=0.9",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Origin": "https://www.citaconsular.es",
-          "Sec-Fetch-Site": "same-origin",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Dest": "empty",
-          "Priority": "u=1, i",
-        },
-        body: tokenMatch[1],
-      });
-
-      if (jsdRes) {
-        for (const sc of (jsdRes.headers?.getSetCookie?.() ?? [])) {
-          const nv = sc.split(";")[0] ?? "";
-          if (nv.startsWith("cf_clearance=")) {
-            activeCfClearance = nv.slice("cf_clearance=".length);
-            console.log(`[spain-http] ✅ JSD Oneshot → nouveau cf_clearance obtenu`);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(`[spain-http] ⚠️ JSD Oneshot échoué (non-fatal): ${err instanceof Error ? err.message : err}`);
-    }
-  } else {
-    console.log(`[spain-http] ℹ️ JSD Oneshot URL non trouvé dans widget HTML — on continue avec cf_clearance existant`);
+  if (!postRes || !postRes.ok || widgetHtml1.length === 0) {
+    console.warn("[spain-http] ⚠️ POST widget sans réponse HTML exploitable");
+    return null;
   }
 
-  // ─── Step 4: RUM beacon #21 (Burp: ~5s après POST widget row 15) ─────
-  fireRumBeacon(session, widgetReferer, { delayMs: 4800 + Math.floor(Math.random() * 400), transferSize: 1226, cookieStr: buildCookieStr() });
-
-  // ─── Step 5: Second widget POST (Burp row 23) ──────────────────────
-  // Après le JSD oneshot, le navigateur refait un POST widget avec le nouveau cf_clearance.
-  // C'est ce second POST qui précède immédiatement les appels JSONP.
-  const postRes2 = await spainCfFetch(widgetReferer, session, {
-    method: "POST",
-    headers: {
-      "Cookie": buildCookieStr(),
-      "Cache-Control": "max-age=0",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Language": "fr-FR,fr;q=0.9",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Origin": "https://www.citaconsular.es",
-      "Referer": widgetReferer,
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-      "Priority": "u=0, i",
-    },
-    body: `token=${encodeURIComponent(tokenMatch[1])}`,
-  });
-
-  if (postRes2 && postRes2.status !== 200) {
-    console.warn(`[spain-http] ⚠️ Second POST widget status ${postRes2.status}`);
-  }
-
-  // Capture any updated cf_clearance from second POST
-  for (const sc of (postRes2?.headers?.getSetCookie?.() ?? [])) {
-    const nv = sc.split(";")[0] ?? "";
-    if (nv.startsWith("cf_clearance=")) {
-      activeCfClearance = nv.slice("cf_clearance=".length);
-      console.log(`[spain-http] 🔑 cf_clearance mis à jour depuis second POST widget`);
-    }
-  }
-  // Consume body
-  if (postRes2) await postRes2.text().catch(() => null);
-
-  // ─── Step 6: RUM beacon #24 (Burp: ~402ms après second POST widget) ──
-  fireRumBeacon(session, widgetReferer, { delayMs: 380 + Math.floor(Math.random() * 50), transferSize: 1335, cookieStr: buildCookieStr() });
-
-  // ─── Step 7: JSONP calls (Burp rows 26, 103, 107) ────────────────────
+  // ─── Step 3: JSONP calls (Bookitit) ─────────────────────────────────
   // Le vrai navigateur fire main/ puis getwidgetconfigurations/ + getservices/ ~3s plus tard
   // (via GTM callback). même cbName jQuery, _ incrémenté de 1ms par endpoint.
   const tWidget = Date.now();
@@ -1178,13 +998,9 @@ async function scanViaMainEndpoint(
   // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
   const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
 
-  // RUM #28 — beacon critique : 3ms après GET main/ (Burp: row 26 → 28)
-  // C'est le beacon le plus fort : CF sait que le JS a traité la réponse main/ en temps réel
-  fireRumBeacon(session, referer, { delayMs: 3 + Math.floor(Math.random() * 8), transferSize: 124917, cookieStr: buildCookieStr() });
-
-  // Fire companions ~3s après main/ + RUM #111 après les companions — fire-and-forget
+  // Fire companions after the main response. These are application JSONP
+  // calls; no synthetic Cloudflare telemetry is generated.
   void (async () => {
-    const cookieForCompanions = buildCookieStr();
     await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
     const tNow = Date.now();
     const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
@@ -1193,11 +1009,6 @@ async function scanViaMainEndpoint(
       spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
       spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
     ]);
-    // RUM #111 — beacon après getwidgetconfigurations/ (~578ms dans Burp)
-    fireRumBeacon(session, referer, { delayMs: 500 + Math.floor(Math.random() * 150), transferSize: 1170, cookieStr: cookieForCompanions });
-    // RUM final — beacon de navigation/unload (~3.1s après #111 dans Burp)
-    // Déclenché par le widget qui finalise son chargement complet (DOMInteractive → fully loaded)
-    fireRumBeacon(session, referer, { delayMs: 3000 + Math.floor(Math.random() * 200), transferSize: 680, cookieStr: cookieForCompanions });
   })();
 
   const mainStatus = mainRes?.status ?? null;

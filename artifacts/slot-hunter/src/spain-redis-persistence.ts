@@ -48,6 +48,7 @@ export interface SerializableSpainCfSession {
   expiresAt: number;
   allCookies: Array<{ name: string; value: string }>;
   extraHeaders: Record<string, string>;
+  source?: "playwright" | "capsolver" | "direct";
 }
 
 export interface SerializableSoaxRotation {

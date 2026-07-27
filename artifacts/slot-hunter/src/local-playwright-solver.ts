@@ -203,9 +203,11 @@ export async function solveSpainWidgetSession(
     }
   }
 
-  // Sur Railway/CI (pas de display X11) on force headless:true avec le nouveau moteur.
-  // En local (DISPLAY ou REPLIT_DEV_DOMAIN absent) on reste visible pour débogage.
-  const isHeadlessEnv = !!(process.env.RAILWAY_ENVIRONMENT || process.env.CI);
+  // Les workers Replit/Railway n'ont généralement pas de display X11.
+  // Utiliser headless dans ce cas évite un échec de lancement, sans modifier
+  // le contexte navigateur ni les requêtes exécutées par le site.
+  const isHeadlessEnv =
+    !!(process.env.RAILWAY_ENVIRONMENT || process.env.CI) || !process.env.DISPLAY;
 
   const browser = await chromiumStealth.launch({
     headless: isHeadlessEnv,
@@ -305,6 +307,20 @@ export async function solveSpainWidgetSession(
       throw new Error("cf_clearance #1 non obtenu — CF Turnstile non résolu");
     }
     console.log(`[PLAYWRIGHT-WIDGET] 🍪 cf_clearance #1: ${cfClearance.value.slice(0, 20)}…`);
+
+    // Le portail réel utilise un formulaire POST avec le token caché. Le
+    // soumettre dans le navigateur permet au site et à Cloudflare d'exécuter
+    // leur séquence native; il ne faut pas reconstruire ce POST à la main.
+    const tokenInput = page.locator('input[name="token"]').first();
+    if (await tokenInput.count()) {
+      const form = tokenInput.locator("xpath=ancestor::form[1]");
+      console.log("[PLAYWRIGHT-WIDGET] 🔘 Soumission native du formulaire token…");
+      await form.evaluate((node: any) => node.submit());
+      await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
+      await new Promise<void>((r) => setTimeout(r, 2_000));
+    } else {
+      console.log("[PLAYWRIGHT-WIDGET] ℹ️ Formulaire token absent — page déjà sur le widget.");
+    }
 
     // ─── Phase 2 : Attente JSD Oneshot (JS CF tournant dans le navigateur) ──
     // Le widget HTML est chargé, CF's JS s'exécute et déclenche JSD Oneshot ~3-8s après.

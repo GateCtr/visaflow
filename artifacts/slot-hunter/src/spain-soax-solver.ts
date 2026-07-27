@@ -56,6 +56,10 @@ function httpModeRequiresProxy(): boolean {
   return process.env.SPAIN_HTTP_MODE === "1";
 }
 
+function browserSessionRequired(): boolean {
+  return httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE !== "capsolver";
+}
+
 function hasCompatibleProxy(sessionProxyUrl: string, configuredProxyUrl: string | undefined): boolean {
   if (!sessionProxyUrl) return false;
 
@@ -100,6 +104,8 @@ export interface SpainCfSession {
   allCookies: Array<{ name: string; value: string }>;
   /** Headers supplémentaires recommandés */
   extraHeaders: Record<string, string>;
+  /** How the session was established. Browser sessions contain real CF state. */
+  source?: "playwright" | "capsolver" | "direct";
 }
 
 export interface SolveResult {
@@ -444,13 +450,19 @@ export async function ensureSpainCfSession(
 
   // Session active et valide en mémoire ?
   const existing = getActiveSpainCfSession();
-  if (existing && (!httpModeRequiresProxy() || hasCompatibleProxy(existing.soaxProxyUrl, configuredProxyUrl))) {
+  if (
+    existing &&
+    (!httpModeRequiresProxy() || hasCompatibleProxy(existing.soaxProxyUrl, configuredProxyUrl)) &&
+    (!browserSessionRequired() || existing.source === "playwright")
+  ) {
     const remainMin = Math.round((_activeCfSession!.expiresAt - Date.now()) / 60_000);
     console.log(`[spain-soax] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
     return existing;
   }
   if (existing && httpModeRequiresProxy()) {
-    console.warn("[spain-soax] ⚠️ Session mémoire ignorée: proxy absent ou incompatible avec le proxy configuré");
+    console.warn(
+      "[spain-soax] ⚠️ Session mémoire ignorée: proxy incompatible ou session non établie par navigateur",
+    );
     _activeCfSession = undefined;
   }
 
@@ -497,8 +509,15 @@ export async function ensureSpainCfSession(
     return session;
   }
 
-  // 2. Tenter de résoudre via Local Playwright Stealth (si activé dans l'environnement)
-  if (process.env.USE_LOCAL_STEALTH === "true") {
+  // HTTP-only must use a browser-established session by default. The browser is
+  // the only component that can execute Cloudflare's JavaScript and produce the
+  // real JSD/RUM state. CapSolver remains available only as an explicit
+  // compatibility fallback for deployments that knowingly accept an
+  // approximate HTTP session.
+  const browserSessionPreferred =
+    process.env.USE_LOCAL_STEALTH === "true" ||
+    (httpModeRequiresProxy() && process.env.SPAIN_HTTP_SESSION_MODE !== "capsolver");
+  if (browserSessionPreferred) {
     console.log("[spain-soax] 🔍 Mode local stealth activé — solveSpainWidgetSession (JSD Oneshot natif)…");
 
     // Proxy actif (Decodo ou SOAX sticky) — DOIT être la même IP que les appels impit
@@ -507,7 +526,10 @@ export async function ensureSpainCfSession(
     const widgetCookies = await solveSpainWidgetSession(targetUrl, soaxProxyForPlaywright);
     if (widgetCookies) {
       const pwCreatedAt = Date.now();
-      const pwAllCookies = await applyStableGaProfile(widgetCookies.allCookies, pwCreatedAt);
+      // Preserve the browser cookie jar exactly. In particular, replacing the
+      // real Analytics cookies after a browser solve would create a session
+      // that no longer matches the navigation that produced it.
+      const pwAllCookies = widgetCookies.allCookies;
       const session: SpainCfSession = {
         cfClearance: widgetCookies.cfClearance,
         cfDomain: ".citaconsular.es",
@@ -517,6 +539,7 @@ export async function ensureSpainCfSession(
         expiresAt: pwCreatedAt + CF_CLEARANCE_TTL_MS,
         allCookies: pwAllCookies,
         extraHeaders: {},
+        source: "playwright",
       };
       _activeCfSession = session;
       syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
@@ -528,7 +551,15 @@ export async function ensureSpainCfSession(
       return session;
     }
 
-    console.warn("[spain-soax] ⚠️ solveSpainWidgetSession échoué — fallback CapSolver…");
+      if (httpModeRequiresProxy() && process.env.SPAIN_HTTP_ALLOW_APPROXIMATE_SESSION !== "1") {
+      console.error(
+        "[spain-soax] ❌ Session navigateur indisponible. " +
+        "Le mode HTTP refuse le fallback CapSolver approximatif; " +
+        "définir SPAIN_HTTP_ALLOW_APPROXIMATE_SESSION=1 uniquement pour un test explicite.",
+      );
+      return null;
+    }
+    console.warn("[spain-soax] ⚠️ solveSpainWidgetSession échoué — fallback CapSolver explicite…");
     // Fallback : ancien solver simple (obtient cf_clearance #1 seulement, sans JSD Oneshot)
     const localSolved = await solveWithLocalPlaywright(targetUrl);
     if (localSolved) {
@@ -541,15 +572,18 @@ export async function ensureSpainCfSession(
   try {
     const cached = await restoreSpainCfSessionFromRedis();
     if (cached) {
-      if (httpModeRequiresProxy() && !hasCompatibleProxy(cached.soaxProxyUrl, configuredProxyUrl)) {
+      if (
+        httpModeRequiresProxy() &&
+        (!hasCompatibleProxy(cached.soaxProxyUrl, configuredProxyUrl) ||
+          (browserSessionRequired() && cached.source !== "playwright"))
+      ) {
         console.warn(
-          "[spain-soax] ⚠️ Session Redis ignorée: elle a été créée sans proxy " +
-          "ou avec un proxy différent du proxy configuré",
+          "[spain-soax] ⚠️ Session Redis ignorée: proxy incompatible ou session non établie par navigateur",
         );
         removeSpainCfSessionFromRedis();
       } else {
         // Reconstruire la session en mémoire
-        const restoredAllCookies = await applyStableGaProfile(cached.allCookies, cached.createdAt);
+        const restoredAllCookies = cached.allCookies;
         const restored: SpainCfSession = {
           cfClearance: cached.cfClearance,
           cfDomain: cached.cfDomain,
@@ -559,6 +593,7 @@ export async function ensureSpainCfSession(
           expiresAt: cached.expiresAt,
           allCookies: restoredAllCookies,
           extraHeaders: cached.extraHeaders,
+          source: cached.source,
         };
         _activeCfSession = restored;
         const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
@@ -581,7 +616,7 @@ export async function ensureSpainCfSession(
   // Si DECODO_PROXY_URL est défini, tenter un accès direct : l'IP ISP Decodo
   // peut bypasser Cloudflare sans solve. Si la page répond 200 sans challenge,
   // on crée la session directement avec le PHPSESSID obtenu (coût CapSolver = 0).
-  if (process.env.DECODO_PROXY_URL) {
+  if (process.env.DECODO_PROXY_URL && !browserSessionRequired()) {
     console.log(`[spain-soax] 🚀 Decodo ISP — tentative accès direct (bypass CF possible)…`);
     try {
       const directImpit = new Impit({
@@ -634,6 +669,7 @@ export async function ensureSpainCfSession(
           expiresAt: directExpiresAt,
           allCookies: directAllCookies,
           extraHeaders: {},
+          source: "direct",
         };
 
         _activeCfSession = directSession;
@@ -674,6 +710,7 @@ export async function ensureSpainCfSession(
         result.session.allCookies,
         result.session.createdAt,
       );
+      result.session.source = "capsolver";
       _activeCfSession = result.session;
       console.log(`[spain-soax] 🎉 Session CF établie via ${proxyLabel}! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
       console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
