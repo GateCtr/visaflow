@@ -102,6 +102,24 @@ export interface SpainCfSession {
   source?: "playwright" | "capsolver" | "direct";
 }
 
+/**
+ * Crée une copie de session pour un flux Bookitit isolé par dossier.
+ *
+ * Le cookie Cloudflare peut être partagé tant que le proxy reste identique,
+ * mais PHPSESSID est une session applicative côté Bookitit et ne doit jamais
+ * être partagé entre deux dossiers. La copie conserve donc la clearance et
+ * tous les cookies de fingerprint, tout en repartant sans PHPSESSID.
+ */
+export function cloneSpainCfSessionForDossier(session: SpainCfSession): SpainCfSession {
+  return {
+    ...session,
+    allCookies: session.allCookies
+      .filter((cookie) => cookie.name !== "PHPSESSID")
+      .map((cookie) => ({ ...cookie })),
+    extraHeaders: { ...session.extraHeaders },
+  };
+}
+
 export interface SolveResult {
   success: boolean;
   session?: SpainCfSession;

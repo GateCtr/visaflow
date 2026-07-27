@@ -15,3 +15,4 @@
 - [Spain HTTP proxy binding](spain-http-proxy-binding.md) — HTTP-only sessions must solve and scan through the same Decodo/SOAX proxy; local CF cookies have unknown origin IPs and must not be reused.
 - [Spain watcher cadence](spain-watcher-cadence.md) — HTTP scan timing is persisted in seconds and measured start-to-start; empty /main responses log HTTP/body-read diagnostics.
 - [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
+- [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.

@@ -19,7 +19,7 @@
 
 import {
   spainCfFetch,
-  getSpainImpit,
+  cloneSpainCfSessionForDossier,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
@@ -198,6 +198,120 @@ async function callBookititEndpoint(
   return parseJsonpResponse(body);
 }
 
+function buildBookingCookieHeader(session: SpainCfSession): string {
+  const preferredNames = ["_ga", "_ga_F3TYSDL945", "PHPSESSID"];
+  const parts: string[] = [];
+
+  for (const name of preferredNames) {
+    const cookie = session.allCookies.find((candidate) => candidate.name === name);
+    if (cookie) parts.push(`${cookie.name}=${cookie.value}`);
+  }
+
+  for (const cookie of session.allCookies) {
+    if (!preferredNames.includes(cookie.name) && cookie.name !== "cf_clearance") {
+      parts.push(`${cookie.name}=${cookie.value}`);
+    }
+  }
+
+  if (session.cfClearance) parts.push(`cf_clearance=${session.cfClearance}`);
+  return parts.join("; ");
+}
+
+/**
+ * Initialise une session PHP Bookitit propre pour un dossier.
+ *
+ * La clearance CF et le proxy restent ceux de la session commune, mais le
+ * PHPSESSID est supprimé de la copie avant le GET main/. Le serveur doit alors
+ * émettre un nouveau PHPSESSID, qui reste uniquement dans cette copie locale
+ * pour datetime/signin/summary.
+ */
+async function createIsolatedBookingSession(
+  cfSession: SpainCfSession,
+  portalUrl: string,
+): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
+  const session = cloneSpainCfSessionForDossier(cfSession);
+  const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+  const referer = portalUrl.replace(/\/?$/, "/");
+  const callback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+  const query = new URLSearchParams({
+    callback,
+    type: "default",
+    publickey,
+    lang: "es",
+    version: "4",
+    src: referer,
+    _: String(Date.now()),
+  });
+
+  const response = await spainCfFetch(
+    `https://www.citaconsular.es/onlinebookings/main/?${query}`,
+    session,
+    {
+      headers: {
+        Cookie: buildBookingCookieHeader(session),
+        Referer: referer,
+        "X-Requested-With": "XMLHttpRequest",
+        Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        Priority: "u=1, i",
+      },
+    },
+  );
+
+  if (!response || !response.ok) {
+    console.warn(
+      `[spain-booking] ❌ main/ dédié échoué: HTTP ${response?.status ?? "no response"}`,
+    );
+    return null;
+  }
+
+  for (const setCookie of response.headers.getSetCookie?.() ?? []) {
+    const firstPart = setCookie.split(";", 1)[0] ?? "";
+    const separator = firstPart.indexOf("=");
+    if (separator <= 0) continue;
+
+    const name = firstPart.slice(0, separator).trim();
+    const value = firstPart.slice(separator + 1).trim();
+    if (!name || !value) continue;
+
+    const existingIndex = session.allCookies.findIndex((cookie) => cookie.name === name);
+    const nextCookie = { name, value };
+    if (existingIndex >= 0) session.allCookies[existingIndex] = nextCookie;
+    else session.allCookies.push(nextCookie);
+
+    if (name === "cf_clearance") session.cfClearance = value;
+  }
+
+  const phpSessId = session.allCookies.find((cookie) => cookie.name === "PHPSESSID")?.value;
+  if (!phpSessId) {
+    console.warn("[spain-booking] ❌ main/ dédié n'a pas fourni de PHPSESSID — booking interrompu");
+    return null;
+  }
+
+  const rawBody = await response.text();
+  let mainHtml: string | undefined;
+  const jsonpMatch = rawBody.match(/^[^(]+\("(.*)"\);?$/s);
+  if (jsonpMatch) {
+    try {
+      mainHtml = JSON.parse(`"${jsonpMatch[1]}"`);
+    } catch {
+      mainHtml = undefined;
+    }
+  } else if (rawBody.trim().startsWith("<")) {
+    mainHtml = rawBody;
+  }
+
+  console.log(
+    `[spain-booking] 🔒 Session Bookitit isolée créée — PHPSESSID=${phpSessId.slice(0, 12)}…` +
+    ` | proxy partagé=${session.soaxProxyUrl ? "oui" : "non"}`,
+  );
+
+  return { session, mainHtml };
+}
+
 // ─── Service Extraction ─────────────────────────────────────────────────────
 
 /**
@@ -276,6 +390,18 @@ export async function executeHttpBooking(
   const logPrefix = config.applicantName ? `[spain-booking][${config.applicantName}]` : "[spain-booking]";
   console.log(`${logPrefix} 🎯 Service cible: ${targetService.serviceName} (ID: ${targetService.serviceId})`);
 
+  // Chaque dossier doit obtenir son propre PHPSESSID avant toute requête
+  // datetime/signin/summary. La clearance CF et l'IP proxy restent partagées.
+  const isolated = await createIsolatedBookingSession(session, portalUrl);
+  if (!isolated) {
+    return {
+      status: "booking_failed",
+      errorMessage: "Impossible d'établir une session PHP Bookitit isolée pour ce dossier",
+      durationMs: Date.now() - t0,
+    };
+  }
+  const bookingSession = isolated.session;
+
   // ─── 2. Récupérer les agendas pour ce service ────────────────────────
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
   const baseParams: Record<string, string> = {
@@ -284,7 +410,7 @@ export async function executeHttpBooking(
   };
 
   console.log(`[spain-booking] 📋 Récupération agendas pour service ${targetService.serviceId}…`);
-  const agendasPayload = await callBookititEndpoint(session, "getagendas/", {
+  const agendasPayload = await callBookititEndpoint(bookingSession, "getagendas/", {
     ...baseParams,
     services: targetService.serviceId,
     selectedPeople: "1",
@@ -306,7 +432,7 @@ export async function executeHttpBooking(
   const dateFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const dateTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-  const datetimePayload = await callBookititEndpoint(session, "datetime/", {
+  const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/", {
     ...baseParams,
     services: targetService.serviceId,
     agendas: agendaId,
@@ -334,7 +460,7 @@ export async function executeHttpBooking(
       const mFrom = futureDate.toISOString().slice(0, 10);
       const mTo = new Date(futureDate.getFullYear(), futureDate.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-      const mPayload = await callBookititEndpoint(session, "datetime/", {
+      const mPayload = await callBookititEndpoint(bookingSession, "datetime/", {
         ...baseParams,
         services: targetService.serviceId,
         agendas: agendaId,
@@ -383,7 +509,7 @@ export async function executeHttpBooking(
     gct: turnstileToken,
   };
 
-  const signinPayload = await callBookititEndpoint(session, "signin/", signinParams, portalUrl);
+  const signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinParams, portalUrl);
 
   if (!signinPayload || typeof signinPayload !== "object") {
     return { status: "signin_failed", errorMessage: "signin/ pas de réponse", durationMs: Date.now() - t0 };
@@ -470,7 +596,7 @@ export async function executeHttpBooking(
       confirmParams.email = clientEmail;
     }
 
-    const confirmPayload = await callBookititEndpoint(session, "confirmclient/", confirmParams, portalUrl);
+    const confirmPayload = await callBookititEndpoint(bookingSession, "confirmclient/", confirmParams, portalUrl);
     if (!confirmPayload) {
       return { status: "booking_failed", errorMessage: "confirmclient/ pas de réponse", durationMs: Date.now() - t0 };
     }
@@ -502,7 +628,7 @@ export async function executeHttpBooking(
     client_signin: "true",
   };
 
-  const summaryPayload = await callBookititEndpoint(session, "summary/", summaryParams, portalUrl);
+  const summaryPayload = await callBookititEndpoint(bookingSession, "summary/", summaryParams, portalUrl);
   if (!summaryPayload) {
     return { status: "booking_failed", errorMessage: "summary/ pas de réponse", durationMs: Date.now() - t0 };
   }
