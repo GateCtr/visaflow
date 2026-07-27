@@ -216,10 +216,10 @@ export async function startSpainWatcherLoop(): Promise<void> {
       }
 
       // HTTP utilise le réglage persistant en secondes. L'environnement reste
-      // un override d'urgence pour un service déjà déployé sans nouveau schéma.
-      // `intervalMin` est le fallback de compatibilité pour les anciennes configs.
+      // l'override d'urgence pour un service déjà déployé sans nouveau champ.
+      // Une ancienne valeur `intervalMin` ne doit pas ralentir le mode HTTP :
+      // avant `intervalSec`, ce mode était explicitement cadencé à 60 secondes.
       const configuredHttpIntervalSec = config.intervalSec
-        ?? (config.intervalMin !== undefined ? config.intervalMin * 60 : undefined)
         ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = SPAIN_HTTP_MODE
         ? Math.max(10, configuredHttpIntervalSec) * 1000
