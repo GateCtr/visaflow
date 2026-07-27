@@ -1385,7 +1385,7 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   const t0 = Date.now();
 
   // 1. Obtenir la session CF (solve si nécessaire)
-  const session = await ensureSpainCfSession(portalUrl);
+  let session = await ensureSpainCfSession(portalUrl);
   if (!session) {
     return {
       status: "cf_blocked",
@@ -1395,7 +1395,18 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   }
 
   // 2. Scan via /onlinebookings/main/ (méthode optimisée — 1 seul appel)
-  const mainResult = await scanViaMainEndpoint(session, portalUrl);
+  let mainResult = await scanViaMainEndpoint(session, portalUrl);
+  if (!mainResult) {
+    // Un accès direct Decodo peut recevoir un challenge CF même si le
+    // pre-warm a obtenu une page 200. Après invalidation, une nouvelle
+    // session force ensureSpainCfSession() à passer par AntiCloudflareTask
+    // avec le même proxy, puis on rejoue le scan une seule fois.
+    console.warn("[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique");
+    session = await ensureSpainCfSession(portalUrl);
+    if (session) {
+      mainResult = await scanViaMainEndpoint(session, portalUrl);
+    }
+  }
   if (mainResult) {
     return mainResult;
   }
