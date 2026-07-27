@@ -680,6 +680,118 @@ async function buildConfigFromBase(
   return config;
 }
 
+// ─── Slot Confirmation via datetime/ API ────────────────────────────────────
+//
+// POURQUOI cette étape est obligatoire :
+//   Après que l'utilisateur clique "Aceptar" sur le modal important,
+//   le widget affiche la liste des services, dont "tramitacion de visas".
+//   Ces liens #selectservice sont TOUJOURS présents dans /main/ après Aceptar,
+//   même quand il n'y a aucun créneau disponible.
+//   La disponibilité réelle se confirme UNIQUEMENT en appelant datetime/ pour
+//   le service sélectionné : si datetime/ retourne des Slots avec times > 0 → créneau réel.
+
+/**
+ * Confirme la présence de créneaux réels via getagendas/ + datetime/.
+ * Appelée quand le HTML de /main/ montre des services rendus (après Aceptar),
+ * pour éviter les faux positifs.
+ *
+ * Flow : #selectservice links → getagendas/ → datetime/ (2 mois) → premier créneau
+ */
+async function confirmSlotsViaDatetime(
+  session: SpainCfSession,
+  renderedHtml: string,
+  publickey: string,
+  cookieStr: string,
+  referer: string,
+): Promise<{ serviceId: string; serviceName: string; date: string; time: string } | null> {
+  const base = "https://www.citaconsular.es/onlinebookings/";
+  const headers = {
+    Cookie: cookieStr,
+    "X-Requested-With": "XMLHttpRequest",
+    Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Accept-Language": "fr-FR,fr;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    Referer: referer,
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    Priority: "u=1, i",
+  };
+
+  // Extraire les services rendus (liens #selectservice hors templates)
+  const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/(\d+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
+  if (svcMatches.length === 0) {
+    console.log("[spain-http] ⚠️ confirmSlotsViaDatetime: aucun #selectservice dans renderedHtml → not_found");
+    return null;
+  }
+
+  const services = svcMatches.map((m) => {
+    const serviceId = m[1];
+    const inner = m[2];
+    const nameM = inner.match(/clsBktServiceDataName[^>]*>([^<]+)/i) ?? inner.match(/>([^<]{5,})</);
+    return { serviceId, serviceName: nameM?.[1]?.trim() ?? "Service" };
+  });
+
+  const cbBase = `cb${Date.now()}`;
+  const now = new Date();
+
+  for (const svc of services.slice(0, 3)) {
+    console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
+
+    // 1. getagendas/ pour ce service
+    let agendaId = "";
+    try {
+      const agQ = new URLSearchParams({
+        callback: `${cbBase}ag`,
+        publickey,
+        lang: "es",
+        services: svc.serviceId,
+        selectedPeople: "1",
+        _: String(Date.now()),
+      });
+      const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
+      if (agRes?.ok) {
+        const agData = parseJsonpPayload(await agRes.text());
+        const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
+        agendaId = ids[0] ?? "";
+        if (agendaId) console.log(`[spain-http]    agenda: ${agendaId}`);
+      }
+    } catch { /* non-fatal */ }
+
+    // 2. datetime/ sur 2 mois
+    for (let mo = 0; mo < 2; mo++) {
+      const tgt = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+      const dateFrom = tgt.toISOString().slice(0, 10);
+      const dateTo = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
+      try {
+        const dtQ = new URLSearchParams({
+          callback: `${cbBase}dt${mo}`,
+          publickey,
+          lang: "es",
+          services: svc.serviceId,
+          agendas: agendaId,
+          selectedPeople: "1",
+          date_from: dateFrom,
+          date_to: dateTo,
+          _: String(Date.now()),
+        });
+        const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
+        if (dtRes?.ok) {
+          const slot = extractSlotFromBookititPayload(parseJsonpPayload(await dtRes.text()));
+          if (slot) {
+            console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${slot.date} ${slot.time} — "${svc.serviceName}"`);
+            return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time };
+          }
+        }
+      } catch { /* non-fatal */ }
+    }
+    console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
+  }
+  return null;
+}
+
+function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
+
 /**
  * Scan rapide via /onlinebookings/main/ — le serveur pré-rend la disponibilité.
  *
@@ -687,8 +799,6 @@ async function buildConfigFromBase(
  * dans le HTML retourné par /onlinebookings/main/. Quand pas de créneaux :
  *   <div style='text-align: center;...'>No hay horas disponibles</div>
  * Quand créneaux dispo : ce message est en display:none et le calendrier est rendu.
- *
- * → UN SEUL appel HTTP suffit pour savoir s'il y a des créneaux !
  *
  * COOKIES (ordre confirmé par Burp 2026-06-25) :
  *   _ga=GA1.1.<clientId>.<ts>; _ga_F3TYSDL945=GS2.1.s<ts>...; PHPSESSID=<id>; cf_clearance=<token>
@@ -1111,150 +1221,132 @@ async function scanViaMainEndpoint(
 
   console.log(`[spain-http] 📊 /main/ retourné ${html.length} chars`);
 
-  // ─── DÉTECTION ROBUSTE DE DISPONIBILITÉ ─────────────────────────────────
+  // Supprimer les templates Underscore.js — utilisé dans toute la détection
+  const renderedHtml = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
+
+  // ─── DÉTECTION DE DISPONIBILITÉ ──────────────────────────────────────────
   //
-  // Le serveur pré-rend #idDivBktServicesContainer avec deux divs consécutives :
+  // Flux UI réel observé :
+  //   1. /main/ charge → modal "Important / Aceptar" affiché
+  //   2. Utilisateur clique Aceptar → liste des services apparaît
+  //      (dont "tramitacion de visas" → lien #selectservice/ID)
+  //   3. Utilisateur clique sur le service → datetime/ appelé → créneaux affichés
   //
-  //   <div style='display: none; text-align: center; ...'>No hay horas disponibles...</div>   ← HIDDEN (placeholder)
-  //   <div style='text-align: center; ...'>No hay horas disponibles...</div>                  ← VISIBLE = PAS DE CRÉNEAU
+  // Conséquence : les liens #selectservice dans /main/ signifient UNIQUEMENT que
+  // l'étape Aceptar est passée — PAS que des créneaux existent.
+  // Un appel datetime/ est OBLIGATOIRE pour confirmer la disponibilité réelle.
   //
-  // Quand des créneaux sont dispos, la 2ème div passe aussi en display:none
-  // et le service list (#idListServices) est peuplé à la place.
-  //
-  // RÈGLE :
-  //   On cible la div qui a style commençant par text-align (sans display:none)
-  //   ET contient "No hay horas disponibles".
-  //   Si elle existe → pas de créneau.
-  //   Si toutes les divs "No hay horas" sont en display:none → CRÉNEAU POTENTIEL.
+  // Signal négatif fiable (pas de datetime/ nécessaire) :
+  //   → div "No hay horas disponibles" VISIBLE (display sans none en début de style)
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Regex précise : div dont le style commence par text-align (PAS display:none en premier)
-  // Pattern vu : style='text-align: center; font-size: 1.500em; font-weight: bold;'
   const VISIBLE_NO_SLOTS_RE = /<div\s+style='text-align:\s*center;[^']*'[^>]*>\s*No hay horas disponibles/i;
-
-  // Pattern pour la div hidden (display: none en premier dans le style)
-  const HIDDEN_NO_SLOTS_RE = /<div\s+style='display:\s*none;[^']*'[^>]*>\s*No hay horas disponibles/i;
+  const HIDDEN_NO_SLOTS_RE  = /<div\s+style='display:\s*none;[^']*'[^>]*>\s*No hay horas disponibles/i;
 
   const hasVisibleNoSlots = VISIBLE_NO_SLOTS_RE.test(html);
-  const hasHiddenNoSlots = HIDDEN_NO_SLOTS_RE.test(html);
+  const hasHiddenNoSlots  = HIDDEN_NO_SLOTS_RE.test(html);
 
+  // Signal négatif fiable → pas besoin d'appel API
   if (hasVisibleNoSlots) {
-    // La div visible "No hay horas disponibles" est présente → PAS DE CRÉNEAU
-    console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE dans #idDivBktServicesContainer → pas de créneau`);
-    return {
-      status: "not_found",
-      scanDurationMs: Date.now() - t0,
-    };
+    console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau`);
+    return { status: "not_found", scanDurationMs: Date.now() - t0 };
   }
 
+  // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
+  //   → Seule réponse datetime/ avec des Slots réels = "found"
+
+  // Cas 1 : "No hay horas" masquée + services rendus (après Aceptar)
   if (hasHiddenNoSlots && !hasVisibleNoSlots) {
-    // La div "No hay horas" existe mais est cachée (display:none) →
-    // POTENTIELLEMENT des créneaux, mais vérifier qu'il y a des services rendus
-    // pour éviter les faux positifs (état transitoire serveur, maintenance nocturne)
-    console.log(`[spain-http] 🎉 "No hay horas" est en display:none → CRÉNEAUX POTENTIELS !`);
-
-    const renderedForCheck = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
-    const hasServices = /#selectservice\/\d+/i.test(renderedForCheck);
-
+    const hasServices = /#selectservice\/\d+/i.test(renderedHtml);
     if (!hasServices) {
-      console.log(`[spain-http] ⚠️ FAUX POSITIF: "No hay horas" masqué MAIS 0 service rendu → not_found`);
-      return {
-        status: "not_found",
-        scanDurationMs: Date.now() - t0,
-      };
+      console.log(`[spain-http] ⚠️ "No hay horas" masquée MAIS 0 service rendu → not_found`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
-
+    console.log(`[spain-http] 🔍 "No hay horas" masquée + services visibles — vérification datetime/…`);
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (!confirmed) {
+      console.log(`[spain-http] ⛔ "tramitacion de visas" présent MAIS datetime/ vide → pas de créneau réel`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (message 'No hay horas' masqué = dispo)",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
     };
   }
 
-  // ─── Indicateurs secondaires (HTML rendu vs templates) ──────────────────
-  //
-  // IMPORTANT : Ne pas confondre le HTML de la page avec les <script type='text/template'>
-  // Les templates Underscore.js contiennent aussi "clsBktServiceDataContainer" et
-  // "#selectservice" mais ce ne sont PAS des éléments rendus.
-  //
-  // Pour distinguer :
-  //   - HTML rendu = en dehors de <script type='text/template'>...</script>
-  //   - Template = à l'intérieur de <script type='text/template'>
-  //
-  // On extrait le contenu hors-template pour l'analyser.
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // Supprimer les blocs <script type='text/template'>...</script> pour garder le HTML rendu
-  const renderedHtml = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
-
-  // Chercher des services RENDUS (hors template) dans #idListServices
-  // Quand des créneaux existent, le serveur pré-rend les services comme :
-  //   <a href='#selectservice/123'><div class="clsBktServiceDataContainer ...">...</div></a>
+  // Cas 2 : Liens #selectservice ou containers de service rendus (hors templates)
   const hasRenderedServices = /#selectservice\/\d+/i.test(renderedHtml);
   const hasRenderedServiceContainers = /clsBktServiceDataContainer\s+clsBktServiceAtt/i.test(renderedHtml);
 
   if (hasRenderedServices || hasRenderedServiceContainers) {
-    console.log(`[spain-http] 🎉 Services RENDUS détectés (liens #selectservice ou .clsBktServiceDataContainer)`);
+    console.log(`[spain-http] 🔍 Services RENDUS (hors template) — vérification datetime/…`);
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (!confirmed) {
+      console.log(`[spain-http] ⛔ Services rendus MAIS datetime/ vide → pas de créneau réel`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (services rendus dans le DOM)",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
     };
   }
 
-  // Chercher si #idListServices contient des éléments rendus (pas vide)
+  // Cas 3 : #idListServices non-vide
   const listServicesMatch = renderedHtml.match(/id=['"]?idListServices['"]?[^>]*>([\s\S]*?)<\/div>/i);
   if (listServicesMatch && listServicesMatch[1].trim().length > 10) {
-    console.log(`[spain-http] 🎉 #idListServices non-vide → services/créneaux disponibles`);
+    console.log(`[spain-http] 🔍 #idListServices non-vide — vérification datetime/…`);
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (!confirmed) {
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (idListServices peuplé)",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
     };
   }
 
-  // Chercher des créneaux datetime rendus (pas dans un template)
-  // Quand le calendrier s'affiche, il contient des éléments comme :
-  //   <div class="clsDivDatetimeSlot ..."> ou des inputs type="radio" pour les heures
+  // Cas 4 : Calendrier datetime directement rendu (cas rare — l'utilisateur est déjà sur le picker)
   const hasRenderedDatetime = /clsDivDatetimeSlot|clsDivBktDatetime|type=['"]radio['"][^>]*name=['"]datetime/i.test(renderedHtml);
   if (hasRenderedDatetime) {
-    console.log(`[spain-http] 🎉 Créneaux datetime RENDUS détectés`);
+    console.log(`[spain-http] 🎉 Créneaux datetime RENDUS directement dans le HTML (calendrier visible)`);
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (datetime slots rendus)",
+      slotInfo: "Créneau détecté via /main/ HTML (datetime slots rendus — calendrier visible)",
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
     };
   }
 
-  // ─── Dernier fallback : analyse du container services ───────────────────
-
-  // Extraire le contenu entre #idDivBktServicesContainer et le prochain grand div
+  // Cas 5 : Absence de "No hay horas" dans le container services
   const servicesContainer = renderedHtml.match(/id=['"]?idDivBktServicesContainer['"]?[^>]*>([\s\S]*?)(?=<div\s+id=['"]?idBktDefault)/i);
   const containerHtml = servicesContainer?.[1] ?? "";
-
-  // Si le container services ne contient PAS "No hay horas" du tout
-  // (ni visible ni hidden) → quelque chose d'autre est rendu = potentiellement des créneaux
   const hasNoHorasInContainer = /No hay horas disponibles/i.test(containerHtml);
   if (!hasNoHorasInContainer && containerHtml.length > 100) {
-    console.log(`[spain-http] 🎉 Pas de "No hay horas" dans le container services → créneaux possibles`);
+    console.log(`[spain-http] 🔍 Pas de "No hay horas" dans le container — vérification datetime/…`);
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (!confirmed) {
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     return {
       status: "found",
-      slotInfo: "Créneau détecté via /main/ HTML (absence de message 'No hay horas' dans container)",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
     };
   }
 
-  // Dernier fallback : pas de signal positif → not_found
-  console.log(`[spain-http] 📋 Pas de signal positif de créneau dans HTML (fallback not_found)`);
-  return {
-    status: "not_found",
-    scanDurationMs: Date.now() - t0,
-  };
+  console.log(`[spain-http] 📋 Pas de signal positif → not_found`);
+  return { status: "not_found", scanDurationMs: Date.now() - t0 };
 }
 
 /**
