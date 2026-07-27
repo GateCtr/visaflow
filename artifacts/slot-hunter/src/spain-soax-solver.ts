@@ -512,14 +512,91 @@ export async function ensureSpainCfSession(
     console.warn(`[spain-soax] ⚠️ Redis restore échoué (non-fatal): ${err}`);
   }
 
-  // Vérifier les prérequis
-  const capsolverKey = process.env.CAPSOLVER_API_KEY;
+  // Vérifier les prérequis proxy
   const soaxProxyUrl = getSpainProxyUrl();
-
   if (!soaxProxyUrl) {
     console.error(`[spain-soax] ❌ Aucun proxy configuré (DECODO_PROXY_URL ou SOAX_PROXY_URL requis)`);
     return null;
   }
+
+  // ── Mode Decodo Direct ──────────────────────────────────────────────────────
+  // Si DECODO_PROXY_URL est défini, tenter un accès direct : l'IP ISP Decodo
+  // peut bypasser Cloudflare sans solve. Si la page répond 200 sans challenge,
+  // on crée la session directement avec le PHPSESSID obtenu (coût CapSolver = 0).
+  if (process.env.DECODO_PROXY_URL) {
+    console.log(`[spain-soax] 🚀 Decodo ISP — tentative accès direct (bypass CF possible)…`);
+    try {
+      const directImpit = new Impit({
+        browser: "chrome",
+        proxyUrl: soaxProxyUrl,
+        ignoreTlsErrors: true,
+      } as any);
+
+      const directRes = await directImpit.fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
+          "Sec-Ch-Ua-Mobile": "?0",
+          "Sec-Ch-Ua-Platform": '"Windows"',
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Upgrade-Insecure-Requests": "1",
+        },
+      } as any) as unknown as Response;
+
+      const directBody = await (directRes as any).text();
+      const isCfChallenge = /just a moment|jetzt einen moment|verifying|_cf_chl_opt/i.test(
+        (directBody as string).slice(0, 3000),
+      );
+
+      if ((directRes as any).status === 200 && !isCfChallenge) {
+        // Extraire le PHPSESSID depuis Set-Cookie
+        const setCookie = (directRes as any).headers?.get?.("set-cookie") ?? "";
+        const phpSessionMatch = setCookie.match(/PHPSESSID=([^;]+)/);
+        const phpSessionId = phpSessionMatch?.[1] ?? "";
+
+        const directUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+        const directCreatedAt = Date.now();
+        // PHPSESSID courte durée — renouveler toutes les 30min pour être safe
+        const directExpiresAt = directCreatedAt + 30 * 60_000;
+
+        const directAllCookies: Array<{ name: string; value: string }> = [];
+        if (phpSessionId) directAllCookies.push({ name: "PHPSESSID", value: phpSessionId });
+
+        const directSession: SpainCfSession = {
+          cfClearance: "",          // Pas de CF challenge → pas de cookie cf_clearance
+          cfDomain: ".citaconsular.es",
+          soaxProxyUrl,
+          userAgent: directUA,
+          createdAt: directCreatedAt,
+          expiresAt: directExpiresAt,
+          allCookies: directAllCookies,
+          extraHeaders: {},
+        };
+
+        _activeCfSession = directSession;
+        syncSpainCfSessionToRedis(directSession as SerializableSpainCfSession);
+        console.log(
+          `[spain-soax] 🎉 Session Decodo Direct établie (bypass CF) — PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 30min`,
+        );
+        return directSession;
+      }
+
+      if (isCfChallenge) {
+        console.warn(`[spain-soax] ⚠️ Decodo direct: CF challenge détecté → fallback CapSolver`);
+      } else {
+        console.warn(`[spain-soax] ⚠️ Decodo direct: status ${(directRes as any).status} → fallback CapSolver`);
+      }
+    } catch (directErr) {
+      console.warn(`[spain-soax] ⚠️ Decodo direct échoué (${directErr}) → fallback CapSolver`);
+    }
+  }
+
+  const capsolverKey = process.env.CAPSOLVER_API_KEY;
   if (!capsolverKey) {
     console.error(`[spain-soax] ❌ CAPSOLVER_API_KEY non configurée`);
     return null;
@@ -527,7 +604,7 @@ export async function ensureSpainCfSession(
 
   const proxyLabel = process.env.DECODO_PROXY_URL ? "Decodo ISP" : "SOAX sticky";
 
-  // Tenter le solve (max 2 essais avec rotation)
+  // Tenter le solve CapSolver (max 2 essais avec rotation)
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     console.log(`[spain-soax] 🎯 Tentative ${attempt}/${MAX_ATTEMPTS}…`);
