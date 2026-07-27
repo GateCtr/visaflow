@@ -576,17 +576,15 @@ export async function ensureSpainCfSession(
       // that no longer matches the navigation that produced it.
       const pwAllCookies = widgetCookies.allCookies;
 
-      // Si le JSD n'a pas été observé (clearance CapSolver uniquement sans #2 post-Oneshot),
-      // on n'accepte pas cette session pour le mode HTTP. La clearance CapSolver fonctionne
-      // dans le navigateur Playwright (fingerprint Chrome réel) mais CF la rejette en HTTP
-      // impit (empreinte TLS différente / validation plus stricte).
-      // On force un nouveau solve au prochain cycle plutôt que de propager une session cassée.
+      // Test confirmé 2026-07-27 : CF (Decodo ISP) sert le widget directement même sans
+      // cf_clearance → l'IP est de confiance et JSD Oneshot ne fire jamais en Phase 2b.
+      // La clearance CapSolver liée à la même IP Decodo est acceptée par CF en HTTP impit.
+      // On accepte donc la session seededClearanceAccepted sans exiger JSD.
       if (!widgetCookies.jsdOneshotCaptured && widgetCookies.seededClearanceAccepted) {
-        console.error(
-          "[spain-soax] ❌ JSD Oneshot non observé après attente — clearance CapSolver uniquement. " +
-          "Session rejetée (évite HTTP 403 en cascade). Nouveau solve au prochain cycle.",
+        console.log(
+          "[spain-soax] ✅ Session CapSolver-only acceptée — IP Decodo ISP de confiance, " +
+          "JSD Oneshot non requis (CF ne challenge pas cette IP).",
         );
-        return null;
       }
 
       const session: SpainCfSession = {

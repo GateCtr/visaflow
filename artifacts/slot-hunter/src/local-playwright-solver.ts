@@ -412,86 +412,15 @@ export async function solveSpainWidgetSession(
       await new Promise<void>((r) => setTimeout(r, 500));
     }
 
-    if (!jsdOneshotCaptured && !seededClearanceAccepted) {
-      throw new Error(
-        "JSD Oneshot requis mais non observé — aucun fallback cf_clearance #1",
-      );
-    }
-
-    // ─── Phase 2b : Reload sans clearance → forcer interstitiel CF ───────────
-    // TEST LIVE CONFIRMÉ : quand CF sert le widget directement (seededClearanceAccepted),
-    // JSD Oneshot n'est JAMAIS émis sur la page widget. Il n'est émis que lors de la
-    // soumission du formulaire token de l'interstitiel CF.
-    //
-    // Solution : supprimer cf_clearance du contexte et recharger → CF présente l'interstitiel
-    // → soumission formulaire token → JSD fire → cf_clearance #2 liée à l'IP Decodo.
+    // Phase 2b (reload sans clearance) supprimée — test live 2026-07-27 a confirmé que
+    // CF (Decodo ISP) sert le widget directement même sans cf_clearance.
+    // L'IP ISP est de confiance → JSD Oneshot ne fire pas sur un reload.
+    // La clearance CapSolver seule est acceptée en HTTP impit avec la même IP.
     if (!jsdOneshotCaptured && seededClearanceAccepted) {
       console.log(
-        "[PLAYWRIGHT-WIDGET] 🔄 Reload sans clearance — forçage interstitiel CF pour obtenir JSD…",
+        "[PLAYWRIGHT-WIDGET] ✅ Clearance CapSolver acceptée directement — " +
+        "IP ISP de confiance, Phase 2b non requise.",
       );
-
-      // Supprimer cf_clearance du contexte (garder PHPSESSID et autres)
-      const cookiesBefore = await context.cookies();
-      const cookiesWithoutCf = cookiesBefore.filter((c: any) => c.name !== "cf_clearance");
-      await context.clearCookies();
-      if (cookiesWithoutCf.length > 0) {
-        await context.addCookies(
-          cookiesWithoutCf.map((c: any) => ({
-            name: c.name,
-            value: c.value,
-            domain: c.domain,
-            path: c.path ?? "/",
-            secure: c.secure ?? false,
-            sameSite: (c.sameSite ?? "Lax") as "Strict" | "Lax" | "None",
-          })),
-        );
-      }
-
-      // Recharger — CF doit maintenant présenter l'interstitiel
-      await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
-      await new Promise<void>((r) => setTimeout(r, 3_000));
-
-      // Chercher le formulaire token CF (interstitiel complet)
-      const tokenInputReload = page.locator('input[name="token"]').first();
-      if (await tokenInputReload.count()) {
-        console.log("[PLAYWRIGHT-WIDGET] 🔘 Interstitiel CF présent après reload — soumission formulaire token…");
-        const formReload = tokenInputReload.locator("xpath=ancestor::form[1]");
-        await formReload.evaluate((node: any) => node.submit());
-        await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
-        await new Promise<void>((r) => setTimeout(r, 2_000));
-
-        // Attendre JSD après soumission formulaire
-        console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot post-soumission formulaire (20s)…");
-        const tWaitReload = Date.now();
-        while (!jsdOneshotCaptured && Date.now() - tWaitReload < 20_000) {
-          await new Promise<void>((r) => setTimeout(r, 500));
-        }
-        if (jsdOneshotCaptured) {
-          console.log("[PLAYWRIGHT-WIDGET] ✅ JSD Oneshot capturé après reload + soumission formulaire !");
-          seededClearanceAccepted = false; // JSD a pris le relais — session propre
-        } else {
-          console.warn("[PLAYWRIGHT-WIDGET] ⚠️ JSD toujours absent après reload + formulaire — clearance CapSolver uniquement");
-        }
-      } else {
-        // Pas de formulaire token → CF présente peut-être Turnstile seul
-        console.log("[PLAYWRIGHT-WIDGET] ℹ️ Pas de formulaire token après reload — tentative clic Turnstile…");
-        const clicked = await forceClickTurnstile(page);
-        if (clicked) {
-          await new Promise<void>((r) => setTimeout(r, 10_000));
-          const tWaitTurnstile = Date.now();
-          while (!jsdOneshotCaptured && Date.now() - tWaitTurnstile < 15_000) {
-            await new Promise<void>((r) => setTimeout(r, 500));
-          }
-          if (jsdOneshotCaptured) {
-            console.log("[PLAYWRIGHT-WIDGET] ✅ JSD capturé après reload + clic Turnstile !");
-            seededClearanceAccepted = false;
-          } else {
-            console.warn("[PLAYWRIGHT-WIDGET] ⚠️ JSD absent après reload + Turnstile — clearance CapSolver uniquement");
-          }
-        } else {
-          console.warn("[PLAYWRIGHT-WIDGET] ⚠️ Ni formulaire token ni Turnstile après reload — clearance CapSolver uniquement");
-        }
-      }
     }
 
     // ─── Phase 3 : Extraction cookies finaux ─────────────────────────────
