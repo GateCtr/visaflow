@@ -23,7 +23,6 @@ import {
   spainCfFetch,
   invalidateSpainCfSession,
   isSpainCfSessionExpiringSoon,
-  rotateSpainSoaxSession,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
@@ -53,6 +52,21 @@ export interface SpainHttpScanResult {
   _services?: ExtractedSlotInfo[];
   /** Exact agendas + datetime/ result used to confirm availability. */
   _exploration?: SlotExplorationResult;
+}
+
+/**
+ * Cloudflare présente le challenge interactif comme une page HTML, souvent
+ * avec HTTP 403. Ce n'est pas une preuve que l'IP doit être changée :
+ * l'utilisateur doit d'abord confirmer le challenge dans le navigateur.
+ */
+export function isCloudflareInteractiveChallenge(
+  status: number,
+  body: string,
+): boolean {
+  if (status !== 403) return false;
+  return /just a moment|un instant|verifying you are human|challenge-platform|cdn-cgi\/challenge/i.test(
+    body.slice(0, 12_000),
+  );
 }
 
 /** Configuration Bookitit extraite de la page widget (persistée entre scans). */
@@ -860,9 +874,24 @@ async function scanViaMainEndpoint(
     `title="${entryTitle.slice(0, 100)}"`,
   );
 
+  if (isCloudflareInteractiveChallenge(entryStatus, entryBody)) {
+    invalidateSpainCfSession();
+    console.warn(
+      "[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + " +
+      "\"Just a moment\") — aucune rotation proxy; résolution humaine requise",
+    );
+    return {
+      status: "cf_blocked",
+      errorMessage:
+        "Challenge Cloudflare interactif en attente de résolution humaine; " +
+        "la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.",
+      scanDurationMs: Date.now() - t0,
+    };
+  }
+
   if (entryStatus === 403) {
-    console.warn("[spain-http] 🔄 403 détecté sur portal → rotation proxy (IP flaggée par CF)");
-    rotateSpainSoaxSession();
+    invalidateSpainCfSession();
+    console.warn("[spain-http] ⚠️ HTTP 403 sans page challenge → session invalidée");
     return null;
   }
 
@@ -875,10 +904,19 @@ async function scanViaMainEndpoint(
   const entryHtml = entryBody;
 
   // Check CF challenge
-  if (/un instant|just a moment|verifying/i.test(entryHtml.slice(0, 2000))) {
-    console.warn("[spain-http] 🔄 Challenge CF détecté sur portal → rotation proxy");
-    rotateSpainSoaxSession();
-    return null;
+  if (/un instant|just a moment|verifying you are human|challenge-platform/i.test(entryHtml.slice(0, 12_000))) {
+    invalidateSpainCfSession();
+    console.warn(
+      "[spain-http] ⏸️ Challenge Cloudflare interactif détecté dans le HTML — " +
+      "aucune rotation proxy; résolution humaine requise",
+    );
+    return {
+      status: "cf_blocked",
+      errorMessage:
+        "Challenge Cloudflare interactif en attente de résolution humaine; " +
+        "JSD Oneshot requis avant reprise.",
+      scanDurationMs: Date.now() - t0,
+    };
   }
 
   // ─── Extract token for POST (with structural monitoring) ──────────────

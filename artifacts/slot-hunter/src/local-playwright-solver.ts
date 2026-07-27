@@ -18,6 +18,8 @@ export interface SpainWidgetCookies {
   allCookies: Array<{ name: string; value: string }>;
   userAgent: string;
   capturedAt: number;
+  /** True only when the browser observed Cloudflare's JSD Oneshot request. */
+  jsdOneshotCaptured: boolean;
 }
 
 export interface SeedCookie {
@@ -300,6 +302,17 @@ export async function solveSpainWidgetSession(
     // CF's JS déclenche automatiquement POST /cdn-cgi/challenge-platform/.../jsd/oneshot/...
     // La réponse contient Set-Cookie: cf_clearance=<nouveau_token>
     let postOneshotCfClearance: string | null = null;
+    let jsdOneshotCaptured = false;
+    page.on("request", (request: any) => {
+      const url: string = request.url();
+      if (
+        url.includes("/cdn-cgi/challenge-platform/") &&
+        url.includes("/jsd/oneshot/")
+      ) {
+        jsdOneshotCaptured = true;
+        console.log("[PLAYWRIGHT-WIDGET] ✅ Requête JSD Oneshot observée dans le navigateur");
+      }
+    });
     page.on("response", async (response: any) => {
       try {
         const url: string = response.url();
@@ -307,6 +320,7 @@ export async function solveSpainWidgetSession(
           url.includes("/cdn-cgi/challenge-platform/") &&
           url.includes("/jsd/oneshot/")
         ) {
+          jsdOneshotCaptured = true;
           const headers: Record<string, string> = response.headers();
           const setCookie: string = headers["set-cookie"] ?? "";
           const match = /cf_clearance=([^;]+)/.exec(setCookie);
@@ -328,8 +342,11 @@ export async function solveSpainWidgetSession(
     console.log(`[PLAYWRIGHT-WIDGET] 🌐 Navigation vers ${widgetUrl}…`);
     await page.goto(widgetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
-    // ─── Phase 1 : Attente CF challenge initial (Turnstile) ───────────────
-    console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente résolution CF Turnstile (~8s)…");
+    // ─── Phase 1 : Playwright essaie d'abord le challenge natif ───────────
+    // Si la case "je ne suis pas un robot" est affichée, le clic est tenté
+    // dans ce premier passage. Le fallback CapSolver est orchestré par
+    // ensureSpainCfSession(), puis relance cette même fonction avec ses cookies.
+    console.log("[PLAYWRIGHT-WIDGET] ⏳ Premier essai Playwright — attente du challenge CF (~8s)…");
     await new Promise<void>((r) => setTimeout(r, 8_000));
 
     let cookies = await context.cookies();
@@ -368,14 +385,13 @@ export async function solveSpainWidgetSession(
     console.log("[PLAYWRIGHT-WIDGET] ⏳ Attente JSD Oneshot (exécution JS CF dans le navigateur)…");
     const ONESHOT_TIMEOUT_MS = 20_000;
     const tWait = Date.now();
-    while (!postOneshotCfClearance && Date.now() - tWait < ONESHOT_TIMEOUT_MS) {
+    while (!jsdOneshotCaptured && Date.now() - tWait < ONESHOT_TIMEOUT_MS) {
       await new Promise<void>((r) => setTimeout(r, 500));
     }
 
-    if (!postOneshotCfClearance) {
-      console.warn(
-        "[PLAYWRIGHT-WIDGET] ⚠️ JSD Oneshot non détecté dans le délai imparti — " +
-        "on utilise cf_clearance #1 comme fallback (acceptable : #1 est valide ~2h)"
+    if (!jsdOneshotCaptured) {
+      throw new Error(
+        "JSD Oneshot requis mais non observé — aucun fallback cf_clearance #1",
       );
     }
 
@@ -386,16 +402,19 @@ export async function solveSpainWidgetSession(
       value: c.value as string,
     }));
 
-    // cf_clearance final = #2 si JSD Oneshot capturé, sinon #1
+    // Un cookie #1 seul ne suffit pas: le JSD Oneshot doit avoir été observé.
     const finalCfClearance =
       postOneshotCfClearance ??
       finalBrowserCookies.find((c: any) => c.name === "cf_clearance")?.value ??
-      cfClearance.value;
+      "";
+    if (!finalCfClearance) {
+      throw new Error("JSD Oneshot observé mais aucun cf_clearance final capturé");
+    }
 
     const phpSessIdCookie = finalBrowserCookies.find((c: any) => c.name === "PHPSESSID");
     console.log(
       `[PLAYWRIGHT-WIDGET] 🎯 Session établie | ` +
-      `cf_clearance=${postOneshotCfClearance ? "#2 (post-Oneshot)" : "#1 (fallback)"} | ` +
+      `cf_clearance=${postOneshotCfClearance ? "#2 (post-Oneshot)" : "#2 (cookie navigateur)"} | ` +
       `PHPSESSID=${phpSessIdCookie ? `✅ ${phpSessIdCookie.value.slice(0, 10)}…` : "❌ absent"} | ` +
       `Cookies total: ${allCookies.length}`
     );
@@ -405,6 +424,7 @@ export async function solveSpainWidgetSession(
       allCookies,
       userAgent: UA,
       capturedAt: Date.now(),
+      jsdOneshotCaptured,
     };
   } catch (err: any) {
     console.error(`[PLAYWRIGHT-WIDGET] ❌ Échec solveSpainWidgetSession: ${err.message}`);
