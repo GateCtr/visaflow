@@ -19,9 +19,36 @@ if (!PROXY_URL)     { console.error("❌  Manque PROXY_2CAPTCHA (ex: http://user
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Normalise le proxy en URL standard http://user:pass@host:port
+ * Supporte deux formats :
+ *   - standard :  http://user:pass@host:port
+ *   - 2captcha  : http://host:port:user:pass  (ou juste host:port:user:pass)
+ */
+function normalizeProxyUrl(raw: string): string {
+  const withScheme = raw.startsWith("http") ? raw : `http://${raw}`;
+  try {
+    const p = new URL(withScheme);
+    // Format standard — a un @ dans l'URL
+    if (p.username) return withScheme;
+  } catch { /* pas valide, on parse manuellement */ }
+
+  // Format 2captcha : http://host:port:user:pass
+  const withoutScheme = withScheme.replace(/^https?:\/\//, "");
+  const parts = withoutScheme.split(":");
+  // parts = [host, port, user, pass]  (le user peut contenir des tirets mais pas de :)
+  if (parts.length < 4) throw new Error(`Format proxy non reconnu: ${raw}`);
+  const host = parts[0];
+  const port = parts[1];
+  const user = parts[2];
+  const pass = parts.slice(3).join(":"); // au cas où le mot de passe contiendrait ":"
+  return `http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}`;
+}
+
 function proxyToCapsolverFormat(url: string): string {
-  const p = new URL(url.startsWith("http") ? url : `http://${url}`);
-  const scheme = p.protocol.replace(":", ""); // http | socks5
+  const normalized = normalizeProxyUrl(url);
+  const p = new URL(normalized);
+  const scheme = p.protocol.replace(":", "");
   return `${scheme}://${decodeURIComponent(p.username)}:${decodeURIComponent(p.password)}@${p.hostname}:${p.port}`;
 }
 
@@ -42,7 +69,9 @@ async function checkBalance(): Promise<number | null> {
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 console.log("  TEST : CapSolver AntiCloudflareTask + Proxy 2captcha");
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log(`Proxy  : ${PROXY_URL.replace(/:([^:@]+)@/, ":<PASS>@")}`);
+const PROXY_NORMALIZED = normalizeProxyUrl(PROXY_URL);
+const PROXY_SAFE = PROXY_NORMALIZED.replace(/:([^:@]+)@/, ":<PASS>@");
+console.log(`Proxy  : ${PROXY_SAFE}`);
 console.log(`Cible  : ${TARGET_URL}`);
 console.log("");
 
@@ -64,7 +93,7 @@ try {
   // Fallback : utiliser curl si fetch ne supporte pas l'agent
   const { execSync } = await import("child_process");
   const curlOut = execSync(
-    `curl -s --proxy "${PROXY_URL}" "https://api.ipify.org?format=json" --max-time 15`,
+    `curl -s --proxy "${PROXY_NORMALIZED}" "https://api.ipify.org?format=json" --max-time 15`,
     { encoding: "utf8" }
   );
   const ipData = JSON.parse(curlOut);
@@ -182,7 +211,7 @@ try {
   const { execSync } = await import("child_process");
   const curlCmd = [
     "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}|%{size_download}",
-    "--proxy", PROXY_URL,
+    "--proxy", PROXY_NORMALIZED,
     "-H", `"User-Agent: ${userAgent}"`,
     "-H", `"Cookie: ${cookieHeader}"`,
     "-H", '"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"',
@@ -214,7 +243,7 @@ try {
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 console.log("RÉSUMÉ :");
-console.log(`  Proxy 2captcha (ES)  : ${PROXY_URL.replace(/:([^:@]+)@/, ":<PASS>@")}`);
+console.log(`  Proxy 2captcha (ES)  : ${PROXY_SAFE}`);
 console.log(`  cf_clearance obtenu  : ${cfClearance ? "✅ OUI" : "❌ NON"}`);
 console.log(`  Durée solve          : ${elapsed}s`);
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
