@@ -866,11 +866,11 @@ async function scanViaMainEndpoint(
   const entryBody = await entryRes.clone().text();
   const entryTitle = entryBody.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
   const entryHasToken = /name=["']token["']/i.test(entryBody);
-  const entryHasCfChallenge = /un instant|just a moment|verifying|challenge/i.test(entryBody.slice(0, 5000));
+  const entryHasCfChallenge = /un instant|just a moment|verifying you are human|_cf_chl_opt/i.test(entryBody.slice(0, 5000));
   console.log(
     `[spain-http] GET portail → HTTP ${entryStatus} | ` +
     `type=${entryContentType.split(";")[0] || "unknown"} | bytes=${entryBody.length} | ` +
-    `token=${entryHasToken ? "oui" : "non"} | cf-challenge=${entryHasCfChallenge ? "oui" : "non"} | ` +
+    `token=${entryHasToken ? "oui" : "non"} | cf-interstitiel=${entryHasCfChallenge ? "OUI ⚠️" : "non"} | ` +
     `title="${entryTitle.slice(0, 100)}"`,
   );
 

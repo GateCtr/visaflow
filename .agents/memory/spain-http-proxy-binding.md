@@ -1,24 +1,30 @@
 ---
 name: Spain HTTP proxy binding
-description: Proxy and Cloudflare session constraints for the Spain HTTP-only watcher
+description: Rules for Decodo ISP proxy usage in Spain HTTP scanner and CapSolver integration
 ---
 
-In Spain HTTP-only mode, `cf_clearance` and the Bookitit session must be created and reused through the same configured proxy IP. `DECODO_PROXY_URL` is the preferred fixed proxy; SOAX remains the fallback.
+# Spain HTTP proxy binding
 
-**Why:** Cloudflare can bind the clearance cookie to the source IP. The local cookie pool does not record the cookie's source IP, so reusing an old pool cookie can silently pair it with the wrong proxy after a provider change or redeploy.
+## Rule
+HTTP-only sessions (impit) and CapSolver `AntiCloudflareTask` must both use the same Decodo ISP proxy URL so that the resulting `cf_clearance` is bound to the same exit IP that subsequent requests use.
 
-**How to apply:** In `SPAIN_HTTP_MODE=1`, ignore local pool cookies, reject sessions without a compatible proxy, and verify startup logs show the provider before allowing HTTP scans.
+**Why:** `cf_clearance` is IP-bound. If CapSolver solves using a different IP than the one used for `/main/`, CF silently serves an empty body or Managed Challenge at HTTP 200 instead of the real page.
 
-When production logs show `Cookie valide trouvé dans le pool` followed by `impit ... direct / sans proxy`, the running deployment predates this guard or is using a different build/configuration. The `IP serveur (Railway)` marker also means Replit secrets/workflows are not the process being diagnosed.
+**How to apply:** Pass `proxyUrl` to both `new Impit({ proxy })` and to CapSolver's `proxy` field. Never reuse `cf_clearance` from a pool cookie whose origin IP is unknown.
 
-**Why:** A valid HTTP status with an empty `/onlinebookings/main/` body is a likely symptom of an old deployment pairing a stale Cloudflare cookie with the wrong source IP, not evidence that Bookitit intentionally changed its API.
+## Pre-fetched HTML optimisation
+Passing `html` to CapSolver's `AntiCloudflareTask` saves ~240KB of Decodo bandwidth per solve (the challenge page is ~6KB pre-fetched via impit, so CapSolver doesn't re-fetch). This is safe as long as the probe fetches the HTML **through the same Decodo proxy** — the solve result is still IP-bound to Decodo.
 
-**How to apply:** Compare the deployed startup/build logs with the current source before debugging the response body. Redeploy the same revision and configure the proxy secret in the actual runtime that performs the scan; do not infer Railway behavior from Replit secret presence.
+When the probe fails (e.g. ProxyAuthRequired), `html` is not passed and CapSolver fetches the challenge page itself through the proxy.
 
-## Local Playwright bootstrap
+## `cf-challenge` log false positive (fixed 2026-07-27)
+The GET portail diagnostic previously used `/challenge/` in its regex, which matched the JSD oneshot URL path `/cdn-cgi/challenge-platform/...` embedded in the real (non-challenged) page. Fixed to use `un instant|just a moment|verifying you are human|_cf_chl_opt` only — these never appear on the real page.
 
-The HTTP watcher’s browser bootstrap requires both the Playwright Chromium binary and the system Cairo library. Installing the Node package alone is insufficient in a fresh Replit environment.
+## Decodo ISP session expiry
+The DECODO_PROXY_URL embeds a specific exit IP via `-ip-X.X.X.X` in the username. This IP session has a limited duration. When it expires:
+- impit probe fails with `ProxyAuthRequired` (HTTP 407)
+- CapSolver also fails with `custom proxy connect failed`
+- Fix: renew the URL from the Decodo dashboard and update the `DECODO_PROXY_URL` secret + restart the workflow
 
-**Why:** Without the browser binary, Playwright reports a missing executable; after downloading it, Chromium can still exit immediately if `libcairo.so.2` is unavailable.
-
-**How to apply:** Keep the browser install step and the Cairo system dependency in the Replit environment before diagnosing proxy or Cloudflare behavior.
+## JSD Oneshot absence
+When CF trusts the Decodo ISP exit IP, the POST widget response does NOT embed the JSD oneshot URL. This is expected — CF skips the second challenge step. `/main/` still returns the full page (116KB+). Do not treat JSD oneshot absence as an error.
