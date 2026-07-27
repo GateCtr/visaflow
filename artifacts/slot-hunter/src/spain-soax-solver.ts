@@ -255,9 +255,13 @@ export async function solveSpainCloudflare(
   targetUrl: string,
   capsolverApiKey: string,
   soaxProxyUrl: string,
+  /** HTML de la page CF challenge déjà fetchée via le probe direct.
+   *  Passé à CapSolver pour éviter qu'il re-fetche la page via notre proxy
+   *  (économise ~240KB de traffic Decodo par solve). */
+  prefetchedHtml?: string,
 ): Promise<SolveResult> {
   const t0 = Date.now();
-  console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}`);
+  console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}${prefetchedHtml ? " (html pré-fetchée ✅)" : ""}`);
 
   // Vérifier le solde CapSolver
   try {
@@ -282,7 +286,11 @@ export async function solveSpainCloudflare(
   // Créer la tâche AntiCloudflareTask
   let taskId: string;
   try {
-    console.log(`[spain-soax] 📤 createTask AntiCloudflareTask…`);
+    const htmlSizeKB = prefetchedHtml ? Math.round(prefetchedHtml.length / 1024) : 0;
+    console.log(
+      `[spain-soax] 📤 createTask AntiCloudflareTask…` +
+      (prefetchedHtml ? ` (html: ${htmlSizeKB}KB — évite re-fetch proxy)` : " (sans html — CapSolver fetche via proxy)"),
+    );
     const createRes = await fetch(`${CAPSOLVER_BASE}/createTask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -292,6 +300,13 @@ export async function solveSpainCloudflare(
           type: "AntiCloudflareTask",
           websiteURL: targetUrl,
           proxy: proxyForCapsolver,
+          // Si on passe le html déjà fetchée, CapSolver n'a pas besoin de
+          // re-fetcher challenges.cloudflare.com via notre proxy (~240KB économisés).
+          // userAgent est obligatoire quand html est fourni (requis par CapSolver).
+          ...(prefetchedHtml ? {
+            html: prefetchedHtml,
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          } : {}),
         },
       }),
       signal: AbortSignal.timeout(30_000),
@@ -685,6 +700,7 @@ export async function ensureSpainCfSession(
   const DIRECT_SESSION_TTL_MS = 90 * 60_000; // 90min
 
   let cfChallengeDetected = false;
+  let challengeHtmlFromProbe: string | undefined;
 
   try {
     console.log(`[spain-soax] 🔍 Probe direct Decodo ISP…`);
@@ -725,6 +741,8 @@ export async function ensureSpainCfSession(
     if (isCf) {
       cfChallengeDetected = true;
       console.log(`[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire`);
+      // Conserver le HTML pour l'envoyer à CapSolver et éviter un double-fetch proxy
+      challengeHtmlFromProbe = probeBody;
     } else {
       console.warn(`[spain-soax] ⚠️ Probe direct: HTTP ${(probeRes as any).status} — tentative CapSolver`);
       cfChallengeDetected = true; // tenter CapSolver quand même
@@ -751,7 +769,10 @@ export async function ensureSpainCfSession(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     console.log(`[spain-soax] 🎯 CapSolver tentative ${attempt}/${MAX_ATTEMPTS}…`);
 
-    const result = await solveSpainCloudflare(targetUrl, capsolverKey, soaxProxyUrl);
+    // Passer le HTML pré-fetchée au 1er essai (évite re-fetch proxy ~240KB).
+    // Au 2ème essai on laisse CapSolver fetcher lui-même (IP a peut-être changé).
+    const htmlForAttempt = attempt === 1 ? challengeHtmlFromProbe : undefined;
+    const result = await solveSpainCloudflare(targetUrl, capsolverKey, soaxProxyUrl, htmlForAttempt);
 
     if (result.success && result.session) {
       result.session.allCookies = await applyStableGaProfile(
