@@ -466,6 +466,17 @@ export function invalidateSpainCfSession(): void {
 }
 
 /**
+ * Injecte une session CF pré-établie par un autre mécanisme (ex: persistent-browser).
+ *
+ * Permet à spain-http-scanner.ts (qui appelle ensureSpainCfSession en interne) de
+ * trouver la session dans son cache sans déclencher un nouveau solve CapSolver.
+ * Ne syncronise PAS vers Redis (l'appelant gère sa propre persistance Redis).
+ */
+export function setActiveSpainCfSession(session: SpainCfSession): void {
+  _activeCfSession = session;
+}
+
+/**
  * Obtient ou renouvelle la session CF pour l'Espagne.
  * - Si une session valide existe en mémoire → la retourne
  * - Si pas en mémoire → tente restauration depuis Redis

@@ -34,6 +34,7 @@ import { parseProxyForPuppeteer, randomUserAgent, randomViewport } from "./brows
 import {
   type SpainCfSession,
   cloneSpainCfSessionForDossier,
+  setActiveSpainCfSession,
 } from "./spain-soax-solver.js";
 import { syncSpainCfSessionToRedis, type SerializableSpainCfSession } from "./spain-redis-persistence.js";
 
@@ -315,6 +316,11 @@ class SpainPersistentBrowserManager {
     };
 
     this._cachedSession = session;
+
+    // Sync dans le cache de spain-soax-solver.ts pour que runSpainHttpProbe
+    // (qui appelle ensureSpainCfSession en interne) trouve la session directement
+    // sans déclencher un solve CapSolver.
+    setActiveSpainCfSession(session);
 
     // Persistance Redis pour survie aux redéploiements
     try {
