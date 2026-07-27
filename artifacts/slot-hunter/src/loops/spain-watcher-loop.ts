@@ -192,16 +192,24 @@ export async function startSpainWatcherLoop(): Promise<void> {
       log("WARN", `[SPAIN-WATCHER] Restauration SOAX rotation échouée (non-fatal): ${e}`);
     });
 
-    // 3. Pre-warm la session CF (Redis restore tenté automatiquement dans ensureSpainCfSession)
-    log("INFO", "[SPAIN-WATCHER] Pre-warm session CF (proxy Espagne + CapSolver)…");
+    // 3. Pre-warm la session CF uniquement si un dossier Espagne peut réellement
+    // déclencher un booking. Sans ce garde-fou, un watcher actif mais sans dossier
+    // consomme un solve Cloudflare et son gros trafic proxy pour rien.
     const preWarmConfig = await getSpainWatcherConfig().catch(() => null);
-    const preWarmUrl = preWarmConfig?.portalUrl || undefined;
-    const session = await ensureSpainCfSession(preWarmUrl).catch((e) => {
-      log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
-      return null;
-    });
-    if (session) {
-      log("INFO", `[SPAIN-WATCHER] ✅ Session CF prête (expire: ${new Date(session.expiresAt).toISOString()})`);
+    const preWarmDossiers = preWarmConfig?.isActive
+      ? await getActiveSpainDossiers()
+      : [];
+    if (!preWarmConfig?.isActive || preWarmDossiers.length === 0) {
+      log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — aucun dossier Espagne actif avec identifiants");
+    } else {
+      log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) (proxy Espagne + CapSolver)…`);
+      const session = await ensureSpainCfSession(preWarmConfig.portalUrl).catch((e) => {
+        log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
+        return null;
+      });
+      if (session) {
+        log("INFO", `[SPAIN-WATCHER] ✅ Session CF prête (expire: ${new Date(session.expiresAt).toISOString()})`);
+      }
     }
   }
 
@@ -211,6 +219,16 @@ export async function startSpainWatcherLoop(): Promise<void> {
       const config = await getSpainWatcherConfig();
 
       if (!config || !config.isActive) {
+        await new Promise((r) => setTimeout(r, 2 * 60_000));
+        continue;
+      }
+
+      // Aucun dossier actif = aucun besoin de scanner ni de résoudre Cloudflare.
+      // On repoll Convex périodiquement afin de reprendre automatiquement dès
+      // qu'un dossier Espagne avec identifiants est activé.
+      const activeDossiers = await getActiveSpainDossiers();
+      if (activeDossiers.length === 0) {
+        log("INFO", "[SPAIN-WATCHER] Aucun dossier Espagne actif avec identifiants — probe proxy différé de 2 min");
         await new Promise((r) => setTimeout(r, 2 * 60_000));
         continue;
       }
@@ -279,8 +297,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
               // ─── SLOT DISCOVERY REPORTING: émettre les événements vers Convex ──
               if (exploration.totalSlots > 0) {
-                const dossiers = await getActiveSpainDossiers();
-                const discoveryEvents = buildDiscoveryEventsFromExploration(exploration, dossiers);
+                const discoveryEvents = buildDiscoveryEventsFromExploration(exploration, activeDossiers);
                 if (discoveryEvents.length > 0) {
                   reportSlotDiscoveryBatch(discoveryEvents);
                   log("INFO", `[SPAIN-WATCHER] 📊 ${discoveryEvents.length} slot discovery event(s) reporté(s) (${discoveryEvents.filter(e => e.outcome === "captured").length} captured, ${discoveryEvents.filter(e => e.outcome === "ignored").length} ignored)`);
@@ -306,7 +323,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
           log("WARN", "[SPAIN-WATCHER] ❌ Auto-booking impossible — pas de session CF active");
         } else {
           // 1. Récupérer les dossiers Espagne actifs depuis Convex
-          const dossiers = await getActiveSpainDossiers();
+            const dossiers = activeDossiers;
 
           if (dossiers.length === 0) {
             log("INFO", "[SPAIN-WATCHER] ⚠️ Créneau trouvé mais aucun dossier Espagne actif dans Convex — alerte email seule");
