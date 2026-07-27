@@ -1,0 +1,37 @@
+[2026-07-27T17:57:36.673Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 60s (cadence départ-à-départ)
+[2026-07-27T17:57:39.620Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T17:57:35.867Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[spain-soax] ♻️ Session CF réutilisée (reste 13min)
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): rHPaZjmDH54q…
+[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + Decodo: http://user-spju6sw97g-ip-158.140.219.166:***@isp.decodo.com…)
+[spain-http] GET portail → HTTP 403 | type=text/html | bytes=6249 | token=non | cf-challenge=oui | title="Just a moment..."
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + "Just a moment") — aucune rotation proxy; résolution humaine requise
+[2026-07-27T17:58:11.285Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T17:58:35.927Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[2026-07-27T17:58:35.927Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Probe direct Decodo ISP…
+[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire
+[spain-soax] 🎯 CapSolver tentative 1/2…
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-soax] 💰 Balance CapSolver: $4.691
+[spain-soax] 📤 createTask AntiCloudflareTask…
+[spain-soax] ✅ Task créée: 1011402f-d0ff-4738-971f-a9edf0bbe602
+[2026-07-27T17:58:39.808Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: idSM6B6IdayuJ7EhC7dMGgwFh2ZEwdKdZJunNPay…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #63
+[spain-soax] 🎉 Session CF établie via Decodo ISP! Durée solve: 17s
+[spain-soax]    Valide jusqu'à: 2026-07-27T19:53:53.646Z
+[spain-soax] ♻️ Session CF réutilisée (reste 115min)
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-challenge=oui | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID mis à jour depuis GET portail: Jprvh9Yt64jb…
+[spain-http] 🍪 PHPSESSID capturé: Jprvh9Yt64jb…
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ⏸️ Challenge Cloudflare interactif détecté dans le HTML — aucune rotation proxy; résolution humaine requise
+[2026-07-27T17:58:53.882Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Challenge Cloudflare interactif en attente de résolution humaine; JSD Oneshot requis avant reprise.)
+[2026-07-27T17:58:54.005Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 42s (cadence départ-à-départ)
+[2026-07-27T17:58:56.590Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s

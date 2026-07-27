@@ -904,7 +904,11 @@ async function scanViaMainEndpoint(
   const entryHtml = entryBody;
 
   // Check CF challenge
-  if (/un instant|just a moment|verifying you are human|challenge-platform/i.test(entryHtml.slice(0, 12_000))) {
+  // NOTE: ne PAS inclure "challenge-platform" ici — l'URL du script JSD Oneshot
+  // (/cdn-cgi/challenge-platform/.../jsd/oneshot/...) est présente dans le HTML
+  // du vrai widget (HTTP 200). Seuls les textes d'interstitiel CF réels sont des
+  // marqueurs fiables en cas de 200.
+  if (/un instant|just a moment|verifying you are human/i.test(entryHtml.slice(0, 12_000))) {
     invalidateSpainCfSession();
     console.warn(
       "[spain-http] ⏸️ Challenge Cloudflare interactif détecté dans le HTML — " +
