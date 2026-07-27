@@ -133,12 +133,17 @@ async function run() {
     },
   });
 
+  // Hoist so the summary block can read it (a CF JS challenge returns HTTP 200
+  // with HTML — checking only the status code misses it entirely).
+  let step4Challenge: boolean | null = null;
+
   if (!mainRes) {
     console.error("❌ spainCfFetch a retourné null (réseau ou proxy)");
   } else {
     const status = (mainRes as any).status ?? "?";
     const body = await (mainRes as any).text() as string;
     const challenge = isCfChallenge(Number(status), body);
+    step4Challenge = challenge;               // ← hoisté pour le résumé
     const elapsed = Math.round((Date.now() - t4) / 1000);
 
     console.log(`   HTTP status : ${status} (${elapsed}s)`);
@@ -169,10 +174,17 @@ async function run() {
   console.log(`   slotInfo    : ${probeResult.slotInfo ?? "(aucun)"}`);
   console.log(`   errorMessage: ${probeResult.errorMessage ?? "(aucun)"}`);
 
-  if (probeResult.status === "cf_blocked") {
-    console.error("❌ ÉTAPE 5 ÉCHOUÉE : CF a bloqué le probe");
-  } else if (probeResult.status === "error") {
-    console.error(`❌ ÉTAPE 5 ERREUR : ${probeResult.errorMessage}`);
+  // runSpainHttpProbe collapses cf_blocked/session_expired → "error" internally.
+  // Distinguish CF blocks from other errors via errorMessage.
+  const cfKeywords = /cf_blocked|cloudflare|challenge|session_expired/i;
+  if (probeResult.status === "error") {
+    const isCfBlock = cfKeywords.test(probeResult.errorMessage ?? "");
+    if (isCfBlock) {
+      console.error("❌ ÉTAPE 5 ÉCHOUÉE : CF a bloqué le probe");
+      console.error(`   → ${probeResult.errorMessage}`);
+    } else {
+      console.error(`❌ ÉTAPE 5 ERREUR : ${probeResult.errorMessage}`);
+    }
   } else {
     console.log(`✅ Probe HTTP passé sans challenge CF (status: ${probeResult.status})`);
     if (probeResult.status === "found") {
@@ -182,8 +194,9 @@ async function run() {
 
   // ─── Résumé ───────────────────────────────────────────────────────────────
   const total = Math.round((Date.now() - t0) / 1000);
-  const step4ok = mainRes && !isCfChallenge(Number((mainRes as any).status), "");
-  const step5ok = probeResult.status !== "cf_blocked" && probeResult.status !== "error";
+  // step4Challenge is null only when mainRes was null; false = no challenge (pass).
+  const step4ok = mainRes !== null && step4Challenge === false;
+  const step5ok = probeResult.status !== "error";
 
   console.log("\n══════════════════════════════════════════════════════════════");
   console.log(`  Étape 1 (CF solve)     : ✅`);
