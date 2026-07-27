@@ -1,0 +1,41 @@
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-soax] 💰 Balance CapSolver: $4.812
+[spain-soax] 📤 createTask AntiCloudflareTask…
+[2026-07-27T11:06:28.466Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[spain-soax] ♻️ Session CF réutilisée (reste 82min)
+[spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + Decodo: http://user-spl5fg7w50-ip-144.225.213.29:***@isp.decodo.com:…)
+[spain-http] GET portail → HTTP 403 | type=text/html | bytes=6249 | token=non | cf-challenge=oui | title="Just a moment..."
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🚀 Decodo ISP — tentative accès direct (bypass CF possible)…
+[spain-soax] ⚠️ Decodo direct: CF challenge détecté → fallback CapSolver
+[spain-soax] 🎯 Tentative 1/2…
+[2026-07-27T11:06:33.589Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T11:06:39.053Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: rCVzeayulfCoIu31b.u..6gyV8TNhSc1zgqauPpr…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #57
+[spain-soax] 🎉 Session CF établie via Decodo ISP! Durée solve: 17s
+[spain-soax]    Valide jusqu'à: 2026-07-27T13:01:46.912Z
+[spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-challenge=oui | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID capturé: KPv9GDXKq3TN…
+[spain-http] ℹ️ JSD Oneshot URL non trouvé dans widget HTML — on continue avec cf_clearance existant
+[spain-http] 🚨 /main/ réponse réelle: status=200 rawChars=0 decodedChars=0 type=text/html contentLength=absent cfRay=a21b2d40380f17d0-MAD bodyReadError=none url=https://www.citaconsular.es/onlinebookings/main/?callback=jQuery211091785150407626_609963742&type=default&publickey=25028fcd7126544630b8da0c6e60722b5&lang=es&version=4&src=https%3A%2F%2Fwww.citaconsular.es%2Fes%2Fhosteds%2Fwidgetdefault%2F25028fcd7126544630b8da0c6e60722b5%2F&_=1785150407626 preview="<empty body>"
+[2026-07-27T11:06:48.014Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (ALERTE: /onlinebookings/main/ décodé à 0 chars (brut: 0, HTTP 200, type: text/html, cf-ray: a21b2d40380f17d0-MAD, lecture: OK, aperçu: <empty body>))
+[2026-07-27T11:06:48.127Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 41s (cadence départ-à-départ)
+[2026-07-27T11:07:24.520Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T11:07:28.432Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[spain-soax] ♻️ Session CF réutilisée (reste 114min)
+[spain-http] 🍪 GA réutilisé depuis session Playwright: GA1.1.171011243.1281…
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-challenge=oui | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID capturé: cTDjOs%2CWQ4…
+[spain-http] ℹ️ JSD Oneshot URL non trouvé dans widget HTML — on continue avec cf_clearance existant
+[spain-http] 🚨 /main/ réponse réelle: status=200 rawChars=0 decodedChars=0 type=text/html contentLength=absent cfRay=a21b2e438d0217d0-MAD bodyReadError=none url=https://www.citaconsular.es/onlinebookings/main/?callback=jQuery211091785150449117_266059952&type=default&publickey=25028fcd7126544630b8da0c6e60722b5&lang=es&version=4&src=https%3A%2F%2Fwww.citaconsular.es%2Fes%2Fhosteds%2Fwidgetdefault%2F25028fcd7126544630b8da0c6e60722b5%2F&_=1785150449117 preview="<empty body>"
+[2026-07-27T11:07:29.489Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (ALERTE: /onlinebookings/main/ décodé à 0 chars (brut: 0, HTTP 200, type: text/html, cf-ray: a21b2e438d0217d0-MAD, lecture: OK, aperçu: <empty body>))
+[2026-07-27T11:07:29.593Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 59s (cadence départ-à-départ)
+[2026-07-27T11:07:33.765Z] [INFO] [v3-loop] Aucun 
