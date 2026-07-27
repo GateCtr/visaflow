@@ -1,0 +1,111 @@
+2026-07-27T09:37:50.208056704Z [inf]  Starting Container
+2026-07-27T09:37:51.071444406Z [inf]  
+2026-07-27T09:37:51.071451676Z [inf]  > @workspace/slot-hunter@1.0.0 start /app/artifacts/slot-hunter
+2026-07-27T09:37:51.071455936Z [inf]  > tsx src/index.ts
+2026-07-27T09:37:51.071459476Z [inf]  
+2026-07-27T09:37:52.918349184Z [inf]  [2026-07-27T09:37:52.768Z] [INFO] === Joventy Hunter démarrage (Joventy Shuffle v2) ===
+2026-07-27T09:37:52.918354114Z [inf]  [2026-07-27T09:37:52.769Z] [INFO] Mode: PRODUCTION
+2026-07-27T09:37:52.918358284Z [inf]  [2026-07-27T09:37:52.769Z] [INFO] Convex: configuré
+2026-07-27T09:37:52.918363114Z [inf]  [2026-07-27T09:37:52.769Z] [INFO] Hunter API Key: configurée
+2026-07-27T09:37:53.154580017Z [inf]  [2026-07-27T09:37:53.098Z] [INFO] ═══ PAS DE SESSION WORKER (cookies par compte) ═══
+2026-07-27T09:37:53.154584477Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Chaque compte capture ses propres cookies F5
+2026-07-27T09:37:53.154588997Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Cookies stockés dans hunterConfig de chaque application
+2026-07-27T09:37:53.154593017Z [inf]  [2026-07-27T09:37:53.098Z] [INFO] ═══ CEV DOSSIER MODE v3 ACTIF ═══
+2026-07-27T09:37:53.154597737Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Multi-comptes via Applications 
+2026-07-27T09:37:53.154603257Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Stealth v2 et loops classiques DESACTIVES
+2026-07-27T09:37:53.154608087Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Cookies frais capturés par chaque compte, toutes les 30min
+2026-07-27T09:37:53.154611637Z [inf]  [2026-07-27T09:37:53.098Z] [INFO]    → Desactiver: bot-config Convex cev_dossier_mode = 0
+2026-07-27T09:37:53.154615137Z [inf]  [09:37:53] [35m[CEV-DOSSIER-v3][0m [34m[INFO][0m ═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══
+2026-07-27T09:37:53.154619057Z [inf]  [2026-07-27T09:37:53.101Z] [INFO] [SPAIN-WATCHER] Boucle démarrée (mode: HTTP-ONLY 🚀, auto-booking: Convex dossiers)
+2026-07-27T09:37:53.154622397Z [inf]  [2026-07-27T09:37:53.101Z] [INFO] [SPAIN-WATCHER] HTTP proxy: Decodo ISP ✅
+2026-07-27T09:37:53.154627847Z [inf]  [2026-07-27T09:37:53.119Z] [germany-loop] [INFO] ═══ GERMANY RK-TERMIN LOOP DÉMARRÉE ═══
+2026-07-27T09:37:53.154631707Z [inf]  [2026-07-27T09:37:53.120Z] [germany-loop] [INFO]    → Scan périodique des créneaux ambassade allemande
+2026-07-27T09:37:53.154634937Z [inf]  [2026-07-27T09:37:53.120Z] [germany-loop] [INFO]    → Portail: service2.diplo.de/rktermin
+2026-07-27T09:37:53.154638857Z [inf]  [2026-07-27T09:37:53.120Z] [germany-loop] [INFO]    → Captcha: image JPEG base64 (2Captcha/CapSolver)
+2026-07-27T09:37:53.155917309Z [inf]  [spain-redis] ✅ Redis connecté pour persistance Spain CF
+2026-07-27T09:37:53.155923869Z [inf]  [2026-07-27T09:37:53.147Z] [INFO] [SPAIN-WATCHER] ✅ Redis Spain connecté — session CF persistée entre redéploiements
+2026-07-27T09:37:53.155927789Z [inf]  [2026-07-27T09:37:53.148Z] [INFO] [SPAIN-WATCHER] Pre-warm session CF (proxy Espagne + CapSolver)…
+2026-07-27T09:37:53.250872821Z [inf]  [2026-07-27T09:37:53.221Z] [INFO] CEV auto-config: aucune config sauvegardée — discovery complète au premier booking
+2026-07-27T09:37:53.250880221Z [inf]  [2026-07-27T09:37:53.238Z] [germany-loop] [DEBUG] Aucun dossier Germany actif
+2026-07-27T09:37:53.250884101Z [inf]  [2026-07-27T09:37:53.239Z] [germany-loop] [DEBUG] Prochain cycle dans 36 min
+2026-07-27T09:37:53.316001874Z [inf]  [ProxyPool] Public IP detected: 162.220.232.234
+2026-07-27T09:37:53.316006154Z [inf]  [2026-07-27T09:37:53.309Z] [INFO] IP serveur (Railway): 162.220.232.234
+2026-07-27T09:37:53.316009094Z [inf]  [ip-whitelist] 🌐 IPRoyal: Ajout IP 162.220.232.234 à la whitelist...
+2026-07-27T09:37:53.316011814Z [inf]  [ip-whitelist]    Config: _country-cd_city-kinshasa_session-A3nEck0G_lifetime-12h
+2026-07-27T09:37:53.398211834Z [inf]  [spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+2026-07-27T09:37:53.398216614Z [inf]  [spain-soax] 🔍 Mode local stealth activé — solveSpainWidgetSession (JSD Oneshot natif)…
+2026-07-27T09:37:53.398222174Z [inf]  [PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: isp.decodo.com:10001
+2026-07-27T09:37:53.443467358Z [inf]  [2026-07-27T09:37:53.441Z] [WARN] [SPAIN-WATCHER] Pre-warm CF échoué: Error: browserType.launch: Executable doesn't exist at /ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell
+2026-07-27T09:37:53.443476008Z [inf]  ╔════════════════════════════════════════════════════════╗
+2026-07-27T09:37:53.443481048Z [inf]  ║ Looks like Playwright was just updated to 1.60.0.      ║
+2026-07-27T09:37:53.443485328Z [inf]  ║ Please update docker image as well.                    ║
+2026-07-27T09:37:53.443492568Z [inf]  ║ -  current: mcr.microsoft.com/playwright:v1.58.2-jammy ║
+2026-07-27T09:37:53.443498998Z [inf]  ║ - required: mcr.microsoft.com/playwright:v1.60.0-jammy ║
+2026-07-27T09:37:53.443504868Z [inf]  ║                                                        ║
+2026-07-27T09:37:53.443509218Z [inf]  ║ <3 Playwright Team                                     ║
+2026-07-27T09:37:53.443513208Z [inf]  ╚════════════════════════════════════════════════════════╝ — retry au prochain cycle
+2026-07-27T09:37:53.445873804Z [inf]  [09:37:53] [35m[CEV-DOSSIER-v3][0m [33m[WARN][0m Aucune application CEV active trouvée (destination=schengen + hunterConfig.isActive=true)
+2026-07-27T09:37:53.445881444Z [inf]  [09:37:53] [35m[CEV-DOSSIER-v3][0m [34m[INFO][0m Attente configuration...
+2026-07-27T09:37:54.644035850Z [inf]  [ip-whitelist] IPRoyal: 20 entrée(s) whitelist existante(s): 102.206.157.212, 102.206.157.96, 102.206.158.130, 102.206.158.166, 102.206.158.40, 102.206.159.132, 102.206.241.131, 102.208.121.156, 102.223.130.67, 13.52.208.167, 13.52.225.172, 13.52.69.143, 13.56.104.141, 13.57.4.136, 13.57.76.126, 152.55.176.11, 152.55.176.125, 152.55.176.146, 152.55.176.153, 152.55.176.16
+2026-07-27T09:37:55.312235048Z [inf]  [ip-whitelist] ℹ️ IPRoyal: IP 162.220.232.234 probablement déjà whitelistée (409): {
+2026-07-27T09:37:55.312238688Z [inf]      "error": {
+2026-07-27T09:37:55.312242348Z [inf]          "code": "duplicate_entry",
+2026-07-27T09:37:55.312246388Z [inf]          "message": "This IP address is already whitelisted by another account and cannot be added."
+2026-07-27T09:37:55.312250078Z [inf]      }
+2026-07-27T09:37:55.312253338Z [inf]  }
+2026-07-27T09:37:55.312257078Z [inf]  [ip-whitelist] 🌐 BrightData: Ajout IP 162.220.232.234 à la whitelist (zone: residential_proxy1)...
+2026-07-27T09:37:55.559746781Z [inf]  [ip-whitelist] ✅ BrightData: IP 162.220.232.234 ajoutée à la whitelist (zone: residential_proxy1)
+2026-07-27T09:37:55.559750771Z [inf]  [ip-whitelist] ✅ 2Captcha: Mode gateway — whitelist IP non requise (auth credentials)
+2026-07-27T09:37:55.559755831Z [inf]  [ip-whitelist] ✅ SOAX: Auth par credentials — whitelist IP non requise
+2026-07-27T09:37:55.559760331Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] IPRoyal whitelist: ✅ IP déjà whitelistée
+2026-07-27T09:37:55.559763761Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] 2Captcha whitelist: ✅ Gateway mode ✅ — auth user:pass via eu.proxy.2captcha.com:2334 (whitelist IP NON requise)
+2026-07-27T09:37:55.559766871Z [inf]  [ProxyPool] ✅ Gateway mode: eu.proxy.2captcha.com:2334 (auth user:pass, region=cd)
+2026-07-27T09:37:55.559769821Z [inf]  [ProxyPool] Server IP: 162.220.232.234 (whitelist NON requise — auth par credentials)
+2026-07-27T09:37:55.559773121Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] Proxy: iProyal ✅ (Espagne) | Decodo ✅ (Espagne HTTP) | 2captcha gateway ✅ (eu.proxy.2captcha.com:2334 — auth user:pass, region=cd)
+2026-07-27T09:37:55.559776471Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] Intervalles tier — tres_urgent:5-10m (rush:3-4m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m
+2026-07-27T09:37:55.559779861Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] Silence radio: normal 2m0s–3m0s | stagger 0m30s–1m0s | rush 0m45s–1m30s
+2026-07-27T09:37:55.559783541Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: non
+2026-07-27T09:37:55.559786941Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] Auto-pause après: 3 login_failed consécutifs
+2026-07-27T09:37:55.559790371Z [inf]  [2026-07-27T09:37:55.520Z] [INFO] [daily-report] Boucle activée — envoi prévu à 23h00 Kinshasa (22:00 UTC)
+2026-07-27T09:37:55.559793841Z [inf]  [2026-07-27T09:37:55.521Z] [INFO] CEV hCaptcha solveurs: | AntiCaptcha ✅ | CapSolver ✅ (sitekey gov blacklistée en 2026-04 — peut échouer) | 2captcha ✅ (hCaptcha non supporté sur ce compte)
+2026-07-27T09:37:55.617912997Z [inf]  [2026-07-27T09:37:55.614Z] [INFO] [v3] ✅ Mode V3 Chasseur activé via bot-config Convex (v3_mode=1)
+2026-07-27T09:37:55.654754162Z [inf]  [redis-cache] ✅ Redis connecté — restauration des sessions...
+2026-07-27T09:37:55.654760442Z [inf]  [redis-cache] Aucune session en cache Redis
+2026-07-27T09:37:55.654765692Z [inf]  [redis-cache] ✅ 0 session(s) restaurée(s) depuis Redis
+2026-07-27T09:37:56.197497444Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T09:37:56.197503044Z [inf]  [v3] 🚀 Hunter V3 Chasseur — Initialisation...
+2026-07-27T09:37:56.197507114Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T09:37:56.197511214Z [inf]  [session-pool-redis] ✅ Redis connecté — aucun budget à restaurer
+2026-07-27T09:37:56.197515244Z [inf]  [v3] ✅ Hunter V3 Chasseur initialisé
+2026-07-27T09:37:56.197519164Z [inf]  [v3]    Budget: 9 logins/jour, rush allocation 4+3+2
+2026-07-27T09:37:56.197523124Z [inf]  [v3]    Scan: multi-mois (3), orchestrator chrono
+2026-07-27T09:37:56.197526854Z [inf]  [v3]    Booking: direct + blind cross-account
+2026-07-27T09:37:56.197530594Z [inf]  [v3]    Proxy: cascade 3-way avec budget protection
+2026-07-27T09:37:56.197534404Z [inf]  [v3] ═══════════════════════════════════════════════════════
+2026-07-27T09:37:56.197539733Z [inf]  [2026-07-27T09:37:55.942Z] [INFO] ═══════════════════════════════════════════════════════════════
+2026-07-27T09:37:56.197543683Z [inf]  [2026-07-27T09:37:55.943Z] [INFO] 🎯 MODE V3 CHASSEUR ACTIVÉ (v3_mode=1)
+2026-07-27T09:37:56.197547373Z [inf]  [2026-07-27T09:37:55.943Z] [INFO]    → runScanSession complet : login → preflight → multi-mois → booking → discovery
+2026-07-27T09:37:56.197552443Z [inf]  [2026-07-27T09:37:55.943Z] [INFO]    → Intervalles pilotés par scan-orchestrator (rush/standard/night/burst)
+2026-07-27T09:37:56.197557123Z [inf]  [2026-07-27T09:37:55.943Z] [INFO] ═══════════════════════════════════════════════════════════════
+2026-07-27T09:37:56.198955525Z [inf]  [2026-07-27T09:37:56.126Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:37:56.198960905Z [inf]  [2026-07-27T09:37:56.142Z] [INFO] 🔍 Vérification bundle portail USA (quotidienne)...
+2026-07-27T09:37:56.499804081Z [inf]  [2026-07-27T09:37:56.445Z] [INFO] 🔍 Bundle check ✅ — clé AES inchangée (bundle: main.3bb4eff7eac5d83b.js)
+2026-07-27T09:37:56.542692100Z [inf]  [2026-07-27T09:37:56.536Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:38:47.013274903Z [inf]  [2026-07-27T09:38:42.218Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:38:56.331838454Z [inf]  [2026-07-27T09:38:56.328Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:39:36.798786631Z [inf]  [2026-07-27T09:39:27.580Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:39:56.615703530Z [inf]  [2026-07-27T09:39:56.511Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:40:16.204236333Z [inf]  [2026-07-27T09:40:12.906Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:40:56.913805521Z [inf]  [2026-07-27T09:40:56.719Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:40:58.223245706Z [inf]  [2026-07-27T09:40:58.210Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:41:49.014588423Z [inf]  [2026-07-27T09:41:43.555Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:41:57.068527515Z [inf]  [2026-07-27T09:41:56.925Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:42:37.029804349Z [inf]  [2026-07-27T09:42:28.901Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:43:06.769935544Z [inf]  [2026-07-27T09:42:57.255Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:43:14.557635553Z [inf]  [2026-07-27T09:43:14.257Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:44:05.310734989Z [inf]  [2026-07-27T09:43:57.539Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:44:05.310741519Z [inf]  [2026-07-27T09:43:59.564Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:44:45.247476994Z [inf]  [2026-07-27T09:44:44.934Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:45:05.141538226Z [inf]  [2026-07-27T09:44:57.743Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+2026-07-27T09:45:35.146102720Z [inf]  [2026-07-27T09:45:30.439Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+2026-07-27T09:46:04.662410029Z [inf]  [2026-07-27T09:45:57.950Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
