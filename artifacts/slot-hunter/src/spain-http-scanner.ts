@@ -1088,9 +1088,23 @@ async function scanViaMainEndpoint(
 
   // ─── STRUCTURAL MONITORING: /main/ response ────────────────────────────
   // Monitor that the response is valid and contains expected landmarks
+
+  // Cas body vide (HTTP 200, 0 chars) : le JSD Cloudflare "oneshot" n'a pas été
+  // complété — CapSolver fournit uniquement cf_clearance, pas l'état JSD.
+  // Ce n'est PAS un blocage IP → ne pas rôter le proxy.
+  // On invalide la session pour forcer un nouveau solve au prochain cycle.
+  if (mainBody.length === 0) {
+    console.warn(
+      `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}) ` +
+      `→ JSD oneshot non complété — session invalidée (retry sans rotation proxy)`,
+    );
+    invalidateSpainCfSession();
+    return null; // déclenche le retry dans scanSpainHttp, sans rotation proxy
+  }
+
   if (html.length < 1000) {
     console.error(
-      `[spain-http] 🚨 /main/ réponse réelle: ` +
+      `[spain-http] 🚨 /main/ réponse courte: ` +
       `status=${mainStatus} rawChars=${mainBody.length} decodedChars=${html.length} ` +
       `type=${mainContentType.split(";")[0] || "unknown"} ` +
       `contentLength=${mainContentLength || "absent"} ` +
@@ -1292,12 +1306,13 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     return mainResult;
   }
 
-  // 3. Les deux tentatives ont échoué → rotation proxy pour le prochain cycle
-  console.warn("[spain-http] 🔄 Scan /main/ échoué après retry — rotation proxy pour le prochain cycle");
-  rotateSpainSoaxSession();
+  // 3. Les deux tentatives ont échoué.
+  // Si c'était un vrai blocage CF (403 / challenge), la rotation a déjà été
+  // déclenchée dans scanViaMainEndpoint au moment de la détection.
+  // Si c'était un body vide (JSD manquant), la session a été invalidée — pas de rotation.
   return {
     status: "error",
-    errorMessage: "Scan /main/ échoué après retry + rotation proxy déclenchée",
+    errorMessage: "Scan /main/ échoué après retry (session invalidée pour le prochain cycle)",
     scanDurationMs: Date.now() - t0,
   };
 }
