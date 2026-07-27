@@ -392,7 +392,8 @@ export default defineSchema({
     isActive: v.boolean(),
     portalUrl: v.string(),      // URL Bookitit citaconsular.es à surveiller
     adminEmail: v.string(),     // email de l'admin à alerter lors d'un créneau trouvé
-    intervalMin: v.optional(v.number()), // intervalle de scan en minutes (défaut 15)
+    intervalMin: v.optional(v.number()), // ancien réglage en minutes (compatibilité)
+    intervalSec: v.optional(v.number()), // intervalle HTTP entre débuts de probe (défaut 60)
     lastScanAt: v.optional(v.number()),
     lastResult: v.optional(v.union(
       v.literal("found"),

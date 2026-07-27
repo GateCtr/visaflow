@@ -807,6 +807,7 @@ export interface SpainWatcherConfig {
   portalUrl: string;
   adminEmail: string;
   intervalMin?: number;
+  intervalSec?: number;
 }
 
 /**

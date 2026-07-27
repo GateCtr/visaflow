@@ -1200,12 +1200,38 @@ async function scanViaMainEndpoint(
     fireRumBeacon(session, referer, { delayMs: 3000 + Math.floor(Math.random() * 200), transferSize: 680, cookieStr: cookieForCompanions });
   })();
 
-  if (!mainRes || mainRes.status !== 200) {
-    console.warn(`[spain-http] ⚠️ /onlinebookings/main/ status: ${mainRes?.status ?? "no response"}`);
+  const mainStatus = mainRes?.status ?? null;
+  const mainContentType = mainRes?.headers.get("content-type") ?? "";
+  const mainContentLength = mainRes?.headers.get("content-length") ?? "";
+  const mainCfRay = mainRes?.headers.get("cf-ray") ?? "";
+  const mainLocation = mainRes?.headers.get("location") ?? "";
+  const mainResponseUrl = mainRes?.url ?? "";
+  let mainBody = "";
+  let mainBodyReadError = "";
+  if (mainRes) {
+    try {
+      mainBody = await mainRes.text();
+    } catch (error) {
+      mainBodyReadError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const rawPreview = mainBody
+    ? mainBody.replace(/\s+/g, " ").slice(0, 240)
+    : "<empty body>";
+
+  if (!mainRes || mainStatus !== 200) {
+    console.warn(
+      `[spain-http] ⚠️ /onlinebookings/main/ réponse réelle: ` +
+      `status=${mainStatus ?? "no response"} rawChars=${mainBody.length} ` +
+      `type=${mainContentType.split(";")[0] || "unknown"} ` +
+      `contentLength=${mainContentLength || "absent"} ` +
+      `cfRay=${mainCfRay || "absent"} ` +
+      `location=${mainLocation || "absent"} ` +
+      `bodyReadError=${mainBodyReadError || "none"} ` +
+      `url=${mainResponseUrl || "unknown"} preview="${rawPreview}"`,
+    );
     return null;
   }
-
-  const mainBody = await mainRes.text();
 
   // Parse JSONP → HTML
   const jsonpMatch = mainBody.match(/^[^(]+\("(.*)"\);?$/s);
@@ -1219,10 +1245,22 @@ async function scanViaMainEndpoint(
   // ─── STRUCTURAL MONITORING: /main/ response ────────────────────────────
   // Monitor that the response is valid and contains expected landmarks
   if (html.length < 1000) {
-    console.error(`[spain-http] 🚨 /main/ retourné seulement ${html.length} chars — possible erreur serveur ou changement API`);
+    console.error(
+      `[spain-http] 🚨 /main/ réponse réelle: ` +
+      `status=${mainStatus} rawChars=${mainBody.length} decodedChars=${html.length} ` +
+      `type=${mainContentType.split(";")[0] || "unknown"} ` +
+      `contentLength=${mainContentLength || "absent"} ` +
+      `cfRay=${mainCfRay || "absent"} ` +
+      `bodyReadError=${mainBodyReadError || "none"} ` +
+      `url=${mainResponseUrl || "unknown"} preview="${rawPreview}"`,
+    );
     return {
       status: "error" as const,
-      errorMessage: `ALERTE: /onlinebookings/main/ retourné ${html.length} chars (attendu: ~100K+). Possible changement d'API Bookitit.`,
+      errorMessage:
+        `ALERTE: /onlinebookings/main/ décodé à ${html.length} chars ` +
+        `(brut: ${mainBody.length}, HTTP ${mainStatus}, type: ${mainContentType.split(";")[0] || "inconnu"}, ` +
+        `cf-ray: ${mainCfRay || "absent"}, ` +
+        `lecture: ${mainBodyReadError || "OK"}, aperçu: ${rawPreview.slice(0, 160)})`,
       scanDurationMs: Date.now() - t0,
     };
   }

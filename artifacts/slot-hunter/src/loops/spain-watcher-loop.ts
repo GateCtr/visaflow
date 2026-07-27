@@ -26,6 +26,11 @@ import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationFo
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
+const SPAIN_HTTP_SCAN_INTERVAL_SEC = (() => {
+  const configured = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "60");
+  if (!Number.isFinite(configured) || configured < 10) return 60;
+  return Math.round(configured);
+})();
 
 // ─── Types internes ──────────────────────────────────────────────────────────
 
@@ -202,6 +207,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
 
   while (true) {
     try {
+      const cycleStartedAt = Date.now();
       const config = await getSpainWatcherConfig();
 
       if (!config || !config.isActive) {
@@ -209,9 +215,14 @@ export async function startSpainWatcherLoop(): Promise<void> {
         continue;
       }
 
-      // En mode HTTP : intervalle fixe 30s (ignore config Convex calibrée pour Playwright)
+      // HTTP utilise le réglage persistant en secondes. L'environnement reste
+      // un override d'urgence pour un service déjà déployé sans nouveau schéma.
+      // `intervalMin` est le fallback de compatibilité pour les anciennes configs.
+      const configuredHttpIntervalSec = config.intervalSec
+        ?? (config.intervalMin !== undefined ? config.intervalMin * 60 : undefined)
+        ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = SPAIN_HTTP_MODE
-        ? 60_000
+        ? Math.max(10, configuredHttpIntervalSec) * 1000
         : (config.intervalMin ?? 3) * 60_000;
       const modeLabel = SPAIN_HTTP_MODE ? "HTTP" : "PW";
       log("INFO", `[SPAIN-WATCHER] [${modeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
@@ -436,7 +447,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
         detectedSlots: detectedSlotsJson,
       });
 
-      await new Promise((r) => setTimeout(r, intervalMs));
+      // L'intervalle désigne le temps entre deux débuts de probe, pas le délai
+      // ajouté après la fin du probe. Sinon un probe de 35s produisait un cycle
+      // réel de 95s malgré le log "intervalle: 60s".
+      const nextWaitMs = Math.max(0, intervalMs - (Date.now() - cycleStartedAt));
+      log("INFO", `[SPAIN-WATCHER] Prochain probe dans ${Math.ceil(nextWaitMs / 1000)}s (cadence départ-à-départ)`);
+      await new Promise((r) => setTimeout(r, nextWaitMs));
     } catch (err) {
       log("WARN", `[SPAIN-WATCHER] Erreur boucle: ${err} — retry dans ${SPAIN_HTTP_MODE ? "1" : "5"} min`);
       await new Promise((r) => setTimeout(r, SPAIN_HTTP_MODE ? 60_000 : 5 * 60_000));

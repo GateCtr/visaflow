@@ -1,0 +1,60 @@
+ Erreuril y a 0s27/07/2026 11:29:16
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 35s27/07/2026 11:28:41
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 1 min27/07/2026 11:28:15
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 1 min27/07/2026 11:27:39
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 2 min27/07/2026 11:27:13
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 2 min27/07/2026 11:26:38
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 3 min27/07/2026 11:26:12
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 3 min27/07/2026 11:25:37
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 4 min27/07/2026 11:25:10
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 4 min27/07/2026 11:24:35
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 5 min27/07/2026 11:24:09
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 5 min27/07/2026 11:23:34
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 6 min27/07/2026 11:23:07
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 6 min27/07/2026 11:22:32
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 7 min27/07/2026 11:22:06
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 7 min27/07/2026 11:21:31
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 8 min27/07/2026 11:21:05
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 8 min27/07/2026 11:20:29
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 9 min27/07/2026 11:20:03
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.
+Erreuril y a 9 min27/07/2026 11:19:28
+
+ALERTE: /onlinebookings/main/ retourné 0 chars (attendu: ~100K+). Possible changement d'API Bookitit.

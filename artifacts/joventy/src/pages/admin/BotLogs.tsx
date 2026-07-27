@@ -975,7 +975,7 @@ function SpainWatcherTab() {
 
   const [portalUrl,    setPortalUrl]    = useState("https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5");
   const [adminEmail,   setAdminEmail]   = useState("");
-  const [intervalMin,  setIntervalMin]  = useState(15);
+  const [intervalSec,  setIntervalSec]  = useState(60);
   const [isActive,     setIsActive]     = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [saved,        setSaved]        = useState(false);
@@ -985,7 +985,7 @@ function SpainWatcherTab() {
     if (!watcher) return;
     setPortalUrl(watcher.portalUrl);
     setAdminEmail(watcher.adminEmail);
-    setIntervalMin(watcher.intervalMin ?? 15);
+    setIntervalSec(watcher.intervalSec ?? (watcher.intervalMin ? watcher.intervalMin * 60 : 60));
     setIsActive(watcher.isActive);
   }, [watcher?._id]);
 
@@ -993,7 +993,7 @@ function SpainWatcherTab() {
     if (!portalUrl.trim() || !adminEmail.trim()) return;
     setSaving(true);
     try {
-      await setWatcher({ isActive, portalUrl: portalUrl.trim(), adminEmail: adminEmail.trim(), intervalMin });
+      await setWatcher({ isActive, portalUrl: portalUrl.trim(), adminEmail: adminEmail.trim(), intervalSec });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -1010,7 +1010,7 @@ function SpainWatcherTab() {
         isActive: newActive,
         portalUrl: (watcher?.portalUrl ?? portalUrl).trim(),
         adminEmail: (watcher?.adminEmail ?? adminEmail).trim(),
-        intervalMin: watcher?.intervalMin ?? intervalMin,
+        intervalSec: watcher?.intervalSec ?? intervalSec,
       });
     }
   };
@@ -1119,9 +1119,9 @@ function SpainWatcherTab() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" /> Intervalle (min)
+                <Clock className="w-3.5 h-3.5" /> Intervalle (secondes)
               </label>
-              <input type="number" min={5} max={120} value={intervalMin} onChange={e => setIntervalMin(Number(e.target.value))}
+              <input type="number" min={10} max={3600} value={intervalSec} onChange={e => setIntervalSec(Number(e.target.value))}
                 className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-red-300" />
             </div>
           </div>

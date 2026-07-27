@@ -123,14 +123,19 @@ export const setWatcher = mutation({
     portalUrl: v.string(),
     adminEmail: v.string(),
     intervalMin: v.optional(v.number()),
+    intervalSec: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     requireAdmin(identity as Record<string, unknown> | null);
 
-    // Clamp intervalMin between 5 and 120 minutes
+    // Keep the legacy minute setting for old clients, but make HTTP cadence
+    // explicit in seconds so a 60-second scan is representable.
     const intervalMin = args.intervalMin !== undefined
       ? Math.max(5, Math.min(120, Math.round(args.intervalMin)))
+      : undefined;
+    const intervalSec = args.intervalSec !== undefined
+      ? Math.max(10, Math.min(3600, Math.round(args.intervalSec)))
       : undefined;
 
     const existing = await ctx.db
@@ -144,6 +149,7 @@ export const setWatcher = mutation({
         portalUrl: args.portalUrl,
         adminEmail: args.adminEmail,
         intervalMin,
+        intervalSec,
         updatedAt: Date.now(),
       });
     } else {
@@ -153,6 +159,7 @@ export const setWatcher = mutation({
         portalUrl: args.portalUrl,
         adminEmail: args.adminEmail,
         intervalMin,
+        intervalSec,
         updatedAt: Date.now(),
       });
     }
