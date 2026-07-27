@@ -49,6 +49,8 @@ export interface SpainBookingConfig {
   targetServiceId?: string;
   /** Type de visa du dossier (pour le matching service, ex: "Visa C — Tourisme / Affaires") */
   visaType?: string;
+  /** Services déjà obtenus via getservices/ (main/ ne contient que les templates). */
+  availableServices?: ExtractedSlotInfo[];
 }
 
 export interface SpainBookingResult {
@@ -244,7 +246,9 @@ export async function executeHttpBooking(
   const t0 = Date.now();
 
   // ─── 1. Extraire les services disponibles ─────────────────────────────
-  const services = extractServicesFromHtml(mainHtml);
+  const services = config.availableServices?.length
+    ? config.availableServices
+    : extractServicesFromHtml(mainHtml);
   if (services.length === 0) {
     return { status: "no_slots", errorMessage: "Aucun service rendu dans le HTML", durationMs: Date.now() - t0 };
   }

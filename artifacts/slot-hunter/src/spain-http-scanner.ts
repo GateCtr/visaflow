@@ -28,6 +28,11 @@ import {
   rotateSpainSoaxSession,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
+import {
+  exploreAvailableSlots,
+  type SlotExplorationResult,
+} from "./spain-slot-explorer.js";
+import type { ExtractedSlotInfo } from "./spain-http-booking.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +51,10 @@ export interface SpainHttpScanResult {
   scanDurationMs: number;
   /** Raw HTML from /main/ when found — passed to auto-booking */
   _mainHtml?: string;
+  /** Services returned by getservices/ after the widget's Aceptar step. */
+  _services?: ExtractedSlotInfo[];
+  /** Exact agendas + datetime/ result used to confirm availability. */
+  _exploration?: SlotExplorationResult;
 }
 
 /** Configuration Bookitit extraite de la page widget (persistée entre scans). */
