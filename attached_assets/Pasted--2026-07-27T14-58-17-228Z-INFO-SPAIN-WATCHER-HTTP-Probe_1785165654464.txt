@@ -1,0 +1,108 @@
+[2026-07-27T14:58:17.228Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[2026-07-27T14:58:17.228Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Mode navigateur activé — Playwright + challenge humain + JSD Oneshot…
+[PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: isp.decodo.com:10001
+[PLAYWRIGHT-WIDGET] 🌐 Navigation vers https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5…
+[PLAYWRIGHT-WIDGET] ⏳ Premier essai Playwright — attente du challenge CF (~8s)…
+[PLAYWRIGHT-WIDGET] 🔘 cf_clearance absent — tentative clic Turnstile…
+[PLAYWRIGHT-STEALTH] 🔍 Recherche de l'Iframe Cloudflare Turnstile...
+[PLAYWRIGHT-STEALTH] ℹ️ Pas de case Turnstile visible ou impossible de cliquer.
+[2026-07-27T14:58:45.707Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[PLAYWRIGHT-WIDGET] ❌ Échec solveSpainWidgetSession: cf_clearance #1 non obtenu — CF Turnstile non résolu
+[PLAYWRIGHT-WIDGET] 🔋 Instance fermée.
+[spain-soax] 🔁 Playwright n'a pas capturé le JSD — fallback CapSolver, puis nouvelle navigation Playwright
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-soax] 💰 Balance CapSolver: $4.732
+[spain-soax] 📤 createTask AntiCloudflareTask…
+[spain-soax] ✅ Task créée: d10e0002-1409-479b-b4b2-13cab0856f7a
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: tcWvvRL9OSNIdkDAE6sVfOs.zyBK56fm7q8fyMUH…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: isp.decodo.com:10001
+[PLAYWRIGHT-WIDGET] 🍪 Session CapSolver injectée (1 cookie(s))
+[PLAYWRIGHT-WIDGET] 🌐 Navigation vers https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5…
+[PLAYWRIGHT-WIDGET] ⏳ Premier essai Playwright — attente du challenge CF (~8s)…
+[2026-07-27T14:59:14.054Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[PLAYWRIGHT-WIDGET] 🍪 cf_clearance #1: tcWvvRL9OSNIdkDAE6sV…
+[PLAYWRIGHT-WIDGET] ℹ️ Formulaire token absent — page déjà sur le widget.
+[PLAYWRIGHT-WIDGET] ✅ Clearance CapSolver acceptée — widget servi directement, JSD intermédiaire absent
+[PLAYWRIGHT-WIDGET] ⏭️ JSD non attendu: clearance déjà acceptée
+[PLAYWRIGHT-WIDGET] 🎯 Session établie | cf_clearance=#2 (cookie navigateur) | PHPSESSID=✅ LtgPR4J3nl… | Cookies total: 2
+[spain-http] 🍪 Jar navigateur réutilisée: 1 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): LtgPR4J3nldV…
+[PLAYWRIGHT-WIDGET] 🔋 Instance fermée.
+[spain-soax] 🎉 Session Playwright établie ! PHPSESSID=✅ | Valide ~115min
+[spain-soax] ♻️ Session CF réutilisée (reste 115min)
+[spain-http] GET portail → HTTP 403 | type=text/html | bytes=6249 | token=non | cf-challenge=oui | title="Just a moment..."
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + "Just a moment") — aucune rotation proxy; résolution humaine requise
+[2026-07-27T14:59:14.528Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Challenge Cloudflare interactif en attente de résolution humaine; la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.)
+[2026-07-27T14:59:14.641Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 3s (cadence départ-à-départ)
+[2026-07-27T14:59:17.151Z] [INFO] [SPAIN-WATCHER] [HTTP] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (intervalle: 60s)
+[2026-07-27T14:59:17.151Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Mode navigateur activé — Playwright + challenge humain + JSD Oneshot…
+[PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: isp.decodo.com:10001
+[PLAYWRIGHT-WIDGET] 🌐 Navigation vers https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5…
+[PLAYWRIGHT-WIDGET] ⏳ Premier essai Playwright — attente du challenge CF (~8s)…
+[PLAYWRIGHT-WIDGET] 🔘 cf_clearance absent — tentative clic Turnstile…
+[PLAYWRIGHT-STEALTH] 🔍 Recherche de l'Iframe Cloudflare Turnstile...
+[2026-07-27T14:59:31.019Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[PLAYWRIGHT-STEALTH] ℹ️ Pas de case Turnstile visible ou impossible de cliquer.
+[PLAYWRIGHT-WIDGET] ❌ Échec solveSpainWidgetSession: cf_clearance #1 non obtenu — CF Turnstile non résolu
+[PLAYWRIGHT-WIDGET] 🔋 Instance fermée.
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-soax] 🔁 Playwright n'a pas capturé le JSD — fallback CapSolver, puis nouvelle navigation Playwright
+[spain-soax] 💰 Balance CapSolver: $4.729
+[spain-soax] 📤 createTask AntiCloudflareTask…
+[spain-soax] ✅ Task créée: d344f431-bb11-42ff-830e-b56f013fbecc
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: ZAinzFb1Hmy0cIy4tT1IFjitphjW4lVODDGJbxs7…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[PLAYWRIGHT-WIDGET] 🔌 Proxy SOAX: isp.decodo.com:10001
+[PLAYWRIGHT-WIDGET] 🍪 Session CapSolver injectée (1 cookie(s))
+[PLAYWRIGHT-WIDGET] 🌐 Navigation vers https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5…
+[PLAYWRIGHT-WIDGET] ⏳ Premier essai Playwright — attente du challenge CF (~8s)…
+[2026-07-27T15:00:14.381Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[PLAYWRIGHT-WIDGET] 🍪 cf_clearance #1: ZAinzFb1Hmy0cIy4tT1I…
+[PLAYWRIGHT-WIDGET] ℹ️ Formulaire token absent — page déjà sur le widget.
+[PLAYWRIGHT-WIDGET] ✅ Clearance CapSolver acceptée — widget servi directement, JSD intermédiaire absent
+[PLAYWRIGHT-WIDGET] ⏭️ JSD non attendu: clearance déjà acceptée
+[PLAYWRIGHT-WIDGET] 🎯 Session établie | cf_clearance=#2 (cookie navigateur) | PHPSESSID=✅ ZFcuVlhUj-… | Cookies total: 2
+[spain-soax] 🎉 Session Playwright établie ! PHPSESSID=✅ | Valide ~115min
+[spain-soax] ♻️ Session CF réutilisée (reste 115min)
+[spain-http] 🍪 Jar navigateur réutilisée: 1 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): ZFcuVlhUj-3B…
+[PLAYWRIGHT-WIDGET] 🔋 Instance fermée.
+[spain-http] GET portail → HTTP 403 | type=text/html | bytes=6249 | token=non | cf-challenge=oui | title="Just a moment..."
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + "Just a moment") — aucune rotation proxy; résolution humaine requise
+[2026-07-27T15:00:15.372Z] [INFO] [SPAIN-WATCHER] [HTTP] Résultat: error (Challenge Cloudflare interactif en attente de résolution humaine; la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.)
+[2026-07-27T15:00:15.504Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 2s (cadence départ-à-départ)
+[2026-07-27T15:00:16.282Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:01:01.641Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:01:14.633Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:01:47.148Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:02:14.845Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:02:32.669Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:03:15.055Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:03:17.952Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:04:03.316Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:04:15.396Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:04:48.672Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:05:15.615Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:05:34.009Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:06:15.821Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:06:19.300Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:07:04.669Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:07:16.013Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:07:50.033Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:08:16.214Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:08:35.367Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:09:16.417Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-27T15:09:20.653Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:10:06.001Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[2026-07-27T15:10:16.609Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
