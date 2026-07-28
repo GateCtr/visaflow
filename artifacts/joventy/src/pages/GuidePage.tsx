@@ -396,6 +396,7 @@ export default function GuidePage() {
                 <li><Link href="/visa-usa-kinshasa" className="hover:text-white transition-colors">Visa USA</Link></li>
                 <li><Link href="/visa-canada-kinshasa" className="hover:text-white transition-colors">Visa Canada</Link></li>
                 <li><Link href="/visa-schengen-kinshasa" className="hover:text-white transition-colors">Visa Schengen</Link></li>
+                <li><Link href="/visa-espagne-kinshasa" className="hover:text-white transition-colors">Visa Espagne</Link></li>
                 <li><Link href="/e-visa-dubai-kinshasa" className="hover:text-white transition-colors">E-Visa Dubaï</Link></li>
                 <li><Link href="/visa-maroc-kinshasa" className="hover:text-white transition-colors">Visa Maroc</Link></li>
                 <li><Link href="/e-visa-egypte-kinshasa" className="hover:text-white transition-colors">Visa Égypte</Link></li>
@@ -423,6 +424,8 @@ export default function GuidePage() {
               <ul className="space-y-1">
                 <li><Link href="/guides/comment-obtenir-creneau-visa-usa-kinshasa" className="hover:text-white transition-colors">Créneau USA</Link></li>
                 <li><Link href="/guides/documents-visa-schengen-kinshasa" className="hover:text-white transition-colors">Documents Schengen</Link></li>
+                <li><Link href="/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026" className="hover:text-white transition-colors">RDV Espagne 2026</Link></li>
+                <li><Link href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026" className="hover:text-white transition-colors">Délai créneaux Espagne</Link></li>
                 <li><Link href="/guides" className="hover:text-white transition-colors">Tous les guides →</Link></li>
               </ul>
             </div>
@@ -431,6 +434,7 @@ export default function GuidePage() {
               <ul className="space-y-1">
                 <li><Link href="/" className="hover:text-white transition-colors">Accueil</Link></li>
                 <li><Link href="/guides" className="hover:text-white transition-colors">Guides</Link></li>
+                <li><Link href="/alerte-espagne" className="hover:text-white transition-colors">🇪🇸 Alerte Espagne</Link></li>
                 <li><Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link></li>
                 <li><a href="https://wa.me/243840808122" className="hover:text-white transition-colors">WhatsApp</a></li>
               </ul>

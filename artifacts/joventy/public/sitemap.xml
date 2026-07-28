@@ -103,6 +103,14 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- Alerte Rendez-vous Espagne (conversion page) -->
+  <url>
+    <loc>https://joventy.cd/alerte-espagne</loc>
+    <lastmod>2026-07-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
   <!-- Embassies index -->
   <url>
     <loc>https://joventy.cd/ambassades</loc>

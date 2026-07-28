@@ -131,6 +131,43 @@ export const rejectOrder = mutation({
   },
 });
 
+/** Stats globales pour le dashboard admin. */
+export const getStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || getRole(identity as Record<string, unknown>) !== "admin") return null;
+
+    const all = await ctx.db.query("spainAlertOrders").collect();
+    const pending = all.filter((o) => o.status === "pending").length;
+    const confirmed = all.filter((o) => o.status === "confirmed").length;
+    const rejected = all.filter((o) => o.status === "rejected").length;
+
+    // Visites sur /alerte-espagne (via pageViews)
+    const views = await ctx.db
+      .query("pageViews")
+      .filter((q) => q.eq(q.field("path"), "/alerte-espagne"))
+      .collect();
+    // Sessions uniques
+    const uniqueSessions = new Set(views.map((v) => v.sessionId)).size;
+
+    // Conversions 7 derniers jours
+    const since7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recent = all.filter((o) => o.createdAt >= since7d).length;
+
+    return {
+      total: all.length,
+      pending,
+      confirmed,
+      rejected,
+      pageViews: views.length,
+      uniqueSessions,
+      recent7d: recent,
+      conversionRate: uniqueSessions > 0 ? Math.round((all.length / uniqueSessions) * 100) : 0,
+    };
+  },
+});
+
 /** Compte les commandes en attente (badge admin). */
 export const countPending = query({
   args: {},

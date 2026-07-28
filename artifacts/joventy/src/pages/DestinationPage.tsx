@@ -369,6 +369,36 @@ export default function DestinationPage() {
           </section>
         )}
 
+        {/* ── ALERTE ESPAGNE (Spain-only CTA) ── */}
+        {dest.slug === "visa-espagne-kinshasa" && (
+          <section className="bg-gradient-to-br from-primary/5 via-blue-50 to-orange-50 border border-primary/20 rounded-3xl p-8 sm:p-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <div className="text-5xl flex-shrink-0">🇪🇸</div>
+              <div className="flex-1">
+                <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Nouveau — Groupe WhatsApp privé</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
+                  Alerte créneaux Espagne — Faites-le vous-même pour 10 USD
+                </h2>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  Vous préférez prendre vous-même votre rendez-vous sur citaconsular.es ? Rejoignez notre groupe WhatsApp privé : vous recevrez le jour et la plage horaire exacte dès qu'un créneau apparaît, plus des conseils pratiques pour le capturer en moins de 30 secondes. Accès à vie, paiement unique de 10 USD via Mobile Money.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/alerte-espagne">
+                    <Button className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 gap-2">
+                      Rejoindre le groupe · 10 USD <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Link href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026">
+                    <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 gap-2">
+                      Guide : créneaux Espagne
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ── WHY JOVENTY ── */}
         <section>
           <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
