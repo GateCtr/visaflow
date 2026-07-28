@@ -519,76 +519,48 @@ export async function executeHttpBooking(
     console.warn(`[spain-booking] ⚠️ getwidgetconfigurations/ échoué — on continue sans gct`);
   }
 
-  // ─── 4.5. DÉTECTER LE TYPE D'AUTH ─────────────────────────────────────
-  // Kinshasa (25028fcd) → getsigninaccountfields/ retourne des champs → signinaccount/
-  // Cuba / autres portails → getsigninaccountfields/ vide / absent → signin/ avec date+time intégrés
-  //
-  // Différence clé (confirmée par captures 2026-07-28) :
-  //   signinaccount/?logintype=document&login=PASSPORT&password=PWD  → bktToken SANS date/time
-  //   signin/?...&date=DATE&time=TIME&login=PASSPORT&logintype=document → bktToken AVEC booking créé
-  //
-  // Pour signinaccount/ : le booking doit être créé séparément via signedin/ après auth.
-  let useSigninAccount = false;
-  try {
-    const signinAccountFieldsPayload = await callBookititEndpoint(
-      bookingSession, "getsigninaccountfields/", baseParams, portalUrl,
-    );
-    const clients = (signinAccountFieldsPayload as any)?.CustomFields?.Clients;
-    useSigninAccount = Array.isArray(clients) && clients.length > 0;
-    if (useSigninAccount) {
-      console.log(`[spain-booking] 🔍 signinaccount/ détecté (getsigninaccountfields/ retourne des champs)`);
-    } else {
-      console.log(`[spain-booking] 🔍 signin/ standard détecté (getsigninaccountfields/ vide)`);
-    }
-  } catch {
-    console.warn(`[spain-booking] ⚠️ getsigninaccountfields/ échoué → fallback signin/ standard`);
-  }
-
-  // ─── 5. AUTH (signin/ ou signinaccount/) ──────────────────────────────
+  // ─── 5. SIGNIN ────────────────────────────────────────────────────────
   // Paramètres confirmés par capture 2026-07-28.
-  console.log(`[spain-booking] 🔑 Auth (${useSigninAccount ? "signinaccount/" : "signin/"}) avec ${config.login.slice(0, 5)}…`);
+  //
+  // ARCHITECTURE Bookitit registration_type=2 (#signupsecondappointment) :
+  //   SignUpSecondAppointmentContainer extends SignInContainer — pas de submit() propre.
+  //   Le widget appelle signin/ avec date+time inclus (auth + booking en une requête).
+  //   logintype=document = numéro de passeport comme identifiant (pas email).
+  //
+  //   NB : signinaccount/ est un chemin ALTERNATIF ("ya tengo cuenta") qui ne crée
+  //   pas de booking — capturé en 11-01-12 lors d'une connexion manuelle, pas un flow booking.
+  console.log(`[spain-booking] 🔑 Signin avec ${config.login.slice(0, 5)}…`);
 
-  let signinPayload: unknown;
-  if (useSigninAccount) {
-    // Kinshasa (25028fcd) : auth pure, pas de date/time dans cette requête
-    const signinAccountParams: Record<string, string> = {
-      ...baseParams,
-      logintype: "document",
-      login: config.login,
-      password: config.password,
-    };
-    signinPayload = await callBookititEndpoint(bookingSession, "signinaccount/", signinAccountParams, portalUrl);
-  } else {
-    // Cuba et portails standard : auth + booking en une seule requête (date+time inclus)
-    const signinStandardParams: Record<string, string> = {
-      ...baseParams,
-      "services[]": targetService.serviceId,
-      ...(agendaId ? { "agendas[]": agendaId } : {}),
-      date: slotDate,
-      time: slotTime,
-      selectedPeople: "1",
-      logintype: "document",
-      login: config.login,
-      password: config.password,
-      comments: "",
-      ...(gctToken ? { gct: gctToken } : {}),
-    };
-    signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinStandardParams, portalUrl);
-  }
+  const signinParams: Record<string, string> = {
+    ...baseParams,
+    "services[]": targetService.serviceId,
+    ...(agendaId ? { "agendas[]": agendaId } : {}),
+    date: slotDate,
+    time: slotTime,
+    selectedPeople: "1",
+    logintype: "document",
+    login: config.login,
+    password: config.password,
+    comments: "",
+    ...(gctToken ? { gct: gctToken } : {}),
+  };
+
+  const signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinParams, portalUrl);
 
   if (!signinPayload || typeof signinPayload !== "object") {
-    return { status: "signin_failed", errorMessage: `${useSigninAccount ? "signinaccount/" : "signin/"} pas de réponse`, durationMs: Date.now() - t0 };
+    return { status: "signin_failed", errorMessage: "signin/ pas de réponse", durationMs: Date.now() - t0 };
   }
 
   const signinObj = signinPayload as Record<string, unknown>;
+  // Bookitit enveloppe parfois dans { Client: { ... } }
   const clientObj = (signinObj as any).Client ?? signinObj;
 
   // Check for errors
   const signinErrors = clientObj.errors ?? signinObj.errors;
   if (signinErrors && Array.isArray(signinErrors) && signinErrors.length > 0) {
     const errMsg = (signinErrors as Array<{ message?: string }>).map((e) => e.message).join(", ");
-    console.error(`[spain-booking] ❌ Auth errors: ${errMsg}`);
-    return { status: "signin_failed", errorMessage: `Auth échouée: ${errMsg}`, durationMs: Date.now() - t0 };
+    console.error(`[spain-booking] ❌ Signin errors: ${errMsg}`);
+    return { status: "signin_failed", errorMessage: `Signin échoué: ${errMsg}`, durationMs: Date.now() - t0 };
   }
 
   // Extract bktToken from response
@@ -597,47 +569,16 @@ export async function executeHttpBooking(
     ?? "";
 
   if (!bktToken) {
-    console.error(`[spain-booking] ❌ Pas de bktToken dans la réponse auth`);
+    console.error(`[spain-booking] ❌ Pas de bktToken dans la réponse signin`);
     console.error(`[spain-booking]    Response: ${JSON.stringify(signinPayload).slice(0, 500)}`);
-    return { status: "signin_failed", errorMessage: "bktToken absent de la réponse auth", durationMs: Date.now() - t0 };
+    return { status: "signin_failed", errorMessage: "bktToken absent de la réponse signin", durationMs: Date.now() - t0 };
   }
 
-  console.log(`[spain-booking] ✅ Auth OK — bktToken: ${String(bktToken).slice(0, 20)}…`);
-
-  // ─── 5.5. SIGNEDIN/ (uniquement pour signinaccount/ — Kinshasa) ───────
-  // Pour les portails signinaccount/, l'auth ne crée pas le booking.
-  // Il faut appeler signedin/ avec bktToken + date/time pour réserver le créneau.
-  // Confirmé par l'analyse de signedin.js (extend SignInContainer, API call: signedin/).
-  if (useSigninAccount) {
-    console.log(`[spain-booking] 📅 signedin/ — création du booking (Kinshasa flow)…`);
-    const signedinParams: Record<string, string> = {
-      ...baseParams,
-      "services[]": targetService.serviceId,
-      ...(agendaId ? { "agendas[]": agendaId } : {}),
-      date: slotDate,
-      time: slotTime,
-      selectedPeople: "1",
-      bktToken: String(bktToken),
-      comments: "",
-      ...(gctToken ? { gct: gctToken } : {}),
-    };
-    const signedinPayload = await callBookititEndpoint(bookingSession, "signedin/", signedinParams, portalUrl);
-    if (!signedinPayload || typeof signedinPayload !== "object") {
-      console.warn(`[spain-booking] ⚠️ signedin/ pas de réponse — on tente summary/ directement`);
-    } else {
-      const signedinErrors = (signedinPayload as any)?.Client?.errors ?? (signedinPayload as any)?.errors;
-      if (signedinErrors && Array.isArray(signedinErrors) && signedinErrors.length > 0) {
-        const msg = (signedinErrors as Array<{ message?: string }>).map((e) => e.message).join(", ");
-        console.error(`[spain-booking] ❌ signedin/ errors: ${msg}`);
-        return { status: "booking_failed", errorMessage: `signedin/ échoué: ${msg}`, durationMs: Date.now() - t0 };
-      }
-      console.log(`[spain-booking] ✅ signedin/ OK — booking créé`);
-    }
-  }
+  console.log(`[spain-booking] ✅ Signin OK — bktToken: ${String(bktToken).slice(0, 20)}…`);
 
   // Check if OTP validation is required
   const validateRequired = (signinObj as any).validate !== undefined
-    || (signinObj as any).Client?.validate !== undefined;
+    || clientObj.validate !== undefined;
 
   // ─── 6. CONFIRM CLIENT (OTP) ──────────────────────────────────────────
   if (validateRequired) {
