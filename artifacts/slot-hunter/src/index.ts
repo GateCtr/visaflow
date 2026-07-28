@@ -778,9 +778,20 @@ async function main(): Promise<void> {
 
     // Exclure les jobs Schengen si le mode dossier CEV est activé (éviter conflit)
     const cevDossierModeEnabled = await getBotConfigValue("cev_dossier_mode").catch(() => "0") === "1";
-    const filteredLegacyJobs = cevDossierModeEnabled
-      ? legacyJobs.filter(j => j.destination !== "schengen")
-      : legacyJobs;
+    // Exclure les jobs Espagne si le Spain Watcher HTTP est actif (SPAIN_HTTP_MODE=1)
+    // → le watcher gère lui-même le scan + auto-booking pour tous les dossiers Espagne actifs.
+    // Laisser le scheduler séquentiel traiter Espagne en parallèle crée une collision :
+    // deux implémentations (HTTP watcher vs Playwright runSpainSession) concourent pour
+    // le même créneau au même moment.
+    const spainWatcherActive = process.env.SPAIN_HTTP_MODE === "1";
+    const isSpainDossier = (j: HunterJob) =>
+      j.destination === "spain" || j.destination === "espagne" || j.destination === "es";
+
+    const filteredLegacyJobs = legacyJobs.filter(j => {
+      if (cevDossierModeEnabled && j.destination === "schengen") return false;
+      if (spainWatcherActive && isSpainDossier(j)) return false;
+      return true;
+    });
 
     const due = findNextDueJob(filteredLegacyJobs);
 
@@ -791,7 +802,8 @@ async function main(): Promise<void> {
       const activeCount = jobs.filter((j) =>
         !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
         !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
-        !(schengenExcluded && j.destination === "schengen")
+        !(schengenExcluded && j.destination === "schengen") &&
+        !(spainWatcherActive && isSpainDossier(j))
       ).length;
 
       if (activeCount === 0) {
@@ -799,8 +811,12 @@ async function main(): Promise<void> {
           log("INFO", "Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s");
         } else if (isParallelMode) {
           log("INFO", "Scheduler séquentiel idle — jobs USA gérés par OFC Watcher — polling dans 90s");
+        } else if (cevDossierModeEnabled && spainWatcherActive) {
+          log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop, jobs Espagne gérés par Spain Watcher — polling dans 90s");
         } else if (cevDossierModeEnabled) {
           log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop — polling dans 90s");
+        } else if (spainWatcherActive) {
+          log("INFO", "Scheduler séquentiel idle — jobs Espagne gérés par Spain Watcher HTTP — polling dans 90s");
         } else {
           log("INFO", "Aucun dossier actif — polling dans 90s");
         }
@@ -809,7 +825,8 @@ async function main(): Promise<void> {
           .filter((j) =>
             !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
             !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
-            !(schengenExcluded && j.destination === "schengen")
+            !(schengenExcluded && j.destination === "schengen") &&
+            !(spainWatcherActive && isSpainDossier(j))
           )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
