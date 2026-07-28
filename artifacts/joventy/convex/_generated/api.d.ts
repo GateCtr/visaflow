@@ -27,6 +27,7 @@ import type * as reviews from "../reviews.js";
 import type * as slotBroadcast from "../slotBroadcast.js";
 import type * as slotDiscoveries from "../slotDiscoveries.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
+import type * as spainAlert from "../spainAlert.js";
 import type * as spainOtp from "../spainOtp.js";
 import type * as spainWatcher from "../spainWatcher.js";
 import type * as traffic from "../traffic.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   slotBroadcast: typeof slotBroadcast;
   slotDiscoveries: typeof slotDiscoveries;
   slotFoundHelper: typeof slotFoundHelper;
+  spainAlert: typeof spainAlert;
   spainOtp: typeof spainOtp;
   spainWatcher: typeof spainWatcher;
   traffic: typeof traffic;

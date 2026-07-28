@@ -23,6 +23,7 @@ import {
   Terminal,
   Settings,
   ScrollText,
+  Flag,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -98,6 +99,7 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
     { href: "/admin/bot-logs", label: "Logs du Bot", icon: Terminal, badge: botFailCount },
     { href: "/admin/bot-settings", label: "Config Bot", icon: Settings },
     { href: "/admin/victor", label: "Agent Victor", icon: Bot },
+    { href: "/admin/spain-alerts", label: "Alertes Espagne 🇪🇸", icon: Flag },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;

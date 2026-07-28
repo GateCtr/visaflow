@@ -28,6 +28,7 @@ import GuidePage from "@/pages/GuidePage";
 import EmbassiesIndex from "@/pages/EmbassiesIndex";
 import EmbassyPage from "@/pages/EmbassyPage";
 
+import AlerteEspagne from "@/pages/AlerteEspagne";
 import Prix from "@/pages/Prix";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
@@ -46,6 +47,7 @@ import ClientInvoice from "@/pages/client/Invoice";
 import ClientMessages from "@/pages/client/Messages";
 import MyContract from "@/pages/client/MyContract";
 
+import SpainAlerts from "@/pages/admin/SpainAlerts";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
 import AdminApplicationDetail from "@/pages/admin/application-detail/index";
@@ -168,6 +170,9 @@ function Router() {
       <Route path="/ambassade-chine-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-bresil-kinshasa" component={EmbassyPage} />
 
+      {/* Alerte Espagne */}
+      <Route path="/alerte-espagne" component={AlerteEspagne} />
+
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
       <Route path="/audit-diagnostic" component={AuditDiagnostic} />
@@ -244,6 +249,9 @@ function Router() {
       </Route>
       <Route path="/admin/victor">
         {() => <ProtectedRoute adminOnly component={VictorAnalytics} />}
+      </Route>
+      <Route path="/admin/spain-alerts">
+        {() => <ProtectedRoute adminOnly component={SpainAlerts} />}
       </Route>
 
       <Route component={NotFound} />

@@ -166,6 +166,122 @@ function urgentBanner(text: string): string {
   </table>`;
 }
 
+/* ─── ALERTE ESPAGNE — NOTIFICATION ADMIN (nouvelle commande) ─── */
+export const sendSpainAlertNewOrderAdmin = internalAction({
+  args: {
+    orderId: v.string(),
+    name: v.string(),
+    email: v.string(),
+    phone: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const adminUrl = `${APP_URL}/admin/spain-alerts`;
+    const rows =
+      info("Nom", escHtml(args.name)) +
+      info("Email", escHtml(args.email)) +
+      (args.phone ? info("Téléphone", escHtml(args.phone)) : "");
+
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🇪🇸 Nouvelle commande Alerte Espagne</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Un client vient de soumettre une preuve de paiement pour l'accès au groupe WhatsApp d'alerte créneaux Espagne (10 USD).</p>
+      ${infoTable(rows)}
+      ${cta(adminUrl, "Voir et confirmer la commande")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: getAdminEmail(),
+      subject: `🇪🇸 Nouvelle commande Alerte Espagne — ${escHtml(args.name)}`,
+      html: htmlWrapper("Nouvelle commande Alerte Espagne", body),
+    });
+  },
+});
+
+/* ─── ALERTE ESPAGNE — CONFIRMATION CLIENT (paiement validé) ─── */
+export const sendSpainAlertConfirmed = internalAction({
+  args: {
+    to: v.string(),
+    name: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const groupUrl = process.env.SPAIN_ALERT_WHATSAPP_GROUP_URL ?? "#";
+    const adminWhatsapp = process.env.SPAIN_ALERT_ADMIN_WHATSAPP ?? "";
+    const adminMsg = encodeURIComponent(
+      `Bonjour, je viens de rejoindre le groupe Alerte Espagne. Mon email de paiement : ${args.to}. Merci de valider mon accès au groupe.`
+    );
+    const adminWaUrl = adminWhatsapp
+      ? `https://wa.me/${adminWhatsapp.replace(/\D/g, "")}?text=${adminMsg}`
+      : "#";
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🎉 Accès confirmé — Groupe Alerte Espagne 🇪🇸</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.name)}</strong>,<br/><br/>
+        Votre paiement a été validé ! Voici vos accès — <strong>lisez attentivement les 2 étapes ci-dessous</strong>.
+      </p>
+
+      <!-- ÉTAPE 1 : Rejoindre le groupe -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#166534;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 1 — Rejoindre le groupe WhatsApp</p>
+            <p style="margin:0 0 14px;color:#15803d;font-size:15px;line-height:1.7;">Cliquez sur le lien ci-dessous pour intégrer le groupe. L'accès est <strong>à vie</strong> — ne partagez pas ce lien.</p>
+            ${cta(groupUrl, "Rejoindre le groupe 🇪🇸")}
+          </td>
+        </tr>
+      </table>
+
+      <!-- ÉTAPE 2 : Contacter l'admin -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#fefce8;border:1.5px solid #fbbf24;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#92400e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 2 — Obligatoire : Envoyer un message à l'admin</p>
+            <p style="margin:0 0 14px;color:#78350f;font-size:15px;line-height:1.7;">
+              ⚠️ <strong>Après avoir rejoint le groupe</strong>, envoyez ce message à l'admin WhatsApp pour que votre accès soit approuvé dans le groupe. Sans ce message, votre accès restera en attente même après avoir intégré le groupe.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+              <tr>
+                <td style="background:#0f172a;border-radius:8px;padding:14px 16px;">
+                  <p style="margin:0;font-family:monospace;font-size:13px;color:#86efac;line-height:1.8;">
+                    Bonjour, je viens de rejoindre le groupe Alerte Espagne.<br/>
+                    Mon email de paiement : ${escHtml(args.to)}<br/>
+                    Merci de valider mon accès au groupe.
+                  </p>
+                </td>
+              </tr>
+            </table>
+            ${cta(adminWaUrl, "Envoyer le message à l'admin WhatsApp →")}
+          </td>
+        </tr>
+      </table>
+
+      <!-- Ce que vous recevrez -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px 24px;">
+            <p style="margin:0 0 12px;color:#0f172a;font-size:14px;font-weight:700;">📲 Ce que vous recevrez dans le groupe :</p>
+            <ul style="margin:0;padding-left:18px;color:#475569;font-size:14px;line-height:2;">
+              <li>Alertes créneaux en temps réel (jour J + plage horaire exacte)</li>
+              <li>Conseils pratiques pour capturer un créneau rapidement</li>
+              <li>Astuces testées pour réussir sur citaconsular.es</li>
+            </ul>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Cet accès est strictement personnel et non transférable. Tout partage du lien entraîne la révocation immédiate de l'accès.
+      </p>
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "🇪🇸 Accès confirmé — Groupe Alerte Rendez-vous Espagne",
+      html: htmlWrapper("Accès Alerte Espagne confirmé", body),
+    });
+  },
+});
+
 /* ─────────────────────────── 0. RELANCE PAIEMENT → CLIENT ─── */
 export const sendPaymentReminderClient = internalAction({
   args: {
@@ -605,7 +721,7 @@ export const sendSpainPreRegistrationClient = internalAction({
 
     const body = `
       <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Action requise — Inscription auprès de l'ambassade d'Espagne 🇪🇸</h2>
-      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">Bonjour <strong>${name}</strong>, notre robot de surveillance est maintenant actif. Pour qu'il puisse réserver votre créneau sur citaconsular.es, vous devez d'abord <strong>obtenir vos identifiants auprès de l'ambassade</strong> en suivant les 2 étapes ci-dessous.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">Bonjour <strong>${name}</strong>, notre système de surveillance est maintenant actif. Pour qu'il puisse réserver votre créneau sur citaconsular.es, vous devez d'abord <strong>obtenir vos identifiants auprès de l'ambassade</strong> en suivant les 2 étapes ci-dessous.</p>
 
       <!-- ÉTAPE 1 -->
       <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
@@ -648,7 +764,7 @@ export const sendSpainPreRegistrationClient = internalAction({
           <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:22px 24px;">
             <p style="margin:0 0 10px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 2 — Transmettez vos identifiants à Joventy</p>
             <p style="margin:0 0 10px;color:#166534;font-size:14px;line-height:1.7;">Une fois que l'ambassade vous a envoyé votre <strong>identifiant et mot de passe</strong> par email de confirmation, transmettez-les à votre conseiller Joventy via la messagerie de votre dossier.</p>
-            <p style="margin:0;color:#166534;font-size:14px;line-height:1.7;">Notre robot se connectera à citaconsular.es avec ces identifiants et réservera <strong>automatiquement</strong> le premier créneau disponible correspondant à vos dates.</p>
+            <p style="margin:0;color:#166534;font-size:14px;line-height:1.7;">Notre équipe se connectera à citaconsular.es avec ces identifiants et réservera le premier créneau disponible correspondant à vos dates.</p>
           </td>
         </tr>
       </table>
@@ -695,7 +811,7 @@ export const sendSpainOtpConfiguredClient = internalAction({
   handler: async (_ctx, args) => {
     const channelLabel =
       args.channel === "email"
-        ? `Email (interception IMAP automatique)`
+        ? `Email (transfert IMAP)`
         : args.channel === "sms"
         ? `SMS (assistance manuelle)`
         : `Manuel (vous serez notifié pour saisir le code)`;
@@ -724,7 +840,7 @@ export const sendSpainOtpConfiguredClient = internalAction({
       <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Configuration OTP Espagne activée ✅</h2>
       <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
         Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
-        Votre configuration pour l'interception automatique des codes OTP du portail espagnol est bien enregistrée.
+        Votre configuration pour l'interception des codes OTP du portail espagnol est bien enregistrée.
         Notre système utilisera ces informations uniquement lors des sessions de réservation de créneau.
       </p>
       ${infoTable(
@@ -767,14 +883,14 @@ export const sendSpainOtpRemovedClient = internalAction({
           <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:16px 20px;">
             <p style="margin:0;color:#166534;font-size:14px;line-height:1.7;">
               ✅ &nbsp;Données d'accès effacées<br/>
-              ✅ &nbsp;Interception automatique désactivée<br/>
+              ✅ &nbsp;Interception désactivée<br/>
               ✅ &nbsp;Aucune donnée résiduelle conservée
             </p>
           </td>
         </tr>
       </table>
       <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0;">
-        Si vous devez reprendre l'automatisation OTP, vous pouvez reconfigurer vos identifiants depuis votre dossier à tout moment.
+        Si vous souhaitez reprendre l'interception OTP, vous pouvez reconfigurer vos identifiants depuis votre dossier à tout moment.
       </p>
       ${cta(`${APP_URL}/dashboard/applications/${args.applicationId}`, "Voir mon dossier")}
     `;
@@ -829,7 +945,7 @@ export const sendSpainOtpGuideClient = internalAction({
           ${step(1, `<strong>Gmail :</strong> Paramètres → Filtres et adresses bloquées → supprimer le filtre créé pour ${mono("no-reply@citaconsular.es")}`)}
           ${step(2, `<strong>Outlook :</strong> Paramètres → Règles → supprimer la règle de transfert`)}
           ${step(3, `<strong>Android :</strong> Ouvrir SMS Forwarder → désactiver ou supprimer la règle`)}
-          ${step(4, `<strong>iPhone :</strong> Raccourcis → Automatisation → supprimer l'automatisation créée`)}
+          ${step(4, `<strong>iPhone :</strong> Raccourcis → Automatisation → supprimer le raccourci créé`)}
         </table>
         <p style="margin:12px 0 0;color:#92400e;font-size:13px;line-height:1.6;">
           Une fois le transfert supprimé, notre système ne recevra plus vos codes OTP. Vous pouvez relancer ce guide depuis votre dossier si besoin.
@@ -861,11 +977,11 @@ export const sendSpainOtpGuideClient = internalAction({
       step(6, `Corps de la requête : JSON → ajouter clé ${mono("raw_text")} = valeur <em>Contenu du message</em> → Enregistrer`);
 
     const body = `
-      <h2 style="margin:0 0 6px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Guide de configuration — OTP automatique Espagne</h2>
+      <h2 style="margin:0 0 6px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Guide de configuration — OTP Espagne</h2>
       <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
         Bonjour <strong>${escHtml(args.applicantName)}</strong>,<br/><br/>
-        Pour que notre bot puisse saisir automatiquement les codes OTP du portail espagnol,
-        configurez un transfert automatique vers Joventy selon la méthode qui vous convient.
+        Pour que notre équipe puisse traiter les codes OTP du portail espagnol,
+        configurez un transfert de ces codes vers Joventy selon la méthode qui vous convient.
         <strong>Aucun mot de passe ni identifiant à partager</strong> — seul le code de vérification sera transmis.
       </p>
 
@@ -893,7 +1009,7 @@ export const sendSpainOtpGuideClient = internalAction({
     await sendEmail({
       from: FROM,
       to: args.to,
-      subject: "Joventy — Guide de configuration OTP automatique (Espagne)",
+      subject: "Joventy — Guide de configuration OTP (Espagne)",
       html: htmlWrapper("Guide OTP Espagne", body),
     });
   },
@@ -1037,7 +1153,7 @@ export const sendSlotHuntingUpdateClient = internalAction({
           <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:20px 24px;">
             <p style="margin:0 0 12px;color:#14532d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Ce que fait notre système en ce moment</p>
             <table cellpadding="0" cellspacing="0" style="width:100%;">
-              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">🤖&nbsp; Vérification automatique toutes les 2 minutes</td></tr>
+              <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">🔍&nbsp; Vérification continue toutes les 2 minutes</td></tr>
               <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">📡&nbsp; Surveillance 24h/24, 7j/7</td></tr>
               <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">⚡&nbsp; Saisie instantanée dès qu'un créneau s'ouvre</td></tr>
               <tr><td style="padding:4px 0;color:#166534;font-size:14px;line-height:1.6;">🔔&nbsp; Alerte immédiate par email dès la capture</td></tr>
@@ -1046,7 +1162,7 @@ export const sendSlotHuntingUpdateClient = internalAction({
         </tr>
       </table>
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 16px;">
-        Les créneaux d'ambassade peuvent être rares et s'ouvrent parfois très brièvement. Notre robot est configuré pour réagir <strong>immédiatement</strong> dès qu'une opportunité apparaît. Votre dossier est prioritaire dans notre file d'attente.
+        Les créneaux d'ambassade peuvent être rares et s'ouvrent parfois très brièvement. Notre équipe réagit <strong>immédiatement</strong> dès qu'une opportunité apparaît. Votre dossier est prioritaire dans notre file d'attente.
       </p>
       <p style="color:#64748b;font-size:13px;line-height:1.7;margin:0 0 4px;">
         Avez-vous des questions ou souhaitez-vous mettre à jour votre dossier ? Écrivez-nous directement.
@@ -1146,7 +1262,7 @@ export const sendReEngagementNoApplicationClient = internalAction({
             <table cellpadding="0" cellspacing="0" style="width:100%;">
               <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">1️⃣&nbsp; Vous déposez votre demande en ligne (5 min)</td></tr>
               <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">2️⃣&nbsp; Vous réglez les frais d'engagement</td></tr>
-              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">3️⃣&nbsp; Notre équipe &amp; notre robot gèrent le reste</td></tr>
+              <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">3️⃣&nbsp; Notre équipe prend en charge le reste</td></tr>
               <tr><td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">4️⃣&nbsp; Vous recevez votre créneau ou votre visa</td></tr>
             </table>
           </td>

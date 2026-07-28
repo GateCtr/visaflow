@@ -576,6 +576,27 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_session", ["sessionId"]),
 
+  // ─── Alerte Rendez-vous Espagne ───────────────────────────────────────────
+  // Commandes d'accès au groupe WhatsApp d'alerte créneaux Espagne (10 USD lifetime).
+  spainAlertOrders: defineTable({
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    proofStorageId: v.string(),       // Capture preuve de paiement (Convex Storage)
+    status: v.union(
+      v.literal("pending"),           // En attente de confirmation admin
+      v.literal("confirmed"),         // Paiement validé — email groupe envoyé
+      v.literal("rejected"),          // Paiement rejeté
+    ),
+    createdAt: v.number(),
+    confirmedAt: v.optional(v.number()),
+    rejectedAt: v.optional(v.number()),
+    adminNote: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_email", ["email"])
+    .index("by_created", ["createdAt"]),
+
   victorConversations: defineTable({
     sessionId: v.string(),
     pageContext: v.string(),
