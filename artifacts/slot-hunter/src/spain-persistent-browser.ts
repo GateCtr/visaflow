@@ -436,6 +436,18 @@ class SpainPersistentBrowserManager {
         await cdpForCookie.detach().catch(() => {});
         cfClearance = capResult.session.cfClearance;
         console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté: ${cfClearance.slice(0, 40)}…`);
+
+        // ── Synchroniser le UA avec celui de CapSolver ────────────────────────
+        // CF lie le cf_clearance au UA qui a résolu le challenge.
+        // Si notre browser a un UA différent (ex: Macintosh vs Windows NT de CapSolver),
+        // CF re-challenge la page → "Un instant…" permanent.
+        // Fix : adopter le UA de CapSolver avant de re-naviguer.
+        const capUA = capResult.session.userAgent;
+        if (capUA && capUA !== this._ua) {
+          await page.setUserAgent(capUA);
+          this._ua = capUA;
+          console.log(`[spain-pb] 🔄 UA synchronisé avec CapSolver: ${capUA.slice(0, 70)}`);
+        }
       } catch (injectErr) {
         console.error(`[spain-pb] ❌ Injection cookie CapSolver échouée: ${injectErr}`);
         return null;
@@ -528,6 +540,17 @@ class SpainPersistentBrowserManager {
         }).catch(() => false);
 
         if (!continueClicked) {
+          // Diagnostic : loguer l'état DOM pour comprendre pourquoi le bouton est absent
+          const domState = await page.evaluate(() => ({
+            hash: window.location.hash,
+            title: document.title.slice(0, 60),
+            hasBtn: !!document.getElementById("idDivBktCustomContinueButton"),
+            btnVisible: (() => { const b = document.getElementById("idDivBktCustomContinueButton"); return b ? b.offsetParent !== null : false; })(),
+            hasWidget: !!document.getElementById("idBktWidgetDefaultBodyContainer"),
+            hasCustom: !!document.getElementById("idBktDefaultCustomContainer"),
+            bodySnippet: (document.body?.innerText ?? "").slice(0, 120).replace(/\n/g, " "),
+          })).catch(() => ({ error: "evaluate failed" }));
+          console.log(`[spain-pb] 🔍 DOM: ${JSON.stringify(domState)}`);
           await new Promise((r) => setTimeout(r, 2_000));
         }
       }
