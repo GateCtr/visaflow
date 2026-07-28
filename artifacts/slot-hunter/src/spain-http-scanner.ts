@@ -643,21 +643,27 @@ async function confirmSlotsViaDatetime(
 
   const cbBase = `cb${Date.now()}`;
   const now = new Date();
+  const srvsrc = "https://www.citaconsular.es";
 
   for (const svc of services.slice(0, 3)) {
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
     // 1. getagendas/ pour ce service
+    // Params confirmés par capture Burp réelle Chrome 150 (portail Cuba 2026-07-27).
+    // Universels Bookitit : services[] notation tableau, type, version, src, srvsrc requis.
     let agendaId = "";
     try {
-      const agQ = new URLSearchParams({
-        callback: `${cbBase}ag`,
-        publickey,
-        lang: "es",
-        services: svc.serviceId,
-        selectedPeople: "1",
-        _: String(Date.now()),
-      });
+      const agQ = new URLSearchParams();
+      agQ.append("callback",       `${cbBase}ag`);
+      agQ.append("type",           "default");
+      agQ.append("publickey",      publickey);
+      agQ.append("lang",           "es");
+      agQ.append("version",        "4");
+      agQ.append("src",            referer);
+      agQ.append("srvsrc",         srvsrc);
+      agQ.append("services[]",     svc.serviceId);
+      agQ.append("selectedPeople", "1");
+      agQ.append("_",              String(Date.now()));
       const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
       if (agRes?.ok) {
         const agData = parseJsonpPayload(await agRes.text());
@@ -668,22 +674,26 @@ async function confirmSlotsViaDatetime(
     } catch { /* non-fatal */ }
 
     // 2. datetime/ sur 2 mois
+    // Params confirmés par Burp : start/end (pas date_from/date_to), services[]/agendas[].
     for (let mo = 0; mo < 2; mo++) {
-      const tgt = new Date(now.getFullYear(), now.getMonth() + mo, 1);
-      const dateFrom = tgt.toISOString().slice(0, 10);
-      const dateTo = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+      const start = tgt.toISOString().slice(0, 10);
+      const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
-        const dtQ = new URLSearchParams({
-          callback: `${cbBase}dt${mo}`,
-          publickey,
-          lang: "es",
-          services: svc.serviceId,
-          agendas: agendaId,
-          selectedPeople: "1",
-          date_from: dateFrom,
-          date_to: dateTo,
-          _: String(Date.now()),
-        });
+        const dtQ = new URLSearchParams();
+        dtQ.append("callback",       `${cbBase}dt${mo}`);
+        dtQ.append("type",           "default");
+        dtQ.append("publickey",      publickey);
+        dtQ.append("lang",           "es");
+        dtQ.append("version",        "4");
+        dtQ.append("src",            referer);
+        dtQ.append("srvsrc",         srvsrc);
+        dtQ.append("services[]",     svc.serviceId);
+        if (agendaId) dtQ.append("agendas[]", agendaId);
+        dtQ.append("selectedPeople", "1");
+        dtQ.append("start",          start);
+        dtQ.append("end",            end);
+        dtQ.append("_",              String(Date.now()));
         const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
         if (dtRes?.ok) {
           const slot = extractSlotFromBookititPayload(parseJsonpPayload(await dtRes.text()));
