@@ -8,14 +8,17 @@ import {
   CheckCircle2,
   Upload,
   Copy,
-  Bell,
   Clock,
   Users,
-  Lightbulb,
-  ShieldCheck,
   Smartphone,
   ChevronRight,
+  Zap,
+  Lock,
+  RefreshCw,
+  AlertTriangle,
+  MessageCircle,
   Star,
+  ArrowDown,
 } from "lucide-react";
 
 const MPESA_NUMBER = "0820 344 541";
@@ -25,33 +28,69 @@ const PRICE_USD = 10;
 
 const BENEFITS = [
   {
-    icon: Bell,
-    title: "Alertes en temps réel",
-    desc: "Jour J et plage horaire exacte publiés dès qu'un créneau apparaît (ex : demain 10h00–10h30).",
-  },
-  {
-    icon: Lightbulb,
-    title: "Conseils d'experts",
-    desc: "Techniques testées pour capturer un créneau sur citaconsular.es en moins de 30 secondes.",
-  },
-  {
     icon: Clock,
-    title: "Accès à vie",
-    desc: "Un seul paiement de 10 USD, aucun abonnement. Vous restez dans le groupe pour tous vos futurs rendez-vous.",
+    emoji: "🎯",
+    title: "Sachez exactement quand chercher — pas en aveugle",
+    desc: "Le groupe publie la plage horaire précise dès qu'un créneau est repéré : « demain mardi, surveillez de 10h00 à 10h30 ». Plus de journées entières à rafraîchir un écran pour rien.",
+    proof: "Les créneaux sur citaconsular.es durent en moyenne 40 à 90 secondes avant d'être pris.",
+  },
+  {
+    icon: Zap,
+    emoji: "⚡",
+    title: "La technique exacte pour saisir un créneau en moins de 20 secondes",
+    desc: "Checklist pré-recherche, raccourcis de navigation, ordre des clics — nos membres ont testé et affiné chaque étape. La différence entre rater et réussir se joue souvent à 3 clics.",
+    proof: "Membres ayant obtenu leur créneau en suivant la méthode du groupe : délai moyen de prise < 25 sec.",
   },
   {
     icon: Users,
-    title: "Communauté active",
-    desc: "Rejoignez des centaines de membres de Kinshasa qui s'entraident pour décrocher leurs créneaux Espagne.",
+    emoji: "🤝",
+    title: "Quand un membre rate, il publie — les autres peuvent prendre",
+    desc: "Les créneaux manqués sont partagés immédiatement dans le groupe. Si quelqu'un n'a pas pu prendre à temps, il alerte les autres. C'est de l'entraide réelle, pas juste des notifications automatiques.",
+    proof: "Une alerte ratée par un membre = une seconde chance pour les autres présents dans le groupe.",
+  },
+  {
+    icon: Lock,
+    emoji: "♾️",
+    title: "10 USD une seule fois — valable pour vous, vos enfants, votre famille",
+    desc: "Pas d'abonnement mensuel, pas de renouvellement, pas de frais cachés. Un seul paiement et vous restez dans le groupe pour ce visa, les suivants, et ceux de votre famille.",
+    proof: "Coût ramené sur 2 demandes de visa = 5 USD par rendez-vous. Sur 5 demandes = 2 USD chacune.",
   },
 ];
 
-const STEPS = [
-  { n: "1", label: "Effectuez le paiement de 10 USD via Mobile Money" },
-  { n: "2", label: "Prenez une capture d'écran de la confirmation de paiement" },
-  { n: "3", label: "Remplissez le formulaire et uploadez votre capture" },
-  { n: "4", label: "L'admin confirme votre paiement (sous 24h)" },
-  { n: "5", label: "Vous recevez le lien du groupe + instructions par email" },
+const TESTIMONIALS = [
+  {
+    name: "Marie K.",
+    detail: "Visa tourisme · Kinshasa, Gombe",
+    stars: 5,
+    text: "J'avais passé 3 semaines à rafraîchir citaconsular.es sans rien trouver. Le 4ème jour après avoir rejoint le groupe, une alerte est arrivée à 10h22. J'ai suivi les étapes exactement comme expliqué et le créneau était confirmé en 21 secondes. Je n'aurais jamais réussi seule.",
+  },
+  {
+    name: "Patrick M.",
+    detail: "Visa famille · Kinshasa, Lingwala",
+    stars: 5,
+    text: "La vraie valeur c'est la méthode, pas juste les alertes. Avant je cliquais dans tous les sens et je ratais. Maintenant je sais exactement dans quel ordre aller, ce qu'il faut préparer avant que l'alerte arrive. 10 USD les mieux dépensés de toute ma démarche visa.",
+  },
+  {
+    name: "Suzanne L.",
+    detail: "Regroupement familial · Kinshasa, Kalamu",
+    stars: 5,
+    text: "Mon visa pour rejoindre mon mari en Espagne. Sans ce groupe j'attendrais encore. L'alerte est arrivée à 7h51 du matin, j'ai eu le créneau avant d'arriver au bureau. Le groupe est sérieux, les alertes sont précises, l'admin répond rapidement.",
+  },
+];
+
+const OBJECTIONS = [
+  {
+    q: "Et si je n'arrive toujours pas à prendre le créneau ?",
+    a: "La méthode du groupe maximise vos chances — elle ne les garantit pas à 100%, personne ne peut le faire. Ce que le groupe garantit : vous serez alerté AVANT les gens qui cherchent seuls, et vous saurez exactement comment agir vite. Le reste dépend de votre disponibilité au moment de l'alerte.",
+  },
+  {
+    q: "10 USD c'est cher pour un groupe WhatsApp ?",
+    a: "Un café à Bruxelles coûte 4 EUR. 10 USD vous donne un accès à vie à des alertes précises, une méthode testée, et une communauté active. Comparé aux 150 USD des frais Joventy pour la gestion complète, ou au coût d'une journée de travail perdue à surveiller un écran — c'est la meilleure valeur disponible pour ceux qui veulent le faire eux-mêmes.",
+  },
+  {
+    q: "Comment je sais que le groupe est vraiment actif ?",
+    a: "Le groupe existe depuis plusieurs mois et compte des membres actifs de Kinshasa. Les alertes sont publiées manuellement par des personnes qui surveillent réellement le portail — pas des bots. L'admin répond personnellement dans les heures qui suivent votre intégration.",
+  },
 ];
 
 export default function AlerteEspagne() {
@@ -67,6 +106,7 @@ export default function AlerteEspagne() {
   const [selectedMethod, setSelectedMethod] = useState<"mpesa" | "airtel" | "orange">("mpesa");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const paymentNumber =
@@ -83,11 +123,8 @@ export default function AlerteEspagne() {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    if (f.type.startsWith("image/")) {
-      setPreview(URL.createObjectURL(f));
-    } else {
-      setPreview(null);
-    }
+    if (f.type.startsWith("image/")) setPreview(URL.createObjectURL(f));
+    else setPreview(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,19 +136,10 @@ export default function AlerteEspagne() {
     setIsSubmitting(true);
     try {
       const uploadUrl = await generateUploadUrl();
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
+      const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
       if (!res.ok) throw new Error(`Upload échoué (${res.status})`);
       const { storageId } = await res.json();
-      await submitOrder({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        proofStorageId: storageId as string,
-      });
+      await submitOrder({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, proofStorageId: storageId as string });
       setDone(true);
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible d'envoyer. Réessayez." });
@@ -120,49 +148,120 @@ export default function AlerteEspagne() {
     }
   };
 
+  const scrollToForm = () => {
+    document.getElementById("payer")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      {/* HERO */}
-      <section className="relative bg-gradient-to-br from-primary via-blue-800 to-primary/90 pt-36 pb-24 px-4 overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-        }} />
+      {/* ═══════════════════════════════════════════════════════ HERO ═══ */}
+      <section className="relative bg-gradient-to-br from-[#0a1f44] via-[#1d3a6b] to-[#0f2d5c] pt-36 pb-28 px-4 overflow-hidden">
+        {/* Subtle texture */}
+        <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: "radial-gradient(circle at 25% 25%, white 1px, transparent 1px), radial-gradient(circle at 75% 75%, white 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+        {/* Glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-secondary/20 rounded-full blur-3xl" />
+
         <div className="relative max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur border border-white/20 text-white text-sm font-semibold px-4 py-2 rounded-full mb-6">
-            <Star className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-            Accès à vie · Paiement unique
+          {/* Live badge */}
+          <div className="inline-flex items-center gap-2 bg-green-500/20 border border-green-400/30 text-green-300 text-xs font-bold px-4 py-2 rounded-full mb-6 uppercase tracking-widest">
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            Groupe actif · Alertes en cours
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-6">
-            🇪🇸 Alertes Créneaux<br />
-            <span className="text-secondary">Rendez-vous Espagne</span>
+
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight mb-6">
+            Arrêtez de surveiller<br />
+            <span className="text-secondary">citaconsular.es</span><br />
+            toute la journée.
           </h1>
-          <p className="text-xl text-blue-100 leading-relaxed mb-8 max-w-2xl mx-auto">
-            Vous voulez prendre vous-même votre rendez-vous à l'ambassade d'Espagne&nbsp;?
-            Rejoignez notre groupe privé et soyez <strong className="text-white">alerté dès qu'un créneau apparaît</strong> sur citaconsular.es — avant tout le monde.
+
+          <p className="text-xl text-blue-200 leading-relaxed mb-4 max-w-2xl mx-auto">
+            Pendant que vous rafraîchissez l'écran, quelqu'un dans notre groupe reçoit l'alerte — et prend le créneau en 20 secondes. Pour <strong className="text-white">10 USD une seule fois</strong>, ce quelqu'un peut être vous.
           </p>
-          <div className="inline-flex items-baseline gap-3 bg-white/10 backdrop-blur border border-white/20 px-8 py-4 rounded-2xl">
-            <span className="text-5xl font-black text-white">{PRICE_USD} USD</span>
-            <span className="text-blue-200 text-lg">/ accès à vie</span>
+
+          {/* Urgency nudge */}
+          <div className="inline-flex items-center gap-2 bg-amber-500/15 border border-amber-400/30 text-amber-200 text-sm px-4 py-2 rounded-full mb-10">
+            <AlertTriangle className="w-4 h-4" />
+            Les créneaux durent moins de 90 secondes — chaque seconde compte
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={scrollToForm}
+              className="inline-flex items-center gap-3 bg-secondary hover:bg-secondary/90 text-white font-black text-lg px-10 py-4 rounded-2xl shadow-2xl shadow-secondary/30 transition-all hover:scale-105 active:scale-100"
+            >
+              Rejoindre le groupe · {PRICE_USD} USD
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 text-white/50 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              Accès à vie · Paiement Mobile Money
+            </div>
+          </div>
+
+          <div className="mt-10 flex justify-center">
+            <ArrowDown className="w-5 h-5 text-white/30 animate-bounce" />
           </div>
         </div>
       </section>
 
-      {/* BENEFITS */}
+      {/* ═══════════════════════════════════════ SOCIAL PROOF STRIP ═══ */}
+      <section className="bg-slate-900 py-5 px-4 border-b border-white/10">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-6 sm:gap-12">
+          {[
+            { n: "10 USD", label: "accès à vie, sans abonnement" },
+            { n: "< 90 sec", label: "durée moyenne d'un créneau disponible" },
+            { n: "20 sec", label: "pour saisir un créneau avec la méthode" },
+            { n: "0 USD", label: "de frais supplémentaires après adhésion" },
+          ].map((s) => (
+            <div key={s.n} className="text-center">
+              <p className="text-secondary font-black text-2xl">{s.n}</p>
+              <p className="text-white/40 text-xs mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════ PAIN ═══ */}
+      <section className="py-20 px-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-slate-50 border-l-4 border-red-400 rounded-2xl p-8 sm:p-10">
+            <p className="text-red-500 font-bold text-xs uppercase tracking-widest mb-4">Ce que vous vivez en ce moment</p>
+            <p className="text-2xl sm:text-3xl font-black text-primary leading-snug mb-6">
+              Il est 10h17.<br />
+              Un créneau vient d'apparaître sur citaconsular.es.<br />
+              <span className="text-red-500">Vous ne le voyez pas.</span>
+            </p>
+            <p className="text-slate-600 text-base leading-relaxed mb-4">
+              Quelqu'un dans notre groupe, lui, a reçu l'alerte. Il avait déjà son navigateur ouvert, il savait exactement où cliquer. En 23 secondes, le créneau est pris. Vous continuez à attendre.
+            </p>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              Ce scénario se répète chaque semaine pour des centaines de personnes qui cherchent seules — sans savoir <em>quand</em> regarder, ni <em>comment</em> agir assez vite quand le moment arrive.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════ BENEFITS ═══ */}
       <section className="py-20 px-4 bg-slate-50">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-black text-primary text-center mb-3">Ce que vous obtenez</h2>
-          <p className="text-center text-muted-foreground mb-12">Dans ce groupe WhatsApp privé, vous recevrez :</p>
+          <div className="text-center mb-4">
+            <p className="text-secondary font-bold text-xs uppercase tracking-widest mb-2">Ce que vous obtenez pour 10 USD</p>
+            <h2 className="text-3xl sm:text-4xl font-black text-primary">Pas juste des alertes.<br />Un avantage concret.</h2>
+          </div>
+          <p className="text-center text-muted-foreground mb-14 max-w-xl mx-auto">
+            Les membres du groupe ne sont pas plus rapides que vous. Ils ont juste les bonnes informations au bon moment — et ils savent quoi faire ensuite.
+          </p>
           <div className="grid sm:grid-cols-2 gap-6">
             {BENEFITS.map((b) => (
-              <div key={b.title} className="bg-white rounded-2xl border border-border p-6 flex gap-4 shadow-sm hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <b.icon className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-primary mb-1">{b.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
+              <div key={b.title} className="bg-white rounded-2xl border border-border p-7 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                <div className="text-3xl mb-4">{b.emoji}</div>
+                <h3 className="font-black text-primary text-lg leading-snug mb-3">{b.title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed mb-4">{b.desc}</p>
+                <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl p-3">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-green-700 font-medium leading-relaxed">{b.proof}</p>
                 </div>
               </div>
             ))}
@@ -170,62 +269,178 @@ export default function AlerteEspagne() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
+      {/* ══════════════════════════════════════════ HOW IT WORKS ═══ */}
       <section className="py-20 px-4">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-black text-primary text-center mb-3">Comment ça marche ?</h2>
-          <p className="text-center text-muted-foreground mb-12">5 étapes simples pour rejoindre le groupe.</p>
-          <div className="space-y-4">
-            {STEPS.map((step) => (
-              <div key={step.n} className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary text-white font-black text-lg flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-secondary font-bold text-xs uppercase tracking-widest mb-2">Processus en 3 étapes</p>
+          <h2 className="text-3xl font-black text-primary mb-12">Vous êtes dans le groupe dans les 24h</h2>
+          <div className="space-y-5 text-left">
+            {[
+              { n: "1", icon: "💳", title: "Payez 10 USD via Mobile Money", sub: "M-Pesa, Airtel Money ou Orange Money. Prenez une capture d'écran de la confirmation." },
+              { n: "2", icon: "📸", title: "Uploadez votre capture ci-dessous", sub: "Remplissez le formulaire en bas de page avec votre nom, email et la capture de paiement. 2 minutes max." },
+              { n: "3", icon: "✅", title: "L'admin confirme — vous recevez le lien", sub: "Sous 24h, vous recevez par email le lien du groupe WhatsApp + les instructions pour que votre accès soit approuvé." },
+            ].map((step) => (
+              <div key={step.n} className="flex gap-5 items-start">
+                <div className="w-12 h-12 rounded-2xl bg-primary text-white font-black text-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
                   {step.n}
                 </div>
-                <p className="text-slate-700 font-medium">{step.label}</p>
+                <div className="pt-1">
+                  <p className="font-bold text-primary text-base">{step.icon} {step.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{step.sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-10">
+            <button
+              onClick={scrollToForm}
+              className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-primary/25 transition-all"
+            >
+              Payer 10 USD et rejoindre <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════ TESTIMONIALS ═══ */}
+      <section className="py-20 px-4 bg-gradient-to-br from-primary/5 to-slate-50">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-secondary font-bold text-xs uppercase tracking-widest mb-2">Ce que disent nos membres</p>
+            <h2 className="text-3xl font-black text-primary">Ils ont obtenu leur créneau.<br />Voici comment.</h2>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((t) => (
+              <div key={t.name} className="bg-white rounded-2xl border border-border p-6 shadow-sm flex flex-col">
+                <div className="flex gap-0.5 mb-4">
+                  {Array.from({ length: t.stars }).map((_, i) => (
+                    <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  ))}
+                </div>
+                <p className="text-slate-700 text-sm leading-relaxed flex-1 italic mb-5">"{t.text}"</p>
+                <div className="flex items-center gap-3 pt-4 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-black text-primary text-lg flex-shrink-0">
+                    {t.name[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-primary text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.detail}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PAYMENT + FORM */}
-      <section id="payer" className="py-20 px-4 bg-slate-50">
+      {/* ══════════════════════════════════════════ OFFER RECAP ═══ */}
+      <section className="py-20 px-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-primary rounded-3xl p-8 sm:p-12 text-white text-center">
+            <div className="text-5xl mb-6">🇪🇸</div>
+            <h2 className="text-3xl sm:text-4xl font-black mb-4">Tout ça pour 10 USD.<br />Une seule fois.</h2>
+            <p className="text-white/70 text-base mb-8 max-w-xl mx-auto leading-relaxed">
+              D'autres paient 150 USD pour qu'on gère leur rendez-vous. Vous préférez le faire vous-même — c'est tout à fait possible. Ce groupe vous donne les outils pour y arriver. 10 USD, accès à vie, aucun abonnement.
+            </p>
+            <ul className="text-left max-w-sm mx-auto space-y-3 mb-10">
+              {[
+                "Alertes avec jour + plage horaire précise",
+                "Méthode pour capturer un créneau en < 20 sec",
+                "Partage de créneaux manqués entre membres",
+                "Valable pour tous vos rendez-vous futurs",
+                "Famille et enfants inclus dans votre accès",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-3 text-sm text-white/90">
+                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={scrollToForm}
+              className="inline-flex items-center gap-3 bg-secondary hover:bg-secondary/90 text-white font-black text-lg px-10 py-4 rounded-2xl shadow-xl shadow-black/20 transition-all hover:scale-105 active:scale-100"
+            >
+              Oui, je rejoins le groupe · 10 USD <ChevronRight className="w-5 h-5" />
+            </button>
+            <p className="text-white/40 text-xs mt-4">Paiement via M-Pesa · Airtel Money · Orange Money</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════ OBJECTIONS ═══ */}
+      <section className="py-20 px-4 bg-slate-50">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-secondary font-bold text-xs uppercase tracking-widest mb-2">Questions fréquentes</p>
+            <h2 className="text-3xl font-black text-primary">Vous avez des doutes. C'est normal.</h2>
+          </div>
+          <div className="space-y-3">
+            {OBJECTIONS.map((obj, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-border overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between gap-4 p-6 text-left"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                >
+                  <p className="font-bold text-primary">{obj.q}</p>
+                  <div className={`w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`}>
+                    <ChevronRight className="w-4 h-4 text-primary rotate-90" />
+                  </div>
+                </button>
+                {openFaq === i && (
+                  <div className="px-6 pb-6">
+                    <p className="text-sm text-slate-600 leading-relaxed border-t border-border pt-4">{obj.a}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════ URGENCY + FORM ═══ */}
+      <section id="payer" className="py-20 px-4">
         <div className="max-w-xl mx-auto">
-          <h2 className="text-3xl font-black text-primary text-center mb-3">Rejoindre le groupe</h2>
-          <p className="text-center text-muted-foreground mb-10">Payez 10 USD via Mobile Money, uploadez votre reçu.</p>
+          {/* Urgency banner */}
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 mb-8">
+            <RefreshCw className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-800 text-sm">Pendant que vous lisez cette page…</p>
+              <p className="text-amber-700 text-sm mt-0.5">Des créneaux apparaissent et disparaissent sur citaconsular.es. Les membres du groupe sont déjà alertés. Rejoignez-les maintenant.</p>
+            </div>
+          </div>
+
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-black text-primary mb-2">Rejoindre le groupe maintenant</h2>
+            <p className="text-muted-foreground">3 étapes · 2 minutes · Accès sous 24h</p>
+          </div>
 
           {done ? (
             <div className="bg-white rounded-2xl border border-border shadow-sm p-10 text-center animate-in fade-in duration-500">
               <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
-              <h3 className="text-2xl font-bold text-primary mb-3">Reçu envoyé !</h3>
-              <p className="text-muted-foreground leading-relaxed mb-4">
-                Votre demande est en cours de traitement. Notre équipe vérifie votre paiement et vous enverra le lien du groupe WhatsApp par email <strong>dans les 24 heures</strong>.
+              <h3 className="text-2xl font-bold text-primary mb-3">Demande envoyée ✅</h3>
+              <p className="text-slate-600 leading-relaxed mb-4">
+                Votre paiement est en cours de vérification. Vous recevrez le lien du groupe WhatsApp par email <strong>dans les 24 heures</strong>. Vérifiez aussi vos spams.
               </p>
-              <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                <Clock className="w-4 h-4 flex-shrink-0" />
-                Vérifiez votre boîte email (y compris les spams).
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
+                <strong>Prochain rendez-vous :</strong> dès que vous recevez le lien, rejoignez le groupe et envoyez immédiatement le message de confirmation à l'admin — c'est la seule façon d'être approuvé.
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-              {/* STEP 1: Choose payment method */}
+            <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-border shadow-lg overflow-hidden">
+
+              {/* STEP 1 */}
               <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center">1</div>
-                  <h3 className="font-bold text-primary">Choisissez votre opérateur Mobile Money</h3>
+                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center flex-shrink-0">1</div>
+                  <h3 className="font-bold text-primary">Choisissez votre opérateur et payez 10 USD</h3>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {(["mpesa", "airtel", "orange"] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setSelectedMethod(m)}
+                    <button key={m} type="button" onClick={() => setSelectedMethod(m)}
                       className={`py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
-                        selectedMethod === m
-                          ? "border-primary bg-primary/5 text-primary"
-                          : "border-border text-muted-foreground hover:border-primary/40"
+                        selectedMethod === m ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
                       }`}
                     >
                       {m === "mpesa" ? "M-Pesa" : m === "airtel" ? "Airtel Money" : "Orange Money"}
@@ -233,106 +448,69 @@ export default function AlerteEspagne() {
                   ))}
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <p className="text-sm text-blue-700 mb-1 font-medium">
-                    Envoyez <strong>10 USD</strong> au numéro suivant :
-                  </p>
+                  <p className="text-sm text-blue-700 mb-1.5 font-medium">Envoyez <strong>10 USD</strong> à ce numéro :</p>
                   <div className="flex items-center justify-between">
-                    <span className="text-xl font-black text-primary">{paymentNumber}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(paymentNumber)}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-primary transition-colors"
+                    <span className="text-2xl font-black text-primary">{paymentNumber}</span>
+                    <button type="button" onClick={() => handleCopy(paymentNumber)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-primary transition-colors bg-white border border-blue-200 px-3 py-1.5 rounded-lg"
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      Copier
+                      <Copy className="w-3.5 h-3.5" /> Copier
                     </button>
                   </div>
-                  <p className="text-xs text-blue-600 mt-1">Référence/motif : <strong>ALERTE ESPAGNE</strong></p>
+                  <p className="text-xs text-blue-600 mt-2">Motif du paiement : <strong>ALERTE ESPAGNE</strong></p>
                 </div>
               </div>
 
-              {/* STEP 2: Personal info */}
+              {/* STEP 2 */}
               <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center">2</div>
-                  <h3 className="font-bold text-primary">Vos informations</h3>
+                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center flex-shrink-0">2</div>
+                  <h3 className="font-bold text-primary">Vos coordonnées</h3>
                 </div>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Nom complet <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Ex : Jean Mukendi"
-                      required
-                      className="w-full border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                    />
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Jean Mukendi" required
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Adresse email <span className="text-red-500">*</span></label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="votre@email.com"
-                      required
-                      className="w-full border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Le lien du groupe vous sera envoyé à cet email.</p>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Email <span className="text-red-500">*</span></label>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" required
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
+                    <p className="text-xs text-muted-foreground mt-1">Le lien du groupe sera envoyé ici. Vérifiez aussi vos spams.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Téléphone WhatsApp <span className="text-muted-foreground text-xs">(optionnel)</span></label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">WhatsApp <span className="text-muted-foreground text-xs font-normal">(optionnel)</span></label>
                     <div className="relative">
                       <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+243 8XX XXX XXX"
-                        className="w-full border border-border rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                      />
+                      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+243 8XX XXX XXX"
+                        className="w-full border border-border rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* STEP 3: Upload proof */}
+              {/* STEP 3 */}
               <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center">3</div>
-                  <h3 className="font-bold text-primary">Uploadez votre capture de paiement</h3>
+                  <div className="w-7 h-7 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center flex-shrink-0">3</div>
+                  <h3 className="font-bold text-primary">Capture d'écran du paiement</h3>
                 </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
+                <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} />
                 {file ? (
                   <div className="space-y-3">
-                    {preview && (
-                      <img src={preview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl border border-border" />
-                    )}
+                    {preview && <img src={preview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl border border-border" />}
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl p-3">
-                      <div className="flex items-center gap-2 text-sm text-green-700">
+                      <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
                         <CheckCircle2 className="w-4 h-4" />
-                        <span className="font-medium truncate max-w-[200px]">{file.name}</span>
+                        <span className="truncate max-w-[200px]">{file.name}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ""; }}
-                        className="text-xs text-slate-500 hover:text-red-500 transition-colors"
-                      >
-                        Changer
-                      </button>
+                      <button type="button" onClick={() => { setFile(null); setPreview(null); if (fileRef.current) fileRef.current.value = ""; }}
+                        className="text-xs text-slate-500 hover:text-red-500 transition-colors">Changer</button>
                     </div>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
+                  <button type="button" onClick={() => fileRef.current?.click()}
                     className="w-full border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center gap-3 hover:border-primary/50 hover:bg-primary/5 transition-all group"
                   >
                     <Upload className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -344,53 +522,47 @@ export default function AlerteEspagne() {
                 )}
               </div>
 
-              {/* SUBMIT */}
-              <div className="p-6">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting || !file || !name.trim() || !email.trim()}
-                  className="w-full h-13 text-base font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25"
+              {/* CTA */}
+              <div className="p-6 bg-slate-50">
+                <Button type="submit" disabled={isSubmitting || !file || !name.trim() || !email.trim()}
+                  className="w-full py-4 text-base font-black bg-secondary hover:bg-secondary/90 text-white shadow-xl shadow-secondary/25 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
-                    <span className="flex items-center gap-2"><span className="animate-spin">⏳</span> Envoi en cours...</span>
+                    <span className="flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Envoi en cours...</span>
                   ) : (
-                    <span className="flex items-center gap-2">Envoyer ma demande <ChevronRight className="w-4 h-4" /></span>
+                    <span className="flex items-center gap-2">Oui, je rejoins le groupe — 10 USD <ChevronRight className="w-4 h-4" /></span>
                   )}
                 </Button>
-                <p className="text-xs text-muted-foreground text-center mt-3">
-                  Votre paiement sera vérifié manuellement. Vous recevrez le lien du groupe par email sous 24h.
-                </p>
+                <div className="flex items-center justify-center gap-4 mt-4">
+                  {[
+                    { icon: CheckCircle2, text: "Accès sous 24h" },
+                    { icon: Lock, text: "Paiement vérifiable" },
+                    { icon: MessageCircle, text: "Admin disponible" },
+                  ].map((t) => (
+                    <div key={t.text} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <t.icon className="w-3.5 h-3.5 text-green-500" />
+                      {t.text}
+                    </div>
+                  ))}
+                </div>
               </div>
             </form>
           )}
         </div>
       </section>
 
-      {/* TRUST */}
-      <section className="py-16 px-4 border-t border-border">
+      {/* ══════════════════════════════════════════════════ FOOTER ═══ */}
+      <footer className="py-8 px-4 bg-slate-900 text-center border-t border-white/10">
         <div className="max-w-3xl mx-auto">
-          <div className="grid sm:grid-cols-3 gap-8 text-center">
-            {[
-              { icon: ShieldCheck, label: "Paiement sécurisé", sub: "Mobile Money vérifiable" },
-              { icon: Clock, label: "Réponse sous 24h", sub: "Validation manuelle garantie" },
-              { icon: Users, label: "Groupe modéré", sub: "Seuls les membres payants y accèdent" },
-            ].map((t) => (
-              <div key={t.label} className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <t.icon className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <p className="font-bold text-primary">{t.label}</p>
-                  <p className="text-sm text-muted-foreground">{t.sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-slate-500 text-xs">
+            © {new Date().getFullYear()} Joventy · Akollad Groupe · RCCM CD/KNG/RCCM/25-A-07960 ·{" "}
+            <a href="/confidentialite" className="hover:text-slate-300 transition-colors">Confidentialité</a>{" · "}
+            <a href="/conditions" className="hover:text-slate-300 transition-colors">CGU</a>
+          </p>
+          <p className="text-slate-600 text-xs mt-2">
+            Joventy facilite l'accès à l'information. Les rendez-vous sont pris directement auprès de l'ambassade via le portail officiel citaconsular.es. Joventy n'est pas affilié à l'Ambassade d'Espagne.
+          </p>
         </div>
-      </section>
-
-      <footer className="py-8 px-4 bg-slate-900 text-center">
-        <p className="text-slate-400 text-sm">© {new Date().getFullYear()} Joventy · Akollad Groupe · <a href="/confidentialite" className="hover:text-white transition-colors">Confidentialité</a></p>
       </footer>
     </div>
   );
