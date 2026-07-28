@@ -31,6 +31,7 @@
     "cloudflare:test-free": "tsx test-free-cloudflare-solutions.ts",
     "cloudflare:free-solver": "tsx test-free-solver-simple.ts",
     "cloudflare:capture-free": "tsx capture-free-cookie.ts",
+    "capture:spain-cuba": "tsx src/debug/spain-cuba-capture.ts",
     "cev:capture": "tsx scripts/cev-capture-interactive.ts",
     "spain:capture": "tsx scripts/spain-manual-capture.ts",
     "spain:capture:manual": "tsx scripts/spain-manual-capture.ts",
