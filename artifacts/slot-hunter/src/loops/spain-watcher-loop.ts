@@ -89,24 +89,34 @@ interface SpainDossier {
 async function getActiveSpainDossiers(): Promise<SpainDossier[]> {
   try {
     const jobs = await getActiveJobs();
-    return jobs
-      .filter((j: HunterJob) =>
-        (j.destination === "spain" || j.destination === "espagne" || j.destination === "es") &&
-        j.hunterConfig?.isActive === true &&
-        !!j.hunterConfig.embassyUsername &&
-        !!j.hunterConfig.embassyPassword
-      )
-      .map((j: HunterJob) => ({
-        id: j.id,
-        applicantName: j.applicantName,
-        visaType: j.visaType,
-        login: j.hunterConfig.embassyUsername,
-        password: j.hunterConfig.embassyPassword,
-        applicationId: j.id,
-        otpChannel: (j.spainOtpConfig?.channel ?? "email") as "email" | "sms" | "manual",
-        slotDateFrom: j.hunterConfig.slotDateFrom,
-        slotDateDeadline: j.hunterConfig.slotDateDeadline,
-      }));
+
+    // ─── Diagnostic : décompose chaque étape du filtre ────────────────────────
+    const spainDestinations = ["spain", "espagne", "es"];
+    const byDestination = jobs.filter((j: HunterJob) => spainDestinations.includes(j.destination));
+    const byActive      = byDestination.filter((j: HunterJob) => j.hunterConfig?.isActive === true);
+    const byCreds       = byActive.filter((j: HunterJob) => !!j.hunterConfig.embassyUsername && !!j.hunterConfig.embassyPassword);
+
+    if (byDestination.length === 0 && jobs.length > 0) {
+      const dests = [...new Set(jobs.map((j: HunterJob) => j.destination))].join(", ");
+      log("INFO", `[SPAIN-WATCHER] 🔍 Diagnostic dossiers: ${jobs.length} job(s) total, 0 Espagne — destinations trouvées: [${dests}]`);
+    } else if (byDestination.length > 0 && byActive.length === 0) {
+      log("INFO", `[SPAIN-WATCHER] 🔍 Diagnostic dossiers: ${byDestination.length} dossier(s) Espagne trouvé(s) mais hunterConfig.isActive=false pour tous`);
+    } else if (byActive.length > 0 && byCreds.length === 0) {
+      log("INFO", `[SPAIN-WATCHER] 🔍 Diagnostic dossiers: ${byActive.length} dossier(s) Espagne actifs mais sans credentials (embassyUsername/embassyPassword vides) — dossiers: ${byActive.map((j: HunterJob) => j.applicantName).join(", ")}`);
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    return byCreds.map((j: HunterJob) => ({
+      id: j.id,
+      applicantName: j.applicantName,
+      visaType: j.visaType,
+      login: j.hunterConfig.embassyUsername,
+      password: j.hunterConfig.embassyPassword,
+      applicationId: j.id,
+      otpChannel: (j.spainOtpConfig?.channel ?? "email") as "email" | "sms" | "manual",
+      slotDateFrom: j.hunterConfig.slotDateFrom,
+      slotDateDeadline: j.hunterConfig.slotDateDeadline,
+    }));
   } catch (err) {
     log("WARN", `[SPAIN-WATCHER] Échec récupération dossiers Espagne: ${err}`);
     return [];
@@ -233,11 +243,16 @@ export async function startSpainWatcherLoop(): Promise<void> {
     // déclencher un booking. Sans ce garde-fou, un watcher actif mais sans dossier
     // consomme un solve Cloudflare et son gros trafic proxy pour rien.
     const preWarmConfig = await getSpainWatcherConfig().catch(() => null);
-    const preWarmDossiers = preWarmConfig?.isActive
+    if (!preWarmConfig) {
+      log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — Spain Watcher non configuré ou inactif dans Convex (spainWatcher.isActive=false)");
+    }
+    const preWarmDossiers = preWarmConfig
       ? await getActiveSpainDossiers()
       : [];
-    if (!preWarmConfig?.isActive || preWarmDossiers.length === 0) {
-      log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — aucun dossier Espagne actif avec identifiants");
+    if (preWarmConfig && preWarmDossiers.length === 0) {
+      log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — aucun dossier Espagne actif avec identifiants (voir diagnostic ci-dessus)");
+    } else if (!preWarmConfig) {
+      // déjà loggé ci-dessus
     } else {
       const preWarmLabel = SPAIN_PERSISTENT_BROWSER ? "Chromium persistant" : "proxy Espagne + CapSolver";
       log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) (${preWarmLabel})…`);
@@ -257,6 +272,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
       const config = await getSpainWatcherConfig();
 
       if (!config || !config.isActive) {
+        log("INFO", "[SPAIN-WATCHER] Config Convex inactive (spainWatcher.isActive=false) — retry dans 2 min");
         await new Promise((r) => setTimeout(r, 2 * 60_000));
         continue;
       }
