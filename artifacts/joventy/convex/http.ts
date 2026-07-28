@@ -1211,6 +1211,48 @@ http.route({
   }),
 });
 
+// ─── Spain Watcher : commandes rush-prep (CF resolve / session pre-warm) ──────
+http.route({
+  path: "/hunter/spain-watcher/rush-prep",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    const command = await ctx.runMutation(internal.spainWatcher.internalGetRushPrepCommand);
+    return new Response(JSON.stringify({ command: command ?? null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/hunter/spain-watcher/rush-prep",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { result: string };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.result) {
+      return new Response("Missing field: result", { status: 400 });
+    }
+
+    await ctx.runMutation(internal.spainWatcher.internalAckRushPrep, { result: body.result });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── Slot Discovery : événements de dates captées/ignorées par le bot ─────────
 http.route({
   path: "/hunter/slot-discovery",

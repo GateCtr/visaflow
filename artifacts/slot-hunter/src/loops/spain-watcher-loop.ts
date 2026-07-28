@@ -15,7 +15,7 @@
 //   3. Exécute le booking HTTP pour chaque dossier éligible
 //   → Pas de env vars SPAIN_BOOK_LOGIN/PASSWORD — tout vient de Convex (comme le bot USA)
 
-import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, reportSlotDiscoveryBatch, type HunterJob, type SlotDiscoveryEvent } from "../convexClient.js";
+import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, reportSlotDiscoveryBatch, pollRushPrepCommand, ackRushPrepCommand, type HunterJob, type SlotDiscoveryEvent } from "../convexClient.js";
 import { runSpainWatcherProbe } from "../spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
@@ -25,15 +25,15 @@ import {
   getActiveSpainPersistentBrowserSession,
 } from "../spain-persistent-browser.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
-import { executeHttpBooking, extractServicesFromHtml, type SpainBookingConfig } from "../spain-http-booking.js";
+import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
 import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
 const SPAIN_HTTP_SCAN_INTERVAL_SEC = (() => {
-  const configured = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "60");
-  if (!Number.isFinite(configured) || configured < 10) return 60;
+  const configured = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10");
+  if (!Number.isFinite(configured) || configured < 10) return 10;
   return Math.round(configured);
 })();
 
@@ -268,6 +268,48 @@ export async function startSpainWatcherLoop(): Promise<void> {
     try {
       const cycleStartedAt = Date.now();
 
+      // ─── Commandes admin (rush-prep : CF re-solve / session pre-warm) ─────────
+      if (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) {
+        const cmd = await pollRushPrepCommand().catch(() => null);
+        if (cmd) {
+          log("INFO", `[SPAIN-WATCHER] 🎯 Commande admin reçue: ${cmd}`);
+          try {
+            if (cmd === "cf_resolve") {
+              // Re-solve CF session proactif immédiat
+              const configForCmd = await getSpainWatcherConfig().catch(() => null);
+              const dossierList = await getActiveSpainDossiers();
+              const urlForCmd = configForCmd?.portalUrl || dossierList[0]?.portalUrl || "";
+              if (!urlForCmd) throw new Error("Aucune portalUrl disponible pour le re-solve CF");
+              const session = await ensureActiveSession(urlForCmd);
+              if (!session) throw new Error("ensureActiveSession a retourné null");
+              log("INFO", `[SPAIN-WATCHER] ✅ Re-solve CF OK (expire: ${new Date(session.expiresAt).toISOString()})`);
+              await ackRushPrepCommand("ok");
+            } else if (cmd === "session_prep") {
+              // Pré-créer la isolated booking session pour chaque dossier actif
+              const cfSession = getActiveSession();
+              if (!cfSession) throw new Error("Pas de session CF active — lancez d'abord un re-solve CF");
+              const dossierList = await getActiveSpainDossiers();
+              if (dossierList.length === 0) throw new Error("Aucun dossier Espagne actif");
+              let ok = 0;
+              for (const d of dossierList) {
+                const iso = await createIsolatedBookingSession(cfSession, d.portalUrl).catch((e: unknown) => {
+                  log("WARN", `[SPAIN-WATCHER] session_prep/${d.applicantName}: ${e}`);
+                  return null;
+                });
+                if (iso) ok++;
+              }
+              if (ok === 0) throw new Error("Toutes les sessions isolées ont échoué");
+              log("INFO", `[SPAIN-WATCHER] ✅ session_prep OK — ${ok}/${dossierList.length} session(s) pré-créée(s)`);
+              await ackRushPrepCommand("ok");
+            }
+          } catch (cmdErr: unknown) {
+            const msg = cmdErr instanceof Error ? cmdErr.message : String(cmdErr);
+            log("WARN", `[SPAIN-WATCHER] ❌ Commande ${cmd} échouée: ${msg}`);
+            await ackRushPrepCommand(`error: ${msg}`).catch(() => {});
+          }
+        }
+      }
+
       // Aucun dossier actif = aucun besoin de scanner ni de résoudre Cloudflare.
       // On se base directement sur les dossiers actifs comme la CEV dossier loop —
       // plus de dépendance au singleton spainWatcher.isActive pour démarrer.
@@ -285,7 +327,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
       const singletonConfig = await getSpainWatcherConfig().catch(() => null);
       const configuredHttpIntervalSec = singletonConfig?.intervalSec ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
-        ? Math.max(30, configuredHttpIntervalSec) * 1000
+        ? Math.max(10, configuredHttpIntervalSec) * 1000
         : (singletonConfig?.intervalMin ?? 3) * 60_000;
 
       const cycleModeLabel = SPAIN_PERSISTENT_BROWSER ? "PB" : (SPAIN_HTTP_MODE ? "HTTP" : "PW");

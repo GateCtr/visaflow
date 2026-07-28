@@ -239,7 +239,7 @@ function buildBookingCookieHeader(session: SpainCfSession): string {
  * émettre un nouveau PHPSESSID, qui reste uniquement dans cette copie locale
  * pour datetime/signin/summary.
  */
-async function createIsolatedBookingSession(
+export async function createIsolatedBookingSession(
   cfSession: SpainCfSession,
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {

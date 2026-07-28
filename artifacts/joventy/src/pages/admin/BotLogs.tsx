@@ -42,6 +42,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 
 const DEST_FLAGS: Record<string, string> = {
@@ -959,6 +961,40 @@ function SpainPageCapturesBlock({ pageCaptures }: { pageCaptures: string }) {
   );
 }
 
+/** Affiche le statut de la dernière commande rush-prep pour un type donné. */
+function RushPrepStatus({ watcher, command }: {
+  watcher: { rushPrepCommand?: string; rushPrepAt?: number; rushPrepResult?: string; rushPrepAckedAt?: number } | null;
+  command: "cf_resolve" | "session_prep";
+}) {
+  if (!watcher) return null;
+  const isPending = watcher.rushPrepCommand === command;
+  const isThisCommand =
+    !watcher.rushPrepCommand && // already acked
+    watcher.rushPrepResult !== undefined &&
+    watcher.rushPrepAt !== undefined &&
+    // no way to know which command was last acked without storing it — show if recently acked (< 60s)
+    watcher.rushPrepAckedAt !== undefined &&
+    Date.now() - (watcher.rushPrepAckedAt ?? 0) < 60_000;
+
+  if (isPending) {
+    return (
+      <span className="flex items-center gap-1 text-[10px] text-amber-700 font-medium">
+        <RefreshCw className="w-3 h-3 animate-spin" /> En attente du bot…
+      </span>
+    );
+  }
+  if (isThisCommand && watcher.rushPrepResult) {
+    const ok = watcher.rushPrepResult === "ok";
+    return (
+      <span className={`flex items-center gap-1 text-[10px] font-medium ${ok ? "text-green-700" : "text-red-700"}`}>
+        {ok ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+        {ok ? "Succès" : watcher.rushPrepResult.replace(/^error:\s*/, "")}
+      </span>
+    );
+  }
+  return null;
+}
+
 function SpainWatcherTab() {
   const [scanPage, setScanPage] = useState(0);
   const [scanFilter, setScanFilter] = useState<"" | "found" | "not_found" | "error">("");
@@ -966,6 +1002,7 @@ function SpainWatcherTab() {
   const data = useQuery(api.spainWatcher.getWatcherPaginated, { page: scanPage, pageSize: 20, statusFilter: scanFilter || undefined });
   const setWatcher = useMutation(api.spainWatcher.setWatcher);
   const clearSpainScans = useMutation(api.spainWatcher.clearScans);
+  const requestRushPrep = useMutation(api.spainWatcher.requestRushPrep);
 
   const watcher = data?.watcher ?? null;
   const scans   = data?.scans  ?? [];
@@ -980,6 +1017,8 @@ function SpainWatcherTab() {
   const [saving,       setSaving]       = useState(false);
   const [saved,        setSaved]        = useState(false);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+  const [rushCfLoading, setRushCfLoading] = useState(false);
+  const [rushSessionLoading, setRushSessionLoading] = useState(false);
 
   useEffect(() => {
     if (!watcher) return;
@@ -1131,6 +1170,47 @@ function SpainWatcherTab() {
               {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : null}
               {saved ? "OK!" : saving ? "..." : "Enregistrer"}
             </button>
+          </div>
+        </div>
+
+        {/* Rush-prep admin actions */}
+        <div className="mt-5 pt-5 border-t border-slate-100">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">Actions admin immédiates</p>
+          <div className="flex flex-col gap-2">
+            {/* Force CF re-solve */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setRushCfLoading(true);
+                  try { await requestRushPrep({ command: "cf_resolve" }); } finally { setRushCfLoading(false); }
+                }}
+                disabled={rushCfLoading || !watcher}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {rushCfLoading
+                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  : <ShieldCheck className="w-3.5 h-3.5" />}
+                Forcer re-solve CF
+              </button>
+              <RushPrepStatus watcher={watcher} command="cf_resolve" />
+            </div>
+            {/* Pre-create isolated booking session */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setRushSessionLoading(true);
+                  try { await requestRushPrep({ command: "session_prep" }); } finally { setRushSessionLoading(false); }
+                }}
+                disabled={rushSessionLoading || !watcher}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {rushSessionLoading
+                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  : <Zap className="w-3.5 h-3.5" />}
+                Pré-créer session booking
+              </button>
+              <RushPrepStatus watcher={watcher} command="session_prep" />
+            </div>
           </div>
         </div>
       </div>

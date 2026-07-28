@@ -862,6 +862,47 @@ export async function reportSpainWatcherScan(payload: {
   }
 }
 
+// ─── Spain Watcher : rush-prep commands (CF resolve / session pre-warm) ───────
+
+/**
+ * Demande la commande rush-prep en attente depuis Convex.
+ * Retourne "cf_resolve" | "session_prep" | null.
+ */
+export async function pollRushPrepCommand(): Promise<"cf_resolve" | "session_prep" | null> {
+  const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/rush-prep`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers: { "X-Hunter-Key": HUNTER_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { command: "cf_resolve" | "session_prep" | null };
+    return data.command ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Acquitte une commande rush-prep et transmet le résultat au singleton Convex.
+ * result = "ok" ou "error: <message>"
+ */
+export async function ackRushPrepCommand(result: string): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/rush-prep`;
+  try {
+    await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ result }),
+    });
+  } catch (err) {
+    console.warn("[convexClient] ackRushPrepCommand error:", err);
+  }
+}
+
 // ─── Slot Discovery (dates captées / ignorées par le bot) ─────────────────────
 
 export interface SlotDiscoveryEvent {
