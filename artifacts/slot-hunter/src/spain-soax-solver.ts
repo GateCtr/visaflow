@@ -288,22 +288,36 @@ export async function solveSpainCloudflare(
   const t0 = Date.now();
   console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}${prefetchedHtml ? " (html pré-fetchée ✅)" : ""}`);
 
-  // Vérifier le solde CapSolver
-  try {
-    const balRes = await fetch(`${CAPSOLVER_BASE}/getBalance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientKey: capsolverApiKey }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const balData = (await balRes.json()) as { errorId: number; balance?: number };
-    if (balData.errorId !== 0 || (balData.balance ?? 0) <= 0) {
-      return { success: false, error: `CapSolver balance insuffisant: ${balData.balance ?? "erreur"}`, durationMs: Date.now() - t0 };
+  // Vérifier le solde CapSolver — retry 2× sur erreurs transientes (rate-limit, hiccup API)
+  const apiKey = capsolverApiKey.trim();
+  let balOk = false;
+  for (let balAttempt = 0; balAttempt < 3; balAttempt++) {
+    if (balAttempt > 0) await new Promise((r) => setTimeout(r, 2_000 * balAttempt));
+    try {
+      const balRes = await fetch(`${CAPSOLVER_BASE}/getBalance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const balData = (await balRes.json()) as { errorId: number; errorCode?: string; errorDescription?: string; balance?: number };
+      if (balData.errorId !== 0) {
+        console.warn(`[spain-soax] ⚠️ CapSolver getBalance errorId=${balData.errorId} code=${balData.errorCode ?? "?"} desc="${balData.errorDescription ?? ""}" (tentative ${balAttempt + 1}/3)`);
+        if (balAttempt === 2) return { success: false, error: `CapSolver getBalance error: ${balData.errorCode ?? balData.errorId}`, durationMs: Date.now() - t0 };
+        continue;
+      }
+      if ((balData.balance ?? 0) <= 0) {
+        return { success: false, error: `CapSolver balance insuffisant: $${balData.balance ?? 0}`, durationMs: Date.now() - t0 };
+      }
+      console.log(`[spain-soax] 💰 Balance CapSolver: $${balData.balance?.toFixed(3)}`);
+      balOk = true;
+      break;
+    } catch (err) {
+      console.warn(`[spain-soax] ⚠️ CapSolver getBalance fetch error (tentative ${balAttempt + 1}/3): ${err}`);
+      if (balAttempt === 2) return { success: false, error: `Balance check failed: ${err}`, durationMs: Date.now() - t0 };
     }
-    console.log(`[spain-soax] 💰 Balance CapSolver: $${balData.balance?.toFixed(3)}`);
-  } catch (err) {
-    return { success: false, error: `Balance check failed: ${err}`, durationMs: Date.now() - t0 };
   }
+  if (!balOk) return { success: false, error: "Balance check: toutes les tentatives échouées", durationMs: Date.now() - t0 };
 
   // Préparer le proxy au format CapSolver
   const proxyForCapsolver = proxyUrlToCapsolverFormat(soaxProxyUrl);
