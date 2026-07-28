@@ -668,7 +668,7 @@ async function confirmSlotsViaDatetime(
   let services: Array<{ serviceId: string; serviceName: string }>;
 
   if (svcMatches.length === 0) {
-    // FALLBACK : Cuba (et certains portails Bookitit récents) utilisent un rendu
+    // FALLBACK : Kinshasa (et certains portails Bookitit récents) utilisent un rendu
     // client-side via Backbone.js / Underscore templates — les liens #selectservice
     // contiennent <%= attributes.id %> côté serveur et ne sont jamais présents
     // dans le HTML brut de /main/. On récupère les IDs directement via getservices/.
@@ -1494,13 +1494,15 @@ async function scanViaMainEndpoint(
   //   → Seule réponse datetime/ avec des Slots réels = "found"
 
   // Cas 1 : "No hay horas" masquée (signal positif potentiel)
-  // NOTE : certains portails (ex: Cuba) utilisent un rendu Backbone.js / Underscore.js
+  // NOTE : le portail Kinshasa (et d'autres) utilisent un rendu Backbone.js / Underscore.js
   // client-side. Les liens #selectservice ne sont JAMAIS dans le HTML serveur —
   // ils apparaissent dans des <script type="text/template"> sous la forme
   // `#selectservice/<%= attributes.id %>`, supprimés par le strip.
   // On doit donc tester le html BRUT (avant strip) pour détecter ce pattern.
   // confirmSlotsViaDatetime dispose d'un fallback getservices/ pour obtenir les IDs
   // dans ce cas — on l'appelle toujours quand "No hay horas" est masquée.
+  // Même sans créneau actuellement (Kinshasa), getservices/ retourne la liste de
+  // services et datetime/ confirme la disponibilité réelle.
   if (hasHiddenNoSlots && !hasVisibleNoSlots) {
     const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
     // Check original (un-stripped) html for EJS template placeholders
