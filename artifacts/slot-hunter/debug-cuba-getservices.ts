@@ -52,13 +52,6 @@ console.log(`   cf_clearance: ${session.cfClearance.slice(0, 40)}…`);
 // ─── Étape 1 : Portal GET → PHPSESSID ─────────────────────────────────────────
 console.log("\n─── 1. GET portal → PHPSESSID ───");
 
-// impit init
-const { initSpainImpit } = await import("./src/spain-shared-impit.js");
-const impit = await initSpainImpit(session);
-if (!impit) { console.error("❌ impit init failed"); process.exit(1); }
-
-const { ImpitFetchInstance } = await import("./src/spain-shared-impit.js");
-
 // We'll track PHPSESSID via Set-Cookie
 let phpsessid = "";
 const cookies: Record<string, string> = {};
@@ -102,14 +95,16 @@ mergeCookies(portalRes.headers.get("set-cookie"));
 console.log(`   HTTP ${portalRes.status} | bytes: ${portalHtml.length}`);
 console.log(`   PHPSESSID: ${phpsessid.slice(0, 20)}…`);
 
-// Extract token
-const tokenMatch = portalHtml.match(/name="_token"\s+value="([a-f0-9]{20,})"/);
+// Extract token (field is name="token", NOT "_token")
+const tokenMatch = portalHtml.match(/name="token"\s+value="([^"]+)"/)
+  ?? portalHtml.match(/<input[^>]+name=["']token["'][^>]+value=["']([^"']+)["']/i)
+  ?? portalHtml.match(/<input[^>]+value=["']([a-f0-9]{20,})["'][^>]+name=["']token["']/i);
 const token = tokenMatch?.[1] ?? "";
-console.log(`   token: ${token.slice(0, 20)}…`);
+console.log(`   token: ${token ? token.slice(0, 20) + "…" : "❌ ABSENT"} (len=${token.length})`);
 
 // ─── Étape 2 : POST Continue ───────────────────────────────────────────────────
 console.log("\n─── 2. POST Continue → widget HTML ───");
-const body = new URLSearchParams({ _token: token });
+const body = new URLSearchParams({ token: token });
 const postRes = await spainCfFetch(PORTAL_URL, session, {
   method: "POST",
   headers: {
@@ -254,20 +249,20 @@ async function testGetServices(delayMs: number, extraParams: Record<string, stri
 }
 
 // Test 1: immédiatement
-let body = await testGetServices(0);
-console.log(`   delay=0ms → bytes: ${body.length} | snippet: ${body.slice(0, 120)}`);
+let svcBody = await testGetServices(0);
+console.log(`   delay=0ms → bytes: ${svcBody.length} | snippet: ${svcBody.slice(0, 120)}`);
 
 // Test 2: 2s de délai
-body = await testGetServices(2000);
-console.log(`   delay=2000ms → bytes: ${body.length} | snippet: ${body.slice(0, 120)}`);
+svcBody = await testGetServices(2000);
+console.log(`   delay=2000ms → bytes: ${svcBody.length} | snippet: ${svcBody.slice(0, 120)}`);
 
 // Test 3: 5s de délai
-body = await testGetServices(5000);
-console.log(`   delay=5000ms → bytes: ${body.length} | snippet: ${body.slice(0, 120)}`);
+svcBody = await testGetServices(5000);
+console.log(`   delay=5000ms → bytes: ${svcBody.length} | snippet: ${svcBody.slice(0, 120)}`);
 
 // Test 4: sans selectedPeople
-body = await testGetServices(0, {});
-console.log(`   no-selectedPeople → bytes: ${body.length} | snippet: ${body.slice(0, 120)}`);
+svcBody = await testGetServices(0, {});
+console.log(`   no-selectedPeople → bytes: ${svcBody.length} | snippet: ${svcBody.slice(0, 120)}`);
 
 // Test 5: getagendas/ sans serviceId (pour voir ce que ça donne)
 console.log("\n─── 7. getagendas/ (sans serviceId) ───");

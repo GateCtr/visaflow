@@ -1,0 +1,186 @@
+puisqu'il y'a des creneaux en ce moment sur le portail de cuba, continue avec le test de cuba de bout en bout, c'est le meme portail bookit que kinshasa, les fichiers de test sont deja la
+
+31 minutes ago
+Running Cuba end-to-end test
+
+Running Cuba end-to-end test
+Je cherche les fichiers de test Cuba existants en parallèle.
+
+
+3 actions
+Je lis les 4 fichiers en parallèle.
+
+
+Show less
+
+Opened test-cuba-full-flow.ts
+
+Opened test-cuba-dump-main.ts
+
+Opened diag-cuba-main.ts
+
+Opened test-cuba-capture.ts
+Running end-to-end test
+
+Running end-to-end test
+Je vérifie le .env et les exports du module persistent-browser avant de lancer le test.
+
+
+3 actions
+Je vérifie si Puppeteer/Chromium est disponible et regarde rapidement les dépendances du test.
+
+
+3 actions
+Les node_modules ne sont pas installés. Je les installe et vérifie la config .env en parallèle.
+
+
+3 actions
+Je lance l'installation pnpm workspace depuis la racine en parallèle avec la vérification du pnpm-lock.
+
+
+7 actions
+Bien, dépendances installées. Je vérifie Chromium et lance le test bout-en-bout.
+
+
+Show less
+
+Listed files
+
+Located a command
+Testing Playwright Chromium setup
+
+Testing Playwright Chromium setup
+
+Listed files
+
+Ran tests
+Finding and running tests
+
+Finding and running tests
+
+Found files
+
+Finding files
+Testing persistent browser
+
+Testing persistent browser
+Chromium trouvé. Je lance le test bout-en-bout avec le bon PLAYWRIGHT_BROWSERS_PATH.
+
+
+2 actions
+Puppeteer cherche Chrome v149 dans son cache. Je le pointe vers le Chromium Playwright présent dans le nix store.
+
+
+3 actions
+Le Chromium nix est v123 mais Puppeteer 25.1 cherche v149. Je modifie spain-persistent-browser.ts pour accepter un executablePath via env var, et je lis la section launch en parallèle.
+
+
+2 actions
+Je modifie spain-persistent-browser.ts pour accepter CHROMIUM_EXECUTABLE_PATH et lance le test en même temps avec test-cuba-dump-main.ts (CapSolver, pas de browser) pour valider les APIs pendant ce temps.
+
+
+2 actions
+Je lance maintenant les deux tests en parallèle — le full-flow avec le Chromium nix, et le dump-main avec CapSolver.
+
+
+2 actions
+Deux problèmes : 1) CF solve natif échoue en headless (prévisible), 2) Network.deleteCookies crashe à cause du mismatch CDP entre Puppeteer 25.1 et Chromium v123 (partitionKey non supporté). Je lis le code d'injection pour corriger.
+
+
+4 actions
+Le problème : Puppeteer 25.1 appelle Network.deleteCookies avec partitionKey que Chromium v123 ne comprend pas. Fix : passer par CDP directement. Je lis aussi l'autre setCookie ligne 576.
+
+
+2 actions
+Je corrige les deux page.setCookie() par des appels CDP directs pour bypasser le bug partitionKey.
+
+
+Show less
+
+Edited spain-persistent-browser.ts
+Fixing cookie call
+
+Fixing cookie call
+Je corrige aussi le second page.setCookie() puis je relance le test.
+
+
+Show less
+
+Edited spain-persistent-browser.ts
+Applying test fixes
+
+Applying test fixes
+
+Ran test-cuba-full-flow.ts
+Thinking…
+
+Thinking…
+Analysons les logs du test Cuba :
+
+Problème identifié clairement :
+
+✅ CF solve fonctionne (via CapSolver fallback)
+✅ /main/ retourne 126978 chars avec "No hay horas masquée" + templates Backbone → correct
+✅ getwidgetconfigurations/ → HTTP 200 | 0B (body vide)
+❌ getservices/ → body vide (raw: "") → not_found
+Le problème est que getwidgetconfigurations/ retourne 0 bytes ET getservices/ retourne aussi 0 bytes.
+
+En regardant les logs plus attentivement, je vois que getservices/ affiche parsed type: object | isArray: false | keys: n/a, ce qui suggère que le parsing d'une chaîne vide retourne un objet vide plutôt que null.
+
+Je vérifies le code de logging : il affiche le type de svcPayload, si c'est un array, et les clés de l'objet. Quand svcPayload est null, typeof null retourne "object" (le bug classique de JavaScript), Array.isArray(null) retourne false, et la condition null && ... évalue à "n/a" pour les clés. Donc svcPayload est effectivement null, et svcRaw est une chaîne vide parce que getservices/ retourne 0 bytes.
+
+Le vrai problème commence à se dessiner.
+
+La première session CapSolver (avec le PHPSESSID 3S2PwW…) établie par le premier solve du navigateur persistant devient invalide quand /main/ retourne un corps vide. Lors du retry, un nouveau solve CapSolver génère une session différente (PHPSESSID s9v2-n8vGB4v…). Avec cette nouvelle session, /main/ fonctionne et retourne 126978 caractères, mais getwidgetconfigurations/ retourne 200 avec 0 bytes et getservices/ retourne une chaîne vide — ce qui est bizarre puisque ces endpoints devraient normalement retourner du contenu.
+
+Je remarque que dans confirmSlotsViaDatetime, les headers incluent le cookieStr passé en paramètre depuis scanViaMainEndpoint, qui contient le PHPSESSID établi par le navigateur persistant. La question qui se pose est pourquoi getservices/ retourne vide alors que /main/ fonctionne correctement avec la même session.
+
+En examinant le flow plus attentivement, je vois que dans scanViaMainEndpoint, les cookies proviennent de session.allCookies qui viennent d'une nouvelle résolution CapSolver, pas du navigateur Playwright original. Le flow de retry montre que la première tentative avec la session persistante du navigateur (PHPSESSID 3S2PwW) retourne un body vide pour /main/, ce qui invalide la session et déclenche un nouvel appel à ensureSpainCfSession avec une nouvelle résolution CapSolver qui génère ses propres cookies synthétiques.
+
+À la deuxième tentative avec cette nouvelle session CapSolver, j'obtiens un PHPSESSID s9v2 du GET portail et /main/ fonctionne, mais getwidgetconfigurations/ et getservices/ retournent 0B. Le problème semble être que le PHPSESSID s9v2 correspond à une session Bookitit côté serveur qui n'a pas encore été initialisée par le JavaScript client-side, ou que les cookies envoyés ne correspondent pas au contexte attendu par le serveur.
+
+En regardant les réponses du GET portail et POST Continue, je vois qu'elles contiennent du HTML avec le widget Bookitit initialisé...
+
+Generating widget config... 'est pas exécuté. Je pourrais charger manuellement le script du widget loader et appeler getwidgetconfigurations/ avec les bons paramètres, mais en regardant les logs plus attentivement, je vois que le POST widget retourne 2510 bytes contenant le code d'initialisation Bookitit, tandis que le vrai widget HTML est servi via /main/. En retraçant la séquence confirmée dans les logs, je vois que GET portail retourne 2689B.
+
+Maintenant j'examine la suite : le POST Continue retourne 2510B avec bkt_init_widget, JSD Oneshot est absent car l'IP est de confiance, /main/ retourne 126978B, et j'ai détecté les templates Backbone avec "No hay horas" masquée. Mais getwidgetconfigurations/ retourne 0B — c'est le problème clé. Cela indique que la session Bookitit côté serveur n'est pas initialisée pour ce PHPSESSID. Les endpoints Bookitit comme getwidgetconfigurations/ et getservices/ sont normalement appelés depuis le JavaScript, donc l'absence de réponse suggère que la session n'a pas été correctement établie. La session CapSolver crée un nouveau PHPSESSID via le GET du portail HTTP, ce qui permet à /main/ de retourner le HTML statique du widget, mais getservices/ échoue car le serveur Bookitit n'a pas initialisé cette session — seul le script loadermaec.js exécuté dans le browser peut le faire en créant les appels nécessaires pour que le serveur reconnaisse la session.
+
+L'alternative serait d'utiliser le PHPSESSID établi par le browser persistent plutôt que celui du fallback CapSolver, mais ce PHPSESSID initial retournait un body vide sur /main/, ce qui suggère que le JSD Oneshot n'était pas complètement chargé ou que la session a été invalidée.
+
+Le flow du persistent-browser exécute le JSD Oneshot nativement pour obtenir le cf_clearance, mais quand impit essaie de réutiliser ce cf_clearance, Cloudflare le rejette avec un 403 parce que le fingerprint du browser ne correspond pas, donc on doit contourner le portail avec skipPortalFlow=true.
+
+Le problème, c'est qu'en sautant le portail, on appelle /main/ directement avec le PHPSESSID du persistent-browser, mais sans que le JSD Oneshot soit exécuté dans ce contexte impit, la session reste invalide et /main/ retourne un body vide.
+
+La vraie solution serait de continuer avec le PHPSESSID du persistent-browser tout en forçant l'exécution du JSD Oneshot, mais on ne peut pas extraire l'URL du JSD depuis le HTML du portail puisqu'on l'a sauté. Avec la session persistent-browser, le cf_clearance vient de CapSolver mais le PHPSESSID provient du navigateur Chromium — il y a probablement un désalignement entre l'IP utilisée pour résoudre le défi CF et celle associée à la session, ce qui expliquerait pourquoi /main/ retourne un corps vide malgré un statut 200.
+
+Pour le test Cuba complet, je dois choisir entre utiliser Puppeteer directement (qui gère nativement CF) ou rester sur le flow CapSolver pur, mais en veillant à la cohérence des sessions.
+
+En examinant le deuxième retry, /main/ retourne bien du contenu (126978 caractères) avec une session CapSolver fraîche, mais getwidgetconfigurations/ revient vide. Je soupçonne que les paramètres passés à cette requête — notamment le publickey extrait depuis l'URL du portail — pourraient être mal formés ou incompatibles avec la session actuelle. Continuing through the flow, the session passed from scanViaMainEndpoint to confirmSlotsViaDatetime includes the CapSolver session with cookies like PHPSESSID and cf_clearance, which are then used in the spainCfFetch requests to the Bookitit server.
+
+The root issue is becoming clearer: Bookitit initializes the widget session when the JavaScript runs in a browser, but in our HTTP-only flow, that initialization never happens. When we manually call getwidgetconfigurations/, the server returns empty because it doesn't recognize the PHP session as a valid Bookitit widget session. For Cuba specifically, the portal seems to require the widget JS to initialize the session before getservices/ returns any data.
+
+I need to figure out how to simulate that JavaScript initialization step in the HTTP flow.
+
+Detecting empty response data
+
+Detecting empty response data
+Clair. getservices/ retourne 0B même après que /main/ donne 126978 chars — le serveur Bookitit Cuba n'est pas initialisé côté API avant que le JS Backbone soit exécuté. Il faut capturer le vrai trafic réseau. Je lance test-cuba-dump-main.ts pour analyser le HTML, et je corrige le bug setCookie dans test-cuba-capture.ts en parallèle.
+
+
+3 actions
+Le HTML confirme : portail Backbone pur, #selectservice seulement en template EJS. Je lis le widget-post.html et le getservices/ problème en parallèle.
+
+
+3 actions
+Découverte clé : bkt_init_widget a services: [], agendas: [], dates: [] — pas de serviceIds préconfigurés. Et le JSD Oneshot est bien dans le widget-post.html (iframe inline) mais notre scanner le loupe. Je fetch loadermaec.js pour comprendre la séquence d'init et regarde le pattern JSD Oneshot en parallèle.
+
+
+3 actions
+Le pattern JSD Oneshot cherché (/cdn-cgi/challenge-platform/h/b/jsd/oneshot/...) ne correspond pas au script jsd/main.js (iframe inline) dans le widget Cuba — ce n'est pas le bloquant. Le vrai problème est getservices/ → 0B. Je crée un script dédié pour fetch loadermaec.js et tester getservices/ avec différentes configs.
+
+
+Created debug-cuba-getservices.ts
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
+
+
+Worked for 23 minutes

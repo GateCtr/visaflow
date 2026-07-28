@@ -1282,9 +1282,127 @@ async function scanViaMainEndpoint(
       console.log(`[spain-http] ℹ️ POST widget #2 ignoré (widget SPA direct — pas de token CSRF)`);
     }
   } else {
-    // No JSD oneshot URL in widget HTML: either CF trusts this IP (direct path)
-    // or the HTML structure changed. Log so we can diagnose.
-    console.log(`[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP probablement de confiance CF`);
+    // ─── Step 2b-alt: jsd/main.js variant (CF embeds params in inline script) ──
+    // Some portals (e.g. Cuba) don't embed the oneshot URL directly in the widget
+    // HTML. Instead CF injects an iframe with window.__CF$cv$params={r:'<rayId>',…}
+    // and loads /cdn-cgi/challenge-platform/scripts/jsd/main.js. That script
+    // contains the oneshot path (siteKey + nonce) which we extract and fire.
+    const jsdMainCfParams = widgetHtml1.match(
+      /window\.__CF\$cv\$params\s*=\s*\{r:'([^']+)',t:'([^']+)'\}/,
+    );
+    if (jsdMainCfParams && /jsd\/main\.js/.test(widgetHtml1)) {
+      const jsdRayId = jsdMainCfParams[1];
+      console.log(
+        `[spain-http] 🔎 JSD main.js détecté (r='${jsdRayId}') — fetch script pour extraire nonce…`,
+      );
+      let jsdMainUrl: string | null = null;
+      try {
+        const mainJsRes = await spainCfFetch(
+          "https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js",
+          session,
+          {
+            headers: {
+              "Cookie": buildCookieStr(),
+              "Accept": "*/*",
+              "Accept-Language": "fr-FR,fr;q=0.9",
+              "Accept-Encoding": "gzip, deflate, br",
+              "Referer": widgetReferer,
+              "Sec-Fetch-Dest": "script",
+              "Sec-Fetch-Mode": "no-cors",
+              "Sec-Fetch-Site": "same-origin",
+            },
+          },
+        );
+        const mainJsBody = await mainJsRes.text();
+        // Pattern: /jsd/oneshot/<siteKey>/<nonce>/ (nonce can contain : . - _ ~)
+        const oneshotInJs = mainJsBody.match(
+          /\/jsd\/oneshot\/([a-f0-9]{10,14})\/([\w.:\-_~]+)\//,
+        );
+        if (oneshotInJs) {
+          const siteKey = oneshotInJs[1];
+          const nonce = oneshotInJs[2];
+          jsdMainUrl =
+            `https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/jsd/oneshot/${siteKey}/${nonce}/${jsdRayId}`;
+          console.log(
+            `[spain-http] 🔑 JSD oneshot construit depuis main.js: /…/${siteKey}/${nonce.slice(0, 30)}…/${jsdRayId}`,
+          );
+        } else {
+          console.warn(
+            `[spain-http] ⚠️ jsd/main.js fetchée (${mainJsBody.length}B) mais oneshot path non trouvé`,
+          );
+        }
+      } catch (fetchErr) {
+        console.warn(
+          `[spain-http] ⚠️ Fetch jsd/main.js échoué (non-fatal): ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`,
+        );
+      }
+
+      if (jsdMainUrl) {
+        try {
+          await new Promise<void>((r) => setTimeout(r, 4_500 + Math.floor(Math.random() * 1_000)));
+          const jsdRes = await spainCfFetch(jsdMainUrl, session, {
+            method: "POST",
+            headers: {
+              "Cookie": buildCookieStr(),
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Content-Length": "0",
+              "Origin": "https://www.citaconsular.es",
+              "Referer": widgetReferer,
+              "Accept": "*/*",
+              "Accept-Language": "fr-FR,fr;q=0.9",
+              "Accept-Encoding": "gzip, deflate, br",
+              "Sec-Fetch-Dest": "empty",
+              "Sec-Fetch-Mode": "cors",
+              "Sec-Fetch-Site": "same-origin",
+              "Priority": "u=1, i",
+            },
+            body: "",
+          });
+          mergeSetCookies(jsdRes, "JSD main.js oneshot");
+          console.log(`[spain-http] ✅ JSD main.js oneshot → HTTP ${jsdRes?.status ?? "no response"}`);
+        } catch (err) {
+          console.warn(
+            `[spain-http] ⚠️ JSD main.js oneshot POST échoué (non-fatal): ${err instanceof Error ? err.message : err}`,
+          );
+        }
+
+        // Step 2c: second widget POST (same as direct-oneshot path)
+        if (tokenMatch) {
+          const postRes2 = await spainCfFetch(widgetReferer, session, {
+            method: "POST",
+            headers: {
+              "Cookie": buildCookieStr(),
+              "Cache-Control": "max-age=0",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "Accept-Language": "fr-FR,fr;q=0.9",
+              "Accept-Encoding": "gzip, deflate, br",
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Origin": "https://www.citaconsular.es",
+              "Referer": portalUrl,
+              "Sec-Fetch-Dest": "document",
+              "Sec-Fetch-Mode": "navigate",
+              "Sec-Fetch-Site": "same-origin",
+              "Sec-Fetch-User": "?1",
+              "Upgrade-Insecure-Requests": "1",
+              "Priority": "u=0, i",
+            },
+            body: `token=${encodeURIComponent(tokenMatch[1])}`,
+          });
+          mergeSetCookies(postRes2, "POST widget #2 (main.js path)");
+          const w2bytes = postRes2 ? (await postRes2.clone().text()).length : 0;
+          console.log(
+            `[spain-http] 📄 POST widget #2 (main.js path) → HTTP ${postRes2?.status ?? "no response"} | bytes=${w2bytes}`,
+          );
+        }
+      } else {
+        console.warn(
+          `[spain-http] ⚠️ JSD main.js : URL oneshot non construite — appel /main/ sans garantie`,
+        );
+      }
+    } else {
+      // No JSD challenge at all: CF trusts this IP — direct path.
+      console.log(`[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF`);
+    }
   }
 
   // ─── Step 3: JSONP calls (Bookitit) ─────────────────────────────────
