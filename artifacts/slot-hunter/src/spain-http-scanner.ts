@@ -330,36 +330,70 @@ function collectIds(value: unknown, keyHint: RegExp): string[] {
 /**
  * Extrait les détails complets des services (ID + nom + durée) depuis le payload getservices/.
  * Utilisé pour le logging et le mapping visa → service.
+ *
+ * Formats supportés (Bookitit varie selon la version et le portail) :
+ *   • Array directe :      [{id:"897578", description:"Visa", ...}]
+ *   • Objet wrapper :      {services:[{id:"897578", name:"Visa"}]}
+ *   • Objet indexé numéric: {"0":{id:"897578", name:"Visa"}, "1":{...}}
+ *   • Champs variés :       id/Id/idService/serviceId + name/description/label/nombre/titulo/title
  */
 function extractServiceDetails(payload: unknown): Array<{ id: string; name: string; duration?: number }> {
   const results: Array<{ id: string; name: string; duration?: number }> = [];
 
-  const walk = (node: unknown): void => {
+  /** Champs valides pour l'identifiant d'un service. */
+  function extractId(obj: Record<string, unknown>): string | null {
+    const raw = obj.id ?? obj.Id ?? obj.serviceId ?? obj.ServiceId
+      ?? obj.idService ?? obj.IdService ?? obj.service_id ?? obj.service_Id;
+    if (raw === undefined || raw === null) return null;
+    const s = String(raw).trim();
+    return s.length > 0 && s !== "0" ? s : null;
+  }
+
+  /** Champs valides pour le nom d'un service (EN + ES + FR). */
+  function extractName(obj: Record<string, unknown>): string | null {
+    const raw = obj.name ?? obj.Name ?? obj.serviceName ?? obj.ServiceName
+      ?? obj.description ?? obj.Description ?? obj.label ?? obj.Label
+      ?? obj.title ?? obj.Title ?? obj.nombre ?? obj.Nombre ?? obj.titulo ?? obj.Titulo
+      ?? obj.service_name ?? obj.service_description;
+    if (raw === undefined || raw === null) return null;
+    const s = String(raw).trim();
+    return s.length > 0 ? s : null;
+  }
+
+  /** Tente de traiter un objet quelconque comme un service. */
+  function tryPushService(obj: Record<string, unknown>): boolean {
+    const id = extractId(obj);
+    if (!id) return false;
+    const name = extractName(obj) ?? `Service ${id}`;
+    const duration = typeof obj.duration === "number" ? obj.duration
+      : typeof obj.Duration === "number" ? obj.Duration
+      : undefined;
+    results.push({ id, name, duration });
+    return true;
+  }
+
+  const walk = (node: unknown, depth = 0): void => {
+    if (depth > 6) return; // éviter les boucles infinies
     if (Array.isArray(node)) {
       for (const item of node) {
         if (item && typeof item === "object") {
-          const obj = item as Record<string, unknown>;
-          // Service-like object: has id + name/description
-          const id = obj.id ?? obj.Id ?? obj.serviceId ?? obj.ServiceId ?? obj.idService ?? obj.IdService;
-          const name = obj.name ?? obj.Name ?? obj.serviceName ?? obj.ServiceName
-            ?? obj.description ?? obj.Description ?? obj.label ?? obj.Label;
-
-          if (id && name) {
-            results.push({
-              id: String(id),
-              name: String(name),
-              duration: typeof obj.duration === "number" ? obj.duration
-                : typeof obj.Duration === "number" ? obj.Duration
-                : undefined,
-            });
-          } else {
-            walk(item);
+          // Essayer de traiter directement comme service
+          if (!tryPushService(item as Record<string, unknown>)) {
+            // Sinon, recurser dans les sous-objets
+            walk(item, depth + 1);
           }
         }
       }
     } else if (node && typeof node === "object") {
-      for (const value of Object.values(node as Record<string, unknown>)) {
-        if (value && typeof value === "object") walk(value);
+      const obj = node as Record<string, unknown>;
+      // Essayer d'abord comme service direct (objet non-array avec id+name)
+      if (extractId(obj)) {
+        tryPushService(obj);
+        return;
+      }
+      // Sinon recurser dans les valeurs (wrapper object ou indexé numérique)
+      for (const value of Object.values(obj)) {
+        if (value && typeof value === "object") walk(value, depth + 1);
       }
     }
   };
@@ -643,6 +677,28 @@ async function confirmSlotsViaDatetime(
       "fallback getservices/ JSONP (portail client-side render détecté)",
     );
     try {
+      const srvsrc = "https://www.citaconsular.es";
+
+      // Étape 0 : getwidgetconfigurations/ — initialise la session Bookitit côté serveur.
+      // Sans cet appel, certains portails (Cuba) retournent un body vide sur getservices/.
+      // Non-fatal : on continue même si ça échoue.
+      const cfgCb = `cbCfg${Date.now()}`;
+      const cfgQ = new URLSearchParams();
+      cfgQ.append("callback",       cfgCb);
+      cfgQ.append("type",           "default");
+      cfgQ.append("publickey",      publickey);
+      cfgQ.append("lang",           "es");
+      cfgQ.append("version",        "4");
+      cfgQ.append("src",            referer);
+      cfgQ.append("srvsrc",         srvsrc);
+      cfgQ.append("selectedPeople", "1");
+      cfgQ.append("_",              String(Date.now()));
+      const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
+      const cfgRaw = cfgRes ? await cfgRes.text() : "";
+      console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgRaw.length}B`);
+      // Petite pause pour laisser le serveur initialiser la session (~200ms observé en vrai Chrome)
+      await new Promise<void>((r) => setTimeout(r, 220));
+
       const svcCb = `cbSvc${Date.now()}`;
       const svcQ = new URLSearchParams();
       svcQ.append("callback",       svcCb);
@@ -651,7 +707,7 @@ async function confirmSlotsViaDatetime(
       svcQ.append("lang",           "es");
       svcQ.append("version",        "4");
       svcQ.append("src",            referer);
-      svcQ.append("srvsrc",         "https://www.citaconsular.es");
+      svcQ.append("srvsrc",         srvsrc);
       svcQ.append("selectedPeople", "1");
       svcQ.append("_",              String(Date.now()));
       const svcRes = await spainCfFetch(`${base}getservices/?${svcQ}`, session, { headers });
@@ -664,11 +720,26 @@ async function confirmSlotsViaDatetime(
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
       const svcDetails = extractServiceDetails(svcPayload);
+
       if (svcDetails.length === 0) {
-        console.log(`[spain-http] ⚠️ getservices/ fallback → 0 services (payload préview: ${JSON.stringify(svcPayload)?.slice(0, 300)}) → not_found`);
-        return null;
+        // Fallback : extractServiceDetails n'a rien trouvé mais la réponse n'est pas vide.
+        // On utilise collectIds (plus permissif) pour récupérer au moins les IDs.
+        if (svcPayload) {
+          const ids = collectIds(svcPayload, /(service.*id|services.*id|^id$)/i);
+          if (ids.length > 0) {
+            console.log(`[spain-http] ⚠️ extractServiceDetails→0 mais collectIds→${ids.length} IDs : ${ids.join(",")} — service noms inconnus`);
+            services = ids.map((id) => ({ serviceId: id, serviceName: `Service ${id}` }));
+          } else {
+            console.log(`[spain-http] ⚠️ getservices/ fallback → 0 services + 0 IDs (payload: ${JSON.stringify(svcPayload)?.slice(0, 300)}) → not_found`);
+            return null;
+          }
+        } else {
+          console.log(`[spain-http] ⚠️ getservices/ fallback → payload null (raw: "${svcRaw.slice(0, 200)}") → not_found`);
+          return null;
+        }
+      } else {
+        services = svcDetails.map((s) => ({ serviceId: s.id, serviceName: s.name }));
       }
-      services = svcDetails.map((s) => ({ serviceId: s.id, serviceName: s.name }));
       console.log(`[spain-http] ✅ getservices/ fallback → ${services.length} service(s) : ${services.map(s => `"${s.serviceName}" (${s.serviceId})`).join(", ")}`);
     } catch (err) {
       console.log(`[spain-http] ⚠️ getservices/ fallback exception: ${err} → not_found`);
@@ -1458,7 +1529,8 @@ async function scanViaMainEndpoint(
   }
 
   // Cas 2 : Liens #selectservice ou containers de service rendus (hors templates)
-  const hasRenderedServices = /#selectservice\/\d+/i.test(renderedHtml);
+  // [\w-]+ pour couvrir les IDs numériques ET alphanumériques (ex: bkt897578)
+  const hasRenderedServices = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasRenderedServiceContainers = /clsBktServiceDataContainer\s+clsBktServiceAtt/i.test(renderedHtml);
 
   if (hasRenderedServices || hasRenderedServiceContainers) {

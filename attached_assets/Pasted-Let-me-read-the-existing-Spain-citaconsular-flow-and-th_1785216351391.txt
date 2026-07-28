@@ -1,0 +1,61 @@
+Let me read the existing Spain citaconsular flow and the current scanner code to understand what needs to be captured.
+
+Let me look at the key files I need to understand before writing the Cuba capture script.
+
+Let me read the rest of the scanner and check if there's any existing Cuba test file.
+
+Let me read the existing Cuba test file and a few more key files in parallel.
+
+Good picture. Let me check Playwright/Chromium availability and then run the capture.
+
+Chromium and both keys are ready. Let me run the Cuba capture now.
+
+The probe gets 126978 chars from /main/ but finds 0 services — the service detection regex doesn't match Cuba's HTML structure. I need to capture and inspect that raw HTML. Let me add a dump to disk in the test script.
+
+Let me read the rest of the scanner to find the /main/ parsing and service detection logic.
+
+Now I understand the root cause. Line 1386 uses /#selectservice\/\d+/i — only matches numeric IDs. Cuba likely uses alphanumeric or differently-formatted service IDs. I need to dump the raw /main/ HTML to see the exact pattern.
+
+Let me write a focused capture script that saves the HTML to disk and also runs the full Puppeteer browser flow to capture all real network requests:
+
+The /main/ returns 0 bytes because the browser used the cached CapSolver cf_clearance (no real JSD execution). The fix: navigate the portal URL properly in the browser so Chromium executes the JSD oneshot naturally, then intercept all requests via CDP. Let me rewrite the capture:
+
+The portal keeps getting 403 even after injecting the CapSolver clearance. Let me look at the portal page HTML to understand what's happening, and also inspect the network log more carefully.
+
+The issue: fresh browser profile → CF Turnstile can't solve even with CapSolver injection. The working approach uses the persistent profile at /tmp/spain-cf-profile. Let me use that same profile and properly capture via CDP.
+
+Good — the profile exists. Now let me write a targeted capture that reuses the persistent profile and captures the /main/ JSONP + getagendas/datetime via CDP in the browser context.
+
+The problem: the browser profile has a 3-hour-old expired cf_clearance (from the first run), my 30s poll finds it and returns it as "valid." Then subsequent requests fail with 403. I need to delete the stale cookie, let the browser attempt Turnstile for 90s (same as the working persistent-browser code), and only then fall back to CapSolver.
+
+Key insight from the logs: impit (HTTP scanner) does get 200 on the Cuba portal — the 126978-char /main/ came from impit's second probe, not the browser. The browser keeps getting 403. I need to use impit to fetch and dump the /main/ HTML, then inspect why service detection fails. Let me write a focused HTTP-only diagnostic:
+
+Found the root cause. The snippet reveals:
+href #selectservice IDs: <%= attributes.id %>
+
+Cuba's services are client-side rendered by Backbone/Underscore.js — the service IDs only exist as <%= attributes.id %> template placeholders in the server HTML, never as real DOM elements. The scanner's /#selectservice\/\d+/ regex can never match, so it always returns not_found when "No hay horas" is hidden.
+
+The fix: when "No hay horas" is hidden but no rendered service links exist, fall through to confirmSlotsViaDatetime which needs a fallback to call getservices/ JSONP directly for the service IDs. Let me implement this now.
+
+Now I implement the fix. Two changes in spain-http-scanner.ts:
+
+    confirmSlotsViaDatetime — fallback to getservices/ JSONP when no service links in rendered HTML (Cuba pattern)
+    scanViaMainEndpoint Case 1 — remove early not_found when hasHiddenNoSlots=true but services aren't rendered
+
+Now fix Case 1 in scanViaMainEndpoint — remove the early not_found bail-out when services aren't rendered:
+
+Now let me verify the fix compiles and run the end-to-end test against Cuba:
+
+Good, compiles cleanly. Let me verify extractServiceDetails is already defined and check what collectIds does, then run the Cuba probe:
+
+The template detection is checking renderedHtml (which already has the <script type="text/template"> blocks stripped), so the <%= attributes.id %> pattern is never found there. The fix is simpler: check the original html for the template pattern, or just remove the intermediate guard entirely since confirmSlotsViaDatetime already handles the empty-service case gracefully.
+
+The template check tests renderedHtml (post-strip) — the fix is to test the original html variable instead:
+
+The fix is straightforward — test the original html (before template stripping) for the Backbone pattern, and simplify the guard:
+
+Good progress — the Backbone template detection is working. getservices/ returned 0 services, so extractServiceDetails isn't parsing the response correctly. Let me inspect both the raw response and the function:
+
+getservices/ returned 0 services — need to see the raw payload. Let me add a temp debug log to the fallback path and also probe it directly:
+
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
