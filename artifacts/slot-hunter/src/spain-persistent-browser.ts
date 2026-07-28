@@ -390,32 +390,52 @@ class SpainPersistentBrowserManager {
     } catch { /* non-fatal */ }
 
     // Naviguer vers le widget
+    // ERR_TOO_MANY_RETRIES = Chromium bloqué en boucle d'auth proxy (typique en prod
+    // avec Decodo ISP sticky-IP) → inutile de poller, aller directement au fallback CapSolver.
+    let skipPollGoDirectToCapSolver = false;
     try {
       await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
         timeout: CF_SOLVE_TIMEOUT_MS,
       });
     } catch (navErr) {
-      // La navigation peut timeout sur un challenge interactif long — on continue le poll
-      console.warn(`[spain-pb] ⚠️ goto() timeout/erreur (non-fatal, poll cf_clearance…): ${navErr}`);
+      const errStr = String(navErr);
+      if (errStr.includes("ERR_TOO_MANY_RETRIES")) {
+        console.warn(`[spain-pb] ⚠️ ERR_TOO_MANY_RETRIES — proxy auth Chromium bloqué → skip poll, CapSolver direct`);
+        skipPollGoDirectToCapSolver = true;
+        // Fermer le browser cassé pour éviter que page.cookies() ne bloque
+        try { await this._browser?.close(); } catch { /* non-fatal */ }
+        this._browser = null;
+      } else {
+        // La navigation peut timeout sur un challenge interactif long — on continue le poll
+        console.warn(`[spain-pb] ⚠️ goto() timeout/erreur (non-fatal, poll cf_clearance…): ${navErr}`);
+      }
     }
 
-    // Poll cf_clearance
+    // Poll cf_clearance (sauté si ERR_TOO_MANY_RETRIES)
     const deadline = Date.now() + CF_SOLVE_TIMEOUT_MS;
     let cfClearance = "";
 
-    while (Date.now() < deadline) {
-      try {
-        const cookies = await page.cookies("https://www.citaconsular.es");
-        const cfCookie = cookies.find((c) => c.name === "cf_clearance");
-        if (cfCookie?.value) {
-          cfClearance = cfCookie.value;
-          break;
+    if (!skipPollGoDirectToCapSolver) {
+      while (Date.now() < deadline) {
+        try {
+          // Timeout sur chaque appel CDP pour éviter un hang si le browser est dans un état cassé
+          const cookies = await Promise.race([
+            page.cookies("https://www.citaconsular.es"),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("cookies-timeout")), 5_000),
+            ),
+          ]);
+          const cfCookie = cookies.find((c) => c.name === "cf_clearance");
+          if (cfCookie?.value) {
+            cfClearance = cfCookie.value;
+            break;
+          }
+        } catch {
+          // Page peut être en cours de redirection ou CDP lent — retry
         }
-      } catch {
-        // Page peut être en cours de redirection — retry
+        await new Promise((r) => setTimeout(r, CF_POLL_INTERVAL_MS));
       }
-      await new Promise((r) => setTimeout(r, CF_POLL_INTERVAL_MS));
     }
 
     // Indique que CapSolver a déjà navigué vers /main/ et récupéré un PHPSESSID —
