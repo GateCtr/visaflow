@@ -902,11 +902,29 @@ export function getSpainImpit(session: SpainCfSession): InstanceType<typeof Impi
  *
  * @returns Response object ou null si session expirée/erreur
  */
+// ─── Test injection hook ─────────────────────────────────────────────────────
+// Pattern : same as _resetForTesting in session-pool.ts.
+// Production build is not affected — the hook is null at runtime.
+
+type SpainCfFetchImpl = (
+  url: string,
+  session: SpainCfSession,
+  fetchOptions?: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
+) => Promise<Response | null>;
+
+let _testFetchImpl: SpainCfFetchImpl | null = null;
+
+/** Override spainCfFetch in tests — pass null to restore real impit behaviour. */
+export function _setTestFetch(fn: SpainCfFetchImpl | null): void {
+  _testFetchImpl = fn;
+}
+
 export async function spainCfFetch(
   url: string,
   session: SpainCfSession,
   fetchOptions?: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
 ): Promise<Response | null> {
+  if (_testFetchImpl) return _testFetchImpl(url, session, fetchOptions);
   const impit = getSpainImpit(session);
 
   // Keep the cookie order observed in the browser flow and place the

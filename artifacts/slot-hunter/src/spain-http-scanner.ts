@@ -1903,11 +1903,25 @@ async function scanViaMainEndpoint(
  *
  * @param portalUrl - URL du widget citaconsular.es
  */
+// ─── Test injection hook ─────────────────────────────────────────────────────
+// Allows tests to bypass ensureSpainCfSession (which needs real proxy/CF).
+// Null at runtime — never set in production code.
+
+type SessionProvider = (portalUrl: string) => Promise<import("./spain-soax-solver.js").SpainCfSession | null>;
+let _testSessionProvider: SessionProvider | null = null;
+
+/** Override the CF-session provider in tests — pass null to restore real behaviour. */
+export function _setTestSessionProvider(fn: SessionProvider | null): void {
+  _testSessionProvider = fn;
+}
+
 export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanResult> {
   const t0 = Date.now();
 
   // 1. Obtenir la session CF (solve si nécessaire)
-  let session = await ensureSpainCfSession(portalUrl);
+  let session = _testSessionProvider
+    ? await _testSessionProvider(portalUrl)
+    : await ensureSpainCfSession(portalUrl);
   if (!session) {
     return {
       status: "cf_blocked",
@@ -1922,7 +1936,9 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     // Après invalidation, une nouvelle session navigateur est demandée avec
     // le même proxy, puis le scan est rejoué une seule fois.
     console.warn("[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique");
-    session = await ensureSpainCfSession(portalUrl);
+    session = _testSessionProvider
+      ? await _testSessionProvider(portalUrl)
+      : await ensureSpainCfSession(portalUrl);
     if (session) {
       mainResult = await scanViaMainEndpoint(session, portalUrl);
     }
