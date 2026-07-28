@@ -400,6 +400,83 @@ function printSummary(dump: SpainCaptureDump): void {
   console.log('\n══════════════════════════════════════════════════════════════════\n');
 }
 
+// ─── Extraction JS Bookitit ────────────────────────────────────────────────
+
+interface CapturedJsFile {
+  url: string;
+  sizeBytes: number;
+  content: string;
+  extractedSelectors: string[];
+  extractedApiCalls: string[];
+  extractedTokenKeys: string[];
+}
+
+function extractJsInsights(jsContent: string): Pick<CapturedJsFile, 'extractedSelectors' | 'extractedApiCalls' | 'extractedTokenKeys'> {
+  const selectors: string[] = [];
+  const apiCalls: string[] = [];
+  const tokenKeys: string[] = [];
+
+  // Sélecteurs CSS/jQuery fréquents dans Bookitit
+  const selectorMatches = jsContent.matchAll(/["']([#.][a-zA-Z][\w-]{3,50})["']/g);
+  for (const m of selectorMatches) {
+    if (!selectors.includes(m[1])) selectors.push(m[1]);
+  }
+
+  // Appels API (suffixes Bookitit)
+  const apiMatches = jsContent.matchAll(/["'](getservices|getagendas|datetime|signup|signin|signedin|summary|freetempevent|getwidgetconfigurations|confirmclient|signupfirstappointment)[/"']/g);
+  for (const m of apiMatches) {
+    if (!apiCalls.includes(m[1])) apiCalls.push(m[1]);
+  }
+
+  // Clés de tokens/paramètres critiques
+  const tokenMatches = jsContent.matchAll(/["'](bktToken|bkt_token|widget_key|server_url|phpSessionId|PHPSESSID|cf_clearance|callback|jsonp)['"]/gi);
+  for (const m of tokenMatches) {
+    const key = m[1].toLowerCase();
+    if (!tokenKeys.includes(key)) tokenKeys.push(key);
+  }
+
+  return {
+    extractedSelectors: selectors.slice(0, 100),
+    extractedApiCalls: apiCalls,
+    extractedTokenKeys: tokenKeys,
+  };
+}
+
+function extractJsFiles(har: Har): CapturedJsFile[] {
+  const jsFiles: CapturedJsFile[] = [];
+
+  for (const e of har.log.entries) {
+    const url = e.request.url;
+    const contentType = e.response.headers.find(h => h.name.toLowerCase() === 'content-type')?.value ?? '';
+    const isJs = /\.js(\?|$)/i.test(url) || contentType.includes('javascript');
+
+    // Cibler : Bookitit JS + citaconsular JS (pas les CDN génériques)
+    const isRelevant = (
+      url.includes('bookitit.com') ||
+      url.includes('citaconsular.es') ||
+      url.includes('/onlinebookings/') ||
+      url.includes('widget') ||
+      url.includes('app.js') ||
+      url.includes('main.js')
+    ) && isJs;
+
+    if (!isRelevant) continue;
+
+    const content = e.response.content.text ?? '';
+    if (content.length < 100) continue; // ignorer les JS vides
+
+    const insights = extractJsInsights(content);
+    jsFiles.push({
+      url,
+      sizeBytes: content.length,
+      content: content.slice(0, 500_000), // max 500KB par fichier JS
+      ...insights,
+    });
+  }
+
+  return jsFiles;
+}
+
 // ─── Sauvegarde ─────────────────────────────────────────────────────────────
 
 let isSaving = false;
@@ -466,7 +543,38 @@ async function saveAll(
     }, null, 2));
     console.log(`✅ Flow Bookitit         : ${flowDest}`);
 
-    // ── 4. Cookies snapshot ─────────────────────────────────────────────────
+    // ── 4. Fichiers JS Bookitit + citaconsular (sélecteurs, API, tokens) ────
+    const jsFiles = extractJsFiles(har);
+    if (jsFiles.length > 0) {
+      // Dossier JS dédié
+      const jsDir = path.join(DUMP_DIR, `${ts}-js`);
+      fs.mkdirSync(jsDir, { recursive: true });
+
+      // Index : liste + insights de tous les JS
+      const jsIndex = jsFiles.map(f => ({
+        url: f.url,
+        sizeBytes: f.sizeBytes,
+        extractedSelectors: f.extractedSelectors,
+        extractedApiCalls: f.extractedApiCalls,
+        extractedTokenKeys: f.extractedTokenKeys,
+      }));
+      fs.writeFileSync(
+        path.join(jsDir, 'index.json'),
+        JSON.stringify({ description: 'Index JS Bookitit/citaconsular', count: jsFiles.length, files: jsIndex }, null, 2),
+      );
+
+      // Un fichier par JS capturé
+      jsFiles.forEach((f, i) => {
+        const filename = `js-${String(i).padStart(2, '0')}-${f.url.split('/').pop()?.replace(/\?.*/, '') ?? 'bundle'}.js`;
+        fs.writeFileSync(path.join(jsDir, filename), f.content);
+      });
+
+      console.log(`✅ JS files (${jsFiles.length})      : ${jsDir}/`);
+    } else {
+      console.log(`⚠️  Aucun JS Bookitit capturé (HAR content=embed requis)`);
+    }
+
+    // ── 5. Cookies snapshot ─────────────────────────────────────────────────
     const cookieDest = path.join(DUMP_DIR, `${ts}-cookies.json`);
     fs.writeFileSync(cookieDest, JSON.stringify({
       description: 'Snapshot cookies fin de session',
@@ -475,7 +583,7 @@ async function saveAll(
     }, null, 2));
     console.log(`✅ Cookies snapshot      : ${cookieDest}`);
 
-    // ── 5. Logs console navigateur ──────────────────────────────────────────
+    // ── 6. Logs console navigateur ──────────────────────────────────────────
     if (consoleLogs.length > 0) {
       const logsDest = path.join(DUMP_DIR, `${ts}-console-logs.json`);
       fs.writeFileSync(logsDest, JSON.stringify({
@@ -486,11 +594,12 @@ async function saveAll(
       console.log(`✅ Console logs         : ${logsDest}`);
     }
 
-    // ── 6. Résumé lisible ───────────────────────────────────────────────────
+    // ── 7. Résumé lisible ───────────────────────────────────────────────────
     const summaryDest = path.join(DUMP_DIR, `${ts}-summary.json`);
     fs.writeFileSync(summaryDest, JSON.stringify({
       description: 'Résumé capture Spain/Cuba',
       ...dump.summary,
+      jsFilesCaptured: jsFiles.length,
       cfChallenge: dump.cfChallenge ? {
         url: dump.cfChallenge.challengeUrl,
         cfRay: dump.cfChallenge.cfRayHeader,
