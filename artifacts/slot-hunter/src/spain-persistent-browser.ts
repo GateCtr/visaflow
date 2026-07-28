@@ -65,6 +65,7 @@ import {
   type SpainCfSession,
   cloneSpainCfSessionForDossier,
   setActiveSpainCfSession,
+  solveSpainCloudflare,
 } from "./spain-soax-solver.js";
 import { syncSpainCfSessionToRedis, type SerializableSpainCfSession } from "./spain-redis-persistence.js";
 
@@ -368,11 +369,113 @@ class SpainPersistentBrowserManager {
 
     if (!cfClearance) {
       const elapsed = Math.round((Date.now() - t0) / 1000);
-      console.error(`[spain-pb] ❌ cf_clearance non obtenu après ${elapsed}s`);
-      return null;
+      console.warn(`[spain-pb] ⚠️ cf_clearance non obtenu après ${elapsed}s — fallback CapSolver…`);
+
+      // ─── Fallback CapSolver ─────────────────────────────────────────────
+      // Headless Chromium seul ne peut pas toujours résoudre le challenge CF
+      // (Turnstile interactif). On utilise CapSolver pour obtenir un cf_clearance
+      // lié au même proxy, puis on l'injecte dans le profil Chromium pour que
+      // les appels HTTP suivants soient acceptés par CF.
+      const capsolverKey = process.env.CAPSOLVER_API_KEY;
+      const proxyForCap = this.getProxyUrl() ?? "";
+      if (!capsolverKey || !proxyForCap) {
+        console.error(
+          "[spain-pb] ❌ Fallback CapSolver requis mais " +
+          (!capsolverKey ? "CAPSOLVER_API_KEY manquant" : "aucun proxy configuré"),
+        );
+        return null;
+      }
+
+      const capResult = await solveSpainCloudflare(targetUrl, capsolverKey, proxyForCap);
+      if (!capResult.success || !capResult.session) {
+        console.error(`[spain-pb] ❌ Fallback CapSolver échoué: ${capResult.error ?? "erreur inconnue"}`);
+        return null;
+      }
+
+      // Injecter le cf_clearance CapSolver dans le browser, puis re-naviguer
+      // vers le portail pour que CF exécute son JSD Oneshot côté navigateur.
+      // Cela produit un cf_clearance "upgradé" accepté par TOUS les endpoints CF
+      // (portail + /onlinebookings/main/). Sans ce deuxième navigate, le cf_clearance
+      // CapSolver seul passe /main/ mais est bloqué (403) sur la page portail.
+      try {
+        await page.setCookie({
+          name: "cf_clearance",
+          value: capResult.session.cfClearance,
+          domain: ".citaconsular.es",
+          path: "/",
+          secure: true,
+          sameSite: "None",
+        });
+        cfClearance = capResult.session.cfClearance;
+        console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté: ${cfClearance.slice(0, 40)}…`);
+      } catch (injectErr) {
+        console.error(`[spain-pb] ❌ Injection cookie CapSolver échouée: ${injectErr}`);
+        return null;
+      }
+
+      // Deuxième navigation : laisser le browser exécuter le JSD Oneshot CF.
+      // CF sert la page directement (clearance déjà valide) et fire JSD en
+      // arrière-plan → un nouveau cf_clearance "post-JSD" peut être émis.
+      console.log(`[spain-pb] 🔄 Re-navigation portail avec clearance CapSolver (JSD Oneshot)…`);
+      try {
+        await page.goto(targetUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 30_000,
+        });
+      } catch (navErr2) {
+        // Non-fatal — on continue même si goto timeout (JSD peut s'exécuter avant)
+        console.warn(`[spain-pb] ⚠️ Re-navigation goto warn (non-fatal): ${navErr2}`);
+      }
+
+      // Poll 15s pour un éventuel cf_clearance post-JSD
+      const jsdDeadline = Date.now() + 15_000;
+      while (Date.now() < jsdDeadline) {
+        await new Promise((r) => setTimeout(r, 1_000));
+        try {
+          const c = await page.cookies("https://www.citaconsular.es");
+          const cf = c.find((x) => x.name === "cf_clearance");
+          if (cf?.value && cf.value !== capResult.session.cfClearance) {
+            cfClearance = cf.value;
+            console.log(`[spain-pb] 🔑 cf_clearance post-JSD capturé: ${cfClearance.slice(0, 40)}…`);
+            break;
+          }
+        } catch { /* page still loading */ }
+      }
+      if (cfClearance === capResult.session.cfClearance) {
+        console.log(`[spain-pb] ℹ️ Pas de cf_clearance post-JSD — clearance CapSolver conservée (IP de confiance CF)`);
+      }
     }
 
-    // Extraire tous les cookies du domaine
+    // ── Naviguer vers /main/ pour établir un PHPSESSID frais côté serveur ──
+    // Après avoir obtenu cf_clearance (browser ou CapSolver), un GET /main/ dans
+    // le profil principal crée une session Bookitit valide. Sans ça, le PHPSESSID
+    // resté dans le profil peut être expiré → /main/ renvoie un body vide en HTTP.
+    // La navigation se fait dans le main browser (pas incognito) pour que les
+    // cookies soient persistés dans le profil userDataDir et capturés ci-dessous.
+    const mainPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+    if (mainPublickey) {
+      const mainCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+      const mainQuery = new URLSearchParams({
+        callback:  mainCallback,
+        type:      "default",
+        publickey: mainPublickey,
+        lang:      "es",
+        version:   "4",
+        src:       targetUrl.replace(/\/?$/, "/"),
+        _:         String(Date.now()),
+      });
+      const freshMainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
+      console.log(`[spain-pb] 🍪 Navigation /main/ pour PHPSESSID frais…`);
+      try {
+        await page.goto(freshMainUrl, { waitUntil: "networkidle0", timeout: 20_000 });
+      } catch (mainNavErr) {
+        // Non-fatal: si /main/ timeout, les cookies déjà dans le profil seront
+        // utilisés tels quels (PHPSESSID peut être absent ou stale).
+        console.warn(`[spain-pb] ⚠️ Navigation /main/ warn (non-fatal): ${mainNavErr}`);
+      }
+    }
+
+    // Extraire tous les cookies du domaine (y compris le PHPSESSID frais)
     const allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
     const allCookies = allPuppeteerCookies.map((c) => ({ name: c.name, value: c.value }));
 

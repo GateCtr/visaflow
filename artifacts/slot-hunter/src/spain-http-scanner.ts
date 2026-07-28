@@ -840,6 +840,12 @@ async function scanViaMainEndpoint(
   // ─── Step 1: GET entry page → PHPSESSID + CSRF token ───────────────────
   // IMPORTANT: Use full Chrome header set — Cloudflare validates the fingerprint
   // Sec-Fetch-Site: none because it's a direct navigation (no Referer)
+  //
+  // skipPortalFlow: set to true when CF blocks the portal HTML page via impit
+  // but the session already has a valid PHPSESSID from Playwright navigation.
+  // In that case we skip Steps 1–2b entirely and call /main/ directly (the
+  // Decodo ISP is trusted by CF for JSONP API endpoints).
+  let skipPortalFlow = false;
   const entryRes = await spainCfFetch(portalUrl, session, {
     headers: {
       "Cookie": buildCookieStr(),
@@ -875,138 +881,200 @@ async function scanViaMainEndpoint(
   );
 
   if (isCloudflareInteractiveChallenge(entryStatus, entryBody)) {
-    invalidateSpainCfSession();
-    console.warn(
-      "[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + " +
-      "\"Just a moment\") — aucune rotation proxy; résolution humaine requise",
-    );
-    return {
-      status: "cf_blocked",
-      errorMessage:
-        "Challenge Cloudflare interactif en attente de résolution humaine; " +
-        "la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.",
-      scanDurationMs: Date.now() - t0,
-    };
+    // ── Playwright fast-path bypass ──────────────────────────────────────
+    // The portal HTML page (/es/hosteds/widgetdefault/...) has a stricter CF
+    // rule than the JSONP API (/onlinebookings/main/).  impit satisfies the
+    // JSONP endpoint with a valid cf_clearance but CF rejects the HTML page
+    // navigation even with the same cookie.
+    //
+    // When the session was established by the persistent browser (Puppeteer),
+    // the browser already navigated the portal and set a fresh server-side
+    // PHPSESSID in /main/.  We can skip Steps 1-2b entirely and call /main/
+    // directly — CF trusts the Decodo ISP for JSONP endpoints.
+    if (session.source === "playwright" && phpSessId) {
+      console.log(
+        `[spain-http] ⏩ CF 403 portail (impit) — session Playwright avec PHPSESSID ` +
+        `pré-initialisé → skipPortalFlow=true, appel /main/ direct`,
+      );
+      skipPortalFlow = true;
+    } else {
+      invalidateSpainCfSession();
+      console.warn(
+        "[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + " +
+        "\"Just a moment\") — aucune rotation proxy; résolution humaine requise",
+      );
+      return {
+        status: "cf_blocked",
+        errorMessage:
+          "Challenge Cloudflare interactif en attente de résolution humaine; " +
+          "la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.",
+        scanDurationMs: Date.now() - t0,
+      };
+    }
   }
 
-  if (entryStatus === 403) {
-    invalidateSpainCfSession();
-    console.warn("[spain-http] ⚠️ HTTP 403 sans page challenge → session invalidée");
-    return null;
+  if (!skipPortalFlow) {
+    if (entryStatus === 403) {
+      invalidateSpainCfSession();
+      console.warn("[spain-http] ⚠️ HTTP 403 sans page challenge → session invalidée");
+      return null;
+    }
+
+    // Capture every server-side cookie before constructing the next request.
+    mergeSetCookies(entryRes, "GET portail");
+    if (phpSessId) {
+      console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
+    }
   }
 
-  // Capture every server-side cookie before constructing the next request.
-  mergeSetCookies(entryRes, "GET portail");
-  if (phpSessId) {
-    console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
-  }
+  const entryHtml = skipPortalFlow ? "" : entryBody;
 
-  const entryHtml = entryBody;
-
-  // Check CF challenge
-  // NOTE: ne PAS inclure "challenge-platform" ici — l'URL du script JSD Oneshot
-  // (/cdn-cgi/challenge-platform/.../jsd/oneshot/...) est présente dans le HTML
-  // du vrai widget (HTTP 200). Seuls les textes d'interstitiel CF réels sont des
-  // marqueurs fiables en cas de 200.
-  if (/un instant|just a moment|verifying you are human/i.test(entryHtml.slice(0, 12_000))) {
-    invalidateSpainCfSession();
-    console.warn(
-      "[spain-http] ⏸️ Challenge Cloudflare interactif détecté dans le HTML — " +
-      "aucune rotation proxy; résolution humaine requise",
-    );
-    return {
-      status: "cf_blocked",
-      errorMessage:
-        "Challenge Cloudflare interactif en attente de résolution humaine; " +
-        "JSD Oneshot requis avant reprise.",
-      scanDurationMs: Date.now() - t0,
-    };
+  if (!skipPortalFlow) {
+    // Check CF challenge in HTML body (HTTP 200 but CF interstitial)
+    // NOTE: ne PAS inclure "challenge-platform" ici — l'URL du script JSD Oneshot
+    // (/cdn-cgi/challenge-platform/.../jsd/oneshot/...) est présente dans le HTML
+    // du vrai widget (HTTP 200). Seuls les textes d'interstitiel CF réels sont des
+    // marqueurs fiables en cas de 200.
+    if (/un instant|just a moment|verifying you are human/i.test(entryHtml.slice(0, 12_000))) {
+      invalidateSpainCfSession();
+      console.warn(
+        "[spain-http] ⏸️ Challenge Cloudflare interactif détecté dans le HTML — " +
+        "aucune rotation proxy; résolution humaine requise",
+      );
+      return {
+        status: "cf_blocked",
+        errorMessage:
+          "Challenge Cloudflare interactif en attente de résolution humaine; " +
+          "JSD Oneshot requis avant reprise.",
+        scanDurationMs: Date.now() - t0,
+      };
+    }
   }
 
   // ─── Extract token for POST (with structural monitoring) ──────────────
   // The entry page must contain a <form method="POST"> with a hidden input name="token".
   // If the structure changes (CF update, site redesign), this is the breakpoint.
   // We use multiple extraction strategies and report anomalies.
+  // Skipped entirely when skipPortalFlow=true (no entry HTML was fetched).
 
-  const tokenMatch = entryHtml.match(/name="token"\s+value="([^"]+)"/)
+  const tokenMatch = skipPortalFlow ? null
+    : (entryHtml.match(/name="token"\s+value="([^"]+)"/)
     ?? entryHtml.match(/<input[^>]+name=["']token["'][^>]+value=["']([^"']+)["']/i)
-    ?? entryHtml.match(/<input[^>]+value=["']([a-f0-9]{20,})["'][^>]+name=["']token["']/i);
+    ?? entryHtml.match(/<input[^>]+value=["']([a-f0-9]{20,})["'][^>]+name=["']token["']/i));
 
-  if (!tokenMatch) {
-    // ─── STRUCTURAL ANOMALY DETECTION ──────────────────────────────────
-    // The token is missing. Diagnose WHY to help future debugging.
-    const hasForm = /<form[^>]*method=["']POST["']/i.test(entryHtml);
-    const hasAnyHiddenInput = /<input[^>]+type=["']hidden["']/i.test(entryHtml);
-    const hiddenInputNames = [...entryHtml.matchAll(/<input[^>]+type=["']hidden["'][^>]+name=["']([^"']+)["']/gi)].map(m => m[1]);
-    const hasButton = /idCaptchaButton|[Cc]ontinue|[Cc]ontinuar/i.test(entryHtml);
-    const pageTitle = entryHtml.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "unknown";
-    const bodyPreview = entryHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (!skipPortalFlow) {
+    // ─── "Already on widget SPA" fast path ──────────────────────────────
+    // When the persistent-browser session carries a valid PHPSESSID, Bookitit
+    // skips the "Continue/Continuar" intermediary page and serves the widget
+    // SPA directly on the GET — so there is no CSRF token form. Detect this
+    // by looking for Bookitit widget markers in the entry response (and the
+    // absence of a real CF challenge).
+    const entryIsWidgetSpa =
+      !entryHasCfChallenge &&
+      (/bkt_init_widget|idBktWidget|onlinebookings/i.test(entryHtml) ||
+       /BOOKITIT/i.test(entryTitle));
 
-    console.error(`[spain-http] 🚨 ALERTE STRUCTURELLE — Token CSRF non trouvé !`);
-    console.error(`[spain-http]    Page title: "${pageTitle}"`);
-    console.error(`[spain-http]    Has <form POST>: ${hasForm}`);
-    console.error(`[spain-http]    Has hidden inputs: ${hasAnyHiddenInput} (names: ${hiddenInputNames.join(", ") || "none"})`);
-    console.error(`[spain-http]    Has Continue button: ${hasButton}`);
-    console.error(`[spain-http]    Body preview: ${bodyPreview}`);
-    console.error(`[spain-http]    → Le formulaire d'entrée a peut-être changé de structure`);
-    console.error(`[spain-http]    → Vérifier: nouveau nom de champ? Token généré par JS? Nouveau challenge?`);
+    if (!tokenMatch) {
+      if (entryIsWidgetSpa) {
+        console.log(
+          `[spain-http] ✅ Portail déjà en mode widget SPA (PHPSESSID valide) — ` +
+          `POST Continue ignoré, JSD Oneshot analysé depuis le GET entry`,
+        );
+      } else {
+        // ─── STRUCTURAL ANOMALY DETECTION ────────────────────────────────
+        // The token is missing and we are not on the widget SPA. Diagnose WHY.
+        const hasForm = /<form[^>]*method=["']POST["']/i.test(entryHtml);
+        const hasAnyHiddenInput = /<input[^>]+type=["']hidden["']/i.test(entryHtml);
+        const hiddenInputNames = [...entryHtml.matchAll(/<input[^>]+type=["']hidden["'][^>]+name=["']([^"']+)["']/gi)].map(m => m[1]);
+        const hasButton = /idCaptchaButton|[Cc]ontinue|[Cc]ontinuar/i.test(entryHtml);
+        const pageTitle = entryHtml.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "unknown";
+        const bodyPreview = entryHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
 
-    // Report the structural change via scan result (will trigger admin email)
-    return {
-      status: "error" as const,
-      errorMessage: `ALERTE STRUCTURELLE: Token CSRF absent. Form=${hasForm}, HiddenInputs=${hiddenInputNames.join(",") || "none"}, Title="${pageTitle}". La page d'entrée citaconsular a peut-être changé.`,
-      scanDurationMs: Date.now() - t0,
-    };
+        console.error(`[spain-http] 🚨 ALERTE STRUCTURELLE — Token CSRF non trouvé !`);
+        console.error(`[spain-http]    Page title: "${pageTitle}"`);
+        console.error(`[spain-http]    Has <form POST>: ${hasForm}`);
+        console.error(`[spain-http]    Has hidden inputs: ${hasAnyHiddenInput} (names: ${hiddenInputNames.join(", ") || "none"})`);
+        console.error(`[spain-http]    Has Continue button: ${hasButton}`);
+        console.error(`[spain-http]    Body preview: ${bodyPreview}`);
+        console.error(`[spain-http]    → Le formulaire d'entrée a peut-être changé de structure`);
+        console.error(`[spain-http]    → Vérifier: nouveau nom de champ? Token généré par JS? Nouveau challenge?`);
+
+        // Report the structural change via scan result (will trigger admin email)
+        return {
+          status: "error" as const,
+          errorMessage: `ALERTE STRUCTURELLE: Token CSRF absent. Form=${hasForm}, HiddenInputs=${hiddenInputNames.join(",") || "none"}, Title="${pageTitle}". La page d'entrée citaconsular a peut-être changé.`,
+          scanDurationMs: Date.now() - t0,
+        };
+      }
+    }
   }
 
   // ─── Step 2: POST Continue (Burp row 15) ─────────────────────────────
-  // Cache-Control: max-age=0 + Priority: u=0, i confirmés par Burp
+  // Skipped when already on widget SPA (entryIsWidgetSpa path above).
+  // Skipped entirely when skipPortalFlow=true (portal GET was CF-blocked).
   const widgetReferer = portalUrl.replace(/\/?$/, "/");
-  const postRes = await spainCfFetch(widgetReferer, session, {
-    method: "POST",
-    headers: {
-      "Cookie": buildCookieStr(),
-      "Cache-Control": "max-age=0",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Language": "fr-FR,fr;q=0.9",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Origin": "https://www.citaconsular.es",
-      "Referer": portalUrl,
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-      "Priority": "u=0, i",
-    },
-    body: `token=${encodeURIComponent(tokenMatch[1])}`,
-  });
+  let widgetHtml1: string;
 
-  // Monitor POST response for structural changes
-  if (postRes && postRes.status !== 200) {
-    console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
-  }
+  if (!skipPortalFlow && tokenMatch) {
+    // Cache-Control: max-age=0 + Priority: u=0, i confirmés par Burp
+    const postRes = await spainCfFetch(widgetReferer, session, {
+      method: "POST",
+      headers: {
+        "Cookie": buildCookieStr(),
+        "Cache-Control": "max-age=0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": "https://www.citaconsular.es",
+        "Referer": portalUrl,
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Priority": "u=0, i",
+      },
+      body: `token=${encodeURIComponent(tokenMatch[1])}`,
+    });
 
-  // Read the widget HTML — needed to extract the JSD oneshot URL embedded by CF.
-  const widgetHtml1 = postRes ? await postRes.text() : "";
+    // Monitor POST response for structural changes
+    if (postRes && postRes.status !== 200) {
+      console.warn(`[spain-http] ⚠️ POST Continue status ${postRes.status} (attendu: 200) — possible changement serveur`);
+    }
 
-  // Capture every cookie returned by the widget POST before JSONP requests.
-  mergeSetCookies(postRes, "POST widget");
+    // Read the widget HTML — needed to extract the JSD oneshot URL embedded by CF.
+    widgetHtml1 = postRes ? await postRes.text() : "";
 
-  const widgetTitle = widgetHtml1.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
-  const widgetHasBkt = /bkt_init_widget|idBktWidget|onlinebookings/i.test(widgetHtml1);
-  const widgetHasCfChallenge = /un instant|just a moment|verifying you are human|_cf_chl_opt/i.test(widgetHtml1.slice(0, 3000));
-  const widgetBodyPreview = widgetHtml1.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-  console.log(
-    `[spain-http] 📄 POST widget → HTTP ${postRes?.status ?? "no response"} | ` +
-    `bytes=${widgetHtml1.length} | title="${widgetTitle.slice(0, 100)}" | ` +
-    `bkt=${widgetHasBkt ? "oui" : "non"} | cf-interstitiel=${widgetHasCfChallenge ? "OUI ⚠️" : "non"}`,
-  );
-  console.log(`[spain-http] 📄 POST widget body preview: ${widgetBodyPreview}`);
-  if (!postRes || !postRes.ok || widgetHtml1.length === 0) {
-    console.warn("[spain-http] ⚠️ POST widget sans réponse HTML exploitable");
-    return null;
+    // Capture every cookie returned by the widget POST before JSONP requests.
+    mergeSetCookies(postRes, "POST widget");
+
+    const widgetTitle = widgetHtml1.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+    const widgetHasBkt = /bkt_init_widget|idBktWidget|onlinebookings/i.test(widgetHtml1);
+    const widgetHasCfChallenge = /un instant|just a moment|verifying you are human|_cf_chl_opt/i.test(widgetHtml1.slice(0, 3000));
+    const widgetBodyPreview = widgetHtml1.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+    console.log(
+      `[spain-http] 📄 POST widget → HTTP ${postRes?.status ?? "no response"} | ` +
+      `bytes=${widgetHtml1.length} | title="${widgetTitle.slice(0, 100)}" | ` +
+      `bkt=${widgetHasBkt ? "oui" : "non"} | cf-interstitiel=${widgetHasCfChallenge ? "OUI ⚠️" : "non"}`,
+    );
+    console.log(`[spain-http] 📄 POST widget body preview: ${widgetBodyPreview}`);
+    if (!postRes || !postRes.ok || widgetHtml1.length === 0) {
+      console.warn("[spain-http] ⚠️ POST widget sans réponse HTML exploitable");
+      return null;
+    }
+  } else {
+    // Two cases:
+    //  a) skipPortalFlow=true  → portal was CF-blocked; widgetHtml1="" so that
+    //     jsdOneshotPathMatch returns null and Step 2b is skipped automatically.
+    //  b) Already on widget SPA → the GET entry page IS the widget HTML
+    //     (mergeSetCookies(entryRes) was already called above).
+    widgetHtml1 = entryHtml; // "" for skipPortalFlow, entryHtml for widget-SPA
+    if (skipPortalFlow) {
+      console.log(`[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct`);
+    } else {
+      console.log(`[spain-http] 📄 Widget SPA direct (GET entry) | bytes=${widgetHtml1.length}`);
+    }
   }
 
   // ─── Step 2b: JSD Oneshot (Burp row 22) ─────────────────────────────────────
@@ -1060,31 +1128,36 @@ async function scanViaMainEndpoint(
     // ─── Step 2c: Second widget POST (Burp row 23) ───────────────────────────
     // After JSD oneshot, the browser re-POSTs the widget with the same token
     // and the updated cf_clearance. This is required for /main/ to return content.
-    const postRes2 = await spainCfFetch(widgetReferer, session, {
-      method: "POST",
-      headers: {
-        "Cookie": buildCookieStr(),
-        "Cache-Control": "max-age=0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Origin": "https://www.citaconsular.es",
-        "Referer": portalUrl,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "Priority": "u=0, i",
-      },
-      body: `token=${encodeURIComponent(tokenMatch[1])}`,
-    });
-    mergeSetCookies(postRes2, "POST widget #2");
-    const w2bytes = postRes2 ? (await postRes2.clone().text()).length : 0;
-    console.log(
-      `[spain-http] 📄 POST widget #2 → HTTP ${postRes2?.status ?? "no response"} | bytes=${w2bytes}`,
-    );
+    // Skipped in the "already on widget SPA" path (no CSRF token available).
+    if (tokenMatch) {
+      const postRes2 = await spainCfFetch(widgetReferer, session, {
+        method: "POST",
+        headers: {
+          "Cookie": buildCookieStr(),
+          "Cache-Control": "max-age=0",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+          "Accept-Language": "fr-FR,fr;q=0.9",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Origin": "https://www.citaconsular.es",
+          "Referer": portalUrl,
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "same-origin",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+          "Priority": "u=0, i",
+        },
+        body: `token=${encodeURIComponent(tokenMatch[1])}`,
+      });
+      mergeSetCookies(postRes2, "POST widget #2");
+      const w2bytes = postRes2 ? (await postRes2.clone().text()).length : 0;
+      console.log(
+        `[spain-http] 📄 POST widget #2 → HTTP ${postRes2?.status ?? "no response"} | bytes=${w2bytes}`,
+      );
+    } else {
+      console.log(`[spain-http] ℹ️ POST widget #2 ignoré (widget SPA direct — pas de token CSRF)`);
+    }
   } else {
     // No JSD oneshot URL in widget HTML: either CF trusts this IP (direct path)
     // or the HTML structure changed. Log so we can diagnose.

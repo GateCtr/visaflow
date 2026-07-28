@@ -1,0 +1,44 @@
+le probleme de proxy est resolu continue avec le test
+
+30 minutes ago
+
+3 actions
+Le challenge CF est résolu — 9 secondes, steps 1 à 4 tous verts :
+
+Étape 1 (CF solve)     : ✅  9s
+Étape 2 (cache)        : ✅  0ms (hit)
+Étape 3 (PHPSESSID)    : ✅  distinct
+Étape 4 (impit /main/) : ✅  200, pas de challenge
+Étape 5 (probe complet): ❌
+
+L'échec de l'étape 5 est complètement indépendant : runSpainHttpProbe() navigue jusqu'à la page d'entrée de citaconsular (/es/hosteds/widgetdef498.html) et n'y trouve pas le formulaire CSRF attendu. La page répond avec le bon titre .:: BOOKITIT ::. mais sans <form POST> ni hidden inputs — soit la structure HTML du portail a changé, soit la page sert une version sans formulaire (peut-être un cookie de session déjà existant qui redirige vers l'étape suivante).
+
+Ce que les fixes ont corrigé :
+
+navigator.platform spoofé (Win32 au lieu de Linux x86_64)
+--disable-gpu → software WebGL via SwiftShader (WebGL exposé)
+UA pool filtré Chrome/Edge uniquement (plus de Safari/Firefox via Chromium)
+page.authenticate() → CDP Fetch.enable + handleAuthRequests pour le proxy auth
+
+Worked for 20 minutes
+
+Checkpoint made
+29 minutes ago
+la page principale c'est n'est pas celle-ci? https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services
+
+24 minutes ago
+
+4 actions
+Les deux defaults pointent vers widgetdef498.html — l'ancien URL. Il faut les corriger vers widgetdefault/25028fcd... :
+
+
+5 actions
+Le test utilise encore PORTAL_URL = widgetdef498.html — le default dans le test script lui-même n'a pas été mis à jour. C'est pourquoi step 4 retourne "Contact with your technical support" (pas de publickey dans l'URL) et step 5 probe le mauvais portail.
+
+
+4 actions
+Le cf_clearance passe pour /onlinebookings/main/ (étape 4) mais pas pour la page portail (/es/hosteds/widgetdefault/...) : CF a une protection différente sur cet endpoint — il faut le JSD Oneshot que le browser persistent a déjà exécuté lors de la navigation. runSpainHttpProbe recommence le flow depuis le début sans utiliser les cookies JSD du browser. Voyons comment le probe récupère sa session :
+
+
+13 actions
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
