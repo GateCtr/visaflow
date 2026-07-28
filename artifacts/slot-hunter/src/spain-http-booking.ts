@@ -548,23 +548,34 @@ export async function executeHttpBooking(
 
   // ─── 5. AUTO-DÉCOUVERTE DE L'ENDPOINT D'AUTH ──────────────────────────
   //
-  // Le router Bookitit navigue vers un hash Backbone différent selon registration_type,
-  // mais le hash NE correspond PAS 1:1 à l'endpoint HTTP :
+  // Valeurs confirmées depuis le bundle citaconsular_bundle/js/widgets/default/ :
   //
-  //   registration_type="2" → hash #signupsecondappointment
-  //     └─ SignUpSecondAppointmentContainer extends SignInContainer (pas de submit() propre)
-  //     └─ endpoint HTTP : signin/   (logintype=document — Kinshasa ET Cuba visa confirmés)
+  //   widgetconfiguration.js :
+  //     iFirstAppointment  = 1
+  //     iSecondAppointment = 2
+  //     iShowSignInStep    = 3
   //
-  //   registration_type="1" → hash #signupfirstappointment
-  //     └─ SignUpFirstAppointmentContainer — formulaire name+email, sans password
-  //     └─ endpoint HTTP : signupfirstappointment/
+  //   router.js (selecttime handler) :
+  //     type=3               → navigate("signin")                   → SignInContainer
+  //     type=1               → navigate("signup") → navigate("signupfirstappointment")
+  //     type=2               → navigate("signup") → navigate("signupsecondappointment")
+  //     autre/0/undefined    → navigate("signup") → reste sur #signup
   //
-  //   registration_type="3" (ou absent) → hash #signin
-  //     └─ SignInContainer classique email+password
-  //     └─ endpoint HTTP : signin/   (même endpoint que type=2, logintype peut différer)
+  //   Hash Backbone → Endpoint HTTP :
+  //     #signin               registration_type=3  → signin/
+  //     #signupsecondappointment  registration_type=2  → signin/
+  //       (SignUpSecondAppointmentContainer extends SignInContainer, pas de submit() propre)
+  //       (Cuba visa = type=2 → hash #signupsecondappointment → endpoint signin/)
+  //     #signupfirstappointment  registration_type=1  → signupfirstappointment/
+  //     #signup              type autre/0           → signup/
   //
-  //   NB : il n'existe PAS d'endpoint HTTP "signupsecondappointment/" — ce n'est que
-  //   le nom de la vue Backbone. BOOKITIT_KNOWN_SUFFIXES dans spainPortal.ts le confirme.
+  //   NB : "signedin/" n'est jamais utilisé en booking frais — signin.js l'active seulement
+  //   si oClientValues_248295.signedInData.signedin est déjà défini (re-booking dans la
+  //   même session widget). Notre bot démarre toujours une session fraîche → non applicable.
+  //
+  //   NB2 : il n'existe PAS d'endpoint HTTP "signupsecondappointment/" — c'est uniquement
+  //   le nom de la vue Backbone. Confirmé par BOOKITIT_KNOWN_SUFFIXES dans spainPortal.ts
+  //   ET par le bundle (signupsecondappointment.js extends SignInContainer, fetch→signin/).
   //
   // On construit une liste ordonnée de candidats (priorité selon registration_type),
   // on tente chacun et on retient le premier qui retourne un bktToken.
