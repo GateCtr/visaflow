@@ -1,0 +1,45 @@
+si le watcher detecte les creneaux, qu"est ce u'il le fait? il vas reveiller, les dossiers, qui vont reprendre encore processus de d'acceé resolution du challenge, ensuite decouverte de date, selection et confirmation via identifiant? ou il vais leurs envoyers des tout configuerer pour chaque dossiers chacuns avec leurs date selectionner et eux ils vont tenter tout simplement de confirmer? mais seulement en veuillent de ne pas se prendre un 403 et autreserreur?
+
+12 minutes ago
+Clarifying watcher execution behavior
+
+Clarifying watcher execution behavior
+Laisse-moi lire exactement ce que fait executeHttpBooking pour répondre précisément.
+
+
+6 actions
+J'ai tout ce qu'il faut pour répondre. Voici le flux exact quand le watcher détecte un créneau :
+
+Ce que fait le watcher en séquence :
+
+Phase 1 — Scan (une seule fois, partagé) : Le watcher résout Cloudflare une fois → obtient cfSession (cookies CF + IP proxy Decodo). Il appelle /main/ → reçoit le HTML rendu. Ce HTML contient les services disponibles (liens #selectservice/ID). C'est là qu'il confirme qu'il y a de vrais créneaux.
+
+Phase 2 — Booking (exécuté pour CHAQUE dossier, par le watcher lui-même) :
+
+Ce n'est ni l'option A ni l'option B. Le watcher ne "réveille" pas les dossiers pour qu'ils refassent le process tout seuls. Il exécute lui-même le booking complet pour chaque dossier, en HTTP pur, sans browser :
+
+Pour chaque dossier actif :
+  1. Clone cfSession + appel /main/ dédié → nouveau PHPSESSID isolé
+     (CF clearance partagée, mais session PHP propre à ce dossier)
+  
+  2. getagendas/ → récupère agendaId pour le service matchant le visaType
+  
+  3. datetime/ → redécouvre la date/heure disponible (mois par mois)
+     ← c'est une vraie redécouverte, pas la date du scan initial
+  
+  4. getwidgetconfigurations/ → vérifie si hCaptcha requis
+     (Kinshasa = captcha=0 → gct vide, pas de CapSolver)
+  
+  5. signin/ (JSONP) → authentifie avec login + password + date + service + agenda
+     → retourne bktToken
+  
+  6. Si OTP requis → confirmclient/ avec le code intercepté (email/SMS)
+  
+  7. summary/ → confirme le booking → retourne le locator (code de confirmation)
+
+La réponse directe à ta question :
+
+❌ Pas l'option A — les dossiers ne se "réveillent" pas pour refaire le process complet depuis le début. Pas de re-résolution CF par dossier, pas de browser.
+❌ Pas exactement l'option B — le watcher ne pré-configure pas une date fixe à confirmer. Chaque dossier refait son propre appel datetime/ pour redécouvrir la date en temps réel.
+✅ C'est le watcher qui exécute tout en HTTP pour chaque dossier : CF partagée (une fois), session PHP isolée par dossier, date redécouverte par dossier, signin + summary par dossier.
+Le seul risque de 403 est sur l'appel /main/ dédié par dossier — si CF a expiré entre le scan et le booking. D'où l'isolation cloneSpainCfSessionForDossier qui clone les cookies CF avant chaque booking.
