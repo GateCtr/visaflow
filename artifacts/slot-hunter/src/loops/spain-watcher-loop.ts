@@ -78,6 +78,8 @@ interface SpainDossier {
   otpChannel: "email" | "sms" | "manual";
   slotDateFrom?: string;
   slotDateDeadline?: string;
+  /** URL Bookitit du dossier — portalUrl ou hunterConfig.scheduleUrl */
+  portalUrl: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,17 +108,20 @@ async function getActiveSpainDossiers(): Promise<SpainDossier[]> {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
-    return byCreds.map((j: HunterJob) => ({
-      id: j.id,
-      applicantName: j.applicantName,
-      visaType: j.visaType,
-      login: j.hunterConfig.embassyUsername,
-      password: j.hunterConfig.embassyPassword,
-      applicationId: j.id,
-      otpChannel: (j.spainOtpConfig?.channel ?? "email") as "email" | "sms" | "manual",
-      slotDateFrom: j.hunterConfig.slotDateFrom,
-      slotDateDeadline: j.hunterConfig.slotDateDeadline,
-    }));
+    return byCreds
+      .filter((j: HunterJob) => !!(j.portalUrl || (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl))
+      .map((j: HunterJob) => ({
+        id: j.id,
+        applicantName: j.applicantName,
+        visaType: j.visaType,
+        login: j.hunterConfig.embassyUsername,
+        password: j.hunterConfig.embassyPassword,
+        applicationId: j.id,
+        otpChannel: (j.spainOtpConfig?.channel ?? "email") as "email" | "sms" | "manual",
+        slotDateFrom: j.hunterConfig.slotDateFrom,
+        slotDateDeadline: j.hunterConfig.slotDateDeadline,
+        portalUrl: j.portalUrl ?? (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl ?? "",
+      }));
   } catch (err) {
     log("WARN", `[SPAIN-WATCHER] Échec récupération dossiers Espagne: ${err}`);
     return [];
@@ -240,23 +245,16 @@ export async function startSpainWatcherLoop(): Promise<void> {
     }
 
     // 3. Pre-warm la session CF uniquement si un dossier Espagne peut réellement
-    // déclencher un booking. Sans ce garde-fou, un watcher actif mais sans dossier
-    // consomme un solve Cloudflare et son gros trafic proxy pour rien.
-    const preWarmConfig = await getSpainWatcherConfig().catch(() => null);
-    if (!preWarmConfig) {
-      log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — Spain Watcher non configuré ou inactif dans Convex (spainWatcher.isActive=false)");
-    }
-    const preWarmDossiers = preWarmConfig
-      ? await getActiveSpainDossiers()
-      : [];
-    if (preWarmConfig && preWarmDossiers.length === 0) {
+    // déclencher un booking. On se base directement sur les dossiers actifs —
+    // plus de dépendance au singleton spainWatcher (comme la CEV dossier loop).
+    const preWarmDossiers = await getActiveSpainDossiers();
+    if (preWarmDossiers.length === 0) {
       log("INFO", "[SPAIN-WATCHER] Pre-warm CF différé — aucun dossier Espagne actif avec identifiants (voir diagnostic ci-dessus)");
-    } else if (!preWarmConfig) {
-      // déjà loggé ci-dessus
     } else {
+      const preWarmUrl = preWarmDossiers[0].portalUrl;
       const preWarmLabel = SPAIN_PERSISTENT_BROWSER ? "Chromium persistant" : "proxy Espagne + CapSolver";
-      log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) (${preWarmLabel})…`);
-      const session = await ensureActiveSession(preWarmConfig.portalUrl).catch((e) => {
+      log("INFO", `[SPAIN-WATCHER] Pre-warm session CF pour ${preWarmDossiers.length} dossier(s) → ${preWarmUrl} (${preWarmLabel})…`);
+      const session = await ensureActiveSession(preWarmUrl).catch((e) => {
         log("WARN", `[SPAIN-WATCHER] Pre-warm CF échoué: ${e} — retry au prochain cycle`);
         return null;
       });
@@ -269,41 +267,34 @@ export async function startSpainWatcherLoop(): Promise<void> {
   while (true) {
     try {
       const cycleStartedAt = Date.now();
-      const config = await getSpainWatcherConfig();
-
-      if (!config || !config.isActive) {
-        log("INFO", "[SPAIN-WATCHER] Config Convex inactive (spainWatcher.isActive=false) — retry dans 2 min");
-        await new Promise((r) => setTimeout(r, 2 * 60_000));
-        continue;
-      }
 
       // Aucun dossier actif = aucun besoin de scanner ni de résoudre Cloudflare.
-      // On repoll Convex périodiquement afin de reprendre automatiquement dès
-      // qu'un dossier Espagne avec identifiants est activé.
+      // On se base directement sur les dossiers actifs comme la CEV dossier loop —
+      // plus de dépendance au singleton spainWatcher.isActive pour démarrer.
       const activeDossiers = await getActiveSpainDossiers();
       if (activeDossiers.length === 0) {
-        log("INFO", "[SPAIN-WATCHER] Aucun dossier Espagne actif avec identifiants — probe proxy différé de 2 min");
+        log("INFO", "[SPAIN-WATCHER] Aucun dossier Espagne actif — probe différé de 2 min");
         await new Promise((r) => setTimeout(r, 2 * 60_000));
         continue;
       }
 
-      // HTTP utilise le réglage persistant en secondes. L'environnement reste
-      // l'override d'urgence pour un service déjà déployé sans nouveau champ.
-      // Une ancienne valeur `intervalMin` ne doit pas ralentir le mode HTTP :
-      // avant `intervalSec`, ce mode était explicitement cadencé à 60 secondes.
-      // Minimum 30s en HTTP (protège contre une valeur trop basse dans Convex).
-      const configuredHttpIntervalSec = config.intervalSec
-        ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
+      // portalUrl = premier dossier actif (tous partagent la même ambassade)
+      const portalUrl = activeDossiers[0].portalUrl;
+
+      // Intervalle : singleton spainWatcher optionnel pour override, sinon env var
+      const singletonConfig = await getSpainWatcherConfig().catch(() => null);
+      const configuredHttpIntervalSec = singletonConfig?.intervalSec ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
         ? Math.max(30, configuredHttpIntervalSec) * 1000
-        : (config.intervalMin ?? 3) * 60_000;
+        : (singletonConfig?.intervalMin ?? 3) * 60_000;
+
       const cycleModeLabel = SPAIN_PERSISTENT_BROWSER ? "PB" : (SPAIN_HTTP_MODE ? "HTTP" : "PW");
-      log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${config.portalUrl} (intervalle: ${Math.round(intervalMs / 1000)}s)`);
+      log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${portalUrl} | ${activeDossiers.length} dossier(s) actif(s) | intervalle: ${Math.round(intervalMs / 1000)}s`);
 
       // Proactive re-solve si le cookie CF expire bientôt
       if ((SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) && isActiveSessionExpiringSoon()) {
         log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif");
-        await ensureActiveSession(config.portalUrl).catch((e) => {
+        await ensureActiveSession(portalUrl).catch((e) => {
           log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
         });
       }
@@ -312,8 +303,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
       // persistent-browser utilise le même probe HTTP que SPAIN_HTTP_MODE
       // (la session CF vient du Chromium persistant mais les scans restent HTTP-only)
       const result = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
-        ? await runSpainHttpProbe(config.portalUrl)
-        : await runSpainWatcherProbe(config.portalUrl);
+        ? await runSpainHttpProbe(portalUrl)
+        : await runSpainWatcherProbe(portalUrl);
 
       log(
         "INFO",
@@ -344,7 +335,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
           const cfSessionExplore = getActiveSession();
           if (cfSessionExplore) {
             try {
-              const exploration = await exploreAvailableSlots(cfSessionExplore, config.portalUrl, diagServices);
+              const exploration = await exploreAvailableSlots(cfSessionExplore, portalUrl, diagServices);
               detectedSlotsJson = serializeExplorationForConvex(exploration);
               const logLines = formatExplorationForLogs(exploration);
               for (const line of logLines) {
@@ -419,7 +410,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
               try {
                 const bookingResult = await executeHttpBooking(
                   cfSession,
-                  config.portalUrl,
+                  portalUrl,
                   mainHtml,
                   bookingConfig,
                 );
