@@ -1602,7 +1602,22 @@ async function scanViaMainEndpoint(
     //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
     // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
     // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
-    const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
+    // ─── Peak traffic retry for 5xx (server overload — CF session stays valid) ──
+    // 504/502/503/520/524 = Bookitit gateway surchargé pendant l'ouverture de créneaux.
+    // Ne PAS invalider la session CF pour ces codes : la session est valide, c'est le
+    // serveur origin qui est saturé sous le trafic. Retry jusqu'à 3× avec délai croissant.
+    const SERVER_OVERLOAD_CODES = new Set([502, 503, 504, 520, 524]);
+    let mainRes: Response | null = null;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      if (attempt > 0) {
+        const waitMs = attempt * 3_000;
+        console.warn(`[spain-http] 🔄 /main/ retry ${attempt}/3 (surcharge serveur HTTP ${mainRes?.status}) — attente ${waitMs / 1000}s`);
+        await new Promise<void>((r) => setTimeout(r, waitMs));
+      }
+      mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
+      if (!mainRes || !SERVER_OVERLOAD_CODES.has(mainRes.status)) break;
+      console.warn(`[spain-http] ⚠️ /main/ HTTP ${mainRes.status} (surcharge Bookitit — traffic de pointe) — session CF conservée`);
+    }
 
     // Beacon #29 (Burp row 29) : CRITIQUE — t+3-11ms après GET main/.
     const mainCfRayForBeacon = mainRes?.headers.get("cf-ray") ?? "";
@@ -1628,6 +1643,17 @@ async function scanViaMainEndpoint(
       : "<empty body>";
 
     if (!mainRes || mainStatus !== 200) {
+      // Server overload après retries → retourner error SANS invalider la session CF
+      if (mainStatus && SERVER_OVERLOAD_CODES.has(mainStatus)) {
+        console.error(
+          `[spain-http] ❌ /main/ HTTP ${mainStatus} après 3 retries — serveur Bookitit surchargé (traffic de pointe). Session CF conservée pour le prochain cycle.`,
+        );
+        return {
+          status: "error",
+          errorMessage: `Serveur Bookitit surchargé (HTTP ${mainStatus}) après 3 tentatives — session CF valide, réessai au prochain cycle`,
+          scanDurationMs: Date.now() - t0,
+        };
+      }
       console.warn(
         `[spain-http] ⚠️ /onlinebookings/main/ réponse réelle: ` +
         `status=${mainStatus ?? "no response"} rawChars=${mainBody.length} ` +

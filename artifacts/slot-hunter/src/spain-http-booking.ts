@@ -257,28 +257,44 @@ async function createIsolatedBookingSession(
     _: String(Date.now()),
   });
 
-  const response = await spainCfFetch(
-    `https://www.citaconsular.es/onlinebookings/main/?${query}`,
-    session,
-    {
-      headers: {
-        Cookie: buildBookingCookieHeader(session),
-        Referer: referer,
-        "X-Requested-With": "XMLHttpRequest",
-        Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-        Priority: "u=1, i",
-      },
-    },
-  );
+  // ─── Peak traffic retry for 5xx (server overload — CF session stays valid) ──
+  // 504/502/503 = Bookitit saturé pendant l'ouverture de créneaux. Ne pas abandonner
+  // le booking sur un timeout transitoire — retry jusqu'à 3× avec délai croissant.
+  const BOOKING_OVERLOAD_CODES = new Set([502, 503, 504, 520, 524]);
+  const bookingMainHeaders = {
+    Cookie: buildBookingCookieHeader(session),
+    Referer: referer,
+    "X-Requested-With": "XMLHttpRequest",
+    Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Accept-Language": "fr-FR,fr;q=0.9",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    Priority: "u=1, i",
+  };
+  let response: Response | null = null;
+  for (let attempt = 0; attempt <= 3; attempt++) {
+    if (attempt > 0) {
+      const waitMs = attempt * 3_000;
+      console.warn(`[spain-booking] 🔄 /main/ dédié retry ${attempt}/3 (surcharge serveur HTTP ${response?.status}) — attente ${waitMs / 1000}s`);
+      await new Promise<void>((r) => setTimeout(r, waitMs));
+    }
+    response = await spainCfFetch(
+      `https://www.citaconsular.es/onlinebookings/main/?${query}`,
+      session,
+      { headers: bookingMainHeaders },
+    );
+    if (!response || !BOOKING_OVERLOAD_CODES.has(response.status)) break;
+    console.warn(`[spain-booking] ⚠️ /main/ dédié HTTP ${response.status} (surcharge Bookitit — traffic de pointe)`);
+  }
 
   if (!response || !response.ok) {
-    console.warn(
-      `[spain-booking] ❌ main/ dédié échoué: HTTP ${response?.status ?? "no response"}`,
-    );
+    const statusCode = response?.status ?? "no response";
+    if (response && BOOKING_OVERLOAD_CODES.has(response.status)) {
+      console.warn(`[spain-booking] ❌ /main/ dédié surchargé (HTTP ${statusCode}) après 3 retries — booking interrompu`);
+    } else {
+      console.warn(`[spain-booking] ❌ main/ dédié échoué: HTTP ${statusCode}`);
+    }
     return null;
   }
 

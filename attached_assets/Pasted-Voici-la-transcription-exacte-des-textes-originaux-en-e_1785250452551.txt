@@ -1,0 +1,56 @@
+Voici la transcription exacte des textes originaux en espagnol apparaissant à chaque étape de la vidéo :
+
+---
+
+## 1. Términos y Condiciones (Conditions d'utilisation)
+
+### Titre de la page
+
+> **Embajada de España en Kinshasa...**
+
+### Message d'avertissement principal
+
+> **LEA ATENTAMENTE ESTE MENSAJE**
+> **1.)** Puede solicitar cita aquí solo si está registrado en este Consulado General.
+> **2.)** Nuestro listado será el **ÚNICO** elemento válido para permitirle el acceso a la Oficina. No se admiten resguardos como prueba de ningún tipo.
+> **3.)** La cita es personal, intransferible y **GRATUITA**. No se admiten citas a nombre de otra personas. Si requiere una cita para un hijo/padre/hermano, utilice los datos de esa persona. Nuestros sistemas informáticos utilizan los datos de su petición para la solicitud y sólo puede realizarse a la persona nombre de quien está la cita. No comparta sus datos para evitar que los defraudadores los utilicen por Ud. Evite problemas y que usen sus datos por Ud. El consulado NO es responsable del mal uso que se haga de sus credenciales.
+> A efectos de garantizar en igualdad de condiciones el acceso al servicio a todos los ciudadanos y debido a la limitación de recursos de este consulado las condiciones del servicio son:
+> **A.)** Las citas sólo pueden cancelarse hasta tres (3) días antes. Pasado ese límite NO podrá cancelarla. La cancelación se realiza en "Historial..."
+> **E.)** Si realiza mas de 2 cancelaciones dentro del periodo de solicitud (tres meses), su usuario sera deshabilitado.
+> **F.)** Una vez haga su primera solicitud, acuda o no, tiene tres meses para finalizar su trámite y haber acudido al consulado. Transcurrido ese tiempo su usuario será eliminado.
+
+### Encart jaune d'avertissement
+
+> **ESTE SISTEMA NO ENVIARÁ RECORDATORIOS NI NOTIFICACIONES**
+> **VERIFIQUE EN NUESTRA WEB Y NUESTRO TWITTER, 24 HORAS ANTES, QUE NO EXISTE NINGUNA INCIDENCIA O CIERRE DE LA OFICINA POR CAUSAS DE FUERZA MAYOR.**
+
+### Bouton de validation
+
+> Mediante la pulsación del botón ACEPTAR Ud. declara aceptar, sin reserva, estas condiciones.
+> Gracias por su colaboración.
+> **[ ACEPTAR ]**
+
+---
+
+## 2. Selección del trámite (Choix du service)
+
+> **TRAMITACIÓN DE VISADOS**
+
+---
+
+## 3. Selección de fecha y hora (Calendrier et horaires)
+
+* **Service sélectionné :** `Visados - TRAMITACIÓN DE VISADOS`
+* **Option :** `Cambiar de día`
+* **Date affichée :** `< Miércoles 4 de Marzo de 2026 >`
+
+### Horaires disponibles affichés :
+
+* **08:45** *(1 Hueco libre)*
+* **09:15** *(1 Hueco libre)*
+* **09:30** *(1 Hueco libre)*
+* **09:45** *(2 Huecos libres)*
+* **10:00** *(1 Hueco libre)*
+* **10:15** *(1 Hueco libre)*
+* **10:30** *(1 Hueco libre)*
+* **11:15**
