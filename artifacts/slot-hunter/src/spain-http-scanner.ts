@@ -1763,6 +1763,15 @@ async function scanViaMainEndpoint(
 
   // Signal négatif fiable → pas besoin d'appel API
   if (hasVisibleNoSlots) {
+    // ── DIAGNOSTIC : dump du contexte HTML autour du match ──────────────────
+    // Permet de vérifier que c'est bien un vrai "no hay horas" et non un artefact.
+    const matchIdx = html.search(VISIBLE_NO_SLOTS_RE);
+    if (matchIdx !== -1) {
+      const ctxStart = Math.max(0, matchIdx - 150);
+      const ctxEnd   = Math.min(html.length, matchIdx + 200);
+      console.log(`[spain-http] 🔬 Contexte HTML "No hay horas" (pos ${matchIdx}):`);
+      console.log(`[spain-http]    ${html.slice(ctxStart, ctxEnd).replace(/\s+/g, " ").trim()}`);
+    }
     console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau`);
     return { status: "not_found", scanDurationMs: Date.now() - t0 };
   }
