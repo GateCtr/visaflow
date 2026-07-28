@@ -3,18 +3,25 @@
  *
  * FLOW COMPLET (reverse-engineered depuis le bundle Bookitit citaconsular) :
  *   1. Extraire serviceId depuis le HTML rendu quand "found"
- *   2. Résoudre CF Turnstile via CapSolver (TurnstileTask) — ~2s, $0.001
- *   3. JSONP signin/ (login + password + gct + date/time/service/agenda) → bktToken
+ *   2. Vérifier getwidgetconfigurations/ → captcha=0 (Kinshasa) → gct vide
+ *                                        → captcha=1 (LMD/Cuba) → résoudre hCaptcha
+ *   3. JSONP signin/ (login + password + gct + date/time/service[]/agenda[]) → bktToken
  *   4. Si validate requis → JSONP confirmclient/ (bktToken + OTP code)
  *   5. JSONP summary/ (bktToken + all params) → locator (code confirmation)
  *
  * PRÉREQUIS :
  *   - Session CF active (ensureSpainCfSession déjà fait par le scanner)
- *   - Credentials Bookitit (embassyUsername + embassyPassword)
- *   - CAPSOLVER_API_KEY pour Turnstile
+ *   - Credentials Bookitit (passport number + password pour Kinshasa)
+ *   - CAPSOLVER_API_KEY uniquement si captcha=1 sur le widget
  *   - OTP flow configuré (email/SMS via Convex)
  *
- * COÛT : ~$0.006 par booking (CF solve $0.005 + Turnstile $0.001)
+ * PARAMÈTRES CONFIRMÉS par capture réelle 2026-07-28 (citaconsular.es) :
+ *   - logintype=document (passport), pas "email"
+ *   - services[]=bktXXX (PHP array notation, pas "services=")
+ *   - agendas[]=bktXXX  (idem)
+ *   - start/end pour datetime (pas date_from/date_to)
+ *   - type, version, src, srvsrc requis sur chaque appel
+ *   - gct vide si captcha=0 (Kinshasa), hCaptcha token si captcha=1
  */
 
 import {
@@ -73,36 +80,41 @@ export interface ExtractedSlotInfo {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CAPSOLVER_BASE = "https://api.capsolver.com";
-const TURNSTILE_SITEKEY = "0x4AAAAAAAzAYjTopCMo0Y8u"; // CF Turnstile sitekey from citaconsular.es widget
+// Sitekey hCaptcha de citaconsular.es (widgets avec captcha=1, ex: LMD)
+const HCAPTCHA_SITEKEY = "38663b6a-85dc-40c0-895e-0a1b0b7a9f44";
 
-// ─── Turnstile Solver ───────────────────────────────────────────────────────
+// ─── Captcha Solver ─────────────────────────────────────────────────────────
 
 /**
- * Résout le CF Turnstile via CapSolver TurnstileTask.
- * Retourne le token gct à envoyer avec signin/signup.
+ * Résout hCaptcha via CapSolver HCaptchaTaskProxyLess.
+ * Utilisé uniquement quand getwidgetconfigurations/ retourne captcha != "0".
+ * Pour Kinshasa (captcha=0) : ne pas appeler, passer gct="" directement.
+ *
+ * CONFIRMATION capture 2026-07-28 :
+ *   - Kinshasa widget : captcha="0" → gct absent du signin
+ *   - LMD/Cuba widget : hCaptcha présent → gct=P1_eyJ... (token hCaptcha)
  */
-async function solveTurnstile(
+async function solveHCaptcha(
   pageUrl: string,
-  sitekey: string = TURNSTILE_SITEKEY,
+  sitekey: string = HCAPTCHA_SITEKEY,
 ): Promise<string | null> {
   const capsolverKey = process.env.CAPSOLVER_API_KEY;
   if (!capsolverKey) {
-    console.error("[spain-booking] ❌ CAPSOLVER_API_KEY manquante pour Turnstile");
+    console.error("[spain-booking] ❌ CAPSOLVER_API_KEY manquante pour hCaptcha");
     return null;
   }
 
   const t0 = Date.now();
-  console.log(`[spain-booking] 🔐 Solving CF Turnstile (sitekey: ${sitekey.slice(0, 20)}…)`);
+  console.log(`[spain-booking] 🔐 Solving hCaptcha (sitekey: ${sitekey.slice(0, 20)}…)`);
 
   try {
-    // Create task
     const createRes = await fetch(`${CAPSOLVER_BASE}/createTask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clientKey: capsolverKey,
         task: {
-          type: "AntiTurnstileTaskProxyLess",
+          type: "HCaptchaTaskProxyLess",
           websiteURL: pageUrl,
           websiteKey: sitekey,
         },
@@ -112,11 +124,10 @@ async function solveTurnstile(
 
     const createData = (await createRes.json()) as { errorId: number; taskId?: string; errorDescription?: string };
     if (createData.errorId !== 0 || !createData.taskId) {
-      console.error(`[spain-booking] ❌ Turnstile createTask failed: ${createData.errorDescription}`);
+      console.error(`[spain-booking] ❌ hCaptcha createTask failed: ${createData.errorDescription}`);
       return null;
     }
 
-    // Poll result
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 3_000));
 
@@ -129,26 +140,26 @@ async function solveTurnstile(
 
       const resultData = (await resultRes.json()) as {
         status: "processing" | "ready" | "failed";
-        solution?: { token: string };
+        solution?: { gRecaptchaResponse: string };
         errorDescription?: string;
       };
 
-      if (resultData.status === "ready" && resultData.solution?.token) {
+      if (resultData.status === "ready" && resultData.solution?.gRecaptchaResponse) {
         const elapsed = Math.round((Date.now() - t0) / 1000);
-        console.log(`[spain-booking] ✅ Turnstile résolu (${elapsed}s)`);
-        return resultData.solution.token;
+        console.log(`[spain-booking] ✅ hCaptcha résolu (${elapsed}s)`);
+        return resultData.solution.gRecaptchaResponse;
       }
 
       if (resultData.status === "failed") {
-        console.error(`[spain-booking] ❌ Turnstile failed: ${resultData.errorDescription}`);
+        console.error(`[spain-booking] ❌ hCaptcha failed: ${resultData.errorDescription}`);
         return null;
       }
     }
 
-    console.error(`[spain-booking] ❌ Turnstile timeout (90s)`);
+    console.error(`[spain-booking] ❌ hCaptcha timeout (90s)`);
     return null;
   } catch (err) {
-    console.error(`[spain-booking] ❌ Turnstile error: ${err}`);
+    console.error(`[spain-booking] ❌ hCaptcha error: ${err}`);
     return null;
   }
 }
@@ -404,15 +415,22 @@ export async function executeHttpBooking(
 
   // ─── 2. Récupérer les agendas pour ce service ────────────────────────
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+  const portalReferer = portalUrl.replace(/\/?$/, "/");
+  // Paramètres de base confirmés par capture réelle 2026-07-28 :
+  // type, version, src, srvsrc sont requis sur CHAQUE appel JSONP.
   const baseParams: Record<string, string> = {
+    type: "default",
     publickey,
     lang: "es",
+    version: "4",
+    src: portalReferer,
+    srvsrc: "https://www.citaconsular.es",
   };
 
   console.log(`[spain-booking] 📋 Récupération agendas pour service ${targetService.serviceId}…`);
   const agendasPayload = await callBookititEndpoint(bookingSession, "getagendas/", {
     ...baseParams,
-    services: targetService.serviceId,
+    "services[]": targetService.serviceId, // PHP array notation confirmée par capture
     selectedPeople: "1",
   }, portalUrl);
 
@@ -429,17 +447,18 @@ export async function executeHttpBooking(
   // ─── 3. Récupérer les créneaux datetime ───────────────────────────────
   console.log(`[spain-booking] 📅 Récupération datetime…`);
   const now = new Date();
-  const dateFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const dateTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-
-  const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/", {
+  // Params datetime confirmés par capture 2026-07-28 : start/end (pas date_from/date_to)
+  const buildDatetimeParams = (year: number, month: number) => ({
     ...baseParams,
-    services: targetService.serviceId,
-    agendas: agendaId,
+    "services[]": targetService.serviceId,
+    ...(agendaId ? { "agendas[]": agendaId } : {}),
     selectedPeople: "1",
-    date_from: dateFrom,
-    date_to: dateTo,
-  }, portalUrl);
+    start: `${year}-${String(month + 1).padStart(2, "0")}-01`,
+    end: new Date(year, month + 1, 0).toISOString().slice(0, 10),
+  });
+
+  const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/",
+    buildDatetimeParams(now.getFullYear(), now.getMonth()), portalUrl);
 
   let slotDate = "";
   let slotTime = "";
@@ -454,21 +473,10 @@ export async function executeHttpBooking(
   }
 
   if (!slotDate || !slotTime) {
-    // Try next months
     for (let m = 1; m <= 3; m++) {
       const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
-      const mFrom = futureDate.toISOString().slice(0, 10);
-      const mTo = new Date(futureDate.getFullYear(), futureDate.getMonth() + 1, 0).toISOString().slice(0, 10);
-
-      const mPayload = await callBookititEndpoint(bookingSession, "datetime/", {
-        ...baseParams,
-        services: targetService.serviceId,
-        agendas: agendaId,
-        selectedPeople: "1",
-        date_from: mFrom,
-        date_to: mTo,
-      }, portalUrl);
-
+      const mPayload = await callBookititEndpoint(bookingSession, "datetime/",
+        buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
       if (mPayload) {
         const slot = extractFirstSlot(mPayload);
         if (slot) {
@@ -486,27 +494,46 @@ export async function executeHttpBooking(
     return { status: "no_slots", errorMessage: "Datetime API n'a retourné aucun créneau", durationMs: Date.now() - t0 };
   }
 
-  // ─── 4. Résoudre CF Turnstile ────────────────────────────────────────
-  console.log(`[spain-booking] 🔐 Résolution Turnstile…`);
-  const turnstileToken = await solveTurnstile(portalUrl);
-  if (!turnstileToken) {
-    return { status: "turnstile_failed", errorMessage: "Impossible de résoudre CF Turnstile", durationMs: Date.now() - t0 };
+  // ─── 4. Vérifier si captcha requis (getwidgetconfigurations/) ────────
+  // Kinshasa : captcha="0" → gct vide, pas d'appel CapSolver
+  // LMD/Cuba : captcha="1" → hCaptcha requis → gct=P1_eyJ...
+  // Confirmation capture 2026-07-28 : Kinshasa captcha=0, LMD captcha=0 aussi ce jour-là.
+  let gctToken = "";
+  try {
+    const cfgPayload = await callBookititEndpoint(bookingSession, "getwidgetconfigurations/", baseParams, portalUrl);
+    const captchaFlag = (cfgPayload as any)?.WidgetConfiguration?.captcha;
+    const captchaRequired = captchaFlag !== "0" && captchaFlag !== 0 && captchaFlag !== undefined && captchaFlag !== null;
+    if (captchaRequired) {
+      console.log(`[spain-booking] 🔐 Captcha requis (flag=${captchaFlag}) — résolution hCaptcha…`);
+      gctToken = await solveHCaptcha(portalUrl) ?? "";
+      if (!gctToken) {
+        return { status: "turnstile_failed", errorMessage: "Impossible de résoudre le captcha hCaptcha", durationMs: Date.now() - t0 };
+      }
+    } else {
+      console.log(`[spain-booking] ✅ captcha=0 — gct vide (Kinshasa / widget sans captcha)`);
+    }
+  } catch {
+    console.warn(`[spain-booking] ⚠️ getwidgetconfigurations/ échoué — on continue sans gct`);
   }
 
   // ─── 5. SIGNIN ────────────────────────────────────────────────────────
+  // Paramètres confirmés par capture 2026-07-28 :
+  //   logintype=document (passport), services[]/agendas[] notation tableau,
+  //   password passé raw (URLSearchParams encode), comments="" envoyé vide.
   console.log(`[spain-booking] 🔑 Signin avec ${config.login.slice(0, 5)}…`);
 
   const signinParams: Record<string, string> = {
     ...baseParams,
-    services: targetService.serviceId,
-    agendas: agendaId,
+    "services[]": targetService.serviceId,
+    ...(agendaId ? { "agendas[]": agendaId } : {}),
     date: slotDate,
     time: slotTime,
     selectedPeople: "1",
-    logintype: "email",
+    logintype: "document",   // passport number (pas "email")
     login: config.login,
-    password: encodeURIComponent(config.password),
-    gct: turnstileToken,
+    password: config.password, // raw — URLSearchParams gère l'encodage
+    comments: "",
+    ...(gctToken ? { gct: gctToken } : {}),
   };
 
   const signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinParams, portalUrl);
@@ -617,13 +644,13 @@ export async function executeHttpBooking(
 
   const summaryParams: Record<string, string> = {
     ...baseParams,
-    services: targetService.serviceId,
-    agendas: agendaId,
+    "services[]": targetService.serviceId,
+    ...(agendaId ? { "agendas[]": agendaId } : {}),
     date: slotDate,
     time: slotTime,
     bktToken: String(bktToken),
     login: config.login,
-    logintype: "email",
+    logintype: "document", // cohérent avec signin
     event_created: "true",
     client_signin: "true",
   };
