@@ -1,0 +1,1 @@
+callback=jQuery21104230673043030936_1785236352531({"WidgetConfiguration":{"any_agenda":"0","registration_type":"2","waiting_list":"0","show_comments":"0","mandatory_comments":"0","min_service_to_enable_dropdown":"0","template":"1","captcha":"0","payment_enable":false,"payments_gateways":{"stripe":false,"paypal":false,"redsys":false,"niubiz":false}},"WidgetLabel":[]});

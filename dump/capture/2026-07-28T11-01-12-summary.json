@@ -1,0 +1,36 @@
+{
+  "description": "Résumé capture Spain/Cuba",
+  "totalRequests": 131,
+  "cfChallengeDetected": true,
+  "cfClearanceCookiePresent": true,
+  "bookititServerUrl": null,
+  "widgetsDetected": [
+    "25028fcd7126544630b8da0c6e60722b5"
+  ],
+  "bookingAttempted": true,
+  "bookingSucceeded": false,
+  "signupPayloads": 5,
+  "categoryCounts": {
+    "citaconsular_portal": 75,
+    "cf_challenge": 25,
+    "cloudflare": 2,
+    "bookitit_other": 1,
+    "other": 3,
+    "bookitit_datetime": 4,
+    "bookitit_signup": 5,
+    "bookitit_summary": 2,
+    "bookitit_signin": 10,
+    "bookitit_confirm": 1,
+    "bookitit_config": 1,
+    "bookitit_getservices": 2
+  },
+  "jsFilesCaptured": 81,
+  "cfChallenge": {
+    "url": "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/",
+    "clearanceCookiePresent": true
+  },
+  "widgetInit": {
+    "url": "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/",
+    "widgetKey": "25028fcd7126544630b8da0c6e60722b5"
+  }
+}
