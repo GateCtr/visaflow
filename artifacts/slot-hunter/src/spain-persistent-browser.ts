@@ -215,10 +215,18 @@ class SpainPersistentBrowserManager {
     console.log(`[spain-pb]    Proxy       : ${maskedProxy}`);
     console.log(`[spain-pb]    UA          : ${this._ua.slice(0, 80)}`);
 
+    // CHROMIUM_EXECUTABLE_PATH : permet d'utiliser un Chromium préinstallé
+    // (ex: celui de Playwright dans le nix store sur Replit) plutôt que le cache Puppeteer.
+    const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH || undefined;
+    if (executablePath) {
+      console.log(`[spain-pb]    executablePath: ${executablePath}`);
+    }
+
     this._browser = await (puppeteer as any).launch({
       headless: true,
       userDataDir: CF_PROFILE_DIR,
       args,
+      ...(executablePath ? { executablePath } : {}),
     }) as Browser;
 
     return this._browser!;
@@ -398,7 +406,11 @@ class SpainPersistentBrowserManager {
       // (portail + /onlinebookings/main/). Sans ce deuxième navigate, le cf_clearance
       // CapSolver seul passe /main/ mais est bloqué (403) sur la page portail.
       try {
-        await page.setCookie({
+        // Utiliser CDP Network.setCookie directement pour éviter le bug partitionKey
+        // de Puppeteer 25+ avec Chromium <130 (page.setCookie appelle deleteCookies
+        // avec partitionKey non supporté par le CDP de Chromium v123).
+        const cdpForCookie = await page.createCDPSession();
+        await cdpForCookie.send("Network.setCookie", {
           name: "cf_clearance",
           value: capResult.session.cfClearance,
           domain: ".citaconsular.es",
@@ -406,6 +418,7 @@ class SpainPersistentBrowserManager {
           secure: true,
           sameSite: "None",
         });
+        await cdpForCookie.detach().catch(() => {});
         cfClearance = capResult.session.cfClearance;
         console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté: ${cfClearance.slice(0, 40)}…`);
       } catch (injectErr) {
@@ -565,7 +578,12 @@ class SpainPersistentBrowserManager {
         }));
 
       if (cookiesToInject.length > 0) {
-        await page.setCookie(...cookiesToInject);
+        // CDP direct pour éviter le bug partitionKey Puppeteer 25+ / Chromium <130
+        const cdpInject = await page.createCDPSession();
+        for (const ck of cookiesToInject) {
+          await cdpInject.send("Network.setCookie", ck).catch(() => {});
+        }
+        await cdpInject.detach().catch(() => {});
       }
 
       // GET /onlinebookings/main/ → le serveur émet un PHPSESSID pour ce contexte
