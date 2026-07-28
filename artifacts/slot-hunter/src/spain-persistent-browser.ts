@@ -293,6 +293,21 @@ class SpainPersistentBrowserManager {
     // CDP Fetch handler remplace page.authenticate() — voir setupPageProxyAuth.
     if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
 
+    // ── Dismiss window.alert/confirm/prompt ───────────────────────────────────
+    // citaconsular.es affiche un window.alert() obligatoire après le challenge CF.
+    // PROBLÈME : page.on("dialog") a une race condition si le dialog arrive pendant
+    // la navigation. SOLUTION : supprimer window.alert via evaluateOnNewDocument
+    // (s'exécute avant tout JS de la page) + handler backup.
+    await (page as any).evaluateOnNewDocument(() => {
+      (window as any).alert   = () => {};
+      (window as any).confirm = () => true;
+      (window as any).prompt  = () => "";
+    });
+    page.on("dialog", async (dialog: any) => {
+      console.log(`[spain-pb] Dialog natif (${dialog.type()}): "${dialog.message().slice(0, 80)}" → accept`);
+      await dialog.accept().catch(() => undefined);
+    });
+
     // Script d'init stealth : webdriver + platform + languages + chrome enrichi.
     // navigator.platform DOIT correspondre au UA — CF détecte immédiatement
     // un UA Macintosh avec platform="Linux x86_64" ou "Win32".
@@ -459,33 +474,91 @@ class SpainPersistentBrowserManager {
       }
     }
 
-    // ── Naviguer vers /main/ pour établir un PHPSESSID frais côté serveur ──
-    // Après avoir obtenu cf_clearance (browser ou CapSolver), un GET /main/ dans
-    // le profil principal crée une session Bookitit valide. Sans ça, le PHPSESSID
-    // resté dans le profil peut être expiré → /main/ renvoie un body vide en HTTP.
-    // La navigation se fait dans le main browser (pas incognito) pour que les
-    // cookies soient persistés dans le profil userDataDir et capturés ci-dessous.
-    const mainPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
-    if (mainPublickey) {
-      const mainCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
-      const mainQuery = new URLSearchParams({
-        callback:  mainCallback,
-        type:      "default",
-        publickey: mainPublickey,
-        lang:      "es",
-        version:   "4",
-        src:       targetUrl.replace(/\/?$/, "/"),
-        _:         String(Date.now()),
-      });
-      const freshMainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
-      console.log(`[spain-pb] 🍪 Navigation /main/ pour PHPSESSID frais…`);
-      try {
-        await page.goto(freshMainUrl, { waitUntil: "networkidle0", timeout: 20_000 });
-      } catch (mainNavErr) {
-        // Non-fatal: si /main/ timeout, les cookies déjà dans le profil seront
-        // utilisés tels quels (PHPSESSID peut être absent ou stale).
-        console.warn(`[spain-pb] ⚠️ Navigation /main/ warn (non-fatal): ${mainNavErr}`);
+    // ── Flow complet portail → Continuar → #services → /main/ ───────────────
+    // Le cf_clearance obtenu (browser ou CapSolver) est valide pour la page portail
+    // mais pas encore pour /onlinebookings/main/ : CF exige que le JSD Oneshot soit
+    // exécuté dans le contexte d'une navigation complète incluant :
+    //   1. window.alert → dismiss (géré par evaluateOnNewDocument ci-dessus)
+    //   2. Bouton Continuar (#idDivBktCustomContinueButton) → clic → #services
+    //   3. JS Bookitit charge /onlinebookings/main/ → CF valide le cf_clearance
+    //      pour cet endpoint + le serveur Bookitit émet un PHPSESSID frais
+    // Sans ce flow, /main/ retourne 0B (CF intercept text/html).
+    console.log(`[spain-pb] 🖱️ Portail → Continuar → #services pour valider cf_clearance sur /main/…`);
+    try {
+      // Si on n'est plus sur la page portail (cas CapSolver déjà re-navigué), re-goto
+      const currentUrl = page.url();
+      if (!currentUrl.includes("citaconsular.es/es/hosteds")) {
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 25_000 }).catch((e: unknown) => {
+          console.warn(`[spain-pb] ⚠️ goto portail (non-fatal): ${e}`);
+        });
+      } else {
+        // Déjà sur le portail — attendre que le JS finisse de s'initialiser
+        await new Promise((r) => setTimeout(r, 2_500));
       }
+
+      // Attendre et cliquer le bouton Continuar (max 25s, check toutes les 2s)
+      let continueClicked = false;
+      const contDeadline = Date.now() + 25_000;
+      while (Date.now() < contDeadline && !continueClicked) {
+        continueClicked = await page.evaluate(() => {
+          // Sélecteur exact bundle custom.js
+          const btn = document.getElementById("idDivBktCustomContinueButton");
+          if (btn && (btn as HTMLElement).offsetParent !== null) { (btn as HTMLElement).click(); return true; }
+          // Fallback : container custom → bouton "continuar/continue"
+          const container = document.getElementById("idBktDefaultCustomContainer");
+          if (container) {
+            const cands = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
+            for (let i = 0; i < cands.length; i++) {
+              const el = cands[i] as HTMLElement;
+              if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+                el.click(); return true;
+              }
+            }
+          }
+          // Fallback global par texte
+          const allClickable = document.querySelectorAll("a, button, [role='button'], div[onclick]");
+          for (let i = 0; i < allClickable.length; i++) {
+            const el = allClickable[i] as HTMLElement;
+            const txt = (el.textContent || "").trim().toLowerCase();
+            if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0) && el.offsetParent !== null) {
+              el.click(); return true;
+            }
+          }
+          return false;
+        }).catch(() => false);
+
+        if (!continueClicked) {
+          await new Promise((r) => setTimeout(r, 2_000));
+        }
+      }
+
+      if (continueClicked) {
+        console.log(`[spain-pb] ✅ Continuar cliqué — attente hash #services (max 12s)…`);
+        for (let w = 0; w < 12; w++) {
+          await new Promise((r) => setTimeout(r, 1_000));
+          const hash: string = await page.evaluate(() => window.location.hash).catch(() => "");
+          if (hash && hash !== "" && hash !== "#custom") {
+            console.log(`[spain-pb] ✅ Hash: "${hash}" — JSONP /main/ en cours`);
+            break;
+          }
+        }
+        // Laisser les requêtes JSONP /main/ + companions se terminer
+        await new Promise((r) => setTimeout(r, 4_000));
+      } else {
+        console.warn(`[spain-pb] ⚠️ Bouton Continuar introuvable après 25s — cookies capturés sans clic`);
+      }
+
+      // Rafraîchir le cf_clearance post-Continuar (CF peut émettre un nouveau token)
+      try {
+        const postContCookies = await page.cookies("https://www.citaconsular.es");
+        const postCf = postContCookies.find((c) => c.name === "cf_clearance");
+        if (postCf?.value && postCf.value !== cfClearance) {
+          cfClearance = postCf.value;
+          console.log(`[spain-pb] 🔑 cf_clearance post-Continuar: ${cfClearance.slice(0, 40)}…`);
+        }
+      } catch { /* non-fatal */ }
+    } catch (continueErr) {
+      console.warn(`[spain-pb] ⚠️ Flow Continuar échoué (non-fatal): ${continueErr}`);
     }
 
     // Extraire tous les cookies du domaine (y compris le PHPSESSID frais)

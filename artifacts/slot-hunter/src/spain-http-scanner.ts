@@ -1308,7 +1308,8 @@ async function scanViaMainEndpoint(
           "Sec-Fetch-Site": "same-origin",
           "Priority": "u=1, i",
         },
-        body: "",
+        // Best-effort body: CSRF token (mémoire: "fire best-effort with CSRF token as body")
+        body: tokenMatch ? `token=${encodeURIComponent(tokenMatch[1])}` : "",
       });
       mergeSetCookies(jsdRes, "JSD oneshot");
       console.log(`[spain-http] ✅ JSD Oneshot → HTTP ${jsdRes?.status ?? "no response"}`);
@@ -1392,7 +1393,7 @@ async function scanViaMainEndpoint(
             },
           },
         );
-        const mainJsBody = await mainJsRes.text();
+        const mainJsBody = mainJsRes ? await mainJsRes.text() : "";
         // Pattern: /jsd/oneshot/<siteKey>/<nonce>/ (nonce can contain : . - _ ~)
         const oneshotInJs = mainJsBody.match(
           /\/jsd\/oneshot\/([a-f0-9]{10,14})\/([\w.:\-_~]+)\//,
