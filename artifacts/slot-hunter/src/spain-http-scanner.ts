@@ -628,7 +628,8 @@ async function confirmSlotsViaDatetime(
   };
 
   // Extraire les services rendus (liens #selectservice hors templates)
-  const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/(\d+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
+  // ID peut être numérique (ex: 897578) ou préfixé bkt (ex: bkt897578) selon la version Bookitit.
+  const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
   if (svcMatches.length === 0) {
     console.log("[spain-http] ⚠️ confirmSlotsViaDatetime: aucun #selectservice dans renderedHtml → not_found");
     return null;
