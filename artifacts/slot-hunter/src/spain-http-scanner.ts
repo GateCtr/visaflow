@@ -835,10 +835,77 @@ function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
  * COOKIES (ordre confirmé par Burp 2026-06-25) :
  *   _ga=GA1.1.<clientId>.<ts>; _ga_F3TYSDL945=GS2.1.s<ts>...; PHPSESSID=<id>; cf_clearance=<token>
  *
- * Les appels JSD/RUM Cloudflare ne sont pas rejoués par ce scanner HTTP.
- * Le mode navigateur doit avoir établi cette partie de la session avant son
- * transfert au scanner.
+ * RUM beacons CF (Bug S5) : buildRumBody / fireRumBeacon implémentés ci-dessous.
+ * Beacons critiques : #20 (après POST widget), #29 (3-11ms après /main/), #109 (après companions).
  */
+
+/**
+ * Génère un body plausible pour POST /cdn-cgi/rum?
+ * CF corrèle la présence des beacons avec l'exécution JS — le contenu exact
+ * n'est pas vérifié, mais le format doit ressembler à du Performance API JSON.
+ */
+function buildRumBody(transferSize: number, resourcePath: string, cfRay = ""): string {
+  const jitter = () => Math.floor(Math.random() * 60);
+  const base = 180 + jitter();
+  const payload = {
+    resources: [
+      {
+        name: `https://www.citaconsular.es${resourcePath}`,
+        entryType: "resource",
+        startTime: base,
+        duration: 60 + jitter(),
+        initiatorType: "xmlhttprequest",
+        nextHopProtocol: "h2",
+        transferSize,
+        encodedBodySize: Math.max(0, transferSize - 300),
+        decodedBodySize: Math.max(0, transferSize - 300),
+        responseStatus: 200,
+      },
+    ],
+    version: "2024.10.1",
+    t: Date.now(),
+    ray: cfRay,
+    pageviewId: Math.random().toString(36).slice(2, 18),
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+  return `b=${encodeURIComponent(encoded)}`;
+}
+
+/**
+ * Fire-and-forget RUM beacon vers /cdn-cgi/rum? (non-bloquant).
+ * Burp #29 (après /main/) est CRITIQUE pour le score CF anti-bot.
+ */
+function fireRumBeacon(
+  session: SpainCfSession,
+  transferSize: number,
+  resourcePath: string,
+  referer: string,
+  cookieStr: string,
+  delayMs = 5,
+  cfRay = "",
+): void {
+  void (async () => {
+    if (delayMs > 0) await new Promise<void>((r) => setTimeout(r, delayMs));
+    const body = buildRumBody(transferSize, resourcePath, cfRay);
+    await spainCfFetch("https://www.citaconsular.es/cdn-cgi/rum?", session, {
+      method: "POST",
+      headers: {
+        "Cookie": cookieStr,
+        "Content-Type": "text/plain;charset=UTF-8",
+        "Accept": "*/*",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Origin": "https://www.citaconsular.es",
+        "Referer": referer,
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body,
+    }).catch(() => null);
+  })();
+}
+
 async function scanViaMainEndpoint(
   session: SpainCfSession,
   portalUrl: string,
@@ -1186,6 +1253,9 @@ async function scanViaMainEndpoint(
       console.warn("[spain-http] ⚠️ POST widget sans réponse HTML exploitable");
       return null;
     }
+    // Beacon #20 (Burp row 20) : DOMContentLoaded render, t+3.4-3.8s après POST widget.
+    // Fire-and-forget — ne bloque pas le JSD oneshot qui suit ~0.7s plus tard.
+    fireRumBeacon(session, widgetHtml1.length, widgetReferer.replace("https://www.citaconsular.es", ""), widgetReferer, buildCookieStr(), 3400 + Math.floor(Math.random() * 400));
   } else {
     // Two cases:
     //  a) skipPortalFlow=true  → portal was CF-blocked; widgetHtml1="" so that
@@ -1242,6 +1312,8 @@ async function scanViaMainEndpoint(
       });
       mergeSetCookies(jsdRes, "JSD oneshot");
       console.log(`[spain-http] ✅ JSD Oneshot → HTTP ${jsdRes?.status ?? "no response"}`);
+      // Beacon #24 (Burp row 24) : t+4.3s après POST widget = juste après JSD oneshot.
+      fireRumBeacon(session, 678, widgetReferer.replace("https://www.citaconsular.es", ""), widgetReferer, buildCookieStr(), 80 + Math.floor(Math.random() * 60));
     } catch (err) {
       console.warn(
         `[spain-http] ⚠️ JSD Oneshot POST échoué (non-fatal): ${err instanceof Error ? err.message : err}`,
@@ -1297,8 +1369,13 @@ async function scanViaMainEndpoint(
       );
       let jsdMainUrl: string | null = null;
       try {
+        // Cache-bust : jsd/main.js est servi depuis le cache CF et contient un nonce
+        // à usage unique. Sans cache-bust, CF retourne le même nonce à chaque fetch
+        // (déjà consommé au 1er oneshot → /main/ reste vide au cycle suivant).
+        const jsdMainJsUrl =
+          `https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js?t=${Date.now()}`;
         const mainJsRes = await spainCfFetch(
-          "https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js",
+          jsdMainJsUrl,
           session,
           {
             headers: {
@@ -1306,6 +1383,8 @@ async function scanViaMainEndpoint(
               "Accept": "*/*",
               "Accept-Language": "fr-FR,fr;q=0.9",
               "Accept-Encoding": "gzip, deflate, br",
+              "Cache-Control": "no-cache, no-store",
+              "Pragma": "no-cache",
               "Referer": widgetReferer,
               "Sec-Fetch-Dest": "script",
               "Sec-Fetch-Mode": "no-cors",
@@ -1345,7 +1424,6 @@ async function scanViaMainEndpoint(
             headers: {
               "Cookie": buildCookieStr(),
               "Content-Type": "application/x-www-form-urlencoded",
-              "Content-Length": "0",
               "Origin": "https://www.citaconsular.es",
               "Referer": widgetReferer,
               "Accept": "*/*",
@@ -1356,10 +1434,13 @@ async function scanViaMainEndpoint(
               "Sec-Fetch-Site": "same-origin",
               "Priority": "u=1, i",
             },
-            body: "",
+            // Best-effort body: CSRF token (mémoire: "fire best-effort with CSRF token as body")
+            body: tokenMatch ? `token=${encodeURIComponent(tokenMatch[1])}` : "",
           });
           mergeSetCookies(jsdRes, "JSD main.js oneshot");
           console.log(`[spain-http] ✅ JSD main.js oneshot → HTTP ${jsdRes?.status ?? "no response"}`);
+          // Beacon #24 (Burp row 24) : juste après JSD oneshot.
+          fireRumBeacon(session, 678, widgetReferer.replace("https://www.citaconsular.es", ""), widgetReferer, buildCookieStr(), 80 + Math.floor(Math.random() * 60));
         } catch (err) {
           console.warn(
             `[spain-http] ⚠️ JSD main.js oneshot POST échoué (non-fatal): ${err instanceof Error ? err.message : err}`,
@@ -1472,6 +1553,12 @@ async function scanViaMainEndpoint(
   // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
   const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
 
+  // Beacon #29 (Burp row 29) : CRITIQUE — t+3-11ms après GET main/.
+  // CF corrèle directement ce beacon avec l'exécution JS. Absent = shadow-ban progressif.
+  // On connaît pas encore mainBody.length ici, on utilise une taille approximative (124KB observé en Burp).
+  const mainCfRayForBeacon = mainRes?.headers.get("cf-ray") ?? "";
+  fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), mainCfRayForBeacon);
+
   // Fire companions after the main response. These are application JSONP
   // calls; no synthetic Cloudflare telemetry is generated.
   void (async () => {
@@ -1483,6 +1570,8 @@ async function scanViaMainEndpoint(
       spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
       spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
     ]);
+    // Beacon #109 (Burp row 109) : t+500-650ms après companions.
+    fireRumBeacon(session, 1170, "/onlinebookings/getwidgetconfigurations/", widgetReferer, buildCookieStr(), 500 + Math.floor(Math.random() * 150));
   })();
 
   const mainStatus = mainRes?.status ?? null;
@@ -1530,14 +1619,18 @@ async function scanViaMainEndpoint(
   // ─── STRUCTURAL MONITORING: /main/ response ────────────────────────────
   // Monitor that the response is valid and contains expected landmarks
 
-  // Cas body vide (HTTP 200, 0 chars) : le JSD Cloudflare "oneshot" n'a pas été
-  // complété — CapSolver fournit uniquement cf_clearance, pas l'état JSD.
-  // Ce n'est PAS un blocage IP → ne pas rôter le proxy.
-  // On invalide la session pour forcer un nouveau solve au prochain cycle.
+  // Cas body vide (HTTP 200, 0 chars) : CF intercept sur /main/ — le cookie CF
+  // n'est pas encore validé pour cet endpoint (JSD oneshot fired mais nonce
+  // potentiellement périmé, ou IP nouvelle pas encore "de confiance").
+  // Ce n'est PAS un blocage IP permanent → ne pas rôter le proxy.
+  // On invalide la session pour forcer un nouveau solve + JSD frais au prochain cycle.
   if (mainBody.length === 0) {
+    const mainCt = mainRes?.headers.get("content-type") ?? "";
+    const isCfIntercept = mainCt.includes("text/html");
     console.warn(
-      `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}) ` +
-      `→ JSD oneshot non complété — session invalidée (retry sans rotation proxy)`,
+      `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}` +
+      (isCfIntercept ? ", CF intercept text/html" : "") +
+      `) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)`,
     );
     invalidateSpainCfSession();
     return null; // déclenche le retry dans scanSpainHttp, sans rotation proxy
