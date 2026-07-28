@@ -361,6 +361,34 @@ class SpainPersistentBrowserManager {
       navPlatform,
     );
 
+    // Supprimer le cf_clearance du profil avant de naviguer.
+    //
+    // POURQUOI : Le profil persistant accumule des clearances "dégradées" — émises
+    // par CF pendant les tentatives Continuar bloquées sur "Un instant…". Ces
+    // clearances fonctionnent pour le portail HTML mais PAS pour /main/ (CF distingue
+    // les endpoints). En les supprimant, on force soit :
+    //   A. Chromium résout Turnstile nativement → clearance fraîche valide pour TOUT
+    //   B. CapSolver appelé → clearance liée au proxy Decodo + /main/ direct capturé
+    // PHPSESSID et les autres cookies de profil (localStorage, GA) sont conservés.
+    try {
+      const cdpDel = await page.createCDPSession();
+      await cdpDel.send("Network.deleteCookies", {
+        name: "cf_clearance",
+        domain: ".citaconsular.es",
+      });
+      await cdpDel.detach().catch(() => {});
+      console.log("[spain-pb] 🗑️ cf_clearance du profil supprimé (résolution fraîche)");
+    } catch { /* non-fatal */ }
+
+    // Vider le cache navigateur : CF sert jsd/main.js depuis son CDN avec un nonce
+    // à usage unique ; sans cache-bust, le même nonce (déjà consommé) est retourné.
+    try {
+      const cdpCache = await page.createCDPSession();
+      await cdpCache.send("Network.clearBrowserCache");
+      await cdpCache.detach().catch(() => {});
+      console.log("[spain-pb] 🗑️ Cache navigateur vidé (nonce JSD frais)");
+    } catch { /* non-fatal */ }
+
     // Naviguer vers le widget
     try {
       await page.goto(targetUrl, {
@@ -389,6 +417,13 @@ class SpainPersistentBrowserManager {
       }
       await new Promise((r) => setTimeout(r, CF_POLL_INTERVAL_MS));
     }
+
+    // Indique que CapSolver a déjà navigué vers /main/ et récupéré un PHPSESSID —
+    // le flow Continuar ci-dessous sera sauté pour éviter de re-déclencher Turnstile.
+    let capsolverHandledMain = false;
+    // Corps JSONP de /main/ capturé via Chromium — stocké dans session.prefetchedMainHtml
+    // pour que le scanner l'utilise directement (impit ne peut pas accéder à /main/).
+    let capsolverPrefetchedMain = "";
 
     if (!cfClearance) {
       const elapsed = Math.round((Date.now() - t0) / 1000);
@@ -453,48 +488,81 @@ class SpainPersistentBrowserManager {
         return null;
       }
 
-      // Deuxième navigation : laisser le browser exécuter le JSD Oneshot CF.
-      // CF sert la page directement (clearance déjà valide) et fire JSD en
-      // arrière-plan → un nouveau cf_clearance "post-JSD" peut être émis.
-      console.log(`[spain-pb] 🔄 Re-navigation portail avec clearance CapSolver (JSD Oneshot)…`);
+      // Navigation directe vers /main/ pour obtenir PHPSESSID + contenu JSONP.
+      //
+      // POURQUOI on n'essaie plus de re-naviguer vers le portail :
+      //   - Le portail (Turnstile) utilise un nonce JSD à usage unique.
+      //   - CapSolver consomme ce nonce lors de sa résolution.
+      //   - jsd/main.js est mis en cache CF → toutes les navigations suivantes
+      //     reçoivent le MÊME nonce (déjà brûlé) → CF re-challenge → "Un instant…".
+      //   - Network.clearBrowserCache ne suffit pas : le cache est côté CF, pas local.
+      //
+      // POURQUOI /main/ via le browser et PAS via impit :
+      //   - CF vérifie le TLS/HTTP2 fingerprint pour /main/ et retourne 0B (text/html)
+      //     pour les requêtes impit, même avec un cf_clearance valide.
+      //   - Le browser Chromium a le bon fingerprint → CF laisse passer → JSONP retourné.
+      //   - On stocke le body JSONP dans session.prefetchedMainHtml pour que le scanner
+      //     le réutilise sans faire d'appel impit (qui échouerait de toute façon).
+      const mainPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+      const mainCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+      const mainQuery = new URLSearchParams({
+        callback: mainCallback,
+        type: "default",
+        publickey: mainPublickey,
+        lang: "es",
+        version: "4",
+        src: targetUrl.replace(/\/?$/, "/"),
+        _: String(Date.now()),
+      });
+      const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
+
+      console.log(`[spain-pb] 🎯 Navigation directe /main/ via Chromium (bypass portail Turnstile)…`);
       try {
-        await page.goto(targetUrl, {
-          waitUntil: "domcontentloaded",
-          timeout: 30_000,
-        });
-      } catch (navErr2) {
-        // Non-fatal — on continue même si goto timeout (JSD peut s'exécuter avant)
-        console.warn(`[spain-pb] ⚠️ Re-navigation goto warn (non-fatal): ${navErr2}`);
+        await page.goto(mainUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        const mainCookies = await page.cookies("https://www.citaconsular.es");
+        const phpSessIdDirect = mainCookies.find((c) => c.name === "PHPSESSID")?.value;
+
+        // Capturer le body JSONP depuis le viewport du browser.
+        // La réponse est un appel JSONP brut (ex: jQueryBookingXXX("...html..."));)
+        // que le browser affiche comme texte dans document.body.
+        const mainBodyRaw = await page.evaluate(
+          () => (document.body?.innerText ?? document.documentElement?.innerText ?? "").trim(),
+        ).catch(() => "");
+
+        if (phpSessIdDirect) {
+          console.log(
+            `[spain-pb] ✅ PHPSESSID obtenu via /main/ direct: ${phpSessIdDirect.slice(0, 12)}… | ` +
+            `body: ${mainBodyRaw.length}B`,
+          );
+          if (mainBodyRaw.length > 100) {
+            // JSONP valide → on le mémorise pour le scanner
+            capsolverPrefetchedMain = mainBodyRaw;
+            console.log(`[spain-pb] 📦 /main/ JSONP capturé (${mainBodyRaw.length}B) — scanner l'utilisera directement`);
+          } else {
+            console.warn(`[spain-pb] ⚠️ /main/ body trop court (${mainBodyRaw.length}B) — scanner devra retenter`);
+          }
+        } else {
+          // Diagnostic : CF a peut-être bloqué /main/ aussi
+          console.warn(
+            `[spain-pb] ⚠️ /main/ direct: pas de PHPSESSID. ` +
+            `Body: "${mainBodyRaw.slice(0, 200)}"`,
+          );
+        }
+      } catch (mainNavErr) {
+        console.warn(`[spain-pb] ⚠️ Navigation /main/ direct (non-fatal): ${mainNavErr}`);
       }
 
-      // Poll 15s pour un éventuel cf_clearance post-JSD
-      const jsdDeadline = Date.now() + 15_000;
-      while (Date.now() < jsdDeadline) {
-        await new Promise((r) => setTimeout(r, 1_000));
-        try {
-          const c = await page.cookies("https://www.citaconsular.es");
-          const cf = c.find((x) => x.name === "cf_clearance");
-          if (cf?.value && cf.value !== capResult.session.cfClearance) {
-            cfClearance = cf.value;
-            console.log(`[spain-pb] 🔑 cf_clearance post-JSD capturé: ${cfClearance.slice(0, 40)}…`);
-            break;
-          }
-        } catch { /* page still loading */ }
-      }
-      if (cfClearance === capResult.session.cfClearance) {
-        console.log(`[spain-pb] ℹ️ Pas de cf_clearance post-JSD — clearance CapSolver conservée (IP de confiance CF)`);
-      }
+      // Marquer que le path CapSolver a déjà géré /main/ → on saute le flow Continuar
+      capsolverHandledMain = true;
     }
 
     // ── Flow complet portail → Continuar → #services → /main/ ───────────────
-    // Le cf_clearance obtenu (browser ou CapSolver) est valide pour la page portail
-    // mais pas encore pour /onlinebookings/main/ : CF exige que le JSD Oneshot soit
-    // exécuté dans le contexte d'une navigation complète incluant :
-    //   1. window.alert → dismiss (géré par evaluateOnNewDocument ci-dessus)
-    //   2. Bouton Continuar (#idDivBktCustomContinueButton) → clic → #services
-    //   3. JS Bookitit charge /onlinebookings/main/ → CF valide le cf_clearance
-    //      pour cet endpoint + le serveur Bookitit émet un PHPSESSID frais
-    // Sans ce flow, /main/ retourne 0B (CF intercept text/html).
+    // Ce flow est nécessaire quand Chromium a résolu CF nativement : il faut cliquer
+    // Continuar pour que Bookitit charge /main/ et émettre un PHPSESSID.
+    //
+    // SKIPPÉ si capsolverHandledMain=true : CapSolver a déjà navigué vers /main/
+    // directement (bypass portail Turnstile) — PHPSESSID déjà dans les cookies.
+    if (!capsolverHandledMain) {
     console.log(`[spain-pb] 🖱️ Portail → Continuar → #services pour valider cf_clearance sur /main/…`);
     try {
       // Si on n'est plus sur la page portail (cas CapSolver déjà re-navigué), re-goto
@@ -583,6 +651,56 @@ class SpainPersistentBrowserManager {
     } catch (continueErr) {
       console.warn(`[spain-pb] ⚠️ Flow Continuar échoué (non-fatal): ${continueErr}`);
     }
+    } // end if (!capsolverHandledMain)
+
+    // ── Navigation universelle vers /main/ si prefetch pas encore fait ────────
+    // Quand le cf_clearance vient du CACHE PROFIL (pas CapSolver), capsolverPrefetchedMain
+    // est vide. On tente /main/ via Chromium ici aussi pour :
+    //   1. Obtenir un PHPSESSID frais (si celui du profil est expiré)
+    //   2. Capturer le JSONP /main/ → prefetchedMainHtml (impit ne peut pas y accéder)
+    //
+    // On utilise l'UA courant (peut être Macintosh ou Windows NT selon le profil).
+    // CF fait confiance à Decodo ISP pour /main/ → devrait passer même si le portail
+    // a refusé (UA mismatch avec le nonce Turnstile).
+    if (!capsolverPrefetchedMain) {
+      const ubPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+      const ubCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+      const ubQuery = new URLSearchParams({
+        callback: ubCallback,
+        type: "default",
+        publickey: ubPublickey,
+        lang: "es",
+        version: "4",
+        src: targetUrl.replace(/\/?$/, "/"),
+        _: String(Date.now()),
+      });
+      const ubUrl = `https://www.citaconsular.es/onlinebookings/main/?${ubQuery}`;
+      console.log(`[spain-pb] 🎯 Navigation universelle /main/ via Chromium…`);
+      try {
+        await page.goto(ubUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        const ubCookies = await page.cookies("https://www.citaconsular.es");
+        const phpSessIdUB = ubCookies.find((c) => c.name === "PHPSESSID")?.value;
+        const ubBodyRaw = await page.evaluate(
+          () => (document.body?.innerText ?? document.documentElement?.innerText ?? "").trim(),
+        ).catch(() => "");
+        if (phpSessIdUB) {
+          console.log(
+            `[spain-pb] ✅ /main/ universel: PHPSESSID=${phpSessIdUB.slice(0, 12)}… | body=${ubBodyRaw.length}B`,
+          );
+        }
+        if (ubBodyRaw.length > 100) {
+          capsolverPrefetchedMain = ubBodyRaw;
+          console.log(`[spain-pb] 📦 /main/ JSONP capturé universellement (${ubBodyRaw.length}B)`);
+        } else {
+          console.warn(
+            `[spain-pb] ⚠️ /main/ universel: body trop court ou vide (${ubBodyRaw.length}B) — ` +
+            `snippet: "${ubBodyRaw.slice(0, 120)}"`,
+          );
+        }
+      } catch (ubErr) {
+        console.warn(`[spain-pb] ⚠️ Navigation universelle /main/ (non-fatal): ${ubErr}`);
+      }
+    }
 
     // Extraire tous les cookies du domaine (y compris le PHPSESSID frais)
     const allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
@@ -606,6 +724,10 @@ class SpainPersistentBrowserManager {
       allCookies,
       extraHeaders: {},
       source: "playwright", // indique une session navigateur réelle (même champ que local-playwright-solver)
+      // Corps JSONP pré-fetchée via Chromium. Défini uniquement sur le path CapSolver
+      // (quand le portail Turnstile est inaccessible → /main/ navigué directement).
+      // Le scanner le consomme et bypasse l'appel impit (/main/ renvoie 0B via impit).
+      ...(capsolverPrefetchedMain ? { prefetchedMainHtml: capsolverPrefetchedMain } : {}),
     };
 
     this._cachedSession = session;

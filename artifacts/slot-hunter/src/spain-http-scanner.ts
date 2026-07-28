@@ -1035,8 +1035,21 @@ async function scanViaMainEndpoint(
   // but the session already has a valid PHPSESSID from Playwright navigation.
   // In that case we skip Steps 1–2b entirely and call /main/ directly (the
   // Decodo ISP is trusted by CF for JSONP API endpoints).
+  //
+  // EARLY ACTIVATION : if the session was established by the persistent browser
+  // AND already carries a PHPSESSID, skip the portal GET entirely — don't even
+  // attempt it.  Going through the portal re-executes the JSD Oneshot which uses
+  // a cached (consumed) nonce → CF refuses /main/ regardless.  The browser
+  // session already validated cf_clearance for /main/ via direct navigation.
   let skipPortalFlow = false;
-  const entryRes = await spainCfFetch(portalUrl, session, {
+  if (session.source === "playwright" && phpSessId) {
+    skipPortalFlow = true;
+    console.log(
+      `[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → ` +
+      `skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)`,
+    );
+  }
+  const entryRes = skipPortalFlow ? null : await spainCfFetch(portalUrl, session, {
     headers: {
       "Cookie": buildCookieStr(),
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -1051,69 +1064,83 @@ async function scanViaMainEndpoint(
     },
   });
 
-  if (!entryRes) {
-    console.warn("[spain-http] ⚠️ GET portail sans réponse (erreur réseau ou proxy)");
-    invalidateSpainCfSession();
-    return null;
-  }
+  // Outer-scope variables derived from the portal GET response.
+  // All default to empty/false — populated below when skipPortalFlow=false.
+  let entryBody = "";
+  let entryTitle = "";
+  let entryHasCfChallenge = false;
 
-  const entryStatus = entryRes.status;
-  const entryContentType = entryRes.headers.get("content-type") ?? "";
-  const entryBody = await entryRes.clone().text();
-  const entryTitle = entryBody.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
-  const entryHasToken = /name=["']token["']/i.test(entryBody);
-  const entryHasCfChallenge = /un instant|just a moment|verifying you are human|_cf_chl_opt/i.test(entryBody.slice(0, 5000));
-  console.log(
-    `[spain-http] GET portail → HTTP ${entryStatus} | ` +
-    `type=${entryContentType.split(";")[0] || "unknown"} | bytes=${entryBody.length} | ` +
-    `token=${entryHasToken ? "oui" : "non"} | cf-interstitiel=${entryHasCfChallenge ? "OUI ⚠️" : "non"} | ` +
-    `title="${entryTitle.slice(0, 100)}"`,
-  );
-
-  if (isCloudflareInteractiveChallenge(entryStatus, entryBody)) {
-    // ── Playwright fast-path bypass ──────────────────────────────────────
-    // The portal HTML page (/es/hosteds/widgetdefault/...) has a stricter CF
-    // rule than the JSONP API (/onlinebookings/main/).  impit satisfies the
-    // JSONP endpoint with a valid cf_clearance but CF rejects the HTML page
-    // navigation even with the same cookie.
-    //
-    // When the session was established by the persistent browser (Puppeteer),
-    // the browser already navigated the portal and set a fresh server-side
-    // PHPSESSID in /main/.  We can skip Steps 1-2b entirely and call /main/
-    // directly — CF trusts the Decodo ISP for JSONP endpoints.
-    if (session.source === "playwright" && phpSessId) {
-      console.log(
-        `[spain-http] ⏩ CF 403 portail (impit) — session Playwright avec PHPSESSID ` +
-        `pré-initialisé → skipPortalFlow=true, appel /main/ direct`,
-      );
-      skipPortalFlow = true;
-    } else {
-      invalidateSpainCfSession();
-      console.warn(
-        "[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + " +
-        "\"Just a moment\") — aucune rotation proxy; résolution humaine requise",
-      );
-      return {
-        status: "cf_blocked",
-        errorMessage:
-          "Challenge Cloudflare interactif en attente de résolution humaine; " +
-          "la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.",
-        scanDurationMs: Date.now() - t0,
-      };
-    }
-  }
-
+  // When skipPortalFlow was already set (early activation), entryRes is null —
+  // skip all portal processing and go straight to the post-portal steps.
   if (!skipPortalFlow) {
-    if (entryStatus === 403) {
+    if (!entryRes) {
+      console.warn("[spain-http] ⚠️ GET portail sans réponse (erreur réseau ou proxy)");
       invalidateSpainCfSession();
-      console.warn("[spain-http] ⚠️ HTTP 403 sans page challenge → session invalidée");
       return null;
     }
 
-    // Capture every server-side cookie before constructing the next request.
-    mergeSetCookies(entryRes, "GET portail");
-    if (phpSessId) {
-      console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
+    const entryStatus = entryRes.status;
+    const entryContentType = entryRes.headers.get("content-type") ?? "";
+    entryBody = await entryRes.clone().text();
+    entryTitle = entryBody.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+    const entryHasToken = /name=["']token["']/i.test(entryBody);
+    entryHasCfChallenge = /un instant|just a moment|verifying you are human|_cf_chl_opt/i.test(entryBody.slice(0, 5000));
+    console.log(
+      `[spain-http] GET portail → HTTP ${entryStatus} | ` +
+      `type=${entryContentType.split(";")[0] || "unknown"} | bytes=${entryBody.length} | ` +
+      `token=${entryHasToken ? "oui" : "non"} | cf-interstitiel=${entryHasCfChallenge ? "OUI ⚠️" : "non"} | ` +
+      `title="${entryTitle.slice(0, 100)}"`,
+    );
+
+    if (isCloudflareInteractiveChallenge(entryStatus, entryBody)) {
+      // ── Playwright fast-path bypass ──────────────────────────────────────
+      // The portal HTML page (/es/hosteds/widgetdefault/...) has a stricter CF
+      // rule than the JSONP API (/onlinebookings/main/).  impit satisfies the
+      // JSONP endpoint with a valid cf_clearance but CF rejects the HTML page
+      // navigation even with the same cookie.
+      //
+      // When the session was established by the persistent browser (Puppeteer),
+      // the browser already navigated the portal and set a fresh server-side
+      // PHPSESSID in /main/.  We can skip Steps 1-2b entirely and call /main/
+      // directly — CF trusts the Decodo ISP for JSONP endpoints.
+      if (session.source === "playwright" && phpSessId) {
+        console.log(
+          `[spain-http] ⏩ CF 403 portail (impit) — session Playwright avec PHPSESSID ` +
+          `pré-initialisé → skipPortalFlow=true, appel /main/ direct`,
+        );
+        skipPortalFlow = true;
+        // Reset portal-derived vars since we're now skipping the portal
+        entryBody = "";
+        entryTitle = "";
+        entryHasCfChallenge = false;
+      } else {
+        invalidateSpainCfSession();
+        console.warn(
+          "[spain-http] ⏸️ Challenge Cloudflare interactif détecté (HTTP 403 + " +
+          "\"Just a moment\") — aucune rotation proxy; résolution humaine requise",
+        );
+        return {
+          status: "cf_blocked",
+          errorMessage:
+            "Challenge Cloudflare interactif en attente de résolution humaine; " +
+            "la session n'est pas réutilisée tant que le JSD Oneshot n'est pas capturé.",
+          scanDurationMs: Date.now() - t0,
+        };
+      }
+    }
+
+    if (!skipPortalFlow) {
+      if (entryStatus === 403) {
+        invalidateSpainCfSession();
+        console.warn("[spain-http] ⚠️ HTTP 403 sans page challenge → session invalidée");
+        return null;
+      }
+
+      // Capture every server-side cookie before constructing the next request.
+      mergeSetCookies(entryRes, "GET portail");
+      if (phpSessId) {
+        console.log(`[spain-http] 🍪 PHPSESSID capturé: ${phpSessId.slice(0, 12)}…`);
+      }
     }
   }
 
@@ -1545,20 +1572,86 @@ async function scanViaMainEndpoint(
     _: String(tWidget + 2),
   });
 
-  // Séquence applicative observée :
-  //   main/                → t+0      (response immédiate, détection depuis ce body)
-  //   GTM script load      → t+2914ms (déclencheur des companions)
-  //   getwidgetconfs/      → t+3046ms (132ms après GTM — callback GTM)
-  //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
-  // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
-  // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
-  const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
+  // ─── Step 3a: /main/ — browser prefetch OR impit ─────────────────────────
+  // CF vérifie le TLS/HTTP2 fingerprint pour /onlinebookings/main/ et retourne
+  // HTTP 200 avec body vide (text/html) pour les requêtes impit, même avec un
+  // cf_clearance valide. Le vrai Chromium passe car il a le bon fingerprint.
+  //
+  // Quand session.prefetchedMainHtml est défini (session persistent-browser via
+  // CapSolver path), le browser a déjà fetché /main/ et capturé le JSONP.
+  // On utilise ce contenu directement — pas d'appel impit.
+  //
+  // Sinon (chemin normal ou session native Chromium), on appelle impit comme avant.
+  // Dans ce cas, le JSD oneshot préalable (step 2b) a normalement validé cf_clearance
+  // pour /main/ côté CF, et impit peut réussir.
+  let mainBody = "";
+  let mainCfRay = "";
 
-  // Beacon #29 (Burp row 29) : CRITIQUE — t+3-11ms après GET main/.
-  // CF corrèle directement ce beacon avec l'exécution JS. Absent = shadow-ban progressif.
-  // On connaît pas encore mainBody.length ici, on utilise une taille approximative (124KB observé en Burp).
-  const mainCfRayForBeacon = mainRes?.headers.get("cf-ray") ?? "";
-  fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), mainCfRayForBeacon);
+  if (session.prefetchedMainHtml) {
+    mainBody = session.prefetchedMainHtml;
+    console.log(
+      `[spain-http] 📦 /main/ pré-fetchée via Chromium (${mainBody.length}B) — appel impit ignoré`,
+    );
+    // Fire beacon RUM #29 malgré l'absence de requête réseau (CF corrèle avec l'IP proxy)
+    fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
+  } else {
+    // Séquence applicative observée :
+    //   main/                → t+0      (response immédiate, détection depuis ce body)
+    //   GTM script load      → t+2914ms (déclencheur des companions)
+    //   getwidgetconfs/      → t+3046ms (132ms après GTM — callback GTM)
+    //   getservices/         → t+3633ms (9ms après getwidgetconfs — same callback)
+    // Les companions NE SONT PAS simultanées avec main/ — elles arrivent ~3s plus tard
+    // via le callback Google Tag Manager. On les fire en fire-and-forget avec le bon délai.
+    const mainRes = await spainCfFetch(`${baseBookititUrl}main/?${mainParams}`, session, { headers: jsonpHeaders });
+
+    // Beacon #29 (Burp row 29) : CRITIQUE — t+3-11ms après GET main/.
+    const mainCfRayForBeacon = mainRes?.headers.get("cf-ray") ?? "";
+    fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), mainCfRayForBeacon);
+
+    mainCfRay = mainCfRayForBeacon;
+
+    const mainStatus = mainRes?.status ?? null;
+    const mainContentType = mainRes?.headers.get("content-type") ?? "";
+    const mainContentLength = mainRes?.headers.get("content-length") ?? "";
+    const mainLocation = mainRes?.headers.get("location") ?? "";
+    const mainResponseUrl = mainRes?.url ?? "";
+    let mainBodyReadError = "";
+    if (mainRes) {
+      try {
+        mainBody = await mainRes.text();
+      } catch (error) {
+        mainBodyReadError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    const rawPreview = mainBody
+      ? mainBody.replace(/\s+/g, " ").slice(0, 240)
+      : "<empty body>";
+
+    if (!mainRes || mainStatus !== 200) {
+      console.warn(
+        `[spain-http] ⚠️ /onlinebookings/main/ réponse réelle: ` +
+        `status=${mainStatus ?? "no response"} rawChars=${mainBody.length} ` +
+        `type=${mainContentType.split(";")[0] || "unknown"} ` +
+        `contentLength=${mainContentLength || "absent"} ` +
+        `cfRay=${mainCfRay || "absent"} ` +
+        `location=${mainLocation || "absent"} ` +
+        `bodyReadError=${mainBodyReadError || "none"} ` +
+        `url=${mainResponseUrl || "unknown"} preview="${rawPreview}"`,
+      );
+      return null;
+    }
+
+    if (mainBody.length === 0) {
+      const isCfIntercept = mainContentType.includes("text/html");
+      console.warn(
+        `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}` +
+        (isCfIntercept ? ", CF intercept text/html" : "") +
+        `) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)`,
+      );
+      invalidateSpainCfSession();
+      return null;
+    }
+  }
 
   // Fire companions after the main response. These are application JSONP
   // calls; no synthetic Cloudflare telemetry is generated.
@@ -1575,39 +1668,6 @@ async function scanViaMainEndpoint(
     fireRumBeacon(session, 1170, "/onlinebookings/getwidgetconfigurations/", widgetReferer, buildCookieStr(), 500 + Math.floor(Math.random() * 150));
   })();
 
-  const mainStatus = mainRes?.status ?? null;
-  const mainContentType = mainRes?.headers.get("content-type") ?? "";
-  const mainContentLength = mainRes?.headers.get("content-length") ?? "";
-  const mainCfRay = mainRes?.headers.get("cf-ray") ?? "";
-  const mainLocation = mainRes?.headers.get("location") ?? "";
-  const mainResponseUrl = mainRes?.url ?? "";
-  let mainBody = "";
-  let mainBodyReadError = "";
-  if (mainRes) {
-    try {
-      mainBody = await mainRes.text();
-    } catch (error) {
-      mainBodyReadError = error instanceof Error ? error.message : String(error);
-    }
-  }
-  const rawPreview = mainBody
-    ? mainBody.replace(/\s+/g, " ").slice(0, 240)
-    : "<empty body>";
-
-  if (!mainRes || mainStatus !== 200) {
-    console.warn(
-      `[spain-http] ⚠️ /onlinebookings/main/ réponse réelle: ` +
-      `status=${mainStatus ?? "no response"} rawChars=${mainBody.length} ` +
-      `type=${mainContentType.split(";")[0] || "unknown"} ` +
-      `contentLength=${mainContentLength || "absent"} ` +
-      `cfRay=${mainCfRay || "absent"} ` +
-      `location=${mainLocation || "absent"} ` +
-      `bodyReadError=${mainBodyReadError || "none"} ` +
-      `url=${mainResponseUrl || "unknown"} preview="${rawPreview}"`,
-    );
-    return null;
-  }
-
   // Parse JSONP → HTML
   const jsonpMatch = mainBody.match(/^[^(]+\("(.*)"\);?$/s);
   let html: string;
@@ -1618,42 +1678,21 @@ async function scanViaMainEndpoint(
   }
 
   // ─── STRUCTURAL MONITORING: /main/ response ────────────────────────────
-  // Monitor that the response is valid and contains expected landmarks
-
-  // Cas body vide (HTTP 200, 0 chars) : CF intercept sur /main/ — le cookie CF
-  // n'est pas encore validé pour cet endpoint (JSD oneshot fired mais nonce
-  // potentiellement périmé, ou IP nouvelle pas encore "de confiance").
-  // Ce n'est PAS un blocage IP permanent → ne pas rôter le proxy.
-  // On invalide la session pour forcer un nouveau solve + JSD frais au prochain cycle.
-  if (mainBody.length === 0) {
-    const mainCt = mainRes?.headers.get("content-type") ?? "";
-    const isCfIntercept = mainCt.includes("text/html");
-    console.warn(
-      `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}` +
-      (isCfIntercept ? ", CF intercept text/html" : "") +
-      `) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)`,
-    );
-    invalidateSpainCfSession();
-    return null; // déclenche le retry dans scanSpainHttp, sans rotation proxy
-  }
+  // Monitor that the response is valid and contains expected landmarks.
+  // Note: "body vide" is already handled inside the impit branch above.
 
   if (html.length < 1000) {
     console.error(
       `[spain-http] 🚨 /main/ réponse courte: ` +
-      `status=${mainStatus} rawChars=${mainBody.length} decodedChars=${html.length} ` +
-      `type=${mainContentType.split(";")[0] || "unknown"} ` +
-      `contentLength=${mainContentLength || "absent"} ` +
+      `rawChars=${mainBody.length} decodedChars=${html.length} ` +
       `cfRay=${mainCfRay || "absent"} ` +
-      `bodyReadError=${mainBodyReadError || "none"} ` +
-      `url=${mainResponseUrl || "unknown"} preview="${rawPreview}"`,
+      `preview="${mainBody.replace(/\s+/g, " ").slice(0, 160)}"`,
     );
     return {
       status: "error" as const,
       errorMessage:
         `ALERTE: /onlinebookings/main/ décodé à ${html.length} chars ` +
-        `(brut: ${mainBody.length}, HTTP ${mainStatus}, type: ${mainContentType.split(";")[0] || "inconnu"}, ` +
-        `cf-ray: ${mainCfRay || "absent"}, ` +
-        `lecture: ${mainBodyReadError || "OK"}, aperçu: ${rawPreview.slice(0, 160)})`,
+        `(brut: ${mainBody.length}, cf-ray: ${mainCfRay || "absent"})`,
       scanDurationMs: Date.now() - t0,
     };
   }

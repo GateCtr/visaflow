@@ -100,6 +100,13 @@ export interface SpainCfSession {
   extraHeaders: Record<string, string>;
   /** How the session was established. Browser sessions contain real CF state. */
   source?: "playwright" | "capsolver" | "direct";
+  /**
+   * Contenu JSONP pré-fetchée de /onlinebookings/main/ via le browser Chromium.
+   * Défini uniquement pour les sessions persistent-browser (source=playwright) quand
+   * la navigation directe /main/ a réussi. Le scanner l'utilise directement (bypasse
+   * l'appel impit) car CF bloque /main/ pour les user-agents non-browser (0B text/html).
+   */
+  prefetchedMainHtml?: string;
 }
 
 /**
