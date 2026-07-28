@@ -548,9 +548,23 @@ export async function executeHttpBooking(
 
   // ─── 5. AUTO-DÉCOUVERTE DE L'ENDPOINT D'AUTH ──────────────────────────
   //
-  // Le router Bookitit navigue vers un hash différent selon registration_type :
-  //   #signin               → signin/               (registration_type=2, compte existant)
-  //   #signupfirstappointment → signupfirstappointment/  (registration_type=1, premier RDV)
+  // Le router Bookitit navigue vers un hash Backbone différent selon registration_type,
+  // mais le hash NE correspond PAS 1:1 à l'endpoint HTTP :
+  //
+  //   registration_type="2" → hash #signupsecondappointment
+  //     └─ SignUpSecondAppointmentContainer extends SignInContainer (pas de submit() propre)
+  //     └─ endpoint HTTP : signin/   (logintype=document — Kinshasa ET Cuba visa confirmés)
+  //
+  //   registration_type="1" → hash #signupfirstappointment
+  //     └─ SignUpFirstAppointmentContainer — formulaire name+email, sans password
+  //     └─ endpoint HTTP : signupfirstappointment/
+  //
+  //   registration_type="3" (ou absent) → hash #signin
+  //     └─ SignInContainer classique email+password
+  //     └─ endpoint HTTP : signin/   (même endpoint que type=2, logintype peut différer)
+  //
+  //   NB : il n'existe PAS d'endpoint HTTP "signupsecondappointment/" — ce n'est que
+  //   le nom de la vue Backbone. BOOKITIT_KNOWN_SUFFIXES dans spainPortal.ts le confirme.
   //
   // On construit une liste ordonnée de candidats (priorité selon registration_type),
   // on tente chacun et on retient le premier qui retourne un bktToken.
