@@ -1,0 +1,10 @@
+define(['jquery', 'underscore', 'backbone'], 
+function ($, _, Backbone) {
+    var Agenda = Backbone.Model.extend({	
+	parse: function(response, options){
+            this.attributes = response;            
+	}
+    });
+    return Agenda;
+});
+
