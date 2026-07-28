@@ -84,14 +84,14 @@ interface SpainDossier {
 
 /**
  * Récupère les dossiers Espagne actifs depuis Convex (via getActiveJobs).
- * Filtre : destination="spain", hunterConfig.isActive=true, credentials présents.
+ * Filtre : destination="spain"|"espagne"|"es", hunterConfig.isActive=true, credentials présents.
  */
 async function getActiveSpainDossiers(): Promise<SpainDossier[]> {
   try {
     const jobs = await getActiveJobs();
     return jobs
       .filter((j: HunterJob) =>
-        j.destination === "spain" &&
+        (j.destination === "spain" || j.destination === "espagne" || j.destination === "es") &&
         j.hunterConfig?.isActive === true &&
         !!j.hunterConfig.embassyUsername &&
         !!j.hunterConfig.embassyPassword
