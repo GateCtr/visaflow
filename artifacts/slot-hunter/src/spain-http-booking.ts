@@ -50,8 +50,10 @@ export interface SpainBookingConfig {
   otpChannel?: "email" | "sms" | "manual";
   /** Si true, utilise signup au lieu de signin */
   useSignup?: boolean;
-  /** Nom du demandeur (pour signup et logs) */
+  /** Nom complet du demandeur (pour signupfirstappointment et logs) */
   applicantName?: string;
+  /** Email du demandeur (requis pour signupfirstappointment/) */
+  applicantEmail?: string;
   /** Service cible spécifique (si fourni, bypass l'auto-sélection) */
   targetServiceId?: string;
   /** Type de visa du dossier (pour le matching service, ex: "Visa C — Tourisme / Affaires") */
@@ -80,8 +82,9 @@ export interface ExtractedSlotInfo {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CAPSOLVER_BASE = "https://api.capsolver.com";
-// Sitekey hCaptcha de citaconsular.es (widgets avec captcha=1, ex: LMD)
-const HCAPTCHA_SITEKEY = "38663b6a-85dc-40c0-895e-0a1b0b7a9f44";
+// Sitekey hCaptcha de citaconsular.es (widgets avec captcha=1, ex: LMD/Cuba)
+// Confirmé par capture réseau 2026-07-28 (modal Aceptar Cuba → hcaptcha iframe)
+const HCAPTCHA_SITEKEY = "38663b6a-85dc-4346-965e-f066cd8e7d26";
 
 // ─── Captcha Solver ─────────────────────────────────────────────────────────
 
@@ -338,8 +341,8 @@ export function extractServicesFromHtml(html: string): ExtractedSlotInfo[] {
   // Remove templates to only look at rendered HTML
   const renderedHtml = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
 
-  // Extract services
-  const serviceMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/(\d+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
+  // Extract services — IDs peuvent être numériques ou bkt-préfixés (ex: bkt1181774)
+  const serviceMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w-]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
   for (const m of serviceMatches) {
     const serviceId = m[1];
     const innerHtml = m[2];
@@ -516,53 +519,121 @@ export async function executeHttpBooking(
     console.warn(`[spain-booking] ⚠️ getwidgetconfigurations/ échoué — on continue sans gct`);
   }
 
-  // ─── 5. SIGNIN ────────────────────────────────────────────────────────
-  // Paramètres confirmés par capture 2026-07-28 :
-  //   logintype=document (passport), services[]/agendas[] notation tableau,
-  //   password passé raw (URLSearchParams encode), comments="" envoyé vide.
-  console.log(`[spain-booking] 🔑 Signin avec ${config.login.slice(0, 5)}…`);
+  // ─── 4.5. DÉTECTER LE TYPE D'AUTH ─────────────────────────────────────
+  // Kinshasa (25028fcd) → getsigninaccountfields/ retourne des champs → signinaccount/
+  // Cuba / autres portails → getsigninaccountfields/ vide / absent → signin/ avec date+time intégrés
+  //
+  // Différence clé (confirmée par captures 2026-07-28) :
+  //   signinaccount/?logintype=document&login=PASSPORT&password=PWD  → bktToken SANS date/time
+  //   signin/?...&date=DATE&time=TIME&login=PASSPORT&logintype=document → bktToken AVEC booking créé
+  //
+  // Pour signinaccount/ : le booking doit être créé séparément via signedin/ après auth.
+  let useSigninAccount = false;
+  try {
+    const signinAccountFieldsPayload = await callBookititEndpoint(
+      bookingSession, "getsigninaccountfields/", baseParams, portalUrl,
+    );
+    const clients = (signinAccountFieldsPayload as any)?.CustomFields?.Clients;
+    useSigninAccount = Array.isArray(clients) && clients.length > 0;
+    if (useSigninAccount) {
+      console.log(`[spain-booking] 🔍 signinaccount/ détecté (getsigninaccountfields/ retourne des champs)`);
+    } else {
+      console.log(`[spain-booking] 🔍 signin/ standard détecté (getsigninaccountfields/ vide)`);
+    }
+  } catch {
+    console.warn(`[spain-booking] ⚠️ getsigninaccountfields/ échoué → fallback signin/ standard`);
+  }
 
-  const signinParams: Record<string, string> = {
-    ...baseParams,
-    "services[]": targetService.serviceId,
-    ...(agendaId ? { "agendas[]": agendaId } : {}),
-    date: slotDate,
-    time: slotTime,
-    selectedPeople: "1",
-    logintype: "document",   // passport number (pas "email")
-    login: config.login,
-    password: config.password, // raw — URLSearchParams gère l'encodage
-    comments: "",
-    ...(gctToken ? { gct: gctToken } : {}),
-  };
+  // ─── 5. AUTH (signin/ ou signinaccount/) ──────────────────────────────
+  // Paramètres confirmés par capture 2026-07-28.
+  console.log(`[spain-booking] 🔑 Auth (${useSigninAccount ? "signinaccount/" : "signin/"}) avec ${config.login.slice(0, 5)}…`);
 
-  const signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinParams, portalUrl);
+  let signinPayload: unknown;
+  if (useSigninAccount) {
+    // Kinshasa (25028fcd) : auth pure, pas de date/time dans cette requête
+    const signinAccountParams: Record<string, string> = {
+      ...baseParams,
+      logintype: "document",
+      login: config.login,
+      password: config.password,
+    };
+    signinPayload = await callBookititEndpoint(bookingSession, "signinaccount/", signinAccountParams, portalUrl);
+  } else {
+    // Cuba et portails standard : auth + booking en une seule requête (date+time inclus)
+    const signinStandardParams: Record<string, string> = {
+      ...baseParams,
+      "services[]": targetService.serviceId,
+      ...(agendaId ? { "agendas[]": agendaId } : {}),
+      date: slotDate,
+      time: slotTime,
+      selectedPeople: "1",
+      logintype: "document",
+      login: config.login,
+      password: config.password,
+      comments: "",
+      ...(gctToken ? { gct: gctToken } : {}),
+    };
+    signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinStandardParams, portalUrl);
+  }
 
   if (!signinPayload || typeof signinPayload !== "object") {
-    return { status: "signin_failed", errorMessage: "signin/ pas de réponse", durationMs: Date.now() - t0 };
+    return { status: "signin_failed", errorMessage: `${useSigninAccount ? "signinaccount/" : "signin/"} pas de réponse`, durationMs: Date.now() - t0 };
   }
 
   const signinObj = signinPayload as Record<string, unknown>;
+  const clientObj = (signinObj as any).Client ?? signinObj;
 
   // Check for errors
-  if (signinObj.errors && Array.isArray(signinObj.errors) && signinObj.errors.length > 0) {
-    const errMsg = (signinObj.errors as Array<{ message?: string }>).map(e => e.message).join(", ");
-    console.error(`[spain-booking] ❌ Signin errors: ${errMsg}`);
-    return { status: "signin_failed", errorMessage: `Signin échoué: ${errMsg}`, durationMs: Date.now() - t0 };
+  const signinErrors = clientObj.errors ?? signinObj.errors;
+  if (signinErrors && Array.isArray(signinErrors) && signinErrors.length > 0) {
+    const errMsg = (signinErrors as Array<{ message?: string }>).map((e) => e.message).join(", ");
+    console.error(`[spain-booking] ❌ Auth errors: ${errMsg}`);
+    return { status: "signin_failed", errorMessage: `Auth échouée: ${errMsg}`, durationMs: Date.now() - t0 };
   }
 
   // Extract bktToken from response
-  const bktToken = (signinObj as any).bktToken
-    ?? (signinObj as any).Client?.bktToken
+  const bktToken = clientObj.bktToken
+    ?? (signinObj as any).bktToken
     ?? "";
 
   if (!bktToken) {
-    console.error(`[spain-booking] ❌ Pas de bktToken dans la réponse signin`);
+    console.error(`[spain-booking] ❌ Pas de bktToken dans la réponse auth`);
     console.error(`[spain-booking]    Response: ${JSON.stringify(signinPayload).slice(0, 500)}`);
-    return { status: "signin_failed", errorMessage: "bktToken absent de la réponse signin", durationMs: Date.now() - t0 };
+    return { status: "signin_failed", errorMessage: "bktToken absent de la réponse auth", durationMs: Date.now() - t0 };
   }
 
-  console.log(`[spain-booking] ✅ Signin OK — bktToken: ${String(bktToken).slice(0, 20)}…`);
+  console.log(`[spain-booking] ✅ Auth OK — bktToken: ${String(bktToken).slice(0, 20)}…`);
+
+  // ─── 5.5. SIGNEDIN/ (uniquement pour signinaccount/ — Kinshasa) ───────
+  // Pour les portails signinaccount/, l'auth ne crée pas le booking.
+  // Il faut appeler signedin/ avec bktToken + date/time pour réserver le créneau.
+  // Confirmé par l'analyse de signedin.js (extend SignInContainer, API call: signedin/).
+  if (useSigninAccount) {
+    console.log(`[spain-booking] 📅 signedin/ — création du booking (Kinshasa flow)…`);
+    const signedinParams: Record<string, string> = {
+      ...baseParams,
+      "services[]": targetService.serviceId,
+      ...(agendaId ? { "agendas[]": agendaId } : {}),
+      date: slotDate,
+      time: slotTime,
+      selectedPeople: "1",
+      bktToken: String(bktToken),
+      comments: "",
+      ...(gctToken ? { gct: gctToken } : {}),
+    };
+    const signedinPayload = await callBookititEndpoint(bookingSession, "signedin/", signedinParams, portalUrl);
+    if (!signedinPayload || typeof signedinPayload !== "object") {
+      console.warn(`[spain-booking] ⚠️ signedin/ pas de réponse — on tente summary/ directement`);
+    } else {
+      const signedinErrors = (signedinPayload as any)?.Client?.errors ?? (signedinPayload as any)?.errors;
+      if (signedinErrors && Array.isArray(signedinErrors) && signedinErrors.length > 0) {
+        const msg = (signedinErrors as Array<{ message?: string }>).map((e) => e.message).join(", ");
+        console.error(`[spain-booking] ❌ signedin/ errors: ${msg}`);
+        return { status: "booking_failed", errorMessage: `signedin/ échoué: ${msg}`, durationMs: Date.now() - t0 };
+      }
+      console.log(`[spain-booking] ✅ signedin/ OK — booking créé`);
+    }
+  }
 
   // Check if OTP validation is required
   const validateRequired = (signinObj as any).validate !== undefined

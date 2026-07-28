@@ -43,6 +43,9 @@ const SERVICE_PATTERNS: ServicePattern[] = [
       /short\s*stay/i,
       /turismo/i,
       /negocios/i,
+      // Service générique "traitement des visas" (ex: Kinshasa bkt1181774)
+      /tramitaci[oó]n.*visados?/i,
+      /visados?\s*(c\b|corta|court|sch)/i,
     ],
   },
   {
