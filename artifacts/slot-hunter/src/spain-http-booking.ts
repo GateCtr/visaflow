@@ -513,14 +513,21 @@ export async function executeHttpBooking(
     return { status: "no_slots", errorMessage: "Datetime API n'a retourné aucun créneau", durationMs: Date.now() - t0 };
   }
 
-  // ─── 4. Vérifier si captcha requis (getwidgetconfigurations/) ────────
+  // ─── 4. Widget config : captcha + registration_type ─────────────────
   // Kinshasa : captcha="0" → gct vide, pas d'appel CapSolver
   // LMD/Cuba : captcha="1" → hCaptcha requis → gct=P1_eyJ...
-  // Confirmation capture 2026-07-28 : Kinshasa captcha=0, LMD captcha=0 aussi ce jour-là.
+  //
+  // registration_type détermine quel endpoint d'auth Bookitit utilise après
+  // #selecttime — lu ici pour guider l'auto-découverte de l'endpoint signin.
+  //   "2" → signin/          (compte existant, logintype=document — Kinshasa confirmé)
+  //   "1" → signupfirstappointment/  (premier RDV, name+email sans password)
+  //   autres/inconnu → on tente dans l'ordre
   let gctToken = "";
+  let registrationType = "2"; // défaut Kinshasa
   try {
     const cfgPayload = await callBookititEndpoint(bookingSession, "getwidgetconfigurations/", baseParams, portalUrl);
-    const captchaFlag = (cfgPayload as any)?.WidgetConfiguration?.captcha;
+    const widgetCfg = (cfgPayload as any)?.WidgetConfiguration;
+    const captchaFlag = widgetCfg?.captcha;
     const captchaRequired = captchaFlag !== "0" && captchaFlag !== 0 && captchaFlag !== undefined && captchaFlag !== null;
     if (captchaRequired) {
       console.log(`[spain-booking] 🔐 Captcha requis (flag=${captchaFlag}) — résolution hCaptcha…`);
@@ -531,66 +538,147 @@ export async function executeHttpBooking(
     } else {
       console.log(`[spain-booking] ✅ captcha=0 — gct vide (Kinshasa / widget sans captcha)`);
     }
+    if (widgetCfg?.registration_type !== undefined && widgetCfg.registration_type !== null) {
+      registrationType = String(widgetCfg.registration_type);
+      console.log(`[spain-booking] 📋 registration_type=${registrationType}`);
+    }
   } catch {
-    console.warn(`[spain-booking] ⚠️ getwidgetconfigurations/ échoué — on continue sans gct`);
+    console.warn(`[spain-booking] ⚠️ getwidgetconfigurations/ échoué — on continue avec registration_type=${registrationType} (défaut)`);
   }
 
-  // ─── 5. SIGNIN ────────────────────────────────────────────────────────
-  // Paramètres confirmés par capture 2026-07-28.
+  // ─── 5. AUTO-DÉCOUVERTE DE L'ENDPOINT D'AUTH ──────────────────────────
   //
-  // ARCHITECTURE Bookitit registration_type=2 (#signupsecondappointment) :
-  //   SignUpSecondAppointmentContainer extends SignInContainer — pas de submit() propre.
-  //   Le widget appelle signin/ avec date+time inclus (auth + booking en une requête).
-  //   logintype=document = numéro de passeport comme identifiant (pas email).
+  // Le router Bookitit navigue vers un hash différent selon registration_type :
+  //   #signin               → signin/               (registration_type=2, compte existant)
+  //   #signupfirstappointment → signupfirstappointment/  (registration_type=1, premier RDV)
   //
-  //   NB : signinaccount/ est un chemin ALTERNATIF ("ya tengo cuenta") qui ne crée
-  //   pas de booking — capturé en 11-01-12 lors d'une connexion manuelle, pas un flow booking.
-  console.log(`[spain-booking] 🔑 Signin avec ${config.login.slice(0, 5)}…`);
+  // On construit une liste ordonnée de candidats (priorité selon registration_type),
+  // on tente chacun et on retient le premier qui retourne un bktToken.
+  // Un candidat est "raté" si : pas de réponse, ou réponse sans bktToken ET sans erreurs
+  // métier (pas de bktToken + pas d'errors = mauvais endpoint, pas mauvais credentials).
+  // Un candidat est "refusé" si : bktToken absent MAIS errors[] présent (bad credentials
+  // sur le bon endpoint → pas de fallback).
 
-  const signinParams: Record<string, string> = {
+  /** Params communs date/service pour tous les endpoints d'auth */
+  const authBookingBase: Record<string, string> = {
     ...baseParams,
     "services[]": targetService.serviceId,
     ...(agendaId ? { "agendas[]": agendaId } : {}),
     date: slotDate,
     time: slotTime,
     selectedPeople: "1",
-    logintype: "document",
-    login: config.login,
-    password: config.password,
     comments: "",
     ...(gctToken ? { gct: gctToken } : {}),
   };
 
-  const signinPayload = await callBookititEndpoint(bookingSession, "signin/", signinParams, portalUrl);
+  /**
+   * Candidats d'auth dans l'ordre de priorité.
+   * Chaque candidat a un endpoint et ses params spécifiques.
+   *
+   * signin/               — compte existant (logintype=document, Kinshasa confirmé 2026-07-28)
+   * signupfirstappointment/ — premier RDV (name+email, registration_type=1, pas de password)
+   * signup/               — variante générique (similaire signupfirstappointment)
+   */
+  interface AuthCandidate {
+    endpoint: string;
+    label: string;
+    params: Record<string, string>;
+  }
 
-  if (!signinPayload || typeof signinPayload !== "object") {
-    return { status: "signin_failed", errorMessage: "signin/ pas de réponse", durationMs: Date.now() - t0 };
+  const candidateSignin: AuthCandidate = {
+    endpoint: "signin/",
+    label: "signin (logintype=document)",
+    params: {
+      ...authBookingBase,
+      logintype: "document",
+      login: config.login,
+      password: config.password,
+    },
+  };
+
+  const candidateSignupFirst: AuthCandidate = {
+    endpoint: "signupfirstappointment/",
+    label: "signupfirstappointment (name+email)",
+    params: {
+      ...authBookingBase,
+      name: config.applicantName ?? config.login,
+      email: config.login,
+      // password absent intentionnellement : ce flow crée un compte sans password pré-existant
+    },
+  };
+
+  const candidateSignup: AuthCandidate = {
+    endpoint: "signup/",
+    label: "signup (name+email fallback)",
+    params: {
+      ...authBookingBase,
+      name: config.applicantName ?? config.login,
+      email: config.login,
+    },
+  };
+
+  // Ordre selon registration_type
+  const authCandidates: AuthCandidate[] = registrationType === "1"
+    ? [candidateSignupFirst, candidateSignin, candidateSignup]
+    : [candidateSignin, candidateSignupFirst, candidateSignup]; // "2" ou inconnu → signin en premier
+
+  console.log(
+    `[spain-booking] 🔍 Auto-découverte endpoint auth — registration_type=${registrationType} — ` +
+    `candidats: ${authCandidates.map((c) => c.endpoint).join(", ")}`,
+  );
+
+  // ─── Tentative séquentielle des candidats ────────────────────────────
+  let signinPayload: unknown = null;
+  let confirmedEndpoint = "";
+
+  for (const candidate of authCandidates) {
+    console.log(`[spain-booking] 🔑 Tentative ${candidate.label} (${candidate.endpoint})…`);
+    const payload = await callBookititEndpoint(bookingSession, candidate.endpoint, candidate.params, portalUrl);
+
+    if (!payload || typeof payload !== "object") {
+      console.warn(`[spain-booking] ⚠️ ${candidate.endpoint} — pas de réponse ou format inattendu → candidat suivant`);
+      continue;
+    }
+
+    const obj = payload as Record<string, unknown>;
+    const inner = (obj as any).Client ?? obj;
+    const errors = inner.errors ?? obj.errors;
+    const hasErrors = Array.isArray(errors) && errors.length > 0;
+    const token = inner.bktToken ?? (obj as any).bktToken ?? "";
+
+    if (token) {
+      // ✅ Succès — cet endpoint a fonctionné
+      signinPayload = payload;
+      confirmedEndpoint = candidate.endpoint;
+      console.log(`[spain-booking] ✅ Endpoint confirmé: ${candidate.endpoint} — bktToken: ${String(token).slice(0, 20)}…`);
+      break;
+    }
+
+    if (hasErrors) {
+      // Bon endpoint, mauvais credentials → pas de fallback (retourner erreur métier immédiatement)
+      const errMsg = (errors as Array<{ message?: string }>).map((e) => e.message).join(", ");
+      console.error(`[spain-booking] ❌ ${candidate.endpoint} — erreurs métier (bon endpoint, credentials refusés): ${errMsg}`);
+      return { status: "signin_failed", errorMessage: `Auth échouée sur ${candidate.endpoint}: ${errMsg}`, durationMs: Date.now() - t0 };
+    }
+
+    // Pas de token, pas d'erreurs → endpoint probablement incorrect, on essaie le suivant
+    console.warn(
+      `[spain-booking] ⚠️ ${candidate.endpoint} — réponse sans bktToken ni errors ` +
+      `(endpoint incorrect ?) → candidat suivant. Réponse: ${JSON.stringify(payload).slice(0, 200)}`,
+    );
+  }
+
+  if (!signinPayload || !confirmedEndpoint) {
+    return {
+      status: "signin_failed",
+      errorMessage: `Aucun des ${authCandidates.length} endpoints d'auth n'a retourné de bktToken (${authCandidates.map((c) => c.endpoint).join(", ")})`,
+      durationMs: Date.now() - t0,
+    };
   }
 
   const signinObj = signinPayload as Record<string, unknown>;
-  // Bookitit enveloppe parfois dans { Client: { ... } }
   const clientObj = (signinObj as any).Client ?? signinObj;
-
-  // Check for errors
-  const signinErrors = clientObj.errors ?? signinObj.errors;
-  if (signinErrors && Array.isArray(signinErrors) && signinErrors.length > 0) {
-    const errMsg = (signinErrors as Array<{ message?: string }>).map((e) => e.message).join(", ");
-    console.error(`[spain-booking] ❌ Signin errors: ${errMsg}`);
-    return { status: "signin_failed", errorMessage: `Signin échoué: ${errMsg}`, durationMs: Date.now() - t0 };
-  }
-
-  // Extract bktToken from response
-  const bktToken = clientObj.bktToken
-    ?? (signinObj as any).bktToken
-    ?? "";
-
-  if (!bktToken) {
-    console.error(`[spain-booking] ❌ Pas de bktToken dans la réponse signin`);
-    console.error(`[spain-booking]    Response: ${JSON.stringify(signinPayload).slice(0, 500)}`);
-    return { status: "signin_failed", errorMessage: "bktToken absent de la réponse signin", durationMs: Date.now() - t0 };
-  }
-
-  console.log(`[spain-booking] ✅ Signin OK — bktToken: ${String(bktToken).slice(0, 20)}…`);
+  const bktToken = clientObj.bktToken ?? (signinObj as any).bktToken ?? "";
 
   // Check if OTP validation is required
   const validateRequired = (signinObj as any).validate !== undefined
