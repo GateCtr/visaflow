@@ -1,0 +1,53 @@
+etant donner que celui du cuba a des slot en ce moment je te passe le lien pour que tu le test de bout en bout et tu capture le flow reel qu'on a besoin? c'est le meme parcoupt jusqu'a la confirmation du slot via la connexion etc...
+
+29 minutes ago
+Requesting booking link
+
+Requesting booking link
+Quel est le lien du portail Cuba avec des créneaux disponibles ?
+URL du portail Cuba
+https://www.citaconsular.es/es/hosteds/widgetdefault/28330379fc95acafd31ee9e8938c278ff/#services
+
+Worked for 9 seconds
+Testing portal flow
+
+Testing portal flow
+Je lance d'abord le test existant avec le portail Cuba, puis en parallèle je prépare un script de capture complet du flow getagendas/datetime/ :
+
+
+7 actions
+Le pnpm install a effacé le cache Chrome. Je le réinstalle et en parallèle je prépare le script de capture Cuba :
+
+
+Show less
+
+Ran puppeteer
+
+Created test-cuba-full-flow.ts
+Testing Cuba flow
+
+Testing Cuba flow
+
+Ran test-cuba-full-flow.ts
+$ cd artifacts/slot-hunter && export SPAIN_PORTAL_URL="https://www.citaconsular.es/es/hosteds/widgetdefault/28330379fc95acafd31ee9e8938c278ff/" && timeout 180 node_modules/.bin/tsx test-cuba-full-flow.ts 2>&1
+Checking CapSolver session cookies
+
+Checking CapSolver session cookies
+Trois problèmes visibles :
+
+Le persistent browser échoue pour Cuba (98s → fallback CapSolver) — le profil /tmp/spain-cf-profile était vidé entre les runs
+/main/ retourne 126978 chars mais "0 service rendu" → la détection des services rate pour Cuba
+L'étape 3 du script récupère /main/ via une session déjà invalidée → 0 bytes
+Je capture le HTML brut de /main/ Cuba pour diagnostiquer pourquoi les services ne sont pas détectés :
+
+
+4 actions
+/main/ retourne 0 bytes dans mon script diagnostic mais 126978 chars dans le probe — la différence est dans la construction du cookie. Je vais capturer le HTML brut directement depuis le scanner en sauvant renderedHtml quand 0 services sont détectés :
+
+
+Show less
+
+Opened spain-http-scanner.ts
+
+Opened spain-http-scanner.ts
+You've reached your monthly free quota limit. It will reset on August 26, 2026.

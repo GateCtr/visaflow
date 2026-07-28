@@ -630,17 +630,58 @@ async function confirmSlotsViaDatetime(
   // Extraire les services rendus (liens #selectservice hors templates)
   // ID peut être numérique (ex: 897578) ou préfixé bkt (ex: bkt897578) selon la version Bookitit.
   const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
-  if (svcMatches.length === 0) {
-    console.log("[spain-http] ⚠️ confirmSlotsViaDatetime: aucun #selectservice dans renderedHtml → not_found");
-    return null;
-  }
 
-  const services = svcMatches.map((m) => {
-    const serviceId = m[1];
-    const inner = m[2];
-    const nameM = inner.match(/clsBktServiceDataName[^>]*>([^<]+)/i) ?? inner.match(/>([^<]{5,})</);
-    return { serviceId, serviceName: nameM?.[1]?.trim() ?? "Service" };
-  });
+  let services: Array<{ serviceId: string; serviceName: string }>;
+
+  if (svcMatches.length === 0) {
+    // FALLBACK : Cuba (et certains portails Bookitit récents) utilisent un rendu
+    // client-side via Backbone.js / Underscore templates — les liens #selectservice
+    // contiennent <%= attributes.id %> côté serveur et ne sont jamais présents
+    // dans le HTML brut de /main/. On récupère les IDs directement via getservices/.
+    console.log(
+      "[spain-http] ℹ️ confirmSlotsViaDatetime: aucun #selectservice rendu → " +
+      "fallback getservices/ JSONP (portail client-side render détecté)",
+    );
+    try {
+      const svcCb = `cbSvc${Date.now()}`;
+      const svcQ = new URLSearchParams();
+      svcQ.append("callback",       svcCb);
+      svcQ.append("type",           "default");
+      svcQ.append("publickey",      publickey);
+      svcQ.append("lang",           "es");
+      svcQ.append("version",        "4");
+      svcQ.append("src",            referer);
+      svcQ.append("srvsrc",         "https://www.citaconsular.es");
+      svcQ.append("selectedPeople", "1");
+      svcQ.append("_",              String(Date.now()));
+      const svcRes = await spainCfFetch(`${base}getservices/?${svcQ}`, session, { headers });
+      if (!svcRes?.ok) {
+        console.log(`[spain-http] ⚠️ getservices/ fallback → HTTP ${svcRes?.status ?? "null"} → not_found`);
+        return null;
+      }
+      const svcRaw = await svcRes.text();
+      console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
+      const svcPayload = parseJsonpPayload(svcRaw);
+      console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
+      const svcDetails = extractServiceDetails(svcPayload);
+      if (svcDetails.length === 0) {
+        console.log(`[spain-http] ⚠️ getservices/ fallback → 0 services (payload préview: ${JSON.stringify(svcPayload)?.slice(0, 300)}) → not_found`);
+        return null;
+      }
+      services = svcDetails.map((s) => ({ serviceId: s.id, serviceName: s.name }));
+      console.log(`[spain-http] ✅ getservices/ fallback → ${services.length} service(s) : ${services.map(s => `"${s.serviceName}" (${s.serviceId})`).join(", ")}`);
+    } catch (err) {
+      console.log(`[spain-http] ⚠️ getservices/ fallback exception: ${err} → not_found`);
+      return null;
+    }
+  } else {
+    services = svcMatches.map((m) => {
+      const serviceId = m[1];
+      const inner = m[2];
+      const nameM = inner.match(/clsBktServiceDataName[^>]*>([^<]+)/i) ?? inner.match(/>([^<]{5,})</);
+      return { serviceId, serviceName: nameM?.[1]?.trim() ?? "Service" };
+    });
+  }
 
   const cbBase = `cb${Date.now()}`;
   const now = new Date();
@@ -1381,14 +1422,27 @@ async function scanViaMainEndpoint(
   // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
   //   → Seule réponse datetime/ avec des Slots réels = "found"
 
-  // Cas 1 : "No hay horas" masquée + services rendus (après Aceptar)
+  // Cas 1 : "No hay horas" masquée (signal positif potentiel)
+  // NOTE : certains portails (ex: Cuba) utilisent un rendu Backbone.js / Underscore.js
+  // client-side. Les liens #selectservice ne sont JAMAIS dans le HTML serveur —
+  // ils apparaissent dans des <script type="text/template"> sous la forme
+  // `#selectservice/<%= attributes.id %>`, supprimés par le strip.
+  // On doit donc tester le html BRUT (avant strip) pour détecter ce pattern.
+  // confirmSlotsViaDatetime dispose d'un fallback getservices/ pour obtenir les IDs
+  // dans ce cas — on l'appelle toujours quand "No hay horas" est masquée.
   if (hasHiddenNoSlots && !hasVisibleNoSlots) {
-    const hasServices = /#selectservice\/\d+/i.test(renderedHtml);
-    if (!hasServices) {
-      console.log(`[spain-http] ⚠️ "No hay horas" masquée MAIS 0 service rendu → not_found`);
+    const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
+    // Check original (un-stripped) html for EJS template placeholders
+    const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
+    if (!hasRenderedServiceLinks && !hasClientSideTemplates) {
+      console.log(`[spain-http] ⚠️ "No hay horas" masquée MAIS aucun service rendu ni template Backbone détecté → not_found`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
-    console.log(`[spain-http] 🔍 "No hay horas" masquée + services visibles — vérification datetime/…`);
+    if (hasClientSideTemplates && !hasRenderedServiceLinks) {
+      console.log(`[spain-http] 🔍 "No hay horas" masquée + templates Backbone (client-side render) — vérification datetime/ via getservices/ fallback…`);
+    } else {
+      console.log(`[spain-http] 🔍 "No hay horas" masquée + services visibles — vérification datetime/…`);
+    }
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
       console.log(`[spain-http] ⛔ "tramitacion de visas" présent MAIS datetime/ vide → pas de créneau réel`);
