@@ -1387,13 +1387,22 @@ async function scanViaMainEndpoint(
     // HTML. Instead CF injects an iframe with window.__CF$cv$params={r:'<rayId>',…}
     // and loads /cdn-cgi/challenge-platform/scripts/jsd/main.js. That script
     // contains the oneshot path (siteKey + nonce) which we extract and fire.
-    const jsdMainCfParams = widgetHtml1.match(
-      /window\.__CF\$cv\$params\s*=\s*\{r:'([^']+)',t:'([^']+)'\}/,
+    //
+    // Robust extraction: parse r and t independently so extra fields or a change
+    // in quote style (CF sometimes uses double quotes) don't silently skip JSD.
+    const jsdCvParamsBlock = widgetHtml1.match(
+      /window\.__CF\$cv\$params\s*=\s*(\{[^}]+\})/,
     );
-    if (jsdMainCfParams && /jsd\/main\.js/.test(widgetHtml1)) {
-      const jsdRayId = jsdMainCfParams[1];
+    let jsdRayId: string | null = null;
+    let jsdTValue: string | null = null;
+    if (jsdCvParamsBlock) {
+      const block = jsdCvParamsBlock[1];
+      jsdRayId  = block.match(/\br:['"]([^'"]+)['"]/)?.[1] ?? null;
+      jsdTValue = block.match(/\bt:['"]([^'"]+)['"]/)?.[1] ?? null;
+    }
+    if (jsdRayId && /jsd\/main\.js/.test(widgetHtml1)) {
       console.log(
-        `[spain-http] 🔎 JSD main.js détecté (r='${jsdRayId}') — fetch script pour extraire nonce…`,
+        `[spain-http] 🔎 JSD main.js détecté (r='${jsdRayId}'${jsdTValue ? `, t='${jsdTValue.slice(0, 20)}…'` : ""}) — fetch script pour extraire nonce…`,
       );
       let jsdMainUrl: string | null = null;
       try {
@@ -1447,11 +1456,18 @@ async function scanViaMainEndpoint(
       if (jsdMainUrl) {
         try {
           await new Promise<void>((r) => setTimeout(r, 4_500 + Math.floor(Math.random() * 1_000)));
+          // Build POST body: CSRF token + CF timing param t (required by CF for
+          // JSD signal validation — t is the base64-encoded timestamp from __CF$cv$params).
+          const jsdBodyParts: string[] = [];
+          if (tokenMatch) jsdBodyParts.push(`token=${encodeURIComponent(tokenMatch[1])}`);
+          if (jsdTValue) jsdBodyParts.push(`t=${encodeURIComponent(jsdTValue)}`);
+          const jsdPostBody = jsdBodyParts.join("&");
           const jsdRes = await spainCfFetch(jsdMainUrl, session, {
             method: "POST",
             headers: {
               "Cookie": buildCookieStr(),
               "Content-Type": "application/x-www-form-urlencoded",
+              "Content-Length": String(Buffer.byteLength(jsdPostBody)),
               "Origin": "https://www.citaconsular.es",
               "Referer": widgetReferer,
               "Accept": "*/*",
@@ -1462,8 +1478,7 @@ async function scanViaMainEndpoint(
               "Sec-Fetch-Site": "same-origin",
               "Priority": "u=1, i",
             },
-            // Best-effort body: CSRF token (mémoire: "fire best-effort with CSRF token as body")
-            body: tokenMatch ? `token=${encodeURIComponent(tokenMatch[1])}` : "",
+            body: jsdPostBody,
           });
           mergeSetCookies(jsdRes, "JSD main.js oneshot");
           console.log(`[spain-http] ✅ JSD main.js oneshot → HTTP ${jsdRes?.status ?? "no response"}`);
