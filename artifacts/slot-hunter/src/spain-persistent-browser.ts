@@ -277,13 +277,55 @@ class SpainPersistentBrowserManager {
     }
 
     const t0 = Date.now();
-    console.log(`[spain-pb] 🔍 Résolution CF via Chromium persistant → ${targetUrl}`);
+    console.log(`[spain-pb] 🚀 Résolution CF — stratégie CapSolver-first + XHR intercept`);
+    return this._resolveWithCapsolverFirst(targetUrl, t0);
 
-    const browser = await this.getOrLaunchBrowser();
+  }
+
+  // ── Résolution CapSolver-first + XHR intercept ────────────────────────────
+  /**
+   * Stratégie principale de résolution CF :
+   *   1. CapSolver résout le challenge en ~17s et retourne un cf_clearance lié
+   *      au proxy Decodo (même IP que Chromium).
+   *   2. cf_clearance injecté dans Chromium AVANT toute navigation → CF ne
+   *      re-challenge pas (clearance déjà valide).
+   *   3. Interception de la réponse XHR /main/ émise par le JS du portail après
+   *      le clic Continuar. CF laisse passer les sous-requêtes XHR d'un vrai
+   *      navigateur, contrairement aux navigations top-level (page.goto) vers
+   *      un endpoint JSONP protégé (→ 0B silencieux).
+   *   4. Le JSONP capturé est stocké dans session.prefetchedMainHtml et réutilisé
+   *      par le scanner HTTP sans appel impit (CF bloque impit sur /main/).
+   */
+  private async _resolveWithCapsolverFirst(
+    targetUrl: string,
+    t0: number,
+  ): Promise<SpainCfSession | null> {
     const proxyUrl = this.getProxyUrl();
+    const capsolverKey = process.env.CAPSOLVER_API_KEY;
+    if (!capsolverKey || !proxyUrl) {
+      console.error(
+        "[spain-pb] ❌ " +
+        (!capsolverKey ? "CAPSOLVER_API_KEY manquant" : "aucun proxy configuré (DECODO_PROXY_URL)"),
+      );
+      return null;
+    }
+
+    // ── Étape 1 : CapSolver → cf_clearance lié au proxy Decodo ───────────────
+    console.log(`[spain-pb] 🤖 CapSolver → cf_clearance (proxy Decodo)…`);
+    const capResult = await solveSpainCloudflare(targetUrl, capsolverKey, proxyUrl);
+    if (!capResult.success || !capResult.session) {
+      console.error(`[spain-pb] ❌ CapSolver échoué: ${capResult.error ?? "erreur inconnue"}`);
+      return null;
+    }
+    const capClearance = capResult.session.cfClearance;
+    const capUA = capResult.session.userAgent || this._ua;
+    console.log(`[spain-pb] ✅ CapSolver résolu (${Math.round((Date.now() - t0) / 1000)}s) — cf_clearance: ${capClearance.slice(0, 40)}…`);
+    console.log(`[spain-pb]    UA CapSolver: ${capUA.slice(0, 70)}`);
+
+    // ── Étape 2 : Lancer/récupérer Chromium, configurer la page ──────────────
+    const browser = await this.getOrLaunchBrowser();
     const { proxyAuth } = this.buildLaunchArgs(proxyUrl);
 
-    // Utiliser la première page du contexte persistant (profil complet — cookies, cache, LS)
     const pages = await browser.pages();
     const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
 
