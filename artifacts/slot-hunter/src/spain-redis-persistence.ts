@@ -67,6 +67,13 @@ export interface SerializableSpainCfSession {
   allCookies: Array<{ name: string; value: string }>;
   extraHeaders: Record<string, string>;
   source?: "playwright" | "capsolver" | "direct";
+  /**
+   * Contenu JSONP pré-fetchée de /onlinebookings/main/ via le browser Chromium.
+   * Persisté dans Redis pour que les sessions persistent-browser survivent aux
+   * redéploiements — évite de retomber dans le JSD cookie-fantôme loop au restart.
+   * ~100-120 KB ; TTL aligné sur cf_clearance (~2h).
+   */
+  prefetchedMainHtml?: string;
 }
 
 export interface SerializableSoaxRotation {

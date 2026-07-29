@@ -1,0 +1,78 @@
+[2026-07-29T07:16:27.495Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: not_found
+[2026-07-29T07:16:27.492Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 62min)
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): -or3tEdOLnOv…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 📦 /main/ pré-fetchée via Chromium (124116B) — appel impit ignoré
+[spain-http] 📊 /main/ retourné 116178 chars
+[spain-http] 🔬 Contexte HTML "No hay horas" (pos 12815):
+[spain-http]    lign: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div id='idListServi
+[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau
+[2026-07-29T07:16:27.608Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 10s (cadence départ-à-départ)
+[2026-07-29T07:16:37.500Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 62min)
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): -or3tEdOLnOv…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 📦 /main/ pré-fetchée via Chromium (124116B) — appel impit ignoré
+[spain-http] 📊 /main/ retourné 116178 chars
+[spain-http] 🔬 Contexte HTML "No hay horas" (pos 12815):
+[spain-http]    lign: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div id='idListServi
+[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau
+[2026-07-29T07:16:37.504Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: not_found
+[2026-07-29T07:16:37.618Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 10s (cadence départ-à-départ)
+[2026-07-29T07:16:47.490Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 62min)
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): -or3tEdOLnOv…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 📦 /main/ pré-fetchée via Chromium (124116B) — appel impit ignoré
+[spain-http] 📊 /main/ retourné 116178 chars
+[spain-http] 🔬 Contexte HTML "No hay horas" (pos 12815):
+[spain-http]    lign: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div id='idListServi
+[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau
+[2026-07-29T07:16:47.494Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: not_found
+[2026-07-29T07:16:47.612Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 10s (cadence départ-à-départ)
+[2026-07-29T07:16:53.177Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-http]    lign: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div id='idListServi
+[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau
+[2026-07-29T07:16:57.496Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: not_found
+[2026-07-29T07:16:57.493Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 62min)
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): -or3tEdOLnOv…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 📦 /main/ pré-fetchée via Chromium (124116B) — appel impit ignoré
+[spain-http] 📊 /main/ retourné 116178 chars
+[spain-http] 🔬 Contexte HTML "No hay horas" (pos 12815):
+[2026-07-29T07:16:57.614Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 10s (cadence départ-à-départ)
+[2026-07-29T07:17:02.423Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[2026-07-29T07:17:07.493Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 62min)
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): -or3tEdOLnOv…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 📦 /main/ pré-fetchée via Chromium (124116B) — appel impit ignoré
+[spain-http] 📊 /main/ retourné 116178 chars
+[spain-http] 🔬 Contexte HTML "No hay horas" (pos 12815):
+[spain-http]    lign: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles.<br>Inténtelo de nuevo dentro de unos días.</div> <div id='idListServi
+[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau
+[2026-07-29T07:17:07.496Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: not_found
+[2026-07-29T07:17:07.613Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 10s (cadence départ-à-départ)
+/app/artifacts/slot-hunter:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/slot-hunter@1.0.0 start: `tsx src/index.ts`
+Command failed with signal "SIGTERM"
+[2026-07-29T07:17:11.406Z] [INFO] [shutdown] Signal SIGTERM reçu — flush Redis...
+[redis-cache] ✅ 0 token(s) flush vers Redis
+Stopping Container

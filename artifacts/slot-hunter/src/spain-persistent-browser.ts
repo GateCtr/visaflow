@@ -411,10 +411,12 @@ class SpainPersistentBrowserManager {
    *
    * Stratégie :
    *   1. Cache mémoire valide → retour immédiat
-   *   2. Sinon → navigation vers targetUrl dans le contexte principal (profil persistant)
-   *   3. Poll cf_clearance jusqu'à CF_SOLVE_TIMEOUT_MS
-   *   4. Extrait tous les cookies + construit SpainCfSession
-   *   5. Persiste dans Redis pour survie aux redéploiements
+   *   2. Sinon → restauration Redis (survie aux redéploiements)
+   *      Si la session Redis a un prefetchedMainHtml → retour immédiat (scanner l'utilisera)
+   *   3. Sinon → navigation vers targetUrl dans le contexte principal (profil persistant)
+   *   4. Poll cf_clearance jusqu'à CF_SOLVE_TIMEOUT_MS
+   *   5. Extrait tous les cookies + construit SpainCfSession
+   *   6. Persiste dans Redis pour survie aux redéploiements
    */
   async ensureSession(
     targetUrl: string = DEFAULT_WIDGET_URL,
@@ -423,6 +425,29 @@ class SpainPersistentBrowserManager {
       const remainMin = Math.round((this._cachedSession!.expiresAt - Date.now()) / 60_000);
       console.log(`[spain-pb] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
       return this._cachedSession!;
+    }
+
+    // ── Tentative restauration Redis ──────────────────────────────────────────
+    // Après un redéploiement, le PB manager repart avec _cachedSession=null mais
+    // la session précédente (avec prefetchedMainHtml) peut encore être valide en Redis.
+    // Si on la restaure ici, le scanner réutilise directement le prefetchedMainHtml
+    // sans browser solve — évite le JSD cookie-fantôme loop au restart.
+    try {
+      const { restoreSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+      const redisData = await restoreSpainCfSessionFromRedis();
+      if (redisData && Date.now() < redisData.expiresAt) {
+        const restored: SpainCfSession = { ...redisData, source: "playwright" };
+        this._cachedSession = restored;
+        setActiveSpainCfSession(restored);
+        const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
+        console.log(
+          `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
+          `, prefetch: ${redisData.prefetchedMainHtml?.length ?? 0}B)`,
+        );
+        return restored;
+      }
+    } catch (redisRestoreErr) {
+      console.warn(`[spain-pb] ⚠️ Restauration Redis (non-fatale): ${redisRestoreErr}`);
     }
 
     const t0 = Date.now();

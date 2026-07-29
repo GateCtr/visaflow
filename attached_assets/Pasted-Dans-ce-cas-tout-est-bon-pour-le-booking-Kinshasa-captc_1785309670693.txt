@@ -1,0 +1,38 @@
+Dans ce cas, tout est bon pour le booking.
+
+Kinshasa → captcha=0 dans getwidgetconfigurations/ → pas d'hCaptcha, pas de CAPSOLVER_API_KEY nécessaire, gct="" directement.
+
+Le flow complet pour les deux dossiers :
+
+Probe détecte un créneau → mainHtml du widget Kinshasa
+Session isolée → createIsolatedBookingSession GET /main/?publickey=<kinshasa_key> → PHPSESSID frais par dossier
+Agendas + datetime → créneaux disponibles récupérés
+getwidgetconfigurations/ → captcha=0 → gctToken="" → pas d'appel CapSolver
+signin/ avec logintype=document + credentials du dossier → bktToken
+OTP selon otpChannel configuré (email/sms/manual)
+confirmclient/ → validation OTP
+summary/ → locator de confirmation
+PDF généré + uploadé sur Convex + reportSlotFound
+Aucun blocage identifié pour les deux dossiers Cuba pointant vers Kinshasa.
+
+
+Worked for 27 seconds
+Agendas + datetime → créneaux disponibles récupérés getwidgetconfigurations/ → captcha=0 → gctToken=" sont conforme selon les dumps reels?
+
+11 minutes ago
+
+11 actions
+J'ai les vraies requêtes Cuba. Laisse-moi maintenant comparer précisément avec le code — je cherche getwidgetconfigurations, getsigninfields et le format exact des réponses datetime.
+
+
+3 actions
+Un problème critique dans extractFirstSlot. Laisse-moi vérifier exactement ce que fait le code vs ce que retourne le vrai serveur.
+
+
+3 actions
+Deux bugs critiques à corriger. Je lis le signin POST réel avant de toucher au code.
+
+
+Read files
+$ cat dump/capture/2026-07-28T10-26-50-bookitit-flow.json | python3 -c " import json, sys data = json.load(sys.stdin) flow = data.get('flow', []) # Find any request that fetches specific times for a date for r in flow: url = r.get('url','') resp = (r.get('responseBody','') or '') if 'onlinebookings' in url and ('time' in url.lower() or '\"times\"' in resp or '\"Time\"' in resp): method = r.get('method','') status = r.get('responseStatus','') body = (r.get('requestBody','') or '')[:200] print(f'[{method}] {status}') print(f' URL: {url}') if body: print(f' BODY: {body}') print(f' RESP: {resp[:400]}') print() " 2>&1
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
