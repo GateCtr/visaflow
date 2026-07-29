@@ -1504,6 +1504,81 @@ class SpainPersistentBrowserManager {
     }
   }
 
+  // ── Re-solve proactif conditionnel ───────────────────────────────────────
+
+  /**
+   * Tente un re-solve CF en parallèle de la session courante.
+   *
+   * Comportement :
+   *   Session A valide (expire bientôt) → lance un solve complet
+   *   Si B ok (prefetchedMainHtml > 0) → remplace A par B
+   *   Si B échoue ou prefetch vide    → restaure A, retry différé
+   *
+   * Différence critique avec closeAndInvalidate() + ensureSession() :
+   *   - On ne ferme PAS le browser (pas de rotation IP, pas de délai 1.5s)
+   *   - La session A reste active jusqu'à ce que B soit validée
+   *   - Aucune fenêtre de vulnérabilité entre la destruction de A et la création de B
+   */
+  async tryRenewSession(
+    targetUrl: string = DEFAULT_WIDGET_URL,
+  ): Promise<SpainCfSession | null> {
+    const backup = this._cachedSession;
+    const backupRemainMin = backup
+      ? Math.round((backup.expiresAt - Date.now()) / 60_000)
+      : 0;
+
+    console.log(
+      `[spain-pb] 🔄 Re-solve proactif conditionnel` +
+      (backup ? ` — session A conservée (${backupRemainMin}min restantes)` : ""),
+    );
+
+    // Effacer temporairement le cache pour que _resolveWithTurnstileInjection
+    // soit effectivement appelé (sinon ensureSession() court-circuite).
+    this._cachedSession = null;
+    this._prefetchRetried = false;
+
+    let newSession: SpainCfSession | null = null;
+    try {
+      const t0 = Date.now();
+      newSession = await this._resolveWithTurnstileInjection(targetUrl, t0);
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ Re-solve proactif — erreur inattendue: ${err}`);
+    }
+
+    // Valider : la nouvelle session doit avoir du prefetchedMainHtml
+    const prefetchLen = (newSession as any)?.prefetchedMainHtml?.length ?? 0;
+    const newValid = newSession != null && prefetchLen > 0;
+
+    if (newValid) {
+      // ✅ Nouvelle session ok → remplace A
+      console.log(
+        `[spain-pb] ✅ Re-solve proactif réussi — session B activée` +
+        ` (prefetch: ${prefetchLen}B, expire: ${new Date(newSession!.expiresAt).toISOString()})`,
+      );
+      // _cachedSession déjà mis à jour par _resolveWithTurnstileInjection
+      return newSession!;
+    }
+
+    // ❌ Nouvelle session vide/nulle → restaurer A
+    if (backup && Date.now() < backup.expiresAt) {
+      this._cachedSession = backup;
+      setActiveSpainCfSession(backup);
+      const remainMin = Math.round((backup.expiresAt - Date.now()) / 60_000);
+      console.log(
+        `[spain-pb] ↩️ Re-solve proactif échoué (prefetch: ${prefetchLen}B)` +
+        ` — session A restaurée (${remainMin}min restantes), retry différé`,
+      );
+      return backup;
+    }
+
+    // Backup expiré ou absent + nouveau solve raté → session nulle
+    console.warn(
+      `[spain-pb] ❌ Re-solve proactif échoué et session A expirée` +
+      ` — prochaine probe déclenchera un solve complet`,
+    );
+    return null;
+  }
+
   // ── Fermeture propre ──────────────────────────────────────────────────────
 
   async close(): Promise<void> {
@@ -1553,6 +1628,21 @@ export function isSpainPersistentBrowserSessionExpiringSoon(): boolean {
  */
 export function getActiveSpainPersistentBrowserSession(): SpainCfSession | undefined {
   return spainPersistentBrowser.getSession() ?? getActiveSpainCfSession() ?? undefined;
+}
+
+/**
+ * Tente un re-solve CF en parallèle de la session courante (re-solve proactif conditionnel).
+ *
+ * Si le solve réussit avec prefetchedMainHtml > 0 → remplace la session actuelle.
+ * Si le solve échoue → restaure l'ancienne session ; elle reste valide jusqu'à expiration.
+ *
+ * À utiliser depuis la watcher loop à la place de ensureSpainPersistentBrowserSession()
+ * pour le chemin proactif (session expire bientôt mais pas encore expirée).
+ */
+export async function tryRenewSpainPersistentBrowserSession(
+  targetUrl: string = DEFAULT_WIDGET_URL,
+): Promise<SpainCfSession | null> {
+  return spainPersistentBrowser.tryRenewSession(targetUrl);
 }
 
 /**

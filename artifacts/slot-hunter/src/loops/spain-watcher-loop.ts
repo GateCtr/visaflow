@@ -23,6 +23,7 @@ import {
   ensureSpainPersistentBrowserSession,
   isSpainPersistentBrowserSessionExpiringSoon,
   getActiveSpainPersistentBrowserSession,
+  tryRenewSpainPersistentBrowserSession,
 } from "../spain-persistent-browser.js";
 import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN_INSTANCE_ID } from "../spain-redis-persistence.js";
 import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig } from "../spain-http-booking.js";
@@ -64,6 +65,22 @@ function getActiveSession() {
   return SPAIN_PERSISTENT_BROWSER
     ? getActiveSpainPersistentBrowserSession()
     : getActiveSpainCfSession();
+}
+
+/**
+ * Re-solve proactif conditionnel.
+ *
+ * Mode persistent-browser → tryRenewSpainPersistentBrowserSession :
+ *   tente un nouveau solve SANS détruire la session courante ;
+ *   remplace uniquement si le nouveau solve retourne du prefetchedMainHtml.
+ *
+ * Mode HTTP/soax → comportement inchangé (ensureSpainCfSession gère déjà
+ *   le fallback sur la session courante en interne).
+ */
+async function tryRenewActiveSession(portalUrl: string) {
+  return SPAIN_PERSISTENT_BROWSER
+    ? tryRenewSpainPersistentBrowserSession(portalUrl)
+    : ensureSpainCfSession(portalUrl);
 }
 
 // ─── Types internes ──────────────────────────────────────────────────────────
@@ -367,9 +384,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
       log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${portalUrl} | ${activeDossiers.length} dossier(s) actif(s) | intervalle: ${Math.round(intervalMs / 1000)}s`);
 
       // Proactive re-solve si le cookie CF expire bientôt
+      // Mode PB → tryRenewActiveSession : solve en parallèle, session A conservée si B échoue.
+      // Mode HTTP → ensureSpainCfSession (inchangé, gère déjà le fallback en interne).
       if ((SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) && isActiveSessionExpiringSoon()) {
-        log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif");
-        await ensureActiveSession(portalUrl).catch((e) => {
+        log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif conditionnel");
+        await tryRenewActiveSession(portalUrl).catch((e) => {
           log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
         });
       }
