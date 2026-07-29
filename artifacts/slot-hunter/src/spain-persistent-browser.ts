@@ -360,16 +360,101 @@ class SpainPersistentBrowserManager {
       await dialog.accept().catch(() => undefined);
     });
 
-    // Script d'init stealth : webdriver + platform + languages + chrome enrichi.
-    // navigator.platform DOIT correspondre au UA — CF détecte immédiatement
-    // un UA Macintosh avec platform="Linux x86_64" ou "Win32".
+    // Script d'init stealth : webdriver + platform + languages + chrome enrichi +
+    // WebGL renderer + navigator.plugins + Permissions.
+    //
+    // SIGNAUX BOT CRITIQUES patchés :
+    //   • WebGL UNMASKED_RENDERER = "SwiftShader" → CF détecte les headless VMs
+    //     → patché pour retourner un GPU Intel intégré (commun sur Win 10 laptop)
+    //   • navigator.plugins = [] et navigator.mimeTypes = [] → vide en headless
+    //     → Chrome réel a toujours au moins le plugin PDF + ses MIME types
+    //   • navigator.webdriver = true → patché → undefined
+    //   • Permissions API "notifications" → "prompt" (headless retourne souvent "denied")
     const navLanguages = ["fr-FR", "fr", "en-US", "en"];
     const navPlatform = platformFromUA(this._ua);
     await (page as any).evaluateOnNewDocument(
       (langs: string[], platform: string) => {
+        // ── webdriver ─────────────────────────────────────────────────────────
         Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+
+        // ── platform + languages ──────────────────────────────────────────────
         Object.defineProperty(navigator, "platform", { get: () => platform });
         Object.defineProperty(navigator, "languages", { get: () => langs });
+
+        // ── navigator.plugins + mimeTypes (PDF plugin simulé) ────────────────
+        // Chrome réel expose au minimum : Chrome PDF Plugin, Chrome PDF Viewer,
+        // Native Client. Sans ces plugins, le score bot CF est très élevé.
+        const makeMime = (type: string, desc: string, suffixes: string) => {
+          const m = { type, description: desc, suffixes, enabledPlugin: null as any };
+          return m;
+        };
+        const pdfMime1 = makeMime("application/pdf", "Portable Document Format", "pdf");
+        const pdfMime2 = makeMime("text/pdf", "Portable Document Format", "pdf");
+        const pdfPlugin = {
+          name: "PDF Viewer",
+          description: "Portable Document Format",
+          filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+          length: 2,
+          0: pdfMime1,
+          1: pdfMime2,
+          item: (i: number) => [pdfMime1, pdfMime2][i] ?? null,
+          namedItem: (n: string) => ({ "application/pdf": pdfMime1, "text/pdf": pdfMime2 }[n] ?? null),
+        };
+        const pluginArr = [pdfPlugin];
+        Object.defineProperty(pluginArr, "item", { value: (i: number) => pluginArr[i] ?? null });
+        Object.defineProperty(pluginArr, "namedItem", { value: (n: string) => pluginArr.find((p) => p.name === n) ?? null });
+        Object.defineProperty(pluginArr, "refresh", { value: () => {} });
+        Object.defineProperty(navigator, "plugins", {
+          get: () => pluginArr,
+          configurable: true,
+        });
+        const mimeArr = [pdfMime1, pdfMime2];
+        Object.defineProperty(mimeArr, "item", { value: (i: number) => mimeArr[i] ?? null });
+        Object.defineProperty(mimeArr, "namedItem", {
+          value: (n: string) => mimeArr.find((m) => m.type === n) ?? null,
+        });
+        Object.defineProperty(navigator, "mimeTypes", {
+          get: () => mimeArr,
+          configurable: true,
+        });
+
+        // ── Permissions API → "notifications" retourne "prompt" ───────────────
+        // En headless Chromium sans profil utilisateur, Notification.permission
+        // peut retourner "denied" (aucun prompt disponible) → signal bot fort.
+        const origQuery = window.navigator.permissions?.query?.bind(navigator.permissions);
+        if (origQuery) {
+          (navigator.permissions as any).query = (params: any) => {
+            if (params?.name === "notifications") {
+              return Promise.resolve({ state: "prompt", onchange: null });
+            }
+            return origQuery(params);
+          };
+        }
+
+        // ── WebGL renderer / vendor (cache SwiftShader) ───────────────────────
+        // SwiftShader est la signature exacte d'un GPU virtuel headless.
+        // CF le détecte via getParameter(UNMASKED_RENDERER_WEBGL / UNMASKED_VENDOR_WEBGL).
+        // On simule un Intel Iris (GPU intégré commun sur Win 10 / Mac).
+        const UNMASKED_VENDOR   = 0x9245;
+        const UNMASKED_RENDERER = 0x9246;
+        const fakeVendor   = "Intel Inc.";
+        const fakeRenderer = platform === "MacIntel"
+          ? "Intel Iris OpenGL Engine"
+          : "Intel(R) UHD Graphics 620";
+
+        const patchWebGL = (Ctx: any) => {
+          if (!Ctx) return;
+          const orig = Ctx.prototype.getParameter;
+          Ctx.prototype.getParameter = function(param: number) {
+            if (param === UNMASKED_VENDOR)   return fakeVendor;
+            if (param === UNMASKED_RENDERER) return fakeRenderer;
+            return orig.call(this, param);
+          };
+        };
+        patchWebGL((window as any).WebGLRenderingContext);
+        patchWebGL((window as any).WebGL2RenderingContext);
+
+        // ── window.chrome enrichi ─────────────────────────────────────────────
         const noop = () => undefined;
         (window as any).chrome = {
           app: {
@@ -413,27 +498,49 @@ class SpainPersistentBrowserManager {
       navPlatform,
     );
 
-    // ── Étape 3 : Supprimer l'ancien cf_clearance du profil + vider le cache ──
-    // Le profil persistant accumule des clearances "dégradées" émises pendant
-    // les challenges bloqués. On injectera immédiatement après le cf_clearance
-    // CapSolver frais, lié au proxy Decodo.
+    // ── Étape 3 : Purge complète des données CF stockées dans le profil ─────────
+    //
+    // PROBLÈME : Le profil persistant (/tmp/spain-cf-profile) accumule des données
+    // CF stales : tokens JSD expirés dans localStorage/IndexedDB, service workers
+    // qui servent du JS CF mis en cache (avec nonce périmé), etc.
+    //
+    // SYMPTÔME observé : CF reçoit un JSD oneshot avec timestamp vieux de 21 jours
+    // → CF rejette silencieusement → /main/ retourne 200 text/html 0B.
+    //
+    // Network.clearBrowserCache ne nettoie que le cache HTTP disk — PAS :
+    //   • localStorage / sessionStorage (tokens JSD CF stockés ici)
+    //   • IndexedDB (CF bot management data)
+    //   • Service Workers + cache_storage (SW peut intercepter et servir du JS CF périmé)
+    //
+    // Fix : Storage.clearDataForOrigin avec toutes les catégories SAUF cookies
+    // (on garde cf_clearance + PHPSESSID déjà en mémoire pour le profil).
+    // Ensuite résolution cf_clearance fraîche via Network.deleteCookies.
     try {
-      const cdpDel = await page.createCDPSession();
-      await cdpDel.send("Network.deleteCookies", {
+      const cdpStorage = await page.createCDPSession();
+      // Supprimer le cf_clearance du profil (on va injecter le cf_clearance CapSolver frais)
+      await cdpStorage.send("Network.deleteCookies", {
         name: "cf_clearance",
         domain: ".citaconsular.es",
       });
-      await cdpDel.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ cf_clearance du profil supprimé");
-    } catch { /* non-fatal */ }
+      // Purger storage CF (localStorage, IndexedDB, ServiceWorkers, CacheStorage)
+      // SANS cookies pour conserver PHPSESSID et autres cookies applicatifs.
+      await cdpStorage.send("Storage.clearDataForOrigin", {
+        origin: "https://www.citaconsular.es",
+        storageTypes: "local_storage,session_storage,indexeddb,service_workers,cache_storage",
+      });
+      await cdpStorage.detach().catch(() => {});
+      console.log("[spain-pb] 🗑️ Profil CF purgé (cf_clearance + localStorage/SW/IndexedDB — tokens JSD expirés supprimés)");
+    } catch (purgeErr) {
+      console.warn(`[spain-pb] ⚠️ Purge storage CF (non-fatal): ${purgeErr}`);
+    }
 
-    // Vider le cache navigateur : CF sert jsd/main.js depuis son CDN avec un nonce
-    // à usage unique ; sans cache-bust, le même nonce (déjà consommé) est retourné.
+    // Vider le cache HTTP navigateur : CF sert ses scripts JSD depuis CDN — sans
+    // cache-bust, le même script (avec nonce périmé) est retourné du cache local.
     try {
       const cdpCache = await page.createCDPSession();
       await cdpCache.send("Network.clearBrowserCache");
       await cdpCache.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ Cache navigateur vidé (nonce JSD frais)");
+      console.log("[spain-pb] 🗑️ Cache HTTP navigateur vidé (scripts JSD frais)");
     } catch { /* non-fatal */ }
 
     // ── Étape 4 : Injecter le cf_clearance CapSolver dans le browser ──────────
@@ -462,21 +569,84 @@ class SpainPersistentBrowserManager {
     // cf_clearance valide → retourne 0B. Mais quand le JS du portail appelle
     // /main/ en XHR/fetch après le clic Continuar, CF laisse passer la réponse
     // (sous-requête dans un contexte browser réel, pas une navigation top-level).
-    // On écoute page.on('response') pour capturer ce body avant qu'il disparaisse.
+    // On écoute page.on('response') + CDP Network pour capturer le body.
     let capturedMainBody = "";
+
+    // CDP Network listener — plus fiable que page.on('response') pour les ressources
+    // script (JSONP) car il fournit requestId → Network.getResponseBody peut être
+    // appelé même si la réponse est déjà traitée par le browser.
+    let cdpNet: any = null;
+    const pendingMainRequests = new Map<string, string>(); // requestId → url
+    try {
+      cdpNet = await page.createCDPSession();
+      await cdpNet.send("Network.enable", {});
+
+      cdpNet.on("Network.requestWillBeSent", (ev: any) => {
+        const url: string = ev.request?.url ?? "";
+        if (url.includes("citaconsular.es")) {
+          console.log(`[spain-pb] 🌐 req: ${ev.request.method} ${url.slice(0, 120)}`);
+        }
+        if (url.includes("onlinebookings/main")) {
+          pendingMainRequests.set(ev.requestId, url);
+        }
+      });
+
+      cdpNet.on("Network.responseReceived", (ev: any) => {
+        const url: string = ev.response?.url ?? "";
+        if (url.includes("onlinebookings/main")) {
+          console.log(
+            `[spain-pb] 📡 /main/ responseReceived: status=${ev.response.status}` +
+            ` type=${ev.type} mimeType=${ev.response.mimeType}` +
+            ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}`,
+          );
+        }
+      });
+
+      cdpNet.on("Network.loadingFinished", async (ev: any) => {
+        if (!pendingMainRequests.has(ev.requestId)) return;
+        pendingMainRequests.delete(ev.requestId);
+        try {
+          const { body, base64Encoded } = await cdpNet.send("Network.getResponseBody", {
+            requestId: ev.requestId,
+          });
+          const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
+          console.log(`[spain-pb] 📥 /main/ CDP body: ${decoded.length}B snippet="${decoded.slice(0, 80)}"`);
+          if (decoded.length > capturedMainBody.length) {
+            capturedMainBody = decoded;
+          }
+        } catch (cdpBodyErr) {
+          console.warn(`[spain-pb] ⚠️ CDP getResponseBody /main/: ${cdpBodyErr}`);
+        }
+      });
+
+      cdpNet.on("Network.loadingFailed", (ev: any) => {
+        if (!pendingMainRequests.has(ev.requestId)) return;
+        pendingMainRequests.delete(ev.requestId);
+        console.warn(`[spain-pb] ❌ /main/ loadingFailed: ${ev.errorText}`);
+      });
+    } catch (cdpErr) {
+      console.warn(`[spain-pb] ⚠️ CDP Network setup (non-fatal): ${cdpErr}`);
+    }
+
+    // Fallback page.on('response') — filtre large (sans slash final) pour ne
+    // pas rater les URLs comme /onlinebookings/main?... (sans trailing slash)
     const mainResponseHandler = async (response: any) => {
       try {
         const url: string = response.url();
-        if (!url.includes("/onlinebookings/main/")) return;
-        // Ignorer les navigations top-level (document) → ne capturer que XHR/fetch
+        if (!url.includes("onlinebookings/main")) return;
         const reqType: string = response.request().resourceType();
         if (reqType === "document") return;
+        const status: number = response.status();
+        const headers = response.headers();
         const body = await response.text().catch(() => "");
+        console.log(
+          `[spain-pb] 📡 page.on(response) /main/: status=${status} type=${reqType}` +
+          ` size=${body.length}B cf-ray=${headers["cf-ray"] ?? "none"}`,
+        );
         if (body.length > capturedMainBody.length) {
           capturedMainBody = body;
-          console.log(`[spain-pb] 📡 XHR /main/ intercepté (${body.length}B, type=${reqType})`);
         }
-      } catch { /* non-fatal — response peut être already-destroyed */ }
+      } catch { /* non-fatal */ }
     };
     page.on("response", mainResponseHandler);
 
@@ -582,6 +752,10 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ Flow portail→Continuar échoué (non-fatal): ${flowErr}`);
     } finally {
       page.off("response", mainResponseHandler);
+      if (cdpNet) {
+        cdpNet.detach().catch(() => {});
+        cdpNet = null;
+      }
     }
 
     // ── Fallback : fetch /main/ directement depuis le contexte browser ────────
