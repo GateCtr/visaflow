@@ -1,0 +1,63 @@
+[2026-07-29T06:10:28.231Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: FtvP4lkAG.tpep0CUAnVDAK4YEBg9P8iD3TzDw.Z…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-soax]    solution keys: cookies, token, userAgent
+[spain-soax]    solution full: {"cookies":{"cf_clearance":"FtvP4lkAG.tpep0CUAnVDAK4YEBg9P8iD3TzDw.Z.QQ-1785305427-1.2.1.1-s2IpPMetRtw4DwCI5g2Li0osTTa6SGs7NwONjzq0ZrSW_tMAReE3Re.Ck…"},"token":"FtvP4lkAG.tpep0CUAnVDAK4YEBg9P8iD3TzDw.Z.QQ-1785305427-1.2.1.1-s2IpPMetRtw4DwCI5g2Li0osTTa6SGs7NwONjzq0ZrSW_tMAReE3Re.Ck…","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"}
+[spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #220
+[spain-soax] 🎉 Session CF établie via Decodo ISP! Durée solve: 17s
+[spain-soax]    Valide jusqu'à: 2026-07-29T08:05:31.664Z
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-interstitiel=non | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID mis à jour depuis GET portail: pmchTETJme%2…
+[spain-http] 🍪 PHPSESSID capturé: pmchTETJme%2…
+[spain-http] 📄 POST widget → HTTP 200 | bytes=2497 | title="Embajada de España en Kinshasa - VISADOS" | bkt=oui | cf-interstitiel=non
+[spain-http] 📄 POST widget body preview: Embajada de España en Kinshasa - VISADOS var bkt_init_widget = { type: 'default', srvsrc: 'https://www.citaconsular.es', publickey: '25028fcd7126544630b8da0c6e60722b5', lang: 'es', services: [], agend
+[spain-http] 🔎 JSD main.js détecté (r='a229f6065e2df775') — fetch script pour extraire nonce…
+[spain-http] 🔑 JSD oneshot construit depuis main.js: /…/b0da9f4911ba/0.4937323919168455:1785301530:…/a229f6065e2df775
+[spain-http] 🔑 cf_clearance mis à jour depuis JSD main.js oneshot
+[spain-http] ✅ JSD main.js oneshot → HTTP 200
+[spain-http] 📄 POST widget #2 (main.js path) → HTTP 200 | bytes=1559
+[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: a229f62ac85ff775-MAD, CF intercept text/html) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[2026-07-29T06:10:38.264Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: error (Scan /main/ échoué après retry (session invalidée pour le prochain cycle))
+[2026-07-29T06:10:38.386Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 0s (cadence départ-à-départ)
+[2026-07-29T06:10:38.669Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 2 dossier(s) actif(s) | intervalle: 10s
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Probe direct Decodo ISP…
+[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire
+[spain-soax] 🎯 CapSolver tentative 1/2…
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (html pré-fetchée ✅)
+[spain-soax] 💰 Balance CapSolver: $4.142
+[spain-soax] 📤 createTask AntiCloudflareTask… (html: 6KB — évite re-fetch proxy)
+[spain-soax] ✅ Task créée: 971189fa-b44c-4123-935c-62af189434aa
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: njna9V21zUgAULjDX.8QKF2NUhQ1k_Ec_g443XaU…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-soax]    solution keys: cookies, token, userAgent
+[spain-soax]    solution full: {"cookies":{"cf_clearance":"njna9V21zUgAULjDX.8QKF2NUhQ1k_Ec_g443XaURcE-1785305455-1.2.1.1-RDhCdEl3xmzWWiAt5tYrE_tymmEBMXKSF1suPIbk1PWRUVIj5Py7Ml3fE…"},"token":"njna9V21zUgAULjDX.8QKF2NUhQ1k_Ec_g443XaURcE-1785305455-1.2.1.1-RDhCdEl3xmzWWiAt5tYrE_tymmEBMXKSF1suPIbk1PWRUVIj5Py7Ml3fE…","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"}
+[spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.171011243.12817383.… | session #221
+[spain-soax] 🎉 Session CF établie via Decodo ISP! Durée solve: 17s
+[spain-soax]    Valide jusqu'à: 2026-07-29T08:05:56.674Z
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-interstitiel=non | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID mis à jour depuis GET portail: 6-Krnee0%2CT…
+[spain-http] 🍪 PHPSESSID capturé: 6-Krnee0%2CT…
+[spain-http] 📄 POST widget → HTTP 200 | bytes=2497 | title="Embajada de España en Kinshasa - VISADOS" | bkt=oui | cf-interstitiel=non
+[spain-http] 📄 POST widget body preview: Embajada de España en Kinshasa - VISADOS var bkt_init_widget = { type: 'default', srvsrc: 'https://www.citaconsular.es', publickey: '25028fcd7126544630b8da0c6e60722b5', lang: 'es', services: [], agend
+[spain-http] 🔎 JSD main.js détecté (r='a229f6a24d69f775') — fetch script pour extraire nonce…
+[spain-http] 🔑 JSD oneshot construit depuis main.js: /…/b0da9f4911ba/0.4937323919168455:1785301530:…/a229f6a24d69f775
+[2026-07-29T06:10:58.553Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-http] 🔑 cf_clearance mis à jour depuis JSD main.js oneshot
+[spain-http] ✅ JSD main.js oneshot → HTTP 200
+[spain-http] 📄 POST widget #2 (main.js path) → HTTP 200 | bytes=1559
+[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: a229f6c60cb8f775-MAD, CF intercept text/html) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Probe direct Decodo ISP…
+[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire
+[spain-soax] 🎯 CapSolver tentative 1/2…
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (html pré-fetchée ✅)
+[spain-soax] 💰 Balance CapSolver: $4.140
+[spain-soax] 📤 createTask AntiCloudflareTask… (html: 6KB — évite re-fetch proxy)
+[spain-soax] ✅ Task créée: b2bf2f31-16c7-493c-be7a-f173251559c6

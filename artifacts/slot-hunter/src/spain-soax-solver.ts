@@ -516,6 +516,32 @@ export function setActiveSpainCfSession(session: SpainCfSession): void {
 export async function ensureSpainCfSession(
   targetUrl: string = DEFAULT_SPAIN_TARGET_URL,
 ): Promise<SpainCfSession | null> {
+  // ── Mode persistent-browser : déléguer entièrement au PB manager ────────────
+  // Quand SPAIN_SESSION_MODE=persistent-browser, le solve CF et la capture /main/
+  // sont gérés par SpainPersistentBrowserManager (Chromium Puppeteer + Decodo ISP).
+  // Tomber dans le chemin soax/CapSolver ci-dessous serait une régression : CapSolver
+  // AntiCloudflareTask produit un cf_clearance lié à son TLS, incompatible avec impit.
+  if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
+    const { ensureSpainPersistentBrowserSession, spainPersistentBrowser } =
+      await import("./spain-persistent-browser.js");
+    const pbSession = await ensureSpainPersistentBrowserSession(targetUrl);
+    // Si /main/ n'a pas été capturé (CF bloque cette IP Decodo pour /main/),
+    // fermer le browser MAINTENANT (avant tout retry) pour forcer une nouvelle
+    // rotation -sessionid-XXXX → nouvelle IP sticky → CF voit une IP inconnue →
+    // émet un nonce frais → /main/ répond avec le body JSONP complet.
+    // NOTE : closeAndInvalidate() est awaité ICI pour éviter la race condition où
+    // le scanner relancerait ensureSpainCfSession pendant la fermeture du browser.
+    if (pbSession && !(pbSession as any).prefetchedMainHtml) {
+      console.warn(
+        "[spain-soax] ⚠️ PB session sans prefetch /main/ (CF bloque cette IP Decodo)" +
+        " — fermeture browser + rotation IP + retry unique…",
+      );
+      await spainPersistentBrowser.closeAndInvalidate();
+      return ensureSpainPersistentBrowserSession(targetUrl);
+    }
+    return pbSession;
+  }
+
   const configuredProxyUrl = getSpainProxyUrl();
   if (httpModeRequiresProxy() && !configuredProxyUrl) {
     console.error(

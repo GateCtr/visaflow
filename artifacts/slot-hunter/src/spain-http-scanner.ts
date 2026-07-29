@@ -1675,6 +1675,8 @@ async function scanViaMainEndpoint(
         `) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)`,
       );
       invalidateSpainCfSession();
+      // En mode persistent-browser, ensureSpainCfSession() gère la rotation IP
+      // en interne (closeAndInvalidate + retry) — aucune action supplémentaire ici.
       return null;
     }
   }

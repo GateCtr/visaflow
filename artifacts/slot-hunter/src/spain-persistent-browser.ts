@@ -380,6 +380,26 @@ class SpainPersistentBrowserManager {
     console.log("[spain-pb] 🗑️ Session CF invalidée");
   }
 
+  /**
+   * Invalide la session ET ferme le browser.
+   *
+   * À utiliser quand /main/ retourne 0B (CF bloque cette IP Decodo) :
+   * simple invalidateSession() ne suffit pas — getOrLaunchBrowser() réutilise
+   * le browser existant avec la MÊME IP → CF bloque à nouveau.
+   * La fermeture force buildRotatedProxyUrl() à générer un nouveau sessionid
+   * Decodo → nouvelle IP sticky → CF émet un nonce frais → /main/ répond.
+   */
+  async closeAndInvalidate(): Promise<void> {
+    this._cachedSession = null;
+    if (this._browser) {
+      await this._browser.close().catch(() => {});
+      this._browser = null;
+      console.log("[spain-pb] 🔄 Session + browser fermés — prochaine IP Decodo sera différente");
+    } else {
+      console.log("[spain-pb] 🗑️ Session invalidée (browser déjà fermé)");
+    }
+  }
+
   getSession(): SpainCfSession | null {
     return this.isSessionValid() ? this._cachedSession : null;
   }
