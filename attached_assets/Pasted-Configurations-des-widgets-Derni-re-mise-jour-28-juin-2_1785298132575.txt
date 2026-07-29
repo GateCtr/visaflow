@@ -1,0 +1,338 @@
+Configurations des widgets
+Dernière mise à jour
+28 juin 2026
+
+Copier en tant que Markdown
+Voir comme Markdown
+Configuration de l'agent
+Configurez l'apparence, le comportement et les fonctionnalités de votre widget Turnstile à l'aide d'attributs de données ou de paramètres de rendu JavaScript.
+
+Méthodes de rendu
+Les widgets Turnstile peuvent être implémentés à l'aide d'un rendu implicite ou explicite.
+
+Rendu implicite
+Rendu explicite
+Le rendu implicite analyse automatiquement votre HTML à la recherche d'éléments avec lacf-turnstile classe et restitue le widget lorsque la page se charge. Il est préférable de l'utiliser pour des implémentations simples, des sites Web statiques ou lorsque vous souhaitez que des widgets apparaissent immédiatement lors du chargement de la page.
+
+Comment ça marche
+
+Ajoutez le script Turnstile à votre page.
+Inclure<div class="cf-turnstile" data-sitekey="your-key"></div> des éléments.
+Les widgets s'afficheront automatiquement lors du chargement de la page.
+Configurez le widget à l’aidedata-* des attributs de l’élément HTML.
+Exemple
+HTML
+	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-theme="light"></div>
+
+Tailles des widgets
+Le widget Tourniquet peut avoir deux tailles fixes différentes ou une taille de largeur flexible lors de l'utilisation des modes Géré ou Non Interactif.
+
+Taille	Largeur	Hauteur	Cas d'utilisation
+Normal	300px	65px	Mise en œuvre standard
+Flexible	100 % (min : 300 px)	65px	Conception réactive
+Compact	150px	140px	Dispositions limitées en espace
+normal: La taille par défaut fonctionne bien pour la plupart des mises en page de bureau et mobiles. Utilisez ceci si vous disposez d’un espace horizontal adéquat sur votre site Web ou votre formulaire.
+flexible: S'adapte automatiquement à la largeur du conteneur tout en conservant une facilité d'utilisation minimale. Utilisez ceci pour les conceptions réactives qui doivent fonctionner sur toutes les tailles d’écran.
+compact: Idéal pour les interfaces mobiles, les barres latérales ou tout espace où l'espace horizontal est limité. Le widget compact est plus haut que la normale pour s'adapter à la plus petite largeur.
+Note
+
+La taille du widget s'applique uniquement aux modes gérés et non interactifs. Les widgets invisibles n'ont aucune empreinte visuelle quelle que soit la configuration de taille.
+
+Rendu implicite
+Rendu explicite
+Taille normale (par défaut)
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Taille flexible
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-size="flexible"></div>
+
+Taille compacte
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-size="compact"></div>
+
+Options de thème
+Personnalisez l'apparence visuelle du widget pour qu'elle corresponde à la conception de votre site Web.
+
+auto(par défaut) : correspond automatiquement à la préférence de thème système du visiteur. Auto est recommandé pour la plupart des implémentations car il respecte les préférences du visiteur et offre la meilleure expérience d'accessibilité.
+light: Thème clair avec des couleurs vives et un contraste clair. Le thème lumineux fonctionne mieux sur des arrière-plans lumineux et offre un contraste élevé pour la lisibilité.
+dark: Thème sombre optimisé pour les interfaces sombres. Le thème sombre est idéal pour les interfaces sombres, les sites de jeux ou les applications avec des combinaisons de couleurs sombres.
+Rendu implicite
+Rendu explicite
+Thème automatique (par défaut)
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Thème léger
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-theme="light"></div>
+
+Thème sombre
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-theme="dark"></div>
+
+Modes d'apparence
+Contrôlez le moment où le widget devient visible pour les visiteurs à l'aide du mode apparence.
+
+always(par défaut) : Le widget est toujours visible depuis le chargement de la page. Il s’agit de la meilleure option pour la plupart des implémentations où vous souhaitez que vos visiteurs voient le widget immédiatement car il fournit un retour visuel clair indiquant que la vérification de sécurité est en place.
+execute: Le widget ne devient visible qu'après le début du défi. Ceci est utile lorsque vous devez contrôler le moment d'apparition du widget, par exemple en l'affichant uniquement lorsqu'un visiteur commence à remplir un formulaire ou en sélectionnant un bouton d'envoi.
+interaction-only: Le widget devient visible uniquement lorsqu'une interaction avec le visiteur est requise et offre l'expérience la plus propre au visiteur. La plupart des visiteurs ne verront jamais le widget, mais les robots suspects rencontreront le défi interactif.
+Note
+
+Les modes d'apparence affectent uniquement les types de widgets visibles (gérés et non interactifs). Les widgets invisibles ne sont jamais affichés quel que soit le paramètre d'apparence.
+
+Rendu implicite
+Rendu explicite
+Toujours visible (par défaut)
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Visible uniquement après le début du défi
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-appearance="execute"></div>
+
+Visible uniquement lorsque l'interaction est nécessaire
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-appearance="interaction-only"></div>
+
+Modes d'exécution
+Contrôlez quand le défi s'exécute et qu'un jeton est généré.
+
+render (par défaut) : Le défi s'exécute automatiquement après l'appel de larender() fonction et offre une protection immédiate dès le chargement du widget. Le défi s'exécute en arrière-plan pendant le chargement de la page, garantissant que le jeton est prêt lorsque le visiteur soumet des données.
+
+execute: Le défi s'exécute après avoir appelé laturnstile.execute() fonction séparément et vous donne un contrôle précis sur le moment où la vérification a lieu. Cette option est utile pour les formulaires en plusieurs étapes, la vérification conditionnelle ou lorsque vous souhaitez reporter le défi jusqu'à ce que le visiteur tente réellement de soumettre des données. Cela peut améliorer les performances de chargement des pages et l'expérience des visiteurs en exécutant la vérification uniquement lorsque cela est nécessaire.
+
+Scénarios communs
+
+Formulaires en plusieurs étapes : exécutez la vérification uniquement à l’étape finale.
+Protection conditionnelle : Vérifiez uniquement les visiteurs qui répondent à certains critères.
+Optimisation des performances : différer la vérification pour réduire le temps de chargement initial de la page.
+Vérification déclenchée par l'utilisateur : laissez les visiteurs démarrer manuellement le processus de vérification.
+Rendu implicite
+Rendu explicite
+Exécution automatique (par défaut)
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Exécution manuelle
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-execution="execute"></div>
+
+Configuration de la langue
+Définissez la langue de l'interface du widget.
+
+auto(par défaut) : utilise la préférence de langue du navigateur du visiteur.
+Codes de langue spécifiques : codes à deux lettres ISO 639-1, tels quees ,fr ,de .
+Langue et région : Codes combinés pour les variantes régionales, telles queen-US ,es-MX ,pt-BR .
+Notes
+
+Lorsqu'il est défini surauto , Turnstile détecte automatiquement la langue préférée du visiteur à partir des paramètres de son navigateur.
+Si une langue demandée n'est pas prise en charge, Turnstile revient à l'anglais.
+La langue affecte tout le texte destiné aux visiteurs, y compris les messages de chargement, les états d'erreur et les étiquettes d'accessibilité.
+La définition de langues spécifiques peut améliorer l’expérience des visiteurs auprès du public international.
+Rendu implicite
+Rendu explicite
+Langage automatique (par défaut)
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Langue spécifique
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-language="es"></div>
+
+Langue et pays
+HTML
+	<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-language="en-US"></div>
+
+Configuration de rappel
+Gérez les événements de widgets avec des rappels.
+
+callback: Déclenché lorsque le défi est terminé avec succès.
+error-callback: Déclenché lorsqu'une erreur se produit pendant le défi.
+expired-callback: Déclenché lorsqu'un jeton expire (avant le délai d'attente).
+timeout-callback: Déclenché lorsqu'un défi interactif expire.
+Le rappel de réussite reçoit un jeton qui doit être validé sur votre serveur à l'aide de l'API Siteverify. Les jetons sont à usage unique et expirent après 300 secondes (cinq minutes).
+
+Rendu implicite
+Rendu explicite
+	<div class="cf-turnstile"
+		data-sitekey="<YOUR-SITE-KEY>"
+		data-callback="onSuccess"
+		data-error-callback="onError"
+		data-expired-callback="onExpired"
+		data-timeout-callback="onTimeout"></div>
+	<script>
+	function onSuccess(token) {
+	console.log('Challenge Success:', token);
+	}
+	function onError(errorCode) {
+	console.log('Challenge Error:', errorCode);
+	}
+	function onExpired() {
+	console.log('Token expired');
+	}
+	function onTimeout() {
+	console.log('Challenge timed out');
+	}
+	</script>
+
+Meilleures pratiques
+Implémentez toujours le rappel de réussite pour gérer le jeton et procéder à la soumission du formulaire ou aux étapes suivantes.
+Utilisez les rappels d’erreurs pour une gestion élégante des erreurs et des commentaires des visiteurs.
+Surveillez les jetons expirés pour actualiser les défis avant qu'ils ne deviennent invalides.
+Gérez les temps morts pour guider les visiteurs dans la résolution des défis.
+Options de configuration avancées
+Comportement de nouvelle tentative
+Contrôlez la façon dont Turnstile gère les défis échoués.
+
+auto(par défaut) : réessaye automatiquement les défis échoués. La nouvelle tentative automatique offre une meilleure expérience aux visiteurs en récupérant automatiquement des problèmes de réseau temporaires ou des erreurs de traitement.
+never: Désactive la nouvelle tentative automatique. Cela nécessite une intervention manuelle et vous donne un contrôle total sur la gestion des erreurs dans les applications qui nécessitent une logique de nouvelle tentative personnalisée.
+retry-interval: Contrôle le temps entre les tentatives de nouvelle tentative (par défaut : 8 000 ms) et vous permet d'équilibrer entre la récupération rapide et la charge du serveur.
+Réessayer automatiquement (par défaut)
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Désactiver la nouvelle tentative
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-retry="never"></div>
+
+Intervalle de nouvelle tentative personnalisé (8 000 ms par défaut)
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-retry-interval="0000"></div>
+
+Actualiser le comportement
+Contrôlez la manière dont Turnstile gère l'expiration des jetons et les délais d'attente interactifs.
+
+refresh-expired: Contrôle le comportement lorsque les jetons expirent (auto,manual ,never ).
+refresh-timeout: Contrôle le comportement lorsque les défis interactifs expirent (auto,manual ,never ).
+Avantages
+autoL'actualisation offre une expérience utilisateur fluide mais utilise davantage de ressources.
+manualL'actualisation donne le contrôle aux visiteurs mais les oblige à agir.
+neverL'actualisation nécessite que votre application gère toute la logique d'actualisation.
+Différentes stratégies peuvent être utilisées pour l'expiration des jetons par rapport aux délais d'attente interactifs en fonction des exigences de votre expérience visiteur.
+
+Actualisation automatique des jetons expirés (par défaut)
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>"></div>
+
+Actualisation manuelle
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-refresh-expired="manual"></div>
+
+Délais d'expiration du rafraîchissement automatique (par défaut pour le mode géré)
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-refresh-timeout="auto"></div>
+
+Données personnalisées
+Ajoutez des identifiants et des données personnalisés à vos défis.
+
+action: Un identifiant personnalisé pour l'analyse et la différenciation (maximum 32 caractères).
+cData: Données de charge utile personnalisées renvoyées lors de la validation (maximum 255 caractères).
+Cas d'utilisation
+Suivi des actions : faites la différence entre la connexion, l’inscription, les formulaires de contact, etc. dans vos analyses.
+Contexte du visiteur : transmettez les identifiants des visiteurs, les informations de session ou d’autres données contextuelles.
+Tests A/B : suivez différentes configurations de widgets ou variantes de pages.
+Détection de fraude : inclure un contexte supplémentaire pour l’évaluation des risques.
+Attention
+
+Les champs action et cData n'acceptent que les caractères alphanumériques, les traits de soulignement (_) et les tirets (-).
+
+Ajouter un identifiant d'action personnalisé
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-action="login"></div>
+
+Ajouter une charge utile de données personnalisée
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-cdata="user-cdata"></div>
+
+Intégration de formulaires
+Configurez la façon dont Turnstile s'intègre aux formulaires HTML.
+
+Lorsqu'il est activé, Turnstile crée automatiquement un élément caché<input> avec le jeton de vérification. Ces données sont soumises avec les autres données de votre formulaire, ce qui simplifie la validation côté serveur.
+
+response-field: Détermine s'il faut créer un champ de formulaire caché avec le jeton (default: true)
+response-field-name: Nom personnalisé pour le champ de formulaire caché (default: cf-turnstile-response)
+Avantages
+L'intégration automatique du formulaire signifie que le jeton est inclus lors de la soumission du formulaire, ne nécessitant aucun JavaScript supplémentaire.
+Les noms de champs personnalisés permettent d'éviter les conflits avec les champs de formulaire existants.
+Les champs de réponse désactivés vous donnent un contrôle total sur la gestion des jetons pour les scénarios de formulaire complexes.
+Nom du champ de réponse personnalisé
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-response-field-name="turnstile-token"></div>
+
+Désactiver le champ de réponse
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-response-field="false"></div>
+
+Référence de configuration complète
+Paramètres de rendu JavaScript	Attribut de données	Description
+sitekey	data-sitekey	Chaque widget a une clé de site. Cette clé de site est associée à la configuration du widget correspondante et est créée lors de la création du widget.
+action	data-action	Une valeur client qui peut être utilisée pour différencier les widgets sous la même clé de site dans les analyses et qui est renvoyée lors de la validation. Celui-ci ne peut contenir que jusqu'à 32 caractères alphanumériques, dont_ et-.
+cData	data-cdata	Une charge utile client qui peut être utilisée pour joindre les données client au défi tout au long de son émission et qui est renvoyée lors de la validation. Celui-ci ne peut contenir que jusqu'à 255 caractères alphanumériques, dont_ et-.
+callback	data-callback	Un rappel JavaScript invoqué en cas de succès du défi. Le rappel reçoit un jeton qui peut être validé.
+error-callback	data-error-callback	Un rappel JavaScript invoqué lorsqu'il y a une erreur (par exemple erreur réseau ou échec du défi). Reportez-vous aux erreurs côté client.
+execution	data-execution	L'exécution contrôle quand obtenir le jeton du widget et peut être activéerender (par défaut) ou activéeexecute. Reportez-vous à Modes d’exécution pour plus d’informations.
+expired-callback	data-expired-callback	Un rappel JavaScript invoqué lorsque le jeton expire et ne réinitialise pas le widget.
+before-interactive-callback	data-before-interactive-callback	Un rappel JavaScript invoqué avant que le défi n'entre en mode interactif.
+after-interactive-callback	data-after-interactive-callback	Un rappel JavaScript invoqué lorsque le défi a quitté le mode interactif.
+unsupported-callback	data-unsupported-callback	Un rappel JavaScript invoqué lorsqu'un client/navigateur donné n'est pas pris en charge par Turnstile.
+theme	data-theme	Le thème du widget. Peut prendre les valeurs suivantes :light ,dark ,auto . La valeur par défaut est , qui respecte la préférence du visiteur. Cela peut être forcé à la lumière ou à l'obscurité en définissant le thème en conséquence.
+
+auto
+language	data-language	La langue à afficher doit être soitauto : (par défaut) pour utiliser la langue choisie par le visiteur, soit un code de langue à deux lettres ISO 639-1 (par exemple. ) ou la langue et le code du pays (par exempleen ).en-US Reportez-vous à la liste des langues prises en charge pour plus d'informations.
+tabindex	data-tabindex	Le tabindex de l'iframe de Turnstile à des fins d'accessibilité. La valeur par défaut est0 .
+timeout-callback	data-timeout-callback	Un rappel JavaScript invoqué lorsque le défi présente un défi interactif mais n'a pas été résolu dans un délai donné. Un rappel réinitialisera le widget pour permettre à un visiteur de résoudre à nouveau le défi.
+response-field	data-response-field	Un booléen qui contrôle si un élément d'entrée avec le jeton de réponse est créé est défini par défaut surtrue .
+response-field-name	data-response-field-name	Nom de l'élément d'entrée, par défautcf-turnstile-response : .
+size	data-size	La taille du widget. Peut prendre les valeurs suivantes :normal ,flexible ,compact .
+retry	data-retry	Contrôle si le widget doit automatiquement réessayer d'obtenir un jeton s'il n'y parvient pas. La valeur par défaut estauto , qui réessayera automatiquement. Cela peut être configuré pour désactiver lanever nouvelle tentative en cas d'échec.
+retry-interval	data-retry-interval	Lorsque estretry défini surauto ,retry-interval contrôle le temps entre les tentatives de nouvelle tentative en millisecondes. La valeur doit être un entier positif inférieur900000 à , par défaut8000 à .
+refresh-expired	data-refresh-expired	Actualise automatiquement le jeton lorsqu'il expire. Peut prendreauto ,manual , ounever , par défautauto.
+refresh-timeout	data-refresh-timeout	Contrôle si le widget doit s'actualiser automatiquement lors de la saisie d'un défi interactif et de l'observation d'un délai d'attente. Peut prendre (s'autoactualise automatiquement lorsqu'il rencontre un délai d'attente interactif),manual (invite le visiteur à s'actualiser manuellement) ounever (affichera un délai d'attente), par défautauto sur . S'applique uniquement aux widgets du mode Géré.
+appearance	data-appearance	L'apparence contrôle lorsque le widget est visible. Cela peut êtrealways (par défaut),execute , ouinteraction-only . Reportez-vous aux modes Apparence pour plus d’informations.
+feedback-enabled	data-feedback-enabled	Permet à Cloudflare de recueillir les commentaires des visiteurs en cas de défaillance du widget. Cela peut êtretrue (par défaut) oufalse .
+offlabel-show-privacy	data-offlabel-show-privacy	Affiche le lien de confidentialité pour les widgets Turnstile sans marque. Peut êtretrue (par défaut) oufalse .
+offlabel-show-help	data-offlabel-show-help	Affiche le lien d'aide pour les widgets Turnstile sans marque. Peut êtretrue (par défaut) oufalse .
+Exemples
+Widget de conception réactif
+HTML
+<div style="max-width: 500px;">
+  <div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-size="flexible" data-theme="auto"></div>
+</div>
+
+Widget compact optimisé pour les mobiles
+HTML
+<div class="cf-turnstile" data-sitekey="<YOUR-SITE-KEY>" data-size="compact" data-theme="light" data-language="en">
+</div>
+
+Précédent
+Aperçu
+Suivant
+Valider le jeton
+Sur cette page
+Aperçu
+Méthodes de rendu
+Tailles des widgets
+Options de thème
+Modes d'apparence
+Modes d'exécution
+Configuration de la langue
+Configuration de rappel
+Meilleures pratiques
+Options de configuration avancées
+Comportement de nouvelle tentative
+Actualiser le comportement
+Données personnalisées
+Intégration de formulaires
+Référence de configuration complète
+Exemples
+Est-ce que cela a été utile ?
+
+
+Oui
+
+Non
+Modifier la page
+Problème de rapport

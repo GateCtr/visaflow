@@ -69,8 +69,8 @@ import {
   isSpainCfSessionExpiringSoon,
   getActiveSpainCfSession,
   setActiveSpainCfSession,
-  solveSpainCloudflare,
 } from "./spain-soax-solver.js";
+import { solveTurnstileInPage, TURNSTILE_INTERCEPT_SCRIPT } from "./capsolver-turnstile.js";
 import { syncSpainCfSessionToRedis, type SerializableSpainCfSession } from "./spain-redis-persistence.js";
 
 puppeteer.use(StealthPlugin());
@@ -343,29 +343,32 @@ class SpainPersistentBrowserManager {
     }
 
     const t0 = Date.now();
-    console.log(`[spain-pb] 🚀 Résolution CF — stratégie CapSolver-first + XHR intercept`);
-    return this._resolveWithCapsolverFirst(targetUrl, t0);
+    console.log(`[spain-pb] 🚀 Résolution CF — stratégie Turnstile injection (token injecté dans notre Chromium)`);
+    return this._resolveWithTurnstileInjection(targetUrl, t0);
 
   }
 
-  // ── Résolution CapSolver-first + XHR intercept ────────────────────────────
+  // ── Résolution via injection Turnstile dans notre Chromium ───────────────
   /**
    * Stratégie principale de résolution CF :
    *
-   *   1. CapSolver résout le challenge CF en ~17s et retourne un cf_clearance
-   *      lié au proxy Decodo (même IP que Chromium).
-   *   2. cf_clearance injecté dans Chromium AVANT toute navigation → CF ne
-   *      re-challenge pas (clearance déjà valide pour cette IP).
-   *   3. UA synchronisé avec celui de CapSolver → CF lie clearance + UA.
-   *   4. Listener `page.on('response')` armé sur /onlinebookings/main/ avant
-   *      la navigation portail → capture la réponse XHR émise par le JS du
-   *      portail après le clic Continuar. CF laisse passer les sous-requêtes
-   *      XHR/fetch dans un contexte browser réel, contrairement aux navigations
-   *      top-level vers l'endpoint JSONP (→ 0B silencieux via goto ou impit).
-   *   5. Le JSONP capturé est stocké dans session.prefetchedMainHtml et réutilisé
+   *   1. Notre Chromium navigue vers targetUrl → CF challenge Turnstile apparaît.
+   *   2. CapSolver résout UNIQUEMENT le token Turnstile (AntiTurnstileTaskProxyLess).
+   *   3. On injecte le token dans notre page via JS → CF valide dans notre contexte.
+   *   4. CF émet cf_clearance lié à NOTRE TLS Chromium (pas celui de CapSolver).
+   *   5. Listener CDP armé sur /onlinebookings/main/ avant le clic Continuar →
+   *      capture le JSONP émis par le portail après Continuar. CF laisse passer
+   *      les sous-requêtes XHR/fetch depuis un contexte browser réel.
+   *   6. Le JSONP capturé est stocké dans session.prefetchedMainHtml et réutilisé
    *      par le scanner HTTP sans appel impit (CF bloque impit sur /main/).
+   *
+   * DIFFÉRENCE vs AntiCloudflareTask :
+   *   AntiCloudflareTask fait le solve ENTIER côté infra CapSolver → cf_clearance
+   *   lié à LEUR TLS → notre Chromium envoie un TLS différent → /main/ = 0B.
+   *   Ici, CapSolver résout seulement le CAPTCHA math/IA, notre Chromium reste
+   *   l'acteur de la validation finale → cf_clearance pour NOTRE TLS.
    */
-  private async _resolveWithCapsolverFirst(
+  private async _resolveWithTurnstileInjection(
     targetUrl: string,
     t0: number,
   ): Promise<SpainCfSession | null> {
@@ -379,32 +382,14 @@ class SpainPersistentBrowserManager {
       return null;
     }
 
-    // ── Étape 1 : CapSolver → cf_clearance lié au proxy Decodo ───────────────
-    console.log(`[spain-pb] 🤖 CapSolver → cf_clearance (proxy Decodo)…`);
-    const capResult = await solveSpainCloudflare(targetUrl, capsolverKey, proxyUrl);
-    if (!capResult.success || !capResult.session) {
-      console.error(`[spain-pb] ❌ CapSolver échoué: ${capResult.error ?? "erreur inconnue"}`);
-      return null;
-    }
-    const cfClearance = capResult.session.cfClearance;
-    const capUA = capResult.session.userAgent || this._ua;
-    console.log(`[spain-pb] ✅ CapSolver résolu (${Math.round((Date.now() - t0) / 1000)}s) — cf_clearance: ${cfClearance.slice(0, 40)}…`);
-    console.log(`[spain-pb]    UA CapSolver: ${capUA.slice(0, 70)}`);
-
-    // ── Étape 2 : Lancer/récupérer Chromium, configurer la page ──────────────
-    // Passer capUA à getOrLaunchBrowser() : si le browser est (re)lancé, le
-    // --user-agent flag utilisera directement l'UA de CapSolver sans rotation.
-    const browser = await this.getOrLaunchBrowser(capUA);
+    // ── Étape 1 : Lancer/récupérer Chromium, configurer la page ──────────────
+    // Pas d'UA CapSolver à synchroniser — on utilise notre propre UA Chrome.
+    const browser = await this.getOrLaunchBrowser();
     const { proxyAuth } = this.buildLaunchArgs(proxyUrl);
 
     const pages = await browser.pages();
     const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
 
-    // S'assurer que this._ua = capUA (si le browser était déjà vivant,
-    // getOrLaunchBrowser retourne sans modifier this._ua — on le force ici).
-    if (capUA && capUA !== this._ua) {
-      this._ua = capUA;
-    }
     await page.setUserAgent(this._ua);
     await page.setViewport(this._viewport);
     await page.setExtraHTTPHeaders({
@@ -449,6 +434,13 @@ class SpainPersistentBrowserManager {
 
     // CDP Fetch handler remplace page.authenticate() — voir setupPageProxyAuth.
     if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
+
+    // ── Intercepter window.turnstile.render pour capturer le sitekey ─────────
+    // CF Managed Challenge avec render=explicit ne met JAMAIS data-sitekey dans
+    // le DOM — il passe le sitekey à window.turnstile.render(el, { sitekey })
+    // dynamiquement. Ce hook s'exécute avant tout JS de la page (evaluateOnNewDocument)
+    // et sauvegarde le sitekey dans window.__cf_intercepted_sitekey.
+    await (page as any).evaluateOnNewDocument(TURNSTILE_INTERCEPT_SCRIPT);
 
     // ── Dismiss window.alert/confirm/prompt ───────────────────────────────────
     // citaconsular.es affiche un window.alert() obligatoire après le challenge CF.
@@ -622,7 +614,7 @@ class SpainPersistentBrowserManager {
     // Ensuite résolution cf_clearance fraîche via Network.deleteCookies.
     try {
       const cdpStorage = await page.createCDPSession();
-      // Supprimer le cf_clearance du profil (on va injecter le cf_clearance CapSolver frais)
+      // Supprimer le cf_clearance du profil pour forcer un fresh challenge
       await cdpStorage.send("Network.deleteCookies", {
         name: "cf_clearance",
         domain: ".citaconsular.es",
@@ -648,24 +640,78 @@ class SpainPersistentBrowserManager {
       console.log("[spain-pb] 🗑️ Cache HTTP navigateur vidé (scripts JSD frais)");
     } catch { /* non-fatal */ }
 
-    // ── Étape 4 : Injecter le cf_clearance CapSolver dans le browser ──────────
-    // On utilise CDP Network.setCookie directement pour éviter le bug partitionKey
-    // de Puppeteer 25+ avec Chromium <130 (page.setCookie appelle deleteCookies
-    // avec partitionKey non supporté par le CDP de Chromium v123).
+    // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
+    //
+    // STRATÉGIE (basée sur la doc CF JavaScript Detections) :
+    //   CF utilise le script JSD (/cdn-cgi/challenge-platform/scripts/jsd/main.js)
+    //   qui s'exécute DANS notre Chromium. Si le fingerprint est valide,
+    //   CF émet automatiquement cf_clearance avec js_detection.passed = true.
+    //
+    // CapSolver (AntiCloudflareTask / AntiTurnstileTaskProxyLess) N'EST PAS applicable :
+    //   - b0da9f4911ba (dans l'URL du script JSD) n'est pas un sitekey Turnstile valide
+    //   - CapSolver rejette "invalid websiteKey (b0da9f4911ba)"
+    //   - CF Managed Challenge utilise JS Detection, pas un widget Turnstile avec sitekey
+    //
+    // La solution : laisser le Chromium stealth exécuter le JSD nativement.
+    // cf_clearance est émis pour NOTRE TLS → /main/ accepte nos requêtes impit.
+    console.log(`[spain-pb] 🌐 Navigation → JSD CF en attente (exécution native Chromium) : ${targetUrl.slice(0, 80)}`);
     try {
-      const cdpCookie = await page.createCDPSession();
-      await cdpCookie.send("Network.setCookie", {
-        name: "cf_clearance",
-        value: cfClearance,
-        domain: ".citaconsular.es",
-        path: "/",
-        secure: true,
-        sameSite: "None",
-      });
-      await cdpCookie.detach().catch(() => {});
-      console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté dans Chromium`);
-    } catch (injectErr) {
-      console.error(`[spain-pb] ❌ Injection cookie CapSolver échouée: ${injectErr}`);
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 35_000 });
+    } catch (navErr) {
+      console.warn(`[spain-pb] ⚠️ Navigation initiale domcontentloaded (non-fatal): ${navErr}`);
+    }
+
+    // Vérifier si cf_clearance déjà présent (profil persistant valide)
+    {
+      const existing = await page.cookies("https://www.citaconsular.es").catch(() => []);
+      const hasCf = existing.find((c) => c.name === "cf_clearance");
+      if (hasCf) {
+        console.log(`[spain-pb] ♻️ cf_clearance déjà présent dans le profil — JSD non requis: ${hasCf.value.slice(0, 40)}…`);
+      }
+    }
+
+    // Attendre que le JSD s'exécute et que CF émette cf_clearance (max 65s)
+    // Le JSD dure 15min selon la doc CF, mais l'émission initiale prend ~10-40s.
+    // Page "Un instant..." / "Just a moment" = JSD en cours → ATTENDRE, ne pas interrompre.
+    console.log(`[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…`);
+    const jsdStartMs = Date.now();
+    let cfObtained = false;
+    const JSD_TIMEOUT_MS = 65_000;
+    const jsdDeadline = Date.now() + JSD_TIMEOUT_MS;
+
+    while (Date.now() < jsdDeadline) {
+      const cookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
+      const cf = cookies.find((c) => c.name === "cf_clearance");
+      if (cf?.value) {
+        cfObtained = true;
+        console.log(
+          `[spain-pb] ✅ cf_clearance obtenu via JSD natif (${Math.round((Date.now() - jsdStartMs) / 1000)}s)` +
+          ` — js_detection.passed=true pour NOTRE TLS`
+        );
+        console.log(`[spain-pb]    cf_clearance: ${cf.value.slice(0, 40)}…`);
+        break;
+      }
+      // Log intermédiaire toutes les 10s
+      const elapsed = Math.round((Date.now() - jsdStartMs) / 1000);
+      if (elapsed > 0 && elapsed % 10 === 0) {
+        const title = await page.title().catch(() => "?");
+        const url = await page.url().catch(() => "?");
+        console.log(`[spain-pb]    JSD polling ${elapsed}s — titre: "${title}" url: ${url.slice(0, 60)}`);
+      }
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+
+    if (!cfObtained) {
+      // Diagnostic final
+      const title = await page.title().catch(() => "?");
+      const url = await page.url().catch(() => "?");
+      const cookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
+      console.error(
+        `[spain-pb] ❌ cf_clearance absent après ${JSD_TIMEOUT_MS / 1000}s` +
+        ` | titre: "${title}" | url: ${url.slice(0, 60)}` +
+        ` | cookies: ${cookies.map((c) => c.name).join(", ")}`,
+      );
+      console.error(`[spain-pb] ❌ JSD échoué — Chromium headless détecté par CF (stealth insuffisant) ou proxy rejeté`);
       return null;
     }
 
@@ -802,7 +848,7 @@ class SpainPersistentBrowserManager {
       try {
         const postNavCookies = await page.cookies("https://www.citaconsular.es");
         const postCf = postNavCookies.find((c) => c.name === "cf_clearance");
-        if (postCf?.value && postCf.value !== cfClearance) {
+        if (postCf?.value) {
           console.log(`[spain-pb] 🔑 cf_clearance post-navigation: ${postCf.value.slice(0, 40)}…`);
         }
       } catch { /* non-fatal */ }
@@ -967,7 +1013,7 @@ class SpainPersistentBrowserManager {
     const allCookies = allPuppeteerCookies.map((c) => ({ name: c.name, value: c.value }));
 
     // Récupérer le cf_clearance final (peut avoir été mis à jour par CF post-Continuar)
-    const finalCf = allCookies.find((c) => c.name === "cf_clearance")?.value || cfClearance;
+    const finalCf = allCookies.find((c) => c.name === "cf_clearance")?.value ?? "";
 
     const createdAt = Date.now();
     const elapsed = Math.round((createdAt - t0) / 1000);

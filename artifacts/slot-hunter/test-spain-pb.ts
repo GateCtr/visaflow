@@ -13,7 +13,7 @@ const TARGET_URL =
   "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 
 // ── Watchdog : tue le process après 90s quoi qu'il arrive ─────────────────────
-const WATCHDOG_MS = 90_000;
+const WATCHDOG_MS = 150_000;
 const watchdog = setTimeout(() => {
   console.error(`\n⏱️ WATCHDOG ${WATCHDOG_MS / 1000}s dépassé — arrêt forcé (tokens proxy préservés)`);
   process.exit(4);
