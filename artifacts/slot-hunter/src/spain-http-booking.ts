@@ -179,37 +179,75 @@ function parseJsonpResponse(text: string): unknown | null {
   try { return JSON.parse(m[1].trim()); } catch { return null; }
 }
 
+// Codes 5xx Bookitit lors du rush d'ouverture de créneaux (gateway saturé).
+// Le serveur Bookitit est mutualisé — quand les créneaux s'ouvrent, des centaines
+// de navigateurs frappent simultanément. Même réponse que dans un vrai navigateur
+// (roue qui tourne), sauf qu'on réessaie automatiquement au lieu d'attendre l'utilisateur.
+const BOOKING_5XX_RETRY_CODES = new Set([502, 503, 504, 520, 524]);
+
 async function callBookititEndpoint(
   session: SpainCfSession,
   endpoint: string,
   params: Record<string, string>,
   portalUrl: string,
+  /** Max tentatives en cas de 5xx serveur (défaut: 4 = 1 initial + 3 retries) */
+  maxAttempts = 4,
 ): Promise<unknown | null> {
   const baseUrl = "https://www.citaconsular.es/onlinebookings/";
-  const q = new URLSearchParams(params);
-  q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10000)}`);
-  q.set("_", String(Date.now()));
-  const url = `${baseUrl}${endpoint}?${q.toString()}`;
+  const headers = {
+    "Referer": portalUrl,
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+  };
 
-  const res = await spainCfFetch(url, session, {
-    headers: {
-      "Referer": portalUrl,
-      "X-Requested-With": "XMLHttpRequest",
-      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-    },
-  });
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      // Délai court : on est en mode booking actif, chaque seconde compte.
+      // 1s → 2s → 3s (backoff linéaire léger, pas exponentiel).
+      const waitMs = attempt * 1_000;
+      console.warn(
+        `[spain-booking] 🔄 ${endpoint} retry ${attempt}/${maxAttempts - 1}` +
+        ` (HTTP ${lastStatus} — surcharge Bookitit) — attente ${waitMs}ms…`,
+      );
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
 
-  if (!res) return null;
-  if (!res.ok) {
-    console.warn(`[spain-booking] ${endpoint} returned ${res.status}`);
-    return null;
+    // Regénérer callback + _ à chaque tentative pour éviter la mise en cache
+    const q = new URLSearchParams(params);
+    q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10000)}`);
+    q.set("_", String(Date.now()));
+    const url = `${baseUrl}${endpoint}?${q.toString()}`;
+
+    const res = await spainCfFetch(url, session, { headers });
+
+    if (!res) {
+      console.warn(`[spain-booking] ${endpoint} — pas de réponse (tentative ${attempt + 1})`);
+      lastStatus = 0;
+      continue;
+    }
+
+    lastStatus = res.status;
+
+    // 5xx transitoire → retry
+    if (BOOKING_5XX_RETRY_CODES.has(res.status)) {
+      continue;
+    }
+
+    if (!res.ok) {
+      console.warn(`[spain-booking] ${endpoint} returned ${res.status}`);
+      return null;
+    }
+
+    const body = await res.text();
+    return parseJsonpResponse(body);
   }
 
-  const body = await res.text();
-  return parseJsonpResponse(body);
+  console.warn(`[spain-booking] ❌ ${endpoint} — abandonné après ${maxAttempts} tentatives (dernier HTTP ${lastStatus})`);
+  return null;
 }
 
 function buildBookingCookieHeader(session: SpainCfSession): string {
