@@ -33,6 +33,7 @@ import type { Browser, Page } from "puppeteer";
 import { rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
+import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
 
 // ─── UA Chrome/Edge exclusivement pour le persistent browser ─────────────────
 // Safari/Firefox UAs servis par un moteur Chromium sont détectables via JS engine
@@ -217,31 +218,33 @@ class SpainPersistentBrowserManager {
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
   private getProxyUrl(): string | undefined {
-    return process.env.DECODO_PROXY_URL ?? process.env.SOAX_PROXY_URL;
+    // Utilise le pool Decodo (DECODO_PROXY_URLS ou DECODO_PROXY_URL) en priorité
+    return getCurrentDecodoUrl() ?? process.env.SOAX_PROXY_URL;
   }
 
   /**
-   * Retourne une URL proxy avec un suffixe de session aléatoire pour forcer
-   * une nouvelle IP à chaque lancement de browser.
+   * Retourne l'URL proxy suivante du pool pour forcer une nouvelle IP.
    *
-   * PROBLÈME : Decodo port 10001 = IP sticky permanente. CF épingle le nonce JSD
-   * (ex: 1785297931) à cette IP → même challenge périmé à chaque tentative,
-   * même après purge complète du profil et du PHPSESSID.
+   * Mode A — IPs dédiées (DECODO_PROXY_URLS avec plusieurs ports) :
+   *   Avance l'index du pool → port 10010 → 10011 → … → 10010.
+   *   Le "-sessionid-XXXX" est IGNORÉ sur ce type de proxy (IP fixée par le port).
    *
-   * SOLUTION : ajouter `-sessionid-XXXX` au username Decodo → le provider attribue
-   * une IP sticky DIFFÉRENTE pour chaque valeur de session → CF voit une IP inconnue
-   * → génère un nonce frais → JSD oneshot accepté → /main/ répond avec le contenu.
-   *
-   * Format Decodo ISP : `username-sessionid-XXXX:password@host:port`
-   * où XXXX = 8 chars aléatoires alphanumériques.
+   * Mode B — Proxy résidentiel/rotatif (DECODO_PROXY_URL seul) :
+   *   Ajoute "-sessionid-XXXX" au username → le provider attribue une IP sticky
+   *   différente pour chaque valeur de session → CF voit une IP inconnue.
    */
   private buildRotatedProxyUrl(baseUrl: string): string {
+    // Mode A : pool multi-URLs (IPs dédiées à ports fixes)
+    if (isDecodoMultiPool()) {
+      const nextUrl = rotateDecodoUrl();
+      if (nextUrl) return nextUrl;
+    }
+
+    // Mode B : URL unique → rotation via sessionid (résidentiel/rotatif)
     try {
       const u = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
       const decodedUser = decodeURIComponent(u.username);
-      // Générer un ID de session court et aléatoire (8 chars alphanumériques)
       const sessionId = Math.random().toString(36).slice(2, 10);
-      // Remplacer un éventuel sessionid déjà présent pour ne pas empiler les suffixes
       const baseUser = decodedUser.replace(/-sessionid-[a-z0-9]+$/i, "");
       const rotatedUser = `${baseUser}-sessionid-${sessionId}`;
       u.username = encodeURIComponent(rotatedUser);
@@ -250,7 +253,6 @@ class SpainPersistentBrowserManager {
       console.log(`[spain-pb] 🔄 Rotation IP proxy Decodo — session: ${sessionId} (${masked.slice(0, 70)})`);
       return rotated;
     } catch {
-      // En cas d'erreur de parsing, utiliser l'URL originale sans rotation
       console.warn("[spain-pb] ⚠️ Rotation proxy échouée — utilisation URL originale");
       return baseUrl;
     }

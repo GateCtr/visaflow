@@ -28,6 +28,7 @@ import {
 import { cookieManager } from "./cookie-manager.js";
 import { solveSpainWidgetSession } from "./local-playwright-solver.js";
 import { applyStableGaProfile } from "./spain-redis-persistence.js";
+import { getCurrentDecodoUrl } from "./spain-decodo-pool.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -35,11 +36,13 @@ const CAPSOLVER_BASE = "https://api.capsolver.com";
 
 /**
  * Retourne l'URL proxy active pour l'Espagne.
- * Priorité : DECODO_PROXY_URL (ISP fixe, utilisé tel quel) → SOAX_PROXY_URL (sticky session builder).
- * Decodo ISP utilise une IP fixe — pas besoin de session ID / rotation côté URL.
+ * Priorité : pool Decodo (DECODO_PROXY_URLS ou DECODO_PROXY_URL) → SOAX_PROXY_URL.
+ *
+ * En mode multi-pool (IPs dédiées à ports fixes), retourne l'URL courante du pool.
+ * La rotation est gérée par buildRotatedProxyUrl() dans spain-persistent-browser.ts.
  */
 function getSpainProxyUrl(identifier = "spain-cf", lifetime = SOAX_SPAIN_SESSION_LIFETIME_MIN): string | undefined {
-  const decodo = process.env.DECODO_PROXY_URL;
+  const decodo = getCurrentDecodoUrl();
   if (decodo) return decodo;
   const soax = process.env.SOAX_PROXY_URL;
   if (soax) return makeSpainSoaxStickyUrl(soax, lifetime, identifier);
