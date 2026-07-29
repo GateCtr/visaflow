@@ -64,6 +64,8 @@ function platformFromUA(ua: string): string {
 import {
   type SpainCfSession,
   cloneSpainCfSessionForDossier,
+  isSpainCfSessionExpiringSoon,
+  getActiveSpainCfSession,
   setActiveSpainCfSession,
   solveSpainCloudflare,
 } from "./spain-soax-solver.js";
@@ -897,14 +899,27 @@ export async function ensureSpainPersistentBrowserSession(
   return spainPersistentBrowser.ensureSession(targetUrl);
 }
 
-/** Équivalent de `isSpainCfSessionExpiringSoon()` pour le mode persistent-browser. */
+/**
+ * Équivalent de `isSpainCfSessionExpiringSoon()` pour le mode persistent-browser.
+ *
+ * Si le manager PB a sa propre session en cache → on utilise son TTL.
+ * Sinon (Puppeteer indisponible sur cet env) → on consulte la session soax fallback,
+ * afin d'éviter un re-solve proactif à chaque cycle alors que la session est valide.
+ */
 export function isSpainPersistentBrowserSessionExpiringSoon(): boolean {
-  return spainPersistentBrowser.isSessionExpiringSoon();
+  if (spainPersistentBrowser.getSession()) {
+    return spainPersistentBrowser.isSessionExpiringSoon();
+  }
+  // PB session absente → déléguer au cache soax (fallback actif)
+  return isSpainCfSessionExpiringSoon();
 }
 
-/** Équivalent de `getActiveSpainCfSession()` pour le mode persistent-browser. */
+/**
+ * Équivalent de `getActiveSpainCfSession()` pour le mode persistent-browser.
+ * Retourne la session PB si disponible, sinon la session soax fallback.
+ */
 export function getActiveSpainPersistentBrowserSession(): SpainCfSession | undefined {
-  return spainPersistentBrowser.getSession() ?? undefined;
+  return spainPersistentBrowser.getSession() ?? getActiveSpainCfSession() ?? undefined;
 }
 
 /**
