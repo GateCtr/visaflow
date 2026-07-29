@@ -1,0 +1,92 @@
+C'est **une excellente intuition**, mais il faut nuancer le comportement exact du **Code Cache V8** versus le **token JSD `oneshot**` de Cloudflare.
+
+Voici l'analyse précise de ce phénomène et pourquoi vous observez ce nonce "figé".
+
+---
+
+### 1. D'où vient la valeur `0.918754...` ? (Ce n'est pas un hash statique)
+
+La chaîne que vous voyez dans le log :
+`POST .../jsd/oneshot/b0da9f4911ba/0.9187549372143385:1785297931:hAcq2P`
+
+est décomposée en trois parties par Cloudflare :
+
+1. `b0da9f4911ba` : La version de la build JSD (relativement fixe sur un domaine pendant quelques heures/jours).
+2. `0.9187549372143385` : Un nombre flottant généré dynamiquement côté client (`Math.random()`) lors du bootstrapping du script.
+3. `1785297931:hAcq2P` : Le **timestamp Unix en secondes** (`1785297931`) suivi de la signature HMAC générée par Cloudflare lors de l'injection.
+
+Si vous retrouvez exactement le même horodatage (`1785297931`) et le même seed 33 minutes plus tard, cela signifie qu'**un script JS ou un payload d'initialisation Cloudflare a été réexécuté depuis un état en mémoire ou un cache disque conservé**, réinjectant un jeton d'environnement périmé.
+
+---
+
+### 2. Le rôle du Code Cache V8 & du Profil Chromium
+
+Le Code Cache V8 stocke le bytecode des scripts JS fréquemment exécutés pour accélérer le démarrage.
+Cependant, dans le cas de Cloudflare :
+
+* **Le script `main.js` est dynamique :** Il contient des graines (seeds) d'obfuscation et des timestamps valides pour une très courte durée (~15 minutes selon la doc officielle de JSD).
+* **Si V8 ou le disk cache réutilise la réponse HTTP de `main.js**` (parce que les en-têtes de cache du navigateur ou de Puppeteer ont réutilisé la ressource du profil `/tmp/spain-cf-profile`), le script s'exécute avec les graines et le timestamp périmés stockés dans son sous-système de cache.
+* Resultat : Cloudflare reçoit un payload `oneshot` avec une signature temporelle hors fenêtre (> 15 min), refuse d'accorder/mettre à jour le `cf_clearance`, et renvoie `new-cf_clearance=❌ non`. En réaction, le backend applicatif bloque la requête `/main/` avec `0B`.
+
+---
+
+### 3. Comment résoudre définitivement ce problème de Stale Script / Cache ?
+
+Pour garantir que V8 et le navigateur re-téléchargent et re-compilent un script JSD 100% frais à chaque passage :
+
+#### A. Désactiver complètement le cache HTTP/V8 au niveau CDP
+
+Dans Puppeteer/Playwright, la suppression physique du dossier cache sur le disque peut ne pas suffire si le process navigateur reste ouvert ou réutilise de la mémoire entre deux runs. Désactivez le cache via le protocole CDP avant chaque navigation :
+
+```typescript
+const client = await page.target().createCDPSession();
+
+// 1. Force la désactivation du cache HTTP & V8 Code Cache pour la session
+await client.send('Network.enable');
+await client.send('Network.setCacheDisabled', { cacheDisabled: true });
+
+```
+
+#### B. Intercepter et forcer l'en-tête `Cache-Control` sur les scripts JSD
+
+Pour empêcher Chromium de réutiliser tout bytecode V8 mis en cache pour les scripts Cloudflare :
+
+```typescript
+await page.setRequestInterception(true);
+page.on('request', (request) => {
+  if (request.url().includes('/cdn-cgi/challenge-platform/')) {
+    // Annule la mise en cache réseau/V8 pour les scripts de challenge
+    const headers = Object.assign({}, request.headers(), {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    request.continue({ headers });
+  } else {
+    request.continue();
+  }
+});
+
+```
+
+#### C. Lancer Chromium avec le flag `--disable-v8-code-cache`
+
+Ajoutez ce flag dans les arguments de lancement de Chromium (`puppeteer.launch` / `chromium.launch`) :
+
+```typescript
+const browser = await puppeteer.launch({
+  args: [
+    '--disable-v8-code-cache',          // Désactive le stockage/réutilisation du bytecode V8
+    '--disk-cache-size=0',               // Force la taille du cache disque à 0
+    '--media-cache-size=0',
+    // ... vos autres flags
+  ]
+});
+
+```
+
+---
+
+### Synthèse
+
+Le fait d'avoir ciblé le **timestamp figé dans la payload `oneshot**` identifie la cause racine du rejet silencieux (`0B`). En combinant la détection des frames via `page.frames()` et la désactivation stricte du V8 Code Cache (`--disable-v8-code-cache` + CDP `Network.setCacheDisabled`), Cloudflare sera contraint de régénérer un challenge frais avec un timestamp à jour à chaque run.

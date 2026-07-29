@@ -145,18 +145,32 @@ function purgeProfileCacheOnDisk(profileDir: string): void {
   //   • En supprimant Default/Cache/ avant le lancement, Chrome télécharge un script
   //     JSD frais avec le token courant → CF accepte le oneshot.
   //
-  // POURQUOI PAS les autres répertoires :
-  //   • Default/Code Cache/ — bytecode V8 compilé. CF accumule ici des données de
-  //     reconnaissance ("profil de confiance") pour ce browser. Le purger force CF à
-  //     re-évaluer le browser comme inconnu → managed challenge complet (Turnstile).
-  //   • Default/Service Worker/ — CF enregistre un SW sur citaconsular.es. Le SW
-  //     valide les requêtes JSD. Le purger = CF voit un browser sans historique.
-  //   • Default/Local Storage/, Default/IndexedDB/ — CF challenge storage. Ces données
-  //     sont déjà purgées via CDP Storage.clearDataForOrigin avant chaque navigation.
-  //   • Default/Session Storage/ — session storage purgé par CDP aussi.
-  //   • GPUCache, DawnGraphiteCache, DawnWebGPUCache — ne contiennent pas de tokens CF.
+  // POURQUOI ces répertoires :
+  //   • Default/Cache/ + Default/Code Cache/ — scripts JSD mis en cache avec nonce périmé
+  //   • Default/Local Storage/, Default/IndexedDB/, Default/Session Storage/ — CF stocke
+  //     l'état JSD (seeds, nonces) dans ces storages. CDP Storage.clearDataForOrigin ne
+  //     couvre PAS les Storage Partitions de Chromium (partitions créées pour les iframes
+  //     blob: et workers CF). La purge physique sur disque est la seule façon fiable de
+  //     supprimer les nonces figés. Sans ça, le oneshot envoie toujours le même timestamp
+  //     périmé (ex: 1785297931) → CF rejette → /main/ retourne 0B.
+  //   • Default/Service Worker/ + Default/Cache Storage/ — SW CF peut interférer avec JSD
+  //   • GPUCache, DawnGraphiteCache — ne contiennent pas de tokens CF, préservés
   const cacheDirs = [
-    "Default/Cache",   // HTTP cache uniquement — script JSD stale ici
+    "Default/Cache",           // HTTP cache — script JSD stale
+    "Default/Code Cache",      // Bytecode V8 compilé avec nonce baked-in
+    "Default/Local Storage",   // Seeds JSD + nonces CF (partitions incluses)
+    "Default/IndexedDB",       // État challenge CF (Storage Partitions non couvertes par CDP)
+    "Default/Session Storage", // Tokens session CF
+    "Default/Service Worker",  // SW CF enregistré
+    "Default/Cache Storage",   // CacheAPI du SW CF
+    // CRITIQUE : le fichier Cookies est relu depuis le disque AU DÉMARRAGE de Chrome.
+    // Notre purge CDP (Network.deleteCookies) s'exécute APRÈS le lancement — trop tard :
+    // cf_clearance + PHPSESSID stale sont déjà rechargés en mémoire depuis le profil.
+    // CF voit ce cf_clearance "connu" → sert le même script JSD avec le nonce figé
+    // (ex: 1785297931, ~33 min d'âge) → JSD oneshot rejeté → /main/ = 0B.
+    // Solution : purger Default/Cookies sur disque avant le lancement → Chrome démarre
+    // sans cookies → CF émet un vrai cf_clearance frais via JSD de zéro.
+    "Default/Cookies",
   ];
   let purged = 0;
   for (const dir of cacheDirs) {
@@ -171,7 +185,9 @@ function purgeProfileCacheOnDisk(profileDir: string): void {
     }
   }
   if (purged > 0) {
-    console.log(`[spain-pb] 🗑️ Default/Cache/ supprimé (script JSD stale purgé, Code Cache + SW + IndexedDB préservés)`);
+    console.log(
+      `[spain-pb] 🗑️ Profil CF purgé sur disque (${purged} répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage)`,
+    );
   }
 }
 
@@ -225,6 +241,13 @@ class SpainPersistentBrowserManager {
       // de CapSolver. Sans ce flag, Chrome headless peut envoyer son UA interne dans
       // certaines requêtes même si page.setUserAgent() est appelé par la suite.
       `--user-agent=${this._ua}`,
+      // ── Anti-cache JSD : empêcher la réutilisation du bytecode V8 périmé ─────
+      // Le script b0da9f4911ba/main.js contient un timestamp HMAC (~15min de validité).
+      // --disable-v8-code-cache empêche Chrome de stocker/réutiliser le bytecode compilé.
+      // NOTE : --disk-cache-size=0 est intentionnellement omis — il bloque le chargement
+      // des scripts CF (jsd/main.js, b0da9f4911ba) → JSD oneshot jamais envoyé → timeout.
+      // La purge disque des storages + Network.setCacheDisabled est suffisante.
+      "--disable-v8-code-cache",
     ];
 
     let proxyAuth: { username: string; password: string } | undefined;
@@ -631,13 +654,18 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ Purge storage CF (non-fatal): ${purgeErr}`);
     }
 
-    // Vider le cache HTTP navigateur : CF sert ses scripts JSD depuis CDN — sans
-    // cache-bust, le même script (avec nonce périmé) est retourné du cache local.
+    // Vider le cache HTTP + désactiver le cache pour la session JSD
+    // CRITIQUE : Network.clearBrowserCache purge le cache mémoire mais pas le
+    // cache disque in-process (V8 bytecode en mémoire du process Chrome actif).
+    // Network.setCacheDisabled empêche Chrome de lire ou écrire le cache HTTP/V8
+    // pendant toute la session → script JSD toujours téléchargé frais → nonce valide.
     try {
       const cdpCache = await page.createCDPSession();
+      await cdpCache.send("Network.enable");
       await cdpCache.send("Network.clearBrowserCache");
+      await cdpCache.send("Network.setCacheDisabled", { cacheDisabled: true });
       await cdpCache.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ Cache HTTP navigateur vidé (scripts JSD frais)");
+      console.log("[spain-pb] 🗑️ Cache HTTP vidé + désactivé pour la session JSD (nonce frais garanti)");
     } catch { /* non-fatal */ }
 
     // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
@@ -725,12 +753,20 @@ class SpainPersistentBrowserManager {
     // Timestamp quand le JSD oneshot a répondu — utilisé pour temporiser le fetch fallback.
     let jsdOneShotAt = 0;
 
+    // Promise résolue quand le JSD oneshot est détecté — utilisée par l'intercepteur /main/.
+    // Permet de retarder /main/ jusqu'à ce que CF ait vu notre fingerprint JSD.
+    let jsdOneShotResolve: (() => void) | null = null;
+    const jsdOneShotSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
+
     // CDP Network listener — plus fiable que page.on('response') pour les ressources
     // script (JSONP) car il fournit requestId → Network.getResponseBody peut être
     // appelé même si la réponse est déjà traitée par le browser.
     let cdpNet: any = null;
     const pendingMainRequests = new Map<string, string>(); // requestId → url
     const pendingJsdRequests  = new Map<string, string>(); // requestId → url (JSD oneshot)
+    // true si JSD oneshot a répondu AVEC un nouveau cf_clearance (challenge accepté).
+    // Si false : le cookie cf_clearance est "fantôme" — la session est invalide pour /main/.
+    let jsdOneShotAccepted = false;
     try {
       cdpNet = await page.createCDPSession();
       await cdpNet.send("Network.enable", {});
@@ -762,13 +798,17 @@ class SpainPersistentBrowserManager {
         if (url.includes("jsd/oneshot")) {
           const setCookie: string = ev.response.headers?.["set-cookie"] ?? "";
           const hasCfClearance = setCookie.includes("cf_clearance");
+          jsdOneShotAccepted = hasCfClearance; // true = challenge accepté, cf_clearance réémis
           console.log(
             `[spain-pb] 🔑 JSD oneshot resp: status=${ev.response.status}` +
             ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}` +
-            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non (rejeté ou pas d'upgrade)"}`,
+            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non — cookie fantôme, /main/ sera annulé"}`,
           );
           jsdOneShotAt = Date.now(); // marquer le moment pour le délai post-JSD
           pendingJsdRequests.delete(ev.requestId);
+          // Signaler à l'intercepteur /main/ que le JSD oneshot est terminé.
+          // CF a maintenant vu notre fingerprint — /main/ peut être libéré ou annulé.
+          if (jsdOneShotResolve) jsdOneShotResolve();
         }
       });
 
@@ -820,6 +860,56 @@ class SpainPersistentBrowserManager {
     };
     page.on("response", mainResponseHandler);
 
+    // ── Intercepteur CDP Fetch : bloquer /main/ jusqu'au JSD oneshot ──────────
+    //
+    // RACE CONDITION : Bookitit appelle /main/ immédiatement après le clic
+    // Continuar. Le script JSD b0da9f4911ba n'a pas encore eu le temps de
+    // POSTer son oneshot. CF voit /main/ sans JSD récent → retourne 0B body.
+    //
+    // FIX : intercepter /main/ via CDP Fetch.enable, attendre que le listener
+    // Network détecte jsd/oneshot (via jsdOneShotSignal), puis libérer la
+    // requête /main/ avec un délai de 300ms. CF a alors vu notre fingerprint
+    // JSD avant de décider du contenu de /main/.
+    //
+    // Note : CDP Fetch interceptor sur une session séparée de cdpNet (Network)
+    // pour éviter les conflits de protocole.
+    let cdpFetch: any = null;
+    try {
+      cdpFetch = await page.createCDPSession();
+      await cdpFetch.send("Fetch.enable", {
+        patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
+      });
+      cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
+        const url: string = ev.request?.url ?? "";
+        console.log(`[spain-pb] 🔒 /main/ intercepté — attente JSD oneshot (max 6s)… ${url.slice(0, 80)}`);
+        const reason = await Promise.race([
+          jsdOneShotSignal.then(() => "jsd" as const),
+          new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 6_000)),
+        ]);
+        if (reason === "jsd" && jsdOneShotAccepted) {
+          // JSD accepté par CF (cf_clearance réémis) → /main/ autorisé
+          console.log(`[spain-pb] 🔓 /main/ libéré — JSD accepté ✅ délai 300ms…`);
+          await new Promise((r) => setTimeout(r, 300));
+          await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
+        } else {
+          // JSD échoué ou timeout → /main/ annulé pour éviter le cookie fantôme
+          // CF aurait retourné 0B de toute façon — annuler évite de polluer les logs.
+          const why = reason === "timeout" ? "timeout 6s" : "JSD oneshot refusé (cookie fantôme)";
+          console.warn(`[spain-pb] ❌ /main/ annulé (${why}) — profil CF stale, la session sera retentée`);
+          await cdpFetch.send("Fetch.failRequest", {
+            requestId: ev.requestId,
+            errorReason: "Failed",
+          }).catch(() => {
+            // Fallback si failRequest non supporté
+            cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
+          });
+        }
+      });
+      console.log(`[spain-pb] 🔒 Intercepteur /main/ armé (CDP Fetch)`);
+    } catch (fetchInterceptErr) {
+      console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ (non-fatal): ${fetchInterceptErr}`);
+    }
+
     // ── Étape 6 : Naviguer vers le portail puis cliquer Continuar ────────────
     // Avec le cf_clearance frais injecté + UA synchronisé, CF accepte la page
     // portail sans re-challenger. Le JS du portail charge, on clique Continuar,
@@ -853,10 +943,89 @@ class SpainPersistentBrowserManager {
         }
       } catch { /* non-fatal */ }
 
-      // Attendre et cliquer le bouton Continuar (max 25s, check toutes les 2s)
+      // Attendre et cliquer le bouton Continuar (max 45s, check toutes les 2s)
+      // Étendu à 45s pour laisser le temps de gérer un Managed Challenge Turnstile visible.
       let continueClicked = false;
-      const contDeadline = Date.now() + 25_000;
+      let turnstileClicked = false; // Ne cliquer la case Turnstile qu'une seule fois
+      const contDeadline = Date.now() + 45_000;
       while (Date.now() < contDeadline && !continueClicked) {
+
+        // ── Détecter et cliquer la case Turnstile (Managed Challenge visible) ──
+        // CF peut afficher un widget "Vérifiez que vous êtes humain" même après JSD.
+        // element.click() JS est rejeté (isTrusted=false) — seul un vrai clic physique
+        // CDP (page.mouse.click) génère isTrusted=true et passe le challenge.
+        if (!turnstileClicked) {
+          // Utiliser page.frames() (niveau Puppeteer, pas DOM) pour trouver l'iframe
+          // Cloudflare même si elle est dans un Shadow DOM fermé ou créée avec blob: URL.
+          // document.querySelectorAll("iframe") ne traverse pas les Shadow DOM → hasTurnstile=false.
+          const cfFrame = page.frames().find((f: any) => {
+            const url: string = f.url() ?? "";
+            const name: string = f.name() ?? "";
+            return (
+              url.includes("challenges.cloudflare.com") ||
+              url.includes("cdn-cgi/challenge-platform") ||
+              name.includes("cf-") ||
+              name.includes("turnstile")
+            );
+          });
+          // Récupérer le bounding box de l'iframe CF depuis la page principale
+          const tfBox = cfFrame
+            ? await page.evaluate((frameUrl: string): { x: number; y: number; w: number; h: number } | null => {
+                // 1. Chercher l'iframe correspondant dans le DOM principal et Shadow DOM
+                const all = document.querySelectorAll("*");
+                for (const el of Array.from(all)) {
+                  // Traverser Shadow DOM
+                  const roots: (Document | ShadowRoot)[] = [document];
+                  if ((el as any).shadowRoot) roots.push((el as any).shadowRoot);
+                  for (const root of roots) {
+                    const iframes = root.querySelectorAll("iframe");
+                    for (const f of Array.from(iframes)) {
+                      const r = (f as HTMLElement).getBoundingClientRect();
+                      if (r.width > 0 && r.height > 0) return { x: r.x, y: r.y, w: r.width, h: r.height };
+                    }
+                  }
+                }
+                // 2. Fallback : premier blob: iframe visible (Managed Challenge CF)
+                const allIframes = document.querySelectorAll("iframe");
+                for (const f of Array.from(allIframes)) {
+                  if ((f as HTMLIFrameElement).src?.startsWith("blob:")) {
+                    const r = (f as HTMLElement).getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) return { x: r.x, y: r.y, w: r.width, h: r.height };
+                  }
+                }
+                return null;
+              }, cfFrame.url()).catch(() => null)
+            : null;
+
+          if (tfBox) {
+            // Case à cocher Turnstile : ~24px depuis le bord gauche, centrée verticalement
+            // Widget standard 300×65px → case à ~(24, hauteur/2)
+            const cbX = Math.round(tfBox.x + 24);
+            const cbY = Math.round(tfBox.y + tfBox.h / 2);
+            console.log(
+              `[spain-pb] 🖱️ Managed Challenge Turnstile détecté` +
+              ` (${Math.round(tfBox.w)}×${Math.round(tfBox.h)} @ ${Math.round(tfBox.x)},${Math.round(tfBox.y)})` +
+              ` — clic physique CDP case à cocher…`,
+            );
+            // Mouvement naturel avant le clic (évite un clic téléporté détectable par CF)
+            await page.mouse.move(cbX - 80, cbY - 40, { steps: 12 });
+            await new Promise((r) => setTimeout(r, 200 + Math.floor(Math.random() * 150)));
+            await page.mouse.move(cbX, cbY, { steps: 6 });
+            await new Promise((r) => setTimeout(r, 80 + Math.floor(Math.random() * 80)));
+            await page.mouse.click(cbX, cbY);
+            turnstileClicked = true;
+            console.log(`[spain-pb] ⏳ Clic physique effectué — attente validation CF Turnstile (4s)…`);
+            await new Promise((r) => setTimeout(r, 4_000));
+            // Vérifier si CF a réémis un cf_clearance suite à la validation du widget
+            const postTsCookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
+            const newCf = postTsCookies.find((c) => c.name === "cf_clearance");
+            console.log(
+              `[spain-pb] 🔑 Post-Turnstile cf_clearance: ` +
+              (newCf ? `✅ réémis ${newCf.value.slice(0, 30)}…` : "❌ pas de réémission — fingerprint insuffisant"),
+            );
+          }
+        }
+
         continueClicked = await page.evaluate(() => {
           // Sélecteur exact bundle custom.js
           const btn = document.getElementById("idDivBktCustomContinueButton");
@@ -892,6 +1061,7 @@ class SpainPersistentBrowserManager {
             btnVisible: (() => { const b = document.getElementById("idDivBktCustomContinueButton"); return b ? b.offsetParent !== null : false; })(),
             hasWidget: !!document.getElementById("idBktWidgetDefaultBodyContainer"),
             hasCustom: !!document.getElementById("idBktDefaultCustomContainer"),
+            hasTurnstile: !!document.querySelector("iframe[src*='challenges.cloudflare.com'], .cf-turnstile, [data-sitekey]"),
             bodySnippet: (document.body?.innerText ?? "").slice(0, 120).replace(/\n/g, " "),
           })).catch(() => ({ error: "evaluate failed" }));
           console.log(`[spain-pb] 🔍 DOM: ${JSON.stringify(domState)}`);
@@ -926,6 +1096,14 @@ class SpainPersistentBrowserManager {
         cdpNet.detach().catch(() => {});
         cdpNet = null;
       }
+      if (cdpFetch) {
+        // Désactiver l'intercepteur Fetch — libère toutes les requêtes /main/ bloquées
+        cdpFetch.send("Fetch.disable", {}).catch(() => {});
+        cdpFetch.detach().catch(() => {});
+        cdpFetch = null;
+      }
+      // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
+      if (jsdOneShotResolve) jsdOneShotResolve();
     }
 
     // ── Fallback : fetch /main/ directement depuis le contexte browser ────────

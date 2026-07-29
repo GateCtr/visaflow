@@ -1,0 +1,30 @@
+Voici la nuance fondamentale entre **la case à cocher Turnstile** et le script d'analyse en arrière-plan :
+
+### 1. Si la case à cocher apparaît à l'écran (Iframe Turnstile)
+
+Si une vraie case à cocher *"Vérifiez que vous êtes humain"* s'affiche sur la page, **Cloudflare vous demande une interaction explicite** parce qu'il doute de l'empreinte passive du navigateur.
+
+* **Est-ce qu'un clic `.click()` JS classique fonctionne ?**
+**Non.** Cloudflare intercepte les événements "fictifs" générés par `element.click()` en vérifiant la propriété `isTrusted` de l'événement (qui vaut `false` lorsqu'il est généré par du JS). Un clic programmé de cette manière échoue ou recharge indéfiniment la case.
+* **Comment la franchir ?**
+1. **Option Puppeteer/Playwright (simulateur physique)** : Il faut simuler un vrai mouvement de souris et un clic physique via les API bas niveau du navigateur (CDP / `page.mouse.click(x, y)` aux coordonnées exactes du widget).
+2. **Option CapSolver** : Utiliser un solver avec la tâche `TurnstileTask` / `AntiCloudflareTask` qui extrait la réponse du widget et injecte le token dans le champ caché `cf-turnstile-response`.
+
+
+
+---
+
+### 2. Est-ce qu'un simple clic suffit pour déclencher la suite ?
+
+**Oui et non :**
+
+* **Ce que fait le clic sur la case :** Le clic déclenche une batterie de micro-tests dans le navigateur (résolution du challenge cryptographique de Turnstile) et envoie la preuve aux serveurs Cloudflare.
+* **Ce qui se passe après :** Si la vérification réussit, Cloudflare émet/met à jour le cookie `cf_clearance` et **soumet automatiquement le formulaire ou recharge la page** (ou débloque l'accès aux appels XHR).
+* **Pourquoi ça bloquait chez vous :** Même si la case est cochée (manuellement ou via un clic physique), si Cloudflare détecte juste après un décalage entre vos cookies/headers et les requêtes XHR envoyées vers `/main/`, il applique la règle WAF silencieuse et videra le contenu (`0B`).
+
+---
+
+### Que faire dans votre script ?
+
+1. **Si la case est visible :** Effectuez un clic physique aux coordonnées de l'iframe (`page.mouse.click`) ou utilisez la résolution de jeton CapSolver Turnstile.
+2. **Attendre le jeton :** Ne forcez pas la navigation immédiatement après le clic. Attendez 2 à 3 secondes que le script de Turnstile valide le jeton et que le cookie `cf_clearance` soit réémis avant de cliquer sur "Continuar".

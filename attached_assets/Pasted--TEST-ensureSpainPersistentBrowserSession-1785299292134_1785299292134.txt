@@ -1,0 +1,67 @@
+===========================================================
+TEST ensureSpainPersistentBrowserSession
+  CAPSOLVER_API_KEY : ✅
+  DECODO_PROXY_URL  : ✅
+  CHROMIUM_PATH     : /home/runner/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
+  Target URL        : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+  Watchdog          : 150s
+============================================================
+[spain-pb] 🚀 Résolution CF — stratégie Turnstile injection (token injecté dans notre Chromium)
+[spain-pb] 🚀 Lancement Chromium persistant
+[spain-pb]    userDataDir : /tmp/spain-cf-profile
+[spain-pb]    Proxy       : http://sp1i9toe4m:***@isp.decodo.com:10001
+[spain-pb]    UA          : Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+[spain-pb] 🗑️ Default/Cache/ supprimé (script JSD stale purgé, Code Cache + SW + IndexedDB préservés)
+[spain-pb]    executablePath: /home/runner/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
+[spain-pb] 🪪 Client Hints CDP alignés — Chrome/147 Windows
+[spain-pb] 🗑️ Profil CF purgé (cf_clearance + localStorage/SW/IndexedDB — tokens JSD expirés supprimés)
+[spain-pb] 🗑️ Cache HTTP navigateur vidé (scripts JSD frais)
+[spain-pb] 🌐 Navigation → JSD CF en attente (exécution native Chromium) : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6
+[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…
+[spain-pb] ✅ cf_clearance obtenu via JSD natif (2s) — js_detection.passed=true pour NOTRE TLS
+[spain-pb]    cf_clearance: AUkn3D2ihlanZ6HDyAGnOWiYRIxxW3JQLkgRjtgq…
+[spain-pb] 🖱️ Navigation portail → Continuar → interception XHR /main/…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=a22948f93beb5754
+[spain-pb] 🔑 cf_clearance post-navigation: AUkn3D2ihlanZ6HDyAGnOWiYRIxxW3JQLkgRjtgq…
+[spain-pb] 🔍 DOM: {"hash":"","title":"Just a moment...","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"bodySnippet":""}
+[spain-pb] 🌐 req: GET blob:https://www.citaconsular.es/2670e726-6526-4248-bafa-14edc2767e35
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/fo/1795625224:1785294314:RucWubz16CF8DxD4JnLHQ8z42SYXh2thFN30
+[spain-pb] 🌐 req: GET blob:https://www.citaconsular.es/5dc4cec8-2cb2-4f55-8980-f8c61be82690
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/eb/1795625224:1785294314:RucWubz16CF8DxD4JnLHQ8z42SYXh2thFN30
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/fo/1795625224:1785294314:RucWubz16CF8DxD4JnLHQ8z42SYXh2thFN30
+[spain-pb] 🔍 DOM: {"hash":"","title":"Un instant…","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"bodySnippet":"www.citaconsular.es Vérification de sécurité en cours  Ce site utilise un service de sécurité pour se protéger contre le"}
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🔍 DOM: {"hash":"","title":"Un instant…","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"bodySnippet":"www.citaconsular.es Vérification de sécurité en cours  Ce site utilise un service de sécurité pour se protéger contre le"}
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] 🔍 DOM: {"hash":"","title":"Embajada de España en Kinshasa - VISADOS","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"bodySnippet":""}
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/scripts/jsd/b0da9f4911ba/main.js?
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/jsd/oneshot/b0da9f4911ba/0.42526879196121126:1785294318:0qUv4
+[spain-pb] ✅ Continuar cliqué — attente XHR /main/ (max 15s)…
+[spain-pb] 🔑 JSD oneshot resp: status=200 cf-ray=a229492c6bc25754-MAD new-cf_clearance=❌ non (rejeté ou pas d'upgrade)
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery21102650875280278826_1785298353141&type=default&publicke
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=text/html cf-ray=a22949339de55754-MAD
+[spain-pb] 📥 /main/ CDP body: 0B snippet=""
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=0B cf-ray=a22949339de55754-MAD
+[spain-pb] ⚠️ XHR /main/ non capturé via listener (0B) — tentative fetch direct depuis contexte browser…
+[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…
+[spain-pb] ⚠️ Fetch direct /main/ échoué: "" — scanner devra retenter
+[spain-pb] ✅ Session CF prête (29s) | 3 cookies | prefetch: 0B | expire ~115min
+[spain-pb]    cf_clearance: uQZV8Na.7KhtxF2MvHa2S_u0VWu_duYTo607WMut…
+
+============================================================
+⚠️  SESSION PARTIELLE — /main/ vide (29.5s)
+   cf_clearance   : uQZV8Na.7KhtxF2MvHa2S_u0VWu_duYTo607WMutSg8-178529…
+   UA             : Mozilla/5.0 (Windows N

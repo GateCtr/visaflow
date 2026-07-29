@@ -1,0 +1,594 @@
+j'ai trouver la docs Détections JavaScript
+Dernière mise à jour
+6 juillet 2026
+
+Copier en tant que Markdown
+Voir comme Markdown
+Configuration de l'agent
+JavaScript Detections est un type de défi distinct des pages de défi ou du tourniquet de Cloudflare. JavaScript Detections aide les solutions de bot de Cloudflare à identifier les requêtes automatisées.
+
+Alors que Challenge Pages et Turnstile s'appuient sur des signaux côté client pour déterminer l'authenticité d'une demande, JavaScript Detections de Bot Management s'appuie sur des signaux côté client et s'exécute sur chaque demande adressée à votre site Web.
+
+Processus
+JavaScript Detections est implémenté sur votre site Web via un extrait de code JavaScript léger et invisible qui suit les normes de confidentialité de Cloudflare ↗.
+
+JavaScript est injecté uniquement en réponse aux demandes de pages HTML ou de pages vues, à l'exclusion des appels AJAX. Le trafic des API et des applications mobiles n'est pas affecté.
+
+JavaScript Detections a une durée de vie de 15 minutes. Cependant, le code est à nouveau injecté avant l’expiration de la session. Après le chargement de la page, le script est différé et utilise un thread séparé (le cas échéant) pour garantir que l'impact sur les performances est minime. Les extraits de JavaScript contiendront une source pointant vers la plateforme Challenge, avec des chemins commençant par /cdn-cgi/challenge-platform/…
+
+Une fois JavaScript Detections injecté sur la page HTML, le navigateur du visiteur exécutera l'extrait de code JavaScript et uncf_clearance cookie sera émis au visiteur. Les informations contenues dans JavaScript Detections sont stockées dans lecf_clearance cookie et sont utilisées pour remplirjs_detection.passed.
+
+Si le visiteur est vérifié et qu'uncf_clearance cookie est émis, il contiendra le résultat :cf.bot_management.js_detection.passed = true
+Si la vérification échoue, le cookie contiendra le résultat :cf.bot_management.js_detection.passed = false
+Note
+
+Le cookiecf_clearance ne peut pas dépasser la taille maximale de 4096 octets.
+
+Attention
+
+L'application contre les robots n'a pas lieu même si le cookie est signalé comme faux.
+
+Vous devez activer les détections JavaScript, puis créer une règle WAF personnalisée à l'aide ducf.bot_management.js_detection.passed champ pour bloquer ou contester une requête ayant échoué.
+
+Lorsque le visiteur rencontre une règle personnalisée WAF sur votre site Web, la règle vérifiera le résultat ducf_clearance cookie. Le résultat ducf_clearance cookie détermine si la demande est acceptée, bloquée ou contestée.
+
+Reportez-vous aux étapes ci-dessous pour activer et appliquer les détections JavaScript.
+
+1. Activer les détections JavaScript
+Pour les clients Bot Fight Mode, JavaScript Detections est automatiquement activé et ne peut pas être désactivé.
+
+Pour le mode Super Bot Fight et la gestion des robots pour les clients d'entreprise, les détections JavaScript sont facultatives.
+
+Nouveau tableau de bord
+Ancien tableau de bord
+Dans le tableau de bord Cloudflare, accédez à la page Paramètres de sécurité.
+
+Sous les configurations de votre plan de trafic de bot, sélectionnez l’icône d’édition pour les détections JS et activez les détections JavaScript.
+
+Pour plus de détails sur la façon de configurer la protection des robots, reportez-vous à la documentation Bots.
+
+2. Appliquer l'exécution des détections JavaScript
+Une fois que vous avez activé les détections JavaScript, vous devez utiliser lecf.bot_management.js_detection.passed champ pour créer des règles personnalisées WAF (ou larequest.cf.botManagement.jsDetection.passed variable dans Workers).
+
+Lors de l'ajout de ce champ aux règles personnalisées WAF, il est utilisé sur les points de terminaison qui attendent du trafic de navigateur (évitant les applications mobiles natives ou les points de terminaison WebSocket), après la première requête d'un utilisateur à votre application (Cloudflare a besoin d'au moins une requête HTML avant d'injecter la détection JavaScript), et avec l'action Managed Challenge, car il existe des raisons légitimes pour lesquelles un utilisateur n'a peut-être pas réussi un défi de détection JavaScript (problèmes de réseau, bloqueurs de publicités, JavaScript désactivé dans le navigateur, applications mobiles natives).
+
+Prérequis
+Vous devez disposer d'un abonnement Enterprise Bot Management.
+Vous devez avoir activé les détections JavaScript sur votre zone.
+Vous devez avoir mis à jour vos en-têtes de politique de sécurité du contenu pour les détections JavaScript.
+Vous ne devez pas exécuter ce champ sur les points de terminaison WebSocket.
+Vous devez utiliser le champ dans une expression de règles personnalisée qui attend uniquement le trafic du navigateur.
+L'action doit toujours être un défi géré au cas où un utilisateur légitime n'aurait pas reçu le défi pour des raisons de réseau ou de navigateur.
+Le chemin spécifié dans le générateur de règles ne doit jamais être la première page HTML qu'un utilisateur visite lorsqu'il navigue sur votre site.
+Lecf.bot_management.js_detection.passed champ ne doit jamais être utilisé dans une règle personnalisée WAF qui correspond à la première demande d'un visiteur à un site. Il est nécessaire d'avoir au moins une requête HTML avant que Cloudflare puisse injecter la détection JavaScript.
+
+Exemple de règle WAF
+Exemple de travailleurs
+(http.request.uri.path eq "/api/v4/user/create" and http.request.method eq "POST" and not cf.bot_management.verified_bot)
+and (cf.bot_management.score lt 30 or !cf.bot_management.js_detection.passed)
+
+Reportez-vous à la documentation WAF pour plus d’informations sur la création d’une règle personnalisée.
+
+API
+Si vous activez les détections JavaScript via le tableau de bord, Cloudflare insérera une balise de script dans toutes les pages HTML diffusées sur votre site Web. Si vous préférez limiter l'endroit où JavaScript Detections est servi, vous pouvez le faire avec le script API JavaScript Detections.
+
+L'API JavaScript Detections vous permet un contrôle plus précis sur le moment et l'endroit où JavaScript Detections est injecté sur votre site Web, ainsi qu'une option de gestion des rappels (pour la journalisation ou d'autres actions supplémentaires).
+
+Vous pouvez ajouter explicitement une référence de script/cdn-cgi/challenge-platform/scripts/jsd/api.js et votre propre appel de codewindow.cloudflare.jsd.executeOnce sur des pages HTML spécifiques de votre site Web.
+
+Attention
+
+Il n'est pas recommandé de combiner les deux approches (basculement à l'échelle de la zone et injection manuelle). Si vous souhaitez déployer sélectivement JavaScript Detections uniquement sur certaines pages, désactivez JavaScript Detections via le tableau de bord Cloudflare et utilisez exclusivement l'API JavaScript Detections.
+
+Le script suivant doit être ajouté à chaque page sur laquelle vous souhaitez activer les détections JavaScript :
+
+<script>
+
+function jsdOnload(){
+  window.cloudflare.jsd.executeOnce(
+    {
+      callback: function(result){
+        console.log('jsd outcome', result);
+      }
+    }
+  );
+}
+</script>
+<script src="/cdn-cgi/challenge-platform/scripts/jsd/api.js?onload=jsdOnload" async>
+
+Note
+
+result =success ouerror fait uniquement référence à l'exécution de Détections JavaScript. Cela n’indique pas si un visiteur est un humain ou un robot.
+
+Considérations
+JavaScript Detections ne garantit pas un score de bot spécifique.
+
+Si l'injection ou l'exécution de JavaScript Detections échoue etcf.bot_management.js_detection.passed =false, une heuristique de gestion de bot distincte peut toujours produire un score de1 bot ou plus élevé, indépendamment de JavaScript Detections.
+Si les détections JavaScript réussissent, le score final du bot peut toujours être1 dû à d'autres heuristiques de détection (par exemple, IP malveillante connue, détection de signature, etc.), ce qui donnejs_detection.passed =true , maisscore =1 .
+Limitations
+Si vous avez activé Bot Management avant juin 2020
+Les clients qui ont activé Enterprise Bot Management avant juin 2020 n'ont pas activé JavaScript Detections par défaut (sauf demande spécifique). Ces clients peuvent toujours activer la fonctionnalité dans le tableau de bord Cloudflare.
+
+S'il s'agit de la première demande adressée à votre site Web
+La première requête d'un nouveau client vers votre site Web ou votre application ne contiendra généralement pas de données JavaScript Detections (cf.bot_management.js_detection.passed =false ). En effet, Cloudflare a besoin d'au moins une requête HTML avant d'injecter JavaScript Detection et d'émettre lecf_clearance cookie.
+
+Les requêtes ultérieures peuvent inclure un cookie sicf_clearance JavaScript s'est exécuté avec succès.
+
+Si vous avez une politique de sécurité du contenu (CSP)
+Si vous disposez d'une politique de sécurité du contenu (CSP), vous devez prendre des mesures supplémentaires pour implémenter les détections JavaScript :
+
+Assurez-vous que tout ce qui est en dessous/cdn-cgi/challenge-platform/ est autorisé. Votre CSP doit autoriser les scripts servis à partir de votre domaine d'origine (script-src self).
+Pour lesnonce balises de script :
+Si votre CSP utilise des balises denonce script a for, Cloudflare ajoutera ces nonces aux scripts qu'il injecte en analysant votre en-tête de réponse CSP.
+
+Si votre CSP n'est pas utilisé pour les balises denonce script et que JavaScript Detections est activé, vous pouvez voir une erreur de console telle que Nous décourageons fortement l'utilisation et recommandons plutôt l'utilisation de CSP dans les balises de script que nous analysons et prenons en charge dans notre CDN.Refused to execute inline script because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-b123b8a70+4jEj+d6gWI9U6IilUJIrlnRJbRR/uQl2Jc='), or a nonce ('nonce-...') is required to enable inline execution.unsafe-inlinenonces
+
+Avertissement
+
+Les détections JavaScript ne sont pas prises en charge avecnonce set via<meta> des balises.
+
+Si vous avez des ETags
+L'activation des détections JavaScript (JSD) supprimera les ETags des réponses HTML dans lesquelles JSD est injecté.
+
+Si votre origine envoie un en-no-transformtête
+Si la réponse d'origine inclut uneCache-Control: no-transform directive, Cloudflare n'injecte pas le script JavaScript Detections. Le champ indiquera ces demandes.cf.bot_management.js_detection.passedmissing
+
+Pour utiliser JavaScript Detections, supprimez la directiveno-transform des en-Cache-Controltêtes de réponse sur les pages où vous souhaitez que JavaScript Detections s'exécute. Pour plus d'informations, reportez-vous aux directives Cache-Control. Détecter une réponse à une page de défi
+Dernière mise à jour
+5 mai 2026
+
+Copier en tant que Markdown
+Voir comme Markdown
+Configuration de l'agent
+Lorsqu'une requête rencontre une page de défi Cloudflare au lieu de la réponse initialement prévue, la réponse de la page de défi (quel que soit le type de page de défi) aura l'en-cf-mitigatedtête présent et défini surchallenge . Cet en-tête peut être exploité pour détecter si une réponse a été contestée lors de l'exécution de requêtes fetch/XHR. Cet en-tête fournit un moyen fiable d'identifier si une réponse est un défi ou non, permettant à une application Web de prendre les mesures appropriées en fonction du résultat. Par exemple, une application frontale rencontrant une réponse du backend peut vérifier la présence de cette valeur d'en-tête pour gérer les cas où les pages de défi sont rencontrées de manière inattendue.
+
+Note
+
+Quel que soit le type de ressource demandé, le type de contenu d’un défi seratext/html .
+
+Pour l'en-cf-mitigatedtête,challenge c'est la seule valeur valide. L'en-tête est défini pour tous les types de pages de défi.
+
+Pour illustrer, voici un extrait de code JavaScript qui montre comment utiliser l’en-cf-mitigatedtête pour détecter si une réponse a été contestée :
+
+fetch("/my-api-endpoint").then((response) => {
+        if (response.headers.get("cf-mitigated") === "challenge") {
+                // Handle challenged response
+        } else {
+                // Process response as usual
+        }
+});
+
+Précédent
+Passage du défi Passage du défi
+Dernière mise à jour
+5 mai 2026
+
+Copier en tant que Markdown
+Voir comme Markdown
+Configuration de l'agent
+Lorsqu'un visiteur résout un défi Cloudflare - dans le cadre d'une règle personnalisée WAF ou d'une règle d'accès IP - vous pouvez définir le passage de défi pour l'empêcher d'avoir à résoudre de futurs défis pendant une période de temps spécifiée.
+
+Comment ça marche
+Lorsqu'un visiteur résout avec succès un défi, Cloudflare définit uncf_clearance cookie dans son navigateur. Ce cookie spécifie la durée pendant laquelle votre site Web est accessible à ce visiteur.
+
+Lorsque ce visiteur tente d’accéder à d’autres parties de votre site Web, Cloudflare évalue le cookie avant de présenter un autre défi. Si le cookie est toujours valide, aucun défi ne sera affiché.
+
+Lorsque Cloudflare évalue un cookiecf_clearance, quelques minutes supplémentaires sont incluses pour tenir compte du décalage de l'horloge. Pour les requêtes XmlHTTP, une heure supplémentaire est ajoutée au temps de validation pour éviter d'interrompre les requêtes XmlHTTP pour les pages qui définissent des durées de vie courtes.
+
+Personnalisez le passage du défi
+Par défaut, lecf_clearance cookie a une durée de vie de 30 minutes. Cloudflare recommande un réglage entre 15 et 45 minutes.
+
+Pour mettre à jour le Challenge Passage (et la valeur ducf_clearance cookie) :
+
+Dans le tableau de bord Cloudflare, accédez à la page Paramètres de sécurité.
+
+Accédez au passage Défi.
+
+Sélectionnez l’icône d’édition pour définir une durée d’expiration.
+
+Limitations
+Le Challenge Passage ne s’applique pas aux règles de limitation des tarifs.
+
+Précédent
+Mise en œuvre
+Suivant
+Détecter une réponse à une page de défi erveur
+
+Vous devez appeler l'API Siteverify pour terminer votre implémentation Turnstile. Le widget côté client à lui seul ne protège pas vos formulaires.
+
+La validation côté serveur est requise car :
+
+Les jetons peuvent être falsifiés. Un attaquant peut soumettre n’importe quelle chaîne au point de terminaison de votre formulaire sans relever de défi.
+Les jetons expirent. Chaque jeton est valable 300 secondes (5 minutes) après la génération.
+Les jetons sont à usage unique. Chaque jeton ne peut être validé qu'une seule fois. Un jeton rejoué sera rejeté avec le codetimeout-or-duplicate d'erreur.
+Processus
+Le client génère un jeton : le visiteur termine le défi Turnstile sur votre page Web.
+Jeton envoyé au serveur : la soumission du formulaire inclut le jeton Turnstile.
+Le serveur valide le jeton : votre serveur appelle l'API Siteverify de Cloudflare.
+Cloudflare répond : Renvoiesuccess oufailure et des données supplémentaires.
+Le serveur prend des mesures : autoriser ou rejeter la demande d’origine en fonction de la validation.
+Présentation de l'API Siteverify
+Point final
+coquille
+POST https://challenges.cloudflare.com/turnstile/v0/siteverify
+
+Format de la demande
+L'API accepte les requêtesapplication/x-www-form-urlencoded etapplication/json, mais renvoie toujours des réponses JSON.
+
+Paramètres requis
+Paramètre       Requis  Description
+secret  Oui     La clé secrète de votre widget depuis le tableau de bord Cloudflare
+response        Oui     Le jeton du widget côté client
+remoteip        Non     L'adresse IP du visiteur
+idempotency_key Non     Un UUID que vous générez pour réessayer les demandes de validation en toute sécurité
+Caractéristiques du jeton
+Longueur maximale : 2048 caractères
+Période de validité : 300 secondes (5 minutes) à partir de la génération
+Utilisation unique : Chaque jeton ne peut être validé qu'une seule fois
+Expiration automatique : les jetons expirent automatiquement et ne peuvent pas être réutilisés
+Le jeton de validation émis par Turnstile est valable cinq minutes. Si un utilisateur soumet le formulaire après cette période, le jeton est considéré comme expiré. Dans ce scénario, l'API de vérification côté serveur renverra un échec et leerror-codes champ de la réponse incluratimeout-or-duplicate .
+
+Pour garantir une validation réussie, le visiteur doit lancer la demande et soumettre le jeton à votre backend dans un délai de cinq minutes. Sinon, le widget Turnstile doit être actualisé pour générer un nouveau jeton. Cela peut être fait en utilisant laturnstile.reset fonction.
+
+Exemples de validation de base
+JavaScript
+PHP
+Python
+Java
+C#
+JSON
+const SECRET_KEY = "your-secret-key";
+
+async function validateTurnstile(token, remoteip) {
+        try {
+                const response = await fetch(
+                        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                        {
+                                method: "POST",
+                                headers: {
+                                        "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                        secret: SECRET_KEY,
+                                        response: token,
+                                        remoteip: remoteip,
+                                }),
+                        },
+                );
+
+                const result = await response.json();
+                return result;
+        } catch (error) {
+                console.error("Turnstile validation error:", error);
+                return { success: false, "error-codes": ["internal-error"] };
+        }
+}
+
+Données du formulaire
+const SECRET_KEY = "your-secret-key";
+
+async function validateTurnstile(token, remoteip) {
+        const formData = new FormData();
+        formData.append("secret", SECRET_KEY);
+        formData.append("response", token);
+        formData.append("remoteip", remoteip);
+
+        try {
+                const response = await fetch(
+                        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                        {
+                                method: "POST",
+                                body: formData,
+                        },
+                );
+
+                const result = await response.json();
+                return result;
+        } catch (error) {
+                console.error("Turnstile validation error:", error);
+                return { success: false, "error-codes": ["internal-error"] };
+        }
+}
+
+// Usage in form handler
+async function handleFormSubmission(request) {
+        const body = await request.formData();
+        const token = body.get("cf-turnstile-response");
+        const ip =
+                request.headers.get("CF-Connecting-IP") ||
+                request.headers.get("X-Forwarded-For") ||
+                "unknown";
+
+        const validation = await validateTurnstile(token, ip);
+
+        if (validation.success) {
+                // Token is valid - process the form
+                console.log("Valid submission from:", validation.hostname);
+                return processForm(body);
+        } else {
+                // Token is invalid - reject the submission
+                console.log("Invalid token:", validation["error-codes"]);
+                return new Response("Invalid verification", { status: 400 });
+        }
+}
+
+Techniques avancées de validation
+Clés d'idempotence pour l'opération de nouvelle tentative
+js
+const crypto = require("crypto");
+
+async function validateWithRetry(token, remoteip, maxRetries = 3) {
+        const idempotencyKey = crypto.randomUUID();
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                        const formData = new FormData();
+                        formData.append("secret", SECRET_KEY);
+                        formData.append("response", token);
+                        formData.append("remoteip", remoteip);
+                        formData.append("idempotency_key", idempotencyKey);
+
+                        const response = await fetch(
+                                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                                {
+                                        method: "POST",
+                                        body: formData,
+                                },
+                        );
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                                return result;
+                        }
+
+                        // If this is the last attempt, return the error
+                        if (attempt === maxRetries) {
+                                return result;
+                        }
+
+                        // Wait before retrying (exponential backoff)
+                        await new Promise((resolve) =>
+                                setTimeout(resolve, Math.pow(2, attempt) * 1000),
+                        );
+                } catch (error) {
+                        if (attempt === maxRetries) {
+                                return { success: false, "error-codes": ["internal-error"] };
+                        }
+                }
+        }
+}
+
+Validation améliorée avec contrôles personnalisés
+js
+async function validateTurnstileEnhanced(
+        token,
+        remoteip,
+        expectedAction = null,
+        expectedHostname = null,
+) {
+        const validation = await validateTurnstile(token, remoteip);
+
+        if (!validation.success) {
+                return {
+                        valid: false,
+                        reason: "turnstile_failed",
+                        errors: validation["error-codes"],
+                };
+        }
+
+        // Check if action matches expected value (if specified)
+        if (expectedAction && validation.action !== expectedAction) {
+                return {
+                        valid: false,
+                        reason: "action_mismatch",
+                        expected: expectedAction,
+                        received: validation.action,
+                };
+        }
+
+        // Check if hostname matches expected value (if specified)
+        if (expectedHostname && validation.hostname !== expectedHostname) {
+                return {
+                        valid: false,
+                        reason: "hostname_mismatch",
+                        expected: expectedHostname,
+                        received: validation.hostname,
+                };
+        }
+
+        // Check token age (warn if older than 4 minutes)
+        const challengeTime = new Date(validation.challenge_ts);
+        const now = new Date();
+        const ageMinutes = (now - challengeTime) / (1000 * 60);
+
+        if (ageMinutes > 4) {
+                console.warn(`Token is ${ageMinutes.toFixed(1)} minutes old`);
+        }
+
+        return {
+                valid: true,
+                data: validation,
+                tokenAge: ageMinutes,
+        };
+}
+
+// Usage
+const result = await validateTurnstileEnhanced(
+        token,
+        remoteip,
+        "login", // expected action
+        "example.com", // expected hostname
+);
+
+if (result.valid) {
+        // Process the request
+        console.log("Validation successful:", result.data);
+} else {
+        // Handle validation failure
+        console.log("Validation failed:", result.reason);
+}
+
+Format de réponse API
+Réponse réussie
+Réponse échouée
+Exemple
+json
+{
+  "success": true,
+  "challenge_ts": "2022-02-28T15:14:30.096Z",
+  "hostname": "example.com",
+  "error-codes": [],
+  "action": "login",
+  "cdata": "sessionid-123456789",
+  "metadata": {
+    "ephemeral_id": "x:9f78e0ed210960d7693b167e"
+  }
+}
+
+Champs de réponse
+Champ   Description
+success Booléen indiquant si la validation a réussi
+challenge_ts    Horodatage ISO 8601 lorsque le défi a été résolu
+hostname        Nom d'hôte où le défi a été lancé
+error-codes     Tableau de codes d'erreur (si la validation a échoué)
+action  Identifiant d'action personnalisé côté client
+cdata   Charge utile de données personnalisée côté client
+metadata.ephemeral_id   Identifiant d'empreinte digitale de l'appareil (entreprise uniquement)
+Référence des codes d'erreur
+Code d'erreur   Description     Action requise
+missing-input-secret    Paramètre secret non fournAssurez-vous que la clé secrète est incluse
+invalid-input-secret    La clé secrète n'est pas valide ou a expiré     Vérifiez votre clé secrète dans le tableau de bord Cloudflare
+missing-input-response  Le paramètre de réponse n'a pas été fourni      Assurez-vous que le jeton est inclus
+invalid-input-response  Le jeton n'est pas valide, mal formé ou expiré  L'utilisateur doit réessayer le défi
+bad-request     La demande est mal formée       Vérifiez le format et les paramètres de la demande
+timeout-or-duplicate    Le jeton a déjà été validéChaque jeton ne peut être utilisé qu'une seule fois
+internal-error  Une erreur interne s'est produite Réessayer la demande
+Mise en œuvre
+Exemple de mise en œuvre
+js
+class TurnstileValidator {
+        constructor(secretKey, timeout = 10000) {
+                this.secretKey = secretKey;
+                this.timeout = timeout;
+        }
+
+        async validate(token, remoteip, options = {}) {
+                // Input validation
+                if (!token || typeof token !== "string") {
+                        return { success: false, error: "Invalid token format" };
+                }
+
+                if (token.length > 2048) {
+                        return { success: false, error: "Token too long" };
+                }
+
+                // Prepare request
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+                try {
+                        const formData = new FormData();
+                        formData.append("secret", this.secretKey);
+                        formData.append("response", token);
+
+                        if (remoteip) {
+                                formData.append("remoteip", remoteip);
+                        }
+
+                        if (options.idempotencyKey) {
+                                formData.append("idempotency_key", options.idempotencyKey);
+                        }
+
+                        const response = await fetch(
+                                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                                {
+                                        method: "POST",
+                                        body: formData,
+                                        signal: controller.signal,
+                                },
+                        );
+
+                        const result = await response.json();
+
+                        // Additional validation
+                        if (result.success) {
+                                if (
+                                        options.expectedAction &&
+                                        result.action !== options.expectedAction
+                                ) {
+                                        return {
+                                                success: false,
+                                                error: "Action mismatch",
+                                                expected: options.expectedAction,
+                                                received: result.action,
+                                        };
+                                }
+
+                                if (
+                                        options.expectedHostname &&
+                                        result.hostname !== options.expectedHostname
+                                ) {
+                                        return {
+                                                success: false,
+                                                error: "Hostname mismatch",
+                                                expected: options.expectedHostname,
+                                                received: result.hostname,
+                                        };
+                                }
+                        }
+
+                        return result;
+                } catch (error) {
+                        if (error.name === "AbortError") {
+                                return { success: false, error: "Validation timeout" };
+                        }
+
+                        console.error("Turnstile validation error:", error);
+                        return { success: false, error: "Internal error" };
+                } finally {
+                        clearTimeout(timeoutId);
+                }
+        }
+}
+
+// Usage
+const validator = new TurnstileValidator(process.env.TURNSTILE_SECRET_KEY);
+
+const result = await validator.validate(token, remoteip, {
+        expectedAction: "login",
+        expectedHostname: "example.com",
+});
+
+if (result.success) {
+        // Process the request
+} else {
+        // Handle failure
+        console.log("Validation failed:", result.error);
+}
+
+Test
+Vous pouvez tester le jeton factice généré avec la clé de site de test via l'API Siteverify avec la clé secrète de test. Vos clés secrètes de production rejetteront les jetons factices.
+
+Reportez-vous à Tests pour plus d’informations.
+
+Meilleures pratiques
+Sécurité
+Stockez vos clés secrètes en toute sécurité. Utilisez des variables d’environnement ou sécurisez la gestion des clés.
+Valider le jeton à chaque demande. Ne faites jamais confiance uniquement à la validation côté client.
+Vérifiez les champs supplémentaires. Valider l'action et le nom d'hôte lorsqu'ils sont spécifiés.
+Surveillez les abus et enregistrez les validations échouées et les modèles inhabituels.
+Utilisez HTTPS. Valider toujours via des connexions sécurisées.
+Appelez uniquement l'API Siteverify dans votre environnement backend. Si vous exposez la clé secrète dans le code client frontal pour appeler Siteverify, les attaquants peuvent contourner le contrôle de sécurité. Assurez-vous que votre code côté client envoie le jeton de validation à votre backend et que votre backend est le seul appelant de l'API Siteverify.
+Performance
+Définissez des délais d’attente raisonnables. N'attendez pas indéfiniment les réponses de Siteverify.
+Implémentez une logique de nouvelle tentative et gérez les problèmes de réseau temporaires.
+Résultats de validation du cache pour le même jeton, s'il est nécessaire à votre flux.
+Surveillez la latence de votre API. Suivez le temps de réponse de Siteverify.
+Gestion des erreurs
+Avoir un comportement de secours en cas de défaillance de l'API.
+Utilisez une messagerie conviviale. N'exposez pas les détails des erreurs internes aux utilisateurs.
+Enregistrez correctement les erreurs pour le débogage sans exposer de secrets.
+Limite de débit pour se protéger contre les inondations de validation.
+Précédent
+Configurations des widgets
