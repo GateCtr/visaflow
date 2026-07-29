@@ -574,16 +574,35 @@ class SpainPersistentBrowserManager {
         console.warn(`[spain-pb] ⚠️ Navigation /main/ direct (non-fatal): ${mainNavErr}`);
       }
 
-      // Marquer que le path CapSolver a déjà géré /main/ → on saute le flow Continuar
-      capsolverHandledMain = true;
+      // Marquer que le path CapSolver a géré /main/ UNIQUEMENT si le body JSONP
+      // a été capturé (>100B). Si /main/ direct renvoie 0B, Bookitit n'a pas
+      // initialisé la session PHPSESSID via le widget flow → le flow portail
+      // Continuar doit s'exécuter pour l'initialiser.
+      //
+      // Avec un cf_clearance frais lié au proxy Decodo, CF ne devrait PAS
+      // re-challenger le portail — la clearance est valide. Le problème du
+      // "nonce JSD brûlé" ne s'applique que lors d'un nouveau challenge actif ;
+      // si CF accepte la clearance directement, le portail charge sans Turnstile.
+      capsolverHandledMain = capsolverPrefetchedMain.length > 0;
+      if (!capsolverHandledMain) {
+        console.log(
+          `[spain-pb] 🔄 /main/ direct 0B — portail Continuar requis pour init ` +
+          `session Bookitit (cf_clearance frais devrait passer sans re-challenge)`,
+        );
+      }
     }
 
     // ── Flow complet portail → Continuar → #services → /main/ ───────────────
-    // Ce flow est nécessaire quand Chromium a résolu CF nativement : il faut cliquer
-    // Continuar pour que Bookitit charge /main/ et émettre un PHPSESSID.
+    // Ce flow est nécessaire quand :
+    //   A. Chromium a résolu CF nativement : il faut cliquer Continuar pour que
+    //      Bookitit charge /main/ et émette un PHPSESSID.
+    //   B. CapSolver a injecté un cf_clearance MAIS /main/ direct a renvoyé 0B
+    //      (Bookitit ne retourne rien sans l'init widget via Continuar). Dans ce
+    //      cas, on retente le portail avec le cf_clearance frais — CF ne devrait
+    //      pas re-challenger puisque la clearance est valide pour Decodo IP.
     //
-    // SKIPPÉ si capsolverHandledMain=true : CapSolver a déjà navigué vers /main/
-    // directement (bypass portail Turnstile) — PHPSESSID déjà dans les cookies.
+    // SKIPPÉ si capsolverHandledMain=true : CapSolver a déjà capturé le JSONP
+    // /main/ directement (body>100B) — PHPSESSID + contenu déjà en mémoire.
     if (!capsolverHandledMain) {
     console.log(`[spain-pb] 🖱️ Portail → Continuar → #services pour valider cf_clearance sur /main/…`);
     try {
