@@ -8,9 +8,6 @@ bundle-analysis/bot-sections/
 # Sortie locale `pnpm run es:citaconsular:discover`
 citaconsular-discovery.json
 
-# Fichier CSV credentials proxy Decodo (ne pas committer en clair)
-decodo-proxies.csv
-
 # Environment variables (all variants)
 .env
 .env.local
