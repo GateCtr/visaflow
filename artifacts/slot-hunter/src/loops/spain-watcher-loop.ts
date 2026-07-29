@@ -24,7 +24,7 @@ import {
   isSpainPersistentBrowserSessionExpiringSoon,
   getActiveSpainPersistentBrowserSession,
 } from "../spain-persistent-browser.js";
-import { initSpainRedis } from "../spain-redis-persistence.js";
+import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN_INSTANCE_ID } from "../spain-redis-persistence.js";
 import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
 import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
@@ -331,6 +331,29 @@ export async function startSpainWatcherLoop(): Promise<void> {
         : (singletonConfig?.intervalMin ?? 3) * 60_000;
 
       const cycleModeLabel = SPAIN_PERSISTENT_BROWSER ? "PB" : (SPAIN_HTTP_MODE ? "HTTP" : "PW");
+
+      // ─── Distributed lock : une seule instance scanne à la fois ─────────────
+      // Évite que Railway et Replit scannent simultanément avec le même proxy IP,
+      // ce qui amène CF à retourner /main/ body vide pour l'un des deux.
+      if (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) {
+        const lockAcquired = await acquireSpainScannerLock();
+        if (!lockAcquired) {
+          log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] 🔒 Verrou détenu par une autre instance — cycle ignoré (retry dans ${Math.round(intervalMs / 1000)}s)`);
+          const elapsed = Date.now() - cycleStartedAt;
+          const wait = Math.max(0, intervalMs - elapsed);
+          await new Promise((r) => setTimeout(r, wait));
+          continue;
+        }
+      }
+
+      let scanLockReleased = false;
+      const releaseScanLock = async () => {
+        if (!scanLockReleased) {
+          scanLockReleased = true;
+          await releaseSpainScannerLock();
+        }
+      };
+
       log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${portalUrl} | ${activeDossiers.length} dossier(s) actif(s) | intervalle: ${Math.round(intervalMs / 1000)}s`);
 
       // Proactive re-solve si le cookie CF expire bientôt
@@ -347,6 +370,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
       const result = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
         ? await runSpainHttpProbe(portalUrl)
         : await runSpainWatcherProbe(portalUrl);
+
+      // Libérer le verrou dès que le probe est terminé (avant le booking)
+      await releaseScanLock();
 
       log(
         "INFO",
@@ -561,6 +587,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
       log("INFO", `[SPAIN-WATCHER] Prochain probe dans ${Math.ceil(nextWaitMs / 1000)}s (cadence départ-à-départ)`);
       await new Promise((r) => setTimeout(r, nextWaitMs));
     } catch (err) {
+      // Libérer le verrou en cas d'exception imprévue
+      await releaseSpainScannerLock();
       log("WARN", `[SPAIN-WATCHER] Erreur boucle: ${err} — retry dans ${SPAIN_HTTP_MODE ? "1" : "5"} min`);
       await new Promise((r) => setTimeout(r, SPAIN_HTTP_MODE ? 60_000 : 5 * 60_000));
     }

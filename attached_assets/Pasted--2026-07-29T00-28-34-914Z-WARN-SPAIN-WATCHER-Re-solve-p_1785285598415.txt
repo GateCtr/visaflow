@@ -1,0 +1,59 @@
+[2026-07-29T00:28:34.914Z] [WARN] [SPAIN-WATCHER] Re-solve proactif échoué: Error: Could not find Chrome (ver. 149.0.7827.22). This can occur if either
+ 1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or
+ 2. your cache path is incorrectly configured (which is: /home/runner/.cache/puppeteer).
+For (2), check out our guide on configuring puppeteer at https://pptr.dev/guides/configuration.
+[spain-soax] ♻️ Session CF réutilisée (reste 111min)
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): FgN4ctMBBKFt…
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=1738 | token=oui | cf-interstitiel=non | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID capturé: FgN4ctMBBKFt…
+[spain-http] 📄 POST widget → HTTP 200 | bytes=1559 | title="Embajada de España en Kinshasa - VISADOS" | bkt=oui | cf-interstitiel=non
+[spain-http] 📄 POST widget body preview: Embajada de España en Kinshasa - VISADOS var bkt_init_widget = { type: 'default', srvsrc: 'https://www.citaconsular.es', publickey: '25028fcd7126544630b8da0c6e60722b5', lang: 'es', services: [], agend
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: a2280120fc27a0ad-MAD, CF intercept text/html) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Probe direct Decodo ISP…
+[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire
+[spain-soax] 🎯 CapSolver tentative 1/2…
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 (html pré-fetchée ✅)
+[spain-soax] 💰 Balance CapSolver: $4.201
+[spain-soax] 📤 createTask AntiCloudflareTask… (html: 6KB — évite re-fetch proxy)
+[spain-soax] ✅ Task créée: 050d676f-51c9-4dea-a80e-2cf655745dd5
+[spain-soax] ⏳ Poll #1/60 — processing (12s)
+[spain-soax] ✅ Résolu! (17s)
+[spain-soax]    cf_clearance: gMplNkk1CmshBZWiVBS40E51ySeQ3ds1P_ePu_9N…
+[spain-soax]    UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+[spain-redis] ♻️ Profil GA restauré (0j) | client: GA1.1.657818113.178370261… | session #36
+[spain-soax] 🎉 Session CF établie via Decodo ISP! Durée solve: 17s
+[spain-soax]    Valide jusqu'à: 2026-07-29T02:23:53.352Z
+[spain-http] GET portail → HTTP 200 | type=text/html | bytes=2676 | token=oui | cf-interstitiel=non | title="Embajada de España en Kinshasa - VISADOS"
+[spain-http] 🍪 PHPSESSID mis à jour depuis GET portail: Y5H3coDozH87…
+[spain-http] 🍪 PHPSESSID capturé: Y5H3coDozH87…
+[spain-http] 📄 POST widget → HTTP 200 | bytes=2497 | title="Embajada de España en Kinshasa - VISADOS" | bkt=oui | cf-interstitiel=non
+[spain-http] 📄 POST widget body preview: Embajada de España en Kinshasa - VISADOS var bkt_init_widget = { type: 'default', srvsrc: 'https://www.citaconsular.es', publickey: '25028fcd7126544630b8da0c6e60722b5', lang: 'es', services: [], agend
+[spain-http] 🔎 JSD main.js détecté (r='a22801938eb2a0ad') — fetch script pour extraire nonce…
+[spain-http] 🔑 JSD oneshot construit depuis main.js: /…/b0da9f4911ba/0.6150289796511872:1785283530:…/a22801938eb2a0ad
+[spain-http] 🔑 cf_clearance mis à jour depuis JSD main.js oneshot
+[spain-http] ✅ JSD main.js oneshot → HTTP 200
+[spain-http] 📄 POST widget #2 (main.js path) → HTTP 200 | bytes=1559
+[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: a22801b53d22a0ad-MAD, CF intercept text/html) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[2026-07-29T00:28:59.406Z] [INFO] [SPAIN-WATCHER] [PB] Résultat: error (Scan /main/ échoué après retry (session invalidée pour le prochain cycle))
+[2026-07-29T00:28:59.520Z] [INFO] [SPAIN-WATCHER] Prochain probe dans 0s (cadence départ-à-départ)
+[2026-07-29T00:28:59.705Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 1 dossier(s) actif(s) | intervalle: 10s
+[2026-07-29T00:28:59.706Z] [INFO] [SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif
+[spain-pb] 🔍 Résolution CF via Chromium persistant → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🚀 Lancement Chromium persistant
+[spain-pb]    userDataDir : /tmp/spain-cf-profile
+[spain-pb]    Proxy       : http://sp1i9toe4m:***@isp.decodo.com:10001
+[spain-pb]    UA          : Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+[2026-07-29T00:28:59.747Z] [WARN] [SPAIN-WATCHER] Re-solve proactif échoué: Error: Could not find Chrome (ver. 149.0.7827.22). This can occur if either
+ 1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or
+ 2. your cache path is incorrectly configured (which is: /home/runner/.cache/puppeteer).
+For (2), check out our guide on configuring puppeteer at https://pptr.dev/guides/configuration.
+[spain-soax] ℹ️ Cookie pool ignoré en HTTP-only: IP d'origine inconnue
+[spain-soax] 🔍 Probe direct Decodo ISP…
+[spain-soax] ⚠️ CF challenge détecté sur probe direct → solve CapSolver nécessaire
+[spain-soax] 🎯 CapSolver tentative 1/2…
+[spain-soax] 🚀 Début solve CF — https://www.citaconsular.es/es/hosteds/widgetdefault/25

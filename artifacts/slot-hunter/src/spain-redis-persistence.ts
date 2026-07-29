@@ -37,6 +37,24 @@ const REDIS_SPAIN_BOOKITIT_TTL_SEC = 30 * 60; // 30min (aligné sur PHPSESSID)
 const REDIS_SPAIN_GA_KEY = "visaflow:spain-ga:profile";
 const REDIS_SPAIN_GA_TTL_SEC = 30 * 24 * 60 * 60; // 30 jours
 
+/**
+ * Clé du verrou distribué : une seule instance scanne à la fois.
+ * TTL = durée max d'un cycle complet (CF solve 20s + scan 10s + marge).
+ */
+const REDIS_SPAIN_LOCK_KEY = "visaflow:spain-scanner:lock";
+const REDIS_SPAIN_LOCK_TTL_SEC = 50; // libéré automatiquement si l'instance crashe
+
+/**
+ * Identifiant unique de cette instance (Railway vs Replit, etc.).
+ * Permet de ne libérer que son propre verrou.
+ */
+export const SPAIN_INSTANCE_ID = (
+  process.env.RAILWAY_REPLICA_ID ||
+  process.env.RAILWAY_SERVICE_ID ||
+  process.env.INSTANCE_ID ||
+  `local-${process.pid}`
+);
+
 // ─── Types sérialisables ────────────────────────────────────────────────────
 
 export interface SerializableSpainCfSession {
@@ -218,6 +236,53 @@ export function removeSpainCfSessionFromRedis(): void {
   redisClient.del(REDIS_SPAIN_CF_KEY).catch((err: Error) => {
     console.warn(`[spain-redis] Delete CF session échouée: ${err.message}`);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DISTRIBUTED LOCK (évite deux instances qui scannent simultanément)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Essaie d'acquérir le verrou de scan exclusif (Redis SET NX).
+ *
+ * @returns true si le verrou a été acquis par cette instance, false si une
+ *          autre instance le détient déjà (→ skip ce cycle).
+ *
+ * Si Redis est indisponible, retourne toujours true (pas de coordination
+ * possible → chaque instance scanne de façon indépendante, comportement
+ * identique à l'état actuel).
+ */
+export async function acquireSpainScannerLock(): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // Redis absent → pas de lock
+
+  try {
+    // SET NX EX : réussit seulement si la clé n'existe pas déjà
+    const result = await redisClient.set(REDIS_SPAIN_LOCK_KEY, SPAIN_INSTANCE_ID, {
+      NX: true,
+      EX: REDIS_SPAIN_LOCK_TTL_SEC,
+    });
+    return result === "OK";
+  } catch {
+    return true; // Redis erreur transiente → pas de lock
+  }
+}
+
+/**
+ * Libère le verrou uniquement si cette instance l'a acquis.
+ * Utilise un script Lua pour garantir l'atomicité check+delete.
+ */
+export async function releaseSpainScannerLock(): Promise<void> {
+  if (!redisReady || !redisClient) return;
+
+  try {
+    // Lua : DEL seulement si la valeur correspond à notre instanceId
+    await (redisClient as any).eval(
+      `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+      { keys: [REDIS_SPAIN_LOCK_KEY], arguments: [SPAIN_INSTANCE_ID] },
+    );
+  } catch {
+    // Non-fatal : le TTL auto-libère le verrou de toute façon
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
