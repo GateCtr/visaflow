@@ -1,0 +1,43 @@
+Les logs révèlent le vrai problème. Regardons la séquence complète :
+
+Ligne 58-68 : le scanner HTTP fait tout correctement — GET portail 200, POST widget 200, JSD oneshot 200, POST widget#2 200 — et /main/ retourne quand même 0B.
+Ça veut dire que ce n'est pas un problème de session/clearance. CF bloque impit sur /main/ spécifiquement, peu importe le clearance.
+Et via Chromium : le code navigue directement vers /main/ (page.goto(mainUrl)) → CF le voit comme une navigation top-level vers un endpoint JSONP et bloque.
+Le fix : quand le JS du portail appelle /main/ en XHR après le clic Continuar, CF laisse passer (requête embedded depuis un vrai browser). Il faut intercepter cette réponse XHR au lieu de naviguer directement.
+
+Et tu as raison sur la stratégie : CapSolver d'abord (17s) → injécter → portail → capter le XHR. Fini le timeout 91s inutile.
+
+Je réécris ensureSession() :
+
+
+3 actions
+La vraie cause est claire dans les logs : CF bloque impit sur /main/ (TLS fingerprint), et page.goto(mainUrl) via Chromium est aussi bloqué car c'est une navigation top-level vers un endpoint JSONP protégé. Mais quand le JS du portail appelle /main/ en XHR après Continuar, CF laisse passer — c'est une sous-requête dans un contexte browser réel.
+
+Nouvelle stratégie : CapSolver d'abord → injecter → portail → intercepter le XHR /main/. Je réécris ensureSession() :
+
+
+2 actions
+Maintenant je réécris ensureSession() complètement avec la nouvelle stratégie : CapSolver d'abord → injection → interception XHR /main/ → portail → Continuar.
+
+
+2 actions
+Maintenant je dois supprimer l'ancien body de ensureSession() et ajouter la méthode _resolveWithCapsolverFirst(). Laisse-moi lire l'état actuel.
+
+
+4 actions
+Je remplace tout l'ancien corps mort + j'insère la nouvelle méthode _resolveWithCapsolverFirst() en une seule opération.
+
+
+2 actions
+Je dois lire l'état actuel pour voir exactement ce qui reste à remplacer.
+
+
+Show less
+
+Opened spain-persistent-browser.ts
+
+Opened spain-persistent-browser.ts
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
+
+
+Worked for 4 minutes

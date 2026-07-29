@@ -285,15 +285,18 @@ class SpainPersistentBrowserManager {
   // ── Résolution CapSolver-first + XHR intercept ────────────────────────────
   /**
    * Stratégie principale de résolution CF :
-   *   1. CapSolver résout le challenge en ~17s et retourne un cf_clearance lié
-   *      au proxy Decodo (même IP que Chromium).
+   *
+   *   1. CapSolver résout le challenge CF en ~17s et retourne un cf_clearance
+   *      lié au proxy Decodo (même IP que Chromium).
    *   2. cf_clearance injecté dans Chromium AVANT toute navigation → CF ne
-   *      re-challenge pas (clearance déjà valide).
-   *   3. Interception de la réponse XHR /main/ émise par le JS du portail après
-   *      le clic Continuar. CF laisse passer les sous-requêtes XHR d'un vrai
-   *      navigateur, contrairement aux navigations top-level (page.goto) vers
-   *      un endpoint JSONP protégé (→ 0B silencieux).
-   *   4. Le JSONP capturé est stocké dans session.prefetchedMainHtml et réutilisé
+   *      re-challenge pas (clearance déjà valide pour cette IP).
+   *   3. UA synchronisé avec celui de CapSolver → CF lie clearance + UA.
+   *   4. Listener `page.on('response')` armé sur /onlinebookings/main/ avant
+   *      la navigation portail → capture la réponse XHR émise par le JS du
+   *      portail après le clic Continuar. CF laisse passer les sous-requêtes
+   *      XHR/fetch dans un contexte browser réel, contrairement aux navigations
+   *      top-level vers l'endpoint JSONP (→ 0B silencieux via goto ou impit).
+   *   5. Le JSONP capturé est stocké dans session.prefetchedMainHtml et réutilisé
    *      par le scanner HTTP sans appel impit (CF bloque impit sur /main/).
    */
   private async _resolveWithCapsolverFirst(
@@ -317,9 +320,9 @@ class SpainPersistentBrowserManager {
       console.error(`[spain-pb] ❌ CapSolver échoué: ${capResult.error ?? "erreur inconnue"}`);
       return null;
     }
-    const capClearance = capResult.session.cfClearance;
+    const cfClearance = capResult.session.cfClearance;
     const capUA = capResult.session.userAgent || this._ua;
-    console.log(`[spain-pb] ✅ CapSolver résolu (${Math.round((Date.now() - t0) / 1000)}s) — cf_clearance: ${capClearance.slice(0, 40)}…`);
+    console.log(`[spain-pb] ✅ CapSolver résolu (${Math.round((Date.now() - t0) / 1000)}s) — cf_clearance: ${cfClearance.slice(0, 40)}…`);
     console.log(`[spain-pb]    UA CapSolver: ${capUA.slice(0, 70)}`);
 
     // ── Étape 2 : Lancer/récupérer Chromium, configurer la page ──────────────
@@ -329,6 +332,11 @@ class SpainPersistentBrowserManager {
     const pages = await browser.pages();
     const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
 
+    // Synchroniser le UA avec celui de CapSolver — CF lie cf_clearance + UA.
+    // Un UA différent (ex: Macintosh vs Windows NT) provoque un re-challenge immédiat.
+    if (capUA !== this._ua) {
+      this._ua = capUA;
+    }
     await page.setUserAgent(this._ua);
     await page.setViewport(this._viewport);
     await page.setExtraHTTPHeaders({
@@ -405,15 +413,10 @@ class SpainPersistentBrowserManager {
       navPlatform,
     );
 
-    // Supprimer le cf_clearance du profil avant de naviguer.
-    //
-    // POURQUOI : Le profil persistant accumule des clearances "dégradées" — émises
-    // par CF pendant les tentatives Continuar bloquées sur "Un instant…". Ces
-    // clearances fonctionnent pour le portail HTML mais PAS pour /main/ (CF distingue
-    // les endpoints). En les supprimant, on force soit :
-    //   A. Chromium résout Turnstile nativement → clearance fraîche valide pour TOUT
-    //   B. CapSolver appelé → clearance liée au proxy Decodo + /main/ direct capturé
-    // PHPSESSID et les autres cookies de profil (localStorage, GA) sont conservés.
+    // ── Étape 3 : Supprimer l'ancien cf_clearance du profil + vider le cache ──
+    // Le profil persistant accumule des clearances "dégradées" émises pendant
+    // les challenges bloqués. On injectera immédiatement après le cf_clearance
+    // CapSolver frais, lié au proxy Decodo.
     try {
       const cdpDel = await page.createCDPSession();
       await cdpDel.send("Network.deleteCookies", {
@@ -421,7 +424,7 @@ class SpainPersistentBrowserManager {
         domain: ".citaconsular.es",
       });
       await cdpDel.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ cf_clearance du profil supprimé (résolution fraîche)");
+      console.log("[spain-pb] 🗑️ cf_clearance du profil supprimé");
     } catch { /* non-fatal */ }
 
     // Vider le cache navigateur : CF sert jsd/main.js depuis son CDN avec un nonce
@@ -433,231 +436,82 @@ class SpainPersistentBrowserManager {
       console.log("[spain-pb] 🗑️ Cache navigateur vidé (nonce JSD frais)");
     } catch { /* non-fatal */ }
 
-    // Naviguer vers le widget
-    // ERR_TOO_MANY_RETRIES = Chromium bloqué en boucle d'auth proxy (typique en prod
-    // avec Decodo ISP sticky-IP) → inutile de poller, aller directement au fallback CapSolver.
-    let skipPollGoDirectToCapSolver = false;
+    // ── Étape 4 : Injecter le cf_clearance CapSolver dans le browser ──────────
+    // On utilise CDP Network.setCookie directement pour éviter le bug partitionKey
+    // de Puppeteer 25+ avec Chromium <130 (page.setCookie appelle deleteCookies
+    // avec partitionKey non supporté par le CDP de Chromium v123).
     try {
-      await page.goto(targetUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: CF_SOLVE_TIMEOUT_MS,
+      const cdpCookie = await page.createCDPSession();
+      await cdpCookie.send("Network.setCookie", {
+        name: "cf_clearance",
+        value: cfClearance,
+        domain: ".citaconsular.es",
+        path: "/",
+        secure: true,
+        sameSite: "None",
       });
-    } catch (navErr) {
-      const errStr = String(navErr);
-      if (errStr.includes("ERR_TOO_MANY_RETRIES")) {
-        console.warn(`[spain-pb] ⚠️ ERR_TOO_MANY_RETRIES — proxy auth Chromium bloqué → skip poll, CapSolver direct`);
-        skipPollGoDirectToCapSolver = true;
-        // Fermer le browser cassé pour éviter que page.cookies() ne bloque
-        try { await this._browser?.close(); } catch { /* non-fatal */ }
-        this._browser = null;
-      } else {
-        // La navigation peut timeout sur un challenge interactif long — on continue le poll
-        console.warn(`[spain-pb] ⚠️ goto() timeout/erreur (non-fatal, poll cf_clearance…): ${navErr}`);
-      }
+      await cdpCookie.detach().catch(() => {});
+      console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté dans Chromium`);
+    } catch (injectErr) {
+      console.error(`[spain-pb] ❌ Injection cookie CapSolver échouée: ${injectErr}`);
+      return null;
     }
 
-    // Poll cf_clearance (sauté si ERR_TOO_MANY_RETRIES)
-    const deadline = Date.now() + CF_SOLVE_TIMEOUT_MS;
-    let cfClearance = "";
-
-    if (!skipPollGoDirectToCapSolver) {
-      while (Date.now() < deadline) {
-        try {
-          // Timeout sur chaque appel CDP pour éviter un hang si le browser est dans un état cassé
-          const cookies = await Promise.race([
-            page.cookies("https://www.citaconsular.es"),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("cookies-timeout")), 5_000),
-            ),
-          ]);
-          const cfCookie = cookies.find((c) => c.name === "cf_clearance");
-          if (cfCookie?.value) {
-            cfClearance = cfCookie.value;
-            break;
-          }
-        } catch {
-          // Page peut être en cours de redirection ou CDP lent — retry
-        }
-        await new Promise((r) => setTimeout(r, CF_POLL_INTERVAL_MS));
-      }
-    }
-
-    // Indique que CapSolver a déjà navigué vers /main/ et récupéré un PHPSESSID —
-    // le flow Continuar ci-dessous sera sauté pour éviter de re-déclencher Turnstile.
-    let capsolverHandledMain = false;
-    // Corps JSONP de /main/ capturé via Chromium — stocké dans session.prefetchedMainHtml
-    // pour que le scanner l'utilise directement (impit ne peut pas accéder à /main/).
-    let capsolverPrefetchedMain = "";
-
-    if (!cfClearance) {
-      const elapsed = Math.round((Date.now() - t0) / 1000);
-      console.warn(`[spain-pb] ⚠️ cf_clearance non obtenu après ${elapsed}s — fallback CapSolver…`);
-
-      // ─── Fallback CapSolver ─────────────────────────────────────────────
-      // Headless Chromium seul ne peut pas toujours résoudre le challenge CF
-      // (Turnstile interactif). On utilise CapSolver pour obtenir un cf_clearance
-      // lié au même proxy, puis on l'injecte dans le profil Chromium pour que
-      // les appels HTTP suivants soient acceptés par CF.
-      const capsolverKey = process.env.CAPSOLVER_API_KEY;
-      const proxyForCap = this.getProxyUrl() ?? "";
-      if (!capsolverKey || !proxyForCap) {
-        console.error(
-          "[spain-pb] ❌ Fallback CapSolver requis mais " +
-          (!capsolverKey ? "CAPSOLVER_API_KEY manquant" : "aucun proxy configuré"),
-        );
-        return null;
-      }
-
-      const capResult = await solveSpainCloudflare(targetUrl, capsolverKey, proxyForCap);
-      if (!capResult.success || !capResult.session) {
-        console.error(`[spain-pb] ❌ Fallback CapSolver échoué: ${capResult.error ?? "erreur inconnue"}`);
-        return null;
-      }
-
-      // Injecter le cf_clearance CapSolver dans le browser, puis re-naviguer
-      // vers le portail pour que CF exécute son JSD Oneshot côté navigateur.
-      // Cela produit un cf_clearance "upgradé" accepté par TOUS les endpoints CF
-      // (portail + /onlinebookings/main/). Sans ce deuxième navigate, le cf_clearance
-      // CapSolver seul passe /main/ mais est bloqué (403) sur la page portail.
+    // ── Étape 5 : Armer le listener XHR /main/ AVANT de naviguer ─────────────
+    // CF bloque les navigations top-level (page.goto) vers /main/ même avec un
+    // cf_clearance valide → retourne 0B. Mais quand le JS du portail appelle
+    // /main/ en XHR/fetch après le clic Continuar, CF laisse passer la réponse
+    // (sous-requête dans un contexte browser réel, pas une navigation top-level).
+    // On écoute page.on('response') pour capturer ce body avant qu'il disparaisse.
+    let capturedMainBody = "";
+    const mainResponseHandler = async (response: any) => {
       try {
-        // Utiliser CDP Network.setCookie directement pour éviter le bug partitionKey
-        // de Puppeteer 25+ avec Chromium <130 (page.setCookie appelle deleteCookies
-        // avec partitionKey non supporté par le CDP de Chromium v123).
-        const cdpForCookie = await page.createCDPSession();
-        await cdpForCookie.send("Network.setCookie", {
-          name: "cf_clearance",
-          value: capResult.session.cfClearance,
-          domain: ".citaconsular.es",
-          path: "/",
-          secure: true,
-          sameSite: "None",
-        });
-        await cdpForCookie.detach().catch(() => {});
-        cfClearance = capResult.session.cfClearance;
-        console.log(`[spain-pb] ✅ cf_clearance CapSolver injecté: ${cfClearance.slice(0, 40)}…`);
-
-        // ── Synchroniser le UA avec celui de CapSolver ────────────────────────
-        // CF lie le cf_clearance au UA qui a résolu le challenge.
-        // Si notre browser a un UA différent (ex: Macintosh vs Windows NT de CapSolver),
-        // CF re-challenge la page → "Un instant…" permanent.
-        // Fix : adopter le UA de CapSolver avant de re-naviguer.
-        const capUA = capResult.session.userAgent;
-        if (capUA && capUA !== this._ua) {
-          await page.setUserAgent(capUA);
-          this._ua = capUA;
-          console.log(`[spain-pb] 🔄 UA synchronisé avec CapSolver: ${capUA.slice(0, 70)}`);
+        const url: string = response.url();
+        if (!url.includes("/onlinebookings/main/")) return;
+        // Ignorer les navigations top-level (document) → ne capturer que XHR/fetch
+        const reqType: string = response.request().resourceType();
+        if (reqType === "document") return;
+        const body = await response.text().catch(() => "");
+        if (body.length > capturedMainBody.length) {
+          capturedMainBody = body;
+          console.log(`[spain-pb] 📡 XHR /main/ intercepté (${body.length}B, type=${reqType})`);
         }
-      } catch (injectErr) {
-        console.error(`[spain-pb] ❌ Injection cookie CapSolver échouée: ${injectErr}`);
-        return null;
-      }
+      } catch { /* non-fatal — response peut être already-destroyed */ }
+    };
+    page.on("response", mainResponseHandler);
 
-      // Navigation directe vers /main/ pour obtenir PHPSESSID + contenu JSONP.
-      //
-      // POURQUOI on n'essaie plus de re-naviguer vers le portail :
-      //   - Le portail (Turnstile) utilise un nonce JSD à usage unique.
-      //   - CapSolver consomme ce nonce lors de sa résolution.
-      //   - jsd/main.js est mis en cache CF → toutes les navigations suivantes
-      //     reçoivent le MÊME nonce (déjà brûlé) → CF re-challenge → "Un instant…".
-      //   - Network.clearBrowserCache ne suffit pas : le cache est côté CF, pas local.
-      //
-      // POURQUOI /main/ via le browser et PAS via impit :
-      //   - CF vérifie le TLS/HTTP2 fingerprint pour /main/ et retourne 0B (text/html)
-      //     pour les requêtes impit, même avec un cf_clearance valide.
-      //   - Le browser Chromium a le bon fingerprint → CF laisse passer → JSONP retourné.
-      //   - On stocke le body JSONP dans session.prefetchedMainHtml pour que le scanner
-      //     le réutilise sans faire d'appel impit (qui échouerait de toute façon).
-      const mainPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
-      const mainCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
-      const mainQuery = new URLSearchParams({
-        callback: mainCallback,
-        type: "default",
-        publickey: mainPublickey,
-        lang: "es",
-        version: "4",
-        src: targetUrl.replace(/\/?$/, "/"),
-        _: String(Date.now()),
-      });
-      const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
-
-      console.log(`[spain-pb] 🎯 Navigation directe /main/ via Chromium (bypass portail Turnstile)…`);
-      try {
-        await page.goto(mainUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        const mainCookies = await page.cookies("https://www.citaconsular.es");
-        const phpSessIdDirect = mainCookies.find((c) => c.name === "PHPSESSID")?.value;
-
-        // Capturer le body JSONP depuis le viewport du browser.
-        // La réponse est un appel JSONP brut (ex: jQueryBookingXXX("...html..."));)
-        // que le browser affiche comme texte dans document.body.
-        const mainBodyRaw = await page.evaluate(
-          () => (document.body?.innerText ?? document.documentElement?.innerText ?? "").trim(),
-        ).catch(() => "");
-
-        if (phpSessIdDirect) {
-          console.log(
-            `[spain-pb] ✅ PHPSESSID obtenu via /main/ direct: ${phpSessIdDirect.slice(0, 12)}… | ` +
-            `body: ${mainBodyRaw.length}B`,
-          );
-          if (mainBodyRaw.length > 100) {
-            // JSONP valide → on le mémorise pour le scanner
-            capsolverPrefetchedMain = mainBodyRaw;
-            console.log(`[spain-pb] 📦 /main/ JSONP capturé (${mainBodyRaw.length}B) — scanner l'utilisera directement`);
-          } else {
-            console.warn(`[spain-pb] ⚠️ /main/ body trop court (${mainBodyRaw.length}B) — scanner devra retenter`);
-          }
-        } else {
-          // Diagnostic : CF a peut-être bloqué /main/ aussi
-          console.warn(
-            `[spain-pb] ⚠️ /main/ direct: pas de PHPSESSID. ` +
-            `Body: "${mainBodyRaw.slice(0, 200)}"`,
-          );
-        }
-      } catch (mainNavErr) {
-        console.warn(`[spain-pb] ⚠️ Navigation /main/ direct (non-fatal): ${mainNavErr}`);
-      }
-
-      // Marquer que le path CapSolver a géré /main/ UNIQUEMENT si le body JSONP
-      // a été capturé (>100B). Si /main/ direct renvoie 0B, Bookitit n'a pas
-      // initialisé la session PHPSESSID via le widget flow → le flow portail
-      // Continuar doit s'exécuter pour l'initialiser.
-      //
-      // Avec un cf_clearance frais lié au proxy Decodo, CF ne devrait PAS
-      // re-challenger le portail — la clearance est valide. Le problème du
-      // "nonce JSD brûlé" ne s'applique que lors d'un nouveau challenge actif ;
-      // si CF accepte la clearance directement, le portail charge sans Turnstile.
-      capsolverHandledMain = capsolverPrefetchedMain.length > 0;
-      if (!capsolverHandledMain) {
-        console.log(
-          `[spain-pb] 🔄 /main/ direct 0B — portail Continuar requis pour init ` +
-          `session Bookitit (cf_clearance frais devrait passer sans re-challenge)`,
-        );
-      }
-    }
-
-    // ── Flow complet portail → Continuar → #services → /main/ ───────────────
-    // Ce flow est nécessaire quand :
-    //   A. Chromium a résolu CF nativement : il faut cliquer Continuar pour que
-    //      Bookitit charge /main/ et émette un PHPSESSID.
-    //   B. CapSolver a injecté un cf_clearance MAIS /main/ direct a renvoyé 0B
-    //      (Bookitit ne retourne rien sans l'init widget via Continuar). Dans ce
-    //      cas, on retente le portail avec le cf_clearance frais — CF ne devrait
-    //      pas re-challenger puisque la clearance est valide pour Decodo IP.
-    //
-    // SKIPPÉ si capsolverHandledMain=true : CapSolver a déjà capturé le JSONP
-    // /main/ directement (body>100B) — PHPSESSID + contenu déjà en mémoire.
-    if (!capsolverHandledMain) {
-    console.log(`[spain-pb] 🖱️ Portail → Continuar → #services pour valider cf_clearance sur /main/…`);
+    // ── Étape 6 : Naviguer vers le portail puis cliquer Continuar ────────────
+    // Avec le cf_clearance frais injecté + UA synchronisé, CF accepte la page
+    // portail sans re-challenger. Le JS du portail charge, on clique Continuar,
+    // et le listener XHR capture la réponse /main/.
+    let prefetchedMainHtml = "";
     try {
-      // Si on n'est plus sur la page portail (cas CapSolver déjà re-navigué), re-goto
-      const currentUrl = page.url();
-      if (!currentUrl.includes("citaconsular.es/es/hosteds")) {
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 25_000 }).catch((e: unknown) => {
-          console.warn(`[spain-pb] ⚠️ goto portail (non-fatal): ${e}`);
-        });
-      } else {
-        // Déjà sur le portail — attendre que le JS finisse de s'initialiser
-        await new Promise((r) => setTimeout(r, 2_500));
+      console.log(`[spain-pb] 🖱️ Navigation portail → Continuar → interception XHR /main/…`);
+
+      try {
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      } catch (navErr) {
+        const errStr = String(navErr);
+        if (errStr.includes("ERR_TOO_MANY_RETRIES")) {
+          // Proxy auth Chromium bloqué — le browser est cassé, fermer et remonter une erreur
+          console.error(`[spain-pb] ❌ ERR_TOO_MANY_RETRIES — proxy auth Chromium bloqué`);
+          try { await this._browser?.close(); } catch { /* non-fatal */ }
+          this._browser = null;
+          page.off("response", mainResponseHandler);
+          return null;
+        }
+        // Timeout sur un challenge interactif — non-fatal, on continue
+        console.warn(`[spain-pb] ⚠️ goto() portail timeout/erreur (non-fatal): ${navErr}`);
       }
+
+      // Rafraîchir le cf_clearance post-navigation (CF peut émettre un nouveau token)
+      try {
+        const postNavCookies = await page.cookies("https://www.citaconsular.es");
+        const postCf = postNavCookies.find((c) => c.name === "cf_clearance");
+        if (postCf?.value && postCf.value !== cfClearance) {
+          console.log(`[spain-pb] 🔑 cf_clearance post-navigation: ${postCf.value.slice(0, 40)}…`);
+        }
+      } catch { /* non-fatal */ }
 
       // Attendre et cliquer le bouton Continuar (max 25s, check toutes les 2s)
       let continueClicked = false;
@@ -691,7 +545,6 @@ class SpainPersistentBrowserManager {
         }).catch(() => false);
 
         if (!continueClicked) {
-          // Diagnostic : loguer l'état DOM pour comprendre pourquoi le bouton est absent
           const domState = await page.evaluate(() => ({
             hash: window.location.hash,
             title: document.title.slice(0, 60),
@@ -707,98 +560,47 @@ class SpainPersistentBrowserManager {
       }
 
       if (continueClicked) {
-        console.log(`[spain-pb] ✅ Continuar cliqué — attente hash #services (max 12s)…`);
-        for (let w = 0; w < 12; w++) {
-          await new Promise((r) => setTimeout(r, 1_000));
-          const hash: string = await page.evaluate(() => window.location.hash).catch(() => "");
-          if (hash && hash !== "" && hash !== "#custom") {
-            console.log(`[spain-pb] ✅ Hash: "${hash}" — JSONP /main/ en cours`);
-            break;
-          }
+        console.log(`[spain-pb] ✅ Continuar cliqué — attente XHR /main/ (max 15s)…`);
+        // Attendre jusqu'à 15s que le listener XHR capture la réponse /main/
+        const xhrDeadline = Date.now() + 15_000;
+        while (Date.now() < xhrDeadline && capturedMainBody.length < 100) {
+          await new Promise((r) => setTimeout(r, 500));
         }
-        // Laisser les requêtes JSONP /main/ + companions se terminer
-        await new Promise((r) => setTimeout(r, 4_000));
-      } else {
-        console.warn(`[spain-pb] ⚠️ Bouton Continuar introuvable après 25s — cookies capturés sans clic`);
-      }
-
-      // Rafraîchir le cf_clearance post-Continuar (CF peut émettre un nouveau token)
-      try {
-        const postContCookies = await page.cookies("https://www.citaconsular.es");
-        const postCf = postContCookies.find((c) => c.name === "cf_clearance");
-        if (postCf?.value && postCf.value !== cfClearance) {
-          cfClearance = postCf.value;
-          console.log(`[spain-pb] 🔑 cf_clearance post-Continuar: ${cfClearance.slice(0, 40)}…`);
-        }
-      } catch { /* non-fatal */ }
-    } catch (continueErr) {
-      console.warn(`[spain-pb] ⚠️ Flow Continuar échoué (non-fatal): ${continueErr}`);
-    }
-    } // end if (!capsolverHandledMain)
-
-    // ── Navigation universelle vers /main/ si prefetch pas encore fait ────────
-    // Quand le cf_clearance vient du CACHE PROFIL (pas CapSolver), capsolverPrefetchedMain
-    // est vide. On tente /main/ via Chromium ici aussi pour :
-    //   1. Obtenir un PHPSESSID frais (si celui du profil est expiré)
-    //   2. Capturer le JSONP /main/ → prefetchedMainHtml (impit ne peut pas y accéder)
-    //
-    // On utilise l'UA courant (peut être Macintosh ou Windows NT selon le profil).
-    // CF fait confiance à Decodo ISP pour /main/ → devrait passer même si le portail
-    // a refusé (UA mismatch avec le nonce Turnstile).
-    if (!capsolverPrefetchedMain) {
-      const ubPublickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
-      const ubCallback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
-      const ubQuery = new URLSearchParams({
-        callback: ubCallback,
-        type: "default",
-        publickey: ubPublickey,
-        lang: "es",
-        version: "4",
-        src: targetUrl.replace(/\/?$/, "/"),
-        _: String(Date.now()),
-      });
-      const ubUrl = `https://www.citaconsular.es/onlinebookings/main/?${ubQuery}`;
-      console.log(`[spain-pb] 🎯 Navigation universelle /main/ via Chromium…`);
-      try {
-        await page.goto(ubUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        const ubCookies = await page.cookies("https://www.citaconsular.es");
-        const phpSessIdUB = ubCookies.find((c) => c.name === "PHPSESSID")?.value;
-        const ubBodyRaw = await page.evaluate(
-          () => (document.body?.innerText ?? document.documentElement?.innerText ?? "").trim(),
-        ).catch(() => "");
-        if (phpSessIdUB) {
-          console.log(
-            `[spain-pb] ✅ /main/ universel: PHPSESSID=${phpSessIdUB.slice(0, 12)}… | body=${ubBodyRaw.length}B`,
-          );
-        }
-        if (ubBodyRaw.length > 100) {
-          capsolverPrefetchedMain = ubBodyRaw;
-          console.log(`[spain-pb] 📦 /main/ JSONP capturé universellement (${ubBodyRaw.length}B)`);
+        if (capturedMainBody.length > 100) {
+          prefetchedMainHtml = capturedMainBody;
+          console.log(`[spain-pb] 📦 /main/ XHR capturé (${prefetchedMainHtml.length}B) — scanner l'utilisera directement`);
         } else {
           console.warn(
-            `[spain-pb] ⚠️ /main/ universel: body trop court ou vide (${ubBodyRaw.length}B) — ` +
-            `snippet: "${ubBodyRaw.slice(0, 120)}"`,
+            `[spain-pb] ⚠️ XHR /main/ non capturé après Continuar (${capturedMainBody.length}B) — ` +
+            `snippet: "${capturedMainBody.slice(0, 120)}"`,
           );
         }
-      } catch (ubErr) {
-        console.warn(`[spain-pb] ⚠️ Navigation universelle /main/ (non-fatal): ${ubErr}`);
+      } else {
+        console.warn(`[spain-pb] ⚠️ Bouton Continuar introuvable après 25s — session sans prefetch /main/`);
       }
+    } catch (flowErr) {
+      console.warn(`[spain-pb] ⚠️ Flow portail→Continuar échoué (non-fatal): ${flowErr}`);
+    } finally {
+      page.off("response", mainResponseHandler);
     }
 
-    // Extraire tous les cookies du domaine (y compris le PHPSESSID frais)
+    // ── Étape 7 : Extraire les cookies + construire la session ────────────────
     const allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
     const allCookies = allPuppeteerCookies.map((c) => ({ name: c.name, value: c.value }));
+
+    // Récupérer le cf_clearance final (peut avoir été mis à jour par CF post-Continuar)
+    const finalCf = allCookies.find((c) => c.name === "cf_clearance")?.value || cfClearance;
 
     const createdAt = Date.now();
     const elapsed = Math.round((createdAt - t0) / 1000);
     console.log(
-      `[spain-pb] ✅ cf_clearance obtenu (${elapsed}s) | ${allCookies.length} cookies` +
-      ` | expire ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`,
+      `[spain-pb] ✅ Session CF prête (${elapsed}s) | ${allCookies.length} cookies` +
+      ` | prefetch: ${prefetchedMainHtml.length}B | expire ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`,
     );
-    console.log(`[spain-pb]    cf_clearance: ${cfClearance.slice(0, 40)}…`);
+    console.log(`[spain-pb]    cf_clearance: ${finalCf.slice(0, 40)}…`);
 
     const session: SpainCfSession = {
-      cfClearance,
+      cfClearance: finalCf,
       cfDomain: ".citaconsular.es",
       soaxProxyUrl: proxyUrl ?? "",
       userAgent: this._ua,
@@ -806,11 +608,8 @@ class SpainPersistentBrowserManager {
       expiresAt: createdAt + CF_CLEARANCE_TTL_MS,
       allCookies,
       extraHeaders: {},
-      source: "playwright", // indique une session navigateur réelle (même champ que local-playwright-solver)
-      // Corps JSONP pré-fetchée via Chromium. Défini uniquement sur le path CapSolver
-      // (quand le portail Turnstile est inaccessible → /main/ navigué directement).
-      // Le scanner le consomme et bypasse l'appel impit (/main/ renvoie 0B via impit).
-      ...(capsolverPrefetchedMain ? { prefetchedMainHtml: capsolverPrefetchedMain } : {}),
+      source: "playwright",
+      ...(prefetchedMainHtml ? { prefetchedMainHtml } : {}),
     };
 
     this._cachedSession = session;
