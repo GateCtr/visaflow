@@ -213,6 +213,16 @@ function getDateWindowReason(slotDate: string, dossier: SpainDossier): string {
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 
 export async function startSpainWatcherLoop(): Promise<void> {
+  // ─── Guard : désactivation explicite de cette instance ────────────────────
+  // Mettre SPAIN_SCAN_DISABLED=1 sur une instance pour qu'elle n'intervienne pas
+  // quand une autre instance (ex : Railway) gère déjà le scan Spain.
+  // Retirer la variable si Railway est arrêté et que cette instance doit prendre le relai.
+  if (process.env.SPAIN_SCAN_DISABLED === "1") {
+    log("INFO", "[SPAIN-WATCHER] ⏸️ SPAIN_SCAN_DISABLED=1 — scan Spain désactivé sur cette instance (Railway actif)");
+    log("INFO", "[SPAIN-WATCHER]    → Retirer SPAIN_SCAN_DISABLED pour activer ce backup si Railway tombe");
+    return;
+  }
+
   const modeLabel = SPAIN_PERSISTENT_BROWSER ? "persistent-browser 🌐" : (SPAIN_HTTP_MODE ? "HTTP-ONLY 🚀" : "Playwright");
   log("INFO", `[SPAIN-WATCHER] Boucle démarrée (mode: ${modeLabel}, auto-booking: Convex dossiers)`);
   if (SPAIN_HTTP_MODE) {

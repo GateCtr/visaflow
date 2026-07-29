@@ -18,3 +18,4 @@
 - [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.
 - [Spain challenge traffic budget](spain-challenge-traffic-budget.md) — never pre-warm or probe Cloudflare when no active Spain dossier can book; reuse Redis CF sessions until expiry.
 - [Spain persistent-browser mode](spain-persistent-browser.md) — CF blocks portal URL for impit (403) but not /main/ (200); skipPortalFlow bypasses portal GET; /main/ PHPSESSID must be fresh from browser nav; CapSolver fallback for headless CF solve.
+- [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.
