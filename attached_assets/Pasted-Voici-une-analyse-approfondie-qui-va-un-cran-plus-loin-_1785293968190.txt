@@ -1,0 +1,81 @@
+Voici une analyse approfondie qui va un cran plus loin dans les mécanismes internes de Cloudflare (Turnstile/JSD) et du système de réservation de `citaconsular.es`.
+
+Le fait que Cloudflare réponde `200 OK` avec un payload vide (`0B`) sur `/main/` indique que vous êtes face à un **blocage silencieux (Soft Block / Fingerprint Mismatch)** ou une **incohérence d'état dans l'application PHP**.
+
+---
+
+### 1. Le Piège de l'Empreinte navigateur (TLS & Client Hints)
+
+CapSolver résout le challenge dans sa propre infrastructure (ses proxys + ses instances browser/emulateurs) et vous renvoie les tokens. Quand Chromium reprend la main :
+
+* **Incohérence Sec-CH-UA vs User-Agent** : CapSolver vous donne un UA Chrome 135 (`Chrome/135.0.0.0`). Si votre Chromium de scraping local envoie des en-têtes Client Hints (`sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform`) générés automatiquement par sa propre version (par ex. Chrome 120 ou 128), Cloudflare ou le serveur web détecte la discordance entre le cookie `cf_clearance` (signé pour la signature TLS/JA3 + Headers de CapSolver) et votre requête réelle.
+* **Empreinte TLS / JA3 / JA4** : Le cookie `cf_clearance` généré par CapSolver est lié à l'empreinte TLS de leurs serveurs. Lorsque votre Chromium initié via Puppeteer/Playwright communique avec `citaconsular.es`, la poignée de main TLS (JA3) diffère de celle utilisée lors de la résolution CapSolver. Cloudflare laisse passer la requête (statut `200`), mais altère sciemment le body de la réponse (payload vidé ou stripping du contenu JSONP).
+
+---
+
+### 2. Le Comportement de l'Application PHP (`citaconsular`)
+
+L'application tourne sous PHP (`PHPSESSID: b%2CInRHGqtQSHFw`). Le comportement de leur endpoint JSONP `/onlinebookings/main/?callback=...` est très specifique :
+
+* **Séquence de boot de session requise** : L'endpoint `/main/` vérifie si certaines clés de session PHP existent (définies par l'exécution préalable des scripts JS clients comme `loadermaec.js` ou des XHR intermédiaires).
+* Si la requête `/main/` est tirée prématurément par un `page.evaluate()` avant que les scripts d'initialisation du widget n'aient fini d'exécuter leurs appels Ajax de bootstrap, le serveur PHP renvoie une réponse vide `200 OK` (0 octet) au lieu du payload JSONP habituel.
+
+---
+
+### 3. Pistes de Résolution Avancées
+
+#### A. Aligner strictement l'environnement Puppeteer/Playwright
+
+Pour éviter que Cloudflare n'invalide silencieusement la requête :
+
+1. Passez le User-Agent de CapSolver au niveau **du launch** de Chromium (`--user-agent="..."`), et non pas uniquement via `page.setUserAgent()`.
+2. Surchargez manuellement les Client Hints via le protocole CDP (`Network.setUserAgentOverride`) pour garantir la cohérence :
+```javascript
+const client = await page.target().createCDPSession();
+await client.send('Network.setUserAgentOverride', {
+  userAgent: capsolverUserAgent,
+  acceptLanguage: 'es-ES,es;q=0.9',
+  userAgentMetadata: {
+    brands: [
+      { brand: 'Not A;Brand', version: '99' },
+      { brand: 'Chromium', version: '135' },
+      { brand: 'Google Chrome', version: '135' }
+    ],
+    fullVersion: '135.0.0.0',
+    platform: 'Windows',
+    platformVersion: '10.0.0',
+    architecture: 'x86',
+    model: '',
+    mobile: false
+  }
+});
+
+```
+
+
+
+#### B. Attendre le déclenchement naturel du Widget (Pas de fetch forcé immédiat)
+
+Plutôt que d'exécuter un `fetch()` direct dès le clic sur "Continuar", laissez le script `loadermaec.js` faire sa requête naturelle, mais interceptez la réponse réseau via le protocole CDP au lieu de `page.on('response')` qui peut louper le body des requêtes JSONP/XHR :
+
+```javascript
+// Utiliser CDP pour intercepter le corps réel de la réponse
+const client = await page.target().createCDPSession();
+await client.send('Network.enable');
+
+client.on('Network.responseReceived', async (params) => {
+  if (params.response.url.includes('/onlinebookings/main/')) {
+    try {
+      const body = await client.send('Network.getResponseBody', { requestId: params.requestId });
+      console.log('Body intercepté via CDP:', body.body);
+    } catch (e) {
+      console.error('Erreur lecture body CDP:', e);
+    }
+  }
+});
+
+```
+
+#### C. Injection des cookies CapSolver avant la navigation initiale
+
+Assurez-vous d'injecter le `cf_clearance` obtenu par CapSolver sur le domaine `.citaconsular.es` **avant** de charger la première page racine, plutôt qu'après. Cela évite que la session PHP initiale ne soit instanciée sous un état "non vérifié" par Cloudflare.

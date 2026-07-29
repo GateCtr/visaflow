@@ -410,6 +410,43 @@ class SpainPersistentBrowserManager {
     await page.setExtraHTTPHeaders({
       "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
     });
+
+    // ── Aligner les Client Hints CDP avec l'UA CapSolver ─────────────────────
+    // CF signe le cf_clearance avec la signature TLS + les sec-ch-ua de CapSolver.
+    // Si notre Chromium envoie ses propres Client Hints (version différente),
+    // CF détecte la discordance et vide silencieusement le body de /main/ (0B).
+    // Network.setUserAgentOverride force sec-ch-ua, sec-ch-ua-mobile et
+    // sec-ch-ua-platform à correspondre exactement à l'UA reçu de CapSolver.
+    try {
+      const cdpUA = await page.createCDPSession();
+      const chromeVer = this._ua.match(/Chrome\/([\d]+)/)?.[1] ?? "135";
+      const navPlat    = platformFromUA(this._ua); // "Win32" | "MacIntel" | "Linux x86_64"
+      const cdpPlatform   = navPlat === "MacIntel" ? "macOS" : navPlat === "Win32" ? "Windows" : "Linux";
+      const cdpPlatformVer = navPlat === "MacIntel" ? "10_15_7" : navPlat === "Win32" ? "10.0.0" : "5.15.0";
+      const cdpArch        = navPlat === "Linux x86_64" ? "x86_64" : "x86";
+      await cdpUA.send("Network.setUserAgentOverride", {
+        userAgent: this._ua,
+        acceptLanguage: "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        userAgentMetadata: {
+          brands: [
+            { brand: "Not A;Brand",   version: "99"       },
+            { brand: "Chromium",      version: chromeVer  },
+            { brand: "Google Chrome", version: chromeVer  },
+          ],
+          fullVersion: `${chromeVer}.0.0.0`,
+          platform: cdpPlatform,
+          platformVersion: cdpPlatformVer,
+          architecture: cdpArch,
+          model: "",
+          mobile: false,
+        },
+      });
+      await cdpUA.detach().catch(() => {});
+      console.log(`[spain-pb] 🪪 Client Hints CDP alignés — Chrome/${chromeVer} ${cdpPlatform}`);
+    } catch (cdpUAErr) {
+      console.warn(`[spain-pb] ⚠️ CDP setUserAgentOverride (non-fatal): ${cdpUAErr}`);
+    }
+
     // CDP Fetch handler remplace page.authenticate() — voir setupPageProxyAuth.
     if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
 
