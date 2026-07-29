@@ -214,6 +214,13 @@ class SpainPersistentBrowserManager {
   private _cachedSession: SpainCfSession | null = null;
   private _ua: string = randomChromeUA();
   private _viewport = randomViewport();
+  /**
+   * Mutex de lancement : empêche deux appels concurrents à puppeteer.launch().
+   * Sans ce verrou, si isBrowserAlive() timeout pendant le Turnstile solve
+   * (Chrome occupé → répond en >5s), deux appelants voient _browser=null et
+   * tentent chacun launch() sur le même userDataDir → "browser already running".
+   */
+  private _launchPromise: Promise<Browser> | null = null;
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
@@ -323,6 +330,13 @@ class SpainPersistentBrowserManager {
   async getOrLaunchBrowser(preferredUA?: string): Promise<Browser> {
     if (await this.isBrowserAlive()) return this._browser!;
 
+    // Mutex : si un launch est déjà en cours, attendre son résultat plutôt que
+    // de tenter un second puppeteer.launch() sur le même userDataDir.
+    if (this._launchPromise) {
+      console.log("[spain-pb] ⏳ Launch déjà en cours — attente du browser existant…");
+      return this._launchPromise;
+    }
+
     // Use caller-supplied UA (e.g. CapSolver UA) if provided; otherwise rotate.
     // --user-agent launch flag must match the UA used by CapSolver when obtaining
     // cf_clearance — CF ties clearance to the exact UA string.
@@ -331,8 +345,8 @@ class SpainPersistentBrowserManager {
 
     const baseProxyUrl = this.getProxyUrl();
     // Forcer une rotation d'IP Decodo à chaque nouveau lancement de browser.
-    // Le port sticky 10001 garde la même IP → CF épingle le même nonce périmé.
-    // buildRotatedProxyUrl ajoute -sessionid-XXXX au username → nouvelle IP sticky.
+    // buildRotatedProxyUrl change d'URL dans le pool (IPs dédiées) ou de sessionid
+    // (proxy résidentiel) pour que CF voie une IP inconnue → nonce frais.
     const proxyUrl = baseProxyUrl ? this.buildRotatedProxyUrl(baseProxyUrl) : undefined;
     const { args } = this.buildLaunchArgs(proxyUrl);
 
@@ -355,14 +369,21 @@ class SpainPersistentBrowserManager {
       console.log(`[spain-pb]    executablePath: ${executablePath}`);
     }
 
-    this._browser = await (puppeteer as any).launch({
+    this._launchPromise = ((puppeteer as any).launch({
       headless: true,
       userDataDir: CF_PROFILE_DIR,
       args,
       ...(executablePath ? { executablePath } : {}),
-    }) as Browser;
+    }) as Promise<Browser>).then((browser: Browser) => {
+      this._browser = browser;
+      this._launchPromise = null;
+      return browser;
+    }).catch((err: unknown) => {
+      this._launchPromise = null;
+      throw err;
+    }) as Promise<Browser>;
 
-    return this._browser!;
+    return this._launchPromise;
   }
 
   // ── Session state ─────────────────────────────────────────────────────────
@@ -394,8 +415,19 @@ class SpainPersistentBrowserManager {
   async closeAndInvalidate(): Promise<void> {
     this._cachedSession = null;
     if (this._browser) {
-      await this._browser.close().catch(() => {});
+      const browserToClose = this._browser;
+      // Mettre _browser = null AVANT close() pour que les appels concurrents
+      // n'entrent pas dans cette branche et tentent un double close().
       this._browser = null;
+      try {
+        await browserToClose.close();
+      } catch {
+        // SIGTERM déjà envoyé ou process déjà mort — non-fatal
+      }
+      // Attendre que le processus Chrome libère le verrou userDataDir.
+      // Sans ce délai, puppeteer.launch() arrive trop tôt et échoue avec
+      // "The browser is already running for /tmp/spain-cf-profile".
+      await new Promise((r) => setTimeout(r, 1_500));
       console.log("[spain-pb] 🔄 Session + browser fermés — prochaine IP Decodo sera différente");
     } else {
       console.log("[spain-pb] 🗑️ Session invalidée (browser déjà fermé)");
