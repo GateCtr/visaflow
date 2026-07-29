@@ -1,0 +1,52 @@
+[spain-pb]    Proxy       : http://sphgi7znzc-sessionid-8ez1b5z6:***@dc.decodo.com:10010/
+[spain-pb]    UA          : Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+[spain-pb] 🗑️ Profil CF purgé sur disque (6 répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage)
+[spain-pb] 🪪 Client Hints CDP alignés — Chrome/147 Windows
+[spain-pb] 🗑️ Profil CF purgé (cf_clearance + PHPSESSID + localStorage/SW/IndexedDB — nonce périmé cassé)
+[spain-pb] ✅ cf_clearance obtenu via JSD natif (1s) — js_detection.passed=true pour NOTRE TLS
+[spain-pb]    cf_clearance: 9Nxa.Yl9My.8W3DsK0H9eAHCpvo7hUk8FC76yY1Y…
+[spain-pb] 🔒 Intercepteur /main/ armé (CDP Fetch)
+[spain-pb] 🖱️ Page courante après JSD : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6 — attente widget Bookitit…
+[spain-pb] ⏳ CF challenge encore en cours (titre: "Un instant…") — attente avant Continuar…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] 🔍 DOM: {"hash":"","title":"Embajada de España en Kinshasa - VISADOS","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"hasTurnstile":false,"bodySnippet":""}
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/scripts/jsd/b0da9f4911ba/main.js?
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/g/jsd/oneshot/b0da9f4911ba/0.22489303082167234:1785315930:Zeeks
+[spain-pb] 🔑 JSD oneshot resp: status=200 cf-ray=a22b325f1ff82c39-SJC new-cf_clearance=❌ non — cookie fantôme, /main/ sera annulé
+[spain-pb] ✅ Continuar cliqué — attente XHR /main/ (max 15s)…
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[2026-07-29T09:46:31.121Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🔒 /main/ intercepté — attente JSD oneshot (max 6s)… https://www.citaconsular.es/onlinebookings/main/?callback=jQuery2110465415731513
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery211046541573151317894_1785318391691&type=default&publick
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] ⚠️ /main/ libéré malgré JSD oneshot refusé — observation du body CF réel…
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=text/html cf-ray=a22b326c88e02c39-SJC
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=0B cf-ray=a22b326c88e02c39-SJC
+[spain-pb] 📥 /main/ CDP body: 0B snippet=""
+[2026-07-29T09:46:44.919Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[spain-pb] ⚠️ XHR /main/ non capturé via listener (0B) — tentative fetch direct depuis contexte browser…
+[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…
+[spain-pb] ⚠️ Fetch direct /main/ échoué: "" — scanner devra retenter
+[spain-pb] ✅ Session CF prête (23s) | 3 cookies | prefetch: 0B | expire ~115min
+[spain-pb]    cf_clearance: V7DeOLIjgkcsANROqjFWZGg9ljLfYmld6X6IBeLh…
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): n%2CA6tHs7HX…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: a22b32c73d40cf2f-SJC, CF intercept text/html) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)
+[spain-soax] 🗑️ Session CF invalidée manuellement
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-pb] ♻️ Session CF réutilisée (reste 115min)
+[spain-soax] ⚠️ PB session sans prefetch /main/ (CF bloque cette IP Decodo) — fermeture browser + rotation IP + retry unique…
+[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…
+[spain-pb] ✅ cf_clearance obtenu via JSD natif (1s) — js_detection.passed=true pour NOTRE TLS

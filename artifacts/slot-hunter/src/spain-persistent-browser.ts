@@ -221,6 +221,14 @@ class SpainPersistentBrowserManager {
    * tentent chacun launch() sur le même userDataDir → "browser already running".
    */
   private _launchPromise: Promise<Browser> | null = null;
+  /**
+   * Flag : un retry closeAndInvalidate a déjà été tenté pour la session courante
+   * sans récupérer de prefetchedMainHtml. Empêche la boucle destructrice où
+   * chaque probe (toutes les 10s) appelle closeAndInvalidate + retry à l'infini
+   * quand le token JSD oneshot CF est périmé (ex: token émis à 07:05, encore
+   * servi 2h38min plus tard → CF refuse → 0B → destroy → même token → 0B…).
+   */
+  private _prefetchRetried = false;
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
@@ -398,8 +406,19 @@ class SpainPersistentBrowserManager {
     return (Date.now() + 10 * 60_000) >= this._cachedSession.expiresAt;
   }
 
+  /** True si un closeAndInvalidate+retry a déjà été tenté sans récupérer de prefetch. */
+  get prefetchRetried(): boolean {
+    return this._prefetchRetried;
+  }
+
+  /** Marque que le retry prefetch a été effectué (appeler depuis ensureSpainCfSession). */
+  markPrefetchRetried(): void {
+    this._prefetchRetried = true;
+  }
+
   invalidateSession(): void {
     this._cachedSession = null;
+    this._prefetchRetried = false;
     console.log("[spain-pb] 🗑️ Session CF invalidée");
   }
 
@@ -414,6 +433,7 @@ class SpainPersistentBrowserManager {
    */
   async closeAndInvalidate(): Promise<void> {
     this._cachedSession = null;
+    this._prefetchRetried = false; // reset pour le prochain cycle
     if (this._browser) {
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents

@@ -530,15 +530,26 @@ export async function ensureSpainCfSession(
     const pbSession = await ensureSpainPersistentBrowserSession(targetUrl);
     // Si /main/ n'a pas été capturé (CF bloque cette IP Decodo pour /main/),
     // fermer le browser MAINTENANT (avant tout retry) pour forcer une nouvelle
-    // rotation -sessionid-XXXX → nouvelle IP sticky → CF voit une IP inconnue →
-    // émet un nonce frais → /main/ répond avec le body JSONP complet.
-    // NOTE : closeAndInvalidate() est awaité ICI pour éviter la race condition où
-    // le scanner relancerait ensureSpainCfSession pendant la fermeture du browser.
+    // rotation IP → CF voit une IP inconnue → émet un nonce frais → /main/ répond.
+    //
+    // PROTECTION BOUCLE DESTRUCTRICE : si le token JSD oneshot CF est périmé (ex:
+    // token émis à 07:05 toujours servi 2h38min plus tard), chaque retry produit
+    // aussi 0B → closeAndInvalidate toutes les 10s → destroy en boucle d'une session
+    // valide. On limite à UN seul retry par cycle de session via prefetchRetried.
     if (pbSession && !(pbSession as any).prefetchedMainHtml) {
+      if (spainPersistentBrowser.prefetchRetried) {
+        // Retry déjà effectué dans ce cycle — ne pas relancer closeAndInvalidate.
+        // Retourner la session telle quelle ; le scanner gérera le 0B via son propre retry.
+        console.warn(
+          "[spain-soax] ⚠️ PB session sans prefetch (retry déjà tenté) — session acceptée telle quelle",
+        );
+        return pbSession;
+      }
       console.warn(
         "[spain-soax] ⚠️ PB session sans prefetch /main/ (CF bloque cette IP Decodo)" +
         " — fermeture browser + rotation IP + retry unique…",
       );
+      spainPersistentBrowser.markPrefetchRetried();
       await spainPersistentBrowser.closeAndInvalidate();
       return ensureSpainPersistentBrowserSession(targetUrl);
     }
