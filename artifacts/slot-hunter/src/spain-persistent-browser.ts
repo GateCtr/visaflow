@@ -637,19 +637,33 @@ class SpainPersistentBrowserManager {
     // Ensuite résolution cf_clearance fraîche via Network.deleteCookies.
     try {
       const cdpStorage = await page.createCDPSession();
-      // Supprimer le cf_clearance du profil pour forcer un fresh challenge
+      // Supprimer le cf_clearance pour forcer un fresh challenge JSD
       await cdpStorage.send("Network.deleteCookies", {
         name: "cf_clearance",
         domain: ".citaconsular.es",
       });
+      // CRITIQUE : Supprimer le PHPSESSID sur les deux domaines.
+      // CF lie le challenge Cloudflare (token JSD / nonce) au PHPSESSID côté serveur.
+      // Si le PHPSESSID est stale, citaconsular.es renvoie le MÊME nonce périmé dans
+      // le HTML (ex: timestamp 1785297931 vieux de 33min) → JSD oneshot rejeté par CF
+      // → /main/ retourne 0B. Purger le PHPSESSID force la création d'une nouvelle
+      // session PHP, qui reçoit un nonce frais du serveur CF.
+      await cdpStorage.send("Network.deleteCookies", {
+        name: "PHPSESSID",
+        domain: ".citaconsular.es",
+      });
+      await cdpStorage.send("Network.deleteCookies", {
+        name: "PHPSESSID",
+        domain: "www.citaconsular.es",
+      });
       // Purger storage CF (localStorage, IndexedDB, ServiceWorkers, CacheStorage)
-      // SANS cookies pour conserver PHPSESSID et autres cookies applicatifs.
+      // SANS cookies pour conserver les autres cookies applicatifs.
       await cdpStorage.send("Storage.clearDataForOrigin", {
         origin: "https://www.citaconsular.es",
         storageTypes: "local_storage,session_storage,indexeddb,service_workers,cache_storage",
       });
       await cdpStorage.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ Profil CF purgé (cf_clearance + localStorage/SW/IndexedDB — tokens JSD expirés supprimés)");
+      console.log("[spain-pb] 🗑️ Profil CF purgé (cf_clearance + PHPSESSID + localStorage/SW/IndexedDB — nonce périmé cassé)");
     } catch (purgeErr) {
       console.warn(`[spain-pb] ⚠️ Purge storage CF (non-fatal): ${purgeErr}`);
     }
@@ -723,7 +737,7 @@ class SpainPersistentBrowserManager {
       const elapsed = Math.round((Date.now() - jsdStartMs) / 1000);
       if (elapsed > 0 && elapsed % 10 === 0) {
         const title = await page.title().catch(() => "?");
-        const url = await page.url().catch(() => "?");
+        const url = page.url();
         console.log(`[spain-pb]    JSD polling ${elapsed}s — titre: "${title}" url: ${url.slice(0, 60)}`);
       }
       await new Promise((r) => setTimeout(r, 1_000));
@@ -732,7 +746,7 @@ class SpainPersistentBrowserManager {
     if (!cfObtained) {
       // Diagnostic final
       const title = await page.title().catch(() => "?");
-      const url = await page.url().catch(() => "?");
+      const url = page.url();
       const cookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
       console.error(
         `[spain-pb] ❌ cf_clearance absent après ${JSD_TIMEOUT_MS / 1000}s` +
@@ -1026,46 +1040,70 @@ class SpainPersistentBrowserManager {
           }
         }
 
-        continueClicked = await page.evaluate(() => {
-          // Sélecteur exact bundle custom.js
-          const btn = document.getElementById("idDivBktCustomContinueButton");
-          if (btn && (btn as HTMLElement).offsetParent !== null) { (btn as HTMLElement).click(); return true; }
-          // Fallback : container custom → bouton "continuar/continue"
-          const container = document.getElementById("idBktDefaultCustomContainer");
-          if (container) {
-            const cands = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
-            for (let i = 0; i < cands.length; i++) {
-              const el = cands[i] as HTMLElement;
-              if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+        // ── Vérifier que CF a COMPLÈTEMENT fini avant de cliquer Continuar ──────
+        // PROBLÈME : si on clique Continuar alors que le titre est encore "Un instant…",
+        // CF est encore en train d'évaluer le JSD → /main/ reçoit 0B car CF n'a pas
+        // encore émis le cf_clearance pour cette session.
+        // SOLUTION (doc CF) : attendre que le titre inclue "Embajada" (page applicative)
+        // ET ne contienne plus "instant" / "moment" avant de tenter le clic.
+        const cfStillRunning = await page.evaluate(() => {
+          const title = document.title.toLowerCase();
+          const isCfChallenge = title.includes("instant") || title.includes("moment") || title.includes("checking");
+          // Également vérifier s'il y a encore des iframes CF actives (challenge en cours)
+          const hasCfIframe = !!document.querySelector(
+            "iframe[src*='challenges.cloudflare.com'], iframe[src*='cdn-cgi/challenge-platform']"
+          );
+          return isCfChallenge || hasCfIframe;
+        }).catch(() => false);
+
+        if (cfStillRunning) {
+          const title = await page.title().catch(() => "?");
+          console.log(`[spain-pb] ⏳ CF challenge encore en cours (titre: "${title}") — attente avant Continuar…`);
+          await new Promise((r) => setTimeout(r, 2_000));
+          // Ne pas tenter le clic cette itération — recommencer la boucle
+        } else {
+          // CF a fini → tenter le clic Continuar
+          continueClicked = await page.evaluate(() => {
+            // Sélecteur exact bundle custom.js
+            const btn = document.getElementById("idDivBktCustomContinueButton");
+            if (btn && (btn as HTMLElement).offsetParent !== null) { (btn as HTMLElement).click(); return true; }
+            // Fallback : container custom → bouton "continuar/continue"
+            const container = document.getElementById("idBktDefaultCustomContainer");
+            if (container) {
+              const cands = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
+              for (let i = 0; i < cands.length; i++) {
+                const el = cands[i] as HTMLElement;
+                if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+                  el.click(); return true;
+                }
+              }
+            }
+            // Fallback global par texte
+            const allClickable = document.querySelectorAll("a, button, [role='button'], div[onclick]");
+            for (let i = 0; i < allClickable.length; i++) {
+              const el = allClickable[i] as HTMLElement;
+              const txt = (el.textContent || "").trim().toLowerCase();
+              if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0) && el.offsetParent !== null) {
                 el.click(); return true;
               }
             }
-          }
-          // Fallback global par texte
-          const allClickable = document.querySelectorAll("a, button, [role='button'], div[onclick]");
-          for (let i = 0; i < allClickable.length; i++) {
-            const el = allClickable[i] as HTMLElement;
-            const txt = (el.textContent || "").trim().toLowerCase();
-            if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0) && el.offsetParent !== null) {
-              el.click(); return true;
-            }
-          }
-          return false;
-        }).catch(() => false);
+            return false;
+          }).catch(() => false);
 
-        if (!continueClicked) {
-          const domState = await page.evaluate(() => ({
-            hash: window.location.hash,
-            title: document.title.slice(0, 60),
-            hasBtn: !!document.getElementById("idDivBktCustomContinueButton"),
-            btnVisible: (() => { const b = document.getElementById("idDivBktCustomContinueButton"); return b ? b.offsetParent !== null : false; })(),
-            hasWidget: !!document.getElementById("idBktWidgetDefaultBodyContainer"),
-            hasCustom: !!document.getElementById("idBktDefaultCustomContainer"),
-            hasTurnstile: !!document.querySelector("iframe[src*='challenges.cloudflare.com'], .cf-turnstile, [data-sitekey]"),
-            bodySnippet: (document.body?.innerText ?? "").slice(0, 120).replace(/\n/g, " "),
-          })).catch(() => ({ error: "evaluate failed" }));
-          console.log(`[spain-pb] 🔍 DOM: ${JSON.stringify(domState)}`);
-          await new Promise((r) => setTimeout(r, 2_000));
+          if (!continueClicked) {
+            const domState = await page.evaluate(() => ({
+              hash: window.location.hash,
+              title: document.title.slice(0, 60),
+              hasBtn: !!document.getElementById("idDivBktCustomContinueButton"),
+              btnVisible: (() => { const b = document.getElementById("idDivBktCustomContinueButton"); return b ? b.offsetParent !== null : false; })(),
+              hasWidget: !!document.getElementById("idBktWidgetDefaultBodyContainer"),
+              hasCustom: !!document.getElementById("idBktDefaultCustomContainer"),
+              hasTurnstile: !!document.querySelector("iframe[src*='challenges.cloudflare.com'], .cf-turnstile, [data-sitekey]"),
+              bodySnippet: (document.body?.innerText ?? "").slice(0, 120).replace(/\n/g, " "),
+            })).catch(() => ({ error: "evaluate failed" }));
+            console.log(`[spain-pb] 🔍 DOM: ${JSON.stringify(domState)}`);
+            await new Promise((r) => setTimeout(r, 2_000));
+          }
         }
       }
 
