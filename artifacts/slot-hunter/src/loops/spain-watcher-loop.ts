@@ -46,6 +46,20 @@ const SPAIN_HTTP_SCAN_INTERVAL_SEC = (() => {
 // Toutes les autres valeurs → comportement HTTP-only existant (capsolver / playwright)
 const SPAIN_PERSISTENT_BROWSER = process.env.SPAIN_SESSION_MODE === "persistent-browser";
 
+/**
+ * Cooldown minimum entre deux tentatives de re-solve proactif.
+ * Évite qu'un solve échoué soit retenté à chaque cycle (10s) pendant 10 minutes,
+ * ce qui bloquerait le scan lock pendant toute la fenêtre d'expiration.
+ */
+const PROACTIVE_RETRY_COOLDOWN_MS = 5 * 60_000; // 5 minutes
+
+/**
+ * Timestamp de la dernière tentative de re-solve proactif.
+ * Remis à 0 après un re-solve réussi (la session fraîche ne déclenchera pas
+ * isActiveSessionExpiringSoon() avant ~105 min).
+ */
+let lastProactiveAttemptAt = 0;
+
 /** Abstraction de isSpainCfSessionExpiringSoon selon le mode actif. */
 function isActiveSessionExpiringSoon(): boolean {
   return SPAIN_PERSISTENT_BROWSER
@@ -338,9 +352,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
       }
 
       // Aucun dossier actif = aucun besoin de scanner ni de résoudre Cloudflare.
-      // On se base directement sur les dossiers actifs comme la CEV dossier loop —
-      // plus de dépendance au singleton spainWatcher.isActive pour démarrer.
-      const activeDossiers = await getActiveSpainDossiers();
+      // getActiveSpainDossiers + getSpainWatcherConfig en parallèle (indépendants).
+      const [activeDossiers, singletonConfig] = await Promise.all([
+        getActiveSpainDossiers(),
+        getSpainWatcherConfig().catch(() => null),
+      ]);
+
       if (activeDossiers.length === 0) {
         log("INFO", "[SPAIN-WATCHER] Aucun dossier Espagne actif — probe différé de 2 min");
         await new Promise((r) => setTimeout(r, 2 * 60_000));
@@ -351,13 +368,43 @@ export async function startSpainWatcherLoop(): Promise<void> {
       const portalUrl = activeDossiers[0].portalUrl;
 
       // Intervalle : singleton spainWatcher optionnel pour override, sinon env var
-      const singletonConfig = await getSpainWatcherConfig().catch(() => null);
       const configuredHttpIntervalSec = singletonConfig?.intervalSec ?? SPAIN_HTTP_SCAN_INTERVAL_SEC;
       const intervalMs = (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER)
         ? Math.max(10, configuredHttpIntervalSec) * 1000
         : (singletonConfig?.intervalMin ?? 3) * 60_000;
 
       const cycleModeLabel = SPAIN_PERSISTENT_BROWSER ? "PB" : (SPAIN_HTTP_MODE ? "HTTP" : "PW");
+
+      // ─── Re-solve proactif AVANT le lock ──────────────────────────────────────
+      // Le solve Turnstile prend 30–90s. Si on le fait DANS le lock (TTL=50s),
+      // Redis auto-expire le lock mid-solve → collision avec Railway possible.
+      // On résout ici, sans lock, puis on acquiert le lock uniquement pour le probe.
+      //
+      // Rate-limit : PROACTIVE_RETRY_COOLDOWN_MS entre deux tentatives.
+      // Sans ça, un solve échoué serait retenté toutes les 10s pendant 10 min,
+      // bloquant le scan lock sur chaque tentative.
+      if ((SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) && isActiveSessionExpiringSoon()) {
+        const sinceLastAttempt = Date.now() - lastProactiveAttemptAt;
+        if (sinceLastAttempt < PROACTIVE_RETRY_COOLDOWN_MS) {
+          log(
+            "INFO",
+            `[SPAIN-WATCHER] ⏰ Re-solve proactif différé (cooldown: ${Math.ceil((PROACTIVE_RETRY_COOLDOWN_MS - sinceLastAttempt) / 60_000)}min)`,
+          );
+        } else {
+          log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif conditionnel (hors lock)");
+          lastProactiveAttemptAt = Date.now();
+          const renewed = await tryRenewActiveSession(portalUrl).catch((e: unknown) => {
+            log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
+            return null;
+          });
+          // Réinitialise le cooldown si le renouvellement a réussi.
+          // La nouvelle session (~115 min) ne déclenchera plus isActiveSessionExpiringSoon()
+          // pendant longtemps — le compteur ne sert qu'à protéger les cycles suivants si B échoue.
+          if (renewed && !isActiveSessionExpiringSoon()) {
+            lastProactiveAttemptAt = 0;
+          }
+        }
+      }
 
       // ─── Distributed lock : une seule instance scanne à la fois ─────────────
       // Évite que Railway et Replit scannent simultanément avec le même proxy IP,
@@ -382,16 +429,6 @@ export async function startSpainWatcherLoop(): Promise<void> {
       };
 
       log("INFO", `[SPAIN-WATCHER] [${cycleModeLabel}] Probe → ${portalUrl} | ${activeDossiers.length} dossier(s) actif(s) | intervalle: ${Math.round(intervalMs / 1000)}s`);
-
-      // Proactive re-solve si le cookie CF expire bientôt
-      // Mode PB → tryRenewActiveSession : solve en parallèle, session A conservée si B échoue.
-      // Mode HTTP → ensureSpainCfSession (inchangé, gère déjà le fallback en interne).
-      if ((SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) && isActiveSessionExpiringSoon()) {
-        log("INFO", "[SPAIN-WATCHER] ⏰ Cookie CF expire bientôt → re-solve proactif conditionnel");
-        await tryRenewActiveSession(portalUrl).catch((e) => {
-          log("WARN", `[SPAIN-WATCHER] Re-solve proactif échoué: ${e}`);
-        });
-      }
 
       // Exécuter le probe selon le mode
       // persistent-browser utilise le même probe HTTP que SPAIN_HTTP_MODE
