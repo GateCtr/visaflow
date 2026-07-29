@@ -783,6 +783,10 @@ export async function executeHttpBooking(
   // ─── 7. SUMMARY (confirmation finale) ─────────────────────────────────
   console.log(`[spain-booking] 📝 Confirmation booking (summary/)…`);
 
+  // Params summary/ conformes au bundle (summary.js createAppointment) :
+  //   { services, agendas, date, time, bktToken, ...clientData.attributes }
+  // clientData.attributes contient login, logintype (et tout ce que signin a retourné/stocké).
+  // NB : event_created et client_signin ne sont PAS dans le bundle → on ne les envoie pas.
   const summaryParams: Record<string, string> = {
     ...baseParams,
     "services[]": targetService.serviceId,
@@ -791,9 +795,7 @@ export async function executeHttpBooking(
     time: slotTime,
     bktToken: String(bktToken),
     login: config.login,
-    logintype: "document", // cohérent avec signin
-    event_created: "true",
-    client_signin: "true",
+    logintype: "document", // clientData attribute — cohérent avec le signin qui a fonctionné
   };
 
   const summaryPayload = await callBookititEndpoint(bookingSession, "summary/", summaryParams, portalUrl);
@@ -882,25 +884,31 @@ function extractFirstSlot(payload: unknown): { date: string; time: string; agend
       const date = typeof dayObj.date === "string" ? dayObj.date : "";
       if (!date) continue;
 
-      const agendaId = typeof dayObj.agenda === "string" ? dayObj.agenda
-        : typeof dayObj.agenda === "number" ? String(dayObj.agenda)
-        : undefined;
-
       const times = dayObj.times;
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
 
-      for (const v of Object.values(times as Record<string, unknown>)) {
+      // La réponse datetime est : times = { "HH:MM": { freeslots, agenda, timestamp, … } }
+      // La CLE est l'heure (ex: "09:00"), l'agenda est dans CHAQUE entrée temporelle.
+      // Confirmé par datetimelist.js showAvailableHours :
+      //   var agenda = someResults.somePreparedSlots[time]['agenda'];
+      //   parameters = { agenda, time, date }
+      // → on itère avec Object.entries pour obtenir la clé (=heure) ET la valeur (=données slot).
+      for (const [timeKey, v] of Object.entries(times as Record<string, unknown>)) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
-        const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
+
+        // freeslots est le nom de champ confirmé par le bundle ("freeslots", pas "freeSlots")
+        const freeRaw = t.freeslots ?? t.freeSlots ?? t.free_slots;
         const free = typeof freeRaw === "number" ? freeRaw : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
-        if (free === 0) continue; // explicitly no slots
+        if (free === 0) continue; // explicitement aucun créneau
 
-        const time = typeof t.time === "string" ? t.time
-          : typeof t.hour === "string" ? t.hour
-          : "09:00";
+        // agenda est dans l'entrée temporelle, pas dans l'objet jour parent
+        const agendaId = typeof t.agenda === "string" ? t.agenda
+          : typeof t.agenda === "number" ? String(t.agenda)
+          : typeof dayObj.agenda === "string" ? dayObj.agenda // fallback parent
+          : undefined;
 
-        return { date, time, agendaId };
+        return { date, time: timeKey, agendaId };
       }
     }
   }
