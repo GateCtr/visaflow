@@ -568,20 +568,88 @@ class SpainPersistentBrowserManager {
         }
         if (capturedMainBody.length > 100) {
           prefetchedMainHtml = capturedMainBody;
-          console.log(`[spain-pb] 📦 /main/ XHR capturé (${prefetchedMainHtml.length}B) — scanner l'utilisera directement`);
+          console.log(`[spain-pb] 📦 /main/ XHR capturé via listener (${prefetchedMainHtml.length}B)`);
         } else {
           console.warn(
-            `[spain-pb] ⚠️ XHR /main/ non capturé après Continuar (${capturedMainBody.length}B) — ` +
-            `snippet: "${capturedMainBody.slice(0, 120)}"`,
+            `[spain-pb] ⚠️ XHR /main/ non capturé via listener (${capturedMainBody.length}B) — ` +
+            `tentative fetch direct depuis contexte browser…`,
           );
         }
       } else {
-        console.warn(`[spain-pb] ⚠️ Bouton Continuar introuvable après 25s — session sans prefetch /main/`);
+        console.warn(`[spain-pb] ⚠️ Bouton Continuar introuvable après 25s — tentative fetch direct /main/…`);
       }
     } catch (flowErr) {
       console.warn(`[spain-pb] ⚠️ Flow portail→Continuar échoué (non-fatal): ${flowErr}`);
     } finally {
       page.off("response", mainResponseHandler);
+    }
+
+    // ── Fallback : fetch /main/ directement depuis le contexte browser ────────
+    //
+    // Si le listener n'a rien capturé (widget Bookitit non initialisé, JS bloqué,
+    // nonce JSD expiré…), on exécute le fetch depuis le browser via page.evaluate().
+    //
+    // POURQUOI ça marche là où page.goto() échoue :
+    //   - page.goto(mainUrl) = navigation top-level → CF challenge complet (0B)
+    //   - fetch() dans page.evaluate() = sub-request XHR dans un contexte browser
+    //     avec cf_clearance valide + proxy Decodo + UA synchronisé → CF laisse passer
+    //   - Sec-Fetch-Site: same-origin (le browser est sur citaconsular.es) → CF
+    //     ne re-challenge pas les sub-requests depuis un contexte browser valide
+    //
+    // POURQUOI impit échoue mais fetch() ici réussit :
+    //   - impit = TLS fingerprint non-Chrome → CF bloque même avec cf_clearance
+    //   - fetch() dans Chromium = TLS fingerprint Chrome réel → CF accepte
+    if (prefetchedMainHtml.length < 100) {
+      const publickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+      const cbName = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+      const mainQuery = new URLSearchParams({
+        callback: cbName,
+        type: "default",
+        publickey,
+        lang: "es",
+        version: "4",
+        src: targetUrl.replace(/\/?$/, "/"),
+        _: String(Date.now()),
+      });
+      const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
+
+      // S'assurer qu'on est sur un contexte same-origin citaconsular.es
+      // (si page.goto portail a échoué, on pourrait être sur about:blank ou ailleurs)
+      const currentOrigin: string = await page.evaluate(() => window.location.origin).catch(() => "");
+      if (!currentOrigin.includes("citaconsular.es")) {
+        console.log(`[spain-pb] 🔄 Pas sur citaconsular.es (${currentOrigin}) — navigation root pour contexte same-origin…`);
+        await page.goto("https://www.citaconsular.es/", {
+          waitUntil: "domcontentloaded",
+          timeout: 20_000,
+        }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Navigation root (non-fatal): ${e}`));
+      }
+
+      console.log(`[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…`);
+      const evalBody: string = await page.evaluate(async (url: string) => {
+        try {
+          const resp = await fetch(url, {
+            method: "GET",
+            credentials: "same-origin",
+            headers: {
+              "Accept": "text/javascript, application/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          if (!resp.ok) return `__ERR_STATUS_${resp.status}`;
+          return await resp.text();
+        } catch (e: unknown) {
+          return `__ERR_FETCH_${String(e).slice(0, 80)}`;
+        }
+      }, mainUrl).catch(() => "");
+
+      if (evalBody.length > 100 && !evalBody.startsWith("__ERR_")) {
+        prefetchedMainHtml = evalBody;
+        console.log(`[spain-pb] 📦 /main/ fetch direct réussi (${evalBody.length}B) — scanner l'utilisera directement`);
+      } else {
+        console.warn(
+          `[spain-pb] ⚠️ Fetch direct /main/ échoué: "${evalBody.slice(0, 120)}" — scanner devra retenter`,
+        );
+      }
     }
 
     // ── Étape 7 : Extraire les cookies + construire la session ────────────────
