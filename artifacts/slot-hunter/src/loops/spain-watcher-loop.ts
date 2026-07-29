@@ -449,6 +449,10 @@ export async function startSpainWatcherLoop(): Promise<void> {
       // Permet de vérifier si c'est un vrai créneau (services rendus) ou un faux positif
       let detectedServicesJson: string | undefined;
       let detectedSlotsJson: string | undefined;
+      // Promise de l'exploration lancée en arrière-plan quand un créneau est trouvé.
+      // Initialisée à null ; attendue après le booking pour le reporting Convex.
+      // Cela évite que 5–15s d'exploration bloquent le booking pendant la pointe.
+      let explorationPromise: Promise<SlotExplorationResult | null> = Promise.resolve(null);
       if (
         (SPAIN_HTTP_MODE || SPAIN_PERSISTENT_BROWSER) &&
         result.status === "found" &&
@@ -465,29 +469,17 @@ export async function startSpainWatcherLoop(): Promise<void> {
             log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
           }
 
-          // ─── EXPLORATION: naviguer les dates/heures exactes pour chaque service ──
+          // ─── EXPLORATION: lancée en arrière-plan — ne bloque plus le booking ──
+          // Pendant la pointe les créneaux durent <30s ; l'exploration (5–15s sur
+          // serveur chargé) bloquait le booking. On lance la promise ici, on l'await
+          // après le booking uniquement pour le reporting Convex.
           const cfSessionExplore = getActiveSession();
-          if (cfSessionExplore) {
-            try {
-              const exploration = await exploreAvailableSlots(cfSessionExplore, portalUrl, diagServices);
-              detectedSlotsJson = serializeExplorationForConvex(exploration);
-              const logLines = formatExplorationForLogs(exploration);
-              for (const line of logLines) {
-                log("INFO", line);
-              }
-
-              // ─── SLOT DISCOVERY REPORTING: émettre les événements vers Convex ──
-              if (exploration.totalSlots > 0) {
-                const discoveryEvents = buildDiscoveryEventsFromExploration(exploration, activeDossiers);
-                if (discoveryEvents.length > 0) {
-                  reportSlotDiscoveryBatch(discoveryEvents);
-                  log("INFO", `[SPAIN-WATCHER] 📊 ${discoveryEvents.length} slot discovery event(s) reporté(s) (${discoveryEvents.filter(e => e.outcome === "captured").length} captured, ${discoveryEvents.filter(e => e.outcome === "ignored").length} ignored)`);
-                }
-              }
-            } catch (exploreErr) {
-              log("WARN", `[SPAIN-WATCHER] ⚠️ Exploration slots échouée (non-fatal): ${exploreErr}`);
-            }
-          }
+          explorationPromise = cfSessionExplore
+            ? exploreAvailableSlots(cfSessionExplore, portalUrl, diagServices).catch((exploreErr: unknown) => {
+                log("WARN", `[SPAIN-WATCHER] ⚠️ Exploration slots échouée (non-fatal): ${exploreErr}`);
+                return null;
+              })
+            : Promise.resolve(null);
         } else {
           log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service rendu (0 liens #selectservice dans le HTML)`);
           // Log un extrait du HTML pour diagnostic
@@ -627,6 +619,24 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 }).catch(() => {});
               }
             }
+          }
+        }
+      }
+
+      // ─── Résultats exploration (attendus après le booking) ───────────────────
+      // explorationPromise = Promise.resolve(null) si pas de créneau (not_found/error).
+      const exploration = await explorationPromise;
+      if (exploration) {
+        detectedSlotsJson = serializeExplorationForConvex(exploration);
+        const logLines = formatExplorationForLogs(exploration);
+        for (const line of logLines) {
+          log("INFO", line);
+        }
+        if (exploration.totalSlots > 0) {
+          const discoveryEvents = buildDiscoveryEventsFromExploration(exploration, activeDossiers);
+          if (discoveryEvents.length > 0) {
+            reportSlotDiscoveryBatch(discoveryEvents);
+            log("INFO", `[SPAIN-WATCHER] 📊 ${discoveryEvents.length} slot discovery event(s) reporté(s) (${discoveryEvents.filter(e => e.outcome === "captured").length} captured, ${discoveryEvents.filter(e => e.outcome === "ignored").length} ignored)`);
           }
         }
       }

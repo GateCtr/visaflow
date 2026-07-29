@@ -484,16 +484,21 @@ export async function executeHttpBooking(
     srvsrc: "https://www.citaconsular.es",
   };
 
-  console.log(`[spain-booking] 📋 Récupération agendas pour service ${targetService.serviceId}…`);
-  const agendasPayload = await callBookititEndpoint(bookingSession, "getagendas/", {
-    ...baseParams,
-    "services[]": targetService.serviceId, // PHP array notation confirmée par capture
-    selectedPeople: "1",
-  }, portalUrl);
+  // ─── 2+4. getagendas/ et getwidgetconfigurations/ en parallèle ──────────────
+  // Ces deux appels sont indépendants → 1 RTT au lieu de 2 (~200–500ms économisés
+  // au moment où le serveur est le plus saturé).
+  console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
+  const [agendasPayload, rawCfgPayload] = await Promise.all([
+    callBookititEndpoint(bookingSession, "getagendas/", {
+      ...baseParams,
+      "services[]": targetService.serviceId, // PHP array notation confirmée par capture
+      selectedPeople: "1",
+    }, portalUrl),
+    callBookititEndpoint(bookingSession, "getwidgetconfigurations/", baseParams, portalUrl).catch(() => null),
+  ]);
 
   let agendaId = "";
   if (agendasPayload && typeof agendasPayload === "object") {
-    // Extract first agenda ID
     const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
     if (agendaIds.length > 0) {
       agendaId = agendaIds[0];
@@ -529,18 +534,26 @@ export async function executeHttpBooking(
     }
   }
 
+  // ─── Mois futurs en parallèle si le mois courant est vide ────────────────────
+  // 3 appels indépendants → Promise.all au lieu d'un for séquentiel (~2 RTT gagnés)
   if (!slotDate || !slotTime) {
-    for (let m = 1; m <= 3; m++) {
-      const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
-      const mPayload = await callBookititEndpoint(bookingSession, "datetime/",
-        buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
+    console.log(`[spain-booking] 📅 Mois courant vide — sonde mois+1/+2/+3 en parallèle…`);
+    const futurePayloads = await Promise.all(
+      [1, 2, 3].map((m) => {
+        const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
+        return callBookititEndpoint(bookingSession, "datetime/",
+          buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
+      }),
+    );
+    for (let m = 0; m < futurePayloads.length; m++) {
+      const mPayload = futurePayloads[m];
       if (mPayload) {
         const slot = extractFirstSlot(mPayload);
         if (slot) {
           slotDate = slot.date;
           slotTime = slot.time;
           if (slot.agendaId) agendaId = slot.agendaId;
-          console.log(`[spain-booking] ✅ Créneau trouvé mois+${m}: ${slotDate} à ${slotTime}`);
+          console.log(`[spain-booking] ✅ Créneau trouvé mois+${m + 1}: ${slotDate} à ${slotTime}`);
           break;
         }
       }
@@ -551,20 +564,14 @@ export async function executeHttpBooking(
     return { status: "no_slots", errorMessage: "Datetime API n'a retourné aucun créneau", durationMs: Date.now() - t0 };
   }
 
-  // ─── 4. Widget config : captcha + registration_type ─────────────────
+  // ─── 4. Widget config : captcha + registration_type ──────────────────────────
+  // getwidgetconfigurations/ a déjà été appelé en parallèle de getagendas/ (step 2+4).
   // Kinshasa : captcha="0" → gct vide, pas d'appel CapSolver
   // LMD/Cuba : captcha="1" → hCaptcha requis → gct=P1_eyJ...
-  //
-  // registration_type détermine quel endpoint d'auth Bookitit utilise après
-  // #selecttime — lu ici pour guider l'auto-découverte de l'endpoint signin.
-  //   "2" → signin/          (compte existant, logintype=document — Kinshasa confirmé)
-  //   "1" → signupfirstappointment/  (premier RDV, name+email sans password)
-  //   autres/inconnu → on tente dans l'ordre
   let gctToken = "";
   let registrationType = "2"; // défaut Kinshasa
   try {
-    const cfgPayload = await callBookititEndpoint(bookingSession, "getwidgetconfigurations/", baseParams, portalUrl);
-    const widgetCfg = (cfgPayload as any)?.WidgetConfiguration;
+    const widgetCfg = (rawCfgPayload as any)?.WidgetConfiguration;
     const captchaFlag = widgetCfg?.captcha;
     const captchaRequired = captchaFlag !== "0" && captchaFlag !== 0 && captchaFlag !== undefined && captchaFlag !== null;
     if (captchaRequired) {
