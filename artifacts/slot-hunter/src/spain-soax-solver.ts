@@ -419,6 +419,15 @@ export async function solveSpainCloudflare(
         console.log(`[spain-soax] ✅ Résolu! (${Math.round((Date.now() - t0) / 1000)}s)`);
         console.log(`[spain-soax]    cf_clearance: ${cfClearanceValue.slice(0, 40)}…`);
         console.log(`[spain-soax]    UA: ${solution.userAgent?.slice(0, 60)}`);
+        // Log full solution for diagnostics (captures any __cf_chl_tk / url / redirectUrl fields)
+        const solutionKeys = Object.keys(solution as object);
+        console.log(`[spain-soax]    solution keys: ${solutionKeys.join(", ")}`);
+        const solutionFull = JSON.stringify(solution, (k, v) => {
+          // Truncate long string values except cf_clearance keys
+          if (typeof v === "string" && v.length > 120 && k !== "userAgent") return v.slice(0, 120) + "…";
+          return v;
+        });
+        console.log(`[spain-soax]    solution full: ${solutionFull}`);
 
         // Convert cookies object to array format for our session
         const allCookies: Array<{ name: string; value: string }> = [];

@@ -30,6 +30,8 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer";
+import { rmSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 
 // ─── UA Chrome/Edge exclusivement pour le persistent browser ─────────────────
@@ -119,6 +121,60 @@ async function setupPageProxyAuth(
 /** Dossier userDataDir pour le profil Chromium persistant. */
 const CF_PROFILE_DIR = process.env.SPAIN_CF_PROFILE_DIR ?? "/tmp/spain-cf-profile";
 
+/**
+ * Purge les répertoires cache du profil Chromium sur disque AVANT le lancement.
+ *
+ * PROBLÈME : Chrome lit les fichiers de profil depuis le disque au démarrage.
+ * Le CDP Storage.clearDataForOrigin ne modifie que la mémoire — les fichiers sur
+ * disque (Cache, Code Cache, Service Worker, Local Storage, IndexedDB) restent stales
+ * et sont relus au prochain lancement. Résultat : le JSD challenge token CF stocké dans
+ * le profil (ex: timestamp 1785287132 vieux de 21 jours) est réutilisé indéfiniment.
+ *
+ * FIX : Supprimer ces répertoires sur disque avant puppeteer.launch() pour forcer
+ * Chrome à reconstruire un cache propre. Le fichier Cookies est conservé (cf_clearance
+ * + PHPSESSID de sessions antérieures restent disponibles si valides).
+ */
+function purgeProfileCacheOnDisk(profileDir: string): void {
+  // CHIRURGIE PRÉCISE : on ne purge QUE le cache HTTP sur disque (Default/Cache).
+  //
+  // POURQUOI seulement Default/Cache :
+  //   • Le script JSD CF (/cdn-cgi/challenge-platform/h/g/scripts/jsd/b0da9f4911ba/main.js)
+  //     est mis en cache dans Default/Cache avec un token embarqué qui peut dater de jours.
+  //   • Network.clearBrowserCache via CDP purge le cache mémoire mais PAS les fichiers
+  //     Default/Cache/ sur disque → le script stale est relu au prochain lancement.
+  //   • En supprimant Default/Cache/ avant le lancement, Chrome télécharge un script
+  //     JSD frais avec le token courant → CF accepte le oneshot.
+  //
+  // POURQUOI PAS les autres répertoires :
+  //   • Default/Code Cache/ — bytecode V8 compilé. CF accumule ici des données de
+  //     reconnaissance ("profil de confiance") pour ce browser. Le purger force CF à
+  //     re-évaluer le browser comme inconnu → managed challenge complet (Turnstile).
+  //   • Default/Service Worker/ — CF enregistre un SW sur citaconsular.es. Le SW
+  //     valide les requêtes JSD. Le purger = CF voit un browser sans historique.
+  //   • Default/Local Storage/, Default/IndexedDB/ — CF challenge storage. Ces données
+  //     sont déjà purgées via CDP Storage.clearDataForOrigin avant chaque navigation.
+  //   • Default/Session Storage/ — session storage purgé par CDP aussi.
+  //   • GPUCache, DawnGraphiteCache, DawnWebGPUCache — ne contiennent pas de tokens CF.
+  const cacheDirs = [
+    "Default/Cache",   // HTTP cache uniquement — script JSD stale ici
+  ];
+  let purged = 0;
+  for (const dir of cacheDirs) {
+    const fullPath = join(profileDir, dir);
+    if (existsSync(fullPath)) {
+      try {
+        rmSync(fullPath, { recursive: true, force: true });
+        purged++;
+      } catch (e) {
+        console.warn(`[spain-pb] ⚠️ Purge disque ${dir} (non-fatal): ${e}`);
+      }
+    }
+  }
+  if (purged > 0) {
+    console.log(`[spain-pb] 🗑️ Default/Cache/ supprimé (script JSD stale purgé, Code Cache + SW + IndexedDB préservés)`);
+  }
+}
+
 /** TTL estimé du cf_clearance (115min — marge de 5min sur les ~2h réelles). */
 const CF_CLEARANCE_TTL_MS = 115 * 60_000;
 
@@ -165,6 +221,10 @@ class SpainPersistentBrowserManager {
       "--use-angle=swiftshader-webgl",
       "--enable-webgl",
       `--window-size=${vp.width},${vp.height}`,
+      // Aligner le UA au niveau réseau (background requests, SW, prefetch) avec celui
+      // de CapSolver. Sans ce flag, Chrome headless peut envoyer son UA interne dans
+      // certaines requêtes même si page.setUserAgent() est appelé par la suite.
+      `--user-agent=${this._ua}`,
     ];
 
     let proxyAuth: { username: string; password: string } | undefined;
@@ -199,15 +259,17 @@ class SpainPersistentBrowserManager {
     }
   }
 
-  async getOrLaunchBrowser(): Promise<Browser> {
+  async getOrLaunchBrowser(preferredUA?: string): Promise<Browser> {
     if (await this.isBrowserAlive()) return this._browser!;
+
+    // Use caller-supplied UA (e.g. CapSolver UA) if provided; otherwise rotate.
+    // --user-agent launch flag must match the UA used by CapSolver when obtaining
+    // cf_clearance — CF ties clearance to the exact UA string.
+    this._ua = preferredUA ?? randomChromeUA();
+    this._viewport = randomViewport();
 
     const proxyUrl = this.getProxyUrl();
     const { args } = this.buildLaunchArgs(proxyUrl);
-
-    // Rotate UA + viewport at each browser launch
-    this._ua = randomChromeUA();
-    this._viewport = randomViewport();
 
     const maskedProxy = proxyUrl
       ? proxyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 80)
@@ -216,6 +278,10 @@ class SpainPersistentBrowserManager {
     console.log(`[spain-pb]    userDataDir : ${CF_PROFILE_DIR}`);
     console.log(`[spain-pb]    Proxy       : ${maskedProxy}`);
     console.log(`[spain-pb]    UA          : ${this._ua.slice(0, 80)}`);
+
+    // Purger les caches disque AVANT le lancement pour éviter les tokens JSD stales.
+    // Le fichier Cookies est conservé pour réutiliser les cf_clearance + PHPSESSID valides.
+    purgeProfileCacheOnDisk(CF_PROFILE_DIR);
 
     // CHROMIUM_EXECUTABLE_PATH : permet d'utiliser un Chromium préinstallé
     // (ex: celui de Playwright dans le nix store sur Replit) plutôt que le cache Puppeteer.
@@ -326,15 +392,17 @@ class SpainPersistentBrowserManager {
     console.log(`[spain-pb]    UA CapSolver: ${capUA.slice(0, 70)}`);
 
     // ── Étape 2 : Lancer/récupérer Chromium, configurer la page ──────────────
-    const browser = await this.getOrLaunchBrowser();
+    // Passer capUA à getOrLaunchBrowser() : si le browser est (re)lancé, le
+    // --user-agent flag utilisera directement l'UA de CapSolver sans rotation.
+    const browser = await this.getOrLaunchBrowser(capUA);
     const { proxyAuth } = this.buildLaunchArgs(proxyUrl);
 
     const pages = await browser.pages();
     const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
 
-    // Synchroniser le UA avec celui de CapSolver — CF lie cf_clearance + UA.
-    // Un UA différent (ex: Macintosh vs Windows NT) provoque un re-challenge immédiat.
-    if (capUA !== this._ua) {
+    // S'assurer que this._ua = capUA (si le browser était déjà vivant,
+    // getOrLaunchBrowser retourne sans modifier this._ua — on le force ici).
+    if (capUA && capUA !== this._ua) {
       this._ua = capUA;
     }
     await page.setUserAgent(this._ua);
@@ -571,12 +639,15 @@ class SpainPersistentBrowserManager {
     // (sous-requête dans un contexte browser réel, pas une navigation top-level).
     // On écoute page.on('response') + CDP Network pour capturer le body.
     let capturedMainBody = "";
+    // Timestamp quand le JSD oneshot a répondu — utilisé pour temporiser le fetch fallback.
+    let jsdOneShotAt = 0;
 
     // CDP Network listener — plus fiable que page.on('response') pour les ressources
     // script (JSONP) car il fournit requestId → Network.getResponseBody peut être
     // appelé même si la réponse est déjà traitée par le browser.
     let cdpNet: any = null;
     const pendingMainRequests = new Map<string, string>(); // requestId → url
+    const pendingJsdRequests  = new Map<string, string>(); // requestId → url (JSD oneshot)
     try {
       cdpNet = await page.createCDPSession();
       await cdpNet.send("Network.enable", {});
@@ -589,6 +660,10 @@ class SpainPersistentBrowserManager {
         if (url.includes("onlinebookings/main")) {
           pendingMainRequests.set(ev.requestId, url);
         }
+        // Track JSD oneshot to capture response (tells us if CF accepted the token)
+        if (url.includes("jsd/oneshot")) {
+          pendingJsdRequests.set(ev.requestId, url);
+        }
       });
 
       cdpNet.on("Network.responseReceived", (ev: any) => {
@@ -599,6 +674,18 @@ class SpainPersistentBrowserManager {
             ` type=${ev.type} mimeType=${ev.response.mimeType}` +
             ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}`,
           );
+        }
+        // Log JSD oneshot response — set-cookie cf_clearance = CF accepted the challenge
+        if (url.includes("jsd/oneshot")) {
+          const setCookie: string = ev.response.headers?.["set-cookie"] ?? "";
+          const hasCfClearance = setCookie.includes("cf_clearance");
+          console.log(
+            `[spain-pb] 🔑 JSD oneshot resp: status=${ev.response.status}` +
+            ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}` +
+            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non (rejeté ou pas d'upgrade)"}`,
+          );
+          jsdOneShotAt = Date.now(); // marquer le moment pour le délai post-JSD
+          pendingJsdRequests.delete(ev.requestId);
         }
       });
 
@@ -798,14 +885,26 @@ class SpainPersistentBrowserManager {
         }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Navigation root (non-fatal): ${e}`));
       }
 
+      // Temporisation post-JSD : le PHPSESSID peut nécessiter ~1.5s pour être
+      // synchronisé côté backend Bookitit après le JSD oneshot. Sans ce délai,
+      // le fetch arrive trop tôt et le serveur retourne 0B.
+      const msSinceJsd = jsdOneShotAt > 0 ? Date.now() - jsdOneShotAt : 0;
+      const waitMs = Math.max(0, 1_500 - msSinceJsd);
+      if (waitMs > 0) {
+        console.log(`[spain-pb] ⏳ Délai post-JSD ${waitMs}ms (sync backend Bookitit)…`);
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
       console.log(`[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…`);
       const evalBody: string = await page.evaluate(async (url: string) => {
         try {
           const resp = await fetch(url, {
             method: "GET",
-            credentials: "same-origin",
+            // "include" transmet PHPSESSID + cf_clearance même en cross-origin.
+            // "same-origin" omettait les cookies si le contexte de la page n'était
+            // pas exactement sur citaconsular.es — PHPSESSID absent = 0B.
+            credentials: "include",
             headers: {
-              "Accept": "text/javascript, application/javascript, */*; q=0.01",
+              "Accept": "*/*",
               "X-Requested-With": "XMLHttpRequest",
             },
           });

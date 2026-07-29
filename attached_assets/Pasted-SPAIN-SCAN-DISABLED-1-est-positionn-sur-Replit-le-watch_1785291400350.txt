@@ -1,0 +1,49 @@
+SPAIN_SCAN_DISABLED=1 est positionné sur Replit → le watcher retourne immédiatement sans passer par le pre-warm. Je vais écrire un petit script de test qui appelle directement ensureSpainPersistentBrowserSession() et le lancer via tsx.
+Testing browser session persistence
+Executing the test script
+
+Let me run the test script directly via shell exec.
+$ cd artifacts/slot-hunter && node_modules/.bin/tsx test-spain-pb.ts 2>&1
+Analyzing unexpected cookie duplication behavior
+
+Plusieurs infos clés :
+
+    Le listener XHR ne loggue rien du tout → le filtre /onlinebookings/main/ (avec / final avant ?) rate peut-être les requêtes de Bookitit si elles utilisent /onlinebookings/main? (sans slash)
+    page.evaluate() retourne "" avec resp.ok=true → CF retourne HTTP 200 avec 0B
+    2 cf_clearance + 1 PHPSESSID → le portail a bien chargé et Bookitit a initialisé quelque chose
+
+Je vais corriger le filtre ET ajouter des diagnostics CDP pour voir exactement quelles requêtes le browser fait pendant le flow Continuar.
+
+Also fix the finally block to clean up the CDP session, then re-run the test.
+Verifying compilation and running tests
+Rerunning tests for diagnostic analysis
+
+Let me run the test again with the new CDP diagnostics to see what's actually happening with the /main/ requests.
+Analyzing log request patterns
+
+Le diagnostic CDP est parfait — on voit maintenant exactement ce qui se passe :
+POST /cdn-cgi/challenge-platform/h/g/jsd/oneshot/b0da9f4911ba/0.6539107140934922:1785287132:_c-PkK
+GET  /onlinebookings/main/  → 200 text/html 0B
+
+Le browser résout bien le JSD challenge (il POST le oneshot), mais le timestamp 1785287132 dans l'URL = 8 juillet 2026 — le token a 21 jours. CF rejette silencieusement le oneshot expiré et retourne 0B sur /main/.
+
+Le token expiré vient du profil persistant /tmp/spain-cf-profile qui est resté sur Replit depuis 21 jours. Network.clearBrowserCache ne nettoie que le cache HTTP, pas le service worker / localStorage / IndexedDB où CF stocke ses tokens JSD.
+
+Fix : Storage.clearDataForOrigin avant la navigation pour purger service workers, localStorage, IndexedDB, cache storage — mais pas les cookies (on garde cf_clearance + PHPSESSID).
+Verifying compilation and re-running tests
+Verifying compilation status
+$ cd artifacts/slot-hunter && node_modules/.bin/tsx test-spain-pb.ts 2>&1
+Investigating persistent cached token origins
+
+La purge storage n'a pas aidé — le même oneshot 1785287132 est réutilisé. Cruciale révélation dans les logs :
+POST /cdn-cgi/challenge-platform/h/g/jsd/oneshot/b0da9f4911ba/0.6539107140934922:1785287132:_c-PkK
+GET  /main/ → 200 text/html 0B
+
+Le browser exécute bien le JSD challenge et soumet le oneshot. CF retourne quand même 0B sur /main/. Ce n'est pas un problème de token stale — c'est le bot score de CF. CF valide le oneshot mais considère que le browser headless a un score trop élevé pour accéder à /main/.
+
+La cause la plus probable : WebGL renderer string = "SwiftShader" — l'un des signaux bot les plus détectés par CF (SwiftShader est exclusivement utilisé par des headless VMs). Regardons ce que le JSD challenge voit exactement.
+
+Le evaluateOnNewDocument actuel ne patch pas WebGL (SwiftShader détectable), navigator.plugins (vide en headless → signal bot fort), ni navigator.mimeTypes. Ce sont les 3 checks principaux du JSD CF. Je les ajoute et re-teste.
+Verifying system cleanliness and testing patches
+
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
