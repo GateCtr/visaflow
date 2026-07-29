@@ -220,6 +220,42 @@ class SpainPersistentBrowserManager {
     return process.env.DECODO_PROXY_URL ?? process.env.SOAX_PROXY_URL;
   }
 
+  /**
+   * Retourne une URL proxy avec un suffixe de session aléatoire pour forcer
+   * une nouvelle IP à chaque lancement de browser.
+   *
+   * PROBLÈME : Decodo port 10001 = IP sticky permanente. CF épingle le nonce JSD
+   * (ex: 1785297931) à cette IP → même challenge périmé à chaque tentative,
+   * même après purge complète du profil et du PHPSESSID.
+   *
+   * SOLUTION : ajouter `-sessionid-XXXX` au username Decodo → le provider attribue
+   * une IP sticky DIFFÉRENTE pour chaque valeur de session → CF voit une IP inconnue
+   * → génère un nonce frais → JSD oneshot accepté → /main/ répond avec le contenu.
+   *
+   * Format Decodo ISP : `username-sessionid-XXXX:password@host:port`
+   * où XXXX = 8 chars aléatoires alphanumériques.
+   */
+  private buildRotatedProxyUrl(baseUrl: string): string {
+    try {
+      const u = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+      const decodedUser = decodeURIComponent(u.username);
+      // Générer un ID de session court et aléatoire (8 chars alphanumériques)
+      const sessionId = Math.random().toString(36).slice(2, 10);
+      // Remplacer un éventuel sessionid déjà présent pour ne pas empiler les suffixes
+      const baseUser = decodedUser.replace(/-sessionid-[a-z0-9]+$/i, "");
+      const rotatedUser = `${baseUser}-sessionid-${sessionId}`;
+      u.username = encodeURIComponent(rotatedUser);
+      const rotated = u.toString();
+      const masked = rotated.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[spain-pb] 🔄 Rotation IP proxy Decodo — session: ${sessionId} (${masked.slice(0, 70)})`);
+      return rotated;
+    } catch {
+      // En cas d'erreur de parsing, utiliser l'URL originale sans rotation
+      console.warn("[spain-pb] ⚠️ Rotation proxy échouée — utilisation URL originale");
+      return baseUrl;
+    }
+  }
+
   private buildLaunchArgs(proxyUrl: string | undefined): {
     args: string[];
     proxyAuth: { username: string; password: string } | undefined;
@@ -291,7 +327,11 @@ class SpainPersistentBrowserManager {
     this._ua = preferredUA ?? randomChromeUA();
     this._viewport = randomViewport();
 
-    const proxyUrl = this.getProxyUrl();
+    const baseProxyUrl = this.getProxyUrl();
+    // Forcer une rotation d'IP Decodo à chaque nouveau lancement de browser.
+    // Le port sticky 10001 garde la même IP → CF épingle le même nonce périmé.
+    // buildRotatedProxyUrl ajoute -sessionid-XXXX au username → nouvelle IP sticky.
+    const proxyUrl = baseProxyUrl ? this.buildRotatedProxyUrl(baseProxyUrl) : undefined;
     const { args } = this.buildLaunchArgs(proxyUrl);
 
     const maskedProxy = proxyUrl
@@ -668,18 +708,25 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ Purge storage CF (non-fatal): ${purgeErr}`);
     }
 
-    // Vider le cache HTTP + désactiver le cache pour la session JSD
-    // CRITIQUE : Network.clearBrowserCache purge le cache mémoire mais pas le
-    // cache disque in-process (V8 bytecode en mémoire du process Chrome actif).
-    // Network.setCacheDisabled empêche Chrome de lire ou écrire le cache HTTP/V8
-    // pendant toute la session → script JSD toujours téléchargé frais → nonce valide.
+    // Désactiver le cache HTTP pour toute la session de la page.
+    //
+    // CRITIQUE : La page widgetdefault/... est visitée DEUX FOIS :
+    //   1ère visite (JSD natif) → serveur génère un nonce frais (ex: 1785301530)
+    //   2ème visite (portail)   → si cache activé, Chrome sert le MÊME HTML depuis
+    //   le cache disque → loadermaec.js reçoit le même nonce périmé → JSD oneshot
+    //   rejeté → /main/ = 0B.
+    //
+    // page.setCacheEnabled(false) utilise la session CDP interne de Puppeteer
+    // (pas une session séparée qu'on detach()) → l'état PERSISTE sur toutes les
+    // navigations suivantes de la page. Network.clearBrowserCache vide en plus le
+    // cache mémoire du process Chrome pour cette page.
     try {
+      await (page as any).setCacheEnabled(false);
       const cdpCache = await page.createCDPSession();
       await cdpCache.send("Network.enable");
       await cdpCache.send("Network.clearBrowserCache");
-      await cdpCache.send("Network.setCacheDisabled", { cacheDisabled: true });
       await cdpCache.detach().catch(() => {});
-      console.log("[spain-pb] 🗑️ Cache HTTP vidé + désactivé pour la session JSD (nonce frais garanti)");
+      console.log("[spain-pb] 🗑️ Cache HTTP désactivé via page.setCacheEnabled(false) — nonce frais garanti sur TOUTES les navigations");
     } catch { /* non-fatal */ }
 
     // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
@@ -696,11 +743,23 @@ class SpainPersistentBrowserManager {
     //
     // La solution : laisser le Chromium stealth exécuter le JSD nativement.
     // cf_clearance est émis pour NOTRE TLS → /main/ accepte nos requêtes impit.
-    console.log(`[spain-pb] 🌐 Navigation → JSD CF en attente (exécution native Chromium) : ${targetUrl.slice(0, 80)}`);
+    // STRATÉGIE UNE SEULE NAVIGATION :
+    // On navigue vers targetUrl UNE SEULE FOIS avec waitUntil="load" pour que :
+    //   1. CF exécute le JSD natif → cf_clearance émis
+    //   2. Le widget Bookitit se charge EN MÊME TEMPS (loadermaec.js, jquery, etc.)
+    //   3. On reste sur cette page et on clique Continuar directement
+    //
+    // POURQUOI une seule navigation (critique) :
+    //   Une 2ème goto(targetUrl) re-déclenche un challenge CF → CF génère un JSD
+    //   token lié à la SESSION de la 1ère navigation (déjà périmée de X minutes)
+    //   → oneshot rejeté → /main/ = 0B. Le seul moyen d'avoir un oneshot frais
+    //   est de cliquer Continuar DANS LA MÊME SESSION que le cf_clearance.
+    console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${targetUrl.slice(0, 80)}`);
     try {
-      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 35_000 });
+      await page.goto(targetUrl, { waitUntil: "load", timeout: 70_000 });
     } catch (navErr) {
-      console.warn(`[spain-pb] ⚠️ Navigation initiale domcontentloaded (non-fatal): ${navErr}`);
+      // Timeout non-fatal — CF challenge peut dépasser 35s, la boucle Continuar prend le relais
+      console.warn(`[spain-pb] ⚠️ Navigation initiale (non-fatal, boucle widget prend le relais): ${navErr}`);
     }
 
     // Vérifier si cf_clearance déjà présent (profil persistant valide)
@@ -757,7 +816,7 @@ class SpainPersistentBrowserManager {
       return null;
     }
 
-    // ── Étape 5 : Armer le listener XHR /main/ AVANT de naviguer ─────────────
+    // ── Étape 5 : Armer le listener XHR /main/ ────────────────────────────────
     // CF bloque les navigations top-level (page.goto) vers /main/ même avec un
     // cf_clearance valide → retourne 0B. Mais quand le JS du portail appelle
     // /main/ en XHR/fetch après le clic Continuar, CF laisse passer la réponse
@@ -901,23 +960,18 @@ class SpainPersistentBrowserManager {
           new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 6_000)),
         ]);
         if (reason === "jsd" && jsdOneShotAccepted) {
-          // JSD accepté par CF (cf_clearance réémis) → /main/ autorisé
+          // JSD accepté par CF (cf_clearance réémis) → /main/ autorisé avec délai
           console.log(`[spain-pb] 🔓 /main/ libéré — JSD accepté ✅ délai 300ms…`);
           await new Promise((r) => setTimeout(r, 300));
-          await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
         } else {
-          // JSD échoué ou timeout → /main/ annulé pour éviter le cookie fantôme
-          // CF aurait retourné 0B de toute façon — annuler évite de polluer les logs.
-          const why = reason === "timeout" ? "timeout 6s" : "JSD oneshot refusé (cookie fantôme)";
-          console.warn(`[spain-pb] ❌ /main/ annulé (${why}) — profil CF stale, la session sera retentée`);
-          await cdpFetch.send("Fetch.failRequest", {
-            requestId: ev.requestId,
-            errorReason: "Failed",
-          }).catch(() => {
-            // Fallback si failRequest non supporté
-            cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-          });
+          // JSD refusé ou timeout — on laisse quand même passer /main/.
+          // RAISON : CF peut répondre avec du contenu même sans js_detection.passed=true
+          // si le cf_clearance de base (obtenu lors du 1er JSD natif) est suffisant pour
+          // /onlinebookings/main/. On observe le body réel au lieu d'annuler a priori.
+          const why = reason === "timeout" ? "timeout 6s" : "JSD oneshot refusé";
+          console.warn(`[spain-pb] ⚠️ /main/ libéré malgré ${why} — observation du body CF réel…`);
         }
+        await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
       });
       console.log(`[spain-pb] 🔒 Intercepteur /main/ armé (CDP Fetch)`);
     } catch (fetchInterceptErr) {
@@ -930,38 +984,18 @@ class SpainPersistentBrowserManager {
     // et le listener XHR capture la réponse /main/.
     let prefetchedMainHtml = "";
     try {
-      console.log(`[spain-pb] 🖱️ Navigation portail → Continuar → interception XHR /main/…`);
+      // On est déjà sur targetUrl après la 1ère navigation JSD — PAS de 2ème goto().
+      // Le JSD oneshot doit être envoyé dans la MÊME session que le cf_clearance.
+      // Un 2ème goto() déclencherait un challenge CF lié à la session périmée → token stale.
+      const currentUrl = page.url();
+      console.log(`[spain-pb] 🖱️ Page courante après JSD : ${currentUrl.slice(0, 80)} — attente widget Bookitit…`);
 
-      try {
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      } catch (navErr) {
-        const errStr = String(navErr);
-        if (errStr.includes("ERR_TOO_MANY_RETRIES")) {
-          // Proxy auth Chromium bloqué — le browser est cassé, fermer et remonter une erreur
-          console.error(`[spain-pb] ❌ ERR_TOO_MANY_RETRIES — proxy auth Chromium bloqué`);
-          try { await this._browser?.close(); } catch { /* non-fatal */ }
-          this._browser = null;
-          page.off("response", mainResponseHandler);
-          return null;
-        }
-        // Timeout sur un challenge interactif — non-fatal, on continue
-        console.warn(`[spain-pb] ⚠️ goto() portail timeout/erreur (non-fatal): ${navErr}`);
-      }
-
-      // Rafraîchir le cf_clearance post-navigation (CF peut émettre un nouveau token)
-      try {
-        const postNavCookies = await page.cookies("https://www.citaconsular.es");
-        const postCf = postNavCookies.find((c) => c.name === "cf_clearance");
-        if (postCf?.value) {
-          console.log(`[spain-pb] 🔑 cf_clearance post-navigation: ${postCf.value.slice(0, 40)}…`);
-        }
-      } catch { /* non-fatal */ }
-
-      // Attendre et cliquer le bouton Continuar (max 45s, check toutes les 2s)
-      // Étendu à 45s pour laisser le temps de gérer un Managed Challenge Turnstile visible.
+      // Attendre et cliquer le bouton Continuar (max 60s depuis la page courante)
+      // La 1ère navigation est en "load" → widget peut déjà être initialisé.
+      // Si CF a produit la page mais le widget JS tarde, la boucle attend jusqu'à 60s.
       let continueClicked = false;
       let turnstileClicked = false; // Ne cliquer la case Turnstile qu'une seule fois
-      const contDeadline = Date.now() + 45_000;
+      const contDeadline = Date.now() + 60_000;
       while (Date.now() < contDeadline && !continueClicked) {
 
         // ── Détecter et cliquer la case Turnstile (Managed Challenge visible) ──
