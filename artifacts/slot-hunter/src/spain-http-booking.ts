@@ -1057,7 +1057,9 @@ function extractFirstSlot(payload: unknown): { date: string; time: string; agend
       //   var agenda = someResults.somePreparedSlots[time]['agenda'];
       //   parameters = { agenda, time, date }
       // → on itère avec Object.entries pour obtenir la clé (=heure) ET la valeur (=données slot).
-      for (const [timeKey, v] of Object.entries(times as Record<string, unknown>)) {
+      // Trier par clé (= heure "HH:MM") pour prendre le créneau le plus tôt disponible
+      const sortedSlotEntries = Object.entries(times as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+      for (const [timeKey, v] of sortedSlotEntries) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
 

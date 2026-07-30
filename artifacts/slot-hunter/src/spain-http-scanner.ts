@@ -53,6 +53,28 @@ export interface SpainHttpScanResult {
   _services?: ExtractedSlotInfo[];
   /** Exact agendas + datetime/ result used to confirm availability. */
   _exploration?: SlotExplorationResult;
+  /**
+   * Tous les créneaux disponibles triés date+heure ASC avec leur nombre de places.
+   * freeslots=-1 = le serveur n'a pas retourné de nombre (disponibilité probable).
+   * Utilisé pour la stratégie de booking multi-dossiers : placer chaque dossier
+   * sur le créneau ayant le plus de places libres.
+   */
+  _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  /**
+   * Config widget capturée pendant le scan — permet de calibrer le flow booking
+   * sans rappel supplémentaire à getwidgetconfigurations/.
+   *   captcha       : "0" → pas de captcha, "1" → hCaptcha requis
+   *   registration_type : "1"=login seul, "2"=inscription, "3"=les deux
+   *   waiting_list  : "1" → liste d'attente disponible
+   *   confirmation  : "1" → OTP email requis après signin
+   */
+  _widgetConfig?: {
+    captcha?: string | number;
+    registration_type?: string | number;
+    waiting_list?: string | number;
+    confirmation?: string | number;
+    [key: string]: unknown;
+  };
 }
 
 /**
@@ -294,13 +316,18 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlotHttp | null 
       const times = dayObj.times;
       // times=[] (empty array) + state=1 → day available, no time restriction
       if (Array.isArray(times) && times.length === 0 && stateNum === 1) {
-        return { date, time: "09:00", location, agendaId };
+        // times=[] + state=1 → jour disponible sans heure précise — on commence à 07:00
+        // (les créneaux Kinshasa ouvrent à 08:00, les autres portails pourraient ouvrir plus tôt)
+        return { date, time: "07:00", location, agendaId };
       }
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
       const timesObj = times as Record<string, unknown>;
       if (Object.keys(timesObj).length === 0) continue;
 
-      for (const v of Object.values(timesObj)) {
+      // Trier par clé (= heure "HH:MM") pour retourner le créneau le plus tôt disponible.
+      // Sans tri, Object.entries() peut retourner "09:00" avant "08:00".
+      const sortedEntries = Object.entries(timesObj).sort(([a], [b]) => a.localeCompare(b));
+      for (const [timeKey, v] of sortedEntries) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
         const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
@@ -310,10 +337,11 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlotHttp | null 
         const hasAvailability = (free > 0) || (total > 0) || (free === -1 && total === -1);
         if (!hasAvailability) continue;
 
-        const time =
-          typeof t.time === "string" ? t.time
+        // La clé IS l'heure (ex: "08:00", "09:30") — fallback sur t.time/t.hour si format atypique
+        const time = /^\d{1,2}:\d{2}$/.test(timeKey) ? timeKey
+          : typeof t.time === "string" ? t.time
           : typeof t.hour === "string" ? t.hour
-          : "09:00";
+          : "07:00";
 
         return { date, time, location, agendaId };
       }
@@ -659,8 +687,20 @@ async function confirmSlotsViaDatetime(
   publickey: string,
   cookieStr: string,
   referer: string,
-): Promise<{ serviceId: string; serviceName: string; date: string; time: string } | null> {
+): Promise<{
+  serviceId: string;
+  serviceName: string;
+  date: string;
+  time: string;
+  /** Tous les créneaux disponibles triés ASC — pour la stratégie multi-dossiers */
+  allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  /** Config widget capturée (captcha, registration_type, waiting_list, confirmation…) */
+  widgetConfig?: Record<string, unknown>;
+} | null> {
   const base = "https://www.citaconsular.es/onlinebookings/";
+  // Accumulateurs — peuplés au fil des appels datetime/ puis retournés avec le résultat.
+  const allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }> = [];
+  let widgetConfig: Record<string, unknown> | undefined;
   const headers = {
     Cookie: cookieStr,
     "X-Requested-With": "XMLHttpRequest",
@@ -727,6 +767,18 @@ async function confirmSlotsViaDatetime(
       }
       // Petite pause pour laisser le serveur initialiser la session (~200ms observé en vrai Chrome)
       await new Promise<void>((r) => setTimeout(r, 220));
+
+      // Extraire le widgetConfig depuis cfgRaw — captcha, registration_type, waiting_list, confirmation
+      if (cfgRaw.length > 0) {
+        try {
+          const cfgParsed = parseJsonpPayload(cfgRaw) as Record<string, unknown> | null;
+          const wc = cfgParsed?.WidgetConfiguration as Record<string, unknown> | undefined;
+          if (wc) {
+            widgetConfig = wc;
+            console.log(`[spain-http] 🔧 widgetConfig capturé — captcha=${wc.captcha} reg_type=${wc.registration_type} waiting=${wc.waiting_list} confirm=${wc.confirmation}`);
+          }
+        } catch { /* non-fatal */ }
+      }
 
       const svcCb = `cbSvc${Date.now()}`;
       const svcQ = new URLSearchParams();
@@ -883,10 +935,16 @@ async function confirmSlotsViaDatetime(
         }
         if (dtRaw.length > 0) {
           const parsed = parseJsonpPayload(dtRaw);
+          // Accumuler TOUS les créneaux de cette réponse datetime/ (pour _allSlots)
+          const newSlots = extractAllSlotsFromDatetime(parsed);
+          for (const s of newSlots) allSlots.push(s);
+          if (newSlots.length > 0) {
+            console.log(`[spain-http] 📊 datetime/ ${start}→${end} — ${newSlots.length} créneau(x) : ${newSlots.slice(0, 3).map(s => `${s.date} ${s.time} (${s.freeslots < 0 ? "?" : s.freeslots} places)`).join(", ")}`);
+          }
           const slot = extractSlotFromBookititPayload(parsed);
           if (slot) {
             console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${slot.date} ${slot.time} — "${svc.serviceName}"`);
-            return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time };
+            return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time, allSlots, widgetConfig };
           } else {
             // Log raw structure to diagnose empty slots / unexpected format
             const rawSnip = dtRaw.slice(0, 400);
@@ -903,6 +961,71 @@ async function confirmSlotsViaDatetime(
 }
 
 function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
+
+/**
+ * Extrait TOUS les créneaux disponibles d'une réponse datetime/ Bookitit,
+ * triés par date puis heure ASC.
+ *
+ * Contrairement à extractSlotFromBookititPayload() qui retourne le premier créneau,
+ * cette fonction retourne la liste complète — utile pour la stratégie multi-dossiers :
+ * placer chaque dossier sur le créneau avec le plus de places libres.
+ *
+ * freeslots=-1 signifie que le serveur n'a pas retourné de nombre (disponibilité probable).
+ */
+function extractAllSlotsFromDatetime(
+  payload: unknown,
+): Array<{ date: string; time: string; agendaId?: string; freeslots: number }> {
+  const slots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }> = [];
+  if (!payload || typeof payload !== "object") return slots;
+  const obj = payload as Record<string, unknown>;
+  if (!Array.isArray(obj.Slots)) return slots;
+
+  for (const day of obj.Slots) {
+    if (!day || typeof day !== "object") continue;
+    const dayObj = day as Record<string, unknown>;
+    const date = typeof dayObj.date === "string" ? dayObj.date : "";
+    if (!date) continue;
+
+    // agendaId au niveau du jour (fallback si absent dans l'entrée horaire)
+    const dayAgendaId =
+      typeof dayObj.agenda === "string" ? dayObj.agenda
+      : typeof dayObj.agenda === "number" ? String(dayObj.agenda)
+      : typeof dayObj.agenda_id === "string" ? dayObj.agenda_id
+      : typeof dayObj.agenda_id === "number" ? String(dayObj.agenda_id)
+      : undefined;
+
+    const times = dayObj.times;
+    if (!times || typeof times !== "object" || Array.isArray(times)) continue;
+
+    // Trier par clé (= heure "HH:MM") — l'ordre ASC donne les plus tôt en premier
+    const sortedTimes = Object.entries(times as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+
+    for (const [timeKey, v] of sortedTimes) {
+      if (!v || typeof v !== "object") continue;
+      const t = v as Record<string, unknown>;
+
+      const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
+      const free = typeof freeRaw === "number" ? freeRaw
+        : typeof freeRaw === "string" ? parseInt(freeRaw, 10)
+        : -1; // -1 = inconnu (disponibilité probable)
+      if (free === 0) continue; // explicitement aucun créneau
+
+      const time = /^\d{1,2}:\d{2}$/.test(timeKey) ? timeKey
+        : typeof t.time === "string" ? t.time
+        : typeof t.hour === "string" ? t.hour
+        : "";
+      if (!time) continue;
+
+      // agendaId dans l'entrée temporelle prend la priorité sur celui du jour
+      const agendaId = typeof t.agenda === "string" ? t.agenda
+        : typeof t.agenda === "number" ? String(t.agenda)
+        : dayAgendaId;
+
+      slots.push({ date, time, agendaId, freeslots: free });
+    }
+  }
+  return slots;
+}
 
 /**
  * Scan rapide via /onlinebookings/main/ — le serveur pré-rend la disponibilité.
