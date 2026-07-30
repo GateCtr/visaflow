@@ -1,0 +1,64 @@
+Le fichier décrit le fix à appliquer : sérialiser submitSigninFormViaDOM avec un mutex. Voyons le code actuel avant de le corriger et de lancer le test.
+
+Le mutex est déjà en place. Je lance directement le test saopola.
+
+Chromium n'est pas installé sur ce nouveau Replit. Je l'installe.
+Running the saopola test
+$ cd artifacts/slot-hunter && node_modules/.bin/tsx src/test-saopola-live.ts 2>&1
+Cancelled: Shell execution timed out
+Extending test execution timeout
+
+Le test a dépassé le timeout 4min mais était bien avancé (Phase 1 ✅ scan trouvé, Phase 2 en cours — signin/ 0B → fallback jQuery AJAX en route). Je relance avec le timeout max (5min).
+
+Le DOM form submit a fonctionné (242B) — il manquait juste quelques secondes pour le résultat final. Je lance en arrière-plan pour capturer la sortie complète.
+
+Pas de Chromium en cours. Je modifie le test pour lire MAX_CYCLES depuis l'env (pour éviter le timeout), puis je relance.
+Adjusting execution parameters
+Diagnosing session invalidation issues
+
+Le scan a échoué sur /main/ 0B cette fois — CF a occasionnellement ce comportement. Dans les runs 1 et 2 (MAX_CYCLES=5) ça avait fonctionné au cycle 1. Je relance directement avec MAX_CYCLES=2 pour donner un 2ème essai.
+
+/main/ CDP body: 0B sur tous les runs — c'est une régression. Avant le JSD oneshot se déclenche même avant le clic Continuar, ce qui est suspect. Voyons le code CDP.
+
+Le problème est identifié : CF déclenche maintenant un JSD oneshot avant le clic Continuar (lors de la suppression de cf_clearance), ce qui résout jsdOneShotResolve prématurément. Quand /main/ est ensuite intercepté, il attend un JSD qui ne viendra plus → timeout 8s → 0B.
+
+Le bug est clair : CF déclenche maintenant un JSD oneshot spontané juste après la suppression de cf_clearance (pendant le wait 2s avec bouton invisible), avant même que Continuar soit cliqué. Quand /main/ est ensuite intercepté, plus aucun JSD ne vient → timeout 8s → 0B.
+
+Dans les runs de juillet 30 qui avaient réussi, Continuar était cliqué immédiatement (bouton visible dès que CF finissait), le JSD venait donc après le POST — pas avant.
+
+Deux problèmes à corriger :
+
+    La suppression de cf_clearance déclenche le JSD spontané et laisse le POST Continuar sans cf_clearance → CF retourne 0B
+    Le JSD pré-Continuar est ignoré par l'intercepteur Fetch (signal jsdPostSignal créé après)
+
+Fix : ne supprimer cf_clearance qu'après avoir armé l'intercepteur (i.e. après le clic Continuar), pas avant. CF verra le POST avec cf_clearance valide + le JSD spontané qui avait déjà validé la session.
+
+Regardons les cookies présents après la session CF pour comprendre pourquoi /main/ renvoie 0B même avec cf_clearance présent.
+
+Regardons la section clé : retour session + ce que callBrowserEndpoint fait exactement pour /main/.
+
+Maintenant j'ai la vision complète du bug. CF a changé son comportement : il exécute maintenant un JSD oneshot spontané dès la suppression de cf_clearance (avant Continuar). L'intercepteur Fetch POST bloque /main/ en attendant un JSD post-Continuar qui ne viendra jamais → timeout 8s → 0B.
+
+Le fix : si un JSD pré-Continuar a déjà eu lieu (jsdOneShotAt récent), ne pas armer l'intercepteur Fetch et laisser /main/ partir librement — CF a déjà validé le fingerprint.
+
+La cause racine est confirmée. Le fix : si un JSD spontané a déjà eu lieu avant le clic Continuar (jsdOneShotAt > 0 au moment d'armer l'intercepteur), on ne bloque plus /main/ du tout — CF a déjà validé la session, bloquer ne fait qu'empêcher le contenu.
+
+Maintenant je teste le fix.
+
+Le JSD post-Continuar donne aussi "cookie fantôme" — CF ne réémet pas de cf_clearance. La différence avec juillet 30 : CF sert maintenant /main/ à 0B si la requête n'a pas de cf_clearance valide dans les cookies. On supprime cf_clearance pour forcer CF à en émettre un, mais si CF répond "cookie fantôme" (il considère la session déjà valide), on doit le restaurer avant de libérer /main/.
+
+Fix : sauvegarder la valeur de cf_clearance avant suppression, et la restaurer si JSD donne "cookie fantôme".
+
+Je dois modifier deux endroits : (1) sauvegarder cf_clearance avant suppression, (2) le restaurer dans l'intercepteur si "cookie fantôme".
+
+Now save cf_clearance before deletion and restore it on "cookie fantôme":
+
+Now restore cf_clearance in the interceptor when "cookie fantôme":
+
+Also restore cf_clearance in the preContinuarJsdFired path before waiting for /main/:
+
+Maintenant je teste le fix de restauration de cf_clearance.
+
+La restauration ne suffit pas — CF retourne toujours text/html 0B pour /main/, même avec cf_clearance valide. Le mimeType=text/html est suspect pour un endpoint JSONP (devrait être text/javascript). Vérifions si c'est un problème d'IP (l'IP 10002 est peut-être flaggée par CF pour /main/) en forçant une autre IP de rotation.
+
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
