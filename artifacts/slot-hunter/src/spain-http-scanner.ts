@@ -25,7 +25,7 @@ import {
   isSpainCfSessionExpiringSoon,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
-import { callBookititEndpointViaBrowser } from "./spain-persistent-browser.js";
+import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
 import {
   exploreAvailableSlots,
   type SlotExplorationResult,
@@ -1864,8 +1864,8 @@ async function scanViaMainEndpoint(
     }
     fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
     if (mainBody.length === 0) {
-      console.warn(`[spain-http] ⚠️ /main/ browser → 0B — session invalidée (retry avec JSD frais)`);
-      invalidateSpainCfSession();
+      console.warn(`[spain-http] ⚠️ /main/ browser → 0B — closeAndInvalidate (rotation IP + browser)`);
+      await spainPersistentBrowser.closeAndInvalidate();
       return null;
     }
   } else {

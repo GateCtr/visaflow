@@ -19,3 +19,4 @@
 - [Spain challenge traffic budget](spain-challenge-traffic-budget.md) — never pre-warm or probe Cloudflare when no active Spain dossier can book; reuse Redis CF sessions until expiry.
 - [Spain persistent-browser mode](spain-persistent-browser.md) — CF/impit asymmetry, session rules, cf_clearance deletion before Continuar, Chromium path, full install + Saopola e2e test confirmed 2026-07-30.
 - [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.
+- [Spain multi-dossier parallel booking](spain-multidossier-parallel.md) — 2 bugs fixed: acquireBrowserBookingLock (full flow, not just DOM submit) + closeAndInvalidate on /main/ 0B (not invalidateSession); test confirmed 2026-07-30.

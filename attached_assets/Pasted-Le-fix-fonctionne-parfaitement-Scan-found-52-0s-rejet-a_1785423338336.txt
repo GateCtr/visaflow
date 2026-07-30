@@ -1,0 +1,53 @@
+Le fix fonctionne parfaitement :
+
+✅ Scan   : found — 52.0s
+✅ (rejet attendu) Booking: signin_failed — 59.6s
+La logique était exacte : sans la suppression de cf_clearance, Chrome avait bien le cookie lors de l'appel XHR à /main/ → contenu reçu → scan trouvé → booking jusqu'au formulaire signin → credentials faux refusés (attendu).
+
+Note sur le log : le JSD pré-Continuar spontané a quand même eu lieu (cookie fantôme, 807ms avant Continuar) mais ça n'a plus d'importance — cf_clearance était toujours présent donc /main/ a répondu normalement.
+Fix confirmé — le test saopola passe avec ✅ Scan: found (52s) + ✅ Booking: signin_failed (60s).
+
+Ce qui a changé : suppression du bloc qui effaçait cf_clearance juste avant le clic Continuar. CF ≥ 2026-07 tire le JSD spontanément dès la suppression (cookie fantôme, pas de nouveau cf_clearance), donc le widget appelait /main/ sans cookie → 0B. En gardant le cf_clearance frais de la navigation JSD, Chrome l'envoie naturellement avec la requête XHR → CF laisse passer.
+la reponse envoyer par le serveur est?
+La réponse du serveur Bookitit pour signin/ (visible dans les logs du test) :
+
+callback=jQuery211015470042276605_...(
+  {
+    "Client": {
+      "errors": [
+        { "message": "Usuario o contraseña incorrectos", "field": "login",    "type": "data" },
+        { "message": "Usuario o contraseña incorrectos", "field": "password", "type": "data" }
+      ]
+    }
+  }
+);
+C'est du JSONP — un JSON wrappé dans un callback jQuery. Le serveur confirme que les credentials sont invalides (Usuario o contraseña incorrectos), ce qui est exactement le résultat attendu pour le test (faux credentials → signin_failed = succès du test).
+
+Pour /main/ en revanche, le body n'est pas loggé explicitement — mais le scan a retourné found, ce qui prouve que le contenu JSONP du widget a bien été reçu et parsé (services + créneaux extraits correctement).
+le but etait de tester le plusieurs dossiers en parrallemele, n'oublie pas de documenter et mettre à jour la memoir
+Je regarde le test actuel et le code de booking multi-dossier pour voir ce qu'il faut ajouter.
+Je regarde le code du watcher loop (booking parallel) et le mutex submitSigninFormViaDOM en parallèle.
+Je lis la partie booking du watcher loop et createIsolatedBookingSession en parallèle.
+J'ai tout ce qu'il faut. Le test multi-dossier doit :
+
+Faire 1 scan
+Lancer N bookings en Promise.all avec des dossiers différents
+Chaque dossier obtient son propre PHPSESSID via createIsolatedBookingSession
+submitSigninFormViaDOM est sérialisé par mutex → on vérifie que les dossiers passent bien à la queue sans corruption de champs
+On lance le test multi-dossier maintenant.
+Le test a confirmé l'essentiel avant le timeout (le 1er cycle avait fait une rotation IP qui a coûté ~35s de plus). Dossier B → signin_failed ✅ après mutex. Je relance avec session déjà chaude — ça devrait passer en temps.
+Deux problèmes dans les logs :
+
+/main/ encore 0B sur l'IP 10002 — pas lié au parallélisme, c'est une IP Decodo bloquée par CF
+"detached Frame" / "TargetCloseError" — le vrai bug multi-dossier : le mutex protège uniquement submitSigninFormViaDOM, mais callBookititEndpointViaBrowser et jQueryAjax (avant le DOM submit) utilisent aussi la même page Chrome sans mutex → les 2 dossiers se marchent dessus
+Je lis le code de executeHttpBooking autour des appels browser pour voir où étendre le mutex.
+Le problème est clair : le mutex ne couvre que submitSigninFormViaDOM mais callBookititEndpointBrowser et jQueryAjax utilisent aussi this._page sans protection. Il faut sérialiser TOUT le flow browser (getagendas → signin → summary) quand useBrowserCalls=true. Je lis la fin du flow booking et l'export de la fonction mutex.
+Le fix : ajouter un acquireBrowserBookingLock dans spain-persistent-browser.ts qui sérialise TOUT le flow browser (getagendas → datetime → signin → summary), pas seulement le DOM submit. Je lis les imports actuels de spain-http-booking.ts pour savoir quoi ajouter.
+Maintenant j'applique le fix : un acquireBrowserBookingLock qui sérialise TOUT le flow booking browser (getagendas → datetime → signin → summary), pas seulement le DOM submit.
+Maintenant import + usage dans spain-http-booking.ts, vérification TypeScript, et re-test.
+Maintenant j'ajoute l'acquisition du lock dans executeHttpBooking juste après useBrowserCalls. Je cherche la fin exacte de la fonction pour le try/finally.
+Je lis la fin de executeHttpBooking pour placer le try/finally du lock correctement.
+Maintenant je ferme le try avec son finally à la fin de executeHttpBooking.
+Vérification TypeScript + re-test en parallèle.
+Les erreurs TS sont pré-existantes dans cev-extension.ts / test-phase2b.ts, pas dans mon code. Je relance le test.
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
