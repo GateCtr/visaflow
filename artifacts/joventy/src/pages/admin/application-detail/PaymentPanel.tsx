@@ -10,7 +10,8 @@ import { SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CreditCard, CheckCircle2, Clock, Star, Image, Loader2, Pencil } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CreditCard, CheckCircle2, Clock, Star, Image, Loader2, Pencil, XCircle } from "lucide-react";
 import { PaymentReceiptModal } from "./components/PaymentReceiptModal";
 
 interface PriceDetails {
@@ -43,6 +44,8 @@ export function PaymentPanel({
   const { toast } = useToast();
   const validateEngagement = useMutation(api.admin.validateEngagementPayment);
   const validateSuccess = useMutation(api.admin.validateSuccessFee);
+  const rejectEngagement = useMutation(api.admin.rejectEngagementProof);
+  const rejectSuccess = useMutation(api.admin.rejectSuccessFeeProof);
   const adjustSlotSuccessFee = useMutation(api.admin.adjustSlotSuccessFee);
   const updateSlotUrgencyTier = useMutation(api.admin.updateSlotUrgencyTier);
 
@@ -86,6 +89,7 @@ export function PaymentPanel({
           proofUrl={engagementProofUrl}
           onViewProof={(url) => setReceiptPreview(url)}
           onValidate={() => handleAction(() => validateEngagement({ applicationId: appId }), "Paiement validé.")}
+          onReject={(reason) => handleAction(() => rejectEngagement({ applicationId: appId, reason: reason || undefined }), "Preuve rejetée.")}
         />
 
         {/* Success fee */}
@@ -98,6 +102,7 @@ export function PaymentPanel({
           disabled={isDossierOnly}
           onViewProof={(url) => setReceiptPreview(url)}
           onValidate={() => handleAction(() => validateSuccess({ applicationId: appId }), "Prime validée.")}
+          onReject={(reason) => handleAction(() => rejectSuccess({ applicationId: appId, reason: reason || undefined }), "Preuve rejetée.")}
         />
 
         {/* Revenue summary */}
@@ -186,39 +191,82 @@ export function PaymentPanel({
 
 // ─── Sub-component ──────────────────────────────────────────────────────────
 
-function PaymentRow({ label, amount, isPaid, hasProof, proofUrl, disabled, onViewProof, onValidate }: {
+function PaymentRow({ label, amount, isPaid, hasProof, proofUrl, disabled, onViewProof, onValidate, onReject }: {
   label: string; amount: number; isPaid: boolean; hasProof: boolean; proofUrl?: string | null; disabled?: boolean;
-  onViewProof: (url: string) => void; onValidate: () => void;
+  onViewProof: (url: string) => void; onValidate: () => void; onReject: (reason: string) => void;
 }) {
+  const { toast } = useToast();
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const handleConfirmReject = () => {
+    if (!rejectReason.trim()) {
+      toast({ variant: "destructive", title: "Raison requise" });
+      return;
+    }
+    onReject(rejectReason.trim());
+    setShowRejectForm(false);
+    setRejectReason("");
+  };
+
   return (
-    <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${
+    <div className={`rounded-xl border ${
       disabled ? "bg-slate-50 border-slate-100 opacity-60" :
       isPaid ? "bg-emerald-50/60 border-emerald-200/60" :
       hasProof ? "bg-amber-50/60 border-amber-200/60" :
       "bg-slate-50/60 border-slate-200/60"
     }`}>
-      <div className="flex items-center gap-3 min-w-0">
-        {isPaid ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> :
-         hasProof ? <Clock className="w-4 h-4 text-amber-500 shrink-0" /> :
-         <Star className="w-4 h-4 text-slate-300 shrink-0" />}
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
-          <p className="text-[11px] text-slate-400">{amount > 0 ? `${amount} USD` : "—"}</p>
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {isPaid ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> :
+           hasProof ? <Clock className="w-4 h-4 text-amber-500 shrink-0" /> :
+           <Star className="w-4 h-4 text-slate-300 shrink-0" />}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
+            <p className="text-[11px] text-slate-400">{amount > 0 ? `${amount} USD` : "—"}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasProof && proofUrl && !isPaid && (
+            <button onClick={() => onViewProof(proofUrl)} className="text-[11px] text-blue-600 font-medium flex items-center gap-1">
+              <Image className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {hasProof && !isPaid && !disabled && (
+            <>
+              <Button size="sm" className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-3" onClick={onValidate}>
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Valider
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-[11px] border-slate-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 px-3"
+                onClick={() => setShowRejectForm(v => !v)}>
+                <XCircle className="w-3 h-3 mr-1" /> Rejeter
+              </Button>
+            </>
+          )}
+          {isPaid && <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Payé</span>}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {hasProof && proofUrl && !isPaid && (
-          <button onClick={() => onViewProof(proofUrl)} className="text-[11px] text-blue-600 font-medium flex items-center gap-1">
-            <Image className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {hasProof && !isPaid && !disabled && (
-          <Button size="sm" className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-3" onClick={onValidate}>
-            <CheckCircle2 className="w-3 h-3 mr-1" /> Valider
-          </Button>
-        )}
-        {isPaid && <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Payé</span>}
-      </div>
+
+      {/* Inline rejection form */}
+      {showRejectForm && (
+        <div className="px-4 pb-3 space-y-2">
+          <Textarea
+            placeholder="Raison du rejet..."
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            rows={2}
+            className="bg-red-50/50 border-red-200 text-sm"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white" onClick={handleConfirmReject}>
+              Confirmer
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowRejectForm(false); setRejectReason(""); }}>
+              Annuler
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
