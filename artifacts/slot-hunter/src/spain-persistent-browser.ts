@@ -2012,22 +2012,54 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
             return '__ERR_NO_JQUERY_' + String(e).slice(0, 80);
           });
         }
+        // Script tag manuel avec callback fixe.
+        //
+        // Pourquoi pas dataType:'jsonp' ?
+        //   jQuery JSONP génère son propre cbName (jQuery21107…) et envoie "?callback=jQuery21107…".
+        //   Le serveur Bookitit PRÉFIXE la réponse : "callback=jQuery21107…(data)".
+        //   Le browser exécute le script — "callback = jQuery21107…(data)" est une ASSIGNATION
+        //   (pas un appel direct), donc jQuery21107… est bien appelé…  mais jQuery s'attendait
+        //   à "jQuery21107…(data)" sans le préfixe "callback=" → parseerror.
+        //
+        // Notre fix — script tag avec cbName qu'on contrôle :
+        //   1. On déclare window[cbName] = resolve(JSON.stringify(data)).
+        //   2. On injecte un <script src="url?callback=cbName">.
+        //   3. Le serveur retourne "callback=cbName(data)".
+        //   4. Le browser exécute : callback = cbName(data)
+        //      → cbName(data) est évalué en premier → notre resolve() est appelé ✅.
+        //   5. "callback" (variable globale) reçoit la valeur de retour (undefined) — sans effet.
+        //   Note : si window.callback n'est pas déclaré, l'assignation lèverait un ReferenceError
+        //   en mode strict. On force window.callback = window.callback || null pour l'éviter.
         return new Promise(function(resolve) {
-          jq.ajax({
-            url: u,
-            type: 'GET',
-            dataType: 'jsonp',
-            cache: false,
-            timeout: 20000,
-            success: function(data) {
-              try { resolve(JSON.stringify(data)); }
-              catch(e) { resolve('__ERR_STRINGIFY'); }
-            },
-            error: function(jqXHR, ts, et) {
-              var st = jqXHR && jqXHR.status ? jqXHR.status : 0;
-              resolve('__ERR_JQUERY_' + st + '_' + ts + '_' + et);
-            }
+          // IMPORTANT : le serveur Bookitit valide que callback= commence par "jQuery".
+          // Toute autre valeur (ex: "__bkt_", "cb12345") retourne un body vide/incorrect.
+          var cbName = 'jQuery__bkt_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+          var timer = setTimeout(function() {
+            delete window[cbName];
+            if (sc && sc.parentNode) sc.parentNode.removeChild(sc);
+            resolve('__ERR_JQUERY_SCRIPT_TIMEOUT');
+          }, 22000);
+          window[cbName] = function(data) {
+            clearTimeout(timer);
+            delete window[cbName];
+            if (sc && sc.parentNode) sc.parentNode.removeChild(sc);
+            try { resolve(JSON.stringify(data)); }
+            catch(e) { resolve('__ERR_STRINGIFY'); }
+          };
+          // Prévenir ReferenceError si le browser est en mode strict et "callback" non déclaré.
+          if (typeof window.callback === 'undefined') window.callback = null;
+          // Remplacer le callback dans l'URL par notre cbName fixe.
+          var scriptUrl = u.replace(/([?&])callback=[^&]+/, function(m, sep) {
+            return sep + 'callback=' + cbName;
           });
+          var sc = document.createElement('script');
+          sc.onerror = function() {
+            clearTimeout(timer);
+            delete window[cbName];
+            resolve('');
+          };
+          sc.src = scriptUrl;
+          document.head.appendChild(sc);
         });
       })(${escapedUrl})
     `);
