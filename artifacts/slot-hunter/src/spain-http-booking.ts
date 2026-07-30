@@ -855,9 +855,17 @@ export async function executeHttpBooking(
       const domBody = await submitSigninFormViaDOM(config.login, config.password);
       if (domBody) {
         try {
-          const parsed = domBody.match(/^[\w$.]+\(([\s\S]*)\);?$/);
-          payload = parsed ? JSON.parse(parsed[1].trim()) : JSON.parse(domBody);
+          // Bookitit JSONP format : "callback=jQuery123({...})" ou "jQuery123({...})"
+          // Le préfixe "callback=" est présent dans les réponses capturées via waitForResponse.
+          // On extrait le contenu entre le premier "(" et le dernier ")".
           console.log(`[spain-booking] 🔍 signin/ DOM raw (300c): ${domBody.slice(0, 300)}`);
+          const firstParen = domBody.indexOf("(");
+          const lastParen = domBody.lastIndexOf(")");
+          if (firstParen >= 0 && lastParen > firstParen) {
+            payload = JSON.parse(domBody.slice(firstParen + 1, lastParen).trim());
+          } else {
+            payload = JSON.parse(domBody);
+          }
         } catch {
           console.warn(`[spain-booking] ⚠️ signin/ DOM — impossible de parser la réponse: ${domBody.slice(0, 160)}`);
         }

@@ -645,7 +645,7 @@ class SpainPersistentBrowserManager {
     const { proxyAuth } = this.buildLaunchArgs(proxyUrl);
 
     const pages = await browser.pages();
-    const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
+    let page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
     this._page = page; // mémorisé pour callBookititEndpointViaBrowser
 
     await page.setUserAgent(this._ua);
@@ -957,6 +957,19 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ Navigation initiale (non-fatal, boucle widget prend le relais): ${navErr}`);
     }
 
+    // ── Refresh page après navigation — CF peut avoir redirigé vers une nouvelle Frame ──
+    // Si CF fait window.location.replace() ou crée une nouvelle Frame pendant la navigation,
+    // l'ancienne variable `page` devient obsolète (detached Frame). On prend toujours
+    // la première page vivante du browser pour éviter tous les TargetCloseError suivants.
+    try {
+      const freshPages = await browser.pages();
+      if (freshPages.length > 0 && freshPages[0] !== page) {
+        page = freshPages[0];
+        this._page = page;
+        console.log(`[spain-pb] 🔄 Référence page rafraîchie après navigation initiale (CF redirect détecté)`);
+      }
+    } catch { /* non-fatal */ }
+
     // Vérifier si cf_clearance déjà présent (profil persistant valide)
     {
       const existing = await page.cookies("https://www.citaconsular.es").catch(() => []);
@@ -1194,50 +1207,9 @@ class SpainPersistentBrowserManager {
     };
     page.on("response", mainResponseHandler);
 
-    // ── Intercepteur CDP Fetch : bloquer /main/ jusqu'au JSD oneshot ──────────
-    //
-    // RACE CONDITION : Bookitit appelle /main/ immédiatement après le clic
-    // Continuar. Le script JSD b0da9f4911ba n'a pas encore eu le temps de
-    // POSTer son oneshot. CF voit /main/ sans JSD récent → retourne 0B body.
-    //
-    // FIX : intercepter /main/ via CDP Fetch.enable, attendre que le listener
-    // Network détecte jsd/oneshot (via jsdOneShotSignal), puis libérer la
-    // requête /main/ avec un délai de 300ms. CF a alors vu notre fingerprint
-    // JSD avant de décider du contenu de /main/.
-    //
-    // Note : CDP Fetch interceptor sur une session séparée de cdpNet (Network)
-    // pour éviter les conflits de protocole.
+    // cdpFetch sera armé APRÈS le clic Continuar avec un signal JSD POST frais —
+    // voir commentaire dans le bloc if (continueClicked) ci-dessous.
     let cdpFetch: any = null;
-    try {
-      cdpFetch = await page.createCDPSession();
-      await cdpFetch.send("Fetch.enable", {
-        patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
-      });
-      cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
-        const url: string = ev.request?.url ?? "";
-        console.log(`[spain-pb] 🔒 /main/ intercepté — attente JSD oneshot (max 6s)… ${url.slice(0, 80)}`);
-        const reason = await Promise.race([
-          jsdOneShotSignal.then(() => "jsd" as const),
-          new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 6_000)),
-        ]);
-        if (reason === "jsd" && jsdOneShotAccepted) {
-          // JSD accepté par CF (cf_clearance réémis) → /main/ autorisé avec délai
-          console.log(`[spain-pb] 🔓 /main/ libéré — JSD accepté ✅ délai 300ms…`);
-          await new Promise((r) => setTimeout(r, 300));
-        } else {
-          // JSD refusé ou timeout — on laisse quand même passer /main/.
-          // RAISON : CF peut répondre avec du contenu même sans js_detection.passed=true
-          // si le cf_clearance de base (obtenu lors du 1er JSD natif) est suffisant pour
-          // /onlinebookings/main/. On observe le body réel au lieu d'annuler a priori.
-          const why = reason === "timeout" ? "timeout 6s" : "JSD oneshot refusé";
-          console.warn(`[spain-pb] ⚠️ /main/ libéré malgré ${why} — observation du body CF réel…`);
-        }
-        await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-      });
-      console.log(`[spain-pb] 🔒 Intercepteur /main/ armé (CDP Fetch)`);
-    } catch (fetchInterceptErr) {
-      console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ (non-fatal): ${fetchInterceptErr}`);
-    }
 
     // ── Étape 6 : Naviguer vers le portail puis cliquer Continuar ────────────
     // Avec le cf_clearance frais injecté + UA synchronisé, CF accepte la page
@@ -1256,6 +1228,7 @@ class SpainPersistentBrowserManager {
       // Si CF a produit la page mais le widget JS tarde, la boucle attend jusqu'à 60s.
       let continueClicked = false;
       let turnstileClicked = false; // Ne cliquer la case Turnstile qu'une seule fois
+      let cfClearedBeforeClick = false; // cf_clearance supprimé une seule fois avant le premier clic
       const contDeadline = Date.now() + 60_000;
       while (Date.now() < contDeadline && !continueClicked) {
 
@@ -1403,9 +1376,55 @@ class SpainPersistentBrowserManager {
       }
 
       if (continueClicked) {
-        console.log(`[spain-pb] ✅ Continuar cliqué — attente XHR /main/ (max 15s)…`);
-        // Attendre jusqu'à 15s que le listener XHR capture la réponse /main/
-        const xhrDeadline = Date.now() + 15_000;
+        console.log(`[spain-pb] ✅ Continuar cliqué — armer intercepteur /main/ pour JSD POST…`);
+
+        // ── Intercepteur CDP Fetch POST : bloquer /main/ jusqu'au JSD de la SESSION POST ──
+        //
+        // POURQUOI ici (après Continuar) et PAS avant la boucle :
+        //   Le clic Continuar soumet un POST au portail → CF crée une NOUVELLE session
+        //   avec un nonce JSD frais. Si l'intercepteur est armé avant, il attend le JSD
+        //   de la 1ère navigation (déjà consommé) → "cookie fantôme" → /main/ libéré trop
+        //   tôt → CF retourne text/html 0B car le JSD de la session POST n'est pas encore validé.
+        //
+        //   En réarmant ici avec un signal frais (jsdPostSignal), l'intercepteur attend
+        //   spécifiquement le JSD oneshot déclenché par le POST, garantissant que CF a vu
+        //   notre fingerprint AVANT de servir /main/.
+        jsdOneShotAccepted = false; // Reset — on attend le JSD POST
+        const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
+
+        try {
+          cdpFetch = await page.createCDPSession();
+          await cdpFetch.send("Fetch.enable", {
+            patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
+          });
+          cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
+            const url: string = ev.request?.url ?? "";
+            console.log(`[spain-pb] 🔒 /main/ intercepté POST — attente JSD POST (max 8s)… ${url.slice(0, 80)}`);
+            const reason = await Promise.race([
+              jsdPostSignal.then(() => "jsd" as const),
+              new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 8_000)),
+            ]);
+            if (reason === "jsd" && jsdOneShotAccepted) {
+              // cf_clearance réémis → /main/ reçoit le JSONP avec délai de sécurité
+              console.log(`[spain-pb] 🔓 /main/ libéré — JSD POST accepté ✅ délai 300ms…`);
+              await new Promise((r) => setTimeout(r, 300));
+            } else {
+              // Cookie fantôme = cf_clearance valide, pas de re-émission.
+              // On ajoute 1.5s pour laisser CF synchroniser son état backend POST.
+              const why = reason === "timeout" ? "timeout 8s" : "cookie fantôme (cf_clearance déjà valide)";
+              console.warn(`[spain-pb] ⚠️ /main/ libéré après ${why} + 1500ms sync backend…`);
+              await new Promise((r) => setTimeout(r, 1_500));
+            }
+            await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
+          });
+          console.log(`[spain-pb] 🔒 Intercepteur /main/ POST armé (CDP Fetch)`);
+        } catch (fetchInterceptErr) {
+          console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ POST (non-fatal): ${fetchInterceptErr}`);
+        }
+
+        // Attendre jusqu'à 20s que le listener XHR capture la réponse /main/
+        console.log(`[spain-pb] ⏳ Attente XHR /main/ POST (max 20s)…`);
+        const xhrDeadline = Date.now() + 20_000;
         while (Date.now() < xhrDeadline && capturedMainBody.length < 100) {
           await new Promise((r) => setTimeout(r, 500));
         }
@@ -1596,6 +1615,20 @@ class SpainPersistentBrowserManager {
       });
       const mainUrl = `https://www.citaconsular.es/onlinebookings/main/?${mainQuery}`;
 
+      // Rafraîchir la référence page avant le fetch fallback — après le clic Continuar,
+      // CF peut avoir redirigé vers une nouvelle Frame (la variable locale est obsolète).
+      try {
+        const freshPages = await browser.pages();
+        if (freshPages.length > 0) {
+          const livePage = freshPages[0];
+          if (livePage !== page) {
+            page = livePage;
+            this._page = page;
+            console.log(`[spain-pb] 🔄 Référence page rafraîchie avant fetch /main/ (Frame détachée évitée)`);
+          }
+        }
+      } catch { /* non-fatal */ }
+
       // S'assurer qu'on est sur un contexte same-origin citaconsular.es
       // (si page.goto portail a échoué, on pourrait être sur about:blank ou ailleurs)
       const currentOrigin: string = await page.evaluate(() => window.location.origin).catch(() => "");
@@ -1605,6 +1638,11 @@ class SpainPersistentBrowserManager {
           waitUntil: "domcontentloaded",
           timeout: 20_000,
         }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Navigation root (non-fatal): ${e}`));
+        // Refresh encore après la navigation root
+        try {
+          const freshPages = await browser.pages();
+          if (freshPages.length > 0) { page = freshPages[0]; this._page = page; }
+        } catch { /* non-fatal */ }
       }
 
       // Temporisation post-JSD : le PHPSESSID peut nécessiter ~1.5s pour être
@@ -1652,7 +1690,25 @@ class SpainPersistentBrowserManager {
     }
 
     // ── Étape 7 : Extraire les cookies + construire la session ────────────────
-    const allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
+    // Wrap en try/catch — si la page locale est devenue obsolète (Frame détachée après
+    // une redirection CF), on tente un dernier refresh depuis browser.pages().
+    let allPuppeteerCookies: import("puppeteer").Cookie[] = [];
+    try {
+      allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
+    } catch (cookieErr) {
+      console.warn(`[spain-pb] ⚠️ page.cookies() sur page obsolète (${String(cookieErr).slice(0, 80)}) — fallback browser.pages()…`);
+      try {
+        const freshPages = await browser.pages();
+        if (freshPages.length > 0) {
+          page = freshPages[0];
+          this._page = page;
+          allPuppeteerCookies = await page.cookies("https://www.citaconsular.es");
+          console.log(`[spain-pb] ✅ Cookies récupérés via page fraîche (${allPuppeteerCookies.length} cookies)`);
+        }
+      } catch (fallbackErr) {
+        console.warn(`[spain-pb] ⚠️ Fallback cookies échoué: ${fallbackErr} — session sans cookies frais`);
+      }
+    }
     const allCookies = allPuppeteerCookies.map((c) => ({ name: c.name, value: c.value }));
 
     // Récupérer le cf_clearance final (peut avoir été mis à jour par CF post-Continuar)
@@ -2491,11 +2547,8 @@ export async function submitSigninFormViaDOM(
       return "";
     }
 
-    // ── 4. Attendre la réponse signin/ via CDP (max 20s) ─────────────────────
-    const deadline = Date.now() + 20_000;
-    while (Date.now() < deadline && !signinBody) {
-      await new Promise<void>((r) => setTimeout(r, 200));
-    }
+    // ── 4. Attendre la réponse signin/ via waitForResponse (max 20s) ──────────
+    signinBody = await signinResponsePromise;
 
     if (!signinBody) {
       console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — pas de réponse signin/ après 20s");
@@ -2505,9 +2558,5 @@ export async function submitSigninFormViaDOM(
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ submitSigninFormViaDOM exception: ${err}`);
     return "";
-  } finally {
-    if (cdp) {
-      try { await cdp.detach(); } catch { /* ignore */ }
-    }
   }
 }
