@@ -411,6 +411,10 @@ export default function AdminApplicationDetail() {
 
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [showRejectEngagementForm, setShowRejectEngagementForm] = useState(false);
+  const [rejectEngagementReason, setRejectEngagementReason] = useState("");
+  const [showRejectSuccessForm, setShowRejectSuccessForm] = useState(false);
+  const [rejectSuccessReason, setRejectSuccessReason] = useState("");
   const [adminNoteInput, setAdminNoteInput] = useState("");
 
   const [slotDate, setSlotDate] = useState("");
@@ -448,6 +452,8 @@ export default function AdminApplicationDetail() {
   const markVisaObtained = useMutation(api.admin.markVisaObtained);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const rejectApplication = useMutation(api.admin.rejectApplication);
+  const rejectEngagementProof = useMutation(api.admin.rejectEngagementProof);
+  const rejectSuccessFeeProof = useMutation(api.admin.rejectSuccessFeeProof);
   const setSlotHunting = useMutation(api.admin.setSlotHunting);
   const setInReview = useMutation(api.admin.setInReview);
   const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
@@ -948,6 +954,17 @@ export default function AdminApplicationDetail() {
                       ⚠️ Valider sans aperçu
                     </Button>
                   )}
+                  {/* Bouton Rejeter la preuve */}
+                  {hasEngagementProof && !isEngagementPaid && appId && !showRejectEngagementForm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                      onClick={() => setShowRejectEngagementForm(true)}
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Rejeter
+                    </Button>
+                  )}
                   {isEngagementPaid && (
                     <span className="text-xs font-semibold text-green-700 bg-green-100 px-2.5 py-1 rounded-full">Validé</span>
                   )}
@@ -956,6 +973,40 @@ export default function AdminApplicationDetail() {
                   )}
                 </div>
               </div>
+              {/* ── Formulaire de rejet inline ───────────────────────────────────── */}
+              {hasEngagementProof && !isEngagementPaid && showRejectEngagementForm && appId && (
+                <div className="mt-4 pt-4 border-t border-red-200 space-y-2">
+                  <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                    <XCircle className="w-3.5 h-3.5" /> Motif du rejet (visible par le client)
+                  </p>
+                  <Textarea
+                    placeholder="Ex : reçu illisible, montant incorrect, mauvais document…"
+                    value={rejectEngagementReason}
+                    onChange={(e) => setRejectEngagementReason(e.target.value)}
+                    rows={2}
+                    className="bg-red-50 border-red-200 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-red-600 hover:bg-red-700 text-white gap-1"
+                      onClick={() => {
+                        handleAction(
+                          () => rejectEngagementProof({ applicationId: appId, reason: rejectEngagementReason.trim() || undefined }),
+                          "Justificatif rejeté — le client a été notifié."
+                        );
+                        setShowRejectEngagementForm(false);
+                        setRejectEngagementReason("");
+                      }}
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Confirmer le rejet
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setShowRejectEngagementForm(false); setRejectEngagementReason(""); }}>
+                      Annuler
+                    </Button>
+                  </div>
+                </div>
+              )}
               {/* ── Preuve de paiement : aperçu inline ───────────────────────────── */}
               {hasEngagementProof && !isEngagementPaid && (
                 <div className="mt-4 pt-4 border-t border-amber-200">

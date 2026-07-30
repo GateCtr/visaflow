@@ -627,6 +627,48 @@ export const sendApplicationRejectedClient = internalAction({
   },
 });
 
+/* ──────────────── 8b. PREUVE DE PAIEMENT REJETÉE → CLIENT ─── */
+export const sendPaymentProofRejectedClient = internalAction({
+  args: {
+    to: v.string(),
+    applicantName: v.string(),
+    destination: v.string(),
+    paymentType: v.union(v.literal("engagement"), v.literal("success_fee")),
+    reason: v.optional(v.string()),
+    applicationId: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const label = args.paymentType === "engagement" ? "frais d'engagement" : "prime de succès";
+    const reasonBlock = args.reason
+      ? `<table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+           <tr>
+             <td style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;">
+               <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.6;">${escHtml(args.reason)}</p>
+             </td>
+           </tr>
+         </table>`
+      : "";
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Justificatif de paiement non conforme</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+        Le justificatif que vous avez soumis pour les <strong>${label}</strong> de votre dossier visa <strong>${destLabel(args.destination)}</strong>
+        (<strong>${args.applicantName}</strong>) n'a pas pu être accepté.
+      </p>
+      ${reasonBlock}
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+        Merci de soumettre un nouveau justificatif depuis votre espace client. Si vous avez des questions, utilisez la messagerie intégrée.
+      </p>
+      ${cta(`${APP_URL}/dashboard`, "Soumettre un nouveau justificatif")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: `Joventy — Justificatif de paiement à corriger (${destLabel(args.destination)})`,
+      html: htmlWrapper("Justificatif non conforme", body),
+    });
+  },
+});
+
 /* ──────────────────────── 9. NOUVEAU MESSAGE ADMIN → CLIENT ─── */
 export const sendNewMessageClient = internalAction({
   args: {
