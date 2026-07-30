@@ -308,7 +308,7 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlotHttp | null 
 
       const location = agendaId ?? "citaconsular";
       // state field: some Bookitit portals use state=1 to mean "day available"
-      // with times=[] (no specific time slot) — treat as available at 09:00
+      // with times=[] (no specific time slot) — treat as available at 07:00
       const stateRaw = dayObj.state ?? dayObj.status;
       const stateNum = typeof stateRaw === "number" ? stateRaw
         : typeof stateRaw === "string" ? parseInt(stateRaw, 10) : -1;
@@ -2034,6 +2034,8 @@ async function scanViaMainEndpoint(
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
       _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
     };
   }
 
@@ -2056,6 +2058,8 @@ async function scanViaMainEndpoint(
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
       _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
     };
   }
 
@@ -2074,6 +2078,8 @@ async function scanViaMainEndpoint(
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
       _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
     };
   }
 
@@ -2106,6 +2112,8 @@ async function scanViaMainEndpoint(
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
       _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
     };
   }
 

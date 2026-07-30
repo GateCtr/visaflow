@@ -85,6 +85,23 @@ async function main() {
 
     if (scanResult.status === "found" || scanResult.status === "not_found") {
       console.log(`\n  ✅ Scan stable (status=${scanResult.status}) — session chaude confirmée.`);
+      // ── Créneaux disponibles (avec nombre de places) ──────────────────────
+      if (scanResult._allSlots?.length) {
+        console.log(`\n  📅 Tous les créneaux (${scanResult._allSlots.length}) :`);
+        for (const s of scanResult._allSlots) {
+          const places = s.freeslots < 0 ? "?" : String(s.freeslots);
+          console.log(`       ${s.date} ${s.time}  [${places} place(s)]${s.agendaId ? `  agenda=${s.agendaId}` : ""}`);
+        }
+      }
+      // ── Config widget (captcha, registration_type, confirmation…) ─────────
+      if (scanResult._widgetConfig) {
+        const wc = scanResult._widgetConfig;
+        console.log(`\n  🔧 widgetConfig :`);
+        console.log(`       captcha           : ${wc.captcha ?? "n/a"}  ${wc.captcha === "0" || wc.captcha === 0 ? "✅ pas de captcha" : wc.captcha === "1" || wc.captcha === 1 ? "⚠️  hCaptcha requis" : ""}`);
+        console.log(`       registration_type : ${wc.registration_type ?? "n/a"}  ${wc.registration_type === "1" ? "(login seul)" : wc.registration_type === "2" ? "(inscription uniquement)" : wc.registration_type === "3" ? "(login + inscription)" : ""}`);
+        console.log(`       waiting_list      : ${wc.waiting_list ?? "n/a"}`);
+        console.log(`       confirmation      : ${wc.confirmation ?? "n/a"}  ${wc.confirmation === "1" ? "⚠️  OTP email requis" : ""}`);
+      }
       break;
     }
 
