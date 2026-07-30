@@ -32,6 +32,7 @@ import {
 import {
   createSpainPersistentBrowserDossierSession,
   callBookititEndpointViaBrowser,
+  callBookititViaJQueryInPage,
 } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
@@ -196,6 +197,22 @@ function parseJsonpResponse(text: string): unknown | null {
 // (roue qui tourne), sauf qu'on réessaie automatiquement au lieu d'attendre l'utilisateur.
 const BOOKING_5XX_RETRY_CODES = new Set([502, 503, 504, 520, 524]);
 
+/**
+ * Génère un nom de callback compatible jQuery JSONP.
+ *
+ * IMPORTANT : le serveur Bookitit (citaconsular.es) valide côté PHP que le paramètre
+ * callback= commence par "jQuery" suivi de chiffres et d'un underscore+timestamp.
+ * Toute autre valeur (ex: "cb17853897...") retourne un body vide (0B).
+ * C'est une protection CSRF Bookitit — le backend accepte uniquement les callbacks
+ * qui ressemblent à ceux générés par jQuery's $.ajax JSONP.
+ *
+ * Format jQuery 2.x : jQuery{random16chiffres}_{timestamp}
+ */
+function buildJQueryCallback(): string {
+  const rnd = Math.random().toString().replace("0.", "").padEnd(16, "0").slice(0, 16);
+  return `jQuery${rnd}_${Date.now()}`;
+}
+
 async function callBookititEndpoint(
   session: SpainCfSession,
   endpoint: string,
@@ -229,7 +246,7 @@ async function callBookititEndpoint(
 
     // Regénérer callback + _ à chaque tentative pour éviter la mise en cache
     const q = new URLSearchParams(params);
-    q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10000)}`);
+    q.set("callback", buildJQueryCallback());
     q.set("_", String(Date.now()));
     const url = `${baseUrl}${endpoint}?${q.toString()}`;
 
@@ -279,18 +296,33 @@ async function callBookititEndpointBrowser(
 ): Promise<unknown | null> {
   const baseUrl = "https://www.citaconsular.es/onlinebookings/";
   const q = new URLSearchParams(params);
-  q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10000)}`);
+  // Utiliser le format jQuery JSONP — le serveur Bookitit valide que callback commence par "jQuery"
+  q.set("callback", buildJQueryCallback());
   q.set("_", String(Date.now()));
   const url = `${baseUrl}${endpoint}?${q.toString()}`;
+
   // DEBUG — montrer les params clés envoyés
   const debugKeys = ["logintype","login","date","time","services[]","agendas[]","name","email"];
   const debugParams = debugKeys.filter(k => params[k]).map(k => `${k}=${params[k]}`).join(" | ");
   if (debugParams) console.log(`[spain-booking] 🔍 DEBUG ${endpoint} params: ${debugParams}`);
-  const body = await callBookititEndpointViaBrowser(url);
+
+  // Essai 1 : fetch() via page.evaluate (rapide, cache-first pour getagendas/etc)
+  let body = await callBookititEndpointViaBrowser(url);
+
+  // Essai 2 : jQuery AJAX si fetch retourne 0B.
+  // Le serveur Bookitit retourne 0B pour les endpoints d'auth (signin/, summary/) via fetch()
+  // car le PHPSESSID doit être dans la séquence naturelle du widget. jQuery.ajax utilise
+  // le même mécanisme que le vrai widget Backbone → le serveur accepte la requête.
   if (!body) {
-    console.warn(`[spain-booking] ${endpoint} (browser) — 0B`);
+    console.warn(`[spain-booking] ${endpoint} fetch→0B — fallback jQuery AJAX…`);
+    body = await callBookititViaJQueryInPage(url);
+  }
+
+  if (!body) {
+    console.warn(`[spain-booking] ${endpoint} (browser+jQuery) — toujours 0B`);
     return null;
   }
+
   console.log(`[spain-booking] 🔍 DEBUG ${endpoint} raw (300c): ${body.slice(0, 300)}`);
   return parseJsonpResponse(body);
 }

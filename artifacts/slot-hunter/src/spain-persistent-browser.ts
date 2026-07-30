@@ -1964,6 +1964,88 @@ export async function createSpainPersistentBrowserDossierSession(
  *
  * Retourne une chaîne vide si le browser n'est pas disponible ou si le fetch échoue.
  */
+/**
+ * Appelle un endpoint Bookitit via jQuery.ajax depuis le contexte de la page Chromium.
+ *
+ * Utilisé comme fallback quand page.evaluate(fetch()) retourne 0B pour les endpoints
+ * qui nécessitent la séquence naturelle du widget (signin/, summary/, confirmclient/).
+ * jQuery est déjà chargé par le widget Bookitit — on réutilise son mécanisme AJAX
+ * (même headers, même state PHP session) pour contourner le blocage 0B.
+ *
+ * Le résultat est le JSON.stringify() de l'objet déjà parsé par jQuery (pas de
+ * wrapper JSONP) — parseJsonpResponse() le gère via le fallback JSON.parse().
+ */
+export async function callBookititViaJQueryInPage(url: string): Promise<string> {
+  const page = spainPersistentBrowser.getActivePage();
+  if (!page) {
+    console.warn("[spain-pb] ⚠️ callBookititViaJQueryInPage — page non disponible");
+    return "";
+  }
+
+  const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);
+  const pageUrl = page.url().slice(0, 80);
+  console.log(`[spain-pb] 🎯 jQueryAjax → ${endpoint} (page: ${pageUrl})`);
+
+  try {
+    // IMPORTANT : on passe la fonction comme string littérale, PAS comme fonction TS.
+    // Raison : tsx/esbuild compile la source TS et injecte __name() dans les fonctions
+    // pour le debug. Quand Puppeteer sérialise la fonction compilée et l'envoie au
+    // browser, le browser lève ReferenceError: __name is not defined.
+    // Passer la logique comme expression string évite toute transformation esbuild.
+    const escapedUrl = JSON.stringify(url);
+    const result: string = await page.evaluate(`
+      (function(u) {
+        var jq = window.jQuery;
+        if (!jq) {
+          return fetch(u, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Accept': 'text/javascript, application/javascript, */*; q=0.01',
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          }).then(function(r) {
+            return r.text().then(function(b) {
+              return r.ok ? b : ('__ERR_STATUS_' + r.status);
+            });
+          }).catch(function(e) {
+            return '__ERR_NO_JQUERY_' + String(e).slice(0, 80);
+          });
+        }
+        return new Promise(function(resolve) {
+          jq.ajax({
+            url: u,
+            type: 'GET',
+            dataType: 'jsonp',
+            cache: false,
+            timeout: 20000,
+            success: function(data) {
+              try { resolve(JSON.stringify(data)); }
+              catch(e) { resolve('__ERR_STRINGIFY'); }
+            },
+            error: function(jqXHR, ts, et) {
+              var st = jqXHR && jqXHR.status ? jqXHR.status : 0;
+              resolve('__ERR_JQUERY_' + st + '_' + ts + '_' + et);
+            }
+          });
+        });
+      })(${escapedUrl})
+    `);
+
+    const bodyLen = result.length;
+    console.log(`[spain-pb] 📡 jQueryAjax ${endpoint} → ${bodyLen}B`);
+
+    if (result.startsWith("__ERR_")) {
+      console.warn(`[spain-pb] ⚠️ jQueryAjax ${endpoint} échoué: ${result.slice(0, 160)}`);
+      return "";
+    }
+    return result;
+  } catch (err) {
+    console.warn(`[spain-pb] ⚠️ callBookititViaJQueryInPage exception: ${err}`);
+    return "";
+  }
+}
+
 export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
   // ── Cache-first : réponse déjà capturée pendant le solve (state PHP encore chaud) ──
   const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);

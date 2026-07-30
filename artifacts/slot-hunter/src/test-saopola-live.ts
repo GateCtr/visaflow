@@ -147,11 +147,14 @@ async function main() {
     console.log(`  Créneau pré-confirmé : ${targetDate} à ${targetTime}`);
   }
 
+  // Saopola (retrait passeport São Paulo) : logintype=document → matricule numérique.
+  // Le login n'est PAS un email mais un numéro de matricule (ex: passeport DRC 00000000).
+  // Credentials faux → attendu signin_failed ou booking_failed (rejet serveur).
   const t0Book = Date.now();
   const bookResult = await executeHttpBooking(session, PORTAL_URL, mainHtml, {
-    login: "test.saopola.fake@gmail.com",
-    password: "FakePassword_Incorrect_2026",
-    applicantName: "TEST SAOPOLA",
+    login: "00000001",
+    password: "FakePassword_2026",
+    applicantName: "TEST SAOPOLA FAKE",
     applicantEmail: "test.saopola.fake@gmail.com",
     availableServices,
     targetDate,
