@@ -1658,3 +1658,43 @@ export async function createSpainPersistentBrowserDossierSession(
 ): Promise<SpainCfSession | null> {
   return spainPersistentBrowser.createDossierSession(cfSession, portalUrl);
 }
+
+/**
+ * Exécute un GET depuis le contexte browser (page.evaluate → fetch) et retourne le body.
+ *
+ * Utilisé par le scanner pour appeler getwidgetconfigurations/ et getservices/ sans
+ * changer d'IP : le browser et ces appels JSONP partagent le même proxy Decodo et le
+ * même PHPSESSID, ce que impit ne peut pas garantir (rotation IP indépendante).
+ *
+ * Retourne une chaîne vide si le browser n'est pas disponible ou si le fetch échoue.
+ */
+export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
+  const page = spainPersistentBrowser.getActivePage();
+  if (!page) return "";
+  try {
+    const body: string = await page.evaluate(async (u: string) => {
+      try {
+        const resp = await fetch(u, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Accept": "text/javascript, application/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        if (!resp.ok) return `__ERR_STATUS_${resp.status}`;
+        return await resp.text();
+      } catch (e: unknown) {
+        return `__ERR_FETCH_${String(e).slice(0, 80)}`;
+      }
+    }, url);
+    if (body.startsWith("__ERR_")) {
+      console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser échoué: ${body.slice(0, 120)}`);
+      return "";
+    }
+    return body;
+  } catch (err) {
+    console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser exception: ${err}`);
+    return "";
+  }
+}
