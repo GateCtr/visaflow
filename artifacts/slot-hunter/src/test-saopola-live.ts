@@ -109,7 +109,7 @@ async function main() {
 
   sep("PHASE 2 — Booking (faux identifiants)");
   console.log("  Objectif : parcourir le flow complet jusqu'au rejet serveur");
-  console.log("  Login    : test.saopola.fake@gmail.com");
+  console.log("  Login    : MAT00000000 (faux matricule — Saopola = numéro matricule)");
   console.log("  Password : FakePassword_Incorrect_2026");
 
   // La session CF est déjà cachée en mémoire depuis le scan

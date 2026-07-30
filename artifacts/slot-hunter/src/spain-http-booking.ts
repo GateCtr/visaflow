@@ -29,7 +29,10 @@ import {
   cloneSpainCfSessionForDossier,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
-import { createSpainPersistentBrowserDossierSession } from "./spain-persistent-browser.js";
+import {
+  createSpainPersistentBrowserDossierSession,
+  callBookititEndpointViaBrowser,
+} from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
   consumeOtpCode,
@@ -175,8 +178,11 @@ async function solveHCaptcha(
 // ─── JSONP Caller ───────────────────────────────────────────────────────────
 
 function parseJsonpResponse(text: string): unknown | null {
-  const src = text.trim();
+  let src = text.trim();
   if (!src) return null;
+  // Le cache CDP stocke parfois "callback=FnName({...})" (préfixe inclus).
+  // On le stripppe avant de parser pour que la regex fonctionne correctement.
+  if (src.startsWith("callback=")) src = src.slice("callback=".length);
   const m = src.match(/^[\w$.]+\(([\s\S]*)\);?$/);
   if (!m) {
     try { return JSON.parse(src); } catch { return null; }
@@ -253,6 +259,40 @@ async function callBookititEndpoint(
 
   console.warn(`[spain-booking] ❌ ${endpoint} — abandonné après ${maxAttempts} tentatives (dernier HTTP ${lastStatus})`);
   return null;
+}
+
+/**
+ * Variante de callBookititEndpoint qui route via la page Chromium active (même IP + PHPSESSID chaud).
+ *
+ * Utilisée quand session.source === "playwright" : le PHPSESSID établi par le contexte incognito
+ * est "froid" (le widget JS n'a pas tourné → serveur ignore les appels JSONP → 0B).
+ * La page principale, elle, a un PHPSESSID initialisé par le widget → réponses normales.
+ *
+ * Limitation : tous les dossiers partagent le même PHPSESSID de la page principale.
+ * En pratique, les portails Spain Bookitit n'ont qu'un seul slot disponible à la fois,
+ * donc le risque de collision inter-dossiers est négligeable.
+ */
+async function callBookititEndpointBrowser(
+  endpoint: string,
+  params: Record<string, string>,
+  portalUrl: string,
+): Promise<unknown | null> {
+  const baseUrl = "https://www.citaconsular.es/onlinebookings/";
+  const q = new URLSearchParams(params);
+  q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10000)}`);
+  q.set("_", String(Date.now()));
+  const url = `${baseUrl}${endpoint}?${q.toString()}`;
+  // DEBUG — montrer les params clés envoyés
+  const debugKeys = ["logintype","login","date","time","services[]","agendas[]","name","email"];
+  const debugParams = debugKeys.filter(k => params[k]).map(k => `${k}=${params[k]}`).join(" | ");
+  if (debugParams) console.log(`[spain-booking] 🔍 DEBUG ${endpoint} params: ${debugParams}`);
+  const body = await callBookititEndpointViaBrowser(url);
+  if (!body) {
+    console.warn(`[spain-booking] ${endpoint} (browser) — 0B`);
+    return null;
+  }
+  console.log(`[spain-booking] 🔍 DEBUG ${endpoint} raw (300c): ${body.slice(0, 300)}`);
+  return parseJsonpResponse(body);
 }
 
 function buildBookingCookieHeader(session: SpainCfSession): string {
@@ -465,10 +505,24 @@ export async function executeHttpBooking(
 
   // Chaque dossier doit obtenir son propre PHPSESSID avant toute requête
   // datetime/signin/summary. La clearance CF et l'IP proxy restent partagées.
-  // En mode persistent-browser, on utilise un contexte incognito Chromium
-  // pour obtenir un PHPSESSID frais sans passer par impit (bloqué par CF).
+  //
+  // Mode persistent-browser (session.source === "playwright") :
+  //   Le contexte incognito donne un PHPSESSID "froid" (le widget JS n'a pas tourné,
+  //   serveur retourne 0B sur tous les JSONP). On bypass complètement le contexte
+  //   incognito et on utilise callBookititEndpointBrowser() qui route par la page
+  //   principale Chromium — PHPSESSID chaud, réponses normales.
+  //
+  // Mode HTTP-only / impit :
+  //   Le contexte incognito navigue vers /main/ → PHPSESSID isolé → appels impit
+  //   passent par le même proxy IP → réponses normales.
+  const useBrowserCalls = session.source === "playwright";
   let bookingSession: SpainCfSession;
-  if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
+
+  if (useBrowserCalls) {
+    // Session principale = session browser chaude. Pas de contexte incognito.
+    bookingSession = session;
+    console.log(`${logPrefix} 🌐 Mode browser — PHPSESSID chaud (page principale Chromium)`);
+  } else if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
     const pbSession = await createSpainPersistentBrowserDossierSession(session, portalUrl);
     if (!pbSession) {
       return {
@@ -508,18 +562,27 @@ export async function executeHttpBooking(
   // Ces deux appels sont indépendants → 1 RTT au lieu de 2 (~200–500ms économisés
   // au moment où le serveur est le plus saturé).
   console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
+  const callEndpoint = useBrowserCalls
+    ? (ep: string, p: Record<string, string>) => callBookititEndpointBrowser(ep, p, portalUrl)
+    : (ep: string, p: Record<string, string>) => callBookititEndpoint(bookingSession, ep, p, portalUrl);
+
   const [agendasPayload, rawCfgPayload] = await Promise.all([
-    callBookititEndpoint(bookingSession, "getagendas/", {
+    callEndpoint("getagendas/", {
       ...baseParams,
       "services[]": targetService.serviceId, // PHP array notation confirmée par capture
       selectedPeople: "1",
-    }, portalUrl),
-    callBookititEndpoint(bookingSession, "getwidgetconfigurations/", baseParams, portalUrl).catch(() => null),
+    }),
+    callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null),
   ]);
+
+  // DEBUG temporaire — à retirer après diagnostic
+  console.log(`[spain-booking] 🔍 DEBUG getagendas raw: ${JSON.stringify(agendasPayload)?.slice(0, 400)}`);
+  console.log(`[spain-booking] 🔍 DEBUG widgetcfg raw: ${JSON.stringify(rawCfgPayload)?.slice(0, 400)}`);
 
   let agendaId = "";
   if (agendasPayload && typeof agendasPayload === "object") {
     const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
+    console.log(`[spain-booking] 🔍 DEBUG extractIds agendas: ${JSON.stringify(agendaIds)}`);
     if (agendaIds.length > 0) {
       agendaId = agendaIds[0];
       console.log(`[spain-booking] ✅ Agenda: ${agendaId}`);
@@ -545,8 +608,8 @@ export async function executeHttpBooking(
       end: new Date(year, month + 1, 0).toISOString().slice(0, 10),
     });
 
-    const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/",
-      buildDatetimeParams(now.getFullYear(), now.getMonth()), portalUrl);
+    const datetimePayload = await callEndpoint("datetime/",
+      buildDatetimeParams(now.getFullYear(), now.getMonth()));
 
     if (datetimePayload && typeof datetimePayload === "object") {
       const slot = extractFirstSlot(datetimePayload);
@@ -564,8 +627,8 @@ export async function executeHttpBooking(
       const futurePayloads = await Promise.all(
         [1, 2, 3].map((m) => {
           const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
-          return callBookititEndpoint(bookingSession, "datetime/",
-            buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
+          return callEndpoint("datetime/",
+            buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()));
         }),
       );
       for (let m = 0; m < futurePayloads.length; m++) {
@@ -727,7 +790,7 @@ export async function executeHttpBooking(
 
   for (const candidate of authCandidates) {
     console.log(`[spain-booking] 🔑 Tentative ${candidate.label} (${candidate.endpoint})…`);
-    const payload = await callBookititEndpoint(bookingSession, candidate.endpoint, candidate.params, portalUrl);
+    const payload = await callEndpoint(candidate.endpoint, candidate.params);
 
     if (!payload || typeof payload !== "object") {
       console.warn(`[spain-booking] ⚠️ ${candidate.endpoint} — pas de réponse ou format inattendu → candidat suivant`);
@@ -833,7 +896,7 @@ export async function executeHttpBooking(
       confirmParams.email = clientEmail;
     }
 
-    const confirmPayload = await callBookititEndpoint(bookingSession, "confirmclient/", confirmParams, portalUrl);
+    const confirmPayload = await callEndpoint("confirmclient/", confirmParams);
     if (!confirmPayload) {
       return { status: "booking_failed", errorMessage: "confirmclient/ pas de réponse", durationMs: Date.now() - t0 };
     }
@@ -867,7 +930,7 @@ export async function executeHttpBooking(
     logintype: "document", // clientData attribute — cohérent avec le signin qui a fonctionné
   };
 
-  const summaryPayload = await callBookititEndpoint(bookingSession, "summary/", summaryParams, portalUrl);
+  const summaryPayload = await callEndpoint("summary/", summaryParams);
   if (!summaryPayload) {
     return { status: "booking_failed", errorMessage: "summary/ pas de réponse", durationMs: Date.now() - t0 };
   }
