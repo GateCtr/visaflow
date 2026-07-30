@@ -232,6 +232,15 @@ class SpainPersistentBrowserManager {
   /** Page principale du browser persistant — réutilisée entre les cycles de scan. */
   private _page: import("puppeteer").Page | null = null;
 
+  /**
+   * Cache des réponses Bookitit API capturées immédiatement après /main/.
+   * Clé = nom de l'endpoint (ex: "getwidgetconfigurations/", "getservices/").
+   * Rempli par _prefetchBookititApis() juste après la capture de /main/,
+   * pendant que le state PHP Bookitit côté serveur est encore chaud.
+   * Vidé par closeAndInvalidate / invalidateSession / close.
+   */
+  private _apiPrefetchCache: Map<string, string> = new Map();
+
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
   private getProxyUrl(): string | undefined {
@@ -413,6 +422,15 @@ class SpainPersistentBrowserManager {
     return this._page;
   }
 
+  /**
+   * Retourne la réponse précachée d'un endpoint Bookitit (capturée pendant le solve),
+   * ou undefined si non disponible (cache miss → l'appelant doit faire le vrai appel).
+   * @param endpoint  Nom de l'endpoint, ex: "getwidgetconfigurations/", "getservices/"
+   */
+  getApiPrefetchCached(endpoint: string): string | undefined {
+    return this._apiPrefetchCache.get(endpoint);
+  }
+
   /** True si un closeAndInvalidate+retry a déjà été tenté sans récupérer de prefetch. */
   get prefetchRetried(): boolean {
     return this._prefetchRetried;
@@ -426,7 +444,75 @@ class SpainPersistentBrowserManager {
   invalidateSession(): void {
     this._cachedSession = null;
     this._prefetchRetried = false;
+    this._apiPrefetchCache.clear();
     console.log("[spain-pb] 🗑️ Session CF invalidée");
+  }
+
+  /**
+   * Appelle getwidgetconfigurations/ et getservices/ depuis la page browser
+   * immédiatement après la capture de /main/, pendant que le state PHP Bookitit
+   * côté serveur est encore chaud (~quelques centaines de ms après /main/).
+   *
+   * Les réponses sont stockées dans _apiPrefetchCache (clé = nom endpoint)
+   * pour être servies instantanément par callBookititEndpointViaBrowser().
+   */
+  async _prefetchBookititApis(page: import("puppeteer").Page, targetUrl: string): Promise<void> {
+    const base = "https://www.citaconsular.es/onlinebookings/";
+    const publickey = targetUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
+    const src = targetUrl.replace(/\/?$/, "/");
+    const srvsrc = "https://www.citaconsular.es";
+
+    const buildParams = (cb: string) => {
+      const q = new URLSearchParams();
+      q.append("callback", cb);
+      q.append("type", "default");
+      q.append("publickey", publickey);
+      q.append("lang", "es");
+      q.append("version", "4");
+      q.append("src", src);
+      q.append("srvsrc", srvsrc);
+      q.append("selectedPeople", "1");
+      q.append("_", String(Date.now()));
+      return q.toString();
+    };
+
+    const cfgUrl = `${base}getwidgetconfigurations/?${buildParams(`cbCfg${Date.now()}`)}`;
+    const svcUrl = `${base}getservices/?${buildParams(`cbSvc${Date.now() + 1}`)}`;
+
+    const fetchFromPage = async (url: string): Promise<string> => {
+      try {
+        return await page.evaluate(async (u: string) => {
+          try {
+            const r = await fetch(u, {
+              method: "GET",
+              credentials: "include",
+              headers: {
+                "Accept": "text/javascript, application/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest",
+              },
+            });
+            const body = await r.text();
+            return r.ok ? body : `__ERR_STATUS_${r.status}`;
+          } catch (e: unknown) {
+            return `__ERR_FETCH_${String(e).slice(0, 80)}`;
+          }
+        }, url);
+      } catch {
+        return "";
+      }
+    };
+
+    console.log("[spain-pb] ⚡ Prefetch Bookitit APIs (getwidgetconfigurations + getservices)…");
+    const [cfgRaw, svcRaw] = await Promise.all([fetchFromPage(cfgUrl), fetchFromPage(svcUrl)]);
+
+    const cfgOk = cfgRaw.length > 0 && !cfgRaw.startsWith("__ERR_");
+    const svcOk = svcRaw.length > 0 && !svcRaw.startsWith("__ERR_");
+    console.log(
+      `[spain-pb] ⚡ Prefetch terminé — getwidgetconfigurations: ${cfgOk ? cfgRaw.length + "B ✅" : "0B ❌"} | getservices: ${svcOk ? svcRaw.length + "B ✅" : "0B ❌"}`,
+    );
+
+    if (cfgOk) this._apiPrefetchCache.set("getwidgetconfigurations/", cfgRaw);
+    if (svcOk) this._apiPrefetchCache.set("getservices/", svcRaw);
   }
 
   /**
@@ -442,6 +528,7 @@ class SpainPersistentBrowserManager {
     this._cachedSession = null;
     this._prefetchRetried = false; // reset pour le prochain cycle
     this._page = null;
+    this._apiPrefetchCache.clear();
     if (this._browser) {
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents
@@ -1259,6 +1346,11 @@ class SpainPersistentBrowserManager {
         if (capturedMainBody.length > 100) {
           prefetchedMainHtml = capturedMainBody;
           console.log(`[spain-pb] 📦 /main/ XHR capturé via listener (${prefetchedMainHtml.length}B)`);
+          // Appel immédiat des APIs Bookitit pendant que le state PHP est encore chaud.
+          // Si on attend (ex: 8s après), le serveur libère l'état transitoire → 0B.
+          await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
+            console.warn(`[spain-pb] ⚠️ _prefetchBookititApis (non-fatal): ${e}`),
+          );
         } else {
           console.warn(
             `[spain-pb] ⚠️ XHR /main/ non capturé via listener (${capturedMainBody.length}B) — ` +
@@ -1359,6 +1451,10 @@ class SpainPersistentBrowserManager {
       if (evalBody.length > 100 && !evalBody.startsWith("__ERR_")) {
         prefetchedMainHtml = evalBody;
         console.log(`[spain-pb] 📦 /main/ fetch direct réussi (${evalBody.length}B) — scanner l'utilisera directement`);
+        // Même chose que pour le listener : prefetch immédiat pendant que le state PHP est chaud.
+        await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
+          console.warn(`[spain-pb] ⚠️ _prefetchBookititApis fallback (non-fatal): ${e}`),
+        );
       } else {
         console.warn(
           `[spain-pb] ⚠️ Fetch direct /main/ échoué: "${evalBody.slice(0, 120)}" — scanner devra retenter`,
@@ -1592,6 +1688,7 @@ class SpainPersistentBrowserManager {
 
   async close(): Promise<void> {
     this._page = null;
+    this._apiPrefetchCache.clear();
     if (this._browser) {
       await this._browser.close().catch(() => {});
       this._browser = null;
@@ -1679,30 +1776,48 @@ export async function createSpainPersistentBrowserDossierSession(
  * Retourne une chaîne vide si le browser n'est pas disponible ou si le fetch échoue.
  */
 export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
+  // ── Cache-first : réponse déjà capturée pendant le solve (state PHP encore chaud) ──
+  const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);
+  const cached = spainPersistentBrowser.getApiPrefetchCached(endpoint);
+  if (cached !== undefined) {
+    console.log(`[spain-pb] 📋 callBrowser ${endpoint} → cache (${cached.length}B)`);
+    return cached;
+  }
+
   const page = spainPersistentBrowser.getActivePage();
-  if (!page) return "";
+  if (!page) {
+    console.warn("[spain-pb] ⚠️ callBookititEndpointViaBrowser — _page null (browser non lancé ou fermé)");
+    return "";
+  }
+  // Logguer l'URL courante de la page pour détecter une navigation inattendue
+  const pageUrl = page.url().slice(0, 80);
+  console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
   try {
-    const body: string = await page.evaluate(async (u: string) => {
-      try {
-        const resp = await fetch(u, {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Accept": "text/javascript, application/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-          },
-        });
-        if (!resp.ok) return `__ERR_STATUS_${resp.status}`;
-        return await resp.text();
-      } catch (e: unknown) {
-        return `__ERR_FETCH_${String(e).slice(0, 80)}`;
-      }
-    }, url);
-    if (body.startsWith("__ERR_")) {
-      console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser échoué: ${body.slice(0, 120)}`);
+    const result: { status: number; bodyLen: number; body: string } = await page.evaluate(
+      async (u: string) => {
+        try {
+          const resp = await fetch(u, {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Accept": "text/javascript, application/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          const body = await resp.text();
+          return { status: resp.status, bodyLen: body.length, body: resp.ok ? body : `__ERR_STATUS_${resp.status}` };
+        } catch (e: unknown) {
+          return { status: 0, bodyLen: 0, body: `__ERR_FETCH_${String(e).slice(0, 120)}` };
+        }
+      },
+      url,
+    );
+    console.log(`[spain-pb] 📡 callBrowser ${endpoint} → HTTP ${result.status} | ${result.bodyLen}B`);
+    if (result.body.startsWith("__ERR_")) {
+      console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser échoué: ${result.body.slice(0, 140)}`);
       return "";
     }
-    return body;
+    return result.body;
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser exception: ${err}`);
     return "";
