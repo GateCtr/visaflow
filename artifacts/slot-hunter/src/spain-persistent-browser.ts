@@ -240,6 +240,13 @@ class SpainPersistentBrowserManager {
    * Vidé par closeAndInvalidate / invalidateSession / close.
    */
   private _apiPrefetchCache: Map<string, string> = new Map();
+  /**
+   * Verrou in-flight pour ensureSession() : empêche deux appelants concurrents
+   * (ex: watcher + retry unique) de lancer deux solves CF simultanés sur le
+   * même manager, ce qui causerait deux navigations puppeteer vers le même
+   * userDataDir et une course sur _browser / _cachedSession.
+   */
+  private _ensureSessionInFlight: Promise<SpainCfSession | null> | null = null;
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
@@ -586,6 +593,25 @@ class SpainPersistentBrowserManager {
       return this._cachedSession!;
     }
 
+    // ── Verrou in-flight : empêche deux solves CF simultanés ──────────────────
+    // Sans ce verrou, le watcher + le retry unique peuvent appeler ensureSession()
+    // en même temps (quand _cachedSession vient d'être invalidée), ce qui lance
+    // deux navigations puppeteer sur le même userDataDir → race sur _browser/
+    // _cachedSession + double dépense CapSolver.
+    if (this._ensureSessionInFlight) {
+      console.log(`[spain-pb] ⏳ Solve CF déjà en cours — attente du résultat partagé`);
+      return this._ensureSessionInFlight;
+    }
+
+    this._ensureSessionInFlight = this._ensureSessionImpl(targetUrl).finally(() => {
+      this._ensureSessionInFlight = null;
+    });
+    return this._ensureSessionInFlight;
+  }
+
+  private async _ensureSessionImpl(
+    targetUrl: string,
+  ): Promise<SpainCfSession | null> {
     // ── Tentative restauration Redis ──────────────────────────────────────────
     // Après un redéploiement, le PB manager repart avec _cachedSession=null mais
     // la session précédente (avec prefetchedMainHtml) peut encore être valide en Redis.

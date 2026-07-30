@@ -241,7 +241,7 @@ async function main() {
     const html2 = await dumpHtml(page, "step2-after-seed-navigation");
     log("STEP2", "--- Analyse contenu après navigation avec seed ---");
     analyzePageContent(html2);
-    log("STEP2", `jsdCaptured=${jsdCaptured}, jsdCfClearance=${jsdCfClearance?.slice(0, 20) ?? "null"}`);
+    log("STEP2", `jsdCaptured=${jsdCaptured}, jsdCfClearance=${(jsdCfClearance as string | null)?.slice(0, 20) ?? "null"}`);
 
     const cookies2 = await context.cookies();
     const cf1 = cookies2.find((c: any) => c.name === "cf_clearance");
@@ -296,7 +296,7 @@ async function main() {
     const html3b = await dumpHtml(page, "step3-after-15s-wait");
     log("STEP3", "--- Analyse après 15s d'attente ---");
     analyzePageContent(html3b);
-    log("STEP3", `jsdCaptured=${jsdCaptured}, jsdCfClearance=${jsdCfClearance?.slice(0, 20) ?? "null"}`);
+    log("STEP3", `jsdCaptured=${jsdCaptured}, jsdCfClearance=${(jsdCfClearance as string | null)?.slice(0, 20) ?? "null"}`);
 
     const cookies3 = await context.cookies();
     const cf3 = cookies3.find((c: any) => c.name === "cf_clearance");
@@ -344,7 +344,7 @@ async function main() {
     console.log("\n");
     log("RÉSULTAT", "========== RÉSUMÉ PHASE 2B ==========");
     log("RÉSULTAT", `JSD Oneshot observé: ${jsdCaptured ? "✅ OUI" : "❌ NON"}`);
-    log("RÉSULTAT", `JSD cf_clearance #2 capturé: ${jsdCfClearance ? "✅ OUI — " + jsdCfClearance.slice(0, 30) + "…" : "❌ NON"}`);
+    log("RÉSULTAT", `JSD cf_clearance #2 capturé: ${(jsdCfClearance as string | null) ? "✅ OUI — " + (jsdCfClearance as unknown as string).slice(0, 30) + "…" : "❌ NON"}`);
     log("RÉSULTAT", `cf_clearance final dans jar: ${finalCf ? "✅ OUI — " + finalCf.value.slice(0, 30) + "…" : "❌ NON"}`);
     log("RÉSULTAT", `Screenshots et HTML → ${OUT_DIR}`);
     log("RÉSULTAT", "======================================");
