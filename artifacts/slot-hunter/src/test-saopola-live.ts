@@ -65,11 +65,12 @@ async function main() {
   const CYCLE_DELAY_MS = 15_000;
 
   let scanResult = null as Awaited<ReturnType<typeof scanSpainHttp>> | null;
+  let scanDuration = 0;
   for (let cycle = 1; cycle <= MAX_CYCLES; cycle++) {
     console.log(`\n  ── Cycle ${cycle}/${MAX_CYCLES} ──`);
     const t0Scan = Date.now();
     scanResult = await scanSpainHttp(PORTAL_URL);
-    const scanDuration = Date.now() - t0Scan;
+    scanDuration = Date.now() - t0Scan;
 
     console.log(`  ⏱  Durée : ${elapsed(scanDuration)}`);
     console.log(`  📊 Status : ${scanResult.status}`);

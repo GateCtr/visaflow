@@ -202,7 +202,9 @@ function extractBookititBaseFromHtml(html: string): string | null {
 // ─── JSONP HTTP Caller (via impit + cf_clearance) ───────────────────────────
 
 function parseJsonpPayload(text: string): unknown | null {
-  const src = text.trim();
+  // Certains endpoints Bookitit retournent "callback=jQuery...(JSON)" — strip le préfixe "callback="
+  // avant d'appliquer le regex standard. Sans ça, match() échoue et retourne null.
+  const src = text.trim().replace(/^callback=/, "");
   if (!src) return null;
   const m = src.match(/^[\w$.]+\(([\s\S]*)\);?$/);
   if (!m) {
@@ -785,6 +787,9 @@ async function confirmSlotsViaDatetime(
   const cbBase = `cb${Date.now()}`;
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
+  // Même logique que pour getservices/ : session Playwright → PHPSESSID lié à l'IP Decodo
+  // du browser → getagendas/ et datetime/ via impit (IP différente) = 0B. On passe par le browser.
+  const useBrowserFetch = session.source === "playwright";
 
   for (const svc of services.slice(0, 3)) {
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
@@ -805,14 +810,25 @@ async function confirmSlotsViaDatetime(
       agQ.append("services[]",     svc.serviceId);
       agQ.append("selectedPeople", "1");
       agQ.append("_",              String(Date.now()));
-      const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
-      if (agRes?.ok) {
-        const agData = parseJsonpPayload(await agRes.text());
+      let agRaw: string;
+      if (useBrowserFetch) {
+        agRaw = await callBookititEndpointViaBrowser(`${base}getagendas/?${agQ}`);
+        console.log(`[spain-http] 🗓  getagendas/ (browser) → ${agRaw.length}B`);
+      } else {
+        const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
+        agRaw = agRes?.ok ? await agRes.text() : "";
+        console.log(`[spain-http] 🗓  getagendas/ (impit) → HTTP ${agRes?.status ?? "null"} | ${agRaw.length}B`);
+      }
+      if (agRaw.length > 0) {
+        const agData = parseJsonpPayload(agRaw);
         const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
         agendaId = ids[0] ?? "";
         if (agendaId) console.log(`[spain-http]    agenda: ${agendaId}`);
+        else console.warn(`[spain-http]    getagendas/ sans agenda ID (raw 200c: "${agRaw.slice(0, 200)}")`);
       }
-    } catch { /* non-fatal */ }
+    } catch (agErr) {
+      console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
+    }
 
     // 2. datetime/ sur 2 mois
     // Params confirmés par Burp : start/end (pas date_from/date_to), services[]/agendas[].
@@ -835,15 +851,25 @@ async function confirmSlotsViaDatetime(
         dtQ.append("start",          start);
         dtQ.append("end",            end);
         dtQ.append("_",              String(Date.now()));
-        const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
-        if (dtRes?.ok) {
-          const slot = extractSlotFromBookititPayload(parseJsonpPayload(await dtRes.text()));
+        let dtRaw: string;
+        if (useBrowserFetch) {
+          dtRaw = await callBookititEndpointViaBrowser(`${base}datetime/?${dtQ}`);
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} (browser) → ${dtRaw.length}B`);
+        } else {
+          const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
+          dtRaw = dtRes?.ok ? await dtRes.text() : "";
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit) → HTTP ${dtRes?.status ?? "null"} | ${dtRaw.length}B`);
+        }
+        if (dtRaw.length > 0) {
+          const slot = extractSlotFromBookititPayload(parseJsonpPayload(dtRaw));
           if (slot) {
             console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${slot.date} ${slot.time} — "${svc.serviceName}"`);
             return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time };
           }
         }
-      } catch { /* non-fatal */ }
+      } catch (dtErr) {
+        console.warn(`[spain-http] ⚠️ datetime/ exception: ${dtErr}`);
+      }
     }
     console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
   }

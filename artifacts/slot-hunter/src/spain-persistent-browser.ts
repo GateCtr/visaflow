@@ -1032,9 +1032,17 @@ class SpainPersistentBrowserManager {
     let cdpNet: any = null;
     const pendingMainRequests = new Map<string, string>(); // requestId → url
     const pendingJsdRequests  = new Map<string, string>(); // requestId → url (JSD oneshot)
+    const pendingApiRequests  = new Map<string, string>(); // requestId → endpoint name (getwidgetconfigurations/, getservices/, getagendas/, datetime/)
     // true si JSD oneshot a répondu AVEC un nouveau cf_clearance (challenge accepté).
     // Si false : le cookie cf_clearance est "fantôme" — la session est invalide pour /main/.
     let jsdOneShotAccepted = false;
+    // Promise résolue quand cfg + svc sont capturées naturellement par le widget JS.
+    let widgetApisResolve: (() => void) | null = null;
+    const widgetApisSignal = new Promise<void>((resolve) => { widgetApisResolve = resolve; });
+    let widgetApisCount = 0; // compte seulement cfg + svc
+    // Promise résolue quand getagendas/ est capturé (suite au clic sur service simulé).
+    let widgetSlotResolve: (() => void) | null = null;
+    const widgetSlotSignal = new Promise<void>((resolve) => { widgetSlotResolve = resolve; });
     try {
       cdpNet = await page.createCDPSession();
       await cdpNet.send("Network.enable", {});
@@ -1050,6 +1058,16 @@ class SpainPersistentBrowserManager {
         // Track JSD oneshot to capture response (tells us if CF accepted the token)
         if (url.includes("jsd/oneshot")) {
           pendingJsdRequests.set(ev.requestId, url);
+        }
+        // Track widget JSONP APIs — capturés naturellement par le widget JS
+        if (url.includes("onlinebookings/getwidgetconfigurations")) {
+          pendingApiRequests.set(ev.requestId, "getwidgetconfigurations/");
+        } else if (url.includes("onlinebookings/getservices") && !url.includes("getagendas") && !url.includes("datetime")) {
+          pendingApiRequests.set(ev.requestId, "getservices/");
+        } else if (url.includes("onlinebookings/getagendas")) {
+          pendingApiRequests.set(ev.requestId, "getagendas/");
+        } else if (url.includes("onlinebookings/datetime") && !url.includes("datetimetypes")) {
+          pendingApiRequests.set(ev.requestId, "datetime/");
         }
       });
 
@@ -1101,6 +1119,37 @@ class SpainPersistentBrowserManager {
         if (!pendingMainRequests.has(ev.requestId)) return;
         pendingMainRequests.delete(ev.requestId);
         console.warn(`[spain-pb] ❌ /main/ loadingFailed: ${ev.errorText}`);
+      });
+
+      // Capturer les réponses naturelles du widget JS via CDP Network.
+      // cfg + svc : appelés automatiquement par mainv1.js après /main/.
+      // getagendas/ + datetime/ : appelés après clic sur service (simulé ci-dessous).
+      cdpNet.on("Network.loadingFinished", async (ev: any) => {
+        if (!pendingApiRequests.has(ev.requestId)) return;
+        const ep = pendingApiRequests.get(ev.requestId)!;
+        pendingApiRequests.delete(ev.requestId);
+        try {
+          const { body, base64Encoded } = await cdpNet.send("Network.getResponseBody", {
+            requestId: ev.requestId,
+          });
+          const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
+          if (decoded.length > 10 && !decoded.startsWith("__ERR_")) {
+            console.log(`[spain-pb] 📦 Widget API ${ep} capturée via CDP (${decoded.length}B)`);
+            this._apiPrefetchCache.set(ep, decoded);
+            if (ep === "getwidgetconfigurations/" || ep === "getservices/") {
+              widgetApisCount++;
+              if (widgetApisCount >= 2 && widgetApisResolve) widgetApisResolve();
+            } else if (ep === "getagendas/" && widgetSlotResolve) {
+              widgetSlotResolve(); // signal pour arrêter l'attente
+            }
+          } else {
+            console.warn(`[spain-pb] ⚠️ Widget API ${ep} → 0B (serveur vide)`);
+            if ((ep === "getwidgetconfigurations/" || ep === "getservices/")) {
+              widgetApisCount++;
+              if (widgetApisCount >= 2 && widgetApisResolve) widgetApisResolve();
+            }
+          }
+        } catch { /* non-fatal */ }
       });
     } catch (cdpErr) {
       console.warn(`[spain-pb] ⚠️ CDP Network setup (non-fatal): ${cdpErr}`);
@@ -1346,11 +1395,88 @@ class SpainPersistentBrowserManager {
         if (capturedMainBody.length > 100) {
           prefetchedMainHtml = capturedMainBody;
           console.log(`[spain-pb] 📦 /main/ XHR capturé via listener (${prefetchedMainHtml.length}B)`);
-          // Appel immédiat des APIs Bookitit pendant que le state PHP est encore chaud.
-          // Si on attend (ex: 8s après), le serveur libère l'état transitoire → 0B.
-          await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
-            console.warn(`[spain-pb] ⚠️ _prefetchBookititApis (non-fatal): ${e}`),
+          // Attendre que mainv1.js charge et appelle naturellement getwidgetconfigurations/ + getservices/.
+          // CDP les intercepte dans Network.loadingFinished ci-dessus — plus fiable que page.evaluate(fetch)
+          // qui retournait 0B car appelé avant que le widget ait initialisé la session PHP.
+          console.log(`[spain-pb] ⏳ Attente APIs widget naturelles (mainv1.js, max 10s)…`);
+          await Promise.race([
+            widgetApisSignal,
+            new Promise<void>((r) => setTimeout(r, 10_000)),
+          ]);
+          const cfgLen = this._apiPrefetchCache.get("getwidgetconfigurations/")?.length ?? 0;
+          const svcLen = this._apiPrefetchCache.get("getservices/")?.length ?? 0;
+          console.log(
+            `[spain-pb] ⚡ Widget APIs — getwidgetconfigurations: ${cfgLen > 0 ? cfgLen + "B ✅" : "0B ❌"} | getservices: ${svcLen > 0 ? svcLen + "B ✅" : "0B ❌"}`,
           );
+
+          // ── Simulation clic service → déclenche getagendas/ + datetime/ naturellement ──
+          // Ces endpoints ne sont appelés par le widget QUE sur interaction utilisateur.
+          // Un appel page.evaluate(fetch()) retourne 0B : le PHPSESSID Bookitit est lié
+          // à la séquence natural du widget. On simule un clic pour que le widget fasse
+          // lui-même l'appel, et CDP intercepte la réponse.
+          if (svcLen > 0) {
+            try {
+              console.log(`[spain-pb] ⏳ Attente rendu Backbone (4s) → clic service…`);
+              await new Promise<void>((r) => setTimeout(r, 4_000));
+
+              // Diagnostic DOM d'abord : comprendre ce que Backbone a rendu
+              const domSnapshot = await page.evaluate((): string => {
+                const sel = document.querySelector("#selectservice, .clsBktServiceSelect, #bkt-services, .bkt-services, [class*='service']");
+                const allLinks = Array.from(document.querySelectorAll('a[href*="service"]'));
+                return JSON.stringify({
+                  bodySnippet: document.body?.innerHTML?.slice(4000, 5000) ?? "",
+                  serviceLinks: allLinks.slice(0, 10).map(a => ({ href: a.getAttribute("href"), text: a.textContent?.slice(0, 40), vis: (a as HTMLElement).offsetParent !== null })),
+                  selFound: sel?.className ?? "null",
+                });
+              }).catch(() => "{}");
+              console.log(`[spain-pb] 🔍 DOM services snapshot: ${domSnapshot.slice(0, 400)}`);
+
+              const clickedHref = await page.evaluate((): string | null => {
+                // Le widget Bookitit rend les services comme <a href="#selectservice/{id}">
+                const links = Array.from(
+                  document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'),
+                );
+                // Filtrer les liens dans des templates Backbone (<%=...%>)
+                // NE PAS filtrer par offsetParent — certains containers sont cachés par CSS
+                for (const a of links) {
+                  const href = a.getAttribute("href") ?? "";
+                  if (href.includes("<%") || href.includes("%>")) continue;
+                  a.click();
+                  return href;
+                }
+                return null;
+              }).catch(() => null);
+
+              if (clickedHref) {
+                console.log(`[spain-pb] 🖱️ Clic simulé sur service : ${clickedHref} — attente getagendas/ (max 8s)…`);
+                await Promise.race([
+                  widgetSlotSignal,
+                  new Promise<void>((r) => setTimeout(r, 8_000)),
+                ]);
+                const agLen0 = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
+                if (agLen0 > 0) {
+                  // getagendas/ capturé → le widget va appeler datetime/ dans les ~1-2s
+                  // (auto-selection de l'agenda + rendu calendrier). On attend 5s max.
+                  console.log(`[spain-pb] ✅ getagendas/ capturé (${agLen0}B) — attente datetime/ naturel (max 5s)…`);
+                  let dtWaited = 0;
+                  while (dtWaited < 5_000) {
+                    if ((this._apiPrefetchCache.get("datetime/")?.length ?? 0) > 0) break;
+                    await new Promise<void>((r) => setTimeout(r, 300));
+                    dtWaited += 300;
+                  }
+                }
+                const agLen  = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
+                const dtLen  = this._apiPrefetchCache.get("datetime/")?.length  ?? 0;
+                console.log(
+                  `[spain-pb] ⚡ Slot APIs — getagendas: ${agLen > 0 ? agLen + "B ✅" : "0B ❌"} | datetime: ${dtLen > 0 ? dtLen + "B ✅" : "0B ❌"}`,
+                );
+              } else {
+                console.warn(`[spain-pb] ⚠️ Aucun lien #selectservice visible dans le DOM — skip clic service`);
+              }
+            } catch (clickErr) {
+              console.warn(`[spain-pb] ⚠️ Simulation clic service (non-fatal): ${clickErr}`);
+            }
+          }
         } else {
           console.warn(
             `[spain-pb] ⚠️ XHR /main/ non capturé via listener (${capturedMainBody.length}B) — ` +
