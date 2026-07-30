@@ -1790,18 +1790,14 @@ async function scanViaMainEndpoint(
     _: String(tWidget + 2),
   });
 
-  // ─── Step 3a: /main/ — browser prefetch OR impit ─────────────────────────
-  // CF vérifie le TLS/HTTP2 fingerprint pour /onlinebookings/main/ et retourne
-  // HTTP 200 avec body vide (text/html) pour les requêtes impit, même avec un
-  // cf_clearance valide. Le vrai Chromium passe car il a le bon fingerprint.
-  //
-  // Quand session.prefetchedMainHtml est défini (session persistent-browser via
-  // CapSolver path), le browser a déjà fetché /main/ et capturé le JSONP.
-  // On utilise ce contenu directement — pas d'appel impit.
-  //
-  // Sinon (chemin normal ou session native Chromium), on appelle impit comme avant.
-  // Dans ce cas, le JSD oneshot préalable (step 2b) a normalement validé cf_clearance
-  // pour /main/ côté CF, et impit peut réussir.
+  // ─── Step 3a: /main/ — browser prefetch OR browser live-fetch OR impit ──────
+  // CF lie le PHPSESSID à l'IP exacte qui a résolu le challenge JSD.
+  // • session.prefetchedMainHtml → body capturé par CDP pendant la navigation browser.
+  // • session.source === "playwright" (sans prefetch) → JSD oneshot "cookie fantôme" :
+  //     le CDP n'a pas capturé /main/ mais le browser est encore actif sur la bonne IP.
+  //     On appelle /main/ depuis le contexte browser (callBookititEndpointViaBrowser) —
+  //     même IP, même cookies, same-origin → CF accepte. impit évité (IP différente).
+  // • Autres sessions → impit comme avant (step 2b a normalement validé cf_clearance).
   let mainBody = "";
   let mainCfRay = "";
 
@@ -1812,6 +1808,24 @@ async function scanViaMainEndpoint(
     );
     // Fire beacon RUM #29 malgré l'absence de requête réseau (CF corrèle avec l'IP proxy)
     fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
+  } else if (session.source === "playwright") {
+    // Session Playwright active mais /main/ non capturé via CDP (JSD oneshot cookie fantôme).
+    // Appel depuis le contexte browser → même IP que cf_clearance → CF accepte.
+    const mainUrl = `${baseBookititUrl}main/?${mainParams}`;
+    console.log(`[spain-http] 🌐 /main/ via browser (session Playwright — même IP que cf_clearance)`);
+    try {
+      mainBody = await callBookititEndpointViaBrowser(mainUrl);
+      console.log(`[spain-http] 📡 /main/ browser → ${mainBody.length}B`);
+    } catch (err) {
+      console.warn(`[spain-http] ⚠️ /main/ browser échoué: ${err}`);
+      mainBody = "";
+    }
+    fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
+    if (mainBody.length === 0) {
+      console.warn(`[spain-http] ⚠️ /main/ browser → 0B — session invalidée (retry avec JSD frais)`);
+      invalidateSpainCfSession();
+      return null;
+    }
   } else {
     // Séquence applicative observée :
     //   main/                → t+0      (response immédiate, détection depuis ce body)
