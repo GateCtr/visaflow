@@ -36,16 +36,42 @@ const CAPSOLVER_BASE = "https://api.capsolver.com";
 
 /**
  * Retourne l'URL proxy active pour l'Espagne.
- * Priorité : pool Decodo (DECODO_PROXY_URLS ou DECODO_PROXY_URL) → SOAX_PROXY_URL.
+ * Priorité : Oxylabs résidentiel (si SPAIN_USE_OXYLABS=1) → Decodo pool → SOAX_PROXY_URL.
  *
- * En mode multi-pool (IPs dédiées à ports fixes), retourne l'URL courante du pool.
- * La rotation est gérée par buildRotatedProxyUrl() dans spain-persistent-browser.ts.
+ * SPAIN_USE_OXYLABS=1 force Oxylabs résidentiel pour contourner un PoP CF bloqué
+ * (ex: tous les nœuds Decodo sortent par SJC avec un nonce JSD expiré).
+ * Oxylabs résidentiel route via des IPs espagnoles/européennes → PoP CF différent.
  */
 function getSpainProxyUrl(identifier = "spain-cf", lifetime = SOAX_SPAIN_SESSION_LIFETIME_MIN): string | undefined {
+  // Oxylabs résidentiel — prioritaire si SPAIN_USE_OXYLABS=1 (bypass PoP CF bloqué)
+  if (process.env.SPAIN_USE_OXYLABS === "1") {
+    const oxUser = process.env.OXYLABS_USERNAME;
+    const oxPass = process.env.OXYLABS_PASSWORD;
+    if (oxUser && oxPass) {
+      const cc = process.env.SPAIN_SOAX_COUNTRY ?? "es";
+      const url = `http://customer-${oxUser}-cc-${cc}:${oxPass}@pr.oxylabs.io:7777`;
+      const masked = url.replace(/:([^:@]+)@/, ":***@");
+      console.log(`[spain-soax] 🌐 Oxylabs résidentiel actif (cc=${cc}) → PoP CF non-SJC attendu`);
+      console.log(`[spain-soax]    Proxy: ${masked.slice(0, 80)}…`);
+      return url;
+    }
+    console.warn("[spain-soax] ⚠️ SPAIN_USE_OXYLABS=1 mais OXYLABS_USERNAME/PASSWORD absents — fallback Decodo");
+  }
   const decodo = getCurrentDecodoUrl();
   if (decodo) return decodo;
   const soax = process.env.SOAX_PROXY_URL;
   if (soax) return makeSpainSoaxStickyUrl(soax, lifetime, identifier);
+  // Oxylabs résidentiel comme dernier recours (sans flag forcé)
+  const oxUser = process.env.OXYLABS_USERNAME;
+  const oxPass = process.env.OXYLABS_PASSWORD;
+  if (oxUser && oxPass) {
+    const cc = process.env.SPAIN_SOAX_COUNTRY ?? "es";
+    const url = `http://customer-${oxUser}-cc-${cc}:${oxPass}@pr.oxylabs.io:7777`;
+    const masked = url.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[spain-soax] 🌐 Oxylabs résidentiel (dernier recours, cc=${cc})`);
+    console.log(`[spain-soax]    Proxy: ${masked.slice(0, 80)}…`);
+    return url;
+  }
   return undefined;
 }
 

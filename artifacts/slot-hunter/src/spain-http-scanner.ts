@@ -316,9 +316,8 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlotHttp | null 
       const times = dayObj.times;
       // times=[] (empty array) + state=1 → day available, no time restriction
       if (Array.isArray(times) && times.length === 0 && stateNum === 1) {
-        // times=[] + state=1 → jour disponible sans heure précise — on commence à 07:00
-        // (les créneaux Kinshasa ouvrent à 08:00, les autres portails pourraient ouvrir plus tôt)
-        return { date, time: "07:00", location, agendaId };
+        // times=[] + state=1 → jour disponible sans heure précise — 09:00 par défaut (Saopola)
+        return { date, time: "09:00", location, agendaId };
       }
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
       const timesObj = times as Record<string, unknown>;
@@ -753,8 +752,9 @@ async function confirmSlotsViaDatetime(
       //   → Bookitit rejette le PHPSESSID → 0B. On appelle depuis la page Chromium
       //   elle-même (callBookititEndpointViaBrowser) : même IP, même cookies, same-origin.
       //
-      // Autres modes (impit / CapSolver) : spainCfFetch inchangé.
-      const useBrowserFetch = session.source === "playwright";
+      // Toujours passer par le browser : le PHPSESSID + cf_clearance sont liés à l'IP
+      // Decodo du browser — impit sur une IP différente → 0B systématique.
+      const useBrowserFetch = true;
 
       let cfgRaw: string;
       if (useBrowserFetch) {
@@ -851,7 +851,8 @@ async function confirmSlotsViaDatetime(
   const srvsrc = "https://www.citaconsular.es";
   // Même logique que pour getservices/ : session Playwright → PHPSESSID lié à l'IP Decodo
   // du browser → getagendas/ et datetime/ via impit (IP différente) = 0B. On passe par le browser.
-  const useBrowserFetch = session.source === "playwright";
+  // Toujours via browser : CF cookies + PHPSESSID liés à l'IP Decodo du browser.
+  const useBrowserFetch = true;
 
   // Filtrer les services dont le nom est purement HTML invisible (placeholder Bookitit)
   // ex: "<span style='display:none;'></span>" — pas de contenu visible pour le booking
@@ -865,6 +866,7 @@ async function confirmSlotsViaDatetime(
   }
 
   for (const svc of servicesToCheck.slice(0, 3)) {
+    const svcSlotsStart = allSlots.length; // repère pour détecter les créneaux de CE service
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
     // 1. getagendas/ pour ce service
@@ -935,25 +937,37 @@ async function confirmSlotsViaDatetime(
         }
         if (dtRaw.length > 0) {
           const parsed = parseJsonpPayload(dtRaw);
-          // Accumuler TOUS les créneaux de cette réponse datetime/ (pour _allSlots)
+          // ── Log structure brute du premier jour (voir les champs réels Bookitit) ──
+          if (parsed && typeof parsed === "object") {
+            const slots0 = (parsed as Record<string, unknown>).Slots;
+            if (Array.isArray(slots0) && slots0.length > 0) {
+              console.log(`[spain-http] 🔎 datetime/ raw day[0] (${start}): ${JSON.stringify(slots0[0]).slice(0, 600)}`);
+            } else {
+              console.log(`[spain-http] 🔎 datetime/ ${start} — structure: keys=${Object.keys(parsed as object).join(",")}`);
+            }
+          }
+          // Accumuler TOUS les créneaux sur les 3 mois (pas de retour précoce — on finit le scan)
           const newSlots = extractAllSlotsFromDatetime(parsed);
           for (const s of newSlots) allSlots.push(s);
           if (newSlots.length > 0) {
-            console.log(`[spain-http] 📊 datetime/ ${start}→${end} — ${newSlots.length} créneau(x) : ${newSlots.slice(0, 3).map(s => `${s.date} ${s.time} (${s.freeslots < 0 ? "?" : s.freeslots} places)`).join(", ")}`);
-          }
-          const slot = extractSlotFromBookititPayload(parsed);
-          if (slot) {
-            console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${slot.date} ${slot.time} — "${svc.serviceName}"`);
-            return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time, allSlots, widgetConfig };
+            const preview = newSlots.slice(0, 5).map(s => `${s.date} ${s.time} (${s.freeslots < 0 ? "?" : s.freeslots} places)`).join(", ");
+            const more = newSlots.length > 5 ? ` … +${newSlots.length - 5} de plus` : "";
+            console.log(`[spain-http] 📊 datetime/ ${start}→${end} — ${newSlots.length} créneau(x) : ${preview}${more}`);
           } else {
-            // Log raw structure to diagnose empty slots / unexpected format
             const rawSnip = dtRaw.slice(0, 400);
-            console.log(`[spain-http] 🔎 datetime/ ${start} parsed mais pas de créneau — raw(400): ${rawSnip}`);
+            console.log(`[spain-http] 🔎 datetime/ ${start} aucun créneau extrait — raw(400): ${rawSnip}`);
           }
         }
       } catch (dtErr) {
         console.warn(`[spain-http] ⚠️ datetime/ exception: ${dtErr}`);
       }
+    }
+    // Après les 3 mois : si de nouveaux créneaux ont été trouvés pour ce service → retour
+    if (allSlots.length > svcSlotsStart) {
+      const firstSlot = allSlots[svcSlotsStart];
+      const count = allSlots.length - svcSlotsStart;
+      console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${firstSlot.date} ${firstSlot.time} — "${svc.serviceName}" (${count} créneaux sur 3 mois)`);
+      return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: firstSlot.date, time: firstSlot.time, allSlots, widgetConfig };
     }
     console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
   }
@@ -995,7 +1009,27 @@ function extractAllSlotsFromDatetime(
       : undefined;
 
     const times = dayObj.times;
-    if (!times || typeof times !== "object" || Array.isArray(times)) continue;
+
+    // Log structure du premier jour pour voir les champs réels retournés par Bookitit
+    if (slots.length === 0) {
+      const timesType = Array.isArray(times) ? `array[${(times as unknown[]).length}]` : typeof times;
+      const stateVal = dayObj.state ?? dayObj.status ?? "n/a";
+      console.log(`[spain-http] 🔎 datetime/ extAllSlots day[0] ${date}: state=${JSON.stringify(stateVal)} times_type=${timesType} keys=${dayObj && typeof dayObj === "object" ? Object.keys(dayObj).join(",") : "n/a"}`);
+    }
+
+    // Cas spécial : times=[] (tableau vide) + state=1 → jour dispo sans créneaux explicites
+    // Bookitit indique "disponible" mais ne liste pas d'heures — on utilise 09:00 par défaut (Saopola)
+    if (Array.isArray(times)) {
+      const stateRaw = dayObj.state ?? dayObj.status;
+      const stateNum = typeof stateRaw === "number" ? stateRaw
+        : typeof stateRaw === "string" ? parseInt(stateRaw, 10) : -1;
+      if (times.length === 0 && stateNum === 1) {
+        console.log(`[spain-http] 🗓  datetime/ jour dispo times=[] state=1 → ${date} 09:00`);
+        slots.push({ date, time: "09:00", agendaId: dayAgendaId, freeslots: -1 });
+      }
+      continue; // tableau → pas de clés d'heures à itérer
+    }
+    if (!times || typeof times !== "object") continue;
 
     // Trier par clé (= heure "HH:MM") — l'ordre ASC donne les plus tôt en premier
     const sortedTimes = Object.entries(times as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
@@ -1005,9 +1039,17 @@ function extractAllSlotsFromDatetime(
       const t = v as Record<string, unknown>;
 
       const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
+      const totalRaw = t.totalSlots ?? t.totalslots ?? t.total_slots;
       const free = typeof freeRaw === "number" ? freeRaw
         : typeof freeRaw === "string" ? parseInt(freeRaw, 10)
         : -1; // -1 = inconnu (disponibilité probable)
+      const total = typeof totalRaw === "number" ? totalRaw
+        : typeof totalRaw === "string" ? parseInt(totalRaw, 10)
+        : -1;
+      // Log champs bruts du premier créneau pour diagnostiquer freeslots
+      if (slots.length === 0) {
+        console.log(`[spain-http] 🔎 datetime/ time[0] ${date} ${timeKey}: free=${free} total=${total} raw=${JSON.stringify(v).slice(0, 150)}`);
+      }
       if (free === 0) continue; // explicitement aucun créneau
 
       const time = /^\d{1,2}:\d{2}$/.test(timeKey) ? timeKey
