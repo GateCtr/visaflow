@@ -34,6 +34,7 @@ import {
   callBookititEndpointViaBrowser,
   callBookititViaJQueryInPage,
   navigateToSelecttime,
+  submitSigninFormViaDOM,
 } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
@@ -808,11 +809,18 @@ export async function executeHttpBooking(
   };
 
   // ─── 5b. Warmup PHPSESSID via navigation #selecttime ─────────────────────────
-  // signin/ (type=2 et 3) et signupfirstappointment/ (type=1) retournent 0B si le
-  // PHPSESSID n'a pas traversé le router Backbone (selecttime → vue auth).
-  // On navigue via location.hash (pas page.goto → pas de CF) pour activer cet état.
+  // Après navigateToSelecttime(), le widget appelle getsigninfields/ automatiquement
+  // (confirmé par CDP 2026-07-30). Ce call retourne un nonce côté PHP qui est stocké
+  // dans la session PHP — signin/ ne répond que si ce nonce est présent.
+  //
+  // On ne réplique PAS getsigninfields/ nous-mêmes : il retourne 0B à nos fetch/jQuery
+  // car il nécessite une variable de session PHP initialisée par le widget lui-même.
+  // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
+  // fonctionnera.
   if (useBrowserCalls) {
     await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+    // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
+    await new Promise<void>((r) => setTimeout(r, 1_000));
   }
 
   // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
@@ -835,7 +843,26 @@ export async function executeHttpBooking(
 
   for (const candidate of authCandidates) {
     console.log(`[spain-booking] 🔑 Tentative ${candidate.label} (${candidate.endpoint})…`);
-    const payload = await callEndpoint(candidate.endpoint, candidate.params);
+    let payload = await callEndpoint(candidate.endpoint, candidate.params);
+
+    // ── Fallback DOM form submit pour signin/ en mode browser ────────────────
+    // fetch() et jQuery script tag retournent 0B pour signin/ et getsigninfields/
+    // car le serveur PHP valide une variable de session définie uniquement par le
+    // widget Backbone lui-même. On remplit le formulaire DOM pour que le widget
+    // émette l'appel signin/ avec le bon state PHP.
+    if (!payload && useBrowserCalls && candidate.endpoint === "signin/") {
+      console.log(`[spain-booking] 🖊️ signin/ → 0B via fetch/jQuery — fallback DOM form submit…`);
+      const domBody = await submitSigninFormViaDOM(config.login, config.password);
+      if (domBody) {
+        try {
+          const parsed = domBody.match(/^[\w$.]+\(([\s\S]*)\);?$/);
+          payload = parsed ? JSON.parse(parsed[1].trim()) : JSON.parse(domBody);
+          console.log(`[spain-booking] 🔍 signin/ DOM raw (300c): ${domBody.slice(0, 300)}`);
+        } catch {
+          console.warn(`[spain-booking] ⚠️ signin/ DOM — impossible de parser la réponse: ${domBody.slice(0, 160)}`);
+        }
+      }
+    }
 
     if (!payload || typeof payload !== "object") {
       console.warn(`[spain-booking] ⚠️ ${candidate.endpoint} — pas de réponse ou format inattendu → candidat suivant`);

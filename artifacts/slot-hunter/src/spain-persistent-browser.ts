@@ -2086,16 +2086,19 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
 }
 
 /**
- * Navigue le widget Bookitit vers #selecttime/DATE/TIME/AGENDA via location.hash
- * (pas page.goto → pas de navigation top-level → CF ne se déclenche pas).
+ * Navigue le widget Bookitit vers #selecttime/DATE/TIME/AGENDA et capture TOUS les
+ * appels réseau émis pendant la transition (XHR, fetch, JSONP via script tags).
  *
- * Cette étape est REQUISE avant signin/ pour registration_type=2 et 3 :
- * le serveur Bookitit valide que le PHPSESSID a traversé le router Backbone
- * (selecttime → signupsecondappointment → signin) avant d'accepter signin/.
- * Sans ça, signin/ retourne 0B.
+ * Stratégie en deux passes :
+ *  1. Clic DOM réel sur l'élément du créneau si le widget est déjà à la vue datetime.
+ *     (La click-handler Backbone peut faire un call HTTP AVANT de changer le hash —
+ *      en changeant juste window.location.hash on saute cette étape.)
+ *  2. Fallback : changer window.location.hash directement si aucun élément trouvé.
  *
- * Retourne le hash Backbone résolu après navigation (ex: "#signupsecondappointment",
- * "#signupfirstappointment", "#signin") ou "" si timeout/page indisponible.
+ * Capture réseau : CDP Network.requestWillBeSent (attrape JSONP/script tags en plus
+ * de XHR et fetch) + patch JS document.createElement('script') pour backup.
+ *
+ * Retourne le hash Backbone résolu (ex: "#signupsecondappointment") ou "" si timeout.
  */
 export async function navigateToSelecttime(
   date: string,
@@ -2112,36 +2115,134 @@ export async function navigateToSelecttime(
   const hashTarget = `#selecttime/${encodeURIComponent(date)}/${encodeURIComponent(time)}${agendaId ? "/" + encodeURIComponent(agendaId) : ""}`;
   console.log(`[spain-pb] 🔀 navigateToSelecttime → ${hashTarget}`);
 
+  // ── 1. CDP listener — attrape TOUT : XHR, fetch, script JSONP ────────────────
+  let cdp: any = null;
+  const cdpCaptured: string[] = [];
   try {
-    // Intercepter les XHR/fetch émis par le widget pendant la transition de hash.
-    // Cela nous permet de voir si le widget appelle un endpoint comme selectservice/,
-    // freetempevent/ ou autre pour initialiser le state PHP avant signin/.
-    const interceptedUrls: string[] = [];
+    cdp = await page.createCDPSession();
+    await cdp.send("Network.enable", {});
+    cdp.on("Network.requestWillBeSent", (ev: any) => {
+      const url: string = ev.request?.url ?? "";
+      if (url.includes("onlinebookings") || url.includes("citaconsular.es/es/")) {
+        const entry = `[${(ev.resourceType ?? ev.type ?? "?").slice(0, 8)}] ${ev.request.method} ${url}`;
+        cdpCaptured.push(entry);
+        console.log(`[spain-pb] 🕵️ CDP: ${entry.slice(0, 200)}`);
+      }
+    });
+  } catch (cdpErr) {
+    console.warn(`[spain-pb] ⚠️ CDP session échouée (fallback JS patch seulement): ${cdpErr}`);
+  }
+
+  try {
+    // ── 2. Patch JS — reset propre puis intercepte XHR + fetch + createElement(script) ──
+    // IMPORTANT : réinitialiser __bkt_intercepted SANS || [] pour ne pas mélanger
+    // les appels d'une invocation précédente.
     await page.evaluate(`
-      (function() {
-        window.__bkt_intercepted = window.__bkt_intercepted || [];
-        var origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url) {
-          if (typeof url === 'string' && url.includes('onlinebookings')) {
-            window.__bkt_intercepted.push(method + ' ' + url.split('?')[0]);
-          }
-          return origOpen.apply(this, arguments);
-        };
-        var origFetch = window.fetch;
-        window.fetch = function(input, init) {
-          var url = typeof input === 'string' ? input : (input && input.url) || '';
-          if (url.includes('onlinebookings')) {
-            window.__bkt_intercepted.push((init && init.method || 'GET') + ' ' + url.split('?')[0]);
-          }
-          return origFetch.apply(this, arguments);
-        };
-      })()
+      window.__bkt_intercepted = [];
+      if (!window.__bkt_patched) {
+        window.__bkt_patched = true;
+        (function() {
+          var origOpen = XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open = function(method, url) {
+            if (typeof url === 'string' && url.includes('onlinebookings')) {
+              window.__bkt_intercepted.push('XHR ' + method + ' ' + url);
+            }
+            return origOpen.apply(this, arguments);
+          };
+          var origFetch = window.fetch;
+          window.fetch = function(input, init) {
+            var url = typeof input === 'string' ? input : (input && input.url) || '';
+            if (url.includes('onlinebookings')) {
+              window.__bkt_intercepted.push('FETCH ' + (init && init.method || 'GET') + ' ' + url);
+            }
+            return origFetch.apply(this, arguments);
+          };
+          // JSONP script tag injection — le vrai mécanisme Bookitit
+          var origCreate = document.createElement.bind(document);
+          document.createElement = function(tag, opts) {
+            var el = origCreate(tag, opts);
+            if (typeof tag === 'string' && tag.toLowerCase() === 'script') {
+              var srcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+              if (srcDesc && srcDesc.set) {
+                Object.defineProperty(el, 'src', {
+                  configurable: true,
+                  enumerable: true,
+                  set: function(v) {
+                    if (typeof v === 'string' && v.includes('onlinebookings')) {
+                      window.__bkt_intercepted.push('JSONP GET ' + v);
+                    }
+                    srcDesc.set.call(this, v);
+                  },
+                  get: function() {
+                    return srcDesc.get ? srcDesc.get.call(this) : '';
+                  }
+                });
+              }
+            }
+            return el;
+          };
+        })();
+      }
     `) as unknown;
 
-    // Changer uniquement le hash — pas de rechargement, pas de navigation CF.
-    await page.evaluate(`window.location.hash = ${JSON.stringify(hashTarget)}`) as unknown;
+    // ── 3. Tentative de clic DOM réel sur le créneau ───────────────────────────
+    // Si le widget affiche déjà la grille de créneaux pour la bonne date, on
+    // clique l'élément directement — la click-handler Backbone fera les appels
+    // HTTP naturellement (AVANT de changer le hash).
+    const timeFormatted = time; // ex: "09:00"
+    const clickResult = (await page.evaluate(`
+      (function(targetTime, targetDate, targetAgenda) {
+        // Sélecteurs connus du widget Bookitit pour les créneaux horaires
+        var selectors = [
+          'a[href*="selecttime/' + targetDate + '/' + encodeURIComponent(targetTime) + '"]',
+          'a[href*="selecttime"][href*="' + targetTime.replace(':', '%3A') + '"]',
+          'a[href*="selecttime"][href*="' + targetTime + '"]',
+          '.clsBktTimeSlotsItem a',
+          '.clsBktAvailableTime a',
+          '[data-time="' + targetTime + '"]',
+          '.bkt-time-slot a',
+          'li.clsBktSlot a',
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+          var els = document.querySelectorAll(selectors[i]);
+          for (var j = 0; j < els.length; j++) {
+            var el = els[j];
+            var txt = (el.textContent || '').trim();
+            var href = el.getAttribute('href') || '';
+            if (txt.includes(targetTime) || href.includes(encodeURIComponent(targetTime)) || href.includes(targetTime)) {
+              if (el.offsetParent !== null) {
+                el.click();
+                return 'clicked:' + el.tagName + '[' + href.slice(0, 80) + '] text=' + txt.slice(0, 20);
+              }
+            }
+          }
+        }
+        // Fallback: chercher n'importe quel lien selecttime contenant l'heure
+        var allLinks = document.querySelectorAll('a[href*="selecttime"]');
+        for (var k = 0; k < allLinks.length; k++) {
+          var l = allLinks[k];
+          var lhref = l.getAttribute('href') || '';
+          if (lhref.includes(encodeURIComponent(targetTime)) || lhref.includes(targetTime)) {
+            if (l.offsetParent !== null) {
+              l.click();
+              return 'clicked_fallback:' + lhref.slice(0, 80);
+            }
+          }
+        }
+        return 'no_element_visible';
+      })(${JSON.stringify(timeFormatted)}, ${JSON.stringify(date)}, ${JSON.stringify(agendaId)})
+    `)) as string;
+    console.log(`[spain-pb] 🖱️ Clic DOM selecttime: ${clickResult}`);
 
-    // Attendre que le router Backbone résolve vers la vue auth (max 5s, poll 200ms).
+    const domClickSucceeded = clickResult.startsWith("clicked");
+
+    if (!domClickSucceeded) {
+      // ── 4. Fallback : changer le hash directement ──────────────────────────
+      console.log(`[spain-pb] ↩️  Fallback hash direct → ${hashTarget}`);
+      await page.evaluate(`window.location.hash = ${JSON.stringify(hashTarget)}`) as unknown;
+    }
+
+    // ── 5. Attendre que le router Backbone résolve vers la vue auth (max 5s) ──
     const resolved = await (async () => {
       for (let i = 0; i < 25; i++) {
         await new Promise((r) => setTimeout(r, 200));
@@ -2158,29 +2259,39 @@ export async function navigateToSelecttime(
       return "";
     })();
 
-    // Récupérer les calls HTTP émis par le widget pendant la transition
-    await new Promise((r) => setTimeout(r, 500)); // laisser les derniers calls se terminer
+    // ── 6. Laisser les appels async se terminer + rapport ─────────────────────
+    await new Promise((r) => setTimeout(r, 800));
+
+    if (cdpCaptured.length > 0) {
+      console.log(`[spain-pb] 🔍 CDP selecttime → ${cdpCaptured.length} requête(s) réseau capturée(s) :`);
+      for (const u of cdpCaptured) console.log(`[spain-pb]    ${u.slice(0, 220)}`);
+    } else {
+      console.log(`[spain-pb] 🔍 CDP selecttime → 0 requêtes réseau détectées (pure routing client ?)`);
+    }
+
     try {
-      const captured = (await page.evaluate(`window.__bkt_intercepted || []`)) as string[];
-      if (captured.length > 0) {
-        console.log(`[spain-pb] 🔍 selecttime → widget HTTP calls capturés (${captured.length}) :`);
-        for (const c of captured) console.log(`[spain-pb]    ${c}`);
+      const jsCaptured = (await page.evaluate(`window.__bkt_intercepted || []`)) as string[];
+      if (jsCaptured.length > 0) {
+        console.log(`[spain-pb] 🔍 JS patch selecttime → ${jsCaptured.length} appel(s) :`);
+        for (const c of jsCaptured) console.log(`[spain-pb]    ${c.slice(0, 220)}`);
       } else {
-        console.log(`[spain-pb] 🔍 selecttime → aucun appel HTTP onlinebookings détecté (state purement client ?)`);
+        console.log(`[spain-pb] 🔍 JS patch selecttime → 0 appels (XHR/fetch/JSONP) interceptés`);
       }
-      interceptedUrls.push(...captured);
     } catch { /* ignore */ }
-    void interceptedUrls; // utilisé dans les logs uniquement
 
     if (resolved) {
       console.log(`[spain-pb] ✅ selecttime résolu → ${resolved}`);
     } else {
-      console.warn(`[spain-pb] ⚠️ selecttime — hash non résolu après 5s (router lent ?)`);
+      console.warn(`[spain-pb] ⚠️ selecttime — hash non résolu après 5s (router lent ou widget pas chargé ?)`);
     }
     return resolved;
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ navigateToSelecttime exception: ${err}`);
     return "";
+  } finally {
+    if (cdp) {
+      try { await cdp.detach(); } catch { /* ignore */ }
+    }
   }
 }
 
@@ -2239,5 +2350,164 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser exception: ${err}`);
     return "";
+  }
+}
+
+/**
+ * Soumet le formulaire signin/ en manipulant directement le DOM du widget Bookitit.
+ *
+ * Pourquoi cette approche ?
+ *   fetch() et jQuery script tag retournent 0B pour signin/ et getsigninfields/.
+ *   Ces endpoints PHP vérifient une variable de session qui n'est définie QUE quand
+ *   le widget Backbone fait lui-même l'appel via son propre $.ajax() — pas via nos
+ *   fetch() extérieurs. En remplissant le formulaire DOM et en cliquant Submit,
+ *   c'est le widget qui émet l'appel signin/ → le serveur PHP l'accepte.
+ *
+ * Pré-condition : navigateToSelecttime() a déjà été appelé et le hash est sur
+ *   #signupsecondappointment ou #signin (formulaire visible dans le DOM).
+ *
+ * Retourne le body JSONP de la réponse signin/ (string brute) ou "" si échec.
+ */
+export async function submitSigninFormViaDOM(
+  login: string,
+  password: string,
+): Promise<string> {
+  const page = spainPersistentBrowser.getActivePage();
+  if (!page) {
+    console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — page non disponible");
+    return "";
+  }
+
+  // ── 1. Diagnostic DOM : voir ce que Backbone a rendu ────────────────────────
+  const domDiag = (await page.evaluate(`
+    (function() {
+      var hash = window.location.hash;
+      // Tous les éléments interactifs visibles (input, button, a, div cliquables)
+      var all = Array.from(document.querySelectorAll('input, button, a, [onclick], [class*="Button"], [class*="button"], [class*="Submit"], [class*="submit"], [id*="Button"], [id*="button"], [id*="Submit"], [id*="submit"]'));
+      var visible = all.filter(function(el) { return el.offsetParent !== null; });
+      // HTML du container principal du formulaire
+      var formContainer = document.querySelector('#idBktWidgetDefaultBodyContainer, #idBktDefaultCustomContainer, .clsBktSigninContainer, form');
+      return JSON.stringify({
+        hash: hash,
+        visibleElements: visible.slice(0, 20).map(function(el) {
+          return { tag: el.tagName, type: el.type || '', id: el.id || '', name: el.name || '', cls: el.className.slice(0, 60), txt: (el.textContent || '').trim().slice(0, 40) };
+        }),
+        formHtml: formContainer ? formContainer.innerHTML.slice(0, 800) : 'no-form-container',
+        bodySnippet: (document.body.innerText || '').slice(0, 300).replace(/\\n/g, ' '),
+      });
+    })()
+  `).catch(() => "{}")) as string;
+  console.log(`[spain-pb] 🔍 DOM signin form: ${domDiag.slice(0, 1200)}`);
+
+  // ── 2. Préparer la capture de la réponse signin/ via page.waitForResponse ────
+  // Puppeteer native — aucune CDP session séparée → aucun risque de conflit.
+  // IMPORTANT : créer la promesse AVANT le clic pour ne pas rater la réponse.
+  let signinBody = "";
+  const signinResponsePromise = page.waitForResponse(
+    (resp) => resp.url().includes("onlinebookings/signin"),
+    { timeout: 20_000 },
+  ).then(async (resp) => {
+    const body = await resp.text();
+    console.log(`[spain-pb] 📦 signin/ response via waitForResponse: ${body.length}B`);
+    return body;
+  }).catch((err) => {
+    console.warn(`[spain-pb] ⚠️ waitForResponse signin/ échoué/timeout: ${err}`);
+    return "";
+  });
+
+  try {
+    // ── 3. Remplir les champs et soumettre ────────────────────────────────────
+    const fillResult = (await page.evaluate(`
+      (function(login, password) {
+        // Sélecteurs connus du widget Bookitit (signupfirstappointment / signupsecondappointment)
+        // Hiérarchie : id précis → name → type input text/password → premier visible
+        function findField(selectors) {
+          for (var i = 0; i < selectors.length; i++) {
+            var els = document.querySelectorAll(selectors[i]);
+            for (var j = 0; j < els.length; j++) {
+              if (els[j].offsetParent !== null) return els[j];
+            }
+          }
+          return null;
+        }
+        var loginField = findField([
+          '#idBktSigninLogin', '#idBktLogin', '[name="login"]', '[id*="Login"]',
+          '[id*="login"]', 'input[type="text"]', 'input:not([type="password"]):not([type="hidden"])',
+        ]);
+        var passField = findField([
+          '#idBktSigninPassword', '#idBktPassword', '[name="password"]', '[id*="Password"]',
+          '[id*="password"]', 'input[type="password"]',
+        ]);
+        var submitBtn = findField([
+          // IDs Bookitit confirmés par dump DOM live 2026-07-30 (Saopola)
+          '#idBktDefaultSignInConfirmButton',
+          '#idBktSignInsubmit', '#idBktSigninButton', '#idBktSignInButton',
+          '#idDivBktSignInsubmit', '#idDivBktSigninButton',
+          // Classes confirmées : clsDivContinueButton (Bookitit signup second appointment)
+          '.clsDivContinueButton', '.clsBktSigninSubmit', '.clsBktSignInSubmit', '.clsBktSubmitButton',
+          // IDs partiels (Confirm, Submit, Button)
+          '[id*="ConfirmButton"]', '[id*="Confirm"]',
+          '[id*="SigninButton"]', '[id*="SignInButton"]', '[id*="SigninSubmit"]', '[id*="SignInsubmit"]',
+          '[id*="Submit"]', '[id*="submit"]',
+          // Éléments standard
+          'button[type="submit"]', 'input[type="submit"]',
+          // Liens et divs cliquables Bookitit (<a> et <div> fréquents pour les CTA)
+          'a.clsBktButton', 'a.clsBkt', 'a[class*="Button"]', 'a[class*="button"]',
+          'a[class*="Submit"]', 'a[class*="submit"]',
+          '.clsBktButton', '.clsBkt', 'button.clsBkt',
+          // Fallback large
+          'button', 'a[href="#"]',
+        ]);
+
+        if (!loginField) return 'no_login_field';
+        if (!passField) return 'no_password_field';
+
+        // Setters natifs React/Backbone pour déclencher les event handlers
+        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') && Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        function setNativeValue(el, val) {
+          if (nativeInputValueSetter) nativeInputValueSetter.call(el, val);
+          else el.value = val;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        setNativeValue(loginField, login);
+        setNativeValue(passField, password);
+
+        var loginId = loginField.id || loginField.name || loginField.type;
+        var passId = passField.id || passField.name || passField.type;
+
+        if (!submitBtn) return 'no_submit_btn (login=' + loginId + ', pass=' + passId + ')';
+
+        submitBtn.click();
+        return 'submitted: login=' + loginId + ' pass=' + passId + ' btn=' + (submitBtn.id || submitBtn.className.slice(0,30));
+      })(${JSON.stringify(login)}, ${JSON.stringify(password)})
+    `)) as string;
+
+    console.log(`[spain-pb] 🖱️ submitSigninFormViaDOM: ${fillResult}`);
+
+    if (!fillResult.startsWith("submitted")) {
+      console.warn(`[spain-pb] ⚠️ Formulaire non soumis: ${fillResult}`);
+      return "";
+    }
+
+    // ── 4. Attendre la réponse signin/ via CDP (max 20s) ─────────────────────
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline && !signinBody) {
+      await new Promise<void>((r) => setTimeout(r, 200));
+    }
+
+    if (!signinBody) {
+      console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — pas de réponse signin/ après 20s");
+    }
+    return signinBody;
+
+  } catch (err) {
+    console.warn(`[spain-pb] ⚠️ submitSigninFormViaDOM exception: ${err}`);
+    return "";
+  } finally {
+    if (cdp) {
+      try { await cdp.detach(); } catch { /* ignore */ }
+    }
   }
 }
