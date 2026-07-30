@@ -5,7 +5,7 @@
 - [CEV anti-shadow-ban overhaul](cev-overhaul-done.md) — implementation done: cev-hcaptcha.ts + cev-session-manager.ts created; captureFullSessionForAccount() + stealth fixes in cev-dossier-loop.ts; ignoreTlsErrors removed + log-normal jitter in cev-shared-impit.ts; VOWINT TTL 24h→4h; activate with cev_full_puppeteer_mode=1.
 - [Playwright→Puppeteer migration](playwright-puppeteer-migration.md) — API diff cheatsheet and file-level strategy used to migrate browser.ts + 6 portal files; 0 TS errors after.
 - [CEV One-Shot (Predator) strategy](cev-one-shot-strategy.md) — dossier loop v4: no more 5-click/h quota; wake every 2 min, click once per dossier, sleep; session reuse via existing VOWINT cache (4h TTL in cevHttpSetup); DEFAULT_INTERVAL_SEC=120; pool is pure round-robin; build: 0 TS errors.
-- [Spain Bookitit fingerprint fixes](spain-bookitit-fingerprint.md) — 4 JSONP callers had wrong Sec-Fetch (no-cors/script→cors/empty), wrong Accept, and 6 missing high-entropy CH hints; all fixed via Burp Chrome 146 audit 2026-06-25.
+- [Spain Bookitit fingerprint fixes](spain-bookitit-fingerprint.md) — Sec-Fetch/Accept/CH hint fixes (Burp 2026-06-25) + JSONP parser extended for `callback=jQuery...` prefix (Bug S6, 2026-07-30).
 - [Spain citaconsular session flow](spain-citaconsular-session-flow.md) — exact 8-step HTTP flow (GET entry→POST token→JSD oneshot→2nd POST widget→JSONP); cookie order, PHPSESSID forwarding, GA cookies, JSD oneshot extraction — confirmed by Burp 2026-06-25.
 - [CEV VOWINT Burp audit Chrome 146](cev-vowint-burp-audit.md) — forensic comparison Burp Chrome 146 vs bot; 2 fixes applied: GetAllVisaStatusTypes + Priority header.
 - [CEV Extension v4.0](cev-extension-v4.md) — round-robin pool, selectDossier strict mode, server-error backoff via serverPauseUntil, Priority header, page detection.
@@ -17,5 +17,5 @@
 - [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
 - [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.
 - [Spain challenge traffic budget](spain-challenge-traffic-budget.md) — never pre-warm or probe Cloudflare when no active Spain dossier can book; reuse Redis CF sessions until expiry.
-- [Spain persistent-browser mode](spain-persistent-browser.md) — CF blocks portal URL for impit (403) but not /main/ (200); skipPortalFlow bypasses portal GET; /main/ PHPSESSID must be fresh from browser nav; CapSolver fallback for headless CF solve.
+- [Spain persistent-browser mode](spain-persistent-browser.md) — CF/impit asymmetry, session rules, cf_clearance deletion before Continuar, Chromium path, full install + Saopola e2e test confirmed 2026-07-30.
 - [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.

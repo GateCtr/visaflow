@@ -100,6 +100,22 @@ Implémenté : `buildRumBody()` génère JSON avec performance.timing réalistes
 #114 POST /cdn-cgi/rum?             → 204 RUM #5             (non implémenté, moins critique)
 ```
 
+## Bug S6 — JSONP parser : préfixe `callback=` non géré (2026-07-30)
+**Fichier** : `artifacts/slot-hunter/src/spain/bookitit-client.ts` (`parseJsonpResponse`)
+
+Bookitit retourne parfois :
+```
+callback=jQuery21103198788804851487_1785413467100({"Client":{...}});
+```
+L'ancien regex `/^[a-zA-Z0-9_]+\((.*)\);?$/s` ne matchait pas ce format car il ne gérait pas le préfixe `callback=`.
+
+**Fix appliqué :**
+```typescript
+const jsonpMatch = body.match(/^(?:callback=)?[a-zA-Z0-9_$.]+\((.*)\);?$/s);
+```
+
+**Why :** Le préfixe `callback=` est une variante de sérialisation JSONP utilisée par certains endpoints Bookitit (notamment `signin/` via DOM form submit → `waitForResponse`). Sans ce fix, `parseJsonpResponse` tombait sur le fallback JSON-only et échouait avec "Response is not valid JSON or JSONP".
+
 ## Autres observations (non-critiques)
 - `Accept-Encoding`: Burp = `gzip, deflate, br` (pas zstd) mais artifact Burp — Chrome 120+ supporte zstd, ne pas changer.
 - `Accept-Language`: Burp = `fr-FR` (locale user). Bot = `es-ES`. CF cookie lié à session CapSolver — laisser comme est.

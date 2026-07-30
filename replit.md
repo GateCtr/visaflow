@@ -39,10 +39,27 @@ La clé Clerk de production configurée pour le site fonctionne sur `joventy.cd`
 
 ### Dépendances pré-installées
 - `artifacts/joventy` → `pnpm install` ✓
-- `artifacts/slot-hunter` → `npm install` ✓ + Chromium téléchargé
+- `artifacts/slot-hunter` → `npm install` ✓ + Chromium installé via `node_modules/.bin/playwright install chromium`
 - `artifacts/captcha-service` → `npm install` ✓
-- `artifacts/proxy-service` → `npm install --ignore-scripts` ✓
-- Redis installé système (démarré automatiquement par le slot-hunter)
+- `artifacts/proxy-service` → `npm install` ✓
+- Redis : `redis-server --daemonize yes --logfile /tmp/redis.log`
+
+### Chromium (Puppeteer / Playwright)
+
+Chemin actuel après installation :
+```
+/home/runner/workspace/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome
+```
+À réinstaller si le cache est purgé : `cd artifacts/slot-hunter && node_modules/.bin/playwright install chromium`
+
+### Test end-to-end Saopola (portail citaconsular.es)
+
+```bash
+redis-server --daemonize yes --logfile /tmp/redis.log
+cd artifacts/slot-hunter && node_modules/.bin/tsx src/test-saopola-live.ts
+```
+
+Résultat attendu : `✅ Scan: found` + `✅ Booking: signin_failed` (faux credentials rejetés = succès).
 
 ## Backend Convex
 

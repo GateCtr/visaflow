@@ -17,7 +17,7 @@ description: Implementation details, quirks and confirmed fixes for SPAIN_SESSIO
 9. Boucle Continuar (max 60s) : attend que titre ≠ "Un instant…" avant clic
 10. Capture body /main/ via CDP `Network.getResponseBody`
 
-## Règles critiques confirmées (2026-07-29)
+## Règles critiques confirmées (2026-07-30)
 
 ### Une seule navigation (jamais de 2ème goto vers targetUrl)
 Un 2ème `goto(targetUrl)` re-déclenche un challenge CF qui génère un JSD token lié à la SESSION de la 1ère navigation (déjà périmée). Le JSD oneshot est alors refusé même avec une IP fraîche.
@@ -37,6 +37,13 @@ Le port sticky Decodo (`10001`) garde la même IP → CF épingle le même nonce
 ### Supprimer PHPSESSID via CDP (pas seulement cf_clearance)
 CF lie le challenge Cloudflare au PHPSESSID côté serveur PHP. Sans suppression du PHPSESSID, citaconsular.es renvoie le même nonce périmé dans le HTML de la page.
 
+### Supprimer cf_clearance AVANT le premier clic Continuar
+`page.deleteCookie({ name: "cf_clearance", domain: ".citaconsular.es" })` est appelé une seule fois (guard `cfClearedBeforeClick`) juste avant le premier clic Continuar, dans le `else` du guard CF-still-running.
+
+**Pourquoi :** Le cf_clearance obtenu lors du JSD natif initial est "fantôme" — il est lié à la session de navigation initiale. CF n'en émet pas de nouveau si un clearance valide est déjà présent. En le supprimant, CF ne trouve plus de token → le JSD oneshot déclenché par le POST Continuar en émet un nouveau lié à CETTE session POST → /main/ reçoit du contenu réel.
+
+**Important :** Même si le log `new-cf_clearance=❌ non — cookie fantôme` persiste au JSD oneshot, le DOM form submit + `waitForResponse` contourne le problème — la réponse signin/ (242B) est bien capturée. Le cookie fantôme n'empêche pas le flow de fonctionner end-to-end.
+
 ### Guard "Un instant…" avant clic Continuar
 Ne jamais cliquer Continuar si `document.title` contient "instant"/"moment"/"checking" ou si une iframe `/cdn-cgi/` est encore active. Cliquer trop tôt provoque /main/ = 0B.
 
@@ -46,18 +53,34 @@ La page portail (`/es/hosteds/widgetdefault/...`) bloque impit (HTTP 403) même 
 
 ## Chrome binary
 
+Playwright Chromium (installé via `node_modules/.bin/playwright install chromium`) :
 ```
-/home/runner/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
+/home/runner/workspace/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome
 ```
+Le test-saopola-live.ts lit `CHROMIUM_EXECUTABLE_PATH` ou utilise ce chemin par défaut.
 
-## Test
+## Installation complète (premier démarrage Replit)
 
 ```bash
-cd artifacts/slot-hunter && \
-  CAPSOLVER_API_KEY="$(printenv CAPSOLVER_API_KEY)" \
-  DECODO_PROXY_URL="$(printenv DECODO_PROXY_URL)" \
-  CHROMIUM_EXECUTABLE_PATH="/home/runner/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome" \
-  node_modules/.bin/tsx test-spain-pb.ts
+# 1. Dépendances JS
+cd artifacts/slot-hunter && npm install
+cd artifacts/captcha-service && npm install
+cd artifacts/proxy-service && npm install
+cd artifacts/joventy && pnpm install
+
+# 2. Chromium Puppeteer
+cd artifacts/slot-hunter && node_modules/.bin/playwright install chromium
+
+# 3. Redis
+redis-server --daemonize yes --logfile /tmp/redis.log
 ```
 
-Résultat attendu : `✅ SESSION OK` avec `prefetchedMain ✅ ~124KB`.
+## Test end-to-end (Saopola live) — confirmé 2026-07-30
+
+```bash
+cd artifacts/slot-hunter && node_modules/.bin/tsx src/test-saopola-live.ts
+```
+
+Résultat attendu :
+- Phase 1 `✅ Scan: found` (~50s)
+- Phase 2 `✅ Booking: signin_failed` (~25s) — "Usuario o contraseña incorrectos" avec faux credentials = succès.
