@@ -1330,7 +1330,18 @@ class SpainPersistentBrowserManager {
           await new Promise((r) => setTimeout(r, 2_000));
           // Ne pas tenter le clic cette itération — recommencer la boucle
         } else {
-          // CF a fini → tenter le clic Continuar
+          // CF a fini → supprimer le cf_clearance une seule fois avant le premier clic Continuar
+          // Raison : le cf_clearance existant est "fantôme" — lié à la navigation initiale.
+          // En le supprimant, CF n'en trouve plus → le JSD oneshot déclenché par le POST
+          // Continuar émet un nouveau cf_clearance lié à CETTE session → /main/ reçoit du contenu.
+          if (!cfClearedBeforeClick) {
+            cfClearedBeforeClick = true;
+            await page.deleteCookie({ name: "cf_clearance", domain: ".citaconsular.es" })
+              .catch(() => {});
+            console.log(`[spain-pb] 🗑️ cf_clearance supprimé avant Continuar — CF va émettre un nouveau token pour la session POST`);
+          }
+
+          // Tenter le clic Continuar
           continueClicked = await page.evaluate(() => {
             // Sélecteur exact bundle custom.js
             const btn = document.getElementById("idDivBktCustomContinueButton");

@@ -177,7 +177,8 @@ export class BookititApiClient {
 
   private parseJsonpResponse(body: string): BookititResponse {
     // Chercher le pattern JSONP: callback(...)
-    const jsonpMatch = body.match(/^[a-zA-Z0-9_]+\((.*)\);?$/s);
+    // Bookitit retourne parfois callback=jQuery123({...}) avec le préfixe "callback="
+    const jsonpMatch = body.match(/^(?:callback=)?[a-zA-Z0-9_$.]+\((.*)\);?$/s);
 
     if (jsonpMatch && jsonpMatch[1]) {
       try {
