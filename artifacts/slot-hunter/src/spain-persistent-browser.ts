@@ -1996,7 +1996,7 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
     // Promise.race : protège contre page.evaluate() qui se bloque si la page est dans un
     // état instable après CF challenge (le timer JS 22s dans le browser ne peut pas se déclencher
     // si V8 est gelé). Le timeout TS (26s) garantit une sortie propre dans tous les cas.
-    const evalPromise: Promise<string> = page.evaluate(`
+    const evalPromise = page.evaluate(`
       (function(u) {
         var jq = window.jQuery;
         if (!jq) {
@@ -2069,7 +2069,7 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
     const timeoutPromise: Promise<string> = new Promise<string>((resolve) =>
       setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), 26_000),
     );
-    const result: string = await Promise.race([evalPromise, timeoutPromise]);
+    const result = (await Promise.race([evalPromise, timeoutPromise])) as string;
 
     const bodyLen = result.length;
     console.log(`[spain-pb] 📡 jQueryAjax ${endpoint} → ${bodyLen}B`);
@@ -2081,6 +2081,105 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
     return result;
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ callBookititViaJQueryInPage exception: ${err}`);
+    return "";
+  }
+}
+
+/**
+ * Navigue le widget Bookitit vers #selecttime/DATE/TIME/AGENDA via location.hash
+ * (pas page.goto → pas de navigation top-level → CF ne se déclenche pas).
+ *
+ * Cette étape est REQUISE avant signin/ pour registration_type=2 et 3 :
+ * le serveur Bookitit valide que le PHPSESSID a traversé le router Backbone
+ * (selecttime → signupsecondappointment → signin) avant d'accepter signin/.
+ * Sans ça, signin/ retourne 0B.
+ *
+ * Retourne le hash Backbone résolu après navigation (ex: "#signupsecondappointment",
+ * "#signupfirstappointment", "#signin") ou "" si timeout/page indisponible.
+ */
+export async function navigateToSelecttime(
+  date: string,
+  time: string,
+  agendaId: string,
+  portalUrl: string,
+): Promise<string> {
+  const page = spainPersistentBrowser.getActivePage();
+  if (!page) {
+    console.warn("[spain-pb] ⚠️ navigateToSelecttime — page non disponible");
+    return "";
+  }
+
+  const hashTarget = `#selecttime/${encodeURIComponent(date)}/${encodeURIComponent(time)}${agendaId ? "/" + encodeURIComponent(agendaId) : ""}`;
+  console.log(`[spain-pb] 🔀 navigateToSelecttime → ${hashTarget}`);
+
+  try {
+    // Intercepter les XHR/fetch émis par le widget pendant la transition de hash.
+    // Cela nous permet de voir si le widget appelle un endpoint comme selectservice/,
+    // freetempevent/ ou autre pour initialiser le state PHP avant signin/.
+    const interceptedUrls: string[] = [];
+    await page.evaluate(`
+      (function() {
+        window.__bkt_intercepted = window.__bkt_intercepted || [];
+        var origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+          if (typeof url === 'string' && url.includes('onlinebookings')) {
+            window.__bkt_intercepted.push(method + ' ' + url.split('?')[0]);
+          }
+          return origOpen.apply(this, arguments);
+        };
+        var origFetch = window.fetch;
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input && input.url) || '';
+          if (url.includes('onlinebookings')) {
+            window.__bkt_intercepted.push((init && init.method || 'GET') + ' ' + url.split('?')[0]);
+          }
+          return origFetch.apply(this, arguments);
+        };
+      })()
+    `) as unknown;
+
+    // Changer uniquement le hash — pas de rechargement, pas de navigation CF.
+    await page.evaluate(`window.location.hash = ${JSON.stringify(hashTarget)}`) as unknown;
+
+    // Attendre que le router Backbone résolve vers la vue auth (max 5s, poll 200ms).
+    const resolved = await (async () => {
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const hash = (await page.evaluate(`window.location.hash`)) as string;
+        if (
+          hash.includes("signin") ||
+          hash.includes("signup") ||
+          hash.includes("signupsecond") ||
+          hash.includes("signupfirst")
+        ) {
+          return hash;
+        }
+      }
+      return "";
+    })();
+
+    // Récupérer les calls HTTP émis par le widget pendant la transition
+    await new Promise((r) => setTimeout(r, 500)); // laisser les derniers calls se terminer
+    try {
+      const captured = (await page.evaluate(`window.__bkt_intercepted || []`)) as string[];
+      if (captured.length > 0) {
+        console.log(`[spain-pb] 🔍 selecttime → widget HTTP calls capturés (${captured.length}) :`);
+        for (const c of captured) console.log(`[spain-pb]    ${c}`);
+      } else {
+        console.log(`[spain-pb] 🔍 selecttime → aucun appel HTTP onlinebookings détecté (state purement client ?)`);
+      }
+      interceptedUrls.push(...captured);
+    } catch { /* ignore */ }
+    void interceptedUrls; // utilisé dans les logs uniquement
+
+    if (resolved) {
+      console.log(`[spain-pb] ✅ selecttime résolu → ${resolved}`);
+    } else {
+      console.warn(`[spain-pb] ⚠️ selecttime — hash non résolu après 5s (router lent ?)`);
+    }
+    return resolved;
+  } catch (err) {
+    console.warn(`[spain-pb] ⚠️ navigateToSelecttime exception: ${err}`);
     return "";
   }
 }

@@ -33,6 +33,7 @@ import {
   createSpainPersistentBrowserDossierSession,
   callBookititEndpointViaBrowser,
   callBookititViaJQueryInPage,
+  navigateToSelecttime,
 } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
@@ -806,16 +807,22 @@ export async function executeHttpBooking(
     },
   };
 
-  // Ordre selon registration_type
-  // type=1 → signupfirstappointment/ en premier (premier RDV, pas de compte existant)
-  // type=2 → signupfirstappointment/ en premier aussi : signin/ retourne systématiquement 0B
-  //          pour ces portails (ex: Saopola) car le serveur attend le flow widget complet.
-  //          Constaté empiriquement — signin/ est essayé en fallback si signupfirstappointment échoue.
+  // ─── 5b. Warmup PHPSESSID via navigation #selecttime ─────────────────────────
+  // signin/ (type=2 et 3) et signupfirstappointment/ (type=1) retournent 0B si le
+  // PHPSESSID n'a pas traversé le router Backbone (selecttime → vue auth).
+  // On navigue via location.hash (pas page.goto → pas de CF) pour activer cet état.
+  if (useBrowserCalls) {
+    await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+  }
+
+  // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
+  // type=1 → signupfirstappointment/ (premier RDV, pas de compte existant)
+  // type=2 → signin/ via #signupsecondappointment (SignUpSecondAppointmentContainer extends SignInContainer)
+  // type=3 → signin/ direct (#signin)
   // inconnu → signin en premier (Kinshasa confirmé 2026-07-28)
-  const authCandidates: AuthCandidate[] =
-    registrationType === "1" || registrationType === "2"
-      ? [candidateSignupFirst, candidateSignin, candidateSignup]
-      : [candidateSignin, candidateSignupFirst, candidateSignup];
+  const authCandidates: AuthCandidate[] = registrationType === "1"
+    ? [candidateSignupFirst, candidateSignin, candidateSignup]
+    : [candidateSignin, candidateSignupFirst, candidateSignup];
 
   console.log(
     `[spain-booking] 🔍 Auto-découverte endpoint auth — registration_type=${registrationType} — ` +
