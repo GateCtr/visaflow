@@ -43,6 +43,18 @@ After `playwright install chromium`:
 ```
 Reinstall if cache purged: `cd artifacts/slot-hunter && node_modules/.bin/playwright install chromium`
 
+## Rule: closeAndInvalidate() MUST delete the Redis key
+
+**Why:** `closeAndInvalidate()` resets `_cachedSession = null` but without deleting the Redis key, `ensureSession()` on the very next cycle restores the same broken session (prefetch: 0B, `_page null`) → `/main/ browser → 0B` → `closeAndInvalidate` → Redis restore → infinite loop. Confirmed on Railway 2026-07-30.
+
+**Fix applied:** `closeAndInvalidate()` now calls `removeSpainCfSessionFromRedis()` before closing the browser.
+
+## Rule: never restore a Redis session with prefetch: 0B
+
+**Why:** A session stored with no `prefetchedMainHtml` requires an active `_page` (browser) to call `/main/` via browser. After a redeploy, `_page` is null. Restoring such a session → `callBookititEndpointViaBrowser` → `_page null` → 0B → same loop.
+
+**Fix applied:** `ensureSession()` checks `prefetchedMainHtml.length > 0` before restoring from Redis; if 0B, deletes the key and falls through to a full CF solve.
+
 ## Saopola e2e test (confirmed working 2026-07-30)
 
 ```bash

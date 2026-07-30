@@ -529,6 +529,16 @@ class SpainPersistentBrowserManager {
     this._prefetchRetried = false; // reset pour le prochain cycle
     this._page = null;
     this._apiPrefetchCache.clear();
+
+    // Supprimer la clé Redis AVANT de relancer le browser, sinon ensureSession()
+    // appelé depuis le retry unique va restaurer la même session cassée (boucle infinie).
+    try {
+      const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+      removeSpainCfSessionFromRedis();
+    } catch {
+      // non-fatal
+    }
+
     if (this._browser) {
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents
@@ -585,15 +595,28 @@ class SpainPersistentBrowserManager {
       const { restoreSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
       const redisData = await restoreSpainCfSessionFromRedis();
       if (redisData && Date.now() < redisData.expiresAt) {
-        const restored: SpainCfSession = { ...redisData, source: "playwright" };
-        this._cachedSession = restored;
-        setActiveSpainCfSession(restored);
-        const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
-        console.log(
-          `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
-          `, prefetch: ${redisData.prefetchedMainHtml?.length ?? 0}B)`,
-        );
-        return restored;
+        // N'utiliser la session Redis QUE si elle a un prefetchedMainHtml valide.
+        // Sans prefetch (0B), source="playwright" mais _page=null → /main/ browser
+        // retourne 0B → closeAndInvalidate → Redis restore → même session → boucle infinie.
+        const hasPrefetch = (redisData.prefetchedMainHtml?.length ?? 0) > 0;
+        if (!hasPrefetch) {
+          console.warn(
+            `[spain-pb] ⚠️ Session Redis sans prefetch (0B) — solve complet requis (IP peut être bloquée)`,
+          );
+          // Supprimer la clé cassée pour éviter qu'un autre cycle la restaure
+          const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+          removeSpainCfSessionFromRedis();
+        } else {
+          const restored: SpainCfSession = { ...redisData, source: "playwright" };
+          this._cachedSession = restored;
+          setActiveSpainCfSession(restored);
+          const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
+          console.log(
+            `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
+            `, prefetch: ${redisData.prefetchedMainHtml!.length}B)`,
+          );
+          return restored;
+        }
       }
     } catch (redisRestoreErr) {
       console.warn(`[spain-pb] ⚠️ Restauration Redis (non-fatale): ${redisRestoreErr}`);
