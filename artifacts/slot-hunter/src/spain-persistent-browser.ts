@@ -2438,11 +2438,11 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
 export async function submitSigninFormViaDOM(
   login: string,
   password: string,
-): Promise<string> {
+): Promise<{ signinBody: string; summaryBody: string }> {
   const page = spainPersistentBrowser.getActivePage();
   if (!page) {
     console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — page non disponible");
-    return "";
+    return { signinBody: "", summaryBody: "" };
   }
 
   // ── 1. Diagnostic DOM : voir ce que Backbone a rendu ────────────────────────
@@ -2466,9 +2466,10 @@ export async function submitSigninFormViaDOM(
   `).catch(() => "{}")) as string;
   console.log(`[spain-pb] 🔍 DOM signin form: ${domDiag.slice(0, 1200)}`);
 
-  // ── 2. Préparer la capture de la réponse signin/ via page.waitForResponse ────
-  // Puppeteer native — aucune CDP session séparée → aucun risque de conflit.
-  // IMPORTANT : créer la promesse AVANT le clic pour ne pas rater la réponse.
+  // ── 2. Préparer la capture de signin/ ET summary/ via page.waitForResponse ────
+  // IMPORTANT : créer les promesses AVANT le clic pour ne pas rater les réponses.
+  // Après un signin réussi, le widget Backbone fire summary/ automatiquement —
+  // on l'intercepte ici plutôt que de le rappeler manuellement (évite le 0B).
   let signinBody = "";
   const signinResponsePromise = page.waitForResponse(
     (resp) => resp.url().includes("onlinebookings/signin"),
@@ -2479,6 +2480,21 @@ export async function submitSigninFormViaDOM(
     return body;
   }).catch((err) => {
     console.warn(`[spain-pb] ⚠️ waitForResponse signin/ échoué/timeout: ${err}`);
+    return "";
+  });
+
+  // summary/ est émis automatiquement par le widget Backbone après signin réussi.
+  // Timeout 35s : le serveur peut être lent sous charge (calcul côté Bookitit).
+  const summaryResponsePromise = page.waitForResponse(
+    (resp) => resp.url().includes("onlinebookings/summary"),
+    { timeout: 35_000 },
+  ).then(async (resp) => {
+    const body = await resp.text();
+    console.log(`[spain-pb] 📦 summary/ response via waitForResponse: ${body.length}B`);
+    return body;
+  }).catch((err) => {
+    // Non-fatal : si signin échoue (mauvais credentials), summary/ n'est jamais émis.
+    console.log(`[spain-pb] ℹ️ waitForResponse summary/ non reçu (normal si signin échoué): ${err}`);
     return "";
   });
 
@@ -2555,19 +2571,28 @@ export async function submitSigninFormViaDOM(
 
     if (!fillResult.startsWith("submitted")) {
       console.warn(`[spain-pb] ⚠️ Formulaire non soumis: ${fillResult}`);
-      return "";
+      return { signinBody: "", summaryBody: "" };
     }
 
-    // ── 4. Attendre la réponse signin/ via waitForResponse (max 20s) ──────────
+    // ── 4. Attendre signin/ puis summary/ ────────────────────────────────────
     signinBody = await signinResponsePromise;
 
     if (!signinBody) {
       console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — pas de réponse signin/ après 20s");
+      return { signinBody: "", summaryBody: "" };
     }
-    return signinBody;
+
+    // Si signin a réussi (bktToken présent), attendre summary/ automatique du widget.
+    // Si signin a échoué (erreurs credentials), summary/ ne sera jamais émis → summaryBody="".
+    const summaryBody = await summaryResponsePromise;
+    if (summaryBody) {
+      console.log(`[spain-pb] ✅ summary/ capturé automatiquement via widget Backbone (${summaryBody.length}B)`);
+    }
+
+    return { signinBody, summaryBody };
 
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ submitSigninFormViaDOM exception: ${err}`);
-    return "";
+    return { signinBody: "", summaryBody: "" };
   }
 }

@@ -75,6 +75,16 @@ cd artifacts/slot-hunter && node_modules/.bin/playwright install chromium
 redis-server --daemonize yes --logfile /tmp/redis.log
 ```
 
+## summary/ interception automatique (2026-07-30)
+
+Le widget Backbone fire `summary/` automatiquement après un signin réussi — pas besoin de l'appeler manuellement. `submitSigninFormViaDOM` arme maintenant deux `waitForResponse` avant le clic submit :
+1. `onlinebookings/signin` (timeout 20s) → `signinBody`
+2. `onlinebookings/summary` (timeout 35s) → `summaryBody`
+
+Retourne `{ signinBody, summaryBody }`. Dans `spain-http-booking.ts`, si `capturedSummaryBody` est non-vide, `callEndpoint("summary/")` est skippé entièrement (évite le 0B). Fallback Manuel reste en cas de timeout.
+
+**Pourquoi :** `summary/` retourne 0B via fetch() ET via jQuery AJAX depuis une session froide. L'unique façon fiable d'obtenir le corps est d'intercepter la requête que le widget fait lui-même dans sa session chaude.
+
 ## Test end-to-end (Saopola live) — confirmé 2026-07-30
 
 ```bash

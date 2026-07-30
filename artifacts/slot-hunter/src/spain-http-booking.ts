@@ -506,6 +506,11 @@ export async function executeHttpBooking(
 ): Promise<SpainBookingResult> {
   const t0 = Date.now();
 
+  // Corps summary/ intercepté automatiquement via waitForResponse dans submitSigninFormViaDOM.
+  // Quand le widget Backbone fire summary/ après un signin réussi, on le capture ici
+  // pour éviter d'appeler callEndpoint("summary/") qui retourne 0B.
+  let capturedSummaryBody = "";
+
   // ─── 1. Extraire les services disponibles ─────────────────────────────
   const services = config.availableServices?.length
     ? config.availableServices
@@ -850,9 +855,17 @@ export async function executeHttpBooking(
     // car le serveur PHP valide une variable de session définie uniquement par le
     // widget Backbone lui-même. On remplit le formulaire DOM pour que le widget
     // émette l'appel signin/ avec le bon state PHP.
+    // IMPORTANT : submitSigninFormViaDOM intercepte aussi summary/ automatiquement —
+    // le widget Backbone le fire juste après un signin réussi. On stocke summaryBody
+    // pour court-circuiter l'appel manuel callEndpoint("summary/") plus bas.
     if (!payload && useBrowserCalls && candidate.endpoint === "signin/") {
       console.log(`[spain-booking] 🖊️ signin/ → 0B via fetch/jQuery — fallback DOM form submit…`);
-      const domBody = await submitSigninFormViaDOM(config.login, config.password);
+      const domResult = await submitSigninFormViaDOM(config.login, config.password);
+      const domBody = domResult.signinBody;
+      if (domResult.summaryBody) {
+        capturedSummaryBody = domResult.summaryBody;
+        console.log(`[spain-booking] 📦 summary/ intercepté depuis DOM (${capturedSummaryBody.length}B) — appel manuel sera skippé`);
+      }
       if (domBody) {
         try {
           // Bookitit JSONP format : "callback=jQuery123({...})" ou "jQuery123({...})"
@@ -995,24 +1008,38 @@ export async function executeHttpBooking(
   // ─── 7. SUMMARY (confirmation finale) ─────────────────────────────────
   console.log(`[spain-booking] 📝 Confirmation booking (summary/)…`);
 
-  // Params summary/ conformes au bundle (summary.js createAppointment) :
-  //   { services, agendas, date, time, bktToken, ...clientData.attributes }
-  // clientData.attributes contient login, logintype (et tout ce que signin a retourné/stocké).
-  // NB : event_created et client_signin ne sont PAS dans le bundle → on ne les envoie pas.
-  const summaryParams: Record<string, string> = {
-    ...baseParams,
-    "services[]": targetService.serviceId,
-    ...(agendaId ? { "agendas[]": agendaId } : {}),
-    date: slotDate,
-    time: slotTime,
-    bktToken: String(bktToken),
-    login: config.login,
-    logintype: "document", // clientData attribute — cohérent avec le signin qui a fonctionné
-  };
+  // Priorité 1 : summary/ intercepté automatiquement via waitForResponse (widget Backbone)
+  // Priorité 2 : appel manuel callEndpoint (jQuery AJAX fallback) si non capturé
+  let summaryPayload: unknown = null;
 
-  const summaryPayload = await callEndpoint("summary/", summaryParams);
+  if (capturedSummaryBody) {
+    console.log(`[spain-booking] ✅ summary/ depuis interception DOM (${capturedSummaryBody.length}B) — appel manuel skippé`);
+    try {
+      summaryPayload = parseJsonpResponse(capturedSummaryBody);
+    } catch (parseErr) {
+      console.warn(`[spain-booking] ⚠️ Impossible de parser summary/ capturé: ${parseErr} — fallback appel manuel`);
+    }
+  }
+
   if (!summaryPayload) {
-    return { status: "booking_failed", errorMessage: "summary/ pas de réponse", durationMs: Date.now() - t0 };
+    // Fallback : appel manuel (jQuery AJAX via page ou impit selon mode)
+    // Params summary/ conformes au bundle (summary.js createAppointment) :
+    //   { services, agendas, date, time, bktToken, ...clientData.attributes }
+    const summaryParams: Record<string, string> = {
+      ...baseParams,
+      "services[]": targetService.serviceId,
+      ...(agendaId ? { "agendas[]": agendaId } : {}),
+      date: slotDate,
+      time: slotTime,
+      bktToken: String(bktToken),
+      login: config.login,
+      logintype: "document",
+    };
+    summaryPayload = await callEndpoint("summary/", summaryParams);
+  }
+
+  if (!summaryPayload) {
+    return { status: "booking_failed", errorMessage: "summary/ pas de réponse (DOM + appel manuel)", durationMs: Date.now() - t0 };
   }
 
   // Extract locator from response
