@@ -229,6 +229,8 @@ class SpainPersistentBrowserManager {
    * servi 2h38min plus tard → CF refuse → 0B → destroy → même token → 0B…).
    */
   private _prefetchRetried = false;
+  /** Page principale du browser persistant — réutilisée entre les cycles de scan. */
+  private _page: import("puppeteer").Page | null = null;
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
@@ -406,6 +408,11 @@ class SpainPersistentBrowserManager {
     return (Date.now() + 10 * 60_000) >= this._cachedSession.expiresAt;
   }
 
+  /** Page Chromium principale — utilisée par callBookititEndpointViaBrowser pour les appels same-IP. */
+  getActivePage(): import("puppeteer").Page | null {
+    return this._page;
+  }
+
   /** True si un closeAndInvalidate+retry a déjà été tenté sans récupérer de prefetch. */
   get prefetchRetried(): boolean {
     return this._prefetchRetried;
@@ -434,6 +441,7 @@ class SpainPersistentBrowserManager {
   async closeAndInvalidate(): Promise<void> {
     this._cachedSession = null;
     this._prefetchRetried = false; // reset pour le prochain cycle
+    this._page = null;
     if (this._browser) {
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents
@@ -551,6 +559,7 @@ class SpainPersistentBrowserManager {
 
     const pages = await browser.pages();
     const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
+    this._page = page; // mémorisé pour callBookititEndpointViaBrowser
 
     await page.setUserAgent(this._ua);
     await page.setViewport(this._viewport);
@@ -1582,6 +1591,7 @@ class SpainPersistentBrowserManager {
   // ── Fermeture propre ──────────────────────────────────────────────────────
 
   async close(): Promise<void> {
+    this._page = null;
     if (this._browser) {
       await this._browser.close().catch(() => {});
       this._browser = null;

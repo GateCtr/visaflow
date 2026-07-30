@@ -25,6 +25,7 @@ import {
   isSpainCfSessionExpiringSoon,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
+import { callBookititEndpointViaBrowser } from "./spain-persistent-browser.js";
 import {
   exploreAvailableSlots,
   type SlotExplorationResult,
@@ -693,9 +694,25 @@ async function confirmSlotsViaDatetime(
       cfgQ.append("srvsrc",         srvsrc);
       cfgQ.append("selectedPeople", "1");
       cfgQ.append("_",              String(Date.now()));
-      const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
-      const cfgRaw = cfgRes ? await cfgRes.text() : "";
-      console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgRaw.length}B`);
+      // ── Routage getwidgetconfigurations/ + getservices/ ───────────────────────
+      // Mode persistent-browser (session.source === "playwright") :
+      //   Le PHPSESSID est lié à l'IP Decodo du browser (ex: port 10002).
+      //   spainCfFetch via impit peut tourner sur une IP différente (pool rotation)
+      //   → Bookitit rejette le PHPSESSID → 0B. On appelle depuis la page Chromium
+      //   elle-même (callBookititEndpointViaBrowser) : même IP, même cookies, same-origin.
+      //
+      // Autres modes (impit / CapSolver) : spainCfFetch inchangé.
+      const useBrowserFetch = session.source === "playwright";
+
+      let cfgRaw: string;
+      if (useBrowserFetch) {
+        cfgRaw = await callBookititEndpointViaBrowser(`${base}getwidgetconfigurations/?${cfgQ}`);
+        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init (browser) → ${cfgRaw.length}B`);
+      } else {
+        const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
+        cfgRaw = cfgRes ? await cfgRes.text() : "";
+        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgRaw.length}B`);
+      }
       // Petite pause pour laisser le serveur initialiser la session (~200ms observé en vrai Chrome)
       await new Promise<void>((r) => setTimeout(r, 220));
 
@@ -710,12 +727,23 @@ async function confirmSlotsViaDatetime(
       svcQ.append("srvsrc",         srvsrc);
       svcQ.append("selectedPeople", "1");
       svcQ.append("_",              String(Date.now()));
-      const svcRes = await spainCfFetch(`${base}getservices/?${svcQ}`, session, { headers });
-      if (!svcRes?.ok) {
-        console.log(`[spain-http] ⚠️ getservices/ fallback → HTTP ${svcRes?.status ?? "null"} → not_found`);
-        return null;
+
+      let svcRaw: string;
+      if (useBrowserFetch) {
+        svcRaw = await callBookititEndpointViaBrowser(`${base}getservices/?${svcQ}`);
+        console.log(`[spain-http] 🔬 getservices/ (browser) → ${svcRaw.length}B`);
+        if (!svcRaw) {
+          console.log(`[spain-http] ⚠️ getservices/ fallback (browser) → 0B → not_found`);
+          return null;
+        }
+      } else {
+        const svcRes = await spainCfFetch(`${base}getservices/?${svcQ}`, session, { headers });
+        if (!svcRes?.ok) {
+          console.log(`[spain-http] ⚠️ getservices/ fallback → HTTP ${svcRes?.status ?? "null"} → not_found`);
+          return null;
+        }
+        svcRaw = await svcRes.text();
       }
-      const svcRaw = await svcRes.text();
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
