@@ -53,29 +53,54 @@ async function main() {
     `  CapSolver: ${process.env.CAPSOLVER_API_KEY ? "configuré ✅" : "⚠️  CAPSOLVER_API_KEY absent"}`,
   );
 
-  // ── Phase 1 : Scan ───────────────────────────────────────────────────────
+  // ── Phase 1 : Scan (boucle comme la prod — max 5 cycles de 15s) ────────────
+  //
+  // En prod, la session se construit progressivement :
+  //   Cycle 1 → browser lancé, CF résolu, PHPSESSID obtenu, /main/ peut être 0B
+  //   Cycle 2+ → ♻️ Session CF réutilisée → page.evaluate() sur same-origin → /main/ OK
+  // Notre test simule ce comportement en boucle au lieu de sortir sur le premier échec.
 
-  sep("PHASE 1 — Scan (détection créneaux)");
-  const t0Scan = Date.now();
-  const scanResult = await scanSpainHttp(PORTAL_URL);
-  const scanDuration = Date.now() - t0Scan;
+  sep("PHASE 1 — Scan (boucle prod-like, max 5 cycles × 15s)");
+  const MAX_CYCLES = 5;
+  const CYCLE_DELAY_MS = 15_000;
 
-  console.log(`\n  ⏱  Durée : ${elapsed(scanDuration)}`);
-  console.log(`  📊 Status : ${scanResult.status}`);
-  if (scanResult.slotInfo) console.log(`  🕐 Créneau : ${scanResult.slotInfo}`);
-  if (scanResult.errorMessage)
-    console.log(`  ⚠️  Erreur : ${scanResult.errorMessage}`);
-  if (scanResult._services?.length) {
-    console.log(`  🗂  Services (${scanResult._services.length}) :`);
-    for (const s of scanResult._services) {
-      console.log(`       - [${s.serviceId}] ${s.serviceName}`);
+  let scanResult = null as Awaited<ReturnType<typeof scanSpainHttp>> | null;
+  for (let cycle = 1; cycle <= MAX_CYCLES; cycle++) {
+    console.log(`\n  ── Cycle ${cycle}/${MAX_CYCLES} ──`);
+    const t0Scan = Date.now();
+    scanResult = await scanSpainHttp(PORTAL_URL);
+    const scanDuration = Date.now() - t0Scan;
+
+    console.log(`  ⏱  Durée : ${elapsed(scanDuration)}`);
+    console.log(`  📊 Status : ${scanResult.status}`);
+    if (scanResult.slotInfo) console.log(`  🕐 Créneau : ${scanResult.slotInfo}`);
+    if (scanResult.errorMessage) console.log(`  ⚠️  Erreur : ${scanResult.errorMessage}`);
+    if (scanResult._services?.length) {
+      console.log(`  🗂  Services (${scanResult._services.length}) :`);
+      for (const s of scanResult._services) {
+        console.log(`       - [${s.serviceId}] ${s.serviceName}`);
+      }
+    }
+
+    if (scanResult.status === "found" || scanResult.status === "not_found") {
+      console.log(`\n  ✅ Scan stable (status=${scanResult.status}) — session chaude confirmée.`);
+      break;
+    }
+
+    if (cycle < MAX_CYCLES) {
+      console.log(`  🔄 Résultat transitoire (${scanResult.status}) — attente ${CYCLE_DELAY_MS / 1000}s avant retry (simulation prod)…`);
+      await new Promise((r) => setTimeout(r, CYCLE_DELAY_MS));
     }
   }
 
-  if (scanResult.status !== "found") {
-    console.log(
-      `\n  ⛔ Pas de créneaux détectés (status=${scanResult.status}) — fin du test.`,
-    );
+  if (!scanResult || (scanResult.status !== "found" && scanResult.status !== "not_found")) {
+    console.log(`\n  ⛔ Session CF instable après ${MAX_CYCLES} cycles — fin du test.`);
+    process.exit(1);
+  }
+
+  if (scanResult.status === "not_found") {
+    console.log(`\n  ℹ️  Aucun créneau disponible en ce moment (portal répond correctement).`);
+    console.log("  Le watcher fonctionne. Réessaie quand des créneaux sont visibles.");
     process.exit(0);
   }
 
