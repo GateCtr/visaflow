@@ -507,8 +507,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
             const services = extractServicesFromHtml(mainHtml);
             log("INFO", `[SPAIN-WATCHER]    Services Bookitit disponibles: ${services.map((s) => `"${s.serviceName}" (${s.serviceId})`).join(", ") || "aucun"}`);
 
-            // 3. Pour chaque dossier, matcher le service et tenter le booking
-            for (const dossier of dossiers) {
+            // 3. Tous les dossiers bookent en parallèle — chacun a son PHPSESSID
+            //    isolé via createIsolatedBookingSession(). La session CF (cf_clearance)
+            //    est partagée en lecture seule : pas de conflit. Le gain est ~N×latence
+            //    booking au lieu de N×latence séquentielle (crítico si N>=2 au pic).
+            const slotDateForLog = result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10);
+            await Promise.all(dossiers.map(async (dossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
               if (!matched) {
@@ -518,7 +522,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   result: "not_found",
                   errorMessage: `Créneau détecté mais aucun service Bookitit ne correspond au visa "${dossier.visaType}"`,
                 }).catch(() => {});
-                continue;
+                return;
               }
 
               log("INFO", `[SPAIN-WATCHER] 📋 ${dossier.applicantName}: booking "${matched.serviceName}" (${matched.serviceId}) pour "${dossier.visaType}"`);
@@ -552,18 +556,17 @@ export async function startSpainWatcherLoop(): Promise<void> {
                     applicationId: dossier.applicationId,
                     destination: "spain",
                     office: matched.serviceName,
-                    dateFound: result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10),
+                    dateFound: slotDateForLog,
                     outcome: "captured",
                     context: { locator: bookingResult.locator, serviceId: matched.serviceId },
                     mode: "schedule",
                   }]);
 
                   // ── 1. Upload + attach PDF de confirmation ──
-                  let pdfStorageId: string | undefined;
                   if (bookingResult.confirmationPdf) {
                     try {
                       const b64 = bookingResult.confirmationPdf.toString("base64");
-                      pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
+                      const pdfStorageId = (await uploadFile(b64, "application/pdf")) ?? undefined;
                       if (pdfStorageId) {
                         await attachConfirmationDoc({
                           applicationId: dossier.applicationId,
@@ -588,7 +591,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
                     screenshotStorageId: undefined,
                   }).catch((e) => log("WARN", `[SPAIN-WATCHER] reportSlotFound error: ${e}`));
 
-                  // Override slotInfo with booking confirmation
+                  // Préfixer slotInfo avec la confirmation (écriture synchrone — pas de race en JS)
                   result.slotInfo = `✅ BOOKING CONFIRMÉ pour ${dossier.applicantName} ! Locator: ${bookingResult.locator ?? "N/A"} | ${result.slotInfo}`;
                 } else {
                   // ── Report slot discovery outcome: FAILED ──
@@ -596,14 +599,13 @@ export async function startSpainWatcherLoop(): Promise<void> {
                     applicationId: dossier.applicationId,
                     destination: "spain",
                     office: matched.serviceName,
-                    dateFound: new Date().toISOString().slice(0, 10),
+                    dateFound: slotDateForLog,
                     outcome: "ignored",
                     reason: `booking_failed_${bookingResult.status}`,
                     context: { errorMessage: bookingResult.errorMessage, serviceId: matched.serviceId },
                     mode: "schedule",
                   }]);
 
-                  // Report heartbeat with error
                   await sendHeartbeat({
                     applicationId: dossier.applicationId,
                     result: "error",
@@ -618,7 +620,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   errorMessage: `Exception booking: ${bookErr}`,
                 }).catch(() => {});
               }
-            }
+            }));
           }
         }
       }

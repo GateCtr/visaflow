@@ -883,20 +883,6 @@ export default function AdminApplicationDetail() {
             <div className={`rounded-xl border p-5 ${isEngagementPaid ? "border-green-200 bg-green-50" : hasEngagementProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  {hasEngagementProof && proofUrls?.engagementUrl && (
-                    <button
-                      className="flex-shrink-0 rounded-lg overflow-hidden border border-border w-14 h-14 bg-white hover:opacity-80 transition-opacity"
-                      onClick={() => setReceiptPreview(proofUrls.engagementUrl!)}
-                      title="Voir le reçu"
-                    >
-                      <img
-                        src={proofUrls.engagementUrl}
-                        alt="Reçu engagement"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    </button>
-                  )}
                   <div>
                     <p className="text-sm font-semibold text-primary flex items-center gap-2">
                       {isEngagementPaid
@@ -919,13 +905,15 @@ export default function AdminApplicationDetail() {
                       className="h-8 text-xs gap-1"
                       onClick={() => setReceiptPreview(proofUrls.engagementUrl!)}
                     >
-                      <Image className="w-3.5 h-3.5" /> Voir reçu
+                      <Image className="w-3.5 h-3.5" /> Agrandir
                     </Button>
                   )}
                   {hasEngagementProof && !isEngagementPaid && appId && (
                     <Button
                       size="sm"
-                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={proofUrls === undefined}
+                      title={proofUrls === undefined ? "Chargement de la preuve…" : undefined}
                       onClick={() =>
                         handleAction(
                           () => validateEngagement({ applicationId: appId }),
@@ -944,26 +932,44 @@ export default function AdminApplicationDetail() {
                   )}
                 </div>
               </div>
+              {/* ── Preuve de paiement : aperçu inline ───────────────────────────── */}
+              {hasEngagementProof && !isEngagementPaid && (
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5" /> Preuve soumise par le client
+                  </p>
+                  {proofUrls === undefined ? (
+                    <div className="h-36 rounded-lg bg-slate-100 animate-pulse" />
+                  ) : proofUrls?.engagementUrl ? (
+                    <button
+                      className="block w-full rounded-lg overflow-hidden border border-amber-200 bg-white hover:opacity-90 transition-opacity"
+                      onClick={() => setReceiptPreview(proofUrls.engagementUrl!)}
+                      title="Cliquer pour agrandir"
+                    >
+                      <img
+                        src={proofUrls.engagementUrl}
+                        alt="Reçu engagement"
+                        className="w-full max-h-52 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const fb = document.createElement("p");
+                          fb.className = "p-4 text-xs text-center text-muted-foreground";
+                          fb.innerHTML = `Aperçu indisponible — <a href="${proofUrls.engagementUrl}" target="_blank" rel="noreferrer" class="text-primary underline">ouvrir dans un onglet</a>`;
+                          (e.target as HTMLImageElement).parentElement?.appendChild(fb);
+                        }}
+                      />
+                    </button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Aperçu indisponible (fichier introuvable en stockage).</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Success fee row */}
             <div className={`rounded-xl border p-5 ${isDossierOnly ? "border-slate-200 bg-slate-50 opacity-60" : isSuccessFeePaid ? "border-green-200 bg-green-50" : hasSuccessProof ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  {hasSuccessProof && proofUrls?.successFeeUrl && (
-                    <button
-                      className="flex-shrink-0 rounded-lg overflow-hidden border border-border w-14 h-14 bg-white hover:opacity-80 transition-opacity"
-                      onClick={() => setReceiptPreview(proofUrls.successFeeUrl!)}
-                      title="Voir le reçu"
-                    >
-                      <img
-                        src={proofUrls.successFeeUrl}
-                        alt="Reçu prime de succès"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    </button>
-                  )}
                   <div>
                     <p className="text-sm font-semibold text-primary flex items-center gap-2">
                       {isDossierOnly
@@ -994,13 +1000,15 @@ export default function AdminApplicationDetail() {
                       className="h-8 text-xs gap-1"
                       onClick={() => setReceiptPreview(proofUrls.successFeeUrl!)}
                     >
-                      <Image className="w-3.5 h-3.5" /> Voir reçu
+                      <Image className="w-3.5 h-3.5" /> Agrandir
                     </Button>
                   )}
                   {hasSuccessProof && !isSuccessFeePaid && appId && (
                     <Button
                       size="sm"
-                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={proofUrls === undefined}
+                      title={proofUrls === undefined ? "Chargement de la preuve…" : undefined}
                       onClick={() =>
                         handleAction(
                           () => validateSuccess({ applicationId: appId }),
@@ -1019,6 +1027,38 @@ export default function AdminApplicationDetail() {
                   )}
                 </div>
               </div>
+              {/* ── Preuve de paiement : aperçu inline ───────────────────────────── */}
+              {hasSuccessProof && !isSuccessFeePaid && !isDossierOnly && (
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5" /> Preuve soumise par le client
+                  </p>
+                  {proofUrls === undefined ? (
+                    <div className="h-36 rounded-lg bg-slate-100 animate-pulse" />
+                  ) : proofUrls?.successFeeUrl ? (
+                    <button
+                      className="block w-full rounded-lg overflow-hidden border border-amber-200 bg-white hover:opacity-90 transition-opacity"
+                      onClick={() => setReceiptPreview(proofUrls.successFeeUrl!)}
+                      title="Cliquer pour agrandir"
+                    >
+                      <img
+                        src={proofUrls.successFeeUrl}
+                        alt="Reçu prime de succès"
+                        className="w-full max-h-52 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const fb = document.createElement("p");
+                          fb.className = "p-4 text-xs text-center text-muted-foreground";
+                          fb.innerHTML = `Aperçu indisponible — <a href="${proofUrls.successFeeUrl}" target="_blank" rel="noreferrer" class="text-primary underline">ouvrir dans un onglet</a>`;
+                          (e.target as HTMLImageElement).parentElement?.appendChild(fb);
+                        }}
+                      />
+                    </button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Aperçu indisponible (fichier introuvable en stockage).</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Adjust slot success fee — slot_only only, before success fee is paid */}
