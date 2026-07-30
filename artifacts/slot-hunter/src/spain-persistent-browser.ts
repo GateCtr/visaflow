@@ -2447,6 +2447,35 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
  * Retourne le body JSONP de la réponse signin/ (string brute) ou "" si échec.
  */
 /**
+ * Mutex de booking browser : sérialise TOUT le flow executeHttpBooking quand
+ * useBrowserCalls=true (session playwright).
+ *
+ * La page Chrome est un singleton partagé. Quand N dossiers bookent en
+ * Promise.all, TOUS les appels browser (getagendas/, datetime/, signin/,
+ * summary/) utilisent la même page. Sans ce verrou, deux dossiers concurrents
+ * provoquent "detached Frame" / "TargetCloseError" dès le premier appel.
+ *
+ * Le _domSigninMutex ci-dessous reste en place pour les cas où un seul dossier
+ * est en vol (protection interne) mais ce verrou de niveau supérieur couvre
+ * l'intégralité du booking.
+ */
+let _browserBookingMutex: Promise<void> = Promise.resolve();
+
+/**
+ * Acquiert le verrou de booking browser.
+ * Retourne une fonction release() à appeler dans finally{}.
+ */
+export async function acquireBrowserBookingLock(): Promise<() => void> {
+  const prev = _browserBookingMutex;
+  let release!: () => void;
+  _browserBookingMutex = new Promise<void>((r) => { release = r; });
+  console.log("[spain-pb] 🔐 Browser booking lock — attente verrou…");
+  await prev;
+  console.log("[spain-pb] 🔓 Browser booking lock — verrou acquis");
+  return release;
+}
+
+/**
  * Mutex de la page DOM : sérialise les appels submitSigninFormViaDOM.
  *
  * Tous les dossiers bookent en parallèle (Promise.all dans le watcher), mais

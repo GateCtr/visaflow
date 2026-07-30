@@ -35,6 +35,7 @@ import {
   callBookititViaJQueryInPage,
   navigateToSelecttime,
   submitSigninFormViaDOM,
+  acquireBrowserBookingLock,
 } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
@@ -555,6 +556,12 @@ export async function executeHttpBooking(
   //   Le contexte incognito navigue vers /main/ → PHPSESSID isolé → appels impit
   //   passent par le même proxy IP → réponses normales.
   const useBrowserCalls = session.source === "playwright";
+  // Sérialiser TOUT le flow browser — la page Chrome est un singleton partagé.
+  // getagendas/, datetime/, signin/, summary/ utilisent tous callBookititEndpointBrowser
+  // (→ this._page). Sans ce verrou, deux dossiers en Promise.all se marchent dessus
+  // dès le premier appel → TargetCloseError / detached Frame.
+  const releaseBrowserLock = useBrowserCalls ? await acquireBrowserBookingLock() : null;
+  try {
   let bookingSession: SpainCfSession;
 
   if (useBrowserCalls) {
@@ -1091,6 +1098,13 @@ export async function executeHttpBooking(
     confirmationPdf,
     durationMs: Date.now() - t0,
   };
+  } finally {
+    // Libérer le verrou browser — le dossier suivant peut démarrer
+    if (releaseBrowserLock) {
+      console.log("[spain-booking] 🔓 Browser booking lock — verrou libéré");
+      releaseBrowserLock();
+    }
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
