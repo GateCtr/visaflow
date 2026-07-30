@@ -61,8 +61,8 @@ async function main() {
   // Notre test simule ce comportement en boucle au lieu de sortir sur le premier échec.
 
   sep("PHASE 1 — Scan (boucle prod-like, max 5 cycles × 15s)");
-  const MAX_CYCLES = 5;
-  const CYCLE_DELAY_MS = 15_000;
+  const MAX_CYCLES = process.env.SAOPOLA_MAX_CYCLES ? parseInt(process.env.SAOPOLA_MAX_CYCLES, 10) : 5;
+  const CYCLE_DELAY_MS = process.env.SAOPOLA_CYCLE_DELAY_MS ? parseInt(process.env.SAOPOLA_CYCLE_DELAY_MS, 10) : 15_000;
 
   let scanResult = null as Awaited<ReturnType<typeof scanSpainHttp>> | null;
   let scanDuration = 0;

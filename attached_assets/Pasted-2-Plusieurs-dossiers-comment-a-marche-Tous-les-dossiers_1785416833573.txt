@@ -1,0 +1,46 @@
+2. Plusieurs dossiers — comment ça marche ?
+
+Tous les dossiers bookent en parallèle (Promise.all) dès qu'un créneau est détecté :
+
+Scan détecte créneau
+  ↓
+dossier A (Jean Dupont, visa tourisme)  ─┐
+dossier B (Marie Kone, visa schengen)   ─┤ Promise.all → simultané
+dossier C (Paul Mbeki, visa travail)    ─┘
+Chaque dossier :
+
+Partage le même cf_clearance (lecture seule, pas de conflit)
+Obtient son propre PHPSESSID via createIsolatedBookingSession() — sinon Bookitit mélange les sessions et retourne 0B
+Est matchée au bon service Bookitit via visaType (matchServiceForVisa) — "visa tourisme" → serviceId bkt853215, "visa schengen" → autre serviceId
+La nuance critique : Si deux dossiers veulent le même type de service sur le même créneau, un seul peut l'avoir. Bookitit crée un RDV par summary/ en premier servi — le second arrivera à booking_failed ou recevra une erreur de conflit. C'est inévitable côté serveur Bookitit.
+
+Mais si les freeslots du créneau sont > 1 (plusieurs places disponibles) ou si les dossiers bookent des services différents, ils peuvent tous réussir simultanément.
+Tu as testé le scénario de plusieurs dossiers avec test live saopola ?
+Non — le test actuel n'a jamais couvert le multi-dossier. Un seul executeHttpBooking avec un seul faux dossier.
+
+Et en lisant le code, il y a un vrai problème structurel si on lance plusieurs dossiers en parallèle aujourd'hui :
+
+Le problème : page Chromium partagée
+
+// spain-http-booking.ts ligne 599
+const callEndpoint = useBrowserCalls
+  ? (ep, p) => callBookititEndpointBrowser(ep, p, portalUrl)  // ← même page
+  : ...
+// spain-persistent-browser.ts
+export async function submitSigninFormViaDOM(login, password) {
+  const page = spainPersistentBrowser.getActivePage(); // ← singleton global
+Le watcher lance tous les dossiers avec Promise.all — en parallèle. Mais submitSigninFormViaDOM accède à la même page Chromium pour tous. Si deux dossiers atteignent le DOM form submit simultanément :
+
+dossier A → remplit login=MATRICULE_A, click submit
+dossier B → remplit login=MATRICULE_B, click submit  ← écrase les champs de A
+                                                       ← signin/ répond pour A ou B, pas les deux
+Race condition directe — un dossier au mieux, crash ou mauvais credentials au pire.
+
+Ce qui fonctionne aujourd'hui sans problème
+
+Les étapes HTTP pures (impit) sont parallèle-safe — chacune a son propre PHPSESSID isolé via createIsolatedBookingSession. Seul le DOM form submit (signin/ + summary/ waitForResponse) est bloquant car il touche la même page.
+
+Le fix : sérialiser les appels DOM avec un mutex
+Il y a un pattern mutex déjà utilisé dans le code. Je l'applique à submitSigninFormViaDOM — même principe que le mutex de lancement Puppeteer.
+Je vais ajouter le mutex juste avant submitSigninFormViaDOM.
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.

@@ -1210,6 +1210,8 @@ class SpainPersistentBrowserManager {
     // cdpFetch sera armé APRÈS le clic Continuar avec un signal JSD POST frais —
     // voir commentaire dans le bloc if (continueClicked) ci-dessous.
     let cdpFetch: any = null;
+    // Valeur de cf_clearance sauvegardée avant suppression (pour restauration si cookie fantôme).
+    let savedCfClearanceValue = "";
 
     // ── Étape 6 : Naviguer vers le portail puis cliquer Continuar ────────────
     // Avec le cf_clearance frais injecté + UA synchronisé, CF accepte la page
@@ -1336,9 +1338,16 @@ class SpainPersistentBrowserManager {
           // Continuar émet un nouveau cf_clearance lié à CETTE session → /main/ reçoit du contenu.
           if (!cfClearedBeforeClick) {
             cfClearedBeforeClick = true;
+            // Sauvegarder la valeur avant suppression — sera restaurée si JSD donne "cookie fantôme"
+            // (CF valide la session sans réémettre de cf_clearance → /main/ a besoin du cookie existant)
+            const preCookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
+            const cfCookiePre = preCookies.find((c: import("puppeteer").Cookie) => c.name === "cf_clearance");
+            if (cfCookiePre) savedCfClearanceValue = cfCookiePre.value;
             await page.deleteCookie({ name: "cf_clearance", domain: ".citaconsular.es" })
               .catch(() => {});
-            console.log(`[spain-pb] 🗑️ cf_clearance supprimé avant Continuar — CF va émettre un nouveau token pour la session POST`);
+            await page.deleteCookie({ name: "cf_clearance", domain: "www.citaconsular.es" })
+              .catch(() => {});
+            console.log(`[spain-pb] 🗑️ cf_clearance supprimé avant Continuar (valeur sauvegardée: ${savedCfClearanceValue ? "✅" : "❌ absent"}) — CF va émettre un nouveau token pour la session POST`);
           }
 
           // Tenter le clic Continuar
@@ -1391,46 +1400,98 @@ class SpainPersistentBrowserManager {
 
         // ── Intercepteur CDP Fetch POST : bloquer /main/ jusqu'au JSD de la SESSION POST ──
         //
-        // POURQUOI ici (après Continuar) et PAS avant la boucle :
-        //   Le clic Continuar soumet un POST au portail → CF crée une NOUVELLE session
-        //   avec un nonce JSD frais. Si l'intercepteur est armé avant, il attend le JSD
-        //   de la 1ère navigation (déjà consommé) → "cookie fantôme" → /main/ libéré trop
-        //   tôt → CF retourne text/html 0B car le JSD de la session POST n'est pas encore validé.
+        // COMPORTEMENT CF SELON LA VERSION :
         //
-        //   En réarmant ici avec un signal frais (jsdPostSignal), l'intercepteur attend
-        //   spécifiquement le JSD oneshot déclenché par le POST, garantissant que CF a vu
-        //   notre fingerprint AVANT de servir /main/.
-        jsdOneShotAccepted = false; // Reset — on attend le JSD POST
-        const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
+        // Ancien CF (≤ 2026-07): JSD oneshot déclenché PAR le POST Continuar.
+        //   → L'intercepteur attend le signal JSD POST → /main/ libéré avec contenu.
+        //
+        // Nouveau CF (≥ 2026-07): JSD oneshot déclenché SPONTANÉMENT avant Continuar,
+        //   juste après la suppression de cf_clearance (pendant le wait "bouton invisible").
+        //   → Si on arme l'intercepteur et attend un JSD POST, celui-ci ne vient jamais
+        //     → timeout 8s → /main/ libéré mais retourne 0B (CF n'a pas validé le POST).
+        //
+        // FIX : Si un JSD a déjà eu lieu avant le clic Continuar (jsdOneShotAt > 0),
+        //   CF a DÉJÀ validé le fingerprint TLS → ne pas bloquer /main/.
+        //   On laisse le widget appeler /main/ naturellement et le capture via
+        //   Network.loadingFinished (cdpNet, déjà armé en début de function).
+        //   Si au contraire aucun JSD spontané n'a eu lieu, on arme l'intercepteur
+        //   comme avant (ancien comportement CF).
 
-        try {
-          cdpFetch = await page.createCDPSession();
-          await cdpFetch.send("Fetch.enable", {
-            patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
-          });
-          cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
-            const url: string = ev.request?.url ?? "";
-            console.log(`[spain-pb] 🔒 /main/ intercepté POST — attente JSD POST (max 8s)… ${url.slice(0, 80)}`);
-            const reason = await Promise.race([
-              jsdPostSignal.then(() => "jsd" as const),
-              new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 8_000)),
-            ]);
-            if (reason === "jsd" && jsdOneShotAccepted) {
-              // cf_clearance réémis → /main/ reçoit le JSONP avec délai de sécurité
-              console.log(`[spain-pb] 🔓 /main/ libéré — JSD POST accepté ✅ délai 300ms…`);
-              await new Promise((r) => setTimeout(r, 300));
-            } else {
-              // Cookie fantôme = cf_clearance valide, pas de re-émission.
-              // On ajoute 1.5s pour laisser CF synchroniser son état backend POST.
-              const why = reason === "timeout" ? "timeout 8s" : "cookie fantôme (cf_clearance déjà valide)";
-              console.warn(`[spain-pb] ⚠️ /main/ libéré après ${why} + 1500ms sync backend…`);
-              await new Promise((r) => setTimeout(r, 1_500));
-            }
-            await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-          });
-          console.log(`[spain-pb] 🔒 Intercepteur /main/ POST armé (CDP Fetch)`);
-        } catch (fetchInterceptErr) {
-          console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ POST (non-fatal): ${fetchInterceptErr}`);
+        const preContinuarJsdFired = jsdOneShotAt > 0;
+
+        if (!preContinuarJsdFired) {
+          // Ancien comportement : JSD attendu après le POST Continuar.
+          jsdOneShotAccepted = false; // Reset — on attend le JSD POST
+          const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
+
+          try {
+            cdpFetch = await page.createCDPSession();
+            await cdpFetch.send("Fetch.enable", {
+              patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
+            });
+            cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
+              const url: string = ev.request?.url ?? "";
+              console.log(`[spain-pb] 🔒 /main/ intercepté POST — attente JSD POST (max 8s)… ${url.slice(0, 80)}`);
+              const reason = await Promise.race([
+                jsdPostSignal.then(() => "jsd" as const),
+                new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 8_000)),
+              ]);
+              if (reason === "jsd" && jsdOneShotAccepted) {
+                // cf_clearance réémis → /main/ reçoit le JSONP avec délai de sécurité
+                console.log(`[spain-pb] 🔓 /main/ libéré — JSD POST accepté ✅ délai 300ms…`);
+                await new Promise((r) => setTimeout(r, 300));
+              } else {
+                // Cookie fantôme = CF a validé la session SANS réémettre de cf_clearance.
+                // Le cf_clearance original est toujours valide côté serveur CF, mais il est
+                // absent du navigateur (supprimé pour forcer le JSD). Sans lui dans les cookies
+                // de la requête /main/, CF retourne 0B depuis ~2026-07.
+                // FIX : Restaurer le cf_clearance sauvegardé avant que /main/ soit libéré.
+                const why = reason === "timeout" ? "timeout 8s" : "cookie fantôme (cf_clearance déjà valide)";
+                console.warn(`[spain-pb] ⚠️ /main/ libéré après ${why} + 1500ms sync backend…`);
+                if (savedCfClearanceValue) {
+                  try {
+                    await page.setCookie({
+                      name: "cf_clearance",
+                      value: savedCfClearanceValue,
+                      domain: ".citaconsular.es",
+                      path: "/",
+                      httpOnly: false,
+                      secure: true,
+                      sameSite: "None",
+                    });
+                    console.log(`[spain-pb] 🍪 cf_clearance restauré avant /main/ (${savedCfClearanceValue.slice(0, 30)}…)`);
+                  } catch (restoreErr) {
+                    console.warn(`[spain-pb] ⚠️ Restauration cf_clearance (non-fatal): ${restoreErr}`);
+                  }
+                }
+                await new Promise((r) => setTimeout(r, 1_500));
+              }
+              await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
+            });
+            console.log(`[spain-pb] 🔒 Intercepteur /main/ POST armé (CDP Fetch)`);
+          } catch (fetchInterceptErr) {
+            console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ POST (non-fatal): ${fetchInterceptErr}`);
+          }
+        } else {
+          // Nouveau comportement CF : JSD spontané déjà eu lieu avant Continuar.
+          // CF a validé le fingerprint → /main/ peut s'exécuter librement.
+          // On laisse Network.loadingFinished (déjà armé) capturer le body.
+          console.log(`[spain-pb] ℹ️ JSD pré-Continuar détecté (${Date.now() - jsdOneShotAt}ms ago) — intercepteur Fetch désactivé, /main/ libre`);
+          // Restaurer cf_clearance si "cookie fantôme" (pas de réémission) — sinon /main/ = 0B
+          if (savedCfClearanceValue && !jsdOneShotAccepted) {
+            try {
+              await page.setCookie({
+                name: "cf_clearance",
+                value: savedCfClearanceValue,
+                domain: ".citaconsular.es",
+                path: "/",
+                httpOnly: false,
+                secure: true,
+                sameSite: "None",
+              });
+              console.log(`[spain-pb] 🍪 cf_clearance restauré (JSD pré-Continuar, cookie fantôme — ${savedCfClearanceValue.slice(0, 30)}…)`);
+            } catch { /* non-fatal */ }
+          }
         }
 
         // Attendre jusqu'à 20s que le listener XHR capture la réponse /main/
