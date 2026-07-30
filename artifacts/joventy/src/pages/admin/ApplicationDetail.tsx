@@ -911,9 +911,15 @@ export default function AdminApplicationDetail() {
                   {hasEngagementProof && !isEngagementPaid && appId && (
                     <Button
                       size="sm"
-                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={proofUrls === undefined}
-                      title={proofUrls === undefined ? "Chargement de la preuve…" : undefined}
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={!proofUrls?.engagementUrl}
+                      title={
+                        proofUrls === undefined
+                          ? "Chargement de la preuve…"
+                          : !proofUrls?.engagementUrl
+                          ? "Aperçu de la preuve requis avant validation"
+                          : undefined
+                      }
                       onClick={() =>
                         handleAction(
                           () => validateEngagement({ applicationId: appId }),
@@ -922,6 +928,24 @@ export default function AdminApplicationDetail() {
                       }
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Valider paiement
+                    </Button>
+                  )}
+                  {/* Fallback si le fichier est inaccessible en stockage mais la preuve existe */}
+                  {hasEngagementProof && !isEngagementPaid && appId && proofUrls !== undefined && !proofUrls?.engagementUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1 border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => {
+                        if (window.confirm("La preuve de paiement est inaccessible en stockage. Valider quand même ?")) {
+                          handleAction(
+                            () => validateEngagement({ applicationId: appId }),
+                            "Paiement d'engagement validé. Dossier activé."
+                          );
+                        }
+                      }}
+                    >
+                      ⚠️ Valider sans aperçu
                     </Button>
                   )}
                   {isEngagementPaid && (
@@ -1006,9 +1030,15 @@ export default function AdminApplicationDetail() {
                   {hasSuccessProof && !isSuccessFeePaid && appId && (
                     <Button
                       size="sm"
-                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={proofUrls === undefined}
-                      title={proofUrls === undefined ? "Chargement de la preuve…" : undefined}
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={!proofUrls?.successFeeUrl}
+                      title={
+                        proofUrls === undefined
+                          ? "Chargement de la preuve…"
+                          : !proofUrls?.successFeeUrl
+                          ? "Aperçu de la preuve requis avant validation"
+                          : undefined
+                      }
                       onClick={() =>
                         handleAction(
                           () => validateSuccess({ applicationId: appId }),
@@ -1017,6 +1047,24 @@ export default function AdminApplicationDetail() {
                       }
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Valider prime
+                    </Button>
+                  )}
+                  {/* Fallback si le fichier est inaccessible en stockage mais la preuve existe */}
+                  {hasSuccessProof && !isSuccessFeePaid && appId && proofUrls !== undefined && !proofUrls?.successFeeUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1 border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => {
+                        if (window.confirm("La preuve de paiement est inaccessible en stockage. Valider quand même ?")) {
+                          handleAction(
+                            () => validateSuccess({ applicationId: appId }),
+                            "Prime de succès validée. Dossier marqué complété."
+                          );
+                        }
+                      }}
+                    >
+                      ⚠️ Valider sans aperçu
                     </Button>
                   )}
                   {isSuccessFeePaid && (
