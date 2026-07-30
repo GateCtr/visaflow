@@ -1067,7 +1067,8 @@ class SpainPersistentBrowserManager {
         } else if (url.includes("onlinebookings/getagendas")) {
           pendingApiRequests.set(ev.requestId, "getagendas/");
         } else if (url.includes("onlinebookings/datetime") && !url.includes("datetimetypes")) {
-          pendingApiRequests.set(ev.requestId, "datetime/");
+          // Store full URL so loadingFinished can extract the month for cache keying
+          pendingApiRequests.set(ev.requestId, "datetime/:" + url);
         }
       });
 
@@ -1126,16 +1127,32 @@ class SpainPersistentBrowserManager {
       // getagendas/ + datetime/ : appelés après clic sur service (simulé ci-dessous).
       cdpNet.on("Network.loadingFinished", async (ev: any) => {
         if (!pendingApiRequests.has(ev.requestId)) return;
-        const ep = pendingApiRequests.get(ev.requestId)!;
+        const rawEp = pendingApiRequests.get(ev.requestId)!;
         pendingApiRequests.delete(ev.requestId);
+        // Resolve endpoint name and cache key (datetime/ is month-keyed)
+        let ep = rawEp;
+        let cacheKey = rawEp;
+        if (rawEp.startsWith("datetime/:")) {
+          ep = "datetime/";
+          const dtUrl = rawEp.slice(10);
+          try {
+            const startParam = new URLSearchParams(new URL(dtUrl).search).get("start") ?? "";
+            const month = startParam.slice(0, 7); // "YYYY-MM"
+            cacheKey = month ? `datetime/${month}` : "datetime/";
+          } catch { cacheKey = "datetime/"; }
+        }
         try {
           const { body, base64Encoded } = await cdpNet.send("Network.getResponseBody", {
             requestId: ev.requestId,
           });
           const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
           if (decoded.length > 10 && !decoded.startsWith("__ERR_")) {
-            console.log(`[spain-pb] 📦 Widget API ${ep} capturée via CDP (${decoded.length}B)`);
-            this._apiPrefetchCache.set(ep, decoded);
+            if (ep === "datetime/") {
+              console.log(`[spain-pb] 📦 Widget API ${cacheKey} capturée via CDP (${decoded.length}B) raw="${decoded.slice(0, 150)}"`);
+            } else {
+              console.log(`[spain-pb] 📦 Widget API ${ep} capturée via CDP (${decoded.length}B)`);
+            }
+            this._apiPrefetchCache.set(cacheKey, decoded);
             if (ep === "getwidgetconfigurations/" || ep === "getservices/") {
               widgetApisCount++;
               if (widgetApisCount >= 2 && widgetApisResolve) widgetApisResolve();
@@ -1143,7 +1160,7 @@ class SpainPersistentBrowserManager {
               widgetSlotResolve(); // signal pour arrêter l'attente
             }
           } else {
-            console.warn(`[spain-pb] ⚠️ Widget API ${ep} → 0B (serveur vide)`);
+            console.warn(`[spain-pb] ⚠️ Widget API ${ep} (${cacheKey}) → 0B (serveur vide)`);
             if ((ep === "getwidgetconfigurations/" || ep === "getservices/")) {
               widgetApisCount++;
               if (widgetApisCount >= 2 && widgetApisResolve) widgetApisResolve();
@@ -1466,10 +1483,56 @@ class SpainPersistentBrowserManager {
                   }
                 }
                 const agLen  = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
-                const dtLen  = this._apiPrefetchCache.get("datetime/")?.length  ?? 0;
+                const nowDt  = new Date();
+                const curMo  = `${nowDt.getFullYear()}-${String(nowDt.getMonth() + 1).padStart(2, "0")}`;
+                const nextMo = (() => { const d = new Date(nowDt.getFullYear(), nowDt.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+                const dtLen  = this._apiPrefetchCache.get(`datetime/${curMo}`)?.length ?? this._apiPrefetchCache.get("datetime/")?.length ?? 0;
                 console.log(
-                  `[spain-pb] ⚡ Slot APIs — getagendas: ${agLen > 0 ? agLen + "B ✅" : "0B ❌"} | datetime: ${dtLen > 0 ? dtLen + "B ✅" : "0B ❌"}`,
+                  `[spain-pb] ⚡ Slot APIs — getagendas: ${agLen > 0 ? agLen + "B ✅" : "0B ❌"} | datetime/${curMo}: ${dtLen > 0 ? dtLen + "B ✅" : "0B ❌"}`,
                 );
+
+                // ── Navigation mois suivant → capturer datetime/ pour mois +1 ──────
+                // Le widget Bookitit n'appelle datetime/ que pour le mois affiché dans
+                // le calendrier. Après le clic service, seul le mois courant est capturé.
+                // On simule un clic sur ">" pour que le widget appelle datetime/ pour
+                // le mois +1 aussi — intercepté par le même CDP loadingFinished.
+                if (!this._apiPrefetchCache.has(`datetime/${nextMo}`)) {
+                  try {
+                    console.log(`[spain-pb] 🗓 Navigation mois suivant → capture datetime/${nextMo}…`);
+                    const nextClicked = await page.evaluate((): string | null => {
+                      const candidates = Array.from(document.querySelectorAll<HTMLElement>(
+                        ".ui-datepicker-next, .fc-next-button, " +
+                        "[class*='next'][class*='month'], [class*='month'][class*='next'], " +
+                        "[class*='calendar'] [class*='next'], [class*='cal'] [class*='next'], " +
+                        "a.next, button.next, span.next, i.next, " +
+                        "a[title*='siguiente'], a[title*='next'], button[title*='next'], " +
+                        "a[aria-label*='next'], button[aria-label*='next']",
+                      ));
+                      for (const btn of candidates) {
+                        if (!btn.offsetParent) continue; // skip invisible
+                        btn.click();
+                        return btn.className + "|" + btn.tagName;
+                      }
+                      return null;
+                    }).catch(() => null);
+
+                    if (nextClicked) {
+                      console.log(`[spain-pb] 🖱️ Bouton mois suivant cliqué (${nextClicked}) — attente datetime/${nextMo} (max 5s)…`);
+                      let nmWaited = 0;
+                      while (nmWaited < 5_000) {
+                        if (this._apiPrefetchCache.has(`datetime/${nextMo}`)) break;
+                        await new Promise<void>((r) => setTimeout(r, 300));
+                        nmWaited += 300;
+                      }
+                      const dtNextLen = this._apiPrefetchCache.get(`datetime/${nextMo}`)?.length ?? 0;
+                      console.log(`[spain-pb] 🗓 datetime/${nextMo}: ${dtNextLen > 0 ? dtNextLen + "B ✅" : "0B ❌ (non capturé)"}`);
+                    } else {
+                      console.warn(`[spain-pb] ⚠️ Bouton mois suivant introuvable dans le DOM — datetime/${nextMo} non capturé`);
+                    }
+                  } catch (nmErr) {
+                    console.warn(`[spain-pb] ⚠️ Navigation mois suivant (non-fatal): ${nmErr}`);
+                  }
+                }
               } else {
                 console.warn(`[spain-pb] ⚠️ Aucun lien #selectservice visible dans le DOM — skip clic service`);
               }
@@ -1904,9 +1967,18 @@ export async function createSpainPersistentBrowserDossierSession(
 export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
   // ── Cache-first : réponse déjà capturée pendant le solve (state PHP encore chaud) ──
   const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);
-  const cached = spainPersistentBrowser.getApiPrefetchCached(endpoint);
+  // datetime/ cache is keyed by month ("datetime/YYYY-MM") to avoid juillet/août collision
+  let cacheKey = endpoint;
+  if (endpoint === "datetime/") {
+    try {
+      const startParam = new URLSearchParams(new URL(url).search).get("start") ?? "";
+      const month = startParam.slice(0, 7); // "YYYY-MM"
+      if (month) cacheKey = `datetime/${month}`;
+    } catch { /* keep cacheKey = "datetime/" */ }
+  }
+  const cached = spainPersistentBrowser.getApiPrefetchCached(cacheKey);
   if (cached !== undefined) {
-    console.log(`[spain-pb] 📋 callBrowser ${endpoint} → cache (${cached.length}B)`);
+    console.log(`[spain-pb] 📋 callBrowser ${cacheKey} → cache (${cached.length}B)`);
     return cached;
   }
 

@@ -285,7 +285,17 @@ function extractSlotFromBookititPayload(payload: unknown): SpainSlotHttp | null 
         : undefined;
 
       const location = agendaId ?? "citaconsular";
+      // state field: some Bookitit portals use state=1 to mean "day available"
+      // with times=[] (no specific time slot) — treat as available at 09:00
+      const stateRaw = dayObj.state ?? dayObj.status;
+      const stateNum = typeof stateRaw === "number" ? stateRaw
+        : typeof stateRaw === "string" ? parseInt(stateRaw, 10) : -1;
+
       const times = dayObj.times;
+      // times=[] (empty array) + state=1 → day available, no time restriction
+      if (Array.isArray(times) && times.length === 0 && stateNum === 1) {
+        return { date, time: "09:00", location, agendaId };
+      }
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
       const timesObj = times as Record<string, unknown>;
       if (Object.keys(timesObj).length === 0) continue;
@@ -791,7 +801,18 @@ async function confirmSlotsViaDatetime(
   // du browser → getagendas/ et datetime/ via impit (IP différente) = 0B. On passe par le browser.
   const useBrowserFetch = session.source === "playwright";
 
-  for (const svc of services.slice(0, 3)) {
+  // Filtrer les services dont le nom est purement HTML invisible (placeholder Bookitit)
+  // ex: "<span style='display:none;'></span>" — pas de contenu visible pour le booking
+  const visibleServices = services.filter((s) => {
+    const stripped = s.serviceName.replace(/<[^>]+>/g, "").trim();
+    return stripped.length > 0;
+  });
+  const servicesToCheck = visibleServices.length > 0 ? visibleServices : services;
+  if (visibleServices.length < services.length) {
+    console.log(`[spain-http] 🔍 ${services.length - visibleServices.length} service(s) hidden filtré(s) — ${visibleServices.length} visible(s) restant(s)`);
+  }
+
+  for (const svc of servicesToCheck.slice(0, 3)) {
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
     // 1. getagendas/ pour ce service
@@ -830,9 +851,9 @@ async function confirmSlotsViaDatetime(
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
     }
 
-    // 2. datetime/ sur 2 mois
+    // 2. datetime/ sur 3 mois (mois courant + 2 suivants — sept peut être le premier dispo)
     // Params confirmés par Burp : start/end (pas date_from/date_to), services[]/agendas[].
-    for (let mo = 0; mo < 2; mo++) {
+    for (let mo = 0; mo < 3; mo++) {
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -861,10 +882,15 @@ async function confirmSlotsViaDatetime(
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit) → HTTP ${dtRes?.status ?? "null"} | ${dtRaw.length}B`);
         }
         if (dtRaw.length > 0) {
-          const slot = extractSlotFromBookititPayload(parseJsonpPayload(dtRaw));
+          const parsed = parseJsonpPayload(dtRaw);
+          const slot = extractSlotFromBookititPayload(parsed);
           if (slot) {
             console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${slot.date} ${slot.time} — "${svc.serviceName}"`);
             return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: slot.date, time: slot.time };
+          } else {
+            // Log raw structure to diagnose empty slots / unexpected format
+            const rawSnip = dtRaw.slice(0, 400);
+            console.log(`[spain-http] 🔎 datetime/ ${start} parsed mais pas de créneau — raw(400): ${rawSnip}`);
           }
         }
       } catch (dtErr) {
@@ -1884,6 +1910,7 @@ async function scanViaMainEndpoint(
       slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
     };
   }
 
@@ -1905,6 +1932,7 @@ async function scanViaMainEndpoint(
       slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
     };
   }
 
@@ -1922,6 +1950,7 @@ async function scanViaMainEndpoint(
       slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
     };
   }
 
@@ -1953,6 +1982,7 @@ async function scanViaMainEndpoint(
       slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
       scanDurationMs: Date.now() - t0,
       _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
     };
   }
 

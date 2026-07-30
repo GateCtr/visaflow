@@ -129,12 +129,33 @@ async function main() {
 
   console.log(`  HTML /main/ disponible (${mainHtml.length} chars)`);
 
+  // Pour les portails client-side render (Backbone.js), les services ne sont pas dans
+  // le HTML /main/. On passe les services déjà découverts par le scan via getservices/.
+  const availableServices = scanResult._services?.length ? scanResult._services : undefined;
+  if (availableServices) {
+    console.log(`  Services injectés depuis scan (${availableServices.length}) :`);
+    for (const s of availableServices) {
+      console.log(`       - [${s.serviceId}] ${s.serviceName}`);
+    }
+  }
+
+  // Passer le créneau pré-confirmé par le scan pour sauter le re-fetch datetime/
+  // (le portail bloque impit — seul le browser peut appeler ces endpoints)
+  const targetDate = scanResult.slot?.date;
+  const targetTime = scanResult.slot?.time;
+  if (targetDate && targetTime) {
+    console.log(`  Créneau pré-confirmé : ${targetDate} à ${targetTime}`);
+  }
+
   const t0Book = Date.now();
   const bookResult = await executeHttpBooking(session, PORTAL_URL, mainHtml, {
     login: "test.saopola.fake@gmail.com",
     password: "FakePassword_Incorrect_2026",
     applicantName: "TEST SAOPOLA",
     applicantEmail: "test.saopola.fake@gmail.com",
+    availableServices,
+    targetDate,
+    targetTime,
   });
   const bookDuration = Date.now() - t0Book;
 

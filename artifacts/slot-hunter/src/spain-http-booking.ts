@@ -29,6 +29,7 @@ import {
   cloneSpainCfSessionForDossier,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
+import { createSpainPersistentBrowserDossierSession } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
   consumeOtpCode,
@@ -60,6 +61,10 @@ export interface SpainBookingConfig {
   visaType?: string;
   /** Services déjà obtenus via getservices/ (main/ ne contient que les templates). */
   availableServices?: ExtractedSlotInfo[];
+  /** Date pré-confirmée par le scanner (YYYY-MM-DD) — saute le re-fetch datetime/. */
+  targetDate?: string;
+  /** Heure pré-confirmée par le scanner (HH:MM) — saute le re-fetch datetime/. */
+  targetTime?: string;
 }
 
 export interface SpainBookingResult {
@@ -460,15 +465,30 @@ export async function executeHttpBooking(
 
   // Chaque dossier doit obtenir son propre PHPSESSID avant toute requête
   // datetime/signin/summary. La clearance CF et l'IP proxy restent partagées.
-  const isolated = await createIsolatedBookingSession(session, portalUrl);
-  if (!isolated) {
-    return {
-      status: "booking_failed",
-      errorMessage: "Impossible d'établir une session PHP Bookitit isolée pour ce dossier",
-      durationMs: Date.now() - t0,
-    };
+  // En mode persistent-browser, on utilise un contexte incognito Chromium
+  // pour obtenir un PHPSESSID frais sans passer par impit (bloqué par CF).
+  let bookingSession: SpainCfSession;
+  if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
+    const pbSession = await createSpainPersistentBrowserDossierSession(session, portalUrl);
+    if (!pbSession) {
+      return {
+        status: "booking_failed",
+        errorMessage: "Impossible d'établir une session PHP Bookitit isolée (persistent-browser) pour ce dossier",
+        durationMs: Date.now() - t0,
+      };
+    }
+    bookingSession = pbSession;
+  } else {
+    const isolated = await createIsolatedBookingSession(session, portalUrl);
+    if (!isolated) {
+      return {
+        status: "booking_failed",
+        errorMessage: "Impossible d'établir une session PHP Bookitit isolée pour ce dossier",
+        durationMs: Date.now() - t0,
+      };
+    }
+    bookingSession = isolated.session;
   }
-  const bookingSession = isolated.session;
 
   // ─── 2. Récupérer les agendas pour ce service ────────────────────────
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
@@ -507,61 +527,65 @@ export async function executeHttpBooking(
   }
 
   // ─── 3. Récupérer les créneaux datetime ───────────────────────────────
-  console.log(`[spain-booking] 📅 Récupération datetime…`);
-  const now = new Date();
-  // Params datetime confirmés par capture 2026-07-28 : start/end (pas date_from/date_to)
-  const buildDatetimeParams = (year: number, month: number) => ({
-    ...baseParams,
-    "services[]": targetService.serviceId,
-    ...(agendaId ? { "agendas[]": agendaId } : {}),
-    selectedPeople: "1",
-    start: `${year}-${String(month + 1).padStart(2, "0")}-01`,
-    end: new Date(year, month + 1, 0).toISOString().slice(0, 10),
-  });
+  let slotDate = config.targetDate ?? "";
+  let slotTime = config.targetTime ?? "";
 
-  const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/",
-    buildDatetimeParams(now.getFullYear(), now.getMonth()), portalUrl);
+  if (slotDate && slotTime) {
+    console.log(`[spain-booking] ✅ Créneau pré-confirmé par scanner: ${slotDate} à ${slotTime}`);
+  } else {
+    console.log(`[spain-booking] 📅 Récupération datetime…`);
+    const now = new Date();
+    // Params datetime confirmés par capture 2026-07-28 : start/end (pas date_from/date_to)
+    const buildDatetimeParams = (year: number, month: number) => ({
+      ...baseParams,
+      "services[]": targetService.serviceId,
+      ...(agendaId ? { "agendas[]": agendaId } : {}),
+      selectedPeople: "1",
+      start: `${year}-${String(month + 1).padStart(2, "0")}-01`,
+      end: new Date(year, month + 1, 0).toISOString().slice(0, 10),
+    });
 
-  let slotDate = "";
-  let slotTime = "";
-  if (datetimePayload && typeof datetimePayload === "object") {
-    const slot = extractFirstSlot(datetimePayload);
-    if (slot) {
-      slotDate = slot.date;
-      slotTime = slot.time;
-      if (slot.agendaId) agendaId = slot.agendaId;
-      console.log(`[spain-booking] ✅ Créneau: ${slotDate} à ${slotTime} (agenda: ${agendaId})`);
+    const datetimePayload = await callBookititEndpoint(bookingSession, "datetime/",
+      buildDatetimeParams(now.getFullYear(), now.getMonth()), portalUrl);
+
+    if (datetimePayload && typeof datetimePayload === "object") {
+      const slot = extractFirstSlot(datetimePayload);
+      if (slot) {
+        slotDate = slot.date;
+        slotTime = slot.time;
+        if (slot.agendaId) agendaId = slot.agendaId;
+        console.log(`[spain-booking] ✅ Créneau: ${slotDate} à ${slotTime} (agenda: ${agendaId})`);
+      }
     }
-  }
 
-  // ─── Mois futurs en parallèle si le mois courant est vide ────────────────────
-  // 3 appels indépendants → Promise.all au lieu d'un for séquentiel (~2 RTT gagnés)
-  if (!slotDate || !slotTime) {
-    console.log(`[spain-booking] 📅 Mois courant vide — sonde mois+1/+2/+3 en parallèle…`);
-    const futurePayloads = await Promise.all(
-      [1, 2, 3].map((m) => {
-        const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
-        return callBookititEndpoint(bookingSession, "datetime/",
-          buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
-      }),
-    );
-    for (let m = 0; m < futurePayloads.length; m++) {
-      const mPayload = futurePayloads[m];
-      if (mPayload) {
-        const slot = extractFirstSlot(mPayload);
-        if (slot) {
-          slotDate = slot.date;
-          slotTime = slot.time;
-          if (slot.agendaId) agendaId = slot.agendaId;
-          console.log(`[spain-booking] ✅ Créneau trouvé mois+${m + 1}: ${slotDate} à ${slotTime}`);
-          break;
+    // ─── Mois futurs en parallèle si le mois courant est vide ────────────────────
+    if (!slotDate || !slotTime) {
+      console.log(`[spain-booking] 📅 Mois courant vide — sonde mois+1/+2/+3 en parallèle…`);
+      const futurePayloads = await Promise.all(
+        [1, 2, 3].map((m) => {
+          const futureDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
+          return callBookititEndpoint(bookingSession, "datetime/",
+            buildDatetimeParams(futureDate.getFullYear(), futureDate.getMonth()), portalUrl);
+        }),
+      );
+      for (let m = 0; m < futurePayloads.length; m++) {
+        const mPayload = futurePayloads[m];
+        if (mPayload) {
+          const slot = extractFirstSlot(mPayload);
+          if (slot) {
+            slotDate = slot.date;
+            slotTime = slot.time;
+            if (slot.agendaId) agendaId = slot.agendaId;
+            console.log(`[spain-booking] ✅ Créneau trouvé mois+${m + 1}: ${slotDate} à ${slotTime}`);
+            break;
+          }
         }
       }
     }
-  }
 
-  if (!slotDate || !slotTime) {
-    return { status: "no_slots", errorMessage: "Datetime API n'a retourné aucun créneau", durationMs: Date.now() - t0 };
+    if (!slotDate || !slotTime) {
+      return { status: "no_slots", errorMessage: "Datetime API n'a retourné aucun créneau", durationMs: Date.now() - t0 };
+    }
   }
 
   // ─── 4. Widget config : captcha + registration_type ──────────────────────────
