@@ -807,9 +807,15 @@ export async function executeHttpBooking(
   };
 
   // Ordre selon registration_type
-  const authCandidates: AuthCandidate[] = registrationType === "1"
-    ? [candidateSignupFirst, candidateSignin, candidateSignup]
-    : [candidateSignin, candidateSignupFirst, candidateSignup]; // "2" ou inconnu → signin en premier
+  // type=1 → signupfirstappointment/ en premier (premier RDV, pas de compte existant)
+  // type=2 → signupfirstappointment/ en premier aussi : signin/ retourne systématiquement 0B
+  //          pour ces portails (ex: Saopola) car le serveur attend le flow widget complet.
+  //          Constaté empiriquement — signin/ est essayé en fallback si signupfirstappointment échoue.
+  // inconnu → signin en premier (Kinshasa confirmé 2026-07-28)
+  const authCandidates: AuthCandidate[] =
+    registrationType === "1" || registrationType === "2"
+      ? [candidateSignupFirst, candidateSignin, candidateSignup]
+      : [candidateSignin, candidateSignupFirst, candidateSignup];
 
   console.log(
     `[spain-booking] 🔍 Auto-découverte endpoint auth — registration_type=${registrationType} — ` +

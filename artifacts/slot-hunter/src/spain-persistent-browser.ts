@@ -1993,7 +1993,10 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
     // browser, le browser lève ReferenceError: __name is not defined.
     // Passer la logique comme expression string évite toute transformation esbuild.
     const escapedUrl = JSON.stringify(url);
-    const result: string = await page.evaluate(`
+    // Promise.race : protège contre page.evaluate() qui se bloque si la page est dans un
+    // état instable après CF challenge (le timer JS 22s dans le browser ne peut pas se déclencher
+    // si V8 est gelé). Le timeout TS (26s) garantit une sortie propre dans tous les cas.
+    const evalPromise: Promise<string> = page.evaluate(`
       (function(u) {
         var jq = window.jQuery;
         if (!jq) {
@@ -2063,6 +2066,10 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
         });
       })(${escapedUrl})
     `);
+    const timeoutPromise: Promise<string> = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), 26_000),
+    );
+    const result: string = await Promise.race([evalPromise, timeoutPromise]);
 
     const bodyLen = result.length;
     console.log(`[spain-pb] 📡 jQueryAjax ${endpoint} → ${bodyLen}B`);
