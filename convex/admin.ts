@@ -590,6 +590,106 @@ export const validateSuccessFee = mutation({
   },
 });
 
+// ─── Rejeter la preuve d'engagement ──────────────────────────────────────────
+export const rejectEngagementProof = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+    if (!app.paymentProofUrl) throw new Error("Aucune preuve d'engagement à rejeter.");
+
+    const reasonMsg = args.reason ? ` Motif : ${args.reason}` : "";
+
+    await ctx.db.patch(args.applicationId, {
+      paymentProofUrl: undefined,
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(`❌ Justificatif d'engagement rejeté.${reasonMsg} Le client doit soumettre un nouveau reçu.`, "admin"),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendPaymentProofRejectedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        paymentType: "engagement",
+        reason: args.reason,
+        applicationId: args.applicationId,
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.notifications.create, {
+      userId: app.userId,
+      type: "payment_proof_rejected",
+      title: "Justificatif de paiement non conforme",
+      body: args.reason
+        ? `Votre reçu d'engagement n'a pas été accepté. Motif : ${args.reason}. Veuillez soumettre un nouveau justificatif.`
+        : "Votre reçu d'engagement n'a pas été accepté. Veuillez soumettre un nouveau justificatif.",
+      applicationId: args.applicationId,
+    });
+
+    return args.applicationId;
+  },
+});
+
+// ─── Rejeter la preuve de prime de succès ─────────────────────────────────────
+export const rejectSuccessFeeProof = mutation({
+  args: {
+    applicationId: v.id("applications"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+    if (!app.successFeeProofUrl) throw new Error("Aucune preuve de prime à rejeter.");
+
+    const reasonMsg = args.reason ? ` Motif : ${args.reason}` : "";
+
+    await ctx.db.patch(args.applicationId, {
+      successFeeProofUrl: undefined,
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(`❌ Justificatif de prime de succès rejeté.${reasonMsg} Le client doit soumettre un nouveau reçu.`, "admin"),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    if (app.userEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendPaymentProofRejectedClient, {
+        to: app.userEmail,
+        applicantName: app.applicantName,
+        destination: app.destination,
+        paymentType: "success_fee",
+        reason: args.reason,
+        applicationId: args.applicationId,
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.notifications.create, {
+      userId: app.userId,
+      type: "payment_proof_rejected",
+      title: "Justificatif de paiement non conforme",
+      body: args.reason
+        ? `Votre reçu de prime de succès n'a pas été accepté. Motif : ${args.reason}. Veuillez soumettre un nouveau justificatif.`
+        : "Votre reçu de prime de succès n'a pas été accepté. Veuillez soumettre un nouveau justificatif.",
+      applicationId: args.applicationId,
+    });
+
+    return args.applicationId;
+  },
+});
+
 export const rejectApplication = mutation({
   args: {
     applicationId: v.id("applications"),
