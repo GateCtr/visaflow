@@ -2435,13 +2435,33 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
  *
  * Retourne le body JSONP de la réponse signin/ (string brute) ou "" si échec.
  */
+/**
+ * Mutex de la page DOM : sérialise les appels submitSigninFormViaDOM.
+ *
+ * Tous les dossiers bookent en parallèle (Promise.all dans le watcher), mais
+ * submitSigninFormViaDOM touche la MÊME page Chromium (remplissage de champs,
+ * click submit, waitForResponse). Sans mutex, deux dossiers concurrents
+ * écrasent mutuellement leurs champs et reçoivent la mauvaise réponse.
+ *
+ * Pattern : chaîne de promesses. Chaque appelant attend que le précédent
+ * ait libéré le verrou (resolve dans le finally) avant de démarrer.
+ */
+let _domSigninMutex: Promise<void> = Promise.resolve();
+
 export async function submitSigninFormViaDOM(
   login: string,
   password: string,
 ): Promise<{ signinBody: string; summaryBody: string }> {
+  // Acquérir le mutex — attendre que le dossier précédent ait fini
+  const prevLock = _domSigninMutex;
+  let releaseMutex!: () => void;
+  _domSigninMutex = new Promise<void>((resolve) => { releaseMutex = resolve; });
+  await prevLock;
+
   const page = spainPersistentBrowser.getActivePage();
   if (!page) {
     console.warn("[spain-pb] ⚠️ submitSigninFormViaDOM — page non disponible");
+    releaseMutex();
     return { signinBody: "", summaryBody: "" };
   }
 
