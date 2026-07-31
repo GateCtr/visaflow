@@ -319,6 +319,12 @@ class SpainPersistentBrowserManager {
       // des scripts CF (jsd/main.js, b0da9f4911ba) → JSD oneshot jamais envoyé → timeout.
       // La purge disque des storages + Network.setCacheDisabled est suffisante.
       "--disable-v8-code-cache",
+      // Railway/Docker bloquent posix_spawn du crashpad_handler (seccomp no-ptrace)
+      // → Chrome reçoit SIGABRT immédiatement au lancement. Désactiver le crash reporter
+      // évite ce fork() interdit sans impacter le fingerprint (c'est un process interne).
+      "--disable-crash-reporter",
+      "--no-first-run",
+      "--no-default-browser-check",
     ];
 
     let proxyAuth: { username: string; password: string } | undefined;
