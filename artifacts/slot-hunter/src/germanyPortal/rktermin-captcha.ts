@@ -30,25 +30,16 @@ export function extractCaptchaBase64(html: string): string | null {
 
 /**
  * Résout un captcha image RK-Termin.
- * Stratégie : CapSolver (instant, ~$0.002) → 2Captcha (humain, ~$0.003) → Anti-Captcha
+ * Stratégie : 2Captcha (humain ~100%) → Anti-Captcha (humain) → CapSolver (AI ~10-20%)
+ *
+ * CapSolver est intentionnellement en DERNIER : son modèle AI retourne systématiquement
+ * des résultats incorrects sur le captcha distordu de diplo.de, mais retourne quand même
+ * un status "ready" — ce qui bloquerait les providers humains s'il était en premier.
  */
 export async function solveImageCaptcha(base64Image: string): Promise<ImageCaptchaResult> {
   const startMs = Date.now();
   
-  // Stratégie 1 : CapSolver (résolution instantanée par AI)
-  if (CAPSOLVER_API_KEY) {
-    try {
-      const result = await solveWithCapSolver(base64Image);
-      if (result) {
-        log("INFO", `CapSolver résolu en ${Date.now() - startMs}ms: "${result}"`);
-        return { status: "solved", text: result, solveTimeMs: Date.now() - startMs, provider: "capsolver" };
-      }
-    } catch (err) {
-      log("WARN", `CapSolver échoué: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-  
-  // Stratégie 2 : 2Captcha (résolution humaine — plus lent mais plus précis)
+  // Stratégie 1 : 2Captcha (résolution humaine — fiable ~100% sur diplo.de)
   if (TWOCAPTCHA_API_KEY) {
     try {
       const result = await solveWith2Captcha(base64Image);
@@ -61,7 +52,7 @@ export async function solveImageCaptcha(base64Image: string): Promise<ImageCaptc
     }
   }
   
-  // Stratégie 3 : Anti-Captcha (fallback)
+  // Stratégie 2 : Anti-Captcha (résolution humaine — fallback)
   if (ANTICAPTCHA_API_KEY) {
     try {
       const result = await solveWithAntiCaptcha(base64Image);
@@ -73,9 +64,22 @@ export async function solveImageCaptcha(base64Image: string): Promise<ImageCaptc
       log("WARN", `Anti-Captcha échoué: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // Stratégie 3 : CapSolver (AI instantanée — dernier recours, ~10-20% précision sur diplo.de)
+  if (CAPSOLVER_API_KEY) {
+    try {
+      const result = await solveWithCapSolver(base64Image);
+      if (result) {
+        log("INFO", `CapSolver résolu en ${Date.now() - startMs}ms: "${result}"`);
+        return { status: "solved", text: result, solveTimeMs: Date.now() - startMs, provider: "capsolver" };
+      }
+    } catch (err) {
+      log("WARN", `CapSolver échoué: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   
   log("ERROR", "Tous les providers captcha ont échoué");
-  return { status: "failed", solveTimeMs: Date.now() - startMs, provider: "capsolver" };
+  return { status: "failed", solveTimeMs: Date.now() - startMs, provider: "2captcha" };
 }
 
 // ─── CapSolver (résolution AI instantanée) ──────────────────────────────────
