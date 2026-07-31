@@ -44,6 +44,8 @@ export interface RKTerminMonthResult {
   displayedMonth?: string;
   /** Période réservable (ex: "24.05.2026 — 01.08.2026") */
   bookingPeriod?: string;
+  /** dateStr du/des mois suivants extraits des liens de navigation (ex: ["08.2026", "09.2026"]) */
+  nextMonthDateStrs?: string[];
   errorMessage?: string;
 }
 

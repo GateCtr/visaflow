@@ -204,24 +204,55 @@ function parseCalendarHtml(html: string): RKTerminMonthResult {
     }
   }
   
-  // Mois affiché
+  // Mois affiché (format MM/YYYY)
   const monthMatch = html.match(RKTERMIN_PATTERNS.displayedMonth);
   const displayedMonth = monthMatch?.[1];
   
   // Période réservable
   const periodMatch = html.match(RKTERMIN_PATTERNS.bookingPeriod);
   const bookingPeriod = periodMatch ? `${periodMatch[1]} — ${periodMatch[2]}` : undefined;
-  
+
+  // Liens de navigation mois (dateStr des liens appointment_showMonth dans la page)
+  const nextMonthDateStrs: string[] = [];
+  const navRegex = new RegExp(RKTERMIN_PATTERNS.nextMonth.source, "g");
+  let navMatch: RegExpExecArray | null;
+  while ((navMatch = navRegex.exec(html)) !== null) {
+    const dateStr = navMatch[1];
+    if (dateStr && !nextMonthDateStrs.includes(dateStr)) {
+      nextMonthDateStrs.push(dateStr);
+    }
+  }
+  // Filtrer pour ne garder que les mois futurs par rapport au mois affiché.
+  // displayedMonth est au format "MM/YYYY", dateStr est au format "MM.YYYY".
+  // On convertit en nombre YYYYMM pour la comparaison.
+  const currentYM = displayedMonth
+    ? (() => { const [mm, yyyy] = displayedMonth.split("/"); return parseInt(yyyy) * 100 + parseInt(mm); })()
+    : 0;
+  const futureMonthDateStrs = nextMonthDateStrs.filter(ds => {
+    // Tenter format MM.YYYY
+    const parts = ds.split(".");
+    if (parts.length === 2) {
+      const ym = parseInt(parts[1]) * 100 + parseInt(parts[0]);
+      return ym > currentYM;
+    }
+    // Tenter format dd.MM.YYYY (cas improbable pour une nav mois)
+    if (parts.length === 3) {
+      const ym = parseInt(parts[2]) * 100 + parseInt(parts[1]);
+      return ym > currentYM;
+    }
+    return false;
+  });
+
   if (dates.length === 0) {
     // Vérifier si "aucun créneau" explicite
     if (RKTERMIN_PATTERNS.noAppointments.test(html)) {
-      return { status: "no_dates", availableDates: [], displayedMonth, bookingPeriod };
+      return { status: "no_dates", availableDates: [], displayedMonth, bookingPeriod, nextMonthDateStrs: futureMonthDateStrs };
     }
     // Calendrier affiché mais aucun jour cliquable
-    return { status: "no_dates", availableDates: [], displayedMonth, bookingPeriod };
+    return { status: "no_dates", availableDates: [], displayedMonth, bookingPeriod, nextMonthDateStrs: futureMonthDateStrs };
   }
   
-  return { status: "dates_found", availableDates: dates, displayedMonth, bookingPeriod };
+  return { status: "dates_found", availableDates: dates, displayedMonth, bookingPeriod, nextMonthDateStrs: futureMonthDateStrs };
 }
 
 /** Parse le HTML de la vue jour pour extraire les créneaux. */
