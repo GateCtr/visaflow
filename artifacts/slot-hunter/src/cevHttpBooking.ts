@@ -48,6 +48,7 @@ export interface HttpBookingResult {
   bookedTime?: string;
   error?: string;
   needsPlaywright?: boolean;
+  screenshotStorageId?: string;
 }
 
 interface SiphonedCookies {

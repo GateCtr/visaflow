@@ -262,12 +262,9 @@ async function handleSlotFound(
 
   try {
     const httpBook = await bookCevViaHttp(
-      vowintEmail,
-      vowintPassword,
+      integrationUrl ?? "",
+      sessionCookie ?? "",
       applicationId,
-      dossier.appId,
-      sessionCookie,
-      integrationUrl,
     );
     if (httpBook.success) {
       log.info(`  ✅ BOOKING HTTP: date=${httpBook.bookedDate} time=${httpBook.bookedTime} code=${httpBook.confirmationCode}`);
@@ -392,10 +389,10 @@ async function runExtAccountLoop(job: Record<string, unknown>): Promise<void> {
     getBotConfigValue("cev_extension_lazy_min"),
     getBotConfigValue("cev_extension_lazy_max"),
   ]);
-  const basePauseSec  = parseCfg(cfgPauseSec,  60);
-  const lazyProb      = parseCfg(cfgLazyProb, 0.12);
-  const lazyMinSec    = parseCfg(cfgLazyMin,  120);
-  const lazyMaxSec    = parseCfg(cfgLazyMax,  300);
+  const basePauseSec  = parseCfg(cfgPauseSec  ?? undefined,  60);
+  const lazyProb      = parseCfg(cfgLazyProb ?? undefined, 0.12);
+  const lazyMinSec    = parseCfg(cfgLazyMin  ?? undefined,  120);
+  const lazyMaxSec    = parseCfg(cfgLazyMax  ?? undefined,  300);
 
   // ── Découverte des dossiers ───────────────────────────────────────────────
   let dossiers = await discoverDossiers(vowintEmail, vowintPassword, applicationId, hunterConfig, logger);
@@ -441,7 +438,7 @@ async function runExtAccountLoop(job: Record<string, unknown>): Promise<void> {
           logger.info(`🛑 Job ${applicationId} n'est plus actif → arrêt`);
           return;
         }
-        const lj = latestJob as Record<string, unknown>;
+        const lj = latestJob as unknown as Record<string, unknown>;
         const cfg = (lj.hunterConfig ?? {}) as Record<string, unknown>;
         const freshEmail = cfg.embassyUsername as string | undefined;
         const freshPwd   = cfg.embassyPassword as string | undefined;

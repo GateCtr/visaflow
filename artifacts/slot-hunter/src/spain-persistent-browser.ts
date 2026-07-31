@@ -240,6 +240,13 @@ class SpainPersistentBrowserManager {
    * Vidé par closeAndInvalidate / invalidateSession / close.
    */
   private _apiPrefetchCache: Map<string, string> = new Map();
+  /**
+   * Verrou in-flight pour ensureSession() : empêche deux appelants concurrents
+   * (ex: watcher + retry unique) de lancer deux solves CF simultanés sur le
+   * même manager, ce qui causerait deux navigations puppeteer vers le même
+   * userDataDir et une course sur _browser / _cachedSession.
+   */
+  private _ensureSessionInFlight: Promise<SpainCfSession | null> | null = null;
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
@@ -529,6 +536,16 @@ class SpainPersistentBrowserManager {
     this._prefetchRetried = false; // reset pour le prochain cycle
     this._page = null;
     this._apiPrefetchCache.clear();
+
+    // Supprimer la clé Redis AVANT de relancer le browser, sinon ensureSession()
+    // appelé depuis le retry unique va restaurer la même session cassée (boucle infinie).
+    try {
+      const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+      removeSpainCfSessionFromRedis();
+    } catch {
+      // non-fatal
+    }
+
     if (this._browser) {
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents
@@ -576,6 +593,25 @@ class SpainPersistentBrowserManager {
       return this._cachedSession!;
     }
 
+    // ── Verrou in-flight : empêche deux solves CF simultanés ──────────────────
+    // Sans ce verrou, le watcher + le retry unique peuvent appeler ensureSession()
+    // en même temps (quand _cachedSession vient d'être invalidée), ce qui lance
+    // deux navigations puppeteer sur le même userDataDir → race sur _browser/
+    // _cachedSession + double dépense CapSolver.
+    if (this._ensureSessionInFlight) {
+      console.log(`[spain-pb] ⏳ Solve CF déjà en cours — attente du résultat partagé`);
+      return this._ensureSessionInFlight;
+    }
+
+    this._ensureSessionInFlight = this._ensureSessionImpl(targetUrl).finally(() => {
+      this._ensureSessionInFlight = null;
+    });
+    return this._ensureSessionInFlight;
+  }
+
+  private async _ensureSessionImpl(
+    targetUrl: string,
+  ): Promise<SpainCfSession | null> {
     // ── Tentative restauration Redis ──────────────────────────────────────────
     // Après un redéploiement, le PB manager repart avec _cachedSession=null mais
     // la session précédente (avec prefetchedMainHtml) peut encore être valide en Redis.
@@ -585,15 +621,28 @@ class SpainPersistentBrowserManager {
       const { restoreSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
       const redisData = await restoreSpainCfSessionFromRedis();
       if (redisData && Date.now() < redisData.expiresAt) {
-        const restored: SpainCfSession = { ...redisData, source: "playwright" };
-        this._cachedSession = restored;
-        setActiveSpainCfSession(restored);
-        const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
-        console.log(
-          `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
-          `, prefetch: ${redisData.prefetchedMainHtml?.length ?? 0}B)`,
-        );
-        return restored;
+        // N'utiliser la session Redis QUE si elle a un prefetchedMainHtml valide.
+        // Sans prefetch (0B), source="playwright" mais _page=null → /main/ browser
+        // retourne 0B → closeAndInvalidate → Redis restore → même session → boucle infinie.
+        const hasPrefetch = (redisData.prefetchedMainHtml?.length ?? 0) > 0;
+        if (!hasPrefetch) {
+          console.warn(
+            `[spain-pb] ⚠️ Session Redis sans prefetch (0B) — solve complet requis (IP peut être bloquée)`,
+          );
+          // Supprimer la clé cassée pour éviter qu'un autre cycle la restaure
+          const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+          removeSpainCfSessionFromRedis();
+        } else {
+          const restored: SpainCfSession = { ...redisData, source: "playwright" };
+          this._cachedSession = restored;
+          setActiveSpainCfSession(restored);
+          const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
+          console.log(
+            `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
+            `, prefetch: ${redisData.prefetchedMainHtml!.length}B)`,
+          );
+          return restored;
+        }
       }
     } catch (redisRestoreErr) {
       console.warn(`[spain-pb] ⚠️ Restauration Redis (non-fatale): ${redisRestoreErr}`);
@@ -1606,6 +1655,187 @@ class SpainPersistentBrowserManager {
       }
       // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
       if (jsdOneShotResolve) jsdOneShotResolve();
+    }
+
+    // ── Retry cookie fantôme : reset PHPSESSID uniquement + re-navigation ────
+    //
+    // PROBLÈME (cookie fantôme + /main/ = 0B) :
+    //   La nonce JSD est time-windowed et liée au PHPSESSID Bookitit côté serveur.
+    //   Le JSD natif la consomme pendant la résolution du CF Managed Challenge initial
+    //   (étape 2 du flow). Quand le widget JS tente la MÊME nonce après Continuar →
+    //   CF répond "cookie fantôme" (nonce déjà utilisée, pas de nouveau cf_clearance).
+    //   Bookitit exige que le JSD post-Continuar émette un cf_clearance frais → 0B.
+    //
+    //   Ce problème survient SYSTÉMATIQUEMENT lors de la création/renouvellement de
+    //   session (chaque solve consomme la nonce via JSD natif).
+    //
+    // FIX :
+    //   Supprimer UNIQUEMENT PHPSESSID (pas cf_clearance) → Bookitit crée une
+    //   NOUVELLE session PHP → CF génère une NONCE FRAÎCHE pour cette session.
+    //   Re-naviguer vers le widget → CF ne re-challenge PAS (cf_clearance valide)
+    //   → widget charge avec la nonce fraîche → JSD du widget la consomme EN PREMIER
+    //   → CF émet un nouveau cf_clearance → /main/ retourne 124KB.
+    //
+    // POURQUOI pas de JSD natif au round 2 :
+    //   cf_clearance est toujours valide → CF ne lance pas de Managed Challenge →
+    //   JSD natif ne fire pas → nonce préservée pour le widget JSD post-Continuar.
+    if (prefetchedMainHtml.length < 100 && jsdOneShotAt > 0 && !jsdOneShotAccepted) {
+      console.log(
+        `[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) ` +
+        `+ re-navigation pour nonce fraîche…`,
+      );
+      try {
+        // 1. Supprimer PHPSESSID uniquement — force nouvelle session PHP = nouvelle nonce CF
+        const cdpPhpReset = await page.createCDPSession();
+        await cdpPhpReset.send("Network.deleteCookies", { name: "PHPSESSID", domain: ".citaconsular.es" }).catch(() => {});
+        await cdpPhpReset.send("Network.deleteCookies", { name: "PHPSESSID", domain: "www.citaconsular.es" }).catch(() => {});
+        // Purger le storage CF lié à la session (localStorage JSD, IndexedDB) — la nonce
+        // est également mise en cache dans localStorage. La vider garantit que CF recalcule
+        // une nonce fraîche depuis le serveur lors du prochain chargement du widget.
+        await cdpPhpReset.send("Storage.clearDataForOrigin", {
+          origin: "https://www.citaconsular.es",
+          storageTypes: "local_storage,session_storage,indexeddb",
+        }).catch(() => {});
+        await cdpPhpReset.detach().catch(() => {});
+        console.log(`[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue`);
+
+        // 2. Re-navigation vers le widget — CF ne re-challenge PAS (cf_clearance valide)
+        console.log(`[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : ${targetUrl.slice(0, 80)}`);
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 40_000 })
+          .catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Re-navigation (non-fatal): ${e}`));
+
+        // Refresh page reference après navigation
+        try {
+          const freshPages2 = await browser.pages();
+          if (freshPages2.length > 0) { page = freshPages2[0]; this._page = page; }
+        } catch { /* non-fatal */ }
+
+        // 3. CDP Net listener minimal pour capturer /main/ du round 2
+        let retryMainBody = "";
+        let retryCdpNet: any = null;
+        const retryMainPending = new Map<string, string>(); // requestId → url
+        let retryJsdAccepted = false;
+
+        try {
+          retryCdpNet = await page.createCDPSession();
+          await retryCdpNet.send("Network.enable", {});
+
+          retryCdpNet.on("Network.requestWillBeSent", (ev: any) => {
+            const url: string = ev.request?.url ?? "";
+            if (url.includes("onlinebookings/main")) retryMainPending.set(ev.requestId, url);
+            if (url.includes("citaconsular.es")) {
+              console.log(`[spain-pb] 🌐 r2 req: ${ev.request.method} ${url.slice(0, 100)}`);
+            }
+          });
+
+          retryCdpNet.on("Network.responseReceived", (ev: any) => {
+            const url: string = ev.response?.url ?? "";
+            if (url.includes("jsd/oneshot")) {
+              const setCookie: string = ev.response.headers?.["set-cookie"] ?? "";
+              retryJsdAccepted = setCookie.includes("cf_clearance");
+              console.log(
+                `[spain-pb] 🔑 r2 JSD oneshot: ` +
+                (retryJsdAccepted ? "✅ nouveau cf_clearance émis" : "❌ cookie fantôme encore"),
+              );
+            }
+          });
+
+          retryCdpNet.on("Network.loadingFinished", async (ev: any) => {
+            if (!retryMainPending.has(ev.requestId)) return;
+            retryMainPending.delete(ev.requestId);
+            try {
+              const { body, base64Encoded } = await retryCdpNet.send("Network.getResponseBody", {
+                requestId: ev.requestId,
+              });
+              const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
+              if (decoded.length > retryMainBody.length) {
+                retryMainBody = decoded;
+                console.log(`[spain-pb] 📡 r2 /main/ capturé via CDP (${decoded.length}B)`);
+              }
+            } catch { /* non-fatal */ }
+          });
+        } catch (cdpErr) {
+          console.warn(`[spain-pb] ⚠️ r2 CDP Net setup (non-fatal): ${cdpErr}`);
+        }
+
+        // 4. Attendre que CF finisse (si challenge inattendu) + trouver le bouton Continuar
+        let retryContinuarClicked = false;
+        const retryContDeadline = Date.now() + 25_000;
+        while (Date.now() < retryContDeadline && !retryContinuarClicked) {
+          const cfDone = await page.evaluate(() => {
+            const title = document.title.toLowerCase();
+            return !(title.includes("instant") || title.includes("moment") || title.includes("checking")) &&
+              !document.querySelector("iframe[src*='challenges.cloudflare.com'], iframe[src*='cdn-cgi/challenge-platform']");
+          }).catch(() => true);
+
+          if (!cfDone) {
+            await new Promise((r) => setTimeout(r, 800));
+            continue;
+          }
+
+          retryContinuarClicked = await page.evaluate(() => {
+            const btn = document.getElementById("idDivBktCustomContinueButton");
+            if (btn && (btn as HTMLElement).offsetParent !== null) { (btn as HTMLElement).click(); return true; }
+            const container = document.getElementById("idBktDefaultCustomContainer");
+            if (container) {
+              const cands = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
+              for (let i = 0; i < cands.length; i++) {
+                const el = cands[i] as HTMLElement;
+                if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
+                  el.click(); return true;
+                }
+              }
+            }
+            const allClickable = document.querySelectorAll("a, button, [role='button']");
+            for (let i = 0; i < allClickable.length; i++) {
+              const el = allClickable[i] as HTMLElement;
+              const txt = (el.textContent || "").trim().toLowerCase();
+              if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0) && el.offsetParent !== null) {
+                el.click(); return true;
+              }
+            }
+            return false;
+          }).catch(() => false);
+
+          if (!retryContinuarClicked) await new Promise((r) => setTimeout(r, 600));
+        }
+
+        if (retryContinuarClicked) {
+          console.log(`[spain-pb] ✅ r2 Continuar cliqué — attente /main/ (20s)…`);
+        } else {
+          console.warn(`[spain-pb] ⚠️ r2 Continuar introuvable après 25s`);
+        }
+
+        // 5. Attendre que /main/ soit capturé (20s)
+        const retryXhrDeadline = Date.now() + 20_000;
+        while (Date.now() < retryXhrDeadline && retryMainBody.length < 100) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        if (retryCdpNet) {
+          retryCdpNet.detach().catch(() => {});
+          retryCdpNet = null;
+        }
+
+        if (retryMainBody.length > 100) {
+          prefetchedMainHtml = retryMainBody;
+          console.log(
+            `[spain-pb] 📦 r2 /main/ capturé (${prefetchedMainHtml.length}B) — ` +
+            (retryJsdAccepted ? "JSD ✅ cf_clearance frais" : "JSD ❌ cookie fantôme encore (session dégradée)"),
+          );
+          // Prefetch APIs companion pendant que la session PHP est chaude
+          await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
+            console.warn(`[spain-pb] ⚠️ r2 _prefetchBookititApis (non-fatal): ${e}`),
+          );
+        } else {
+          console.warn(
+            `[spain-pb] ⚠️ r2 /main/ toujours 0B après reset PHPSESSID ` +
+            `(${retryMainBody.length}B) — fetch direct tentera en dernier recours`,
+          );
+        }
+      } catch (retryErr) {
+        console.warn(`[spain-pb] ⚠️ Retry cookie fantôme (non-fatal): ${retryErr}`);
+      }
     }
 
     // ── Fallback : fetch /main/ directement depuis le contexte browser ────────

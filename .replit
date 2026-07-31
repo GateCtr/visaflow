@@ -124,11 +124,19 @@ externalPort = 80
 
 [[ports]]
 localPort = 5001
+<<<<<<< HEAD
 externalPort = 4200
 
 [[ports]]
 localPort = 6379
 externalPort = 3003
+=======
+externalPort = 3003
+
+[[ports]]
+localPort = 6379
+externalPort = 4200
+>>>>>>> 82e77eb6c8a7bdcfb7b347867e52a594d6214a2b
 
 [[ports]]
 localPort = 8081

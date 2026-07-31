@@ -43,6 +43,29 @@ After `playwright install chromium`:
 ```
 Reinstall if cache purged: `cd artifacts/slot-hunter && node_modules/.bin/playwright install chromium`
 
+## Rule: closeAndInvalidate() MUST delete the Redis key
+
+**Why:** `closeAndInvalidate()` resets `_cachedSession = null` but without deleting the Redis key, `ensureSession()` on the very next cycle restores the same broken session (prefetch: 0B, `_page null`) → `/main/ browser → 0B` → `closeAndInvalidate` → Redis restore → infinite loop. Confirmed on Railway 2026-07-30.
+
+**Fix applied:** `closeAndInvalidate()` now calls `removeSpainCfSessionFromRedis()` before closing the browser.
+
+## Rule: never restore a Redis session with prefetch: 0B
+
+**Why:** A session stored with no `prefetchedMainHtml` requires an active `_page` (browser) to call `/main/` via browser. After a redeploy, `_page` is null. Restoring such a session → `callBookititEndpointViaBrowser` → `_page null` → 0B → same loop.
+
+**Fix applied:** `ensureSession()` checks `prefetchedMainHtml.length > 0` before restoring from Redis; if 0B, deletes the key and falls through to a full CF solve.
+
+## Rule: cookie fantôme + /main/ 0B → reset PHPSESSID uniquement + re-navigation
+
+**Root cause (confirmed 2026-07-31):** La nonce JSD est time-windowed et liée au PHPSESSID Bookitit. Le JSD natif la consomme pendant le CF Managed Challenge initial. Le widget JS tente la même nonce post-Continuar → CF répond "cookie fantôme" (nonce déjà utilisée, pas de nouveau cf_clearance). Bookitit exige que le JSD post-Continuar émette un cf_clearance frais → `/main/` retourne 0B. Ce problème survient SYSTÉMATIQUEMENT lors de la création/renouvellement de session (chaque solve consomme la nonce via JSD natif).
+
+**Fix appliqué:** Après cookie fantôme + 0B, block "retry" entre le finally et le fetch direct :
+1. Supprimer UNIQUEMENT PHPSESSID (pas cf_clearance) + purger localStorage/IndexedDB → Bookitit crée une nouvelle session PHP → CF génère une nonce fraîche liée à ce nouveau PHPSESSID
+2. Re-naviguer vers le widget → CF ne re-challenge PAS (cf_clearance valide) → pas de JSD natif → nonce préservée
+3. Nouveau Continuar → widget JSD consomme la nonce fraîche EN PREMIER → cf_clearance réémis → `/main/` retourne 124KB
+
+**How to apply:** Ne jamais supprimer cf_clearance dans ce retry. La suppression cf_clearance déclencherait un nouveau CF challenge → JSD natif consommerait la nouvelle nonce → même problème. Seul PHPSESSID doit être purgé.
+
 ## Saopola e2e test (confirmed working 2026-07-30)
 
 ```bash
