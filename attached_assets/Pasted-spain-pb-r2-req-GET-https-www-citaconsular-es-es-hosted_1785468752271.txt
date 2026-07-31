@@ -1,0 +1,69 @@
+spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] ✅ r2 Continuar cliqué — attente /main/ (20s)…
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery21105481464806409617_1785468111418&t
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] ⚠️ r2 /main/ toujours 0B après reset PHPSESSID (0B) — fetch direct tentera en dernier recours
+[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…
+[spain-pb] ⚠️ Fetch direct /main/ échoué: "" — scanner devra retenter
+[spain-pb] ✅ Session CF prête (54s) | 3 cookies | prefetch: 0B | expire ~115min
+[spain-pb]    cf_clearance: vzmx6KRZ9y0z6OCgsPY3pBNIk1nl6WJ4RQfrhv9p…
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): Rw6w4NpIKyyk…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 🌐 /main/ via browser (session Playwright — même IP que cf_clearance)
+[spain-pb] 🌐 callBrowser → main/ (page: https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6)
+[spain-pb] 📡 callBrowser main/ → HTTP 200 | 0B
+[spain-http] 📡 /main/ browser → 0B
+[spain-http] ⚠️ /main/ browser → 0B — closeAndInvalidate (rotation IP + browser)
+[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + Decodo: http://sphgi7znzc:***@dc.decodo.com:10006…)
+[spain-pb] 🔄 Session + browser fermés — prochaine IP Decodo sera différente
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-pb] 🚀 Résolution CF — stratégie Turnstile injection (token injecté dans notre Chromium)
+[spain-decodo] 🔄 Rotation IP — [8/10] http://sphgi7znzc:***@dc.decodo.com:10008
+[spain-pb] 🚀 Lancement Chromium persistant
+[spain-pb]    userDataDir : /tmp/spain-cf-profile
+[spain-pb]    Proxy       : http://sphgi7znzc:***@dc.decodo.com:10008
+[spain-pb]    UA          : Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+[spain-pb] 🗑️ Profil CF purgé sur disque (6 répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage)
+[2026-07-31T03:22:14.064Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-pb] 🪪 Client Hints CDP alignés — Chrome/148 Windows
+[spain-pb] 🗑️ Profil CF purgé (cf_clearance + PHPSESSID + localStorage/SW/IndexedDB — nonce périmé cassé)
+[spain-pb] 🗑️ Cache HTTP désactivé via page.setCacheEnabled(false) — nonce frais garanti sur TOUTES les navigations
+[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6
+[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…
+[spain-pb] ✅ cf_clearance obtenu via JSD natif (1s) — js_detection.passed=true pour NOTRE TLS
+[spain-pb]    cf_clearance: gDnqAyAK7PaueD5sVCggXfBfPSvdAK.CEXqHp9E0…
+[spain-pb] 🖱️ Page courante après JSD : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6 — attente widget Bookitit…
+[spain-pb] ⏳ CF challenge encore en cours (titre: "Un instant…") — attente avant Continuar…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] 🔍 DOM: {"hash":"","title":"Embajada de España en Kinshasa - VISADOS","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"hasTurnstile":false,"bodySnippet":""}
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/scripts/jsd/877c641b92f6/main.js?
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/jsd/oneshot/877c641b92f6/0.41307695343978124:1785463533:5JZ4W
+[spain-pb] 🔑 JSD oneshot resp: status=200 cf-ray=a2397a62492b483d-SJC new-cf_clearance=❌ non — cookie fantôme, /main/ sera annulé
+[spain-pb] ✅ Continuar cliqué — armer intercepteur /main/ pour JSD POST…
+[spain-pb] ℹ️ JSD pré-Continuar détecté (615ms ago) — intercepteur Fetch désactivé, /main/ libre
+[spain-pb] ⏳ Attente XHR /main/ POST (max 20s)…
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery2110761607069344257_1785468141602&type=default&publickey
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=text/html cf-ray=a2397a6d7f13483d-SJC
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=0B cf-ray=a2397a6d7f13483d-SJC
+[spain-pb] 📥 /main/ CDP body: 0B snippet=""

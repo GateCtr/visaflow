@@ -66,6 +66,16 @@ Reinstall if cache purged: `cd artifacts/slot-hunter && node_modules/.bin/playwr
 
 **How to apply:** Ne jamais supprimer cf_clearance dans ce retry. La suppression cf_clearance déclencherait un nouveau CF challenge → JSD natif consommerait la nouvelle nonce → même problème. Seul PHPSESSID doit être purgé.
 
+## Rule: Chrome 96+ cookies path — Default/Network/Cookies, pas Default/Cookies
+
+**Root cause (confirmed 2026-07-31):** Depuis Chrome 96, les cookies sont stockés dans `Default/Network/Cookies` (sous-répertoire Network), pas `Default/Cookies`. Le purge disque pré-lancement ciblait `Default/Cookies` → fichier inexistant → cf_clearance stale survit → Chrome démarre avec l'ancienne session → CF sert la même nonce morte → JSD oneshot → cookie fantôme → `/main/` 0B systématique.
+
+Symptôme caractéristique : `✅ cf_clearance obtenu via JSD natif (1s)` — un vrai solve prend 10-40s, 1s = cookie chargé depuis disque non purgé.
+
+**Fix appliqué:** `purgeProfileCacheOnDisk()` purge maintenant `"Default/Cookies"` ET `"Default/Network"` (couvre les deux générations de Chromium).
+
+**How to apply:** Si le solve prend <3s, c'est un cf_clearance récupéré du profil, pas un vrai JSD solve. Vérifier que `Default/Network/Cookies` est bien absent du profil avant le lancement.
+
 ## Saopola e2e test (confirmed working 2026-07-30)
 
 ```bash

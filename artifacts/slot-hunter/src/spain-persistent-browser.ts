@@ -168,10 +168,14 @@ function purgeProfileCacheOnDisk(profileDir: string): void {
     // Notre purge CDP (Network.deleteCookies) s'exécute APRÈS le lancement — trop tard :
     // cf_clearance + PHPSESSID stale sont déjà rechargés en mémoire depuis le profil.
     // CF voit ce cf_clearance "connu" → sert le même script JSD avec le nonce figé
-    // (ex: 1785297931, ~33 min d'âge) → JSD oneshot rejeté → /main/ = 0B.
-    // Solution : purger Default/Cookies sur disque avant le lancement → Chrome démarre
-    // sans cookies → CF émet un vrai cf_clearance frais via JSD de zéro.
-    "Default/Cookies",
+    // → JSD oneshot rejeté → /main/ = 0B.
+    //
+    // PIÈGE Chrome 96+ : les cookies ne sont PLUS dans Default/Cookies mais dans
+    // Default/Network/Cookies (sous-répertoire Network). L'ancien chemin n'existe
+    // pas → le purge rate → cf_clearance survit → solve en 1s → nonce morte → 0B.
+    // Fix : purger les DEUX chemins pour couvrir toutes les versions de Chromium.
+    "Default/Cookies",         // Chromium < 96 (compatibilité)
+    "Default/Network",         // Chromium 96+ : Cookies déplacé dans Default/Network/Cookies
   ];
   let purged = 0;
   for (const dir of cacheDirs) {
@@ -187,7 +191,7 @@ function purgeProfileCacheOnDisk(profileDir: string): void {
   }
   if (purged > 0) {
     console.log(
-      `[spain-pb] 🗑️ Profil CF purgé sur disque (${purged} répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage)`,
+      `[spain-pb] 🗑️ Profil CF purgé sur disque (${purged} répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage, Cookies/Network)`,
     );
   }
 }
