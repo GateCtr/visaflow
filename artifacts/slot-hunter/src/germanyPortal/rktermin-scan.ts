@@ -36,9 +36,14 @@ export async function scanMonth(config: RKTerminConfig): Promise<{ session: RKTe
     };
   }
   
-  // Retry loop captcha
+  // Retry loop captcha — on garde une référence mutable à l'image courante.
+  // Chaque tentative incorrecte ouvre une nouvelle session et récupère une
+  // nouvelle image : sans ça CapSolver reçoit 3× la même image et retourne
+  // 3× le même mauvais résultat (réponse cachée côté CapSolver).
+  let currentCaptchaB64 = captchaB64;
+
   for (let attempt = 1; attempt <= RKTERMIN_TIMING.maxCaptchaRetries; attempt++) {
-    const captchaResult = await solveImageCaptcha(captchaB64);
+    const captchaResult = await solveImageCaptcha(currentCaptchaB64);
     
     if (captchaResult.status !== "solved" || !captchaResult.text) {
       log("WARN", `Captcha month non résolu (attempt ${attempt}/${RKTERMIN_TIMING.maxCaptchaRetries})`);
@@ -80,14 +85,16 @@ export async function scanMonth(config: RKTerminConfig): Promise<{ session: RKTe
       log("WARN", `Captcha month incorrect (attempt ${attempt}): "${captchaResult.text}"`);
       
       if (attempt < RKTERMIN_TIMING.maxCaptchaRetries) {
-        // Refresh : nouvelle session car le captcha a changé
+        // Nouvelle session → nouvelle image captcha (diplo.de régénère le captcha).
+        // On met à jour currentCaptchaB64 pour que le prochain appel
+        // solveImageCaptcha() envoie la nouvelle image, pas l'ancienne.
         const { session: retrySession, html: retryPage } = await initSession(config);
         session = retrySession;
         const newCaptcha = extractCaptchaBase64(retryPage);
         if (!newCaptcha) {
           return { session, result: { status: "error", availableDates: [], errorMessage: "Captcha retry failed" } };
         }
-        // Le prochain tour de boucle utilisera ce nouveau captcha via solveImageCaptcha
+        currentCaptchaB64 = newCaptcha; // ← image fraîche pour le prochain tour
         continue;
       }
       return { session, result: { status: "captcha_failed", availableDates: [] } };
