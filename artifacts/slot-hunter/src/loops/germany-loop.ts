@@ -14,6 +14,8 @@ const completedJobs = new Set<string>();
 const pausedJobs = new Set<string>();
 /** Dernier scan par job (pour respecter l'intervalle). */
 const lastScanAt = new Map<string, number>();
+/** Compteur d'erreurs consécutives par job (pour auto-pause). */
+const consecutiveErrors = new Map<string, number>();
 
 /**
  * Démarre la boucle Germany RK-Termin.
@@ -90,6 +92,13 @@ async function runGermanyCycle(): Promise<void> {
 /** Traite un dossier Germany individuel. */
 async function processGermanyJob(job: HunterJob): Promise<void> {
   log("INFO", `─── Scan: ${job.applicantName} (${job.visaType}) ───`);
+  // Log de début de scan (visible dans Admin > Logs du bot et sur la fiche dossier)
+  botLog({
+    applicationId: job.id,
+    step: "germany_scan_start",
+    status: "ok",
+    data: { visaType: job.visaType }
+  });
   
   const config = buildRKTerminConfig(job);
   if (!config) {
@@ -101,6 +110,12 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
       shouldPause: true,
     }).catch(() => {});
     pausedJobs.add(job.id);
+    botLog({
+      applicationId: job.id,
+      step: "germany_config_invalid",
+      status: "fail",
+      data: { reason: "rktermin_config_invalid" }
+    });
     return;
   }
   
@@ -122,6 +137,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           
           await botLog({ applicationId: job.id, step: `🇩🇪 RDV Allemagne confirmé! N° ${result.booking.confirmationNumber} — ${result.booking.bookedDate} ${result.booking.bookedTime}`, status: "ok" });
           completedJobs.add(job.id);
+          consecutiveErrors.delete(job.id);
         }
         break;
       
@@ -131,6 +147,13 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           applicationId: job.id,
           result: "not_found",
         }).catch(() => {});
+        consecutiveErrors.delete(job.id);
+        botLog({
+          applicationId: job.id,
+          step: "germany_not_found",
+          status: "ok",
+          data: { datesScanned: result.datesScanned, captchasSolved: result.captchasSolved }
+        });
         break;
       
       case "captcha_failed":
@@ -140,15 +163,42 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           result: "captcha",
           errorMessage: "Captcha RK-Termin non résolu après retries",
         }).catch(() => {});
+        // Ne compte pas comme erreur « métier » pour la pause automatique
+        consecutiveErrors.delete(job.id);
+        botLog({
+          applicationId: job.id,
+          step: "germany_captcha_failed",
+          status: "warn",
+        });
         break;
       
       case "error":
         log("ERROR", `Erreur scan ${job.applicantName}: ${result.errorMessage}`);
+        const nb = (consecutiveErrors.get(job.id) ?? 0) + 1;
+        consecutiveErrors.set(job.id, nb);
+        const shouldPause = nb >= 3;
         await sendHeartbeat({
           applicationId: job.id,
           result: "error",
           errorMessage: result.errorMessage,
+          shouldPause,
         }).catch(() => {});
+        botLog({
+          applicationId: job.id,
+          step: "germany_error",
+          status: "fail",
+          data: { error: result.errorMessage, consecutiveErrors: nb, paused: shouldPause }
+        });
+        if (shouldPause) {
+          pausedJobs.add(job.id);
+          log("WARN", `${job.applicantName}: pause automatique après ${nb} erreurs consécutives`);
+          botLog({
+            applicationId: job.id,
+            step: "germany_auto_pause",
+            status: "warn",
+            data: { consecutiveErrors: nb }
+          });
+        }
         break;
     }
     
@@ -162,6 +212,19 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
       result: "error",
       errorMessage: errMsg,
     }).catch(() => {});
+    // Compter également pour la pause auto
+    const nb = (consecutiveErrors.get(job.id) ?? 0) + 1;
+    consecutiveErrors.set(job.id, nb);
+    if (nb >= 3) {
+      pausedJobs.add(job.id);
+      log("WARN", `${job.applicantName}: pause automatique après ${nb} erreurs consécutives (exception)`);
+    }
+    botLog({
+      applicationId: job.id,
+      step: "germany_exception",
+      status: "fail",
+      data: { error: errMsg, consecutiveErrors: nb, paused: nb >= 3 }
+    });
   }
 }
 

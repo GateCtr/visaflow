@@ -32,14 +32,13 @@ export async function runGermanyScan(
     log("INFO", `🇩🇪 Scan RK-Termin: ${config.locationCode} realm=${config.realmId} cat=${config.categoryId}`);
     
     const { session, result: monthResult } = await scanMonth(config);
-    captchasSolved++;
     
     if (monthResult.status === "no_dates") {
       log("INFO", `Aucune date disponible (mois: ${monthResult.displayedMonth ?? "?"})`);
       return {
         status: "not_found",
         datesScanned: 0,
-        captchasSolved,
+        captchasSolved: captchasSolved + 1, // captcha month résolu
         durationMs: Date.now() - startMs,
       };
     }
@@ -64,6 +63,8 @@ export async function runGermanyScan(
         errorMessage: monthResult.errorMessage,
       };
     }
+    // Si on est ici, le captcha du mois a été résolu avec succès
+    captchasSolved += 1;
     
     // ─── STEP 2: Naviguer vers les mois suivants (sans captcha) ────────────
     // Jusqu'à 2 mois supplémentaires sont scannés via les liens appointment_showMonth
@@ -72,7 +73,8 @@ export async function runGermanyScan(
     const allAvailableDates: string[] = [...monthResult.availableDates];
 
     const nextMonthLinks = monthResult.nextMonthDateStrs ?? [];
-    const monthsToScan = nextMonthLinks.slice(0, 2); // max 2 mois supplémentaires
+    const extraMonths = Math.max(0, Math.min(6, config.maxExtraMonths ?? 2));
+    const monthsToScan = nextMonthLinks.slice(0, extraMonths); // configurable, défaut 2
     let lastMonthResult = monthResult;
 
     for (const monthDateStr of monthsToScan) {
@@ -117,14 +119,19 @@ export async function runGermanyScan(
       currentSession = updatedSession;
       
       if (dayResult.status === "slots_found" && dayResult.slots.length > 0) {
-        // Prendre le premier créneau disponible
-        bestSlot = dayResult.slots[0];
+        // Choisir le créneau le plus tôt de la journée (meilleur choix que « premier »)
+        const sorted = [...dayResult.slots].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom));
+        bestSlot = sorted[0];
+        captchasSolved++; // captcha day résolu
         log("INFO", `🎯 Créneau trouvé: ${bestSlot.date} ${bestSlot.timeFrom}-${bestSlot.timeTo} (openingPeriodId=${bestSlot.openingPeriodId})`);
         break;
       }
+      if (dayResult.status === "no_slots") {
+        // Pas de créneaux ce jour-là, mais captcha day résolu
+        captchasSolved++;
+      }
       
       if (dayResult.status === "captcha_failed") {
-        captchasSolved++;
         log("WARN", `Captcha day échoué pour ${dateStr} — skip`);
         continue;
       }
@@ -149,7 +156,7 @@ export async function runGermanyScan(
         captchasSolved,
         durationMs: Date.now() - startMs,
         booking: {
-          status: "booked", // virtual — slot detected but not booked
+          status: "detected", // slot détecté mais NON réservé
           bookedDate: bestSlot.date,
           bookedTime: `${bestSlot.timeFrom} — ${bestSlot.timeTo}`,
         },
@@ -159,9 +166,9 @@ export async function runGermanyScan(
     log("INFO", "Tentative de réservation automatique...");
     
     const { result: bookingResult } = await bookSlot(currentSession, config, bestSlot);
-    captchasSolved++;
     
     if (bookingResult.status === "booked") {
+      captchasSolved++; // captcha de réservation résolu
       log("INFO", `🎉 RÉSERVATION CONFIRMÉE! N° ${bookingResult.confirmationNumber}`);
       return {
         status: "slot_found",

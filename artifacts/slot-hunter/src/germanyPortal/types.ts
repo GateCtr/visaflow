@@ -16,6 +16,8 @@ export interface RKTerminConfig {
   slotDateFrom?: string;
   /** Date max souhaitée (deadline, format dd.MM.yyyy) */
   slotDateDeadline?: string;
+  /** Nombre de mois supplémentaires à scanner après le mois courant (défaut: 2, max: 6) */
+  maxExtraMonths?: number;
 }
 
 /** Champ dynamique du formulaire RK-Termin (ex: nationalité, n° passeport). */
@@ -75,7 +77,8 @@ export interface RKTerminDayResult {
 
 /** Résultat d'une tentative de réservation. */
 export interface RKTerminBookingResult {
-  status: "booked" | "captcha_failed" | "validation_error" | "slot_taken" | "error";
+  // "detected" signifie qu'un créneau a été trouvé mais qu'aucune réservation n'a été effectuée
+  status: "booked" | "detected" | "captcha_failed" | "validation_error" | "slot_taken" | "error";
   /** Numéro de confirmation (ex: "25101762") */
   confirmationNumber?: string;
   /** Message d'erreur de validation (ex: "Please enter a valid E-Mail Adress") */

@@ -406,6 +406,11 @@ export default defineSchema({
     lastSlotInfo: v.optional(v.string()),
     consecutiveErrors: v.optional(v.number()),
     updatedAt: v.number(),
+    // Admin rush-prep commands (CF re-solve + session pre-warm)
+    rushPrepCommand: v.optional(v.union(v.literal("cf_resolve"), v.literal("session_prep"))),
+    rushPrepAt: v.optional(v.number()),
+    rushPrepResult: v.optional(v.string()),   // "ok" | "error: <msg>" — set by bot on ack
+    rushPrepAckedAt: v.optional(v.number()),
   }).index("by_key", ["key"]),
 
   spainWatcherScans: defineTable({
