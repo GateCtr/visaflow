@@ -55,6 +55,17 @@ Reinstall if cache purged: `cd artifacts/slot-hunter && node_modules/.bin/playwr
 
 **Fix applied:** `ensureSession()` checks `prefetchedMainHtml.length > 0` before restoring from Redis; if 0B, deletes the key and falls through to a full CF solve.
 
+## Rule: cookie fantôme + /main/ 0B → reset PHPSESSID uniquement + re-navigation
+
+**Root cause (confirmed 2026-07-31):** La nonce JSD est time-windowed et liée au PHPSESSID Bookitit. Le JSD natif la consomme pendant le CF Managed Challenge initial. Le widget JS tente la même nonce post-Continuar → CF répond "cookie fantôme" (nonce déjà utilisée, pas de nouveau cf_clearance). Bookitit exige que le JSD post-Continuar émette un cf_clearance frais → `/main/` retourne 0B. Ce problème survient SYSTÉMATIQUEMENT lors de la création/renouvellement de session (chaque solve consomme la nonce via JSD natif).
+
+**Fix appliqué:** Après cookie fantôme + 0B, block "retry" entre le finally et le fetch direct :
+1. Supprimer UNIQUEMENT PHPSESSID (pas cf_clearance) + purger localStorage/IndexedDB → Bookitit crée une nouvelle session PHP → CF génère une nonce fraîche liée à ce nouveau PHPSESSID
+2. Re-naviguer vers le widget → CF ne re-challenge PAS (cf_clearance valide) → pas de JSD natif → nonce préservée
+3. Nouveau Continuar → widget JSD consomme la nonce fraîche EN PREMIER → cf_clearance réémis → `/main/` retourne 124KB
+
+**How to apply:** Ne jamais supprimer cf_clearance dans ce retry. La suppression cf_clearance déclencherait un nouveau CF challenge → JSD natif consommerait la nouvelle nonce → même problème. Seul PHPSESSID doit être purgé.
+
 ## Saopola e2e test (confirmed working 2026-07-30)
 
 ```bash
