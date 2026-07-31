@@ -1536,123 +1536,80 @@ class SpainPersistentBrowserManager {
           // lui-même l'appel, et CDP intercepte la réponse.
           if (svcLen > 0) {
             try {
-              // Attente polling : on vérifie toutes les 500ms pendant 15s max que Backbone
-              // a rendu les liens #selectservice/ (le container peut rester display:none pendant >4s)
-              console.log(`[spain-pb] ⏳ Attente rendu Backbone (max 15s) → clic service…`);
-              let pollMs = 0;
-              while (pollMs < 15_000) {
-                const found = await page.evaluate((): boolean => {
-                  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'));
-                  return links.some(a => { const h = a.getAttribute("href") ?? ""; return !h.includes("<%"); });
-                }).catch(() => false);
-                if (found) break;
-                await new Promise<void>((r) => setTimeout(r, 500));
-                pollMs += 500;
+              // ── Attente getagendas/ + datetime/ (auto-déclenchés par Backbone) ────
+              // serviceslist.js checkSetSelected() auto-sélectionne le service unique
+              // sans jamais rendre de liens #selectservice/ dans le DOM. Backbone fire
+              // getagendas/ + datetime/ automatiquement — aucun clic nécessaire.
+              const nowDt  = new Date();
+              const curMo  = `${nowDt.getFullYear()}-${String(nowDt.getMonth() + 1).padStart(2, "0")}`;
+              const nextMo = (() => { const d = new Date(nowDt.getFullYear(), nowDt.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+
+              console.log(`[spain-pb] ⏳ Attente getagendas/ auto (Backbone single-service, max 10s)…`);
+              await Promise.race([
+                widgetSlotSignal,
+                new Promise<void>((r) => setTimeout(r, 10_000)),
+              ]);
+
+              const agLen0 = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
+              if (agLen0 > 0) {
+                // getagendas/ capturé → le widget va appeler datetime/ dans les ~1-2s
+                console.log(`[spain-pb] ✅ getagendas/ capturé (${agLen0}B) — attente datetime/ (max 5s)…`);
+                let dtWaited = 0;
+                while (dtWaited < 5_000) {
+                  if ((this._apiPrefetchCache.get(`datetime/${curMo}`)?.length ?? this._apiPrefetchCache.get("datetime/")?.length ?? 0) > 0) break;
+                  await new Promise<void>((r) => setTimeout(r, 300));
+                  dtWaited += 300;
+                }
               }
-              console.log(`[spain-pb] 🔍 Backbone prêt après ~${pollMs}ms`);
 
-              // Diagnostic DOM d'abord : comprendre ce que Backbone a rendu
-              const domSnapshot = await page.evaluate((): string => {
-                const sel = document.querySelector("#selectservice, .clsBktServiceSelect, #bkt-services, .bkt-services, [class*='service']");
-                const allLinks = Array.from(document.querySelectorAll('a[href*="service"]'));
-                return JSON.stringify({
-                  bodySnippet: document.body?.innerHTML?.slice(4000, 5000) ?? "",
-                  serviceLinks: allLinks.slice(0, 10).map(a => ({ href: a.getAttribute("href"), text: a.textContent?.slice(0, 40), vis: (a as HTMLElement).offsetParent !== null })),
-                  selFound: sel?.className ?? "null",
-                });
-              }).catch(() => "{}");
-              console.log(`[spain-pb] 🔍 DOM services snapshot: ${domSnapshot.slice(0, 400)}`);
+              const agLen = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
+              const dtLen = this._apiPrefetchCache.get(`datetime/${curMo}`)?.length ?? this._apiPrefetchCache.get("datetime/")?.length ?? 0;
+              console.log(
+                `[spain-pb] ⚡ Slot APIs — getagendas: ${agLen > 0 ? agLen + "B ✅" : "0B ❌"} | datetime/${curMo}: ${dtLen > 0 ? dtLen + "B ✅" : "0B ❌"}`,
+              );
 
-              const clickedHref = await page.evaluate((): string | null => {
-                // Le widget Bookitit rend les services comme <a href="#selectservice/{id}">
-                const links = Array.from(
-                  document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'),
-                );
-                // Filtrer les liens dans des templates Backbone (<%=...%>)
-                // NE PAS filtrer par offsetParent — certains containers sont cachés par CSS
-                for (const a of links) {
-                  const href = a.getAttribute("href") ?? "";
-                  if (href.includes("<%") || href.includes("%>")) continue;
-                  a.click();
-                  return href;
-                }
-                return null;
-              }).catch(() => null);
-
-              if (clickedHref) {
-                console.log(`[spain-pb] 🖱️ Clic simulé sur service : ${clickedHref} — attente getagendas/ (max 8s)…`);
-                await Promise.race([
-                  widgetSlotSignal,
-                  new Promise<void>((r) => setTimeout(r, 8_000)),
-                ]);
-                const agLen0 = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
-                if (agLen0 > 0) {
-                  // getagendas/ capturé → le widget va appeler datetime/ dans les ~1-2s
-                  // (auto-selection de l'agenda + rendu calendrier). On attend 5s max.
-                  console.log(`[spain-pb] ✅ getagendas/ capturé (${agLen0}B) — attente datetime/ naturel (max 5s)…`);
-                  let dtWaited = 0;
-                  while (dtWaited < 5_000) {
-                    if ((this._apiPrefetchCache.get("datetime/")?.length ?? 0) > 0) break;
-                    await new Promise<void>((r) => setTimeout(r, 300));
-                    dtWaited += 300;
-                  }
-                }
-                const agLen  = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
-                const nowDt  = new Date();
-                const curMo  = `${nowDt.getFullYear()}-${String(nowDt.getMonth() + 1).padStart(2, "0")}`;
-                const nextMo = (() => { const d = new Date(nowDt.getFullYear(), nowDt.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
-                const dtLen  = this._apiPrefetchCache.get(`datetime/${curMo}`)?.length ?? this._apiPrefetchCache.get("datetime/")?.length ?? 0;
-                console.log(
-                  `[spain-pb] ⚡ Slot APIs — getagendas: ${agLen > 0 ? agLen + "B ✅" : "0B ❌"} | datetime/${curMo}: ${dtLen > 0 ? dtLen + "B ✅" : "0B ❌"}`,
-                );
-
-                // ── Navigation mois suivant → capturer datetime/ pour mois +1 ──────
-                // Le widget Bookitit n'appelle datetime/ que pour le mois affiché dans
-                // le calendrier. Après le clic service, seul le mois courant est capturé.
-                // On simule un clic sur ">" pour que le widget appelle datetime/ pour
-                // le mois +1 aussi — intercepté par le même CDP loadingFinished.
-                if (!this._apiPrefetchCache.has(`datetime/${nextMo}`)) {
-                  try {
-                    console.log(`[spain-pb] 🗓 Navigation mois suivant → capture datetime/${nextMo}…`);
-                    const nextClicked = await page.evaluate((): string | null => {
-                      const candidates = Array.from(document.querySelectorAll<HTMLElement>(
-                        ".ui-datepicker-next, .fc-next-button, " +
-                        "[class*='next'][class*='month'], [class*='month'][class*='next'], " +
-                        "[class*='calendar'] [class*='next'], [class*='cal'] [class*='next'], " +
-                        "a.next, button.next, span.next, i.next, " +
-                        "a[title*='siguiente'], a[title*='next'], button[title*='next'], " +
-                        "a[aria-label*='next'], button[aria-label*='next']",
-                      ));
-                      for (const btn of candidates) {
-                        if (!btn.offsetParent) continue; // skip invisible
-                        btn.click();
-                        return btn.className + "|" + btn.tagName;
-                      }
-                      return null;
-                    }).catch(() => null);
-
-                    if (nextClicked) {
-                      console.log(`[spain-pb] 🖱️ Bouton mois suivant cliqué (${nextClicked}) — attente datetime/${nextMo} (max 5s)…`);
-                      let nmWaited = 0;
-                      while (nmWaited < 5_000) {
-                        if (this._apiPrefetchCache.has(`datetime/${nextMo}`)) break;
-                        await new Promise<void>((r) => setTimeout(r, 300));
-                        nmWaited += 300;
-                      }
-                      const dtNextLen = this._apiPrefetchCache.get(`datetime/${nextMo}`)?.length ?? 0;
-                      console.log(`[spain-pb] 🗓 datetime/${nextMo}: ${dtNextLen > 0 ? dtNextLen + "B ✅" : "0B ❌ (non capturé)"}`);
-                    } else {
-                      console.warn(`[spain-pb] ⚠️ Bouton mois suivant introuvable dans le DOM — datetime/${nextMo} non capturé`);
+              // ── Navigation mois suivant → capturer datetime/ pour mois +1 ──────
+              // Le widget Bookitit n'appelle datetime/ que pour le mois affiché.
+              // On simule un clic ">" pour capturer mois +1 aussi.
+              if (!this._apiPrefetchCache.has(`datetime/${nextMo}`) && agLen > 0) {
+                try {
+                  console.log(`[spain-pb] 🗓 Navigation mois suivant → capture datetime/${nextMo}…`);
+                  const nextClicked = await page.evaluate((): string | null => {
+                    const candidates = Array.from(document.querySelectorAll<HTMLElement>(
+                      ".ui-datepicker-next, .fc-next-button, " +
+                      "[class*='next'][class*='month'], [class*='month'][class*='next'], " +
+                      "[class*='calendar'] [class*='next'], [class*='cal'] [class*='next'], " +
+                      "a.next, button.next, span.next, i.next, " +
+                      "a[title*='siguiente'], a[title*='next'], button[title*='next'], " +
+                      "a[aria-label*='next'], button[aria-label*='next']",
+                    ));
+                    for (const btn of candidates) {
+                      if (!btn.offsetParent) continue;
+                      btn.click();
+                      return btn.className + "|" + btn.tagName;
                     }
-                  } catch (nmErr) {
-                    console.warn(`[spain-pb] ⚠️ Navigation mois suivant (non-fatal): ${nmErr}`);
+                    return null;
+                  }).catch(() => null);
+
+                  if (nextClicked) {
+                    console.log(`[spain-pb] 🖱️ Bouton mois suivant cliqué (${nextClicked}) — attente datetime/${nextMo} (max 5s)…`);
+                    let nmWaited = 0;
+                    while (nmWaited < 5_000) {
+                      if (this._apiPrefetchCache.has(`datetime/${nextMo}`)) break;
+                      await new Promise<void>((r) => setTimeout(r, 300));
+                      nmWaited += 300;
+                    }
+                    const dtNextLen = this._apiPrefetchCache.get(`datetime/${nextMo}`)?.length ?? 0;
+                    console.log(`[spain-pb] 🗓 datetime/${nextMo}: ${dtNextLen > 0 ? dtNextLen + "B ✅" : "0B ❌ (non capturé)"}`);
+                  } else {
+                    console.warn(`[spain-pb] ⚠️ Bouton mois suivant introuvable — datetime/${nextMo} non capturé`);
                   }
+                } catch (nmErr) {
+                  console.warn(`[spain-pb] ⚠️ Navigation mois suivant (non-fatal): ${nmErr}`);
                 }
-              } else {
-                console.warn(`[spain-pb] ⚠️ Aucun lien #selectservice visible dans le DOM — skip clic service`);
               }
-            } catch (clickErr) {
-              console.warn(`[spain-pb] ⚠️ Simulation clic service (non-fatal): ${clickErr}`);
+            } catch (slotErr) {
+              console.warn(`[spain-pb] ⚠️ Attente slot APIs (non-fatal): ${slotErr}`);
             }
           }
         } else {
