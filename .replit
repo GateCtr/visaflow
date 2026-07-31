@@ -47,7 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "export PATH=$PATH:$HOME/.nix-profile/bin && redis-server --daemonize yes --logfile /tmp/redis.log; cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
+args = "cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/captcha-service: Captcha Service"

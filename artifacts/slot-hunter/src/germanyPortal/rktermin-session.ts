@@ -3,6 +3,20 @@
 
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
+import { ProxyAgent } from "undici";
+
+declare const process: { env: Record<string, string | undefined> };
+
+/** Retourne un ProxyAgent Decodo si DECODO_PROXY_URL est configuré, sinon undefined. */
+function getProxyDispatcher(): ProxyAgent | undefined {
+  const proxyUrl = process.env["DECODO_PROXY_URL"];
+  if (!proxyUrl) return undefined;
+  try {
+    return new ProxyAgent(proxyUrl);
+  } catch {
+    return undefined;
+  }
+}
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [rktermin] [${level}] ${msg}`);
 
@@ -62,6 +76,7 @@ export async function rkGet(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
   
+  const dispatcher = getProxyDispatcher();
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -72,6 +87,8 @@ export async function rkGet(
       },
       redirect: "follow",
       signal: controller.signal,
+      // @ts-ignore — undici dispatcher not in lib.dom types
+      dispatcher,
     });
     
     clearTimeout(timeout);
@@ -105,6 +122,7 @@ export async function rkPost(
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
+  const dispatcher = getProxyDispatcher();
   
   try {
     const res = await fetch(url, {
@@ -118,6 +136,8 @@ export async function rkPost(
       body: body.toString(),
       redirect: "follow",
       signal: controller.signal,
+      // @ts-ignore — undici dispatcher not in lib.dom types
+      dispatcher,
     });
     
     clearTimeout(timeout);
@@ -151,6 +171,8 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
+  const dispatcher = getProxyDispatcher();
+  if (dispatcher) log("DEBUG", `Via proxy Decodo`);
   
   try {
     const res = await fetch(url, {
@@ -161,6 +183,8 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
       },
       redirect: "follow",
       signal: controller.signal,
+      // @ts-ignore — undici dispatcher not in lib.dom types
+      dispatcher,
     });
     
     clearTimeout(timeout);

@@ -1536,8 +1536,20 @@ class SpainPersistentBrowserManager {
           // lui-même l'appel, et CDP intercepte la réponse.
           if (svcLen > 0) {
             try {
-              console.log(`[spain-pb] ⏳ Attente rendu Backbone (4s) → clic service…`);
-              await new Promise<void>((r) => setTimeout(r, 4_000));
+              // Attente polling : on vérifie toutes les 500ms pendant 15s max que Backbone
+              // a rendu les liens #selectservice/ (le container peut rester display:none pendant >4s)
+              console.log(`[spain-pb] ⏳ Attente rendu Backbone (max 15s) → clic service…`);
+              let pollMs = 0;
+              while (pollMs < 15_000) {
+                const found = await page.evaluate((): boolean => {
+                  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'));
+                  return links.some(a => { const h = a.getAttribute("href") ?? ""; return !h.includes("<%"); });
+                }).catch(() => false);
+                if (found) break;
+                await new Promise<void>((r) => setTimeout(r, 500));
+                pollMs += 500;
+              }
+              console.log(`[spain-pb] 🔍 Backbone prêt après ~${pollMs}ms`);
 
               // Diagnostic DOM d'abord : comprendre ce que Backbone a rendu
               const domSnapshot = await page.evaluate((): string => {

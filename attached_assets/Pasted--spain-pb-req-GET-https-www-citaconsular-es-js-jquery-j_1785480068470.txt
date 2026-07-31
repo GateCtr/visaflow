@@ -1,0 +1,108 @@
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery211031630840783070624_1785478328848&type=default&publick
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/widgets/maec.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/require/require-2.1.14.js
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/creditcard/close.png
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/creditcard/card.png
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/ticket/band.png
+[spain-pb] ⏳ Attente APIs widget naturelles (mainv1.js, max 10s)…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/ticket/logo.png
+[spain-pb] 📥 /main/ CDP body: 124117B snippet="callback=jQuery211031630840783070624_1785478328848("        <link href=\"https:\"
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=124117B cf-ray=a23a7323cbba888e-SJC
+[spain-pb] 📦 /main/ XHR capturé via listener (124117B)
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=application/javascript cf-ray=a23a7323cbba888e-SJC
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/widgets/template/v1.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/widgets/template/v1-update.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/mainv1.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/app.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/widgetlabel.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/noconflict.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/utils.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/footer.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/backbone/underscore.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/router.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/widgetconfigurations.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/widgetconfiguration.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/custom.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/services.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/agendas.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/datetime.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signup.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/summary.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signin.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signupfirstappointment.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signupsecondappointment.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/creditcardcapture.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/accountlogin.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/recoverpassword.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/history.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/changepassword.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signedin.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/confirmclient.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/redsys.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/waitinglistsummary.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/client.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/serviceslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/servicespeople.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/servicesbuttoncontinue.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/languages.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/service.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/agendaslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/breadcrumb.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signupfieldslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/field.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/datetimelist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/datetimedatepicker.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/datetimeslidedate.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/slots.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/creditcardcapturestr.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/services.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/redsys.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/niubiz.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/event.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/ticket.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/signinfieldslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/accountloginfieldslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/validate.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/historyappointmentslist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/waitinglist.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/backbone/backbone.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/extraservices.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/views/servicesselectpeople.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/agendas.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/signupfields.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/slot.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/creditcard.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/ui/jquery-ui.min.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/signinaccountfields.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/events.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/eventhistory.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/collections/signinfields.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/default/models/agenda.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/getwidgetconfigurations/?callback=jQuery211031630840783070624_1785478328848&t
+[spain-pb] 🌐 req: POST https://www.google-analytics.com/g/collect?v=2&tid=G-F3TYSDL945&gtm=45je67t1h1v9106061970z89106055348za20gzb9106055348zd
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/agendas/powered.svg
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/getservices/?callback=jQuery211031630840783070624_1785478328848&type=default&
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 📦 Widget API getwidgetconfigurations/ capturée via CDP (371B)
+[spain-pb] 📦 Widget API getservices/ capturée via CDP (824B)
+[spain-pb] ⚡ Widget APIs — getwidgetconfigurations: 371B ✅ | getservices: 824B ✅
+[spain-pb] ⏳ Attente rendu Backbone (4s) → clic service…
+[spain-http] 🍪 Jar navigateur réutilisée: 4 cookies | _ga=GA1.1.435044571.1785…
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): 3Thc0Fj3NcWl…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-pb] 🌐 req: POST https://www.google-analytics.com/g/collect?v=2&tid=G-F3TYSDL945&gtm=45je67t1h1v9106061970za20gzb9106055348zd9106055348&_
+[spain-pb] 🔍 DOM services snapshot: {"bodySnippet":"tes.select_max ; i = i + attributes.select_increment){ %>\n                    <option value=\"<%= i %>\"><%= i %></option>\n                <%\n                } %>\n            </select>        \n        </div>\n    </div>\n</script>\n\n<div id=\"idBktDefaultCustomContainer\" class=\"clsBktDefaultWindow\" style=\"display:none;\">   \n    <div id=\"idBktDefaultCustomContent\">\n  
+[spain-pb] ⚠️ Aucun lien #selectservice visible dans le DOM — skip clic service
+[spain-pb] ✅ Session CF prête (15s) | 5 cookies | prefetch: 124117B | expire ~115min
+[spain-pb]    cf_clearance: 5ZSPQHFXQfrR87odV8H4faqL4SB.19OuWpawj2WS…
+[spain-pb] ✅ Re-solve proactif réussi — session B activée (prefetch: 124117B, expire: 2026-07-31T08:07:15.889Z)
+[2026-07-31T06:12:15.898Z] [INFO] [SPAIN-WATCHER] [PB] Probe → https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5 | 3 dossier(s) actif(s) | intervalle: 10s
+[spain-pb] ♻️ Session CF réutilisée (reste 115min)

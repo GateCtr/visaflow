@@ -90,9 +90,9 @@ export const RKTERMIN_TIMING = {
   sessionMaxAgeMs: 10 * 60_000, // 10 minutes
   /** Délai entre les cycles de polling */
   pollingInterval: {
-    normal: { min: 20 * 60_000, max: 40 * 60_000 },      // 20-40 min
-    rush: { min: 5 * 60_000, max: 10 * 60_000 },         // 5-10 min
-    slotDetected: { min: 30_000, max: 60_000 },           // 30-60s
+    normal: { min: 60_000, max: 60_000 },                 // 1 min
+    rush: { min: 30_000, max: 60_000 },                   // 30-60s
+    slotDetected: { min: 10_000, max: 20_000 },           // 10-20s
   },
   /** Max tentatives captcha par étape */
   maxCaptchaRetries: 3,
