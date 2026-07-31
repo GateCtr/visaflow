@@ -1044,6 +1044,7 @@ class SpainPersistentBrowserManager {
     console.log(`[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…`);
     const jsdStartMs = Date.now();
     let cfObtained = false;
+    let jsdSolveMs = 0; // durée pour obtenir cf_clearance — < 3s = IP de confiance CF (fast-track)
     const JSD_TIMEOUT_MS = 65_000;
     const jsdDeadline = Date.now() + JSD_TIMEOUT_MS;
 
@@ -1052,9 +1053,11 @@ class SpainPersistentBrowserManager {
       const cf = cookies.find((c) => c.name === "cf_clearance");
       if (cf?.value) {
         cfObtained = true;
+        jsdSolveMs = Date.now() - jsdStartMs;
         console.log(
-          `[spain-pb] ✅ cf_clearance obtenu via JSD natif (${Math.round((Date.now() - jsdStartMs) / 1000)}s)` +
-          ` — js_detection.passed=true pour NOTRE TLS`
+          `[spain-pb] ✅ cf_clearance obtenu via JSD natif (${Math.round(jsdSolveMs / 1000)}s)` +
+          ` — js_detection.passed=true pour NOTRE TLS` +
+          (jsdSolveMs < 3_000 ? " ⚡ IP de confiance CF (fast-track détecté)" : "")
         );
         console.log(`[spain-pb]    cf_clearance: ${cf.value.slice(0, 40)}…`);
         break;
@@ -1690,6 +1693,24 @@ class SpainPersistentBrowserManager {
     //   cf_clearance est toujours valide → CF ne lance pas de Managed Challenge →
     //   JSD natif ne fire pas → nonce préservée pour le widget JSD post-Continuar.
     if (prefetchedMainHtml.length < 100 && jsdOneShotAt > 0 && !jsdOneShotAccepted) {
+      // ── Détection IP de confiance CF (fast-track) ──────────────────────────────
+      // Si cf_clearance a été obtenu en < 3s, CF reconnaît l'IP Decodo comme fiable
+      // et émet cf_clearance sans JSD complet. Dans ce cas, le JSD post-Continuar
+      // est toujours phantom car CF dit "déjà valide" → Round 2 est inutile :
+      //   • Round 2 reset PHPSESSID seulement → même IP → CF réutilise le même
+      //     challenge token (même timestamp dans /cdn-cgi/challenge-platform/…) →
+      //     JSD oneshot encore phantom → /main/ = 0B garanti.
+      // Fix : sauter Round 2, laisser closeAndInvalidate tourner vers une IP inconnue
+      // de CF (qui fera un JSD complet 10-40s → vrai cf_clearance → /main/ = 124KB).
+      const TRUSTED_IP_THRESHOLD_MS = 3_000;
+      if (jsdSolveMs > 0 && jsdSolveMs < TRUSTED_IP_THRESHOLD_MS) {
+        console.log(
+          `[spain-pb] ⚡ IP de confiance CF (cf_clearance en ${jsdSolveMs}ms < ${TRUSTED_IP_THRESHOLD_MS}ms) — ` +
+          `Round 2 ignoré (même challenge token garanti → phantom) — closeAndInvalidate + rotation IP nécessaire`,
+        );
+        // Ne pas entrer dans le bloc Round 2 — on tombe directement dans le fallback
+        // fetch puis la session sera invalidée par l'HTTP scanner (0B → closeAndInvalidate).
+      } else {
       console.log(
         `[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) ` +
         `+ re-navigation pour nonce fraîche…`,
@@ -1846,6 +1867,7 @@ class SpainPersistentBrowserManager {
       } catch (retryErr) {
         console.warn(`[spain-pb] ⚠️ Retry cookie fantôme (non-fatal): ${retryErr}`);
       }
+      } // fin else (non-trusted-IP Round 2)
     }
 
     // ── Fallback : fetch /main/ directement depuis le contexte browser ────────

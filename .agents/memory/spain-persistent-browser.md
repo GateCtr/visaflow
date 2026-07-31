@@ -76,6 +76,22 @@ Symptôme caractéristique : `✅ cf_clearance obtenu via JSD natif (1s)` — un
 
 **How to apply:** Si le solve prend <3s, c'est un cf_clearance récupéré du profil, pas un vrai JSD solve. Vérifier que `Default/Network/Cookies` est bien absent du profil avant le lancement.
 
+## Rule: IP de confiance CF (fast-track) → Round 2 inutile, skip directement
+
+**Root cause (2026-07-31):** Certains ports Decodo sont reconnus par CF comme "fiables" → CF émet cf_clearance en ~1s SANS JSD complet. Quand le widget Bookitit tire son JSD post-Continuar, CF répond "phantom" (déjà valide) → `/main/` = 0B. Le Round 2 (reset PHPSESSID uniquement, garder cf_clearance) échoue également : CF réutilise le **même challenge token** (même timestamp dans `/cdn-cgi/challenge-platform/h/b/…`) → JSD oneshot encore phantom → 0B garanti.
+
+**Pourquoi Round 2 ne peut pas aider pour les IPs de confiance :** CF lie le challenge à l'IP, pas au PHPSESSID. Un reset PHPSESSID ne crée pas une nouvelle session CF pour une IP déjà connue.
+
+**Fix appliqué (2026-07-31):** `jsdSolveMs` mesuré au moment où cf_clearance apparaît. Dans le bloc Round 2 : si `jsdSolveMs < 3000ms` (IP de confiance détectée) → skip Round 2, log explicite, tomber directement dans le fallback fetch puis `closeAndInvalidate` → rotation vers le port Decodo suivant (qui sera peut-être inconnu de CF → JSD complet 10-40s → vrai cf_clearance).
+
+**How to apply:** Si dans les logs on voit `✅ cf_clearance obtenu via JSD natif (1s) ⚡ IP de confiance CF` + JSD phantom → c'est ce scénario. Le fix skip automatiquement Round 2. La vraie résolution est la rotation IP (`closeAndInvalidate` → port suivant).
+
+**Tableau comportements CF:**
+| Scénario | JSD solve | JSD post-Continuar | /main/ |
+|---|---|---|---|
+| IP inconnue | 10-40s → vrai cf_clearance | nouveau cf_clearance ✅ | 124KB ✅ |
+| IP de confiance | 1s → phantom | phantom ❌ | 0B ❌ |
+
 ## Saopola e2e test (confirmed working 2026-07-30)
 
 ```bash
