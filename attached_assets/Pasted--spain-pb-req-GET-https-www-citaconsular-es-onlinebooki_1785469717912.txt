@@ -1,0 +1,110 @@
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery21105052129830739169_1785469490127&type=default&publicke
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=text/html cf-ray=a2399b59b9278f74-SJC
+[spain-pb] 📥 /main/ CDP body: 0B snippet=""
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=0B cf-ray=a2399b59b9278f74-SJC
+[spain-pb] ⚠️ XHR /main/ non capturé via listener (0B) — tentative fetch direct depuis contexte browser…
+[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) + re-navigation pour nonce fraîche…
+[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue
+[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6
+[spain-pb] 🌐 r2 req: GET blob:https://www.citaconsular.es/e33beeb6-1a6d-4a01-99d9-6b6164472156
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/fo/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: GET blob:https://www.citaconsular.es/4d84fe94-ac8f-41ac-99ee-23f0f8ff0fd9
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/eb/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/fo/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[2026-07-31T03:45:15.890Z] [INFO] [v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: 0, raisons: )
+[spain-pb] ✅ r2 Continuar cliqué — attente /main/ (20s)…
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery21103856391518674047_1785469516938&t
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[2026-07-31T03:45:17.277Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-pb] ⚠️ r2 /main/ toujours 0B après reset PHPSESSID (0B) — fetch direct tentera en dernier recours
+[spain-pb] 🎯 Fetch direct /main/ via page.evaluate()…
+[spain-pb] ⚠️ Fetch direct /main/ échoué: "" — scanner devra retenter
+[spain-pb] ✅ Session CF prête (57s) | 3 cookies | prefetch: 0B | expire ~115min
+[spain-pb]    cf_clearance: 4ItkU8JZfLTzBsiMcnThqAp7J85bK4JzpdLc0nke…
+[spain-http] 🍪 Jar navigateur réutilisée: 2 cookies
+[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): aqk9rcELh-kg…
+[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)
+[spain-http] ⏩ skipPortalFlow — widgetHtml1 vide, JSD Oneshot ignoré, /main/ direct
+[spain-http] ℹ️ JSD Oneshot absent du HTML widget — IP de confiance CF
+[spain-http] 🌐 /main/ via browser (session Playwright — même IP que cf_clearance)
+[spain-pb] 🌐 callBrowser → main/ (page: https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6)
+[spain-pb] 📡 callBrowser main/ → HTTP 200 | 0B
+[spain-http] 📡 /main/ browser → 0B
+[spain-http] ⚠️ /main/ browser → 0B — closeAndInvalidate (rotation IP + browser)
+[spain-soax] ✅ impit Espagne initialisé (Chrome TLS + Decodo: http://sphgi7znzc:***@dc.decodo.com:10003…)
+[spain-pb] 🔄 Session + browser fermés — prochaine IP Decodo sera différente
+[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique
+[spain-pb] 🚀 Résolution CF — stratégie Turnstile injection (token injecté dans notre Chromium)
+[spain-decodo] 🔄 Rotation IP — [5/10] http://sphgi7znzc:***@dc.decodo.com:10005
+[spain-pb] 🚀 Lancement Chromium persistant
+[spain-pb]    userDataDir : /tmp/spain-cf-profile
+[spain-pb]    Proxy       : http://sphgi7znzc:***@dc.decodo.com:10005
+[spain-pb]    UA          : Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
+[spain-pb] 🗑️ Profil CF purgé sur disque (6 répertoires : Cache, Code Cache, LocalStorage, IndexedDB, SW, CacheStorage, Cookies/Network)
+[spain-pb] 🪪 Client Hints CDP alignés — Chrome/149 Windows
+[spain-pb] 🗑️ Profil CF purgé (cf_clearance + PHPSESSID + localStorage/SW/IndexedDB — nonce périmé cassé)
+[spain-pb] 🗑️ Cache HTTP désactivé via page.setCacheEnabled(false) — nonce frais garanti sur TOUTES les navigations
+[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6
+[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…
+[spain-pb] ✅ cf_clearance obtenu via JSD natif (1s) — js_detection.passed=true pour NOTRE TLS
+[spain-pb]    cf_clearance: QEq3Y2y_mBJLCZSYBvQILytIEG5xIuKO0Ngpo4Xd…
+[spain-pb] 🖱️ Page courante après JSD : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6 — attente widget Bookitit…
+[spain-pb] ⏳ CF challenge encore en cours (titre: "Un instant…") — attente avant Continuar…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] 🔍 DOM: {"hash":"","title":"Embajada de España en Kinshasa - VISADOS","hasBtn":false,"btnVisible":false,"hasWidget":false,"hasCustom":false,"hasTurnstile":false,"bodySnippet":""}
+[spain-pb] ✅ Continuar cliqué — armer intercepteur /main/ pour JSD POST…
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🔒 Intercepteur /main/ POST armé (CDP Fetch)
+[spain-pb] ⏳ Attente XHR /main/ POST (max 20s)…
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/scripts/jsd/main.js
+[spain-pb] 🔒 /main/ intercepté POST — attente JSD POST (max 8s)… https://www.citaconsular.es/onlinebookings/main/?callback=jQuery2110255020661180
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery21102550206611806114_1785469547009&type=default&publicke
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 req: GET https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/scripts/jsd/877c641b92f6/main.js?
+[spain-pb] 🌐 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/jsd/oneshot/877c641b92f6/0.08250740950887181:1785467131:5M5KS
+[spain-pb] 🔑 JSD oneshot resp: status=200 cf-ray=a2399cbf4bdc6bb4-SJC new-cf_clearance=❌ non — cookie fantôme, /main/ sera annulé
+[spain-pb] ⚠️ /main/ libéré après cookie fantôme (CF session valide) — cf_clearance en place
+[2026-07-31T03:45:47.614Z] [INFO] Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s
+[spain-pb] 📡 /main/ responseReceived: status=200 type=XHR mimeType=text/html cf-ray=a2399cc2aa5b6bb4-SJC
+[spain-pb] 📥 /main/ CDP body: 0B snippet=""
+[spain-pb] 📡 page.on(response) /main/: status=200 type=xhr size=0B cf-ray=a2399cc2aa5b6bb4-SJC
+[spain-pb] ⚠️ XHR /main/ non capturé via listener (0B) — tentative fetch direct depuis contexte browser…
+[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) + re-navigation pour nonce fraîche…
+[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue
+[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e6
+[spain-pb] 🌐 r2 req: GET blob:https://www.citaconsular.es/a4938ac2-7328-430a-af29-4fd102ddde75
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/fo/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: GET blob:https://www.citaconsular.es/c8204afa-235e-4b0c-8055-ed8f7cadf8e9
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/eb/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/challenge-platform/h/b/fo/4122168218:1785467125:yN1aBSON3eJYyxis
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/reset.css?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/css/hosted/captcha.css?v=4
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
+[spain-pb] ✅ r2 Continuar cliqué — attente /main/ (20s)…
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/widgets/loadermaec.js?v=4
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/js/jquery/jquery-2.1.1.min.js
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/onlinebookings/main/?callback=jQuery2110416693848950899_1785469573523&ty
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/images/widgets/default/loading/loading.gif
+[spain-pb] 🌐 r2 req: POST https://www.citaconsular.es/cdn-cgi/rum?
+[spain-pb] 🌐 r2 req: GET https://www.citaconsular.es/favicon.ico
