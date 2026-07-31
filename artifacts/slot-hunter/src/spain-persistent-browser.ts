@@ -689,12 +689,12 @@ class SpainPersistentBrowserManager {
     t0: number,
   ): Promise<SpainCfSession | null> {
     const proxyUrl = this.getProxyUrl();
-    const capsolverKey = process.env.CAPSOLVER_API_KEY;
-    if (!capsolverKey || !proxyUrl) {
-      console.error(
-        "[spain-pb] ❌ " +
-        (!capsolverKey ? "CAPSOLVER_API_KEY manquant" : "aucun proxy configuré (DECODO_PROXY_URL)"),
-      );
+    // Note: CAPSOLVER_API_KEY n'est PAS requis pour le chemin JSD natif.
+    // CF Managed Challenge (JSD) est résolu directement par notre Chromium stealth.
+    // CapSolver n'est utilisé que si un widget Turnstile visible apparaît (rare sur
+    // citaconsular.es). Sans clé CapSolver, le Turnstile physique click CDP prend le relais.
+    if (!proxyUrl) {
+      console.error("[spain-pb] ❌ aucun proxy configuré (DECODO_PROXY_URL ou decodo-proxies.csv requis)");
       return null;
     }
 
