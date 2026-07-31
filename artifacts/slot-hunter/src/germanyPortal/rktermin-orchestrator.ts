@@ -1,7 +1,7 @@
 // ─── Germany RK-Termin — Orchestrator ───────────────────────────────────────
 // Orchestre le scan complet : month → day → book. Interface pour la boucle.
 
-import { scanMonth, scanDay, filterDatesByPreference } from "./rktermin-scan.js";
+import { scanMonth, scanNextMonth, scanDay, filterDatesByPreference } from "./rktermin-scan.js";
 import { bookSlot } from "./rktermin-book.js";
 import { randomDelay } from "./rktermin-session.js";
 import { RKTERMIN_TIMING } from "./config.js";
@@ -65,14 +65,39 @@ export async function runGermanyScan(
       };
     }
     
-    // ─── STEP 2: Filtrer les dates selon les préférences ────────────────────
-    const filteredDates = filterDatesByPreference(monthResult.availableDates, config);
+    // ─── STEP 2: Naviguer vers les mois suivants (sans captcha) ────────────
+    // Jusqu'à 2 mois supplémentaires sont scannés via les liens appointment_showMonth
+    // extraits du calendrier courant. La session est déjà validée — pas de nouveau captcha.
+    let currentSession = session;
+    const allAvailableDates: string[] = [...monthResult.availableDates];
+
+    const nextMonthLinks = monthResult.nextMonthDateStrs ?? [];
+    const monthsToScan = nextMonthLinks.slice(0, 2); // max 2 mois supplémentaires
+    let lastMonthResult = monthResult;
+
+    for (const monthDateStr of monthsToScan) {
+      const { session: ns, result: nextResult } = await scanNextMonth(currentSession, config, monthDateStr);
+      currentSession = ns;
+      if (nextResult.status === "dates_found" || nextResult.status === "no_dates") {
+        allAvailableDates.push(...nextResult.availableDates);
+        // Chaîner les liens de navigation si disponibles (pour aller encore plus loin si besoin)
+        lastMonthResult = nextResult;
+      } else {
+        log("WARN", `Scan mois ${monthDateStr} échoué (${nextResult.status}) — arrêt navigation`);
+        break;
+      }
+    }
+
+    log("INFO", `Total: ${allAvailableDates.length} date(s) trouvée(s) sur ${1 + monthsToScan.length} mois`);
+
+    // ─── STEP 3: Filtrer les dates selon les préférences ────────────────────
+    const filteredDates = filterDatesByPreference(allAvailableDates, config);
     
     if (filteredDates.length === 0) {
-      log("INFO", `${monthResult.availableDates.length} dates trouvées mais aucune dans la plage souhaitée`);
+      log("INFO", `${allAvailableDates.length} dates trouvées mais aucune dans la plage souhaitée`);
       return {
         status: "not_found",
-        datesScanned: monthResult.availableDates.length,
+        datesScanned: allAvailableDates.length,
         captchasSolved,
         durationMs: Date.now() - startMs,
       };
@@ -80,8 +105,7 @@ export async function runGermanyScan(
     
     log("INFO", `${filteredDates.length} date(s) dans la plage: ${filteredDates.join(", ")}`);
     
-    // ─── STEP 3: Scan des créneaux pour chaque date ─────────────────────────
-    let currentSession = session;
+    // ─── STEP 4: Scan des créneaux pour chaque date ─────────────────────────
     let bestSlot: RKTerminTimeSlot | null = null;
     
     for (const dateStr of filteredDates) {

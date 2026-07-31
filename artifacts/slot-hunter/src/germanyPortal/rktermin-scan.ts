@@ -323,6 +323,47 @@ function parseDayHtml(html: string, date: string): RKTerminDayResult {
 }
 
 /**
+ * Navigue vers un mois spécifique en réutilisant la session existante (pas de captcha).
+ * À appeler uniquement après scanMonth() réussi (session.monthCaptchaSolved = true).
+ *
+ * @param session Session avec captcha déjà résolu
+ * @param config  Configuration du scan
+ * @param monthDateStr dateStr du mois cible (ex: "08.2026") extrait des liens de navigation
+ */
+export async function scanNextMonth(
+  session: RKTerminSession,
+  config: RKTerminConfig,
+  monthDateStr: string,
+): Promise<{ session: RKTerminSession; result: RKTerminMonthResult }> {
+  log("INFO", `Navigation mois suivant: dateStr=${monthDateStr}`);
+  await randomDelay(RKTERMIN_TIMING.interRequestDelayMs.min, RKTERMIN_TIMING.interRequestDelayMs.max);
+
+  const { html, newSession } = await rkGet(session, RKTERMIN_ENDPOINTS.appointmentShowMonth, {
+    locationCode: config.locationCode,
+    realmId: config.realmId,
+    categoryId: config.categoryId,
+    dateStr: monthDateStr,
+    request_locale: config.locale,
+  });
+
+  if (newSession) session = updateSession(session, newSession);
+
+  // Si un captcha apparaît, la session a expiré — ne pas bloquer le scan
+  const captchaB64 = extractCaptchaBase64(html);
+  if (captchaB64) {
+    log("WARN", `Captcha inattendu sur mois ${monthDateStr} — session expirée, skip ce mois`);
+    return {
+      session,
+      result: { status: "error", availableDates: [], errorMessage: `Session expirée sur mois ${monthDateStr}` },
+    };
+  }
+
+  const result = parseCalendarHtml(html);
+  log("INFO", `Mois ${monthDateStr}: ${result.availableDates.length} date(s) (affiché: ${result.displayedMonth ?? "?"})`);
+  return { session, result };
+}
+
+/**
  * Filtre les dates selon les préférences du dossier (slotDateFrom / slotDateDeadline).
  */
 export function filterDatesByPreference(dates: string[], config: RKTerminConfig): string[] {
