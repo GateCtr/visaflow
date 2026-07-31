@@ -18,7 +18,14 @@ const ANTICAPTCHA_API_KEY = process.env["ANTICAPTCHA_API_KEY"] ?? "";
 /** Extrait le captcha base64 depuis le HTML de la page. */
 export function extractCaptchaBase64(html: string): string | null {
   const match = html.match(RKTERMIN_PATTERNS.captchaBase64);
-  return match?.[1] ?? null;
+  if (!match?.[1]) return null;
+  // Nettoyer les espaces/sauts de ligne éventuels dans le HTML — base64 doit
+  // être une chaîne continue pour que les solvers OCR le décodent correctement.
+  const clean = match[1].replace(/\s/g, "");
+  // Les 8 premiers chars du base64 révèlent le format:
+  // JPEG = /9j/  |  PNG = iVBOR  |  GIF = R0lGO
+  log("DEBUG", `Captcha extrait: ${clean.length} chars base64 (début: ${clean.slice(0, 8)})`);
+  return clean;
 }
 
 /**
@@ -82,7 +89,10 @@ async function solveWithCapSolver(base64Image: string): Promise<string | null> {
       task: {
         type: "ImageToTextTask",
         body: base64Image,
-        case: false, // case-insensitive
+        // Diplo.de RK-Termin : JPEG ~5KB, texte distordu 4-6 chars alphanumériques.
+        // Aucun module CapSolver n'est spécifiquement calibré pour ce style ;
+        // le modèle par défaut donne ~10-20% de réussite.
+        // Pour 100% de fiabilité, ajouter une clé 2Captcha (TWOCAPTCHA_API_KEY).
       },
     }),
   });

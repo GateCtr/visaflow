@@ -95,7 +95,7 @@ export const RKTERMIN_TIMING = {
     slotDetected: { min: 10_000, max: 20_000 },           // 10-20s
   },
   /** Max tentatives captcha par étape */
-  maxCaptchaRetries: 3,
+  maxCaptchaRetries: 5,
   /** Pause entre captcha et soumission (simule lecture humaine) */
   postCaptchaPauseMs: { min: 500, max: 1500 },
 } as const;

@@ -7,9 +7,12 @@ import { ProxyAgent } from "undici";
 
 declare const process: { env: Record<string, string | undefined> };
 
-/** Retourne un ProxyAgent Decodo si DECODO_PROXY_URL est configuré, sinon undefined. */
+/** Crée un ProxyAgent pour Germany si GERMANY_PROXY_URL est défini.
+ *  DECODO_PROXY_URL est réservé à l'Espagne et ne doit PAS être utilisé ici :
+ *  ce proxy est configuré pour les IP espagnoles et provoque un "fetch failed"
+ *  immédiat sur service2.diplo.de. Germany fonctionne en direct (pas de CF). */
 function getProxyDispatcher(): ProxyAgent | undefined {
-  const proxyUrl = process.env["DECODO_PROXY_URL"];
+  const proxyUrl = process.env["GERMANY_PROXY_URL"];
   if (!proxyUrl) return undefined;
   try {
     return new ProxyAgent(proxyUrl);
@@ -132,6 +135,8 @@ export async function rkPost(
         "User-Agent": randomUA(),
         "Cookie": buildCookieHeader(session),
         "Content-Type": "application/x-www-form-urlencoded",
+        "Referer": url,
+        "Origin": RKTERMIN_BASE_URL,
       },
       body: body.toString(),
       redirect: "follow",
