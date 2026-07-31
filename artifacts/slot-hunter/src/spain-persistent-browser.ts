@@ -1536,19 +1536,47 @@ class SpainPersistentBrowserManager {
           // lui-même l'appel, et CDP intercepte la réponse.
           if (svcLen > 0) {
             try {
-              // ── Attente getagendas/ + datetime/ (auto-déclenchés par Backbone) ────
-              // serviceslist.js checkSetSelected() auto-sélectionne le service unique
-              // sans jamais rendre de liens #selectservice/ dans le DOM. Backbone fire
-              // getagendas/ + datetime/ automatiquement — aucun clic nécessaire.
               const nowDt  = new Date();
               const curMo  = `${nowDt.getFullYear()}-${String(nowDt.getMonth() + 1).padStart(2, "0")}`;
               const nextMo = (() => { const d = new Date(nowDt.getFullYear(), nowDt.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
 
-              console.log(`[spain-pb] ⏳ Attente getagendas/ auto (Backbone single-service, max 10s)…`);
+              // ── Chemin 1 : attente getagendas/ auto (Backbone single-service) ────
+              // serviceslist.js checkSetSelected() auto-sélectionne si 1 seul service
+              // sans rendre de liens #selectservice/ — getagendas/ arrive tout seul.
+              console.log(`[spain-pb] ⏳ Attente getagendas/ auto (max 4s) → clic service si absent…`);
               await Promise.race([
                 widgetSlotSignal,
-                new Promise<void>((r) => setTimeout(r, 10_000)),
+                new Promise<void>((r) => setTimeout(r, 4_000)),
               ]);
+
+              // ── Chemin 2 : fallback clic #selectservice/ (widget multi-services) ──
+              // Si getagendas/ n'est pas encore arrivé après 4s, le widget a besoin
+              // d'une interaction explicite sur un lien #selectservice/{id}.
+              if ((this._apiPrefetchCache.get("getagendas/")?.length ?? 0) === 0) {
+                console.log(`[spain-pb] 🔍 getagendas/ absent — tentative clic service (multi-service widget)…`);
+                const clickedHref = await page.evaluate((): string | null => {
+                  const links = Array.from(
+                    document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'),
+                  );
+                  for (const a of links) {
+                    const href = a.getAttribute("href") ?? "";
+                    if (href.includes("<%") || href.includes("%>")) continue;
+                    a.click();
+                    return href;
+                  }
+                  return null;
+                }).catch(() => null);
+
+                if (clickedHref) {
+                  console.log(`[spain-pb] 🖱️ Clic service : ${clickedHref} — attente getagendas/ (max 8s)…`);
+                  await Promise.race([
+                    widgetSlotSignal,
+                    new Promise<void>((r) => setTimeout(r, 8_000)),
+                  ]);
+                } else {
+                  console.warn(`[spain-pb] ⚠️ Aucun lien #selectservice/ dans le DOM — getagendas/ non déclenché`);
+                }
+              }
 
               const agLen0 = this._apiPrefetchCache.get("getagendas/")?.length ?? 0;
               if (agLen0 > 0) {
