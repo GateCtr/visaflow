@@ -34,6 +34,8 @@ export const setHunterConfig = mutation({
     twoCaptchaApiKey: v.optional(v.string()),
     scheduleUrl: v.optional(v.string()),
     portalApplicationId: v.optional(v.string()),
+    applicantFirstname: v.optional(v.string()),
+    applicantLastname: v.optional(v.string()),
     slotDateFrom: v.optional(v.string()),
     slotDateDeadline: v.optional(v.string()),
     // CEV / Schengen
@@ -72,7 +74,9 @@ export const setHunterConfig = mutation({
       lastResult?: string; 
       twoCaptchaApiKey?: string; 
       scheduleUrl?: string; 
-      portalApplicationId?: string; 
+      portalApplicationId?: string;
+      applicantFirstname?: string;
+      applicantLastname?: string; 
       slotDateFrom?: string; 
       slotDateDeadline?: string; 
       vowintAppId?: string; 
@@ -108,7 +112,9 @@ export const setHunterConfig = mutation({
         isActive: args.isActive,
         twoCaptchaApiKey: args.twoCaptchaApiKey ?? existing?.twoCaptchaApiKey,
         scheduleUrl: args.scheduleUrl || existing?.scheduleUrl,
-        portalApplicationId: args.portalApplicationId || existing?.portalApplicationId,
+        portalApplicationId: args.portalApplicationId ?? existing?.portalApplicationId,
+        applicantFirstname: args.applicantFirstname?.trim() || existing?.applicantFirstname || undefined,
+        applicantLastname: args.applicantLastname?.trim() || existing?.applicantLastname || undefined,
         slotDateFrom: args.slotDateFrom || undefined,
         slotDateDeadline: args.slotDateDeadline || undefined,
         lastCheckAt: existing?.lastCheckAt,

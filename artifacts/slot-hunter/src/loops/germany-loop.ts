@@ -226,14 +226,18 @@ function buildRKTerminConfig(job: HunterJob): RKTerminConfig | null {
   
   log("DEBUG", `Config: ${job.visaType} → ${locationCode}/realm=${realmId}/cat=${categoryId}`);
   
-  // Données applicant : on extrait depuis les champs du job
-  // Le nom est dans job.applicantName (format "Prénom Nom" ou "Nom, Prénom")
-  const nameParts = job.applicantName.includes(",")
-    ? job.applicantName.split(",").map(s => s.trim()).reverse()
-    : job.applicantName.split(" ");
-  
-  const firstname = nameParts[0] ?? "Inconnu";
-  const lastname = nameParts.slice(1).join(" ") || nameParts[0] || "Inconnu";
+  // Données applicant : champs admin dédiés prioritaires, sinon parsing applicantName
+  let firstname = hc.applicantFirstname?.trim() ?? "";
+  let lastname = hc.applicantLastname?.trim() ?? "";
+
+  if (!firstname || !lastname) {
+    const nameParts = job.applicantName.includes(",")
+      ? job.applicantName.split(",").map(s => s.trim()).reverse()
+      : job.applicantName.split(" ");
+
+    if (!firstname) firstname = nameParts[0] ?? "Inconnu";
+    if (!lastname) lastname = nameParts.slice(1).join(" ") || nameParts[0] || "Inconnu";
+  }
   
   // Email depuis embassyUsername (souvent l'email du client pour RK-Termin)
   const email = hc.embassyUsername || "";

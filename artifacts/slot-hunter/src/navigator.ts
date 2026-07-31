@@ -733,6 +733,11 @@ export async function runHunterSession(job: HunterJob): Promise<SessionResult> {
     return runCanadaSession(job);
   }
 
+  if (job.destination === "germany") {
+    console.log(`[navigator] Destination Germany → gérée par germany-loop (RK-Termin, sans login)`);
+    return "not_found";
+  }
+
   const browserRef: { current: Browser | null } = { current: null };
 
   const sessionPromise = (async (): Promise<SessionResult> => {

@@ -56,6 +56,8 @@ export interface HunterJob {
     capsolverApiKey?: string;
     scheduleUrl?: string;
     portalApplicationId?: string;
+    applicantFirstname?: string;
+    applicantLastname?: string;
     slotDateFrom?: string;
     slotDateDeadline?: string;
     checkCount?: number;

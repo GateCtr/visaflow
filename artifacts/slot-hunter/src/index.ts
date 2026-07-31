@@ -786,10 +786,13 @@ async function main(): Promise<void> {
     const spainWatcherActive = process.env.SPAIN_HTTP_MODE === "1";
     const isSpainDossier = (j: HunterJob) =>
       j.destination === "spain" || j.destination === "espagne" || j.destination === "es";
+    const isGermanyDossier = (j: HunterJob) => j.destination === "germany";
 
     const filteredLegacyJobs = legacyJobs.filter(j => {
       if (cevDossierModeEnabled && j.destination === "schengen") return false;
       if (spainWatcherActive && isSpainDossier(j)) return false;
+      // RK-Termin Allemagne : pas de login Playwright — germany-loop.ts gère ces dossiers
+      if (isGermanyDossier(j)) return false;
       return true;
     });
 
@@ -803,7 +806,8 @@ async function main(): Promise<void> {
         !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
         !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
         !(schengenExcluded && j.destination === "schengen") &&
-        !(spainWatcherActive && isSpainDossier(j))
+        !(spainWatcherActive && isSpainDossier(j)) &&
+        !isGermanyDossier(j)
       ).length;
 
       if (activeCount === 0) {
@@ -817,6 +821,8 @@ async function main(): Promise<void> {
           log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop — polling dans 90s");
         } else if (spainWatcherActive) {
           log("INFO", "Scheduler séquentiel idle — jobs Espagne gérés par Spain Watcher HTTP — polling dans 90s");
+        } else if (jobs.some(j => isGermanyDossier(j) && j.hunterConfig?.isActive)) {
+          log("INFO", "Scheduler séquentiel idle — jobs Allemagne gérés par Germany RK-Termin Loop — polling dans 90s");
         } else {
           log("INFO", "Aucun dossier actif — polling dans 90s");
         }
@@ -826,7 +832,8 @@ async function main(): Promise<void> {
             !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
             !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
             !(schengenExcluded && j.destination === "schengen") &&
-            !(spainWatcherActive && isSpainDossier(j))
+            !(spainWatcherActive && isSpainDossier(j)) &&
+            !isGermanyDossier(j)
           )
           .reduce<Record<string, number>>((acc, j) => {
             acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;

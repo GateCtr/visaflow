@@ -22,6 +22,9 @@ interface HunterConfigData {
   vowintAppId?: string;
   cevCountry?: string;
   scheduleUrl?: string;
+  portalApplicationId?: string;
+  applicantFirstname?: string;
+  applicantLastname?: string;
   rescheduleMode?: boolean;
   rescheduleExistingDate?: string;
   useResidentialProxy?: boolean;
@@ -74,6 +77,9 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [slotDateDeadline, setSlotDateDeadline] = useState("");
   const [vowintAppId, setVowintAppId] = useState("");
   const [scheduleUrl, setScheduleUrl] = useState("");
+  const [portalApplicationId, setPortalApplicationId] = useState("");
+  const [applicantFirstname, setApplicantFirstname] = useState("");
+  const [applicantLastname, setApplicantLastname] = useState("");
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [useProxy, setUseProxy] = useState(false);
@@ -114,6 +120,9 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setSlotDateDeadline(hc.slotDateDeadline ?? "");
       setVowintAppId(hc.vowintAppId ?? "");
       setScheduleUrl(hc.scheduleUrl ?? "");
+      setPortalApplicationId(hc.portalApplicationId ?? "");
+      setApplicantFirstname(hc.applicantFirstname ?? "");
+      setApplicantLastname(hc.applicantLastname ?? "");
       setRescheduleMode(hc.rescheduleMode ?? false);
       setRescheduleDate(hc.rescheduleExistingDate ?? "");
       setUseProxy(hc.useResidentialProxy ?? false);
@@ -141,13 +150,18 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   }, [broadcastVisaClass]);
 
   const handleSave = async () => {
-    if (!username.trim() || !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
+    const isGermany = destination === "germany";
+    if (!username.trim()) { toast({ variant: "destructive", title: "Identifiant requis" }); return; }
+    if (!isGermany && !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
     setSaving(true);
     try {
       await setHunterConfig({
-        applicationId: appId, embassyUsername: username, embassyPassword: password, isActive: active,
+        applicationId: appId, embassyUsername: username, embassyPassword: password.trim() || "N/A", isActive: active,
         twoCaptchaApiKey: captchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
         vowintAppId: vowintAppId || undefined, scheduleUrl: scheduleUrl || undefined,
+        portalApplicationId: portalApplicationId || undefined,
+        applicantFirstname: applicantFirstname || undefined,
+        applicantLastname: applicantLastname || undefined,
         rescheduleMode: rescheduleMode, rescheduleExistingDate: rescheduleDate || undefined, useResidentialProxy: useProxy,
         accountRole: accountRole || undefined, currentAppointmentDate: currentApptDate || undefined,
         maxLoginsPerDay: maxLogins ? Number(maxLogins) : undefined, rushWindows: rushWindows || undefined,
@@ -216,10 +230,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       <div className="p-6 space-y-5">
         {/* Credentials */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Identifiant portail">
+          <Field label={destination === "germany" ? "Email applicant (RK-Termin)" : "Identifiant portail"}>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="email@exemple.com" className="h-9 bg-slate-50/80 text-sm" />
           </Field>
-          <Field label="Mot de passe">
+          <Field label={destination === "germany" ? "Mot de passe (non utilisé)" : "Mot de passe"}>
             <div className="relative">
               <Input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="h-9 bg-slate-50/80 text-sm pr-9" />
               <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" onClick={() => setShowPw(v => !v)}>
@@ -314,9 +328,18 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           <Field label="URL Bookitit"><Input value={scheduleUrl} onChange={(e) => setScheduleUrl(e.target.value)} placeholder="https://www.citaconsular.es/..." className="h-9 bg-slate-50/80 text-sm font-mono" /></Field>
         )}
         {destination === "germany" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-yellow-50/50 rounded-xl border border-yellow-100/80">
-            <Field label="Schedule URL (optionnel)"><Input value={scheduleUrl} onChange={(e) => setScheduleUrl(e.target.value)} placeholder="https://service2.diplo.de/rktermin/extern/..." className="h-9 bg-white text-sm font-mono" /></Field>
-            <Field label="Données applicant (JSON)"><Input value={vowintAppId} onChange={(e) => setVowintAppId(e.target.value)} placeholder='{"nationality":"Kongolesisch","passportNumber":"OB..."}' className="h-9 bg-white text-sm font-mono" /></Field>
+          <div className="space-y-3 p-3 bg-yellow-50/50 rounded-xl border border-yellow-100/80">
+            <p className="text-[10px] text-yellow-800/80">locationCode, realmId, categoryId et locale sont dérivés automatiquement du type de visa.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Nom de famille (applicantLastname)">
+                <Input value={applicantLastname} onChange={(e) => setApplicantLastname(e.target.value)} placeholder="YAGUNVU GBAFU" className="h-9 bg-white text-sm font-mono" />
+              </Field>
+              <Field label="Prénom (applicantFirstname)">
+                <Input value={applicantFirstname} onChange={(e) => setApplicantFirstname(e.target.value)} placeholder="EGGEE" className="h-9 bg-white text-sm font-mono" />
+              </Field>
+              <Field label="Schedule URL (optionnel)"><Input value={scheduleUrl} onChange={(e) => setScheduleUrl(e.target.value)} placeholder="https://service2.diplo.de/rktermin/extern/..." className="h-9 bg-white text-sm font-mono" /></Field>
+              <Field label="Données portail (JSON → portalApplicationId)"><Input value={portalApplicationId} onChange={(e) => setPortalApplicationId(e.target.value)} placeholder='{"nationality":"Kongolesisch","passportNumber":"OB..."}' className="h-9 bg-white text-sm font-mono" /></Field>
+            </div>
           </div>
         )}
         {destination === "usa" && (
