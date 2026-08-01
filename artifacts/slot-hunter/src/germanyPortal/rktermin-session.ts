@@ -322,8 +322,12 @@ export async function rkPost(
   session: RKTerminSession,
   endpoint: string,
   formData: Record<string, string>,
+  options?: { referer?: string },
 ): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
   const url = `${RKTERMIN_BASE_URL}/${endpoint}`;
+  // Le Referer doit être la page qui contenait le formulaire (showForm), pas l'action POST.
+  // Un Referer incohérent déclenche "An error occurred… address changed manually".
+  const referer = options?.referer ?? url;
   
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries(formData)) {
@@ -341,7 +345,7 @@ export async function rkPost(
           "User-Agent": randomUA(),
           "Cookie": buildCookieHeader(session),
           "Content-Type": "application/x-www-form-urlencoded",
-          "Referer": url,
+          "Referer": referer,
           "Origin": RKTERMIN_BASE_URL,
         },
         body: body.toString(),

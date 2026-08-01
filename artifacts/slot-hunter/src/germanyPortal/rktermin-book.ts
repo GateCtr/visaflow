@@ -2,7 +2,7 @@
 // Réserve un créneau : affiche le formulaire, résout le captcha, soumet.
 
 import { RKTERMIN_ENDPOINTS, RKTERMIN_PATTERNS, RKTERMIN_TIMING } from "./config.js";
-import { rkGet, rkPost, randomDelay, updateSession } from "./rktermin-session.js";
+import { rkGet, rkPost, randomDelay, updateSession, buildUrl } from "./rktermin-session.js";
 import { extractCaptchaBase64, solveImageCaptcha } from "./rktermin-captcha.js";
 import type { RKTerminConfig, RKTerminSession, RKTerminBookingResult, RKTerminTimeSlot } from "./types.js";
 
@@ -99,12 +99,25 @@ export async function bookSlot(
     }
     
     log("DEBUG", `Soumission booking: ${config.applicantLastname} ${config.applicantFirstname} → ${slot.date} ${slot.timeFrom}`);
+    log("DEBUG", `POST body keys: ${Object.keys(formData).join(", ")}`);
+    log("DEBUG", `POST body values: ${JSON.stringify(formData)}`);
+
+    // Le Referer doit être l'URL du formulaire (appointment_showForm.do?...) pour que
+    // le serveur accepte la soumission — pas l'URL de l'action POST elle-même.
+    const formReferer = buildUrl(RKTERMIN_ENDPOINTS.appointmentShowForm, {
+      locationCode: config.locationCode,
+      realmId: config.realmId,
+      categoryId: config.categoryId,
+      dateStr: slot.date,
+      openingPeriodId: slot.openingPeriodId,
+    });
     
     // 5. POST appointment_addAppointment
     const { html: resultHtml, newSession: ns2 } = await rkPost(
       session,
       RKTERMIN_ENDPOINTS.appointmentAddAppointment,
       formData,
+      { referer: formReferer },
     );
     
     if (ns2) session = updateSession(session, ns2);
@@ -167,8 +180,17 @@ function parseBookingResponse(html: string, slot: RKTerminTimeSlot): RKTerminBoo
   // Erreur anti-CSRF / session expirée ?
   // (tokens hidden manquants ou adresse modifiée manuellement — ref-id = JSESSIONID)
   if (RKTERMIN_PATTERNS.sessionError.test(html)) {
-    const refMatch = html.match(/ref-id:\s*([A-F0-9]+)/i);
-    log("WARN", `Erreur session/CSRF détectée${refMatch ? ` (ref-id: ${refMatch[1]})` : ""} — tokens hidden probablement manquants`);
+    const refMatch = html.match(/ref-id:\s*([A-F0-9\-]+)/i);
+    // Log the full text of the error page for diagnosis
+    const plainText = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1500);
+    log("WARN", `Erreur session/CSRF — page complète: "${plainText}"`);
+    log("WARN", `Erreur session/CSRF détectée${refMatch ? ` (ref-id: ${refMatch[1]})` : ""}`);
     return { status: "session_error", errorMessage: "Erreur anti-CSRF: tokens hidden manquants ou session invalide" };
   }
 
