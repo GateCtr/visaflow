@@ -930,6 +930,10 @@ interface ScanResult {
   status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll";
   sessionCookie?: string;
   integrationUrl?: string;
+  /** URL finale SelectSlot capturée lors du setup (à usage unique — utiliser pour booking) */
+  selectSlotUrl?: string;
+  /** HTML complet de la page SelectSlot capturé lors du setup (évite une 2ème requête) */
+  selectSlotHtml?: string;
 }
 
 // ─── Type étendu pour siphonedCreds (full session + legacy F5) ───────────────
@@ -1050,6 +1054,8 @@ async function performScan(
       status: "slot_found",
       sessionCookie: result.sessionCookie,
       integrationUrl: result.integrationUrl,
+      selectSlotUrl: result.selectSlotUrl,
+      selectSlotHtml: result.selectSlotHtml,
     };
   }
 
@@ -1094,6 +1100,10 @@ async function handleSlotFound(
     validUntil?: number;
   },
   logger?: ReturnType<typeof createLogger>,
+  /** HTML SelectSlot pré-capturé lors du setup (URL à usage unique — ne pas refaire la requête) */
+  existingSelectSlotHtml?: string,
+  /** URL finale SelectSlot capturée lors du setup */
+  existingSelectSlotUrl?: string,
 ): Promise<void> {
   const logFn = logger || { 
     info: (msg: string) => log("INFO", msg), 
@@ -1142,9 +1152,12 @@ async function handleSlotFound(
     await sendSlotDetectedEmail(dossier.vowintRef, discovery);
 
     // Tenter le booking HTTP avec la session existante
-    logFn.info(`  🎯 Tentative booking HTTP avec session existante...`);
+    logFn.info(`  🎯 Tentative booking HTTP avec session existante${existingSelectSlotHtml ? " (HTML pré-capturé)" : ""}...`);
     try {
-      const httpResult = await bookCevViaHttp(integrationUrl, sessionCookie!, applicationId, siphoned);
+      const httpResult = await bookCevViaHttp(
+        integrationUrl, sessionCookie!, applicationId, siphoned, undefined,
+        existingSelectSlotHtml, existingSelectSlotUrl,
+      );
       if (httpResult.success) {
         logFn.info(`  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
         await reportSlotFound({
@@ -1518,6 +1531,8 @@ async function runAccountLoop(job: any): Promise<void> {
             result.sessionCookie, result.integrationUrl,
             undefined,
             logger,
+            result.selectSlotHtml,
+            result.selectSlotUrl,
           );
           break;
         case "rate_limited":

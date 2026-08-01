@@ -274,6 +274,73 @@ async function phaseBooking(sessionCookie: string, integrationUrl: string) {
   }
 }
 
+// ─── Phase 3 (avec HTML pré-capturé) ─────────────────────────────────────────
+
+async function phaseBookingWithPreload(
+  sessionCookie: string,
+  integrationUrl: string,
+  preloadedHtml?: string,
+  preloadedSelectSlotUrl?: string,
+) {
+  section("📅 Phase 3 — Booking HTTP (HTML pré-capturé du setup)");
+
+  if (!preloadedHtml || preloadedHtml.length < 500) {
+    warn("HTML pré-capturé absent ou trop court — fallback sur refetch");
+    await phaseBooking(sessionCookie, integrationUrl);
+    return;
+  }
+
+  ok(`HTML SelectSlot disponible (${preloadedHtml.length} chars) — pas de refetch nécessaire`);
+  dim(`  selectSlotUrl: ${(preloadedSelectSlotUrl ?? integrationUrl).slice(0, 100)}`);
+
+  if (!DO_BOOK) {
+    warn("Mode DRY-RUN — booking ignoré");
+    warn("→ Mettre CEV_TEST_BOOK=1 pour activer la réservation réelle");
+    return;
+  }
+
+  console.log(`\n${YELLOW}${BOLD}  ⚠️  Lancement du booking RÉEL dans 3 secondes...${RESET}`);
+  await new Promise(r => setTimeout(r, 3_000));
+
+  info("Appel bookCevViaHttp() avec HTML pré-capturé...");
+  const t = timer();
+  const result = await bookCevViaHttp(
+    integrationUrl,
+    sessionCookie,
+    CLIENT_ID,
+    undefined,
+    undefined,
+    preloadedHtml,
+    preloadedSelectSlotUrl,
+  );
+  const elapsed = t();
+
+  if (result.success) {
+    console.log(`\n${GREEN}${BOLD}  ✅ BOOKING RÉUSSI en ${elapsed} !${RESET}`);
+    ok(`Code de confirmation: ${result.confirmationCode ?? "(non extrait)"}`);
+    ok(`Date réservée:        ${result.bookedDate ?? "(non extrait)"}`);
+    ok(`Heure réservée:       ${result.bookedTime ?? "(non extrait)"}`);
+  } else {
+    err(`Booking échoué en ${elapsed}: ${result.error}`);
+    if (result.needsPlaywright) {
+      warn("→ Fallback Playwright requis (bookWithExistingSession)");
+      warn("→ L'endpoint HTTP de soumission n'est pas encore confirmé pour ce compte");
+    }
+    if (result.error === "NO_AVAILABILITY") {
+      warn("→ Le créneau a disparu entre la détection et la tentative de réservation");
+    }
+    if (result.error === "NO_ANTIFORGERY_TOKEN") {
+      warn("→ __RequestVerificationToken absent du HTML — structure portal modifiée");
+    }
+    if (result.error === "NO_SLOTS_IN_RESPONSE") {
+      warn("→ /Home/AvailableTimeSlots a retourné 0 slot — mois courant vide");
+      warn("→ Les slots sont peut-être dans le mois suivant ou inline dans le HTML");
+    }
+    // Log le début du HTML pour diagnostic
+    dim(`  HTML preview: ${preloadedHtml.slice(0, 600).replace(/\s+/g, " ")}`);
+  }
+}
+
 // ─── Phase 3b : Vérification bundles (si slotsAvailable=true) ─────────────────
 
 async function phaseBundleCheck(sessionCookie: string, integrationUrl: string) {
@@ -414,23 +481,77 @@ async function main() {
   const sessionCookie  = setupResult.sessionCookie!;
   const integrationUrl = setupResult.integrationUrl!;
 
-  // Phase 2: Polling — toujours exécuté (vérifie l'API JSON directement)
-  const pollStatus = await phasePolling(sessionCookie, integrationUrl);
-  phases["Phase 2 — Polling"] = pollStatus === "no_slot" || pollStatus === "slot_found" ? "ok" : pollStatus;
+  // Phase 2: Polling — uniquement si slotsAvailable=false (vérifie l'API JSON)
+  // Si slotsAvailable=true, l'URL est à usage unique → on skippe le polling et on va direct au booking
+  if (!setupResult.slotsAvailable) {
+    const pollStatus = await phasePolling(sessionCookie, integrationUrl);
+    phases["Phase 2 — Polling"] = pollStatus === "no_slot" || pollStatus === "slot_found" ? "ok" : pollStatus;
 
-  // Phase 3: Booking ou bundle check
-  if (setupResult.slotsAvailable || pollStatus === "slot_found") {
-    // Vérification compatibilité bundles
-    await phaseBundleCheck(sessionCookie, integrationUrl);
-    // Booking (réel si CEV_TEST_BOOK=1)
-    await phaseBooking(sessionCookie, integrationUrl);
-    phases["Phase 3 — Booking"] = DO_BOOK ? "ok" : "skip (dry-run)";
+    if (pollStatus === "slot_found") {
+      section("📅 Phase 3 — Booking");
+      warn("Slot détecté via polling mais sans HTML pré-capturé — Playwright requis");
+      info("→ Dans le loop de production, le setup re-login pour obtenir une session fraîche");
+      phases["Phase 3 — Booking"] = "skip (no preloaded html)";
+    } else {
+      section("📅 Phase 3 — Booking");
+      info("Pas de créneau disponible — booking ignoré");
+      info("→ Le test confirme que le flux detection/booking est opérationnel");
+      info("→ Relancer dès qu'un créneau sera ouvert pour tester la réservation complète");
+      phases["Phase 3 — Booking"] = "skip (no slot)";
+    }
   } else {
-    section("📅 Phase 3 — Booking");
-    info("Pas de créneau disponible — booking ignoré");
-    info("→ Le test confirme que le flux detection/booking est opérationnel");
-    info("→ Relancer dès qu'un créneau sera ouvert pour tester la réservation complète");
-    phases["Phase 3 — Booking"] = "skip (no slot)";
+    // slotsAvailable=true → booking direct avec le HTML pré-capturé du setup
+    phases["Phase 2 — Polling"] = "skip (slotsAvailable=true → direct booking)";
+
+    // Vérification compatibilité bundles avec le HTML capturé
+    if (setupResult.selectSlotHtml) {
+      section("🔬 Phase 2b — Vérification structure HTML (depuis setup)");
+      info("Analyse du HTML SelectSlot capturé lors du setup...");
+      const html = setupResult.selectSlotHtml;
+      info(`HTML disponible: ${html.length} chars`);
+      const checks: [string, string][] = [
+        ["AvailableTimeSlots endpoint",          "AvailableTimeSlots"],
+        ["initDatePicker (vowflow-selectslot)",   "initDatePicker"],
+        ["scheduleLineId (slot data)",            "scheduleLineId"],
+        ["__RequestVerificationToken",            "__RequestVerificationToken"],
+        ["availability inline",                  "var availability"],
+      ];
+      let missingCount = 0;
+      for (const [label, marker] of checks) {
+        if (html.includes(marker)) {
+          ok(`${label} ✓`);
+        } else {
+          warn(`${label} → ABSENT`);
+          missingCount++;
+        }
+      }
+      // Chercher availability inline
+      const availMatch = html.match(/var\s+availability\s*=\s*(\[[\s\S]*?\]);/)
+        ?? html.match(/availability\s*=\s*(\[[\s\S]*?\]);/);
+      if (availMatch) {
+        try {
+          const slots = JSON.parse(availMatch[1]) as unknown[];
+          ok(`Slots inline dans le HTML: ${slots.length} créneau(x)`);
+          (slots as any[]).slice(0, 3).forEach((s: any, i: number) => {
+            dim(`  [${i + 1}] ${JSON.stringify(s).slice(0, 120)}`);
+          });
+        } catch { warn("Variable `availability` présente mais non parseable"); }
+      } else {
+        info("Variable `availability` non inline — chargée via /Home/AvailableTimeSlots (AJAX)");
+        if (missingCount > 2) {
+          dim(`HTML preview: ${html.slice(0, 400)}`);
+        }
+      }
+    }
+
+    // Booking avec HTML pré-capturé
+    await phaseBookingWithPreload(
+      sessionCookie,
+      integrationUrl,
+      setupResult.selectSlotHtml,
+      setupResult.selectSlotUrl,
+    );
+    phases["Phase 3 — Booking"] = DO_BOOK ? "ok" : "skip (dry-run)";
   }
 
   printSummary(phases);

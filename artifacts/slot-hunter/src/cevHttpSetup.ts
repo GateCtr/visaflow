@@ -1,4 +1,4 @@
-﻿/**
+/**
  * cevHttpSetup.ts — Setup CEV session en HTTP pur (sans Playwright)
  *
  * Flux complet :
@@ -123,6 +123,10 @@ export interface CevHttpSetupResult {
   redirectUrl?: string;       // URL retournée par SetCaptchaToken
   slotsAvailable?: boolean;   // true si la page calendrier (SelectSlot) a été atteinte → polling OK
   needsPlaywrightNavigation?: boolean; // DEPRECATED: toujours false — le redirect est suivi en HTTP maintenant
+  /** URL finale après suivi des redirects (SelectSlot direct) — à utiliser pour booking si slotsAvailable=true */
+  selectSlotUrl?: string;
+  /** HTML complet de la page SelectSlot capturé lors du setup — évite une 2ème requête (URL à usage unique) */
+  selectSlotHtml?: string;
   error?: string;
 }
 
@@ -1275,6 +1279,11 @@ export async function setupCevSessionHttp(
         redirectUrl: captchaRedirectUrl,
         slotsAvailable: true,
         needsPlaywrightNavigation: false,
+        // IMPORTANT : l'integrationUrl est à usage unique (déjà consommée par la chaîne de redirects).
+        // On retourne la vraie URL finale et le HTML complet capturé pour que le booking
+        // puisse opérer directement sans refaire une requête (qui échouerait avec SESSION_EXPIRED_OR_CAPTCHA).
+        selectSlotUrl: finalUrl,
+        selectSlotHtml: probeBodyRaw || undefined,
       };
     }
 
@@ -1545,6 +1554,72 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
     }
   } else {
     errors.push(`anticaptcha_not_configured`);
+  }
+
+  // ── Fallback CapSolver ────────────────────────────────────────────────────
+  // ANTICAPTCHA_API_KEY absent → tenter CapSolver (clé CAPSOLVER_API_KEY).
+  // Note : CapSolver était "blacklisté" pour la sitekey CEV en 2026-04 ;
+  // on tente quand même car les restrictions changent et c'est sans risque.
+  const capsolverKey = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
+  if (capsolverKey) {
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_capsolver_start", status: "ok", data: { previousErrors: errors } });
+    try {
+      console.log("[CEV-SETUP] Essai CapSolver HCaptchaTaskProxyless...");
+      const csCreateRes = await fetch("https://api.capsolver.com/createTask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientKey: capsolverKey,
+          task: {
+            type: "HCaptchaTaskProxyLess",
+            websiteURL: pageUrl,
+            websiteKey: HCAPTCHA_SITEKEY,
+          },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const csCreate = await csCreateRes.json() as { errorId: number; taskId?: string; errorCode?: string; errorDescription?: string };
+      console.log("[CEV-SETUP] CapSolver createTask:", csCreate);
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_capsolver_create", status: csCreate.errorId === 0 ? "ok" : "fail", data: csCreate });
+
+      if (csCreate.errorId === 0 && csCreate.taskId) {
+        // Polling max 120s (24 × 5s)
+        for (let i = 0; i < 24; i++) {
+          await new Promise(r => setTimeout(r, 5_000));
+          let csResult: any;
+          try {
+            const csRes = await fetch("https://api.capsolver.com/getTaskResult", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ clientKey: capsolverKey, taskId: csCreate.taskId }),
+              signal: AbortSignal.timeout(10_000),
+            });
+            csResult = await csRes.json();
+          } catch { continue; }
+
+          if (csResult.status === "ready") {
+            const token = csResult.solution?.gRecaptchaResponse ?? csResult.solution?.token ?? null;
+            if (token) {
+              console.log(`[CEV-SETUP] ✅ CapSolver hCaptcha résolu en ${(i + 1) * 5}s`);
+              botLog({ applicationId: clientId, step: "cev_http_hcaptcha_capsolver_solved", status: "ok", data: { seconds: (i + 1) * 5 } });
+              return token;
+            }
+            errors.push("capsolver_ready_but_no_token");
+            break;
+          }
+          if (csResult.errorId !== 0) {
+            errors.push(`capsolver_error: ${csResult.errorCode ?? csResult.errorDescription}`);
+            break;
+          }
+        }
+      } else {
+        errors.push(`capsolver_create_error: ${csCreate.errorCode ?? csCreate.errorDescription}`);
+      }
+    } catch (e) {
+      errors.push(`capsolver_exception: ${String(e)}`);
+    }
+  } else {
+    errors.push("capsolver_not_configured");
   }
 
   botLog({ applicationId: clientId, step: "cev_http_hcaptcha_failed", status: "fail", data: { errors: errors.join(', ') } });

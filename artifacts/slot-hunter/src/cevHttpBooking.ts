@@ -591,6 +591,10 @@ export async function bookCevViaHttp(
   clientId: string,
   siphoned?: SiphonedCookies,
   sessionUa?: string,
+  /** HTML de la page SelectSlot déjà capturé lors du setup — évite une 2ème requête (URL à usage unique) */
+  preloadedHtml?: string,
+  /** URL finale de la page SelectSlot capturée lors du setup */
+  preloadedSelectSlotUrl?: string,
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
@@ -600,37 +604,60 @@ export async function bookCevViaHttp(
     applicationId: clientId,
     step: 'cev_http_booking_start',
     status: 'ok',
-    data: { integrationUrlPreview: integrationUrl.slice(0, 80), ua: ua.slice(0, 60) },
+    data: {
+      integrationUrlPreview: integrationUrl.slice(0, 80),
+      ua: ua.slice(0, 60),
+      usingPreloadedHtml: !!preloadedHtml,
+      preloadedHtmlLen: preloadedHtml?.length ?? 0,
+    },
   });
 
   try {
-    // ═══ ÉTAPE 1 : GET SelectSlot page (suit les redirections) ═══
-    const pageResult = await fetchFollowRedirects(integrationUrl, sessionCookie, ua, siphoned);
+    let html: string;
+    let selectSlotUrl: string;
 
-    botLog({
-      applicationId: clientId,
-      step: 'cev_http_selectslot_fetched',
-      status: pageResult.ok ? 'ok' : 'warn',
-      data: {
-        finalUrl:    pageResult.url,
-        httpStatus:  pageResult.status,
-        htmlLen:     pageResult.html.length,
-        responseHeaders: pageResult.responseHeaders ?? null,
-        error:       pageResult.error ?? null,
-        isNoSlot:    pageResult.url.includes('NoAvailability') || pageResult.html.toLowerCase().includes('noavailability'),
-        isExpired:   pageResult.url.includes('SessionExpired') || pageResult.html.toLowerCase().includes('session expired'),
-        isCaptcha:   pageResult.url.includes('Captcha') || pageResult.html.toLowerCase().includes('hcaptcha'),
-      },
-    });
+    if (preloadedHtml && preloadedHtml.length > 500) {
+      // ═══ FAST-PATH : HTML déjà capturé lors du setup ═══
+      // L'integrationUrl est à usage unique — si le setup a déjà suivi la chaîne
+      // captcha→SelectSlot, réutiliser le HTML capturé évite l'erreur SESSION_EXPIRED_OR_CAPTCHA.
+      html = preloadedHtml;
+      selectSlotUrl = preloadedSelectSlotUrl ?? integrationUrl;
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_selectslot_preloaded',
+        status: 'ok',
+        data: { htmlLen: html.length, selectSlotUrl: selectSlotUrl.slice(0, 100) },
+      });
+    } else {
+      // ═══ ÉTAPE 1 : GET SelectSlot page (suit les redirections) ═══
+      const pageResult = await fetchFollowRedirects(integrationUrl, sessionCookie, ua, siphoned);
 
-    if (!pageResult.ok) {
-      if (pageResult.error?.includes('Trop de redirections')) {
-        return { success: false, error: 'TOO_MANY_REDIRECTS', needsPlaywright: true };
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_selectslot_fetched',
+        status: pageResult.ok ? 'ok' : 'warn',
+        data: {
+          finalUrl:    pageResult.url,
+          httpStatus:  pageResult.status,
+          htmlLen:     pageResult.html.length,
+          responseHeaders: pageResult.responseHeaders ?? null,
+          error:       pageResult.error ?? null,
+          isNoSlot:    pageResult.url.includes('NoAvailability') || pageResult.html.toLowerCase().includes('noavailability'),
+          isExpired:   pageResult.url.includes('SessionExpired') || pageResult.html.toLowerCase().includes('session expired'),
+          isCaptcha:   pageResult.url.includes('Captcha') || pageResult.html.includes('SetCaptchaToken') || pageResult.html.includes('class="h-captcha"'),
+        },
+      });
+
+      if (!pageResult.ok) {
+        if (pageResult.error?.includes('Trop de redirections')) {
+          return { success: false, error: 'TOO_MANY_REDIRECTS', needsPlaywright: true };
+        }
+        return { success: false, error: pageResult.error ?? 'FETCH_FAILED', needsPlaywright: true };
       }
-      return { success: false, error: pageResult.error ?? 'FETCH_FAILED', needsPlaywright: true };
-    }
 
-    const { html, url: selectSlotUrl } = pageResult;
+      html = pageResult.html;
+      selectSlotUrl = pageResult.url;
+    }
 
     if (selectSlotUrl.includes('NoAvailability') || html.toLowerCase().includes('noavailability')) {
       return { success: false, error: 'NO_AVAILABILITY' };
@@ -640,7 +667,13 @@ export async function bookCevViaHttp(
       selectSlotUrl.includes('SessionExpired') ||
       html.toLowerCase().includes('session expired') ||
       selectSlotUrl.includes('/Captcha') ||
-      html.toLowerCase().includes('hcaptcha')
+      // IMPORTANT : la page SelectSlot charge aussi js.hcaptcha.com comme librairie JS —
+      // ne pas confondre "librairie hCaptcha chargée" avec "on est sur la page /Captcha".
+      // Une vraie page captcha contient SetCaptchaToken (endpoint de soumission) ou
+      // class="h-captcha" (le widget DOM réel), pas juste une balise <script> src hcaptcha.
+      html.includes('SetCaptchaToken') ||
+      html.includes('class="h-captcha"') ||
+      html.includes("class='h-captcha'")
     ) {
       return { success: false, error: 'SESSION_EXPIRED_OR_CAPTCHA', needsPlaywright: false };
     }
@@ -908,7 +941,9 @@ export async function bookCevSelectedSlotViaHttp(
       selectSlotUrl.includes('SessionExpired') ||
       html.toLowerCase().includes('session expired') ||
       selectSlotUrl.includes('/Captcha') ||
-      html.toLowerCase().includes('hcaptcha')
+      html.includes('SetCaptchaToken') ||
+      html.includes('class="h-captcha"') ||
+      html.includes("class='h-captcha'")
     ) {
       return { success: false, error: 'SESSION_EXPIRED_OR_CAPTCHA', needsPlaywright: false };
     }
