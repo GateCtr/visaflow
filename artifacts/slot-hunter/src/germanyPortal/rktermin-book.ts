@@ -19,31 +19,36 @@ export async function bookSlot(
 ): Promise<{ session: RKTerminSession; result: RKTerminBookingResult }> {
   log("INFO", `Tentative de réservation: ${slot.date} ${slot.timeFrom}-${slot.timeTo} (openingPeriodId=${slot.openingPeriodId})`);
   
+  // ── Fonction interne : fetch le formulaire et en extrait hidden + captcha ──
+  async function fetchForm() {
+    const { html, newSession: ns } = await rkGet(
+      session,
+      RKTERMIN_ENDPOINTS.appointmentShowForm,
+      {
+        locationCode: config.locationCode,
+        realmId: config.realmId,
+        categoryId: config.categoryId,
+        dateStr: slot.date,
+        openingPeriodId: slot.openingPeriodId,
+      },
+    );
+    if (ns) session = updateSession(session, ns);
+    return html;
+  }
+
   // 1. GET appointment_showForm → récupérer le formulaire avec captcha
   await randomDelay(RKTERMIN_TIMING.interRequestDelayMs.min, RKTERMIN_TIMING.interRequestDelayMs.max);
-  
-  const { html: formHtml, newSession } = await rkGet(
-    session,
-    RKTERMIN_ENDPOINTS.appointmentShowForm,
-    {
-      locationCode: config.locationCode,
-      realmId: config.realmId,
-      categoryId: config.categoryId,
-      dateStr: slot.date,
-      openingPeriodId: slot.openingPeriodId,
-    },
-  );
-  
-  if (newSession) session = updateSession(session, newSession);
+
+  let formHtml = await fetchForm();
 
   // 1b. Extraire les champs hidden du formulaire (tokens anti-CSRF, openingPeriodId signé, etc.)
   //     Le portail RK-Termin valide ces tokens côté serveur — sans eux il retourne
   //     "An error occurred… address changed manually" même si la session est encore valide.
-  const hiddenFields = extractHiddenFields(formHtml);
+  let hiddenFields = extractHiddenFields(formHtml);
   log("DEBUG", `Champs hidden extraits: ${Object.keys(hiddenFields).join(", ") || "aucun"}`);
 
   // 2. Extraire le captcha du formulaire
-  const captchaB64 = extractCaptchaBase64(formHtml);
+  let captchaB64 = extractCaptchaBase64(formHtml);
   if (!captchaB64) {
     log("ERROR", "Captcha non trouvé dans le formulaire de booking");
     return {
@@ -112,26 +117,18 @@ export async function bookSlot(
       return { session, result: bookingResult };
     }
     
-    // Captcha incorrect → retry avec formulaire frais
+    // Captcha incorrect → retry avec formulaire frais (nouveaux tokens + nouveau captcha)
     if (RKTERMIN_PATTERNS.captchaWrong.test(resultHtml)) {
       log("WARN", `Captcha booking incorrect (attempt ${attempt}): "${captchaResult.text}"`);
       
       if (attempt < RKTERMIN_TIMING.maxCaptchaRetries) {
-        // Re-fetch le formulaire pour un nouveau captcha
         await randomDelay(1000, 2000);
-        const { html: freshForm, newSession: ns3 } = await rkGet(
-          session,
-          RKTERMIN_ENDPOINTS.appointmentShowForm,
-          {
-            locationCode: config.locationCode,
-            realmId: config.realmId,
-            categoryId: config.categoryId,
-            dateStr: slot.date,
-            openingPeriodId: slot.openingPeriodId,
-          },
-        );
-        if (ns3) session = updateSession(session, ns3);
-        // Continuer avec le nouveau captcha dans la prochaine itération
+        // Re-fetch pour obtenir de nouveaux tokens hidden ET un nouveau captcha
+        formHtml = await fetchForm();
+        hiddenFields = extractHiddenFields(formHtml);
+        const newCaptcha = extractCaptchaBase64(formHtml);
+        if (newCaptcha) captchaB64 = newCaptcha;
+        log("DEBUG", `Formulaire rafraîchi — hidden: ${Object.keys(hiddenFields).join(", ") || "aucun"}, captcha: ${newCaptcha ? "ok" : "absent"}`);
         continue;
       }
       return { session, result: { status: "captcha_failed" } };
@@ -166,7 +163,15 @@ function parseBookingResponse(html: string, slot: RKTerminTimeSlot): RKTerminBoo
   if (RKTERMIN_PATTERNS.captchaWrong.test(html)) {
     return { status: "captcha_failed" };
   }
-  
+
+  // Erreur anti-CSRF / session expirée ?
+  // (tokens hidden manquants ou adresse modifiée manuellement — ref-id = JSESSIONID)
+  if (RKTERMIN_PATTERNS.sessionError.test(html)) {
+    const refMatch = html.match(/ref-id:\s*([A-F0-9]+)/i);
+    log("WARN", `Erreur session/CSRF détectée${refMatch ? ` (ref-id: ${refMatch[1]})` : ""} — tokens hidden probablement manquants`);
+    return { status: "session_error", errorMessage: "Erreur anti-CSRF: tokens hidden manquants ou session invalide" };
+  }
+
   // Erreur de validation email ?
   if (RKTERMIN_PATTERNS.emailValidationError.test(html)) {
     return {

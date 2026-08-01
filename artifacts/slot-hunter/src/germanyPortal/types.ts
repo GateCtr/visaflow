@@ -78,7 +78,7 @@ export interface RKTerminDayResult {
 /** Résultat d'une tentative de réservation. */
 export interface RKTerminBookingResult {
   // "detected" signifie qu'un créneau a été trouvé mais qu'aucune réservation n'a été effectuée
-  status: "booked" | "detected" | "captcha_failed" | "validation_error" | "slot_taken" | "error";
+  status: "booked" | "detected" | "captcha_failed" | "validation_error" | "slot_taken" | "session_error" | "error";
   /** Numéro de confirmation (ex: "25101762") */
   confirmationNumber?: string;
   /** Message d'erreur de validation (ex: "Please enter a valid E-Mail Adress") */

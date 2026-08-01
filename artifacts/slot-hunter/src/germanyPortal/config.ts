@@ -161,6 +161,8 @@ export const RKTERMIN_PATTERNS = {
   isWaitlistMode: /appointment_showForm\.do\?locationCode/,
   /** Erreur de validation email */
   emailValidationError: /valid E-Mail|gültige E-Mail/i,
+  /** Erreur anti-CSRF / session expirée (tokens hidden manquants ou adresse modifiée manuellement) */
+  sessionError: /An error occurred while processing your appointment|address.*manually|Adresse.*manuell/i,
   /** Navigation mois suivant/précédent */
   nextMonth: /appointment_showMonth\.do[^"]*dateStr=([^"&]+)/g,
 } as const;
