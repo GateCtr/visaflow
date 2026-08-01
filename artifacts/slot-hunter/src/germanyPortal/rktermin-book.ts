@@ -170,18 +170,45 @@ function parseBookingResponse(html: string, slot: RKTerminTimeSlot): RKTerminBoo
     return { status: "slot_taken" };
   }
   
-  // Autre erreur — extraire le message
-  const errorMatch = html.match(/<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/div>/is);
-  const errorText = errorMatch?.[1]?.replace(/<[^>]*>/g, "").trim();
-  
-  if (errorText) {
+  // Autre erreur — extraire le message depuis les balises d'erreur courantes
+  const errorPatterns = [
+    /<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/div>/is,
+    /<p[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/p>/is,
+    /<span[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/span>/is,
+    /<div[^>]*class="[^"]*alert[^"]*"[^>]*>(.*?)<\/div>/is,
+    /<li[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/li>/is,
+  ];
+  for (const pattern of errorPatterns) {
+    const m = html.match(pattern);
+    const text = m?.[1]?.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (text && text.length > 3) {
+      return { status: "validation_error", validationError: text.slice(0, 300) };
+    }
+  }
+
+  // Succès avec texte alternatif (certaines ambassades utilisent d'autres formulations)
+  if (/appointment.*confirm|termin.*bestät|rendez-vous.*confirm|booked.*successfully|Buchung.*erfolgreich/i.test(html)) {
+    const confMatch = html.match(RKTERMIN_PATTERNS.confirmationNumber);
+    const confirmationNumber = confMatch?.[1] ?? confMatch?.[2] ?? confMatch?.[3] ?? "unknown";
     return {
-      status: "validation_error",
-      validationError: errorText,
+      status: "booked",
+      confirmationNumber,
+      bookedDate: slot.date,
+      bookedTime: `${slot.timeFrom} — ${slot.timeTo}`,
+      bookedLocation: extractLocation(html),
     };
   }
-  
-  // Réponse inattendue
+
+  // Réponse inattendue — logguer l'HTML pour diagnostic
+  const snippet = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 600);
+  console.log(`[rktermin-book] [DEBUG] Réponse inattendue — extrait texte: "${snippet}"`);
+
   return {
     status: "error",
     errorMessage: "Réponse inattendue du serveur (ni succès ni erreur détectée)",
