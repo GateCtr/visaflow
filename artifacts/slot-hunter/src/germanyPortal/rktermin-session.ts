@@ -1,20 +1,205 @@
 // ─── Germany RK-Termin — Session Management ────────────────────────────────
 // Gère les cookies (JSESSIONID + KEKS) et la navigation initiale.
 
+import { Agent, ProxyAgent, type Dispatcher } from "undici";
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
 
 declare const process: { env: Record<string, string | undefined> };
 
-// ─── Accès direct (pas de proxy) ─────────────────────────────────────────────
-// service2.diplo.de est accessible directement depuis Replit.
-// Aucun proxy n'est utilisé pour le portail Germany RK-Termin.
+// ─── Connexion HTTP ──────────────────────────────────────────────────────────
+// service2.diplo.de est joignable en direct, mais il est LENT (souvent 10-20s
+// pour l'établissement TLS depuis une IP datacenter) et refuse parfois la
+// connexion pendant quelques minutes. Le dispatcher undici par défaut coupe la
+// connexion au bout de 10s → « ConnectTimeoutError ». On utilise donc un Agent
+// dédié avec un connectTimeout large + un retry avec backoff.
+// Un proxy optionnel peut être fourni via GERMANY_PROXY_URL / RKTERMIN_PROXY_URL.
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [rktermin] [${level}] ${msg}`);
 
 /** Sélection UA aléatoire */
 function randomUA(): string {
   return RKTERMIN_USER_AGENTS[Math.floor(Math.random() * RKTERMIN_USER_AGENTS.length)];
+}
+
+// ─── Dispatcher undici dédié ────────────────────────────────────────────────
+
+let rkDispatcher: Dispatcher | null = null;
+
+/** Masque les identifiants d'une URL de proxy pour les logs. */
+function maskProxyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.username ? "***:***@" : ""}${u.host}`;
+  } catch {
+    return "proxy (url illisible)";
+  }
+}
+
+/**
+ * Dispatcher partagé pour toutes les requêtes RK-Termin.
+ * Créé une seule fois (keep-alive → moins de handshakes TLS coûteux).
+ */
+export function getRKDispatcher(): Dispatcher {
+  if (rkDispatcher) return rkDispatcher;
+
+  const connect = {
+    timeout: RKTERMIN_TIMING.connectTimeoutMs,
+    // Happy Eyeballs : si l'hôte annonce une route IPv6 non fonctionnelle,
+    // bascule sur IPv4 après 1.5s au lieu d'attendre le timeout complet.
+    autoSelectFamily: true,
+    autoSelectFamilyAttemptTimeout: 1_500,
+  };
+  const common = {
+    connect,
+    headersTimeout: RKTERMIN_TIMING.requestTimeoutMs,
+    bodyTimeout: RKTERMIN_TIMING.requestTimeoutMs,
+    keepAliveTimeout: 30_000,
+    keepAliveMaxTimeout: 60_000,
+    connections: 6,
+  };
+
+  const proxyUrl = process.env.GERMANY_PROXY_URL ?? process.env.RKTERMIN_PROXY_URL;
+  if (proxyUrl) {
+    log("INFO", `Proxy RK-Termin actif: ${maskProxyUrl(proxyUrl)}`);
+    rkDispatcher = new ProxyAgent({ uri: proxyUrl, ...common });
+  } else {
+    log("DEBUG", `Accès direct service2.diplo.de (connectTimeout=${RKTERMIN_TIMING.connectTimeoutMs}ms)`);
+    rkDispatcher = new Agent(common);
+  }
+
+  return rkDispatcher;
+}
+
+// ─── Classification des erreurs réseau ──────────────────────────────────────
+
+/** Codes undici/Node correspondant à un échec d'établissement de connexion. */
+const CONNECTION_ERROR_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "ECONNABORTED",
+]);
+
+/** Codes supplémentaires transitoires (la requête a pu partir). */
+const TRANSIENT_ERROR_CODES = new Set([
+  ...CONNECTION_ERROR_CODES,
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "UND_ERR_DESTROYED",
+  "UND_ERR_RESPONSE_STATUS_CODE",
+]);
+
+const CONNECTION_ERROR_PATTERN = /Connect\s?Timeout|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|getaddrinfo/i;
+const TRANSIENT_ERROR_PATTERN = /Connect\s?Timeout|Headers\s?Timeout|Body\s?Timeout|fetch failed|socket hang up|other side closed|network|terminated|ECONN|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|EPIPE|UND_ERR|The operation was aborted|Pas de JSESSIONID|serveur est peut-être down/i;
+
+function matchError(err: unknown, codes: Set<string>, pattern: RegExp, depth = 0): boolean {
+  if (!err || depth > 4) return false;
+  if (typeof err === "string") return pattern.test(err);
+  const e = err as { code?: string; name?: string; message?: string; cause?: unknown };
+  if (e.code && codes.has(e.code)) return true;
+  if (e.cause && matchError(e.cause, codes, pattern, depth + 1)) return true;
+  return typeof e.message === "string" && pattern.test(e.message);
+}
+
+/**
+ * L'erreur vient-elle d'un échec de connexion (le serveur n'a jamais reçu la requête) ?
+ * Ces erreurs sont TOUJOURS rejouables, même pour un POST.
+ */
+export function isConnectionError(err: unknown): boolean {
+  return matchError(err, CONNECTION_ERROR_CODES, CONNECTION_ERROR_PATTERN);
+}
+
+/**
+ * Erreur réseau transitoire (portail injoignable/lent) par opposition à une
+ * erreur « métier » (config invalide, captcha introuvable, booking refusé).
+ * Utilisée par germany-loop pour éviter de mettre un dossier en pause
+ * simplement parce que service2.diplo.de a hoqueté.
+ */
+export function isTransientNetworkError(err: unknown): boolean {
+  return matchError(err, TRANSIENT_ERROR_CODES, TRANSIENT_ERROR_PATTERN);
+}
+
+/** Message d'erreur lisible incluant la cause undici sous-jacente. */
+export function describeNetworkError(err: unknown): string {
+  const base = err instanceof Error ? err.message : String(err);
+  const cause = (err as { cause?: unknown } | null)?.cause;
+  // La cause est déjà dépliée dans le message (erreur re-wrappée) → ne pas dupliquer
+  if (!cause || base.includes("(cause:")) return base;
+  const causeMsg = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
+  return `${base} (cause: ${causeMsg})`;
+}
+
+// ─── Fetch avec retry ───────────────────────────────────────────────────────
+
+function backoffDelay(attempt: number): number {
+  const { baseDelayMs, maxDelayMs } = RKTERMIN_TIMING.networkRetry;
+  const exp = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+  return exp + Math.random() * 500; // jitter
+}
+
+/**
+ * Exécute un fetch RK-Termin et lit la réponse, avec retry sur erreur réseau.
+ *
+ * @param retryAfterSend Autoriser le retry même si la requête a pu atteindre le
+ *                       serveur. `false` pour les POST non idempotents : seules
+ *                       les erreurs de connexion sont alors rejouées.
+ */
+async function rkFetchHtml(
+  url: string,
+  init: RequestInit,
+  label: string,
+  retryAfterSend: boolean,
+): Promise<{ html: string; status: number; headers: Headers }> {
+  const { maxAttempts } = RKTERMIN_TIMING.networkRetry;
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        dispatcher: getRKDispatcher(),
+      } as RequestInit & { dispatcher?: Dispatcher });
+
+      const html = await res.text();
+      clearTimeout(timeout);
+
+      // 429 / 5xx : le portail est saturé → retry avec backoff
+      if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
+        const delay = backoffDelay(attempt);
+        log("WARN", `${label}: HTTP ${res.status} (tentative ${attempt}/${maxAttempts}) — retry dans ${Math.round(delay / 1000)}s`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      if (attempt > 1) log("INFO", `${label}: OK après ${attempt} tentative(s)`);
+      return { html, status: res.status, headers: res.headers };
+    } catch (err) {
+      clearTimeout(timeout);
+      lastErr = err;
+
+      const retryable = isConnectionError(err) || (retryAfterSend && isTransientNetworkError(err));
+      if (attempt >= maxAttempts || !retryable) break;
+
+      const delay = backoffDelay(attempt);
+      log("WARN", `${label}: échec réseau (tentative ${attempt}/${maxAttempts}) — ${describeNetworkError(err)} — retry dans ${Math.round(delay / 1000)}s`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 /** Pause aléatoire entre min et max ms */
@@ -64,36 +249,34 @@ export async function rkGet(
   params?: Record<string, string | number>,
 ): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
   const url = buildUrl(endpoint, params);
-  
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  
+
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        ...RKTERMIN_HEADERS,
-        "User-Agent": randomUA(),
-        "Cookie": buildCookieHeader(session),
+    // GET idempotent → retry autorisé sur toute erreur réseau transitoire
+    const { html, status, headers } = await rkFetchHtml(
+      url,
+      {
+        method: "GET",
+        headers: {
+          ...RKTERMIN_HEADERS,
+          "User-Agent": randomUA(),
+          "Cookie": buildCookieHeader(session),
+        },
+        redirect: "follow",
       },
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
-    const html = await res.text();
-    const cookies = parseCookies(res.headers);
-    
+      `rkGet ${endpoint}`,
+      true,
+    );
+
+    const cookies = parseCookies(headers);
+
     // Mettre à jour la session si nouveaux cookies
     const newSession: Partial<RKTerminSession> = {};
     if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
     if (cookies.keks) newSession.keks = cookies.keks;
-    
-    return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
+
+    return { html, status, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
-    clearTimeout(timeout);
-    const cause = (err as any)?.cause;
-    throw new Error(`rkGet ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
+    throw new Error(`rkGet ${endpoint} failed: ${describeNetworkError(err)}`, { cause: err });
   }
 }
 
@@ -110,38 +293,36 @@ export async function rkPost(
     body.set(key, value);
   }
   
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        ...RKTERMIN_HEADERS,
-        "User-Agent": randomUA(),
-        "Cookie": buildCookieHeader(session),
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Referer": url,
-        "Origin": RKTERMIN_BASE_URL,
+    // POST non idempotent → retry uniquement si la connexion n'a jamais abouti
+    const { html, status, headers } = await rkFetchHtml(
+      url,
+      {
+        method: "POST",
+        headers: {
+          ...RKTERMIN_HEADERS,
+          "User-Agent": randomUA(),
+          "Cookie": buildCookieHeader(session),
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Referer": url,
+          "Origin": RKTERMIN_BASE_URL,
+        },
+        body: body.toString(),
+        redirect: "follow",
       },
-      body: body.toString(),
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
-    const html = await res.text();
-    const cookies = parseCookies(res.headers);
-    
+      `rkPost ${endpoint}`,
+      false,
+    );
+
+    const cookies = parseCookies(headers);
+
     const newSession: Partial<RKTerminSession> = {};
     if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
     if (cookies.keks) newSession.keks = cookies.keks;
-    
-    return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
+
+    return { html, status, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
-    clearTimeout(timeout);
-    const cause = (err as any)?.cause;
-    throw new Error(`rkPost ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
+    throw new Error(`rkPost ${endpoint} failed: ${describeNetworkError(err)}`, { cause: err });
   }
 }
 
@@ -159,27 +340,25 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
   
   log("DEBUG", `Initialisation session: ${config.locationCode} realm=${config.realmId} cat=${config.categoryId}`);
   
-  log("DEBUG", "Accès direct service2.diplo.de");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        ...RKTERMIN_HEADERS,
-        "User-Agent": randomUA(),
+    const { html, status, headers } = await rkFetchHtml(
+      url,
+      {
+        method: "GET",
+        headers: {
+          ...RKTERMIN_HEADERS,
+          "User-Agent": randomUA(),
+        },
+        redirect: "follow",
       },
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
-    const html = await res.text();
-    const cookies = parseCookies(res.headers);
-    
+      "initSession",
+      true,
+    );
+
+    const cookies = parseCookies(headers);
+
     if (!cookies.jsessionId) {
-      throw new Error("Pas de JSESSIONID dans la réponse — le serveur est peut-être down");
+      throw new Error(`Pas de JSESSIONID dans la réponse (HTTP ${status}) — le serveur est peut-être down`);
     }
     
     const session: RKTerminSession = {
@@ -193,12 +372,9 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
     
     return { session, html };
   } catch (err) {
-    clearTimeout(timeout);
-    // Exposer la cause sous-jacente (ECONNREFUSED, ECONNRESET, etc.) pour diagnostiquer
-    // les blocages IP (service2.diplo.de bloque les plages IP datacenter Railway/cloud).
-    const cause = (err as any)?.cause;
-    const causeStr = cause ? ` (cause: ${cause})` : "";
-    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}${causeStr}`);
+    // Exposer la cause sous-jacente (ConnectTimeout, ECONNRESET, etc.) pour diagnostiquer
+    // les blocages IP (service2.diplo.de throttle les plages IP datacenter Railway/cloud).
+    throw new Error(`initSession failed: ${describeNetworkError(err)}`, { cause: err });
   }
 }
 

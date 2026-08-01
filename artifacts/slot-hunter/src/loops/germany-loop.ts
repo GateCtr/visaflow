@@ -4,18 +4,50 @@
 import { getActiveJobs, sendHeartbeat, reportSlotFound, botLog, type HunterJob } from "../convexClient.js";
 import { runGermanyScan } from "../germanyPortal/rktermin-orchestrator.js";
 import { RKTERMIN_TIMING, KINSHASA_CATEGORIES } from "../germanyPortal/config.js";
+import { isTransientNetworkError } from "../germanyPortal/rktermin-session.js";
 import type { RKTerminConfig, RKTerminDynamicField } from "../germanyPortal/types.js";
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [germany-loop] [${level}] ${msg}`);
 
 /** Jobs déjà complétés (évite de re-scanner). */
 const completedJobs = new Set<string>();
-/** Jobs en pause (erreur répétée). */
-const pausedJobs = new Set<string>();
+/** Jobs en pause : jobId → échéance (Infinity = pause définitive, ex. config invalide). */
+const pausedJobs = new Map<string, { until: number; reason: string }>();
 /** Dernier scan par job (pour respecter l'intervalle). */
 const lastScanAt = new Map<string, number>();
-/** Compteur d'erreurs consécutives par job (pour auto-pause). */
+/** Compteur d'erreurs « métier » consécutives par job (pour auto-pause). */
 const consecutiveErrors = new Map<string, number>();
+/** Compteur d'erreurs réseau consécutives (portail injoignable) par job. */
+const networkErrors = new Map<string, number>();
+/** Cooldown réseau : prochain essai autorisé par job. */
+const nextAttemptAt = new Map<string, number>();
+
+/** Met un dossier en pause (temporaire par défaut, reprise automatique ensuite). */
+function pauseJob(jobId: string, reason: string, durationMs: number): void {
+  pausedJobs.set(jobId, {
+    until: durationMs === Infinity ? Infinity : Date.now() + durationMs,
+    reason,
+  });
+}
+
+/** Le dossier est-il en pause ? Purge la pause (et les compteurs) si elle a expiré. */
+function isPaused(jobId: string): boolean {
+  const paused = pausedJobs.get(jobId);
+  if (!paused) return false;
+  if (Date.now() < paused.until) return true;
+
+  pausedJobs.delete(jobId);
+  resetErrorState(jobId);
+  log("INFO", `Reprise automatique du dossier ${jobId} (pause « ${paused.reason} » expirée)`);
+  return false;
+}
+
+/** Réinitialise les compteurs d'erreurs / cooldown après un cycle réussi. */
+function resetErrorState(jobId: string): void {
+  consecutiveErrors.delete(jobId);
+  networkErrors.delete(jobId);
+  nextAttemptAt.delete(jobId);
+}
 
 /**
  * Démarre la boucle Germany RK-Termin.
@@ -59,7 +91,7 @@ async function runGermanyCycle(): Promise<void> {
     j.destination === "germany" &&
     j.hunterConfig?.isActive === true &&
     !completedJobs.has(j.id) &&
-    !pausedJobs.has(j.id)
+    !isPaused(j.id)
   );
   
   if (germanyJobs.length === 0) {
@@ -70,6 +102,14 @@ async function runGermanyCycle(): Promise<void> {
   log("INFO", `${germanyJobs.length} dossier(s) Germany actif(s)`);
   
   for (const job of germanyJobs) {
+    // Cooldown réseau : le portail était injoignable — on patiente avant de réessayer
+    const scheduledAt = nextAttemptAt.get(job.id) ?? 0;
+    if (Date.now() < scheduledAt) {
+      const waitS = Math.ceil((scheduledAt - Date.now()) / 1000);
+      log("DEBUG", `${job.applicantName}: portail injoignable — nouvel essai dans ${waitS}s`);
+      continue;
+    }
+
     // Vérifier l'intervalle min entre scans
     const lastScan = lastScanAt.get(job.id) ?? 0;
     const elapsed = Date.now() - lastScan;
@@ -109,7 +149,8 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
       errorMessage: "Configuration RK-Termin incomplète (scheduleUrl manquant ou mal formaté)",
       shouldPause: true,
     }).catch(() => {});
-    pausedJobs.add(job.id);
+    // Pause définitive : seule une correction côté admin peut débloquer ce dossier
+    pauseJob(job.id, "configuration invalide", Infinity);
     botLog({
       applicationId: job.id,
       step: "germany_config_invalid",
@@ -137,7 +178,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           
           await botLog({ applicationId: job.id, step: `🇩🇪 RDV Allemagne confirmé! N° ${result.booking.confirmationNumber} — ${result.booking.bookedDate} ${result.booking.bookedTime}`, status: "ok" });
           completedJobs.add(job.id);
-          consecutiveErrors.delete(job.id);
+          resetErrorState(job.id);
         }
         break;
       
@@ -147,7 +188,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           applicationId: job.id,
           result: "not_found",
         }).catch(() => {});
-        consecutiveErrors.delete(job.id);
+        resetErrorState(job.id);
         botLog({
           applicationId: job.id,
           step: "germany_not_found",
@@ -164,7 +205,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           errorMessage: "Captcha RK-Termin non résolu après retries",
         }).catch(() => {});
         // Ne compte pas comme erreur « métier » pour la pause automatique
-        consecutiveErrors.delete(job.id);
+        resetErrorState(job.id);
         botLog({
           applicationId: job.id,
           step: "germany_captcha_failed",
@@ -173,32 +214,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
         break;
       
       case "error":
-        log("ERROR", `Erreur scan ${job.applicantName}: ${result.errorMessage}`);
-        const nb = (consecutiveErrors.get(job.id) ?? 0) + 1;
-        consecutiveErrors.set(job.id, nb);
-        const shouldPause = nb >= 3;
-        await sendHeartbeat({
-          applicationId: job.id,
-          result: "error",
-          errorMessage: result.errorMessage,
-          shouldPause,
-        }).catch(() => {});
-        botLog({
-          applicationId: job.id,
-          step: "germany_error",
-          status: "fail",
-          data: { error: result.errorMessage, consecutiveErrors: nb, paused: shouldPause }
-        });
-        if (shouldPause) {
-          pausedJobs.add(job.id);
-          log("WARN", `${job.applicantName}: pause automatique après ${nb} erreurs consécutives`);
-          botLog({
-            applicationId: job.id,
-            step: "germany_auto_pause",
-            status: "warn",
-            data: { consecutiveErrors: nb }
-          });
-        }
+        await handleScanError(job, result.errorMessage ?? "Erreur inconnue", "scan");
         break;
     }
     
@@ -207,23 +223,93 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     log("ERROR", `Exception non gérée pour ${job.applicantName}: ${errMsg}`);
+    await handleScanError(job, errMsg, "exception");
+  }
+}
+
+/**
+ * Traite une erreur de scan en distinguant deux familles :
+ *
+ * • Réseau (ConnectTimeout, ECONNRESET, portail down…) — indépendant du dossier.
+ *   → cooldown progressif (2 → 15 min), AUCUNE pause côté backend, seuil très tolérant.
+ *   C'était la cause des « germany auto pause consecutiveErrors=3 » : trois
+ *   ConnectTimeout d'affilée suffisaient à stopper définitivement la chasse.
+ *
+ * • Métier (booking refusé, page inattendue…) — là une intervention est utile.
+ *   → pause après 3 erreurs, mais temporaire (reprise auto) au lieu de définitive.
+ */
+async function handleScanError(job: HunterJob, errMsg: string, source: "scan" | "exception"): Promise<void> {
+  const { maxBusinessErrors, maxNetworkErrors, networkCooldownMs, pauseDurationMs } = RKTERMIN_TIMING.autoPause;
+
+  if (isTransientNetworkError(errMsg)) {
+    const nb = (networkErrors.get(job.id) ?? 0) + 1;
+    networkErrors.set(job.id, nb);
+
+    const cooldown = Math.min(networkCooldownMs.base * 2 ** (nb - 1), networkCooldownMs.max);
+    nextAttemptAt.set(job.id, Date.now() + cooldown);
+    const retryInMin = Math.max(1, Math.round(cooldown / 60_000));
+    const shouldPause = nb >= maxNetworkErrors;
+
+    log("WARN", `${job.applicantName}: portail injoignable (${nb}/${maxNetworkErrors}) — ${errMsg} — nouvel essai dans ${retryInMin} min`);
+
     await sendHeartbeat({
       applicationId: job.id,
       result: "error",
-      errorMessage: errMsg,
+      errorMessage: `Portail allemand injoignable (${nb}/${maxNetworkErrors}) : ${errMsg}`,
+      // Jamais de pause backend pour un incident réseau : le dossier reste actif
+      shouldPause: false,
     }).catch(() => {});
-    // Compter également pour la pause auto
-    const nb = (consecutiveErrors.get(job.id) ?? 0) + 1;
-    consecutiveErrors.set(job.id, nb);
-    if (nb >= 3) {
-      pausedJobs.add(job.id);
-      log("WARN", `${job.applicantName}: pause automatique après ${nb} erreurs consécutives (exception)`);
-    }
+
     botLog({
       applicationId: job.id,
-      step: "germany_exception",
-      status: "fail",
-      data: { error: errMsg, consecutiveErrors: nb, paused: nb >= 3 }
+      step: "germany_network_error",
+      status: "warn",
+      data: { error: errMsg, networkErrors: nb, retryInMin, source }
+    });
+
+    if (shouldPause) {
+      pauseJob(job.id, "portail injoignable", pauseDurationMs);
+      const resumeInMin = Math.round(pauseDurationMs / 60_000);
+      log("WARN", `${job.applicantName}: pause temporaire ${resumeInMin} min après ${nb} échecs réseau consécutifs`);
+      botLog({
+        applicationId: job.id,
+        step: "germany_auto_pause",
+        status: "warn",
+        data: { networkErrors: nb, resumeInMin, reason: "network" }
+      });
+    }
+    return;
+  }
+
+  // ─── Erreur « métier » ─────────────────────────────────────────────────
+  log("ERROR", `Erreur scan ${job.applicantName}: ${errMsg}`);
+  const nb = (consecutiveErrors.get(job.id) ?? 0) + 1;
+  consecutiveErrors.set(job.id, nb);
+  const shouldPause = nb >= maxBusinessErrors;
+
+  await sendHeartbeat({
+    applicationId: job.id,
+    result: "error",
+    errorMessage: errMsg,
+    shouldPause,
+  }).catch(() => {});
+
+  botLog({
+    applicationId: job.id,
+    step: source === "exception" ? "germany_exception" : "germany_error",
+    status: "fail",
+    data: { error: errMsg, consecutiveErrors: nb, paused: shouldPause }
+  });
+
+  if (shouldPause) {
+    pauseJob(job.id, "erreurs répétées", pauseDurationMs);
+    const resumeInMin = Math.round(pauseDurationMs / 60_000);
+    log("WARN", `${job.applicantName}: pause automatique ${resumeInMin} min après ${nb} erreurs consécutives`);
+    botLog({
+      applicationId: job.id,
+      step: "germany_auto_pause",
+      status: "warn",
+      data: { consecutiveErrors: nb, resumeInMin, reason: "business" }
     });
   }
 }
