@@ -1,0 +1,45 @@
+{
+  "startedAt": "2026-08-01T08:02:05.744Z",
+  "input": {
+    "email": "balemadi35@gmail.com",
+    "vowintRef": "VOWINT6321793",
+    "appId": "cev-e2e-1785571325744"
+  },
+  "steps": [
+    {
+      "t": "2026-08-01T08:02:05.744Z",
+      "step": "setup_start"
+    },
+    {
+      "t": "2026-08-01T08:02:54.082Z",
+      "step": "setup_done",
+      "success": true,
+      "slotsAvailable": true,
+      "hasSessionCookie": true,
+      "hasIntegrationUrl": true,
+      "hasSelectSlotHtml": true,
+      "hasSelectSlotCookies": true
+    },
+    {
+      "t": "2026-08-01T08:02:54.082Z",
+      "step": "poll_skipped",
+      "reason": "slotsAvailable=true depuis le setup"
+    },
+    {
+      "t": "2026-08-01T08:02:54.082Z",
+      "step": "booking_start",
+      "strategy": "bookCevViaHttp_with_preloaded_html",
+      "hasPreloadedHtml": true,
+      "hasSelectSlotCookies": true
+    },
+    {
+      "t": "2026-08-01T08:02:54.646Z",
+      "step": "booking_done",
+      "success": false,
+      "error": "SLOT_TAKEN",
+      "needsPlaywright": true
+    }
+  ],
+  "result": "booking_failed",
+  "endedAt": "2026-08-01T08:02:54.646Z"
+}

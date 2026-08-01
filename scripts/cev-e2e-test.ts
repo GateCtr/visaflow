@@ -4,17 +4,17 @@
  * Flux:
  * 1) Login VisaOnWeb + "Prendre rendez-vous" via setupCevSessionHttp
  * 2) Résolution captcha via Anti-Captcha (dans le setup hunter)
- * 3) Détection créneaux via pollCevSlot + snapshot de capacité
- * 4) Tentative réservation (créneau ciblé si free>2, sinon booking standard)
+ * 3) bookCevViaHttp — utilise le HTML préchargé du setup (availability[]):
+ *    - Groupe les entrées par (date, time) → free = nombre de places disponibles
+ *    - Préfère les créneaux avec ≥3 places (moins de contention)
+ *    - Trie par free décroissant, soumet le meilleur créneau
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { setupCevSessionHttp } from "../artifacts/slot-hunter/src/cevHttpSetup.ts";
-import { pollCevSlot, getCevCapacitySnapshot } from "../artifacts/slot-hunter/src/cevPolling.ts";
-import { bookCevViaHttp, bookCevSelectedSlotViaHttp } from "../artifacts/slot-hunter/src/cevHttpBooking.ts";
-
-type Capacity = Array<{ date: string; times: Array<{ time: string; free: number | null }> }>;
+import { pollCevSlot } from "../artifacts/slot-hunter/src/cevPolling.ts";
+import { bookCevViaHttp } from "../artifacts/slot-hunter/src/cevHttpBooking.ts";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -23,19 +23,6 @@ function nowIso(): string {
 async function saveJSON(filePath: string, data: unknown): Promise<void> {
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
-}
-
-function pickBestSlot(parsed?: Capacity): { date: string; time: string; free: number } | null {
-  if (!parsed?.length) return null;
-  const candidates: Array<{ date: string; time: string; free: number }> = [];
-  for (const d of parsed) {
-    for (const t of d.times) {
-      const free = typeof t.free === "number" && Number.isFinite(t.free) ? t.free : 0;
-      if (free > 2) candidates.push({ date: d.date, time: t.time, free });
-    }
-  }
-  candidates.sort((a, b) => b.free - a.free);
-  return candidates[0] ?? null;
 }
 
 async function main(): Promise<void> {
@@ -61,6 +48,7 @@ async function main(): Promise<void> {
     (report.steps as Array<unknown>).push({ t: nowIso(), step, ...data });
   };
 
+  // ─── Étape 1 : Setup (login + captcha + navigation vers SelectSlot) ───────
   pushStep("setup_start", {});
   const setup = await setupCevSessionHttp(email, password, appId, appId, vowintRef);
   pushStep("setup_done", {
@@ -69,6 +57,8 @@ async function main(): Promise<void> {
     slotsAvailable: setup.success ? setup.slotsAvailable : undefined,
     hasSessionCookie: !!setup.sessionCookie,
     hasIntegrationUrl: !!setup.integrationUrl,
+    hasSelectSlotHtml: !!(setup as unknown as Record<string, unknown>).selectSlotHtml,
+    hasSelectSlotCookies: !!(setup as unknown as Record<string, unknown>).selectSlotCookies,
   });
 
   if (!setup.success || !setup.sessionCookie || !setup.integrationUrl) {
@@ -79,12 +69,15 @@ async function main(): Promise<void> {
     return;
   }
 
+  // ─── Étape 2 : Vérification slot (seulement si setup n'a pas déjà confirmé) ─
   let slotDetected = !!setup.slotsAvailable;
   if (!slotDetected) {
     pushStep("poll_start", {});
     const poll = await pollCevSlot(setup.integrationUrl, setup.sessionCookie);
     pushStep("poll_done", poll as unknown as Record<string, unknown>);
     slotDetected = poll.status === "slot_found";
+  } else {
+    pushStep("poll_skipped", { reason: "slotsAvailable=true depuis le setup" });
   }
 
   if (!slotDetected) {
@@ -95,38 +88,28 @@ async function main(): Promise<void> {
     return;
   }
 
-  pushStep("capacity_start", {});
-  const capacity = await getCevCapacitySnapshot(setup.sessionCookie);
-  pushStep("capacity_done", capacity as unknown as Record<string, unknown>);
-
-  const parsed = (capacity as { parsed?: Capacity }).parsed;
-  const target = pickBestSlot(parsed);
-
+  // ─── Étape 3 : Réservation ────────────────────────────────────────────────
+  // bookCevViaHttp utilise le HTML préchargé (availability[]) pour :
+  //   - Compter les places libres par créneau (une entrée = une place)
+  //   - Préférer les créneaux avec ≥3 places (min. contention)
+  //   - Trier par free décroissant, soumettre le meilleur
+  const setupAny = setup as unknown as Record<string, string | undefined>;
   pushStep("booking_start", {
-    strategy: target ? "selected_slot" : "standard",
-    target,
+    strategy: "bookCevViaHttp_with_preloaded_html",
+    hasPreloadedHtml: !!setupAny.selectSlotHtml,
+    hasSelectSlotCookies: !!setupAny.selectSlotCookies,
   });
 
-  const booking = target
-    ? await bookCevSelectedSlotViaHttp(
-        setup.integrationUrl,
-        setup.sessionCookie,
-        appId,
-        { date: target.date, time: target.time },
-        undefined,          // siphoned
-        undefined,          // sessionUa
-        setup.selectSlotCookies,
-      )
-    : await bookCevViaHttp(
-        setup.integrationUrl,
-        setup.sessionCookie,
-        appId,
-        undefined,          // siphoned
-        undefined,          // sessionUa
-        setup.selectSlotHtml,
-        setup.selectSlotUrl,
-        setup.selectSlotCookies,
-      );
+  const booking = await bookCevViaHttp(
+    setup.integrationUrl,
+    setup.sessionCookie,
+    appId,
+    undefined,                   // siphoned
+    undefined,                   // sessionUa
+    setupAny.selectSlotHtml,     // HTML préchargé → fast-path, évite 2ème requête
+    setupAny.selectSlotUrl,      // URL finale SelectSlot
+    setupAny.selectSlotCookies,  // cookies complets incluant __RequestVerificationToken
+  );
 
   pushStep("booking_done", booking as unknown as Record<string, unknown>);
 

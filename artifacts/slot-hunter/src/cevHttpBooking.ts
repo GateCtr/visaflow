@@ -335,6 +335,8 @@ interface ParsedSlot {
   time: string;
   id?: string | number;
   available: boolean;
+  /** Nombre de places libres pour ce créneau (compté depuis le tableau availability[] inline) */
+  free?: number;
   raw: unknown;
 }
 
@@ -345,6 +347,10 @@ interface ParsedSlot {
  * AvailableSlotForPublic. Format :
  *   { "$type": "...AvailableSlotForPublic...", "fromTime": "2026-08-15T09:30:00",
  *     "scheduleLineId": "uuid-...", "toTime": "..." }
+ *
+ * IMPORTANT : chaque entrée du tableau correspond à UNE place disponible.
+ * Plusieurs entrées avec la même fromTime = plusieurs places pour ce créneau.
+ * La fonction groupe par (date, time) et calcule le nombre de places libres.
  *
  * Quand présents, ces slots sont préférés à un appel /Home/AvailableTimeSlots
  * (qui requiert officeId + visaCategories → HTTP 500 sans ces paramètres).
@@ -368,27 +374,52 @@ function extractInlineSlotsFromHtml(html: string): ParsedSlot[] {
 
   if (!rawJson || !Array.isArray(rawJson) || rawJson.length === 0) return [];
 
-  return (rawJson as Record<string, unknown>[]).flatMap(item => {
-    // Extraire date et heure depuis fromTime (ISO ou .NET /Date(ms)/)
+  // Étape 1 : extraire tous les entrées brutes avec date+time+id
+  //
+  // Format réel CEV AvailableSlotForPublic (confirmé 2026-08-01) :
+  //   { fromTime: "1900-01-01T13:30:00"  ← placeholder date, heure réelle
+  //     datePart: "2026-12-22T00:00:00"  ← VRAIE date du RDV (prioritaire)
+  //     timeSlot: "2026-12-22T14:20:00"  ← heure exacte du RDV (prioritaire)
+  //     scheduleLineId: "uuid"           ← clé de réservation (1 par place libre) }
+  //
+  // Chaque entrée = 1 place disponible. Grouper par (datePart, heure) → free = count.
+  interface RawEntry { date: string; time: string; id: string | undefined; raw: unknown }
+  const allEntries: RawEntry[] = (rawJson as Record<string, unknown>[]).flatMap(item => {
     let date = '';
     let time = '';
-    const fromTime = String(
-      item.fromTime ?? item.FromTime ?? item.startTime ?? item.StartTime ?? ''
-    );
 
-    if (fromTime) {
-      const dotNetMs = fromTime.match(/\/Date\((\d+)\)\//);
-      if (dotNetMs) {
-        const d = new Date(parseInt(dotNetMs[1], 10));
-        date = d.toISOString().slice(0, 10);
-        time = d.toISOString().slice(11, 16); // "09:30"
-      } else if (fromTime.includes('T')) {
-        // Format ISO : "2026-08-15T09:30:00"
-        const parts = fromTime.split('T');
-        date = parts[0];
-        time = (parts[1] ?? '').slice(0, 5);
-      } else {
-        date = fromTime;
+    // Priorité 1 : datePart → vraie date du RDV
+    const datePartRaw = String(item.datePart ?? item.DatePart ?? '');
+    if (datePartRaw.includes('T')) {
+      date = datePartRaw.split('T')[0] ?? '';       // "2026-12-22"
+    } else if (datePartRaw.match(/^\d{4}-\d{2}-\d{2}/)) {
+      date = datePartRaw.slice(0, 10);
+    }
+
+    // Priorité 2 : timeSlot → heure exacte du RDV
+    const timeSlotRaw = String(item.timeSlot ?? item.TimeSlot ?? '');
+    if (timeSlotRaw.includes('T')) {
+      time = (timeSlotRaw.split('T')[1] ?? '').slice(0, 5); // "14:20"
+    }
+
+    // Fallback si datePart/timeSlot absents : fromTime (peut contenir "1900-01-01T13:30:00")
+    if (!date || !time) {
+      const fromTime = String(item.fromTime ?? item.FromTime ?? item.startTime ?? item.StartTime ?? '');
+      if (fromTime) {
+        const dotNetMs = fromTime.match(/\/Date\((-?\d+)\)\//);
+        if (dotNetMs) {
+          const d = new Date(parseInt(dotNetMs[1], 10));
+          if (!date) date = d.toISOString().slice(0, 10);
+          if (!time) time = d.toISOString().slice(11, 16);
+        } else if (fromTime.includes('T')) {
+          const parts = fromTime.split('T');
+          const candidate = parts[0] ?? '';
+          // Ignorer "1900-01-01" (placeholder CEV) si on a déjà une vraie date
+          if (!date && candidate && candidate !== '1900-01-01') date = candidate;
+          if (!time) time = (parts[1] ?? '').slice(0, 5);
+        } else if (!date) {
+          date = fromTime;
+        }
       }
     }
 
@@ -397,15 +428,31 @@ function extractInlineSlotsFromHtml(html: string): ParsedSlot[] {
       item.id ?? item.Id
     ) as string | undefined;
 
-    if (!date && !id) return []; // filtre les slots sans données utilisables
-    return [{
-      date,
-      time,
-      id,
-      available: true,
-      raw: item,
-    }];
+    if (!date && !id) return [];
+    return [{ date, time, id, raw: item }];
   });
+
+  // Étape 2 : grouper par (date, time) pour compter les places libres.
+  // Chaque entrée du tableau = 1 place disponible pour ce créneau.
+  const groups = new Map<string, { entries: RawEntry[]; free: number }>();
+  for (const entry of allEntries) {
+    const key = `${entry.date}|${entry.time}`;
+    if (!groups.has(key)) groups.set(key, { entries: [], free: 0 });
+    const g = groups.get(key)!;
+    g.entries.push(entry);
+    g.free++;
+  }
+
+  // Étape 3 : retourner un slot par (date, time), free = nombre de places
+  // On garde le premier scheduleLineId du groupe pour le POST de réservation.
+  return [...groups.values()].map(g => ({
+    date:      g.entries[0].date,
+    time:      g.entries[0].time,
+    id:        g.entries[0].id,        // scheduleLineId du premier → utiliser pour le POST
+    available: true,
+    free:      g.free,
+    raw:       g.entries[0].raw,
+  }));
 }
 
 function parseAvailableSlots(raw: unknown): ParsedSlot[] {
@@ -810,13 +857,24 @@ export async function bookCevViaHttp(
     // officeId + visaCategories (non disponibles sans la page HTML) → HTTP 500.
     const inlineSlots = extractInlineSlotsFromHtml(html);
 
+    // Log console pour voir les créneaux et leur nombre de places libres
+    if (inlineSlots.length > 0) {
+      console.log(`[CEV-BOOKING] 📅 ${inlineSlots.length} créneau(x) trouvé(s) (source=${preloadedHtml ? 'preloaded' : 'fetched'}):`);
+      for (const s of inlineSlots) {
+        const bar = '█'.repeat(Math.min(s.free ?? 1, 10));
+        console.log(`[CEV-BOOKING]   ${s.date} ${s.time}  free=${s.free ?? 1}  ${bar}`);
+      }
+    } else {
+      console.log(`[CEV-BOOKING] ⚠️ Aucun créneau inline dans le HTML (source=${preloadedHtml ? 'preloaded' : 'fetched'})`);
+    }
+
     botLog({
       applicationId: clientId,
       step: 'cev_http_inline_slots',
       status: inlineSlots.length > 0 ? 'ok' : 'warn',
       data: {
         count: inlineSlots.length,
-        first3: inlineSlots.slice(0, 3).map(s => ({ date: s.date, time: s.time, id: s.id })),
+        slots: inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1, id: s.id })),
         source: preloadedHtml ? 'preloaded' : 'fetched',
       },
     });
@@ -890,13 +948,21 @@ export async function bookCevViaHttp(
       return { success: false, error: 'NO_SLOTS_IN_RESPONSE' };
     }
 
-    // ═══ ÉTAPE 4 : Sélectionner le premier slot disponible ═══
-    const slot = availableSlots[0];
+    // ═══ ÉTAPE 4 : Sélectionner le meilleur slot (le plus de places libres, min 3) ═══
+    // Trier par free décroissant — préférer les créneaux avec ≥3 places (moins de contention).
+    availableSlots.sort((a, b) => (b.free ?? 1) - (a.free ?? 1));
+    const slotsWithMinFree = availableSlots.filter(s => (s.free ?? 1) >= 3);
+    const slot = (slotsWithMinFree.length > 0 ? slotsWithMinFree : availableSlots)[0];
     botLog({
       applicationId: clientId,
       step: 'cev_http_slot_selected',
       status: 'ok',
-      data: { date: slot.date, time: slot.time, id: slot.id, rawSlot: slot.raw },
+      data: {
+        date: slot.date, time: slot.time, id: slot.id, free: slot.free ?? 1,
+        totalSlots: availableSlots.length,
+        slotsWithFree3Plus: slotsWithMinFree.length,
+        allSlots: availableSlots.slice(0, 10).map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+      },
     });
 
     // Sans antiforgery token → Playwright peut lire le vrai DOM
@@ -926,6 +992,7 @@ export async function bookCevViaHttp(
     );
 
     if (!submitResult.success) {
+      const isSlotTaken = submitResult.error === 'SLOT_TAKEN';
       botLog({
         applicationId: clientId,
         step: 'cev_http_submit_failed',
@@ -934,11 +1001,13 @@ export async function bookCevViaHttp(
           error: submitResult.error,
           finalUrl: submitResult.finalUrl,
           usedKnownEndpoint: !!knownConfig,
-          hint: 'Endpoints de booking HTTP non confirmés — fallback Playwright recommandé',
+          isSlotTaken,
+          hint: isSlotTaken
+            ? 'Slot déjà pris (race condition) — réessayer avec le prochain créneau'
+            : 'Endpoints de booking HTTP non confirmés — fallback Playwright recommandé',
         },
       });
-      // Fallback Playwright pour compléter la réservation via UI
-      return { success: false, error: submitResult.error, needsPlaywright: true };
+      return { success: false, error: submitResult.error, needsPlaywright: !isSlotTaken };
     }
 
     // ═══ ÉTAPE 6 : Extraire le code de confirmation ═══

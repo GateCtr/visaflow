@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-08-01T08:10:36.838Z",
+  "input": {
+    "email": "balemadi35@gmail.com",
+    "vowintRef": "VOWINT6321793",
+    "appId": "cev-e2e-1785571836838"
+  },
+  "steps": [
+    {
+      "t": "2026-08-01T08:10:36.838Z",
+      "step": "setup_start"
+    },
+    {
+      "t": "2026-08-01T08:11:01.040Z",
+      "step": "setup_done",
+      "success": false,
+      "error": "Captcha validation rejected by server",
+      "hasSessionCookie": false,
+      "hasIntegrationUrl": false,
+      "hasSelectSlotHtml": false,
+      "hasSelectSlotCookies": false
+    }
+  ],
+  "result": "setup_failed",
+  "endedAt": "2026-08-01T08:11:01.040Z"
+}
