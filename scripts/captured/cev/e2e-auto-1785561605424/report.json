@@ -1,0 +1,24 @@
+{
+  "startedAt": "2026-08-01T05:20:05.423Z",
+  "input": {
+    "email": "balemadi35@gmail.com",
+    "vowintRef": "VOWINT6321793",
+    "appId": "cev-e2e-1785561605424"
+  },
+  "steps": [
+    {
+      "t": "2026-08-01T05:20:05.424Z",
+      "step": "setup_start"
+    },
+    {
+      "t": "2026-08-01T05:20:18.502Z",
+      "step": "setup_done",
+      "success": false,
+      "error": "CEV_VOWINT_SESSION_FAILED",
+      "hasSessionCookie": false,
+      "hasIntegrationUrl": false
+    }
+  ],
+  "result": "setup_failed",
+  "endedAt": "2026-08-01T05:20:18.502Z"
+}
