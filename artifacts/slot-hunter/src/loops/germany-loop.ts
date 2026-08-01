@@ -6,6 +6,16 @@ import { runGermanyScan } from "../germanyPortal/rktermin-orchestrator.js";
 import { RKTERMIN_TIMING, KINSHASA_CATEGORIES } from "../germanyPortal/config.js";
 import { isTransientNetworkError, rotateRKProxy } from "../germanyPortal/rktermin-session.js";
 import type { RKTerminConfig, RKTerminDynamicField } from "../germanyPortal/types.js";
+import {
+  initGermanyRedis,
+  restoreCompletedJobsFromRedis,
+  restorePausedJobsFromRedis,
+  syncGermanyStateToRedis,
+  acquireGermanyScannerLock,
+  releaseGermanyScannerLock,
+  isGermanyRedisReady,
+  GERMANY_INSTANCE_ID,
+} from "../germany-redis-persistence.js";
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [germany-loop] [${level}] ${msg}`);
 
@@ -58,7 +68,24 @@ export async function startGermanyLoop(): Promise<void> {
   log("INFO", "   → Scan périodique des créneaux ambassade allemande");
   log("INFO", "   → Portail: service2.diplo.de/rktermin");
   log("INFO", "   → Captcha: image JPEG base64 (2Captcha/CapSolver)");
-  
+
+  // ─── Redis : init + restauration de l'état ──────────────────────────────
+  await initGermanyRedis();
+  if (isGermanyRedisReady()) {
+    log("INFO", `Redis ✅ — restauration état Germany (instance: ${GERMANY_INSTANCE_ID})`);
+    const [restoredCompleted, restoredPaused] = await Promise.all([
+      restoreCompletedJobsFromRedis(),
+      restorePausedJobsFromRedis(),
+    ]);
+    for (const id of restoredCompleted) completedJobs.add(id);
+    for (const [id, p] of restoredPaused) pausedJobs.set(id, p);
+    if (restoredCompleted.size > 0 || restoredPaused.size > 0) {
+      log("INFO", `  → ${restoredCompleted.size} job(s) complété(s), ${restoredPaused.size} job(s) en pause restaurés`);
+    }
+  } else {
+    log("WARN", "Redis non disponible — état Germany en mémoire seule (non persisté)");
+  }
+
   while (true) {
     try {
       await runGermanyCycle();
@@ -78,54 +105,66 @@ export async function startGermanyLoop(): Promise<void> {
 
 /** Exécute un cycle de scan pour tous les dossiers Germany actifs. */
 async function runGermanyCycle(): Promise<void> {
-  let jobs: HunterJob[];
-  try {
-    jobs = await getActiveJobs();
-  } catch (err) {
-    log("ERROR", `Échec récupération jobs: ${err}`);
+  // ─── Lock distribué : une seule instance scanne à la fois ─────────────────
+  const lockAcquired = await acquireGermanyScannerLock();
+  if (!lockAcquired) {
+    log("DEBUG", "Cycle skippé — une autre instance détient le lock Germany");
     return;
   }
-  
-  // Filtrer les jobs Allemagne actifs
-  const germanyJobs = jobs.filter(j =>
-    j.destination === "germany" &&
-    j.hunterConfig?.isActive === true &&
-    !completedJobs.has(j.id) &&
-    !isPaused(j.id)
-  );
-  
-  if (germanyJobs.length === 0) {
-    log("DEBUG", "Aucun dossier Germany actif");
-    return;
-  }
-  
-  log("INFO", `${germanyJobs.length} dossier(s) Germany actif(s)`);
-  
-  for (const job of germanyJobs) {
-    // Cooldown réseau : le portail était injoignable — on patiente avant de réessayer
-    const scheduledAt = nextAttemptAt.get(job.id) ?? 0;
-    if (Date.now() < scheduledAt) {
-      const waitS = Math.ceil((scheduledAt - Date.now()) / 1000);
-      log("DEBUG", `${job.applicantName}: portail injoignable — nouvel essai dans ${waitS}s`);
-      continue;
-    }
 
-    // Vérifier l'intervalle min entre scans
-    const lastScan = lastScanAt.get(job.id) ?? 0;
-    const elapsed = Date.now() - lastScan;
-    const minInterval = RKTERMIN_TIMING.pollingInterval.normal.min;
-    
-    if (elapsed < minInterval) {
-      const waitMin = Math.round((minInterval - elapsed) / 60_000);
-      log("DEBUG", `${job.applicantName}: prochain scan dans ${waitMin} min`);
-      continue;
+  try {
+    let jobs: HunterJob[];
+    try {
+      jobs = await getActiveJobs();
+    } catch (err) {
+      log("ERROR", `Échec récupération jobs: ${err}`);
+      return;
     }
     
-    await processGermanyJob(job);
-    lastScanAt.set(job.id, Date.now());
+    // Filtrer les jobs Allemagne actifs
+    const germanyJobs = jobs.filter(j =>
+      j.destination === "germany" &&
+      j.hunterConfig?.isActive === true &&
+      !completedJobs.has(j.id) &&
+      !isPaused(j.id)
+    );
     
-    // Pause entre les jobs pour éviter de surcharger le portail
-    await new Promise(r => setTimeout(r, randomBetween(5000, 15000)));
+    if (germanyJobs.length === 0) {
+      log("DEBUG", "Aucun dossier Germany actif");
+      return;
+    }
+    
+    log("INFO", `${germanyJobs.length} dossier(s) Germany actif(s)`);
+    
+    for (const job of germanyJobs) {
+      // Cooldown réseau : le portail était injoignable — on patiente avant de réessayer
+      const scheduledAt = nextAttemptAt.get(job.id) ?? 0;
+      if (Date.now() < scheduledAt) {
+        const waitS = Math.ceil((scheduledAt - Date.now()) / 1000);
+        log("DEBUG", `${job.applicantName}: portail injoignable — nouvel essai dans ${waitS}s`);
+        continue;
+      }
+
+      // Vérifier l'intervalle min entre scans
+      const lastScan = lastScanAt.get(job.id) ?? 0;
+      const elapsed = Date.now() - lastScan;
+      const minInterval = RKTERMIN_TIMING.pollingInterval.normal.min;
+      
+      if (elapsed < minInterval) {
+        const waitMin = Math.round((minInterval - elapsed) / 60_000);
+        log("DEBUG", `${job.applicantName}: prochain scan dans ${waitMin} min`);
+        continue;
+      }
+      
+      await processGermanyJob(job);
+      lastScanAt.set(job.id, Date.now());
+      
+      // Pause entre les jobs pour éviter de surcharger le portail
+      await new Promise(r => setTimeout(r, randomBetween(5000, 15000)));
+    }
+  } finally {
+    // Toujours libérer le lock, même en cas d'exception
+    await releaseGermanyScannerLock();
   }
 }
 
@@ -153,6 +192,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
     }).catch(() => {});
     // Pause définitive : seule une correction côté admin peut débloquer ce dossier
     pauseJob(job.id, "configuration invalide", Infinity);
+    syncGermanyStateToRedis(completedJobs, pausedJobs);
     botLog({
       applicationId: job.id,
       step: "germany_config_invalid",
@@ -181,6 +221,7 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           await botLog({ applicationId: job.id, step: `🇩🇪 RDV Allemagne confirmé! N° ${result.booking.confirmationNumber} — ${result.booking.bookedDate} ${result.booking.bookedTime}`, status: "ok" });
           completedJobs.add(job.id);
           resetErrorState(job.id);
+          syncGermanyStateToRedis(completedJobs, pausedJobs);
         }
         break;
       
@@ -279,6 +320,7 @@ async function handleScanError(job: HunterJob, errMsg: string, source: "scan" | 
         status: "warn",
         data: { networkErrors: nb, resumeInMin, reason: "network" }
       });
+      syncGermanyStateToRedis(completedJobs, pausedJobs);
     }
     return;
   }
@@ -313,6 +355,7 @@ async function handleScanError(job: HunterJob, errMsg: string, source: "scan" | 
       status: "warn",
       data: { consecutiveErrors: nb, resumeInMin, reason: "business" }
     });
+    syncGermanyStateToRedis(completedJobs, pausedJobs);
   }
 }
 
