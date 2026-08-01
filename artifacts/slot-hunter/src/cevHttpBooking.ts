@@ -1011,6 +1011,8 @@ export async function bookCevSelectedSlotViaHttp(
   selected: SelectedSlotInput,
   siphoned?: SiphonedCookies,
   sessionUa?: string,
+  /** Cookie string complet du setup (contient __RequestVerificationToken anti-CSRF ASP.NET) */
+  selectSlotCookies?: string,
 ): Promise<HttpBookingResult> {
   const ua = siphoned?.userAgent ?? sessionUa ?? getCevSessionUa();
 
