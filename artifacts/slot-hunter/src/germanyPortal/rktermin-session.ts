@@ -195,7 +195,7 @@ async function rkFetchHtml(
   init: RequestInit,
   label: string,
   retryAfterSend: boolean,
-): Promise<{ html: string; status: number; headers: Headers }> {
+): Promise<{ html: string; status: number; headers: Headers; finalUrl: string }> {
   const { maxAttempts } = RKTERMIN_TIMING.networkRetry;
   let lastErr: unknown;
 
@@ -222,7 +222,7 @@ async function rkFetchHtml(
       }
 
       if (attempt > 1) log("INFO", `${label}: OK après ${attempt} tentative(s)`);
-      return { html, status: res.status, headers: res.headers };
+      return { html, status: res.status, headers: res.headers, finalUrl: res.url ?? url };
     } catch (err) {
       clearTimeout(timeout);
       lastErr = err;
@@ -328,7 +328,7 @@ export async function rkPost(
   endpoint: string,
   formData: Record<string, string>,
   options?: { referer?: string },
-): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
+): Promise<{ html: string; status: number; finalUrl: string; newSession?: Partial<RKTerminSession> }> {
   const url = `${RKTERMIN_BASE_URL}/${endpoint}`;
   // Le Referer doit être la page qui contenait le formulaire (showForm), pas l'action POST.
   // Un Referer incohérent déclenche "An error occurred… address changed manually".
@@ -341,7 +341,7 @@ export async function rkPost(
   
   try {
     // POST non idempotent → retry uniquement si la connexion n'a jamais abouti
-    const { html, status, headers } = await rkFetchHtml(
+    const { html, status, headers, finalUrl } = await rkFetchHtml(
       url,
       {
         method: "POST",
@@ -366,7 +366,7 @@ export async function rkPost(
     if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
     if (cookies.keks) newSession.keks = cookies.keks;
 
-    return { html, status, newSession: Object.keys(newSession).length ? newSession : undefined };
+    return { html, status, finalUrl, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
     throw new Error(`rkPost ${endpoint} failed: ${describeNetworkError(err)}`, { cause: err });
   }

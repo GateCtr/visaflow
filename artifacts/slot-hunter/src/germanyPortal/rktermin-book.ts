@@ -82,58 +82,78 @@ export async function bookSlot(
     
     // 4. Construire les données du formulaire
     await randomDelay(RKTERMIN_TIMING.postCaptchaPauseMs.min, RKTERMIN_TIMING.postCaptchaPauseMs.max);
-    
-    // Partir des champs hidden extraits du formulaire (tokens anti-CSRF, etc.)
-    // puis écraser/compléter avec nos valeurs — l'ordre garantit que nos champs
-    // ont priorité sur les defaults du serveur mais que les tokens restent présents.
+
+    // Partir des champs hidden extraits du formulaire (definitionId, index, locationCode…).
+    // Ces valeurs viennent du serveur — NE PAS les écraser avec les valeurs de la config.
+    // Le serveur assigne ses propres definitionId par realm/session (ex: 11598/11599 pour
+    // realmId=1276, 14389/14390 pour realmId=731) — écraser avec des IDs incorrects
+    // déclenche "An error occurred… address changed manually" (session_error).
     const formData: Record<string, string> = {
       ...hiddenFields,
-      lastname: config.applicantLastname,
-      firstname: config.applicantFirstname,
-      email: config.applicantEmail,
+      lastname:    config.applicantLastname,
+      firstname:   config.applicantFirstname,
+      email:       config.applicantEmail,
       emailrepeat: config.applicantEmail,
       captchaText: captchaResult.text,
-      locationCode: config.locationCode,
-      realmId: String(config.realmId),
-      categoryId: String(config.categoryId),
+      locationCode:    config.locationCode,
+      realmId:         String(config.realmId),
+      categoryId:      String(config.categoryId),
       openingPeriodId: slot.openingPeriodId,
-      date: slot.date,
+      date:    slot.date,
       dateStr: slot.date,
       "action:appointment_addAppointment": "Submit",
     };
-    
-    // Ajouter les champs dynamiques
+
+    // Champs dynamiques : ajouter UNIQUEMENT le contenu (nationalité, n° passeport…).
+    // Le definitionId et l'index sont DÉJÀ présents dans hiddenFields (extraits du formulaire)
+    // et doivent rester intacts — ne pas les écraser avec les valeurs de la config.
     for (const field of config.dynamicFields) {
       formData[`fields[${field.index}].content`] = field.content;
-      formData[`fields[${field.index}].definitionId`] = String(field.definitionId);
-      formData[`fields[${field.index}].index`] = String(field.index);
     }
-    
+
     log("DEBUG", `Soumission booking: ${config.applicantLastname} ${config.applicantFirstname} → ${slot.date} ${slot.timeFrom}`);
     log("DEBUG", `POST body keys: ${Object.keys(formData).join(", ")}`);
     log("DEBUG", `POST body values: ${JSON.stringify(formData)}`);
 
-    // Le Referer doit être l'URL du formulaire (appointment_showForm.do?...) pour que
-    // le serveur accepte la soumission — pas l'URL de l'action POST elle-même.
+    // Le formulaire showForm POSTe sur lui-même (action="/rktermin/extern/appointment_showForm.do").
+    // Spring WebWork invoque la méthode addAppointment via le bouton "action:appointment_addAppointment".
+    // POSTer sur appointment_addAppointment.do (endpoint direct) était incorrect et causait le session_error.
     const formReferer = buildUrl(RKTERMIN_ENDPOINTS.appointmentShowForm, {
-      locationCode: config.locationCode,
-      realmId: config.realmId,
-      categoryId: config.categoryId,
-      dateStr: slot.date,
+      locationCode:    config.locationCode,
+      realmId:         config.realmId,
+      categoryId:      config.categoryId,
+      dateStr:         slot.date,
       openingPeriodId: slot.openingPeriodId,
     });
-    
-    // 5. POST appointment_addAppointment
-    const { html: resultHtml, newSession: ns2 } = await rkPost(
+
+    // 5. POST vers appointment_showForm.do (action du formulaire HTML)
+    const { html: resultHtml, finalUrl, newSession: ns2 } = await rkPost(
       session,
-      RKTERMIN_ENDPOINTS.appointmentAddAppointment,
+      RKTERMIN_ENDPOINTS.appointmentShowForm,
       formData,
       { referer: formReferer },
     );
     
     if (ns2) session = updateSession(session, ns2);
-    
+
     // 6. Analyser la réponse
+    // Succès détecté par redirect vers appointment_thanx.do (confirmation page).
+    // La page thanx.do a un contenu principal rendu par JavaScript — le HTML statique
+    // est vide, donc les patterns texte ne matchent pas. On se fie à l'URL finale.
+    if (finalUrl.includes("appointment_thanx")) {
+      log("INFO", `✅ RÉSERVATION RÉUSSIE via redirect → ${finalUrl}`);
+      return {
+        session,
+        result: {
+          status: "booked",
+          confirmationNumber: "voir email",   // La page thanx est JS-only — numéro dans l'email de confirmation
+          bookedDate: slot.date,
+          bookedTime: `${slot.timeFrom} — ${slot.timeTo}`,
+          bookedLocation: extractLocation(resultHtml),
+        },
+      };
+    }
+
     const bookingResult = parseBookingResponse(resultHtml, slot);
     
     if (bookingResult.status === "booked") {
