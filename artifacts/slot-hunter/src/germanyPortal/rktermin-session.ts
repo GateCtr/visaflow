@@ -3,62 +3,12 @@
 
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
-import { ProxyAgent } from "undici";
 
 declare const process: { env: Record<string, string | undefined> };
 
-/**
- * Construit une URL SOAX sticky pour Germany.
- *
- * service2.diplo.de bloque les plages IP datacenter (Railway, AWS, Decodo ISP, etc.) —
- * le symptôme est "fetch failed" en ~1-3s (connexion reset/refusée, pas un timeout).
- * SOAX résidentiel contourne ce blocage.
- *
- * Format URL SOAX : http://package-XXXXX:PASSWORD@proxy.soax.com:5000
- * On ajoute "-sessionid-XXXX" pour une IP sticky de 10min (évite les rotations mid-session).
- * Pas de contrainte de pays (-country-de serait plus "naturel" mais réduit le pool).
- */
-function makeSoaxGermanyUrl(baseUrl: string): string {
-  try {
-    const u = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
-    const decodedUser = decodeURIComponent(u.username);
-    const baseUser = decodedUser.replace(/-sessionid-[a-z0-9]+$/i, "");
-    const sessionId = Math.random().toString(36).slice(2, 10);
-    u.username = encodeURIComponent(`${baseUser}-sessionid-${sessionId}`);
-    return u.toString();
-  } catch {
-    return baseUrl;
-  }
-}
-
-/**
- * Crée un ProxyAgent pour Germany.
- *
- * Ordre de priorité :
- *  1. GERMANY_PROXY_URL  — URL proxy dédiée Germany (résidentiel recommandé)
- *  2. SOAX_PROXY_URL     — Fallback SOAX résidentiel (sticky session, sans pays fixé)
- *  3. undefined          — Direct (OK en local/Replit, bloqué sur Railway/cloud)
- *
- * DECODO_PROXY_URL est réservé à l'Espagne : ses IPs ISP sont aussi bloquées par diplo.de.
- */
-function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
-  const germanyUrl = process.env["GERMANY_PROXY_URL"];
-  if (germanyUrl) {
-    try {
-      return { dispatcher: new ProxyAgent(germanyUrl), label: "GERMANY_PROXY_URL" };
-    } catch { /* fall through */ }
-  }
-
-  const soaxBase = process.env["SOAX_PROXY_URL"];
-  if (soaxBase) {
-    try {
-      const stickyUrl = makeSoaxGermanyUrl(soaxBase);
-      return { dispatcher: new ProxyAgent(stickyUrl), label: "SOAX résidentiel (sticky)" };
-    } catch { /* fall through */ }
-  }
-
-  return undefined;
-}
+// ─── Accès direct (pas de proxy) ─────────────────────────────────────────────
+// service2.diplo.de est accessible directement depuis Replit.
+// Aucun proxy n'est utilisé pour le portail Germany RK-Termin.
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [rktermin] [${level}] ${msg}`);
 
@@ -118,7 +68,6 @@ export async function rkGet(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
   
-  const proxy = getProxyDispatcher();
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -129,8 +78,6 @@ export async function rkGet(
       },
       redirect: "follow",
       signal: controller.signal,
-      // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -165,8 +112,7 @@ export async function rkPost(
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  const proxy = getProxyDispatcher();
-  
+
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -181,8 +127,6 @@ export async function rkPost(
       body: body.toString(),
       redirect: "follow",
       signal: controller.signal,
-      // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -215,15 +159,10 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
   
   log("DEBUG", `Initialisation session: ${config.locationCode} realm=${config.realmId} cat=${config.categoryId}`);
   
+  log("DEBUG", "Accès direct service2.diplo.de");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  const proxy = getProxyDispatcher();
-  if (proxy) {
-    log("DEBUG", `Via proxy: ${proxy.label}`);
-  } else {
-    log("DEBUG", "Direct (pas de proxy configuré — risque de blocage IP Railway/cloud)");
-  }
-  
+
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -233,8 +172,6 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
       },
       redirect: "follow",
       signal: controller.signal,
-      // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -261,10 +198,7 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
     // les blocages IP (service2.diplo.de bloque les plages IP datacenter Railway/cloud).
     const cause = (err as any)?.cause;
     const causeStr = cause ? ` (cause: ${cause})` : "";
-    const hint = !proxy
-      ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"
-      : "";
-    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}${causeStr}${hint}`);
+    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}${causeStr}`);
   }
 }
 
