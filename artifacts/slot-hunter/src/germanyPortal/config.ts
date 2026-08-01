@@ -101,8 +101,11 @@ export const RKTERMIN_TIMING = {
     baseDelayMs: 1_500,
     maxDelayMs: 12_000,
   },
-  /** Durée de vie max d'une session avant renouvellement */
-  sessionMaxAgeMs: 10 * 60_000, // 10 minutes
+  /** Durée de vie max d'une session avant renouvellement.
+   * diplo.de expire les sessions après ~2-3 min d'inactivité (empirique).
+   * On expire en local à 100s : assez pour réutiliser au cycle suivant (~60s),
+   * assez court pour ne pas tenter un round-trip sur une session déjà morte. */
+  sessionMaxAgeMs: 100_000, // 100 secondes (~1min40)
   /** Délai entre les cycles de polling */
   pollingInterval: {
     normal: { min: 60_000, max: 60_000 },                 // 1 min
