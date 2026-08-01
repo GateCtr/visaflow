@@ -113,8 +113,20 @@ async function main(): Promise<void> {
         setup.sessionCookie,
         appId,
         { date: target.date, time: target.time },
+        undefined,          // siphoned
+        undefined,          // sessionUa
+        setup.selectSlotCookies,
       )
-    : await bookCevViaHttp(setup.integrationUrl, setup.sessionCookie, appId);
+    : await bookCevViaHttp(
+        setup.integrationUrl,
+        setup.sessionCookie,
+        appId,
+        undefined,          // siphoned
+        undefined,          // sessionUa
+        setup.selectSlotHtml,
+        setup.selectSlotUrl,
+        setup.selectSlotCookies,
+      );
 
   pushStep("booking_done", booking as unknown as Record<string, unknown>);
 

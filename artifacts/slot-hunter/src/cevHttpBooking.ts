@@ -609,6 +609,11 @@ async function submitSlotSelection(
         },
       });
 
+      // Slot déjà pris (race condition) — Playwright ne peut rien y faire non plus
+      if (finalUrl.includes('TimeSlotNoLongerAvailable') || finalUrl.includes('NoLongerAvailable')) {
+        return { success: false, html, finalUrl, error: 'SLOT_TAKEN', needsPlaywright: false };
+      }
+
       // Succès si on arrive sur une page de confirmation (pas d'erreur, pas de redirect vers captcha)
       if (
         res.ok &&
@@ -1086,6 +1091,7 @@ export async function bookCevSelectedSlotViaHttp(
       clientId,
       siphoned,
       knownConfig?.submitEndpoint,
+      selectSlotCookies,
     );
 
     if (!submitResult.success) {
