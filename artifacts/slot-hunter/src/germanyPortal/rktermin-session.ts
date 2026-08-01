@@ -284,11 +284,15 @@ export async function rkGet(
   session: RKTerminSession,
   endpoint: string,
   params?: Record<string, string | number>,
+  options?: { referer?: string },
 ): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
   const url = buildUrl(endpoint, params);
 
   try {
     // GET idempotent → retry autorisé sur toute erreur réseau transitoire
+    const extraHeaders: Record<string, string> = {};
+    if (options?.referer) extraHeaders["Referer"] = options.referer;
+
     const { html, status, headers } = await rkFetchHtml(
       url,
       {
@@ -297,6 +301,7 @@ export async function rkGet(
           ...RKTERMIN_HEADERS,
           "User-Agent": randomUA(),
           "Cookie": buildCookieHeader(session),
+          ...extraHeaders,
         },
         redirect: "follow",
       },

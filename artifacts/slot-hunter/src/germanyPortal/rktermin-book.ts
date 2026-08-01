@@ -18,6 +18,14 @@ export async function bookSlot(
   slot: RKTerminTimeSlot,
 ): Promise<{ session: RKTerminSession; result: RKTerminBookingResult }> {
   log("INFO", `Tentative de réservation: ${slot.date} ${slot.timeFrom}-${slot.timeTo} (openingPeriodId=${slot.openingPeriodId})`);
+
+  // URL de la page jour (Referer attendu par le serveur pour la page du formulaire)
+  const dayPageUrl = buildUrl(RKTERMIN_ENDPOINTS.appointmentShowDay, {
+    locationCode: config.locationCode,
+    realmId: config.realmId,
+    categoryId: config.categoryId,
+    dateStr: slot.date,
+  });
   
   // ── Fonction interne : fetch le formulaire et en extrait hidden + captcha ──
   async function fetchForm() {
@@ -31,6 +39,9 @@ export async function bookSlot(
         dateStr: slot.date,
         openingPeriodId: slot.openingPeriodId,
       },
+      // Le navigateur envoie le Referer de la page jour → le serveur vérifie
+      // que la navigation est cohérente (pas une saisie manuelle d'URL).
+      { referer: dayPageUrl },
     );
     if (ns) session = updateSession(session, ns);
     return html;

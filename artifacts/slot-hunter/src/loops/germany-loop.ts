@@ -5,7 +5,7 @@ import { getActiveJobs, sendHeartbeat, reportSlotFound, botLog, type HunterJob }
 import { runGermanyScan } from "../germanyPortal/rktermin-orchestrator.js";
 import { RKTERMIN_TIMING, KINSHASA_CATEGORIES } from "../germanyPortal/config.js";
 import { isTransientNetworkError, rotateRKProxy } from "../germanyPortal/rktermin-session.js";
-import type { RKTerminConfig, RKTerminDynamicField } from "../germanyPortal/types.js";
+import type { RKTerminConfig, RKTerminDynamicField, RKTerminSession } from "../germanyPortal/types.js";
 import {
   initGermanyRedis,
   restoreCompletedJobsFromRedis,
@@ -31,6 +31,12 @@ const consecutiveErrors = new Map<string, number>();
 const networkErrors = new Map<string, number>();
 /** Cooldown réseau : prochain essai autorisé par job. */
 const nextAttemptAt = new Map<string, number>();
+/**
+ * Cache de session RK-Termin par jobId.
+ * Une session valide (JSESSIONID + captcha mois résolu) dure 10 min côté serveur.
+ * On la réutilise pour éviter de payer un captcha à chaque cycle d'1 min.
+ */
+const sessionCache = new Map<string, RKTerminSession>();
 
 /** Met un dossier en pause (temporaire par défaut, reprise automatique ensuite). */
 function pauseJob(jobId: string, reason: string, durationMs: number): void {
@@ -203,8 +209,18 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
   }
   
   try {
-    const result = await runGermanyScan(config, true);
-    
+    // Récupérer la session cachée pour ce dossier (évite un captcha si < 10 min)
+    const cachedSession = sessionCache.get(job.id);
+    const result = await runGermanyScan(config, true, cachedSession);
+
+    // Mettre à jour (ou invalider) le cache de session
+    if (result.updatedSession) {
+      sessionCache.set(job.id, result.updatedSession);
+    } else {
+      // Pas de session retournée → booking réussi, erreur session, ou crash → on repart à zéro
+      sessionCache.delete(job.id);
+    }
+
     switch (result.status) {
       case "slot_found":
         if (result.booking?.status === "booked") {
@@ -221,12 +237,13 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           await botLog({ applicationId: job.id, step: `🇩🇪 RDV Allemagne confirmé! N° ${result.booking.confirmationNumber} — ${result.booking.bookedDate} ${result.booking.bookedTime}`, status: "ok" });
           completedJobs.add(job.id);
           resetErrorState(job.id);
+          sessionCache.delete(job.id); // job terminé — plus besoin de la session
           syncGermanyStateToRedis(completedJobs, pausedJobs);
         }
         break;
       
       case "not_found":
-        log("INFO", `Pas de créneau pour ${job.applicantName} (${result.datesScanned} dates scannées, ${result.captchasSolved} captchas)`);
+        log("INFO", `Pas de créneau pour ${job.applicantName} (${result.datesScanned} dates scannées, ${result.captchasSolved} captchas${cachedSession ? ", session réutilisée" : ""})`);
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",
