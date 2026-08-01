@@ -127,6 +127,8 @@ export interface CevHttpSetupResult {
   selectSlotUrl?: string;
   /** HTML complet de la page SelectSlot capturé lors du setup — évite une 2ème requête (URL à usage unique) */
   selectSlotHtml?: string;
+  /** Cookie string complet après la chaîne de redirects — inclut __RequestVerificationToken (anti-CSRF ASP.NET) */
+  selectSlotCookies?: string;
   error?: string;
 }
 
@@ -1284,6 +1286,9 @@ export async function setupCevSessionHttp(
         // puisse opérer directement sans refaire une requête (qui échouerait avec SESSION_EXPIRED_OR_CAPTCHA).
         selectSlotUrl: finalUrl,
         selectSlotHtml: probeBodyRaw || undefined,
+        // fullCevCookie contient le __RequestVerificationToken cookie (anti-CSRF ASP.NET).
+        // Sans lui, le POST SelectSlot retourne HTTP 500 "anti-forgery cookie not present".
+        selectSlotCookies: fullCevCookie,
       };
     }
 
@@ -1439,62 +1444,24 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
   if (ANTICAPTCHA_KEY) {
     botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
     try {
-      let task;
-      if (proxyConfig) {
-        task = {
-          type: "HCaptchaTask",
-          websiteURL: pageUrl,
-          websiteKey: HCAPTCHA_SITEKEY,
-          ...proxyConfig,
-          userAgent: userAgent,
-        };
-      } else {
-        task = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
-      }
-      
-      console.log("[CEV-SETUP] Sending task to Anti-Captcha:", JSON.stringify(task, null, 2));
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { type: task.type, useProxy: !!proxyConfig, proxyAddress: proxyConfig?.proxyAddress, proxyLoginPrefix: proxyConfig?.proxyLogin ? proxyConfig.proxyLogin.slice(0, 40) + "..." : undefined } });
-      
-      const createRes = await fetch("https://api.anti-captcha.com/createTask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientKey: ANTICAPTCHA_KEY,
-          task: task,
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      let createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
-      console.log("[CEV-SETUP] Anti-Captcha createTask response:", createData);
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_create", status: createData.errorId === 0 ? "ok" : "fail", data: { errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode, errorDescription: createData.errorDescription } });
-      
-      // If proxy task failed, fallback to proxyless mode
-      if ((createData.errorId !== 0 || !createData.taskId) && proxyConfig) {
-        console.log("[CEV-SETUP] Proxy-based task failed, falling back to proxyless mode");
-        errors.push(`anticaptcha_create_error_with_proxy: ${createData.errorCode} - ${createData.errorDescription}`);
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback", status: "ok", data: { reason: "proxy_task_failed", originalError: createData.errorCode, originalErrorDescription: createData.errorDescription } });
-        
-        const fallbackTask = { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
-        console.log("[CEV-SETUP] Sending fallback task to Anti-Captcha:", JSON.stringify(fallbackTask, null, 2));
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback_task", status: "ok", data: { type: fallbackTask.type } });
-        
-        const fallbackCreateRes = await fetch("https://api.anti-captcha.com/createTask", {
+      // ── Helper : créer + poller une tâche Anti-Captcha ──────────────────────
+      // Renvoie le token ou null (en cas de timeout / erreur).
+      // Lance Error("PROXY_CONNECT_REFUSED_NEEDS_ROTATION") si le proxy est coupé.
+      const createAndPoll = async (task: Record<string, unknown>, label: string): Promise<string | null> => {
+        console.log(`[CEV-SETUP] Sending task to Anti-Captcha (${label}):`, JSON.stringify(task, null, 2));
+        const createRes = await fetch("https://api.anti-captcha.com/createTask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientKey: ANTICAPTCHA_KEY,
-            task: fallbackTask,
-          }),
+          body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, task }),
           signal: AbortSignal.timeout(30_000),
         });
-        createData = await fallbackCreateRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
-        console.log("[CEV-SETUP] Anti-Captcha fallback createTask response:", createData);
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_fallback_create", status: createData.errorId === 0 ? "ok" : "fail", data: { errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode, errorDescription: createData.errorDescription } });
-      }
-      
-      if (createData.errorId === 0 && createData.taskId) {
-        // Polling de maximum 180 secondes (36 tentatives de 5s) car hCaptcha est lent
-        let solved = false;
+        const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
+        console.log(`[CEV-SETUP] Anti-Captcha createTask (${label}):`, createData);
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_create", status: createData.errorId === 0 ? "ok" : "fail", data: { label, errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode } });
+
+        if (createData.errorId !== 0 || !createData.taskId) return null;
+
+        // Polling max 180s (36 × 5s)
         for (let i = 0; i < 36; i++) {
           await new Promise(r => setTimeout(r, 5000));
           let pollData: any;
@@ -1503,53 +1470,93 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
-              signal: AbortSignal.timeout(10000),
+              signal: AbortSignal.timeout(10_000),
             });
             pollData = await pollRes.json();
           } catch (fetchErr) {
-            console.warn(`[CEV-SETUP] Anti-Captcha poll connection error: ${fetchErr}`);
-            continue; // Réessayer au prochain tick
+            console.warn(`[CEV-SETUP] Anti-Captcha poll error (${label}): ${fetchErr}`);
+            continue;
           }
-          
+
           if (pollData.status === "ready") {
             const token = pollData.solution?.gRecaptchaResponse ?? pollData.solution?.token ?? null;
             if (token) {
-              solved = true;
-              botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { service: "anticaptcha", seconds: (i + 1) * 5 } });
+              botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { label, seconds: (i + 1) * 5 } });
               return token;
             }
-            errors.push("anticaptcha_ready_but_no_token");
-            break;
+            return null; // ready but no token
           }
           if (pollData.errorId !== 0) {
-            errors.push(`anticaptcha_poll_error: ${pollData.errorCode} - ${pollData.errorDescription}`);
-            
-            // 🔥 DÉTECTION RAPIDE ERREUR PROXY - ROTATION IMMÉDIATE REQUISE
-            if (pollData.errorCode?.includes("PROXY_CONNECT_REFUSED") || 
+            if (pollData.errorCode?.includes("PROXY_CONNECT_REFUSED") ||
                 pollData.errorDescription?.includes("Could not connect to proxy")) {
-              botLog({ 
-                applicationId: clientId, 
-                step: "cev_http_hcaptcha_proxy_refused", 
-                status: "fail", 
-                data: { 
-                  errorCode: pollData.errorCode,
-                  errorDescription: pollData.errorDescription,
-                  recommendation: "ROTATE PROXY IP IMMEDIATELY - RESTART DOSSIER LOOP"
-                } 
-              });
-              // Lancer une exception spéciale pour indiquer qu'il faut rotater l'IP
+              botLog({ applicationId: clientId, step: "cev_http_hcaptcha_proxy_refused", status: "fail", data: { errorCode: pollData.errorCode, errorDescription: pollData.errorDescription, recommendation: "ROTATE PROXY IP IMMEDIATELY" } });
               throw new Error("PROXY_CONNECT_REFUSED_NEEDS_ROTATION");
             }
-            break;
+            errors.push(`anticaptcha_poll_error(${label}): ${pollData.errorCode}`);
+            return null;
           }
         }
-        if (!solved) {
-          errors.push("anticaptcha_timeout_180s");
+        errors.push(`anticaptcha_timeout_180s(${label})`);
+        return null;
+      };
+
+      // ── Construire les tâches à tester ───────────────────────────────────────
+      // Priorité : si proxy disponible → HCaptchaTask ; sinon Proxyless.
+      // On lance aussi HCaptchaEnterpriseTaskProxyless en parallèle (CEV peut utiliser
+      // Enterprise hCaptcha depuis mi-2026 — type différent, workers différents).
+      const baseTask = proxyConfig
+        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent }
+        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+
+      const enterpriseTask = { type: "HCaptchaEnterpriseTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { baseType: baseTask.type, parallelEnterprise: true } });
+
+      // Race : retourner le premier token valide (régulier OU enterprise).
+      // La promesse ne se résout avec null que quand LES DEUX tâches ont terminé sans token.
+      let raceWon = false;
+      let settledCount = 0;
+      const taskCount = 2;
+      let raceResolve!: (v: string | null) => void;
+      const racePromise = new Promise<string | null>(resolve => { raceResolve = resolve; });
+
+      const runRace = async (task: Record<string, unknown>, label: string) => {
+        try {
+          const token = await createAndPoll(task, label);
+          if (token && !raceWon) {
+            raceWon = true;
+            raceResolve(token);
+          }
+        } catch (e) {
+          // Propager PROXY_CONNECT_REFUSED immédiatement
+          if (String(e).includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
+            raceResolve(null);
+            throw e;
+          }
+        } finally {
+          settledCount++;
+          // Résoudre avec null seulement quand TOUTES les tâches sont terminées
+          if (settledCount === taskCount && !raceWon) {
+            raceResolve(null);
+          }
         }
-      } else {
-        errors.push(`anticaptcha_create_error: ${createData.errorCode} - ${createData.errorDescription}`);
+      };
+
+      // Démarrer les deux en parallèle — runRace ne se résout que sur succès ou quand les deux ont fini
+      const p1 = runRace(baseTask, proxyConfig ? "HCaptchaTask" : "HCaptchaTaskProxyless");
+      const p2 = runRace(enterpriseTask, "HCaptchaEnterpriseTaskProxyless");
+
+      // racePromise se résout quand un token est trouvé ou que les deux tâches ont échoué
+      const [token] = await Promise.all([racePromise, p1.catch(() => {}), p2.catch(() => {})]);
+
+      if (token) {
+        return token;
+      }
+      if (!errors.some(e => e.includes("anticaptcha"))) {
+        errors.push("anticaptcha_both_tasks_failed");
       }
     } catch (e) {
+      if (String(e).includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) throw e;
       errors.push(`anticaptcha_exception: ${String(e)}`);
     }
   } else {

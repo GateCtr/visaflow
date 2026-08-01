@@ -502,6 +502,8 @@ async function submitSlotSelection(
   clientId: string,
   siphoned?: SiphonedCookies,
   preferredEndpoint?: string, // endpoint confirmé depuis la config auto-découverte (essayé en premier)
+  /** Cookie string complet du setup (contient __RequestVerificationToken anti-CSRF ASP.NET) */
+  selectSlotCookies?: string,
 ): Promise<{ success: boolean; html: string; finalUrl: string; confirmedEndpoint?: string; error?: string }> {
   // Si on a un endpoint confirmé → le tester en premier, avant les guesses
   const candidates = [
@@ -565,8 +567,10 @@ async function submitSlotSelection(
         // Form POST (navigate → page confirmation) — ordre exact Chrome 148 isFormPost branch.
         // Cache-Control: max-age=0 ✓, Sec-Fetch-Mode: navigate ✓, Sec-Fetch-Dest: document ✓
         // X-Requested-With ABSENT — un vrai browser ne l'envoie pas sur un form navigate.
+        // IMPORTANT : utiliser selectSlotCookies si disponible (contient __RequestVerificationToken anti-CSRF).
+        // Sans ce cookie, ASP.NET MVC retourne HTTP 500 "anti-forgery cookie not present".
         headers: getCevBrowserHeaders({
-          cookie: buildCevCookieStr(sessionCookie, siphoned),
+          cookie: selectSlotCookies ?? buildCevCookieStr(sessionCookie, siphoned),
           userAgent: siphoned?.userAgent ?? ua,
           contentType: 'application/x-www-form-urlencoded',
           origin: CEV_BASE,
@@ -583,6 +587,12 @@ async function submitSlotSelection(
       const finalUrl = res.url;
       const responseHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => { responseHeaders[k] = v; });
+
+      // Log console pour diagnostic (important pour identifier le bon endpoint)
+      console.log(`[CEV-BOOKING] Submit ${endpoint} → HTTP ${res.status} | finalUrl=${finalUrl.slice(0, 100)}`);
+      if (!res.ok) {
+        console.log(`[CEV-BOOKING] Response preview: ${html.slice(0, 400).replace(/\s+/g, ' ')}`);
+      }
 
       botLog({
         applicationId: clientId,
@@ -610,10 +620,13 @@ async function submitSlotSelection(
         return { success: true, html, finalUrl, confirmedEndpoint: endpoint };
       }
 
-      // Si on reçoit un 404 sur cet endpoint, essayer le suivant
+      // 404/405 → mauvais endpoint, essayer le suivant
       if (res.status === 404 || res.status === 405) continue;
 
-      // Pour les autres erreurs, retourner directement (pas d'intérêt de continuer avec le même body)
+      // 500 → peut signifier champs incorrects ou mauvais endpoint — essayer les autres aussi
+      if (res.status === 500) continue;
+
+      // Autres erreurs (401, 403, etc.) → retourner directement
       return { success: false, html, finalUrl, error: `HTTP ${res.status} sur ${endpoint}` };
     } catch (err) {
       botLog({
@@ -667,6 +680,12 @@ export async function bookCevViaHttp(
   preloadedHtml?: string,
   /** URL finale de la page SelectSlot capturée lors du setup */
   preloadedSelectSlotUrl?: string,
+  /**
+   * Cookie string complet après la chaîne de redirects du setup.
+   * Doit inclure __RequestVerificationToken (anti-CSRF ASP.NET) capturé lors du GET SelectSlot.
+   * Sans lui, le POST /Integration/VOW/SelectSlot retourne HTTP 500 "anti-forgery cookie not present".
+   */
+  selectSlotCookies?: string,
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
@@ -898,6 +917,7 @@ export async function bookCevViaHttp(
       clientId,
       siphoned,
       knownConfig?.submitEndpoint,    // preferredEndpoint — essayé en premier si connu
+      selectSlotCookies,              // cookie complet (inclut __RequestVerificationToken anti-CSRF)
     );
 
     if (!submitResult.success) {
