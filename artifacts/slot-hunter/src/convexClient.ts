@@ -445,6 +445,40 @@ export async function recordCevSessionCheck(
   }
 }
 
+/**
+ * Tente de "claimer" un créneau côté Convex afin de limiter les tentatives concurrentes.
+ * - slotKey: identifiant unique (ex: "CEV:{center}:{category}:{YYYY-MM-DD}:{HH:mm}")
+ * - maxClaims: plafond autorisé (typiquement free-1)
+ * - ttlSec: durée de validité du claim (auto-expire)
+ */
+export async function tryClaimCevSlot(
+  slotKey: string,
+  maxClaims: number,
+  ttlSec: number = 10,
+): Promise<{ ok: boolean; count?: number; max?: number; expiresAt?: number }>
+{
+  const url = `${CONVEX_SITE_URL}/hunter/cev/try-claim-slot`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ slotKey, maxClaims, ttlSec }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[convexClient] tryClaimCevSlot failed: ${res.status} ${text}`);
+      return { ok: false };
+    }
+    return (await res.json()) as { ok: boolean; count?: number; max?: number; expiresAt?: number };
+  } catch (err) {
+    console.warn("[convexClient] tryClaimCevSlot error:", err);
+    return { ok: false };
+  }
+}
+
 export interface CevSetupTask {
   sessionId: string;
   applicationId: string;

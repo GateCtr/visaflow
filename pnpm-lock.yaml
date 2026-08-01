@@ -693,6 +693,10 @@ importers:
         version: 0.31.9
 
   scripts:
+    dependencies:
+      playwright:
+        specifier: ^1.60.0
+        version: 1.60.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

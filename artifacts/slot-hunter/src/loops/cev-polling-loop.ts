@@ -2,10 +2,10 @@
 // Extracted from index.ts
 // Tourne en background sans bloquer la boucle principale du bot Playwright.
 
-import { getActiveCevSessions, recordCevSessionCheck, reportSlotFound } from "../convexClient.js";
+import { getActiveCevSessions, recordCevSessionCheck, reportSlotFound, tryClaimCevSlot } from "../convexClient.js";
 import { bookWithExistingSession } from "../cevBooking.js";
-import { bookCevViaHttp } from "../cevHttpBooking.js";
-import { pollCevSlot } from "../cevPolling.js";
+import { bookCevViaHttp, bookCevSelectedSlotViaHttp } from "../cevHttpBooking.js";
+import { pollCevSlot, getCevCapacitySnapshot } from "../cevPolling.js";
 
 export async function startCevPollingLoop(): Promise<void> {
   console.log("[CEV-POLL] Boucle de polling sessions CEV démarrée");
@@ -35,11 +35,59 @@ export async function startCevPollingLoop(): Promise<void> {
           await recordCevSessionCheck(s.sessionId, "slot_found");
 
           try {
+            // Sécurité capacité: récupérer compteurs et éviter d'attaquer si free ≤ 2
+            const cap = await getCevCapacitySnapshot(s.sessionCookie, siphoned);
+            if ((cap as any)?.error === "session_expired") {
+              console.log(`[CEV-POLL] ⛔ Capacité inaccessible (session_expired) session=${s.sessionId}, on passe`);
+              await recordCevSessionCheck(s.sessionId, "session_expired", "capacity_session_expired");
+              continue;
+            }
+            if ((cap as any)?.parsed && Array.isArray((cap as any).parsed)) {
+              const parsed = (cap as any).parsed as Array<{date:string;times:Array<{time:string;free:number|null}>}>;
+              const maxFree = Math.max(
+                -Infinity,
+                ...parsed.flatMap(d => d.times.map(t => (typeof t.free === 'number' ? t.free : -Infinity)))
+              );
+              if (Number.isFinite(maxFree) && maxFree <= 2) {
+                console.log(`[CEV-POLL] 🛡️  Skip booking (max free <=2) session=${s.sessionId} maxFree=${maxFree}`);
+                await recordCevSessionCheck(s.sessionId, "no_slot", "capacity_guard_free<=2");
+                continue;
+              }
+            }
+
             let booked = false;
             let bookedDate: string | undefined;
             let bookedTime: string | undefined;
             let bookedCode: string | undefined;
             let bookedScreenshot: string | undefined;
+
+            // Allocation multi‑dossiers (free-1) : sélectionner les créneaux avec le plus de places
+            let allocatedTarget: { date: string; time: string } | null = null;
+            if ((cap as any)?.parsed && Array.isArray((cap as any).parsed)) {
+              const parsed = (cap as any).parsed as Array<{date:string;times:Array<{time:string;free:number|null}>}>;
+              // Construire la liste des candidats triés par free décroissant
+              const candidates: Array<{ date: string; time: string; free: number }> = [];
+              for (const d of parsed) {
+                for (const t of d.times) {
+                  const free = typeof t.free === 'number' && Number.isFinite(t.free) ? t.free : 0;
+                  if (free > 2) candidates.push({ date: d.date, time: t.time, free });
+                }
+              }
+              candidates.sort((a, b) => b.free - a.free);
+
+              for (const c of candidates) {
+                const slotKey = `CEV:${c.date}:${c.time}`; // centre/catégorie implicites côté intégration
+                const maxClaims = Math.max(0, c.free - 1);
+                const claim = await tryClaimCevSlot(slotKey, maxClaims, 10);
+                if (claim.ok) {
+                  allocatedTarget = { date: c.date, time: c.time };
+                  console.log(`[CEV-POLL] 🔒 Claim slot OK key=${slotKey} count=${claim.count}/${claim.max}`);
+                  break;
+                } else {
+                  console.log(`[CEV-POLL] ⛔ Claim refusé key=${slotKey}`);
+                }
+              }
+            }
 
             // Tentative 1 : HTTP pur (rapide, zéro browser)
             console.log(`[CEV-POLL] 🌐 Tentative booking HTTP session=${s.sessionId}...`);
@@ -50,7 +98,17 @@ export async function startCevPollingLoop(): Promise<void> {
               userAgent: s.siphonedUserAgent,
               validUntil: s.siphonedValidUntil
             } : undefined;
-            const httpResult = await bookCevViaHttp(s.integrationUrl, s.sessionCookie, s.applicationId, siphoned);
+            // Si un créneau précis a été alloué, tente le booking direct ciblé
+            const httpResult = allocatedTarget
+              ? await bookCevSelectedSlotViaHttp(
+                  s.integrationUrl,
+                  s.sessionCookie,
+                  s.applicationId,
+                  { date: allocatedTarget.date, time: allocatedTarget.time },
+                  siphoned,
+                  s.siphonedUserAgent,
+                )
+              : await bookCevViaHttp(s.integrationUrl, s.sessionCookie, s.applicationId, siphoned);
 
             if (httpResult.success) {
               booked        = true;

@@ -73,6 +73,19 @@ export type CevPollResult =
   | { status: "session_expired" }
   | { status: "error"; error: string };
 
+/**
+ * Snapshot capacité CEV — structure tolérante, basée sur les réponses JSON réelles.
+ * - `rawMonths`: tableau de réponses brutes /Home/AvailableTimeSlots pour mois courant et suivant
+ * - `parsed`: si détectable, une vue normalisée minimale par date/heure avec compte libre
+ */
+export interface CevCapacitySnapshot {
+  rawMonths: Array<{ month: number; year: number; rawText: string; rawJson: unknown }>;
+  parsed?: Array<{
+    date: string; // YYYY-MM-DD si détectable
+    times: Array<{ time: string; free: number | null }>;
+  }>;
+}
+
 // UA généré une fois par appel à pollCevSlot — reste stable dans la même session HTTP
 // mais tourne entre sessions pour éviter les fingerprints répétitifs (desktop uniquement).
 function fetchManual(
@@ -441,6 +454,91 @@ export async function pollCevSlot(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "error", error: msg };
+  }
+}
+
+
+/**
+ * Récupère un snapshot de capacité: appelle /Home/AvailableTimeSlots (mois courant + suivant),
+ * retourne le JSON brut et tente une normalisation best‑effort des créneaux {date,time,free}.
+ * Basé sur le bundle capturé (callPost JSON), sans supposer de schéma fixe.
+ */
+export async function getCevCapacitySnapshot(
+  sessionCookie: string,
+  siphoned?: SiphonedCookies,
+): Promise<CevCapacitySnapshot | { error: string }> {
+  try {
+    const ua = getEffectiveUa(siphoned);
+    const cookieHeader = buildEnrichedCookieHeader(sessionCookie, siphoned);
+    const now = new Date();
+    const months = [0, 1]; // courant + suivant
+    const rawMonths: Array<{ month: number; year: number; rawText: string; rawJson: unknown }> = [];
+
+    for (const add of months) {
+      if (add > 0) {
+        await new Promise(r => setTimeout(r, 700 + Math.random() * 900));
+      }
+      const d = new Date(now.getFullYear(), now.getMonth() + add, 1);
+      const body = { month: d.getMonth() + 1, year: d.getFullYear() };
+      const res = await cevFetch(`${BASE}/Home/AvailableTimeSlots`, {
+        method: "POST",
+        headers: getCevBrowserHeaders({
+          fetchSite: "same-origin",
+          origin: BASE,
+          referer: `${BASE}/Integration/VOW/SelectSlot`,
+          cookie: cookieHeader,
+          userAgent: ua,
+          contentType: "application/json",
+          xRequestedWith: true,
+          accept: "application/json, text/javascript, */*; q=0.01",
+        }),
+        body: JSON.stringify(body),
+        redirect: "manual",
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.status === 401 || res.status === 403) {
+        return { error: "session_expired" };
+      }
+      const rawText = await res.text();
+      let rawJson: unknown = null;
+      try { rawJson = JSON.parse(rawText); } catch { /* non‑JSON toléré */ }
+      rawMonths.push({ month: body.month, year: body.year, rawText, rawJson });
+    }
+
+    // Best‑effort parsing: rechercher structure par jour, puis heures avec compte
+    const parsed: CevCapacitySnapshot["parsed"] = [];
+    for (const m of rawMonths) {
+      const j = m.rawJson as any;
+      if (!j) continue;
+      // Cas 1: tableau de jours [{date:"2026-08-01", times:[{time:"09:30", free:5}]}]
+      if (Array.isArray(j)) {
+        for (const day of j) {
+          const date = day?.date || day?.Date || day?.day || null;
+          const timesSrc = day?.times || day?.Times || day?.hours || day?.Hours || null;
+          if (date && Array.isArray(timesSrc)) {
+            const times = timesSrc.map((t: any) => ({
+              time: String(t?.time || t?.Time || t?.hour || t?.Hour || ""),
+              free: t?.free ?? t?.Free ?? t?.remaining ?? t?.Remaining ?? t?.left ?? t?.Left ?? null,
+            })).filter((x: any) => x.time);
+            if (times.length) parsed!.push({ date: String(date), times });
+          }
+        }
+      }
+      // Cas 2: objet { days:{"2026-08-01":[{"time":"09:30","count":3}, ...]}}
+      if (j && typeof j === 'object' && j.days && typeof j.days === 'object') {
+        for (const [date, timesArr] of Object.entries(j.days as Record<string, any[]>)) {
+          const times = (timesArr || []).map((t: any) => ({
+            time: String(t?.time || t?.Time || t?.hour || t?.Hour || ""),
+            free: t?.count ?? t?.Count ?? t?.free ?? t?.remaining ?? null,
+          })).filter((x: any) => x.time);
+          if (times.length) parsed!.push({ date, times });
+        }
+      }
+    }
+
+    return { rawMonths, parsed: parsed && parsed.length ? parsed : undefined };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
 }
 

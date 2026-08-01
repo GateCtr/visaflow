@@ -51,6 +51,14 @@ export interface HttpBookingResult {
   screenshotStorageId?: string;
 }
 
+/** Entrée minimale quand le slot est déjà connu (détecté en amont). */
+export interface SelectedSlotInput {
+  date: string;   // ex: "2026-05-12" ou format renvoyé par l'API
+  time: string;   // ex: "09:30"
+  id?: string | number; // optionnel si requis par le portail
+  raw?: unknown;  // optionnel, pour logs/auto-config
+}
+
 interface SiphonedCookies {
   f5CookieValue?: string;
   f5CookieName?: string;
@@ -846,6 +854,154 @@ export async function bookCevViaHttp(
       status: 'fail',
       data: { error: String(err) },
     });
+    return { success: false, error: String(err), needsPlaywright: true };
+  }
+}
+
+/**
+ * Réservation CEV en partant d'un slot DÉJÀ DÉTECTÉ (pas de polling/scan ici).
+ * - Ouvre la page SelectSlot (redirections suivies)
+ * - Extrait le token et les champs cachés
+ * - Soumet directement la sélection avec le slot fourni
+ * - Extrait le code de confirmation et persiste la config auto-découverte
+ */
+export async function bookCevSelectedSlotViaHttp(
+  integrationUrl: string,
+  sessionCookie: string,
+  clientId: string,
+  selected: SelectedSlotInput,
+  siphoned?: SiphonedCookies,
+  sessionUa?: string,
+): Promise<HttpBookingResult> {
+  const ua = siphoned?.userAgent ?? sessionUa ?? getCevSessionUa();
+
+  botLog({
+    applicationId: clientId,
+    step: 'cev_http_booking_start_selected',
+    status: 'ok',
+    data: { integrationUrlPreview: integrationUrl.slice(0, 80), ua: ua.slice(0, 60), selected: { date: selected.date, time: selected.time, id: selected.id } },
+  });
+
+  try {
+    // 1) Page SelectSlot
+    const pageResult = await fetchFollowRedirects(integrationUrl, sessionCookie, ua, siphoned);
+
+    botLog({
+      applicationId: clientId,
+      step: 'cev_http_selectslot_fetched_selected',
+      status: pageResult.ok ? 'ok' : 'warn',
+      data: {
+        finalUrl: pageResult.url,
+        httpStatus: pageResult.status,
+        htmlLen: pageResult.html.length,
+        error: pageResult.error ?? null,
+      },
+    });
+
+    if (!pageResult.ok) {
+      return { success: false, error: pageResult.error ?? 'FETCH_FAILED', needsPlaywright: true };
+    }
+
+    const { html, url: selectSlotUrl } = pageResult;
+
+    if (
+      selectSlotUrl.includes('SessionExpired') ||
+      html.toLowerCase().includes('session expired') ||
+      selectSlotUrl.includes('/Captcha') ||
+      html.toLowerCase().includes('hcaptcha')
+    ) {
+      return { success: false, error: 'SESSION_EXPIRED_OR_CAPTCHA', needsPlaywright: false };
+    }
+
+    // 2) Discovery minimale
+    const knownConfig = _discoveredConfig;
+    const antiForgeryToken = extractAntiForgeryToken(html);
+    const formAction       = knownConfig ? null : extractFormAction(html);
+    const hiddenInputs     = extractHiddenInputs(html);
+
+    if (!antiForgeryToken) {
+      botLog({ applicationId: clientId, step: 'cev_http_no_antiforgery_selected', status: 'warn' });
+      return { success: false, error: 'NO_ANTIFORGERY_TOKEN', needsPlaywright: true };
+    }
+
+    // 3) Soumission directe avec le slot fourni
+    const parsed: ParsedSlot = {
+      date: selected.date,
+      time: selected.time,
+      id: selected.id,
+      available: true,
+      raw: selected.raw ?? { date: selected.date, time: selected.time, id: selected.id },
+    };
+
+    const submitResult = await submitSlotSelection(
+      sessionCookie,
+      selectSlotUrl,
+      ua,
+      formAction,
+      hiddenInputs,
+      parsed,
+      clientId,
+      siphoned,
+      knownConfig?.submitEndpoint,
+    );
+
+    if (!submitResult.success) {
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_submit_failed_selected',
+        status: 'warn',
+        data: { error: submitResult.error, finalUrl: submitResult.finalUrl, usedKnownEndpoint: !!knownConfig },
+      });
+      return { success: false, error: submitResult.error, needsPlaywright: true };
+    }
+
+    // 4) Confirmation + auto-config
+    const confirmationCode = extractConfirmationCode(submitResult.html);
+
+    const rawSlot = (parsed.raw ?? {}) as Record<string, unknown>;
+    const inferredDateKey = Object.keys(rawSlot).find((k) => rawSlot[k] === parsed.date) ?? 'date';
+    const inferredTimeKey = Object.keys(rawSlot).find((k) => rawSlot[k] === parsed.time) ?? 'time';
+    const inferredIdKey   = parsed.id != null
+      ? Object.keys(rawSlot).find((k) => String(rawSlot[k]) === String(parsed.id))
+      : undefined;
+
+    const newConfig: CevDiscoveredConfig = {
+      submitEndpoint:      submitResult.confirmedEndpoint!,
+      availabilityDateKey: inferredDateKey,
+      availabilityTimeKey: inferredTimeKey,
+      availabilityIdKey:   inferredIdKey,
+      confirmedAt:         Date.now(),
+      successCount:        (knownConfig?.successCount ?? 0) + 1,
+    };
+
+    _discoveredConfig = newConfig;
+    saveCevBookingConfig(newConfig).catch((err) =>
+      console.warn('[cevHttpBooking] saveCevBookingConfig error (non bloquant):', err)
+    );
+
+    botLog({
+      applicationId: clientId,
+      step: 'cev_http_booking_confirmed_selected',
+      status: 'ok',
+      data: {
+        finalUrl: submitResult.finalUrl,
+        confirmationCode: confirmationCode ?? 'non extrait',
+        date: parsed.date,
+        time: parsed.time,
+        confirmedEndpoint: submitResult.confirmedEndpoint,
+        autoConfigSaved: true,
+        successCount: newConfig.successCount,
+      },
+    });
+
+    return {
+      success: true,
+      confirmationCode: confirmationCode ?? undefined,
+      bookedDate: parsed.date,
+      bookedTime: parsed.time,
+    };
+  } catch (err) {
+    botLog({ applicationId: clientId, step: 'cev_http_booking_crash_selected', status: 'fail', data: { error: String(err) } });
     return { success: false, error: String(err), needsPlaywright: true };
   }
 }
