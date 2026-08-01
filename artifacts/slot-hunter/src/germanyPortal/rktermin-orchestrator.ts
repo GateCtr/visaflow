@@ -32,17 +32,8 @@ export async function runGermanyScan(
     log("INFO", `🇩🇪 Scan RK-Termin: ${config.locationCode} realm=${config.realmId} cat=${config.categoryId}`);
     
     const { session, result: monthResult } = await scanMonth(config);
-    
-    if (monthResult.status === "no_dates") {
-      log("INFO", `Aucune date disponible (mois: ${monthResult.displayedMonth ?? "?"})`);
-      return {
-        status: "not_found",
-        datesScanned: 0,
-        captchasSolved: captchasSolved + 1, // captcha month résolu
-        durationMs: Date.now() - startMs,
-      };
-    }
-    
+
+    // Captcha échoué ou erreur réseau → arrêt immédiat (pas de session valide pour naviguer)
     if (monthResult.status === "captcha_failed") {
       log("WARN", "Captcha month échoué après retries");
       return {
@@ -53,7 +44,7 @@ export async function runGermanyScan(
         errorMessage: "Captcha month failed",
       };
     }
-    
+
     if (monthResult.status === "error") {
       return {
         status: "error",
@@ -63,12 +54,19 @@ export async function runGermanyScan(
         errorMessage: monthResult.errorMessage,
       };
     }
-    // Si on est ici, le captcha du mois a été résolu avec succès
+
+    // Captcha du mois 1 résolu (qu'il y ait des dates ou non) — session valide pour naviguer
     captchasSolved += 1;
-    
+
+    if (monthResult.status === "no_dates") {
+      log("INFO", `Mois 1 (${monthResult.displayedMonth ?? "?"}) : aucune date — navigation mois suivants...`);
+    } else {
+      log("INFO", `Mois 1 (${monthResult.displayedMonth ?? "?"}) : ${monthResult.availableDates.length} date(s)`);
+    }
+
     // ─── STEP 2: Naviguer vers les mois suivants (sans captcha) ────────────
-    // Jusqu'à 2 mois supplémentaires sont scannés via les liens appointment_showMonth
-    // extraits du calendrier courant. La session est déjà validée — pas de nouveau captcha.
+    // IMPORTANT: on navigue même si le mois 1 est vide — le mois 2 ou 3 peut avoir des dates.
+    // La session est déjà validée par le captcha du mois 1 — pas de nouveau captcha nécessaire.
     let currentSession = session;
     const allAvailableDates: string[] = [...monthResult.availableDates];
 
@@ -77,12 +75,13 @@ export async function runGermanyScan(
     const monthsToScan = nextMonthLinks.slice(0, extraMonths); // configurable, défaut 2
     let lastMonthResult = monthResult;
 
-    for (const monthDateStr of monthsToScan) {
+    for (let mIdx = 0; mIdx < monthsToScan.length; mIdx++) {
+      const monthDateStr = monthsToScan[mIdx];
       const { session: ns, result: nextResult } = await scanNextMonth(currentSession, config, monthDateStr);
       currentSession = ns;
       if (nextResult.status === "dates_found" || nextResult.status === "no_dates") {
         allAvailableDates.push(...nextResult.availableDates);
-        // Chaîner les liens de navigation si disponibles (pour aller encore plus loin si besoin)
+        log("INFO", `Mois ${mIdx + 2} (${nextResult.displayedMonth ?? monthDateStr}) : ${nextResult.availableDates.length} date(s)`);
         lastMonthResult = nextResult;
       } else {
         log("WARN", `Scan mois ${monthDateStr} échoué (${nextResult.status}) — arrêt navigation`);
@@ -90,7 +89,7 @@ export async function runGermanyScan(
       }
     }
 
-    log("INFO", `Total: ${allAvailableDates.length} date(s) trouvée(s) sur ${1 + monthsToScan.length} mois`);
+    log("INFO", `Total: ${allAvailableDates.length} date(s) sur ${1 + monthsToScan.length} mois scannés`);
 
     // ─── STEP 3: Filtrer les dates selon les préférences ────────────────────
     const filteredDates = filterDatesByPreference(allAvailableDates, config);
