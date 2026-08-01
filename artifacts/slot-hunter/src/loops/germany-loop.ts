@@ -176,8 +176,13 @@ async function runGermanyCycle(): Promise<void> {
 
 /** Traite un dossier Germany individuel. */
 async function processGermanyJob(job: HunterJob): Promise<void> {
-  // Rotation Decodo : nouvelle IP à chaque scan pour éviter les blocages service2.diplo.de
-  rotateRKProxy();
+  // Rotation Decodo : changer d'IP UNIQUEMENT quand il n'y a pas de session valide en cache.
+  // diplo.de lie le JSESSIONID à l'IP source — tourner pendant une session valide
+  // l'invalide côté serveur et force un captcha supplémentaire inutile.
+  const hasCachedSession = sessionCache.has(job.id);
+  if (!hasCachedSession) {
+    rotateRKProxy();
+  }
   log("INFO", `─── Scan: ${job.applicantName} (${job.visaType}) ───`);
   // Log de début de scan (visible dans Admin > Logs du bot et sur la fiche dossier)
   botLog({
