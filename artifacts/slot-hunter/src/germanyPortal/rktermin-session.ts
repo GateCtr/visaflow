@@ -4,6 +4,7 @@
 import { Agent, ProxyAgent, type Dispatcher } from "undici";
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
+import { hasDecodoProxy, rotateDecodoUrl, getCurrentDecodoUrl } from "../spain-decodo-pool.js";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -25,6 +26,8 @@ function randomUA(): string {
 // ─── Dispatcher undici dédié ────────────────────────────────────────────────
 
 let rkDispatcher: Dispatcher | null = null;
+/** URL de proxy actuellement utilisée par rkDispatcher (pour détecter un changement). */
+let rkDispatcherProxyUrl: string | null = null;
 
 /** Masque les identifiants d'une URL de proxy pour les logs. */
 function maskProxyUrl(url: string): string {
@@ -37,11 +40,29 @@ function maskProxyUrl(url: string): string {
 }
 
 /**
+ * Priorité de sélection du proxy Germany :
+ *  1. GERMANY_PROXY_URL / RKTERMIN_PROXY_URL  (override manuel)
+ *  2. Pool Decodo CSV (décodo-proxies.csv / DECODO_PROXY_URL*)
+ *  3. Accès direct (risque de timeout/blocage IP)
+ */
+function resolveProxyUrl(): string | null {
+  return (
+    process.env.GERMANY_PROXY_URL ??
+    process.env.RKTERMIN_PROXY_URL ??
+    getCurrentDecodoUrl() ??
+    null
+  );
+}
+
+/**
  * Dispatcher partagé pour toutes les requêtes RK-Termin.
- * Créé une seule fois (keep-alive → moins de handshakes TLS coûteux).
+ * Reconstruit automatiquement si l'URL de proxy a changé (rotation).
  */
 export function getRKDispatcher(): Dispatcher {
-  if (rkDispatcher) return rkDispatcher;
+  const proxyUrl = resolveProxyUrl();
+
+  // Recréer si pas encore initialisé OU si le proxy a changé (rotation Decodo)
+  if (rkDispatcher && proxyUrl === rkDispatcherProxyUrl) return rkDispatcher;
 
   const connect = {
     timeout: RKTERMIN_TIMING.connectTimeoutMs,
@@ -59,16 +80,32 @@ export function getRKDispatcher(): Dispatcher {
     connections: 6,
   };
 
-  const proxyUrl = process.env.GERMANY_PROXY_URL ?? process.env.RKTERMIN_PROXY_URL;
   if (proxyUrl) {
-    log("INFO", `Proxy RK-Termin actif: ${maskProxyUrl(proxyUrl)}`);
+    log("INFO", `Proxy RK-Termin: ${maskProxyUrl(proxyUrl)}`);
     rkDispatcher = new ProxyAgent({ uri: proxyUrl, ...common });
   } else {
-    log("DEBUG", `Accès direct service2.diplo.de (connectTimeout=${RKTERMIN_TIMING.connectTimeoutMs}ms)`);
+    log("WARN", `Accès direct service2.diplo.de — risque de timeout (configurez GERMANY_PROXY_URL ou decodo-proxies.csv)`);
     rkDispatcher = new Agent(common);
   }
+  rkDispatcherProxyUrl = proxyUrl;
 
   return rkDispatcher;
+}
+
+/**
+ * Fait tourner le pool Decodo (prochaine IP) et force la reconstruction
+ * du dispatcher lors du prochain appel à getRKDispatcher().
+ * À appeler au début de chaque scan pour changer d'IP.
+ */
+export function rotateRKProxy(): void {
+  if (!hasDecodoProxy()) return; // pas de pool configuré, rien à faire
+  // Env overrides manuels : pas de rotation automatique (l'IP est fixée intentionnellement)
+  if (process.env.GERMANY_PROXY_URL || process.env.RKTERMIN_PROXY_URL) return;
+  const next = rotateDecodoUrl(); // avance le compteur round-robin
+  if (next) {
+    rkDispatcherProxyUrl = null; // force rebuild au prochain getRKDispatcher()
+    rkDispatcher = null;
+  }
 }
 
 // ─── Classification des erreurs réseau ──────────────────────────────────────

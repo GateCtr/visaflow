@@ -4,7 +4,7 @@
 import { getActiveJobs, sendHeartbeat, reportSlotFound, botLog, type HunterJob } from "../convexClient.js";
 import { runGermanyScan } from "../germanyPortal/rktermin-orchestrator.js";
 import { RKTERMIN_TIMING, KINSHASA_CATEGORIES } from "../germanyPortal/config.js";
-import { isTransientNetworkError } from "../germanyPortal/rktermin-session.js";
+import { isTransientNetworkError, rotateRKProxy } from "../germanyPortal/rktermin-session.js";
 import type { RKTerminConfig, RKTerminDynamicField } from "../germanyPortal/types.js";
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [germany-loop] [${level}] ${msg}`);
@@ -131,6 +131,8 @@ async function runGermanyCycle(): Promise<void> {
 
 /** Traite un dossier Germany individuel. */
 async function processGermanyJob(job: HunterJob): Promise<void> {
+  // Rotation Decodo : nouvelle IP à chaque scan pour éviter les blocages service2.diplo.de
+  rotateRKProxy();
   log("INFO", `─── Scan: ${job.applicantName} (${job.visaType}) ───`);
   // Log de début de scan (visible dans Admin > Logs du bot et sur la fiche dossier)
   botLog({

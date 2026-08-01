@@ -1,0 +1,81 @@
+germany errorErreur
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 54s
+errorinitSession failed: fetch failed (cause: ConnectTimeoutError: Connect Timeout Error (attempted address: service2.diplo.de:443, timeout: 10000ms)) — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP
+consecutiveErrors3
+pausedtrue
+germany auto pauseWarn
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 54s
+consecutiveErrors=3s
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+visaType=Visa National — Études (Studium)
+germany captcha failedWarn
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+visaType=Visa National — Études (Studium)
+germany network errorWarn
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+initSession failed: fetch failed (cause: ConnectTimeoutError: Connect Timeout Error (attempted addre
+germany not foundOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+datesScanned=0 · captchasSolved=1
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 1 min
+visaType=Visa National — Études (Studium)
+germany errorErreur
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 2 min
+initSession failed: fetch failed (cause: ConnectTimeoutError: Connect Timeout Error (attempted addre
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 2 min
+visaType=Visa National — Études (Studium)
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 2 min
+visaType=Visa National — Études (Studium)
+germany not foundOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 2 min
+datesScanned=0 · captchasSolved=1
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 2 min
+visaType=Visa National — Études (Studium)
+germany errorErreur
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 3 min
+initSession failed: fetch failed (cause: ConnectTimeoutError: Connect Timeout Error (attempted addre
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 3 min
+visaType=Visa National — Études (Studium)
+germany not foundOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 3 min
+datesScanned=0 · captchasSolved=1
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 4 min
+visaType=Visa National — Études (Studium)
+germany not foundOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 5 min
+datesScanned=0 · captchasSolved=1
+germany scan startOK
+🇩🇪 Yagunvu Gbafu Eggee
+il y a 5 min
+visaType=Visa National — Études (Studium)
+germany network errorWarn
+🇩🇪 Jean Bernard
+il y a 5 min
+initSession failed: fetch failed (cause: ConnectTimeoutError: Connect Timeout Error (attempted addre
