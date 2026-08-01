@@ -35,7 +35,13 @@ export async function bookSlot(
   );
   
   if (newSession) session = updateSession(session, newSession);
-  
+
+  // 1b. Extraire les champs hidden du formulaire (tokens anti-CSRF, openingPeriodId signé, etc.)
+  //     Le portail RK-Termin valide ces tokens côté serveur — sans eux il retourne
+  //     "An error occurred… address changed manually" même si la session est encore valide.
+  const hiddenFields = extractHiddenFields(formHtml);
+  log("DEBUG", `Champs hidden extraits: ${Object.keys(hiddenFields).join(", ") || "aucun"}`);
+
   // 2. Extraire le captcha du formulaire
   const captchaB64 = extractCaptchaBase64(formHtml);
   if (!captchaB64) {
@@ -61,7 +67,11 @@ export async function bookSlot(
     // 4. Construire les données du formulaire
     await randomDelay(RKTERMIN_TIMING.postCaptchaPauseMs.min, RKTERMIN_TIMING.postCaptchaPauseMs.max);
     
+    // Partir des champs hidden extraits du formulaire (tokens anti-CSRF, etc.)
+    // puis écraser/compléter avec nos valeurs — l'ordre garantit que nos champs
+    // ont priorité sur les defaults du serveur mais que les tokens restent présents.
     const formData: Record<string, string> = {
+      ...hiddenFields,
       lastname: config.applicantLastname,
       firstname: config.applicantFirstname,
       email: config.applicantEmail,
@@ -219,4 +229,25 @@ function parseBookingResponse(html: string, slot: RKTerminTimeSlot): RKTerminBoo
 function extractLocation(html: string): string {
   const locMatch = html.match(/Location:\s*([^<]+)|Ort:\s*([^<]+)/i);
   return locMatch?.[1]?.trim() ?? locMatch?.[2]?.trim() ?? "Kinshasa";
+}
+
+/**
+ * Extrait tous les champs `<input type="hidden">` d'un formulaire HTML.
+ * Ces tokens anti-CSRF sont obligatoires dans le POST — sans eux le portail
+ * retourne "An error occurred… address changed manually".
+ */
+function extractHiddenFields(html: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  // Matcher toutes les variantes d'ordre des attributs
+  const hiddenRe = /<input[^>]+type=["']?hidden["']?[^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = hiddenRe.exec(html)) !== null) {
+    const tag = match[0];
+    const nameMatch = tag.match(/\bname=["']([^"']*)["']/i);
+    const valueMatch = tag.match(/\bvalue=["']([^"']*)["']/i);
+    if (nameMatch?.[1]) {
+      fields[nameMatch[1]] = valueMatch?.[1] ?? "";
+    }
+  }
+  return fields;
 }
