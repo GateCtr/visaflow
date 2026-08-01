@@ -7,18 +7,57 @@ import { ProxyAgent } from "undici";
 
 declare const process: { env: Record<string, string | undefined> };
 
-/** Crée un ProxyAgent pour Germany si GERMANY_PROXY_URL est défini.
- *  DECODO_PROXY_URL est réservé à l'Espagne et ne doit PAS être utilisé ici :
- *  ce proxy est configuré pour les IP espagnoles et provoque un "fetch failed"
- *  immédiat sur service2.diplo.de. Germany fonctionne en direct (pas de CF). */
-function getProxyDispatcher(): ProxyAgent | undefined {
-  const proxyUrl = process.env["GERMANY_PROXY_URL"];
-  if (!proxyUrl) return undefined;
+/**
+ * Construit une URL SOAX sticky pour Germany.
+ *
+ * service2.diplo.de bloque les plages IP datacenter (Railway, AWS, Decodo ISP, etc.) —
+ * le symptôme est "fetch failed" en ~1-3s (connexion reset/refusée, pas un timeout).
+ * SOAX résidentiel contourne ce blocage.
+ *
+ * Format URL SOAX : http://package-XXXXX:PASSWORD@proxy.soax.com:5000
+ * On ajoute "-sessionid-XXXX" pour une IP sticky de 10min (évite les rotations mid-session).
+ * Pas de contrainte de pays (-country-de serait plus "naturel" mais réduit le pool).
+ */
+function makeSoaxGermanyUrl(baseUrl: string): string {
   try {
-    return new ProxyAgent(proxyUrl);
+    const u = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+    const decodedUser = decodeURIComponent(u.username);
+    const baseUser = decodedUser.replace(/-sessionid-[a-z0-9]+$/i, "");
+    const sessionId = Math.random().toString(36).slice(2, 10);
+    u.username = encodeURIComponent(`${baseUser}-sessionid-${sessionId}`);
+    return u.toString();
   } catch {
-    return undefined;
+    return baseUrl;
   }
+}
+
+/**
+ * Crée un ProxyAgent pour Germany.
+ *
+ * Ordre de priorité :
+ *  1. GERMANY_PROXY_URL  — URL proxy dédiée Germany (résidentiel recommandé)
+ *  2. SOAX_PROXY_URL     — Fallback SOAX résidentiel (sticky session, sans pays fixé)
+ *  3. undefined          — Direct (OK en local/Replit, bloqué sur Railway/cloud)
+ *
+ * DECODO_PROXY_URL est réservé à l'Espagne : ses IPs ISP sont aussi bloquées par diplo.de.
+ */
+function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
+  const germanyUrl = process.env["GERMANY_PROXY_URL"];
+  if (germanyUrl) {
+    try {
+      return { dispatcher: new ProxyAgent(germanyUrl), label: "GERMANY_PROXY_URL" };
+    } catch { /* fall through */ }
+  }
+
+  const soaxBase = process.env["SOAX_PROXY_URL"];
+  if (soaxBase) {
+    try {
+      const stickyUrl = makeSoaxGermanyUrl(soaxBase);
+      return { dispatcher: new ProxyAgent(stickyUrl), label: "SOAX résidentiel (sticky)" };
+    } catch { /* fall through */ }
+  }
+
+  return undefined;
 }
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [rktermin] [${level}] ${msg}`);
@@ -79,7 +118,7 @@ export async function rkGet(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
   
-  const dispatcher = getProxyDispatcher();
+  const proxy = getProxyDispatcher();
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -91,7 +130,7 @@ export async function rkGet(
       redirect: "follow",
       signal: controller.signal,
       // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher,
+      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -106,7 +145,8 @@ export async function rkGet(
     return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
     clearTimeout(timeout);
-    throw new Error(`rkGet ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}`);
+    const cause = (err as any)?.cause;
+    throw new Error(`rkGet ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
   }
 }
 
@@ -125,7 +165,7 @@ export async function rkPost(
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  const dispatcher = getProxyDispatcher();
+  const proxy = getProxyDispatcher();
   
   try {
     const res = await fetch(url, {
@@ -142,7 +182,7 @@ export async function rkPost(
       redirect: "follow",
       signal: controller.signal,
       // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher,
+      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -156,7 +196,8 @@ export async function rkPost(
     return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
     clearTimeout(timeout);
-    throw new Error(`rkPost ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}`);
+    const cause = (err as any)?.cause;
+    throw new Error(`rkPost ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
   }
 }
 
@@ -176,8 +217,12 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
   
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  const dispatcher = getProxyDispatcher();
-  if (dispatcher) log("DEBUG", `Via proxy Decodo`);
+  const proxy = getProxyDispatcher();
+  if (proxy) {
+    log("DEBUG", `Via proxy: ${proxy.label}`);
+  } else {
+    log("DEBUG", "Direct (pas de proxy configuré — risque de blocage IP Railway/cloud)");
+  }
   
   try {
     const res = await fetch(url, {
@@ -189,7 +234,7 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
       redirect: "follow",
       signal: controller.signal,
       // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher,
+      dispatcher: proxy?.dispatcher,
     });
     
     clearTimeout(timeout);
@@ -212,7 +257,14 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
     return { session, html };
   } catch (err) {
     clearTimeout(timeout);
-    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}`);
+    // Exposer la cause sous-jacente (ECONNREFUSED, ECONNRESET, etc.) pour diagnostiquer
+    // les blocages IP (service2.diplo.de bloque les plages IP datacenter Railway/cloud).
+    const cause = (err as any)?.cause;
+    const causeStr = cause ? ` (cause: ${cause})` : "";
+    const hint = !proxy
+      ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"
+      : "";
+    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}${causeStr}${hint}`);
   }
 }
 
