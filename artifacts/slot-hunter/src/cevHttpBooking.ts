@@ -328,7 +328,7 @@ function extractSlotDataAttributes(html: string): Record<string, string>[] {
   return slots;
 }
 
-// ─── Parse des slots /Home/AvailableTimeSlots ─────────────────────────────────
+// ─── Parse des slots (inline HTML + /Home/AvailableTimeSlots) ────────────────
 
 interface ParsedSlot {
   date: string;
@@ -336,6 +336,76 @@ interface ParsedSlot {
   id?: string | number;
   available: boolean;
   raw: unknown;
+}
+
+/**
+ * Extrait les créneaux disponibles directement depuis le HTML de la page SelectSlot.
+ *
+ * Le portail CEV embed la variable JS `availability = [...]` avec des objets
+ * AvailableSlotForPublic. Format :
+ *   { "$type": "...AvailableSlotForPublic...", "fromTime": "2026-08-15T09:30:00",
+ *     "scheduleLineId": "uuid-...", "toTime": "..." }
+ *
+ * Quand présents, ces slots sont préférés à un appel /Home/AvailableTimeSlots
+ * (qui requiert officeId + visaCategories → HTTP 500 sans ces paramètres).
+ */
+function extractInlineSlotsFromHtml(html: string): ParsedSlot[] {
+  // Chercher la variable availability (avec ou sans var/let/const)
+  const patterns = [
+    /\bvar\s+availability\s*=\s*(\[[\s\S]*?\]);/,
+    /\blet\s+availability\s*=\s*(\[[\s\S]*?\]);/,
+    /\bconst\s+availability\s*=\s*(\[[\s\S]*?\]);/,
+    /\bavailability\s*=\s*(\[[\s\S]*?\]);/,
+  ];
+
+  let rawJson: unknown = null;
+  for (const pattern of patterns) {
+    const m = html.match(pattern);
+    if (m?.[1]) {
+      try { rawJson = JSON.parse(m[1]); break; } catch { continue; }
+    }
+  }
+
+  if (!rawJson || !Array.isArray(rawJson) || rawJson.length === 0) return [];
+
+  return (rawJson as Record<string, unknown>[]).flatMap(item => {
+    // Extraire date et heure depuis fromTime (ISO ou .NET /Date(ms)/)
+    let date = '';
+    let time = '';
+    const fromTime = String(
+      item.fromTime ?? item.FromTime ?? item.startTime ?? item.StartTime ?? ''
+    );
+
+    if (fromTime) {
+      const dotNetMs = fromTime.match(/\/Date\((\d+)\)\//);
+      if (dotNetMs) {
+        const d = new Date(parseInt(dotNetMs[1], 10));
+        date = d.toISOString().slice(0, 10);
+        time = d.toISOString().slice(11, 16); // "09:30"
+      } else if (fromTime.includes('T')) {
+        // Format ISO : "2026-08-15T09:30:00"
+        const parts = fromTime.split('T');
+        date = parts[0];
+        time = (parts[1] ?? '').slice(0, 5);
+      } else {
+        date = fromTime;
+      }
+    }
+
+    const id = (
+      item.scheduleLineId ?? item.ScheduleLineId ??
+      item.id ?? item.Id
+    ) as string | undefined;
+
+    if (!date && !id) return []; // filtre les slots sans données utilisables
+    return [{
+      date,
+      time,
+      id,
+      available: true,
+      raw: item,
+    }];
+  });
 }
 
 function parseAvailableSlots(raw: unknown): ParsedSlot[] {
@@ -462,12 +532,14 @@ async function submitSlotSelection(
     time:                slot.time,
     SelectedTime:        slot.time,
     AppointmentTime:     slot.time,
-    // ID du créneau si disponible
+    // ID du créneau si disponible (CEV utilise scheduleLineId en priorité)
     ...(slot.id != null ? {
-      slotId:        String(slot.id),
-      appointmentId: String(slot.id),
-      SlotId:        String(slot.id),
-      id:            String(slot.id),
+      slotId:         String(slot.id),
+      appointmentId:  String(slot.id),
+      SlotId:         String(slot.id),
+      id:             String(slot.id),
+      scheduleLineId: String(slot.id),  // champ natif CEV AvailableSlotForPublic
+      ScheduleLineId: String(slot.id),
     } : {}),
   };
 
@@ -708,13 +780,26 @@ export async function bookCevViaHttp(
       },
     });
 
-    // ═══ ÉTAPE 2b : Scan des bundles JS pour découvrir l'endpoint de booking ═══
-    // Exécuté uniquement en mode discovery (pas de knownConfig).
-    // Faille #4 : l'endpoint exact de booking n'est pas dans le HTML inline — il est dans un bundle.
-    // On télécharge les bundles de la page SelectSlot et on cherche callPost/$.ajax/url: contenant
-    // des patterns booking. Résultat loggé dans botLog (step cev_http_bundle_scan) — ne bloque pas le flux.
+    // ═══ ÉTAPE 2b : Extraction des créneaux inline depuis le HTML ═══
+    // Le portail CEV embed `availability = [...]` dans le HTML de SelectSlot.
+    // Ces slots sont préférés à un appel /Home/AvailableTimeSlots qui requiert
+    // officeId + visaCategories (non disponibles sans la page HTML) → HTTP 500.
+    const inlineSlots = extractInlineSlotsFromHtml(html);
+
+    botLog({
+      applicationId: clientId,
+      step: 'cev_http_inline_slots',
+      status: inlineSlots.length > 0 ? 'ok' : 'warn',
+      data: {
+        count: inlineSlots.length,
+        first3: inlineSlots.slice(0, 3).map(s => ({ date: s.date, time: s.time, id: s.id })),
+        source: preloadedHtml ? 'preloaded' : 'fetched',
+      },
+    });
+
+    // ═══ ÉTAPE 2c : Scan des bundles JS (discovery — fire-and-forget) ═══
+    // Exécuté uniquement en mode discovery (pas de knownConfig), ne bloque pas le flux.
     if (!knownConfig) {
-      // Fire-and-forget avec timeout global de 30s (n'attend pas si la page arrive sans bundle)
       scanBundlesForBookingEndpoint(html, selectSlotUrl, sessionCookie, siphoned, ua, clientId)
         .catch(err => {
           botLog({
@@ -726,57 +811,58 @@ export async function bookCevViaHttp(
         });
     }
 
-    // ═══ ÉTAPE 3 : GET /Home/AvailableTimeSlots (mois courant) ═══
-    const now = new Date();
-    const slotsResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, now.getMonth() + 1, now.getFullYear());
+    // ═══ ÉTAPE 3 : Résolution des créneaux disponibles ═══
+    // Priorité : slots inline dans le HTML (évite le HTTP 500 de /Home/AvailableTimeSlots).
+    // Fallback : appel AJAX /Home/AvailableTimeSlots si aucun slot inline.
+    let availableSlots: ParsedSlot[];
 
-    botLog({
-      applicationId: clientId,
-      step: 'cev_http_available_slots',
-      status: 'ok',
-      data: {
-        httpOk:       slotsResult.ok,
-        slotCount:    slotsResult.slots.length,
-        error:        slotsResult.error ?? null,
-        responseHeaders: slotsResult.responseHeaders ?? null,
-        rawJsonType:  Array.isArray(slotsResult.rawJson) ? 'array' : (slotsResult.rawJson === null ? 'null' : typeof slotsResult.rawJson),
-        rawJsonKeys:  slotsResult.rawJson && typeof slotsResult.rawJson === 'object' && !Array.isArray(slotsResult.rawJson)
-                        ? Object.keys(slotsResult.rawJson as object)
-                        : null,
-        rawJsonPreview: JSON.stringify(slotsResult.rawJson).slice(0, 1500),
-        firstSlots:   slotsResult.slots.slice(0, 3).map(s => ({ date: s.date, time: s.time, id: s.id })),
-      },
-    });
+    if (inlineSlots.length > 0) {
+      // Fast-path : créneaux déjà extraits du HTML — pas d'appel réseau supplémentaire
+      availableSlots = inlineSlots;
+    } else {
+      // Fallback AJAX — fonctionne pour les comptes où les slots ne sont pas inline
+      const now = new Date();
+      const slotsResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, now.getMonth() + 1, now.getFullYear());
 
-    // Si mois courant vide, essayer le mois suivant
-    let availableSlots = slotsResult.slots;
-    if (slotsResult.ok && availableSlots.length === 0) {
-      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const nextResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, next.getMonth() + 1, next.getFullYear());
       botLog({
         applicationId: clientId,
-        step: 'cev_http_available_slots_next_month',
+        step: 'cev_http_available_slots',
         status: 'ok',
         data: {
-          month:     next.getMonth() + 1,
-          year:      next.getFullYear(),
-          slotCount: nextResult.slots.length,
-          firstSlots: nextResult.slots.slice(0, 3).map(s => ({ date: s.date, time: s.time, id: s.id })),
+          httpOk:       slotsResult.ok,
+          slotCount:    slotsResult.slots.length,
+          error:        slotsResult.error ?? null,
+          responseHeaders: slotsResult.responseHeaders ?? null,
+          rawJsonType:  Array.isArray(slotsResult.rawJson) ? 'array' : (slotsResult.rawJson === null ? 'null' : typeof slotsResult.rawJson),
+          rawJsonPreview: JSON.stringify(slotsResult.rawJson).slice(0, 1500),
+          firstSlots:   slotsResult.slots.slice(0, 3).map(s => ({ date: s.date, time: s.time, id: s.id })),
         },
       });
-      if (nextResult.ok) availableSlots = nextResult.slots;
-    }
 
-    if (!slotsResult.ok) {
-      if (slotsResult.error === 'SESSION_EXPIRED') {
-        return { success: false, error: 'SESSION_EXPIRED' };
+      // Si mois courant vide, essayer le mois suivant
+      availableSlots = slotsResult.slots;
+      if (slotsResult.ok && availableSlots.length === 0) {
+        const now2 = new Date();
+        const next = new Date(now2.getFullYear(), now2.getMonth() + 1, 1);
+        const nextResult = await fetchAvailableTimeSlots(sessionCookie, selectSlotUrl, ua, siphoned, next.getMonth() + 1, next.getFullYear());
+        botLog({
+          applicationId: clientId,
+          step: 'cev_http_available_slots_next_month',
+          status: 'ok',
+          data: { month: next.getMonth() + 1, year: next.getFullYear(), slotCount: nextResult.slots.length },
+        });
+        if (nextResult.ok) availableSlots = nextResult.slots;
       }
-      // Erreur réseau / serveur → Playwright peut mieux gérer
-      return { success: false, error: slotsResult.error ?? 'SLOTS_FETCH_FAILED', needsPlaywright: true };
+
+      if (!slotsResult.ok) {
+        if (slotsResult.error === 'SESSION_EXPIRED') {
+          return { success: false, error: 'SESSION_EXPIRED' };
+        }
+        return { success: false, error: slotsResult.error ?? 'SLOTS_FETCH_FAILED', needsPlaywright: true };
+      }
     }
 
     if (availableSlots.length === 0) {
-      // Plus de slots disponibles — peut être un timing (slots réservés entre poll et booking)
       return { success: false, error: 'NO_SLOTS_IN_RESPONSE' };
     }
 

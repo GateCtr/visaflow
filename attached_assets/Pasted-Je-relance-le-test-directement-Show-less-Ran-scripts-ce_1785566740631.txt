@@ -1,0 +1,101 @@
+Je relance le test directement.
+
+
+Show less
+
+Ran scripts/cev-e2e-test.ts
+Verifying test result status
+
+Verifying test result status
+Excellent résultat — Phase 1 confirme tout : créneaux détectés, long séjour va directement à SelectSlot. Deux bugs à corriger :
+
+integrationUrl à usage unique — setupCevSessionHttp consomme l'URL lors du suivi des redirects ; bookCevViaHttp la réutilise mais elle est déjà invalidée. Il faut retourner finalUrl (la vraie page SelectSlot) et l'utiliser pour le booking.
+Polling HTTP 500 classifié à tort comme session_expired — le 500 vient d'un officeId manquant, pas d'une session expirée.
+Je corrige les deux maintenant.
+
+
+4 actions
+Je lis le polling et l'endroit exact où finalUrl est capturé dans le setup.
+
+
+4 actions
+Maintenant je comprends tous les problèmes. Voici le diagnostic complet :
+
+integrationUrl à usage unique — après que le setup a suivi la chaîne captcha→SelectSlot, l'URL est consommée. Le probeBodyRaw du setup contient déjà le HTML complet de SelectSlot avec les tokens et les slots. Il faut le retourner et le réutiliser directement.
+Polling HTTP 500 — l'API /Home/AvailableTimeSlots attend maintenant officeId (Guid) + visaCategories en plus de month/year. Le polling doit d'abord lire le SelectSlot HTML pour extraire ces params.
+Je fais les 4 corrections en parallèle.
+
+
+2 actions
+Je continue avec les 4 modifications restantes en parallèle.
+
+
+4 actions
+Je fais les 4 modifications en parallèle.
+
+
+2 actions
+Je continue avec les modifications restantes en parallèle.
+
+
+2 actions
+Maintenant je mets à jour le dossier loop et le test en parallèle.
+
+
+2 actions
+Je continue les 3 modifications restantes en parallèle.
+
+
+2 actions
+Je fais les 2 dernières modifications en parallèle — handleSlotFound et le test e2e.
+
+
+7 actions
+Je mets à jour le call site du loop et le test en parallèle.
+
+
+2 actions
+Je mets à jour le test e2e pour utiliser le HTML pré-capturé.
+
+
+2 actions
+Il me faut ajouter phaseBookingWithPreload dans le test et vérifier que le TypeScript compile. Je fais les deux en parallèle.
+
+
+5 actions
+J'ajoute phaseBookingWithPreload dans le test et vérifie la compilation en parallèle.
+
+
+2 actions
+Je vérifie la compilation et relance le test en parallèle.
+
+
+2 actions
+Le test compile. Je relance maintenant le test complet.
+
+
+2 actions
+Bon progrès ! 138 créneaux inline dans le HTML — les données sont là. Le problème est un faux positif : la page SelectSlot charge js.hcaptcha.com/1/api.js comme librairie, mais ce n'est pas une page captcha. Le check html.includes('hcaptcha') est trop large. Je corrige ça.
+
+
+3 actions
+La page SelectSlot charge js.hcaptcha.com/1/api.js pour protéger le formulaire de booking — ce n'est pas la page Captcha. Je raffine la détection sur les 3 occurrences.
+
+
+3 actions
+Je fixe les 3 occurrences du faux positif hcaptcha en une seule passe.
+
+
+2 actions
+Je fixe aussi la deuxième occurrence (ligne 938).
+
+
+2 actions
+Je fixe aussi le check de log diagnostique et relance le test.
+
+
+2 actions
+Je relance le test avec la correction du faux positif hcaptcha.
+
+
+Ran scripts/cev-e2e-test.ts

@@ -91,13 +91,7 @@ export async function startCevPollingLoop(): Promise<void> {
 
             // Tentative 1 : HTTP pur (rapide, zéro browser)
             console.log(`[CEV-POLL] 🌐 Tentative booking HTTP session=${s.sessionId}...`);
-            const siphoned = s.siphonedF5CookieValue ? {
-              f5CookieValue: s.siphonedF5CookieValue,
-              f5CookieName: s.siphonedF5CookieName,
-              aspNetSessionId: s.siphonedAspNetSessionId,
-              userAgent: s.siphonedUserAgent,
-              validUntil: s.siphonedValidUntil
-            } : undefined;
+            // Réutilisation du siphoned déjà construit en haut du for-loop
             // Si un créneau précis a été alloué, tente le booking direct ciblé
             const httpResult = allocatedTarget
               ? await bookCevSelectedSlotViaHttp(
