@@ -23,3 +23,4 @@
 - [Spain persistent-browser mode](spain-persistent-browser.md) — CF/impit asymmetry, session rules, cf_clearance deletion before Continuar, Chromium path, full install + Saopola e2e test confirmed 2026-07-30.
 - [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.
 - [Spain multi-dossier parallel booking](spain-multidossier-parallel.md) — 2 bugs fixed: acquireBrowserBookingLock (full flow, not just DOM submit) + closeAndInvalidate on /main/ 0B (not invalidateSession); test confirmed 2026-07-30.
+- [CEV Overview page flow](cev-overview-flow.md) — /VOW/Overview Cas 1: "Nouveau rendez-vous" href=/Integration/VOW/SelectSlot → suivi direct; Cas 2: limit_reached; implémenté + testé VOWINT6323902.
