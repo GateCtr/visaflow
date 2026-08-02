@@ -2994,13 +2994,15 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
 
   try {
-    const currentOrigin: string = await page.evaluate(() => window.location.origin).catch(() => "");
-    if (!currentOrigin.includes("citaconsular.es")) {
-      console.log(`[spain-pb] 🔄 callBrowser → contexte hors citaconsular.es (${currentOrigin}) — navigation root de secours…`);
-      await page.goto("https://www.citaconsular.es/", {
+    const currentUrl = page.url();
+    const currentOrigin = await page.evaluate(() => window.location.origin).catch(() => "");
+    const shouldReset = !currentOrigin.includes("citaconsular.es") || /\/XWFQ|\/cdn-cgi\//i.test(currentUrl) || currentUrl.includes("about:blank");
+    if (shouldReset) {
+      console.log(`[spain-pb] 🔄 callBrowser → contexte non-portail (${currentUrl}) — retour au widget cible…`);
+      await page.goto("https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/", {
         waitUntil: "domcontentloaded",
         timeout: 20_000,
-      }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ callBrowser navigation root (non-fatal): ${e}`));
+      }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ callBrowser navigation widget (non-fatal): ${e}`));
     }
   } catch {
     // non-fatal
