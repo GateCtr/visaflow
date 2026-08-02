@@ -183,7 +183,7 @@ async function phaseSetup() {
     if (result.slotsAvailable) {
       console.log(`${GREEN}  🎯 SelectSlot atteint — créneaux potentiellement disponibles${RESET}`);
     } else {
-      info("→ Suivi "Nouveau rendez-vous" → NoAvailability (aucun créneau pour l'instant)");
+      info('→ Suivi "Nouveau rendez-vous" → NoAvailability (aucun créneau pour l\'instant)');
     }
   } else if (result.overviewState === 'limit_reached') {
     console.log(`\n${YELLOW}${BOLD}  ⚠️  CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier${RESET}`);
@@ -292,6 +292,7 @@ async function phaseBookingWithPreload(
   integrationUrl: string,
   preloadedHtml?: string,
   preloadedSelectSlotUrl?: string,
+  selectSlotCookies?: string,
 ) {
   section("📅 Phase 3 — Booking HTTP (HTML pré-capturé du setup)");
 
@@ -323,6 +324,7 @@ async function phaseBookingWithPreload(
     undefined,
     preloadedHtml,
     preloadedSelectSlotUrl,
+    selectSlotCookies,
   );
   const elapsed = t();
 
@@ -555,12 +557,13 @@ async function main() {
       }
     }
 
-    // Booking avec HTML pré-capturé
+    // Booking avec HTML pré-capturé (+ cookies complets anti-CSRF)
     await phaseBookingWithPreload(
       sessionCookie,
       integrationUrl,
       setupResult.selectSlotHtml,
       setupResult.selectSlotUrl,
+      setupResult.selectSlotCookies,
     );
     phases["Phase 3 — Booking"] = DO_BOOK ? "ok" : "skip (dry-run)";
   }

@@ -87,21 +87,59 @@ function buildCevCookieStr(sessionCookie: string, siphoned?: SiphonedCookies): s
   return cookieStr;
 }
 
+/** Accumule les Set-Cookie d'une réponse dans un cookie string existant. */
+function accumulateCookies(existing: string, res: Response): string {
+  // impit peut retourner les cookies soit via 'set-cookie' (multiple) soit via getSetCookie()
+  const rawCookies: string[] = [];
+  try {
+    // Standard: getSetCookie() (Node 18+)
+    const all = (res.headers as any).getSetCookie?.() as string[] | undefined;
+    if (all?.length) rawCookies.push(...all);
+  } catch { /* ignore */ }
+  if (!rawCookies.length) {
+    const single = res.headers.get('set-cookie');
+    if (single) rawCookies.push(single);
+  }
+
+  let result = existing;
+  for (const raw of rawCookies) {
+    // "name=value; Path=/; HttpOnly; Secure; ..." → prendre seulement "name=value"
+    const pair = raw.split(';')[0]?.trim();
+    if (!pair) continue;
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx < 1) continue;
+    const name = pair.slice(0, eqIdx).trim();
+    // Remplacer si déjà présent, sinon ajouter
+    const existingRe = new RegExp(`(?:^|;\\s*)${name}=[^;]*`, 'i');
+    if (existingRe.test(result)) {
+      result = result.replace(existingRe, (m) => m.startsWith(';') ? `; ${pair}` : pair);
+    } else {
+      result = result ? `${result}; ${pair}` : pair;
+    }
+  }
+  return result;
+}
+
 async function fetchFollowRedirects(
   startUrl: string,
   sessionCookie: string,
   ua: string,
   siphoned?: SiphonedCookies,
   maxHops = 6,
-): Promise<{ ok: boolean; url: string; html: string; status: number; responseHeaders?: Record<string, string>; error?: string }> {
+): Promise<{ ok: boolean; url: string; html: string; status: number; responseHeaders?: Record<string, string>; accumulatedCookies?: string; error?: string }> {
   let url = startUrl;
+  // Cookie string accumulé à travers toute la chaîne de redirects.
+  // CRITIQUE : le cookie __RequestVerificationToken (anti-CSRF ASP.NET) est souvent émis par
+  // le serveur via Set-Cookie lors du GET SelectSlot — il faut le capturer ici pour le POST.
+  let accumulatedCookies = buildCevCookieStr(sessionCookie, siphoned);
+
   for (let hop = 0; hop < maxHops; hop++) {
     const res = await cevImpitFetch(url, {
       method: 'GET',
       // Document navigate — ordre exact Chrome 148 (getCevBrowserHeaders !isAjax branch)
       // Cache-Control: max-age=0 (pas no-cache), Upgrade-Insecure-Requests: 1 ✓
       headers: getCevBrowserHeaders({
-        cookie: buildCevCookieStr(sessionCookie, siphoned),
+        cookie: accumulatedCookies,
         userAgent: siphoned?.userAgent ?? ua,
         cacheControl: 'max-age=0',
         fetchSite: 'same-origin',
@@ -110,10 +148,13 @@ async function fetchFollowRedirects(
       signal: AbortSignal.timeout(30_000),
     }, "[CEV-BOOKING]");
 
+    // Accumuler les Set-Cookie de chaque hop (y compris les redirects 30x)
+    accumulatedCookies = accumulateCookies(accumulatedCookies, res);
+
     if (res.status === 302 || res.status === 301) {
       const loc = res.headers.get('location');
       if (!loc) {
-        return { ok: false, url, html: '', status: res.status, error: 'Redirect sans Location header' };
+        return { ok: false, url, html: '', status: res.status, accumulatedCookies, error: 'Redirect sans Location header' };
       }
       url = loc.startsWith('http') ? loc : `${CEV_BASE}${loc}`;
       continue;
@@ -123,15 +164,15 @@ async function fetchFollowRedirects(
       const html = await res.text().catch(() => '');
       const responseHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => { responseHeaders[k] = v; });
-      return { ok: true, url, html, status: 200, responseHeaders };
+      return { ok: true, url, html, status: 200, responseHeaders, accumulatedCookies };
     }
 
     const responseHeaders: Record<string, string> = {};
     res.headers.forEach((v, k) => { responseHeaders[k] = v; });
-    return { ok: false, url, html: '', status: res.status, error: `HTTP ${res.status}`, responseHeaders };
+    return { ok: false, url, html: '', status: res.status, error: `HTTP ${res.status}`, responseHeaders, accumulatedCookies };
   }
 
-  return { ok: false, url, html: '', status: 0, error: 'Trop de redirections' };
+  return { ok: false, url, html: '', status: 0, error: 'Trop de redirections', accumulatedCookies };
 }
 
 // ─── Parseurs HTML légers (regex — pas de DOM parser requis) ─────────────────
@@ -806,6 +847,11 @@ export async function bookCevViaHttp(
 
       html = pageResult.html;
       selectSlotUrl = pageResult.url;
+      // Utiliser les cookies accumulés (incluant __RequestVerificationToken anti-CSRF)
+      // comme fallback si le caller n'a pas fourni de selectSlotCookies.
+      if (!selectSlotCookies && pageResult.accumulatedCookies) {
+        selectSlotCookies = pageResult.accumulatedCookies;
+      }
     }
 
     if (selectSlotUrl.includes('NoAvailability') || html.toLowerCase().includes('noavailability')) {
@@ -1135,6 +1181,11 @@ export async function bookCevSelectedSlotViaHttp(
 
     if (!pageResult.ok) {
       return { success: false, error: pageResult.error ?? 'FETCH_FAILED', needsPlaywright: true };
+    }
+
+    // Utiliser les cookies accumulés du GET comme fallback pour le POST anti-CSRF
+    if (!selectSlotCookies && pageResult.accumulatedCookies) {
+      selectSlotCookies = pageResult.accumulatedCookies;
     }
 
     const { html, url: selectSlotUrl } = pageResult;
