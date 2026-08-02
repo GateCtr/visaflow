@@ -56,7 +56,7 @@ import {
   type SlotExplorationResult,
 } from "./spain-slot-explorer.js";
 import type { ExtractedSlotInfo } from "./spain-http-booking.js";
-import { buildBookititQueryString } from "./spain-bookitit-params.js";
+import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -261,15 +261,27 @@ function extractBookititBaseFromHtml(html: string): string | null {
 // ─── JSONP HTTP Caller (via impit + cf_clearance) ───────────────────────────
 
 function parseJsonpPayload(text: string): unknown | null {
-  // Certains endpoints Bookitit retournent "callback=jQuery...(JSON)" — strip le préfixe "callback="
-  // avant d'appliquer le regex standard. Sans ça, match() échoue et retourne null.
-  const src = text.trim().replace(/^callback=/, "");
+  if (!text || typeof text !== "string") return null;
+
+  let src = text.trim();
   if (!src) return null;
-  const m = src.match(/^[\w$.]+\(([\s\S]*)\);?$/);
-  if (!m) {
-    try { return JSON.parse(src); } catch { return null; }
+
+  // Le navigateur réel envoie parfois des réponses déjà préfixées avec "callback=..."
+  // ou "jQuery...({...});". On enlève le préfixe et on parse le JSON contenu.
+  src = src.replace(/^callback=/i, "");
+
+  const jsonpMatch = src.match(/^[\w$.]+\((<\s*\[?\s*\{|\[|\{)[\s\S]*\);?$/);
+  if (jsonpMatch) {
+    const inner = src.slice(src.indexOf("(") + 1, src.lastIndexOf(")"));
+    try { return JSON.parse(inner.trim()); } catch {
+      // Certains payloads peuvent contenir des littéraux JS non valides dans des chaînes
+      // ou des objets imbriqués ; on tente un fallback permissif.
+      const clean = inner.trim().replace(/\bundefined\b/gi, "null");
+      try { return JSON.parse(clean); } catch { return null; }
+    }
   }
-  try { return JSON.parse(m[1].trim()); } catch { return null; }
+
+  try { return JSON.parse(src); } catch { return null; }
 }
 
 async function fetchBookititBodyWithFallback(
@@ -440,6 +452,10 @@ function collectIds(value: unknown, keyHint: RegExp): string[] {
 export function extractServiceDetails(payload: unknown): Array<{ id: string; name: string; duration?: number }> {
   const results: Array<{ id: string; name: string; duration?: number }> = [];
 
+  function isLikelyServicesWrapper(obj: Record<string, unknown>): boolean {
+    return Array.isArray(obj.Services) || Array.isArray(obj.services) || Array.isArray(obj.items);
+  }
+
   /** Champs valides pour l'identifiant d'un service. */
   function extractId(obj: Record<string, unknown>): string | null {
     const raw = obj.id ?? obj.Id ?? obj.serviceId ?? obj.ServiceId
@@ -504,6 +520,12 @@ export function extractServiceDetails(payload: unknown): Array<{ id: string; nam
       // Essayer d'abord comme service direct (objet non-array avec id+name)
       if (extractId(obj)) {
         tryPushService(obj);
+        return;
+      }
+      if (isLikelyServicesWrapper(obj)) {
+        for (const value of Object.values(obj)) {
+          if (value && typeof value === "object") walk(value, depth + 1);
+        }
         return;
       }
       // Sinon recurser dans les valeurs (wrapper object ou indexé numérique)
@@ -694,7 +716,6 @@ async function buildConfigFromBase(
   // Récupérer services
   const svcPayload = await callBookititJsonp(session, baseUrl, "getservices/", {
     ...params,
-    selectedPeople: "1",
   }, portalUrl);
   const services = svcPayload
     ? collectIds(svcPayload, /(service.*id|services.*id|^id$)/i).slice(0, 3)
@@ -717,7 +738,6 @@ async function buildConfigFromBase(
     const agPayload = await callBookititJsonp(session, baseUrl, "getagendas/", {
       ...params,
       "services[]": services,
-      selectedPeople: "1",
     }, portalUrl);
     if (agPayload) {
       agendas = collectIds(agPayload, /(agenda.*id|agendas.*id|^id$)/i).slice(0, 5);
@@ -821,7 +841,6 @@ async function confirmSlotsViaDatetime(
       cfgQ.append("version",        "4");
       cfgQ.append("src",            referer);
       cfgQ.append("srvsrc",         srvsrc);
-      cfgQ.append("selectedPeople", "1");
       cfgQ.append("_",              String(Date.now()));
       // ── Routage getwidgetconfigurations/ + getservices/ ───────────────────────
       // Mode persistent-browser (session.source === "playwright") :
@@ -868,7 +887,6 @@ async function confirmSlotsViaDatetime(
       svcQ.append("version",        "4");
       svcQ.append("src",            referer);
       svcQ.append("srvsrc",         srvsrc);
-      svcQ.append("selectedPeople", "1");
       svcQ.append("_",              String(Date.now()));
 
       let svcRaw: string;
@@ -964,7 +982,6 @@ async function confirmSlotsViaDatetime(
       agQ.append("src",            referer);
       agQ.append("srvsrc",         srvsrc);
       agQ.append("services[]",     svc.serviceId);
-      agQ.append("selectedPeople", "1");
       agQ.append("_",              String(Date.now()));
       let agRaw: string;
       if (useBrowserFetch) {
@@ -1006,17 +1023,22 @@ async function confirmSlotsViaDatetime(
         dtQ.append("srvsrc",         srvsrc);
         dtQ.append("services[]",     svc.serviceId);
         if (agendaId) dtQ.append("agendas[]", agendaId);
-        dtQ.append("selectedPeople", "1");
         dtQ.append("start",          start);
         dtQ.append("end",            end);
+        dtQ.append("selectedPeople", "1");
         dtQ.append("_",              String(Date.now()));
+
+        const datetimeUrl = `${base}datetime/?${dtQ}`;
+        console.log(`[spain-http] 📡 datetime request → ${datetimeUrl}`);
+        console.log(`[spain-http] 📡 datetime params → callback=${dtCb} service=${svc.serviceId} agenda=${agendaId || "<none>"} start=${start} end=${end} selectedPeople=1`);
+
         let dtRaw: string;
         if (useBrowserFetch) {
-          dtRaw = await fetchBookititBodyWithFallback(session, `${base}datetime/?${dtQ}`, headers);
+          dtRaw = await fetchBookititBodyWithFallback(session, datetimeUrl, headers);
           const pageUrl = spainPersistentBrowser.getActivePage()?.url();
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B${isBookititServiceRedirect(dtRaw, pageUrl) ? " [redirect:#services]" : ""}`);
         } else {
-          const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
+          const dtRes = await spainCfFetch(datetimeUrl, session, { headers });
           dtRaw = dtRes?.ok ? await dtRes.text() : "";
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit) → HTTP ${dtRes?.status ?? "null"} | ${dtRaw.length}B`);
         }
@@ -2123,6 +2145,11 @@ async function scanViaMainEndpoint(
   // Supprimer les templates Underscore.js — utilisé dans toute la détection
   const renderedHtml = html.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
 
+  const hasWidgetServiceState = /idDivBktServicesContainer|#selectservice\/[\w-]+|idDivBktButtonContinueContainer|idBktDefaultCustomContainer/i.test(html);
+  const hasServiceTransitionSignal = /#services|selectservice|idDivBktServicesContainer/i.test(renderedHtml);
+  const diagnosticState = hasWidgetServiceState || hasServiceTransitionSignal ? "service-state" : "no-service-state";
+  console.log(`[spain-http] 🧭 Widget state: ${diagnosticState}${hasWidgetServiceState ? " (services/accept flow visible)" : ""}`);
+
   // ─── DÉTECTION DE DISPONIBILITÉ ──────────────────────────────────────────
   //
   // Flux UI réel observé :
@@ -2147,6 +2174,7 @@ async function scanViaMainEndpoint(
   const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton|Aceptar/i.test(html);
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
+  const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
 
   // Signal négatif fiable → pas besoin d'appel API
   if (hasVisibleNoSlots) {
@@ -2170,6 +2198,21 @@ async function scanViaMainEndpoint(
       `[spain-http] ⚠️ "No hay horas disponibles" VISIBLE MAIS flow interactif détecté ` +
       `(modal Aceptar ou services dynamiques) → vérification via getservices/datetime...`,
     );
+  }
+
+  // Si le widget a déjà atteint un état de services/accept flow mais que datetime/ reste vide,
+  // on ne considère pas ça comme un slot confirmé ; on le marque comme état intermédiaire pour
+  // éviter les faux positifs et conserver un signal de progression clair.
+  if (diagnosticState === "service-state" && !hasVisibleNoSlots) {
+    console.log(`[spain-http] 🟡 État widget service-state observé sans slot confirmé — vérification datetime/ en cours...`);
+  }
+
+  if (hasVisibleNoSlots && !hasInteractiveAcceptFlow) {
+    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+  }
+
+  if (hasVisibleNoSlots && hasInteractiveAcceptFlow) {
+    console.log(`[spain-http] ⚠️ "No hay horas disponibles" VISIBLE MAIS flow interactif détecté → vérification via getservices/datetime...`);
   }
 
   // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
@@ -2200,7 +2243,7 @@ async function scanViaMainEndpoint(
     }
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ "tramitacion de visas" présent MAIS datetime/ vide → pas de créneau réel`);
+      console.log(`[spain-http] ⛔ État service-state observé mais datetime/ vide → pas de créneau réel (état intermédiaire Bookitit)`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
     return {
@@ -2226,7 +2269,7 @@ async function scanViaMainEndpoint(
     );
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ Templates client-side MAIS datetime/ vide → pas de créneau réel`);
+      console.log(`[spain-http] ⛔ Templates client-side et état service-state observé, mais datetime/ vide → pas de créneau réel`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
     return {
@@ -2245,7 +2288,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 Services RENDUS (hors template) — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ Services rendus MAIS datetime/ vide → pas de créneau réel`);
+      console.log(`[spain-http] ⛔ Services rendus mais datetime/ vide → pas de créneau réel`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
     return {

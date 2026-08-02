@@ -175,7 +175,6 @@ export async function exploreAvailableSlots(
     const agPayload = await callJsonp(session, "getagendas/", {
       ...baseParams,
       services: service.serviceId,
-      selectedPeople: "1",
     }, portalUrl);
 
     if (agPayload) {
@@ -195,7 +194,6 @@ export async function exploreAvailableSlots(
         ...baseParams,
         services: service.serviceId,
         agendas: agendaParam,
-        selectedPeople: "1",
         date_from: dateFrom,
         date_to: dateTo,
       }, portalUrl);

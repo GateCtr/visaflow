@@ -523,7 +523,7 @@ class SpainPersistentBrowserManager {
     const src = targetUrl.replace(/\/?$/, "/");
     const srvsrc = "https://www.citaconsular.es";
 
-    const buildParams = (cb: string) => {
+    const buildBaseParams = (cb: string) => {
       const q = new URLSearchParams();
       q.append("callback", cb);
       q.append("type", "default");
@@ -532,13 +532,18 @@ class SpainPersistentBrowserManager {
       q.append("version", "4");
       q.append("src", src);
       q.append("srvsrc", srvsrc);
-      q.append("selectedPeople", "1");
       q.append("_", String(Date.now()));
       return q.toString();
     };
 
-    const cfgUrl = `${base}getwidgetconfigurations/?${buildParams(`cbCfg${Date.now()}`)}`;
-    const svcUrl = `${base}getservices/?${buildParams(`cbSvc${Date.now() + 1}`)}`;
+    const buildDatetimeParams = (cb: string) => {
+      const q = new URLSearchParams(buildBaseParams(cb));
+      q.append("selectedPeople", "1");
+      return q.toString();
+    };
+
+    const cfgUrl = `${base}getwidgetconfigurations/?${buildBaseParams(`cbCfg${Date.now()}`)}`;
+    const svcUrl = `${base}getservices/?${buildBaseParams(`cbSvc${Date.now() + 1}`)}`;
 
     const fetchFromPage = async (url: string): Promise<string> => {
       try {
@@ -613,13 +618,13 @@ class SpainPersistentBrowserManager {
         const tasks: Array<{ url: string; cacheKey: string }> = [];
         for (const svcId of serviceIds.slice(0, 3)) {
           // getagendas/ par service
-          const agQ = new URLSearchParams(buildParams(`cbAg${Date.now() + (seq++)}`));
+          const agQ = new URLSearchParams(buildBaseParams(`cbAg${Date.now() + (seq++)}`));
           agQ.set("services[]", svcId);
           tasks.push({ url: `${base}getagendas/?${agQ}`, cacheKey: `getagendas/${svcId}` });
 
           // datetime/ par service × 3 mois
           for (const mo of months) {
-            const dtQ = new URLSearchParams(buildParams(`cbDt${Date.now() + (seq++)}`));
+            const dtQ = new URLSearchParams(buildDatetimeParams(`cbDt${Date.now() + (seq++)}`));
             dtQ.set("services[]", svcId);
             dtQ.set("start",      mo.start);
             dtQ.set("end",        mo.end);

@@ -45,7 +45,7 @@ import {
 } from "./convexClient.js";
 import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./spain-confirmation-pdf.js";
-import { buildBookititQueryString } from "./spain-bookitit-params.js";
+import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -675,7 +675,6 @@ export async function executeHttpBooking(
     callEndpoint("getagendas/", {
       ...baseParams,
       "services[]": [targetService.serviceId], // PHP array notation confirmée par capture
-      selectedPeople: "1",
     }),
     callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null),
   ]);
@@ -704,11 +703,10 @@ export async function executeHttpBooking(
     console.log(`[spain-booking] 📅 Récupération datetime…`);
     const now = new Date();
     // Params datetime confirmés par capture 2026-07-28 : start/end (pas date_from/date_to)
-    const buildDatetimeParams = (year: number, month: number) => ({
+    const buildDatetimeParams = (year: number, month: number) => withBookititSelectedPeople({
       ...baseParams,
       "services[]": targetService.serviceId,
       ...(agendaId ? { "agendas[]": agendaId } : {}),
-      selectedPeople: "1",
       start: `${year}-${String(month + 1).padStart(2, "0")}-01`,
       end: new Date(year, month + 1, 0).toISOString().slice(0, 10),
     });
@@ -843,7 +841,6 @@ export async function executeHttpBooking(
     ...(agendaId ? { "agendas[]": agendaId } : {}),
     date: slotDate,
     time: slotTime,
-    selectedPeople: "1",
     comments: "",
     ...(gctToken ? { gct: gctToken } : {}),
   };

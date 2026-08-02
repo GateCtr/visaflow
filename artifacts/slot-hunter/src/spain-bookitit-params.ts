@@ -14,3 +14,12 @@ export function buildBookititQueryString(params: Record<string, string | string[
 
   return q.toString();
 }
+
+export function withBookititSelectedPeople<T extends Record<string, string | string[] | undefined>>(
+  params: T,
+): T & { selectedPeople: string } {
+  return {
+    ...params,
+    selectedPeople: "1",
+  };
+}
