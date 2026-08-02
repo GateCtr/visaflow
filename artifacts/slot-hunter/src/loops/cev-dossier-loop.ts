@@ -24,6 +24,7 @@
  */
 
 import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache, resolveFirstAppIdFromMyList } from "../cevHttpSetup.js";
+import { cancelCevAppointment } from "../cevHttpCancel.js";
 import { bookCevViaHttp } from "../cevHttpBooking.js";
 import { bookWithExistingSession } from "../cevBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
@@ -927,7 +928,7 @@ function sleep(ms: number): Promise<void> {
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
 
 interface ScanResult {
-  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll";
+  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached";
   sessionCookie?: string;
   integrationUrl?: string;
   /** URL finale SelectSlot capturée lors du setup (à usage unique — utiliser pour booking) */
@@ -936,6 +937,10 @@ interface ScanResult {
   selectSlotHtml?: string;
   /** Cookie string complet du setup (inclut __RequestVerificationToken anti-CSRF ASP.NET) */
   selectSlotCookies?: string;
+  /** HTML brut de la page Overview — présent uniquement si status='limit_reached' */
+  overviewHtml?: string;
+  /** URL de la page Overview — présent uniquement si status='limit_reached' */
+  overviewUrl?: string;
 }
 
 // ─── Type étendu pour siphonedCreds (full session + legacy F5) ───────────────
@@ -1059,6 +1064,16 @@ async function performScan(
       selectSlotUrl: result.selectSlotUrl,
       selectSlotHtml: result.selectSlotHtml,
       selectSlotCookies: result.selectSlotCookies,
+    };
+  }
+
+  // CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier
+  if (result.overviewState === 'limit_reached') {
+    return {
+      status: "limit_reached",
+      sessionCookie: result.sessionCookie,
+      overviewHtml: result.overviewHtml,
+      overviewUrl: result.overviewUrl,
     };
   }
 
@@ -1582,6 +1597,71 @@ async function runAccountLoop(job: any): Promise<void> {
           logger.info(`  — Pas de créneau (poll direct)`);
           recordScan(uniqueJobId, dossier.vowintRef);
           break;
+
+        case "limit_reached": {
+          logger.warn(`  ⚠️ CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier ${dossier.vowintRef}`);
+          recordScan(uniqueJobId, dossier.vowintRef);
+          botLog({
+            applicationId: logApplicationId,
+            step: "cev_dossier_limit_reached",
+            status: "warn",
+            data: {
+              dossier: dossier.vowintRef,
+              dossierIndex: dossier.index,
+              scanCount: state.scanCount,
+              autoCancelEnabled: !!(hunterConfig as any).cevAutoCancelOnLimitReached,
+              overviewHtmlLen: result.overviewHtml?.length ?? 0,
+              overviewUrl: result.overviewUrl ?? "",
+            },
+          });
+
+          if (
+            (hunterConfig as any).cevAutoCancelOnLimitReached &&
+            result.overviewHtml &&
+            result.overviewUrl &&
+            result.sessionCookie
+          ) {
+            logger.info(`  🗑️ Auto-annulation activée — tentative d'annulation du RDV existant...`);
+            try {
+              const cancelResult = await cancelCevAppointment(
+                result.overviewHtml,
+                result.overviewUrl,
+                result.sessionCookie,
+                logApplicationId,
+              );
+              if (cancelResult.success) {
+                logger.info(`  ✅ Annulation réussie (→ ${cancelResult.cancelFinalUrl?.slice(0, 80) ?? "OK"}) — invalidation session pour re-scan propre`);
+                // Invalider la session VOWINT pour forcer un re-login propre au prochain scan
+                invalidateVowintCache(vowintEmail);
+                botLog({
+                  applicationId: logApplicationId,
+                  step: "cev_dossier_cancel_success",
+                  status: "ok",
+                  data: {
+                    dossier: dossier.vowintRef,
+                    cancelFinalUrl: cancelResult.cancelFinalUrl ?? "",
+                  },
+                });
+              } else {
+                logger.warn(`  ❌ Auto-annulation échouée: ${cancelResult.error}`);
+                botLog({
+                  applicationId: logApplicationId,
+                  step: "cev_dossier_cancel_failed",
+                  status: "fail",
+                  data: {
+                    dossier: dossier.vowintRef,
+                    error: cancelResult.error ?? "unknown",
+                  },
+                });
+              }
+            } catch (cancelErr) {
+              logger.error(`  Erreur auto-annulation: ${cancelErr}`);
+            }
+          } else if (!(hunterConfig as any).cevAutoCancelOnLimitReached) {
+            logger.info(`  ℹ️ Auto-annulation désactivée — activer cevAutoCancelOnLimitReached dans la config admin pour débloquer ce dossier`);
+          }
+          break;
+        }
       }
 
       // Stats périodiques

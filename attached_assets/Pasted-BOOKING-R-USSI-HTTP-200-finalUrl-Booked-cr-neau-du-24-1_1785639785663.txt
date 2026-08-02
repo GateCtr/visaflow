@@ -1,0 +1,70 @@
+BOOKING RÉUSSI ! HTTP 200 → finalUrl=.../Booked — créneau du 24/12/2026 14h20 réservé pour VOWINT6323902. Le fix anti-CSRF fonctionne.
+
+Je vérifie maintenant le loop de production pour m'assurer qu'il passe aussi selectSlotCookies à bookCevViaHttp.
+
+
+3 actions
+Le booking HTTP est confirmé en production. Je dois maintenant patcher les loops de production pour passer selectSlotCookies — sinon le fix anti-CSRF n'est actif que dans le test. Lecture des sites d'appel en parallèle.
+
+
+5 actions
+Je dois aussi patcher bookCevViaHttp lui-même pour capturer les cookies anti-CSRF lors du GET fresh (quand pas de preloadedHtml), sinon les loops production sans HTML pré-capturé restent cassés. Je lis la fonction fetchFollowRedirects et les caches de session du dossier loop en parallèle.
+
+
+6 actions
+La stratégie la plus robuste : modifier fetchFollowRedirects pour accumuler les cookies de toute la chaîne et les retourner. Ainsi tous les call sites production bénéficient du fix automatiquement sans patch individuel. Je vérifie d'abord que mergeCookies est disponible dans cevHttpBooking.
+
+
+3 actions
+mergeCookies est privée à cevHttpSetup. J'implémente le fix directement dans fetchFollowRedirects — accumuler les Set-Cookie de chaque hop et retourner le cookie string final. Je fais tous les edits en parallèle.
+
+
+2 actions
+Maintenant je raccorde accumulatedCookies dans les deux call sites de fetchFollowRedirects à l'intérieur de bookCevViaHttp, et je patche cev-dossier-loop.ts pour passer selectSlotCookies des sessions fraîches. Je cherche d'abord les lignes exactes à modifier.
+
+
+6 actions
+Maintenant je câble accumulatedCookies dans les deux fonctions de booking et je patche le dossier loop — tout en parallèle.
+
+
+5 actions
+Je vérifie la signature de bookCevSelectedSlotViaHttp et lance TSC pendant que je fais les edits restants du dossier loop.
+
+
+10 actions
+Une erreur TS : ScanResult n'a pas selectSlotCookies. Je cherche la définition en parallèle avec le fix de bookCevSelectedSlotViaHttp.
+
+
+11 actions
+0 erreurs TS. Je câble accumulatedCookies dans bookCevSelectedSlotViaHttp, je mets à jour la mémoire, et je redémarre le workflow — en parallèle.
+
+
+6 actions
+TSC clean, workflow redémarré. Je mets à jour la mémoire avec les findings critiques de cette session et je propose les follow-up tasks en parallèle.
+
+
+8 actions
+Tout est en ordre. Voici le bilan complet de cette session :
+
+Ce qui a été résolu et livré :
+
+1. Fix race hCaptcha — HCaptchaEnterpriseTaskProxyless échoue immédiatement (non supporté par Anti-Captcha) et résolvait la race avec null avant que la tâche régulière finisse. Fix : compteur settledCount, la promise ne se résout avec null que quand les deux tâches ont terminé. Résultat : setup passe en ~40-100s au lieu de timeout.
+
+2. Fix anti-CSRF cookie (cause du HTTP 500) — ASP.NET MVC exige non seulement le champ hidden __RequestVerificationToken mais aussi un cookie du même nom émis lors du GET SelectSlot. Sans lui → HTTP 500 immédiat.
+
+setupCevSessionHttp() retourne maintenant selectSlotCookies = le cookie string complet accumulé sur toute la chaîne de redirects
+fetchFollowRedirects() accumule les Set-Cookie de chaque hop et retourne accumulatedCookies comme fallback automatique pour tous les call sites sans HTML pré-capturé
+Tous les loops de production (cev-dossier-loop, cev-polling-loop, cev-extension, cev-stealth-loop) bénéficient du fix automatiquement
+3. Booking HTTP confirmé — Premier booking réel en production :
+
+POST /Integration/VOW/SelectSlot → HTTP 200 → finalUrl=.../Booked
+VOWINT6323902 : 2026-12-24 14:20 — réservé en 1.5s
+
+4. Flow Overview Cas 1 confirmé — Setup détecte /VOW/Overview → extrait le lien "Nouveau rendez-vous" → suit vers SelectSlot → booking en une seule passe.
+
+Deux follow-up proposés :
+
+#5 — Implémenter l'annulation de RDV CEV (Cancel + Rebook)
+#6 — Éviter le double-booking sur un dossier déjà réservé ce cycle (persistance Redis)
+
+Worked for 12 minutes

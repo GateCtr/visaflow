@@ -136,6 +136,13 @@ export interface CevHttpSetupResult {
    *   'limit_reached'            — seul "Annuler" disponible, limite atteinte (Cas 2)
    */
   overviewState?: 'new_appointment_available' | 'limit_reached';
+  /**
+   * HTML brut de la page Overview (Cas 2 seulement) — contient le lien "Annuler".
+   * Passé à cancelCevAppointment() quand cevAutoCancelOnLimitReached=true.
+   */
+  overviewHtml?: string;
+  /** URL finale de la page Overview (Referer pour le flow d'annulation) */
+  overviewUrl?: string;
 }
 
 /**
@@ -1269,6 +1276,8 @@ export async function setupCevSessionHttp(
           redirectUrl: captchaRedirectUrl,
           slotsAvailable: false,
           overviewState: 'limit_reached',
+          overviewHtml: probeBodyRaw || undefined,
+          overviewUrl: finalUrl || undefined,
         };
       }
 
