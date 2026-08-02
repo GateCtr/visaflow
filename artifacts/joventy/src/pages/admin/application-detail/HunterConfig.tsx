@@ -45,6 +45,8 @@ interface HunterConfigData {
   cevDossierPool?: string;
   cevUseProxy?: boolean;
   cevScanIntervalSec?: number;
+  // Group booking
+  groupSize?: number;
 }
 
 interface Props {
@@ -98,6 +100,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [cevDossierPool, setCevDossierPool] = useState("");
   const [cevUseProxy, setCevUseProxy] = useState(false);
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
+  // Group booking
+  const [groupSize, setGroupSize] = useState("");
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -139,6 +143,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setCevDossierPool(hc.cevDossierPool ?? "");
       setCevUseProxy(hc.cevUseProxy ?? false);
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
+      // Group booking
+      setGroupSize(hc.groupSize ? String(hc.groupSize) : "");
     }
   }, [hc]);
 
@@ -170,6 +176,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         // CEV Dossier Loop v3 - Multi-comptes
         cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
+        // Group booking
+        groupSize: groupSize ? Number(groupSize) : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -286,6 +294,28 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           <Field label="Date minimum"><Input type="date" value={slotDateFrom} onChange={(e) => setSlotDateFrom(e.target.value)} className="h-9 bg-slate-50/80 text-sm" /></Field>
           <Field label="Date limite"><Input type="date" value={slotDateDeadline} onChange={(e) => setSlotDateDeadline(e.target.value)} className="h-9 bg-slate-50/80 text-sm" /></Field>
         </div>
+
+        {/* Group booking (Spain / Germany / Schengen) */}
+        {(destination === "spain" || destination === "germany" || destination === "schengen") && (
+          <Field label="Places minimum par créneau (group booking)">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={groupSize}
+                onChange={(e) => setGroupSize(e.target.value)}
+                placeholder="1"
+                className="h-9 bg-slate-50/80 text-sm font-mono w-24"
+              />
+              <span className="text-[11px] text-slate-500">
+                {groupSize && Number(groupSize) > 1
+                  ? `Bot ne booke que si ≥ ${groupSize} places libres simultanées`
+                  : "Laisser vide ou 1 = solo (défaut)"}
+              </span>
+            </div>
+          </Field>
+        )}
 
         {/* Destination-specific */}
         {destination === "schengen" && (

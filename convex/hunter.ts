@@ -60,6 +60,8 @@ export const setHunterConfig = mutation({
     cevDossierPool: v.optional(v.string()),
     cevUseProxy: v.optional(v.boolean()),
     cevScanIntervalSec: v.optional(v.number()),
+    // Group booking — min places libres requises par créneau
+    groupSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

@@ -72,6 +72,12 @@ export interface SpainBookingConfig {
   targetDate?: string;
   /** Heure pré-confirmée par le scanner (HH:MM) — saute le re-fetch datetime/. */
   targetTime?: string;
+  /**
+   * Nombre minimum de places libres requises (group booking).
+   * Si > 1, les créneaux avec freeslots < groupSize sont ignorés.
+   * Absent ou 1 = solo booking (défaut).
+   */
+  groupSize?: number;
 }
 
 export interface SpainBookingResult {
@@ -658,7 +664,7 @@ export async function executeHttpBooking(
       buildDatetimeParams(now.getFullYear(), now.getMonth()));
 
     if (datetimePayload && typeof datetimePayload === "object") {
-      const slot = extractFirstSlot(datetimePayload);
+      const slot = extractFirstSlot(datetimePayload, config.groupSize);
       if (slot) {
         slotDate = slot.date;
         slotTime = slot.time;
@@ -680,7 +686,7 @@ export async function executeHttpBooking(
       for (let m = 0; m < futurePayloads.length; m++) {
         const mPayload = futurePayloads[m];
         if (mPayload) {
-          const slot = extractFirstSlot(mPayload);
+          const slot = extractFirstSlot(mPayload, config.groupSize);
           if (slot) {
             slotDate = slot.date;
             slotTime = slot.time;
@@ -1126,7 +1132,7 @@ function extractIds(value: unknown, keyHint: RegExp): string[] {
   return [...out];
 }
 
-function extractFirstSlot(payload: unknown): { date: string; time: string; agendaId?: string } | null {
+function extractFirstSlot(payload: unknown, minFree?: number): { date: string; time: string; agendaId?: string } | null {
   if (!payload || typeof payload !== "object") return null;
   const obj = payload as Record<string, unknown>;
 
@@ -1156,6 +1162,8 @@ function extractFirstSlot(payload: unknown): { date: string; time: string; agend
         const freeRaw = t.freeslots ?? t.freeSlots ?? t.free_slots;
         const free = typeof freeRaw === "number" ? freeRaw : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
         if (free === 0) continue; // explicitement aucun créneau
+        // Group booking : ignorer les créneaux avec moins de places que le minimum requis
+        if (minFree && minFree > 1 && free !== -1 && free < minFree) continue;
 
         // agenda est dans l'entrée temporelle, pas dans l'objet jour parent
         const agendaId = typeof t.agenda === "string" ? t.agenda
