@@ -4,6 +4,7 @@
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
 import { ProxyAgent } from "undici";
+import { hasDecodoProxy, rotateDecodoUrl, getCurrentDecodoUrl } from "../spain-decodo-pool.js";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -31,17 +32,22 @@ function makeSoaxGermanyUrl(baseUrl: string): string {
   }
 }
 
+// ─── Proxy cache (module-level, stable par session) ─────────────────────────
+// diplo.de lie le JSESSIONID à l'IP source → le proxy ne doit PAS changer
+// en cours de session. On cache le dispatcher et on ne le régénère que sur
+// appel explicite de rotateRKProxy() (entre deux sessions).
+let cachedDispatcher: { dispatcher: ProxyAgent; label: string } | undefined;
+
 /**
- * Crée un ProxyAgent pour Germany.
+ * Construit un ProxyAgent frais pour Germany (sans cache).
  *
  * Ordre de priorité :
- *  1. GERMANY_PROXY_URL  — URL proxy dédiée Germany (résidentiel recommandé)
- *  2. SOAX_PROXY_URL     — Fallback SOAX résidentiel (sticky session, sans pays fixé)
- *  3. undefined          — Direct (OK en local/Replit, bloqué sur Railway/cloud)
- *
- * DECODO_PROXY_URL est réservé à l'Espagne : ses IPs ISP sont aussi bloquées par diplo.de.
+ *  1. GERMANY_PROXY_URL — URL proxy dédiée Germany (résidentiel recommandé)
+ *  2. SOAX_PROXY_URL    — SOAX résidentiel sticky (nouvelle sessionId à chaque appel)
+ *  3. Pool Decodo CSV   — Round-robin partagé avec Espagne (3e fallback)
+ *  4. Direct            — OK en local/Replit, bloqué sur Railway/cloud
  */
-function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
+function buildProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
   const germanyUrl = process.env["GERMANY_PROXY_URL"];
   if (germanyUrl) {
     try {
@@ -57,7 +63,61 @@ function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undef
     } catch { /* fall through */ }
   }
 
+  // 3e fallback : pool Decodo CSV (même pool que l'Espagne, round-robin déjà avancé
+  // par rotateRKProxy() avant chaque nouvelle session).
+  if (hasDecodoProxy()) {
+    const decodoUrl = getCurrentDecodoUrl();
+    if (decodoUrl) {
+      try {
+        return { dispatcher: new ProxyAgent(decodoUrl), label: `Decodo ${decodoUrl.split(":").pop()}` };
+      } catch { /* fall through */ }
+    }
+  }
+
   return undefined;
+}
+
+/** Retourne le dispatcher courant (stable) ou le construit si absent. */
+function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
+  if (!cachedDispatcher) {
+    cachedDispatcher = buildProxyDispatcher();
+  }
+  return cachedDispatcher;
+}
+
+/**
+ * Tourne l'IP du proxy Germany.
+ * Appelé par germany-loop.ts avant chaque nouvelle session (pas pendant une session active).
+ * Avance le round-robin Decodo ET vide le cache → prochain appel getProxyDispatcher() choisit
+ * la nouvelle IP.
+ */
+export function rotateRKProxy(): void {
+  if (hasDecodoProxy()) {
+    rotateDecodoUrl(); // avance l'index Decodo
+  }
+  cachedDispatcher = undefined; // force la reconstruction avec la nouvelle IP
+}
+
+/**
+ * Détecte si une erreur est d'origine réseau/transitoire (timeout, reset, connexion refusée).
+ * Exporté pour germany-loop.ts qui doit distinguer erreurs réseau vs erreurs métier.
+ */
+export function isTransientNetworkError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const cause = (err as any)?.cause;
+  const causeMsg = cause instanceof Error ? cause.message : String(cause ?? "");
+  return (
+    causeMsg.includes("ConnectTimeoutError") ||
+    causeMsg.includes("ConnectTimeout") ||
+    causeMsg.includes("ECONNRESET") ||
+    causeMsg.includes("ECONNREFUSED") ||
+    causeMsg.includes("UND_ERR_CONNECT_TIMEOUT") ||
+    msg.includes("ConnectTimeoutError") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("aborted") ||
+    msg.includes("This operation was aborted") ||
+    msg.includes("fetch failed")
+  );
 }
 
 const log = (level: string, msg: string) => console.log(`[${new Date().toISOString()}] [rktermin] [${level}] ${msg}`);
@@ -107,66 +167,85 @@ export function buildUrl(endpoint: string, params?: Record<string, string | numb
   return url;
 }
 
-/** Exécute une requête GET avec gestion de session */
+/** Exécute une requête GET avec gestion de session (retry × 2 sur erreurs réseau transitoires) */
 export async function rkGet(
   session: RKTerminSession,
   endpoint: string,
   params?: Record<string, string | number>,
+  options?: { referer?: string },
 ): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
   const url = buildUrl(endpoint, params);
-  
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
-  
-  const proxy = getProxyDispatcher();
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        ...RKTERMIN_HEADERS,
-        "User-Agent": randomUA(),
-        "Cookie": buildCookieHeader(session),
-      },
-      redirect: "follow",
-      signal: controller.signal,
-      // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher: proxy?.dispatcher,
-    });
-    
-    clearTimeout(timeout);
-    const html = await res.text();
-    const cookies = parseCookies(res.headers);
-    
-    // Mettre à jour la session si nouveaux cookies
-    const newSession: Partial<RKTerminSession> = {};
-    if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
-    if (cookies.keks) newSession.keks = cookies.keks;
-    
-    return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
-  } catch (err) {
-    clearTimeout(timeout);
-    const cause = (err as any)?.cause;
-    throw new Error(`rkGet ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
+    const proxy = getProxyDispatcher();
+
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          ...RKTERMIN_HEADERS,
+          "User-Agent": randomUA(),
+          "Cookie": buildCookieHeader(session),
+          ...(options?.referer ? { "Referer": options.referer } : {}),
+        },
+        redirect: "follow",
+        signal: controller.signal,
+        // @ts-ignore — undici dispatcher not in lib.dom types
+        dispatcher: proxy?.dispatcher,
+      });
+
+      clearTimeout(timeout);
+      const html = await res.text();
+      const cookies = parseCookies(res.headers);
+
+      const newSession: Partial<RKTerminSession> = {};
+      if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
+      if (cookies.keks) newSession.keks = cookies.keks;
+
+      return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
+    } catch (err) {
+      clearTimeout(timeout);
+      lastErr = err;
+
+      if (isTransientNetworkError(err) && attempt < MAX_ATTEMPTS) {
+        const backoffMs = attempt * 5_000; // 5s, 10s
+        console.log(`[${new Date().toISOString()}] [rktermin] [WARN] rkGet ${endpoint} attempt ${attempt}/${MAX_ATTEMPTS} — erreur transitoire. Retry dans ${backoffMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, backoffMs));
+        continue;
+      }
+
+      const cause = (err as any)?.cause;
+      throw new Error(`rkGet ${endpoint} failed: ${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause})` : ""}`);
+    }
   }
+  throw lastErr;
 }
 
-/** Exécute une requête POST (form-encoded) avec gestion de session */
+/** Exécute une requête POST (form-encoded) avec gestion de session.
+ *  Retourne `finalUrl` (URL après redirects) — utilisé pour détecter le redirect
+ *  vers `appointment_thanx.do` qui signale une réservation réussie.
+ */
 export async function rkPost(
   session: RKTerminSession,
   endpoint: string,
   formData: Record<string, string>,
-): Promise<{ html: string; status: number; newSession?: Partial<RKTerminSession> }> {
+  options?: { referer?: string },
+): Promise<{ html: string; status: number; finalUrl: string; newSession?: Partial<RKTerminSession> }> {
   const url = `${RKTERMIN_BASE_URL}/${endpoint}`;
-  
+
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries(formData)) {
     body.set(key, value);
   }
-  
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
   const proxy = getProxyDispatcher();
-  
+
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -175,7 +254,7 @@ export async function rkPost(
         "User-Agent": randomUA(),
         "Cookie": buildCookieHeader(session),
         "Content-Type": "application/x-www-form-urlencoded",
-        "Referer": url,
+        "Referer": options?.referer ?? url,
         "Origin": RKTERMIN_BASE_URL,
       },
       body: body.toString(),
@@ -184,16 +263,17 @@ export async function rkPost(
       // @ts-ignore — undici dispatcher not in lib.dom types
       dispatcher: proxy?.dispatcher,
     });
-    
+
     clearTimeout(timeout);
     const html = await res.text();
+    const finalUrl = res.url ?? url;
     const cookies = parseCookies(res.headers);
-    
+
     const newSession: Partial<RKTerminSession> = {};
     if (cookies.jsessionId) newSession.jsessionId = cookies.jsessionId;
     if (cookies.keks) newSession.keks = cookies.keks;
-    
-    return { html, status: res.status, newSession: Object.keys(newSession).length ? newSession : undefined };
+
+    return { html, status: res.status, finalUrl, newSession: Object.keys(newSession).length ? newSession : undefined };
   } catch (err) {
     clearTimeout(timeout);
     const cause = (err as any)?.cause;
@@ -267,28 +347,17 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
       clearTimeout(timeout);
       lastErr = err;
 
-      // Détecter si c'est une erreur réseau transitoire (timeout, reset, connexion refusée)
-      const msg = err instanceof Error ? err.message : String(err);
-      const cause = (err as any)?.cause;
-      const causeMsg = cause instanceof Error ? cause.message : String(cause ?? "");
-      const isTransient = (
-        causeMsg.includes("ConnectTimeoutError") ||
-        causeMsg.includes("ConnectTimeout") ||
-        causeMsg.includes("ECONNRESET") ||
-        causeMsg.includes("ECONNREFUSED") ||
-        causeMsg.includes("UND_ERR_CONNECT_TIMEOUT") ||
-        msg.includes("aborted") ||
-        msg.includes("This operation was aborted")
-      );
-
-      if (isTransient && attempt < MAX_ATTEMPTS) {
+      if (isTransientNetworkError(err) && attempt < MAX_ATTEMPTS) {
+        const causeMsg = (err as any)?.cause instanceof Error ? (err as any).cause.message : String((err as any)?.cause ?? "");
         const backoffMs = attempt * 8_000; // 8s, 16s
-        log("WARN", `initSession attempt ${attempt}/${MAX_ATTEMPTS} — erreur transitoire (${causeMsg || msg}). Retry dans ${backoffMs / 1000}s...`);
+        log("WARN", `initSession attempt ${attempt}/${MAX_ATTEMPTS} — erreur transitoire (${causeMsg || (err instanceof Error ? err.message : String(err))}). Retry dans ${backoffMs / 1000}s...`);
         await new Promise(r => setTimeout(r, backoffMs));
         continue;
       }
 
       // Erreur non-transitoire ou tentatives épuisées — lever
+      const msg = err instanceof Error ? err.message : String(err);
+      const cause = (err as any)?.cause;
       const causeStr = cause ? ` (cause: ${cause})` : "";
       const hint = !proxy
         ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"

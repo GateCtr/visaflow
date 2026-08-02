@@ -1629,8 +1629,8 @@ async function runAccountLoop(job: any): Promise<void> {
                 result.sessionCookie,
                 logApplicationId,
               );
-              if (cancelResult.success) {
-                logger.info(`  ✅ Annulation réussie (→ ${cancelResult.cancelFinalUrl?.slice(0, 80) ?? "OK"}) — invalidation session pour re-scan propre`);
+              if (cancelResult.emailSent) {
+                logger.info(`  ✅ Annulation réussie (${cancelResult.message?.slice(0, 80) ?? "OK"}) — invalidation session pour re-scan propre`);
                 // Invalider la session VOWINT pour forcer un re-login propre au prochain scan
                 invalidateVowintCache(vowintEmail);
                 botLog({
@@ -1639,7 +1639,7 @@ async function runAccountLoop(job: any): Promise<void> {
                   status: "ok",
                   data: {
                     dossier: dossier.vowintRef,
-                    cancelFinalUrl: cancelResult.cancelFinalUrl ?? "",
+                    message: cancelResult.message ?? "",
                   },
                 });
               } else {
