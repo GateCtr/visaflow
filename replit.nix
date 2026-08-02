@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.libudev-zero
+    pkgs.libgbm
     pkgs.libGLU
     pkgs.libGL
     pkgs.redis
