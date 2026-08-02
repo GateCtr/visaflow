@@ -589,7 +589,12 @@ export async function executeHttpBooking(
   //   Le contexte incognito navigue vers /main/ → PHPSESSID isolé → appels impit
   //   passent par le même proxy IP → réponses normales.
   const browserPageAvailable = Boolean(spainPersistentBrowser.getActivePage());
-  const useBrowserCalls = session.source === "playwright" && browserPageAvailable;
+  const hasMainHtml = Boolean(mainHtml && mainHtml.trim().length > 0);
+  // Quand le scan a déjà fourni le HTML principal, on reste sur le flux HTTP isolé.
+  // Cela évite d'utiliser la page browser partagée pour un booking qui a déjà
+  // obtenu un service et un créneau validés; le booking gagne ainsi un PHPSESSID
+  // unique par dossier et les retries /main/ sont correctement déclenchés.
+  const useBrowserCalls = session.source === "playwright" && browserPageAvailable && !hasMainHtml;
   // Sérialiser TOUT le flow browser — la page Chrome est un singleton partagé.
   // getagendas/, datetime/, signin/, summary/ utilisent tous callBookititEndpointBrowser
   // (→ this._page). Sans ce verrou, deux dossiers en Promise.all se marchent dessus
@@ -1109,15 +1114,23 @@ export async function executeHttpBooking(
   // Response format: [{Event: {locator: "ABC123", state: 1, ...}}] or {Event: [...]}
   let locator = "";
   const summaryObj = summaryPayload as any;
-  if (Array.isArray(summaryObj)) {
-    locator = summaryObj[0]?.Event?.locator ?? "";
-  } else if (summaryObj.Event) {
-    locator = summaryObj.Event?.locator ?? "";
-  } else if (summaryObj.Appointment) {
-    locator = summaryObj.Appointment?.locator ?? "";
+  const firstArrayCandidate = Array.isArray(summaryObj) ? summaryObj[0] : null;
+  locator =
+    firstArrayCandidate?.Event?.locator ??
+    firstArrayCandidate?.Appointment?.locator ??
+    summaryObj?.Event?.locator ??
+    summaryObj?.Appointment?.locator ??
+    summaryObj?.Exception?.Event?.locator ??
+    summaryObj?.Exception?.Appointment?.locator ??
+    "";
+
+  if (!locator && summaryObj?.Exception?.errors) {
+    const errMsg = JSON.stringify(summaryObj.Exception.errors).slice(0, 200);
+    console.error(`[spain-booking] ❌ Summary errors: ${errMsg}`);
+    return { status: "booking_failed", errorMessage: `Summary échoué: ${errMsg}`, durationMs: Date.now() - t0 };
   }
 
-  if (summaryObj.errors || summaryObj.Exception) {
+  if ((!locator && summaryObj?.errors) || (!locator && summaryObj?.Exception && !summaryObj?.Exception?.errors)) {
     const errMsg = JSON.stringify(summaryObj.errors ?? summaryObj.Exception).slice(0, 200);
     console.error(`[spain-booking] ❌ Summary errors: ${errMsg}`);
     return { status: "booking_failed", errorMessage: `Summary échoué: ${errMsg}`, durationMs: Date.now() - t0 };

@@ -31,7 +31,8 @@ import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer";
 import { rmSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
 
@@ -120,7 +121,27 @@ async function setupPageProxyAuth(
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /** Dossier userDataDir pour le profil Chromium persistant. */
-const CF_PROFILE_DIR = process.env.SPAIN_CF_PROFILE_DIR ?? "/tmp/spain-cf-profile";
+function getDefaultCfProfileDir(): string {
+  return join(tmpdir(), "spain-cf-profile");
+}
+
+function resolveCfProfileDir(): string {
+  const explicit = process.env.SPAIN_CF_PROFILE_DIR?.trim();
+  if (!explicit) return getDefaultCfProfileDir();
+
+  // On Windows, explicit Linux paths such as /tmp/... do not resolve correctly.
+  // If a Linux-style absolute path arrives via env or a stale config, fall back to
+  // a writable OS-local profile folder instead of crashing Chromium.
+  if (process.platform === "win32" && explicit.startsWith("/")) {
+    const fallback = join(process.cwd(), ".spain-cf-profile");
+    console.warn(`[spain-pb] ⚠️ Chemin Chromium non Windows (${explicit}) → fallback vers ${fallback}`);
+    return fallback;
+  }
+
+  return resolve(explicit);
+}
+
+const CF_PROFILE_DIR = resolveCfProfileDir();
 
 function ensureProfileDirectory(profileDir: string): string {
   try {
@@ -2459,6 +2480,54 @@ export async function clickInteractiveSpainAcceptFlow(page: Page): Promise<Spain
         (el as HTMLElement).click();
         return { clicked: true, reason, htmlSnippet };
       };
+
+      const captchaContinueBtn = document.getElementById("idCaptchaButton") as HTMLElement | null;
+      const captchaTokenForm = Array.from(document.forms).find((form) => {
+        const tokenInput = form.querySelector('input[name="token"]');
+        const actionMatches = form.action.includes("widgetdefault") || form.action.includes("hosteds");
+        const textBlock = (form.innerText || "").toLowerCase();
+        return !!tokenInput && (actionMatches || /continue|continuar|click on the continue button/.test(textBlock));
+      });
+      const captchaSubmit = captchaTokenForm?.querySelector("button, input[type='submit']") as HTMLElement | null;
+      const explicitContinue = captchaContinueBtn ?? captchaSubmit;
+      if (explicitContinue && visible(explicitContinue)) {
+        const direct = tryClick(explicitContinue, "captcha:token-form");
+        if (direct) return direct;
+      }
+
+      const hiddenTokenForm = Array.from(document.forms).find((form) => {
+        const tokenInput = form.querySelector('input[name="token"]');
+        if (!tokenInput) return false;
+        const action = (form.getAttribute("action") ?? "").toLowerCase();
+        const text = (form.innerText || "").toLowerCase();
+        return action.includes("widgetdefault") || action.includes("hosteds") || /continue|continuar|click on the continue button/.test(text);
+      });
+      if (hiddenTokenForm) {
+        const submitTarget = hiddenTokenForm.querySelector("button, input[type='submit'], input[type='button']") as HTMLElement | null;
+        const tokenInput = hiddenTokenForm.querySelector('input[name="token"]') as HTMLInputElement | null;
+        if (tokenInput && tokenInput.value) {
+          const formAction = hiddenTokenForm.getAttribute("action") || window.location.href;
+          const finalAction = formAction.startsWith("http") ? formAction : new URL(formAction, window.location.href).href;
+          const formData = new FormData(hiddenTokenForm);
+          const payload = new URLSearchParams();
+          for (const [key, value] of formData.entries()) {
+            if (typeof value === "string") payload.append(key, value);
+          }
+          const htmlSnippet = (hiddenTokenForm as HTMLFormElement).outerHTML.slice(0, 220);
+          fetch(finalAction, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: payload.toString(),
+            credentials: "include",
+            redirect: "manual",
+          }).catch(() => {});
+          return { clicked: true, reason: "token-form:submit", htmlSnippet };
+        }
+        if (submitTarget && visible(submitTarget)) {
+          const direct = tryClick(submitTarget, "token-form:submit-button");
+          if (direct) return direct;
+        }
+      }
 
       const candidates = [
         document.getElementById("idDivBktCustomContinueButton"),

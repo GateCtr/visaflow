@@ -84,7 +84,7 @@ function subsection(title: string): void {
 // ─── HTML Fixtures ────────────────────────────────────────────────────────────
 
 const PORTAL_URL =
-  "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
+  "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services";
 
 /** Padding to pass the length > 1 000 char guard in the scanner. */
 const PAD = `<!-- ${"x".repeat(1_200)} -->`;
@@ -442,6 +442,21 @@ subsection("2e. Clic du bouton Aceptar/Continue via browser");
   const result = await clickInteractiveSpainAcceptFlow(fakePage);
   assert(result.clicked, "helper retourne clicked=true quand un bouton Aceptar/Continue est cliqué");
   assert(result.reason.includes("Aceptar") || result.reason.includes("Continue"), "helper indique la cause du clic");
+}
+
+subsection("2f. Page Cloudflare continue gate → détecte idCaptchaButton et token form");
+{
+  const fakePage = {
+    evaluate: async (_fn: (arg: unknown) => unknown, _arg?: unknown) => ({
+      clicked: true,
+      reason: "captcha:token-form",
+      htmlSnippet: "<form><input type='hidden' name='token' value='abc'><button id='idCaptchaButton'>Continue / Continuar</button></form>",
+    }),
+  } as any;
+
+  const result = await clickInteractiveSpainAcceptFlow(fakePage);
+  assert(result.clicked, "helper détecte le gate Cloudflare continue et clique sur le bouton");
+  assert(result.reason.includes("captcha") || result.reason.includes("Continue"), "helper expose la raison du clic");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
