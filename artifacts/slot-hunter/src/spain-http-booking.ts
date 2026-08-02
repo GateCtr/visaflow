@@ -347,10 +347,18 @@ async function callBookititEndpointBrowser(
   }
 
   if (!body) {
-    const cached = spainPersistentBrowser.getApiPrefetchCached(endpoint);
+    // Essai 4 : cache préfetch browser (service-specific key puis bare key)
+    // Clé service-spécifique : "getagendas/<svcId>" / "datetime/<YYYY-MM>/<svcId>"
+    const svcId   = params["services[]"] ?? "";
+    const month   = (params.start ?? "").slice(0, 7);
+    const svcKey  = endpoint === "getagendas/"  ? (svcId ? `getagendas/${svcId}` : endpoint)
+                  : endpoint === "datetime/"    ? (month && svcId ? `datetime/${month}/${svcId}` : month ? `datetime/${month}` : endpoint)
+                  : endpoint;
+    const cached  = spainPersistentBrowser.getApiPrefetchCached(svcKey)
+                 ?? (svcKey !== endpoint ? spainPersistentBrowser.getApiPrefetchCached(endpoint) : undefined);
     if (cached !== undefined) {
       body = cached;
-      console.log(`[spain-booking] 🔁 ${endpoint} fallback → cache préfetch browser (${cached.length}B)`);
+      console.log(`[spain-booking] 🔁 ${endpoint} (key: ${svcKey}) → cache préfetch browser (${cached.length}B)`);
     }
   }
 

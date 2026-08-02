@@ -116,6 +116,20 @@ const jsonpMatch = body.match(/^(?:callback=)?[a-zA-Z0-9_$.]+\((.*)\);?$/s);
 
 **Why :** Le préfixe `callback=` est une variante de sérialisation JSONP utilisée par certains endpoints Bookitit (notamment `signin/` via DOM form submit → `waitForResponse`). Sans ce fix, `parseJsonpResponse` tombait sur le fallback JSON-only et échouait avec "Response is not valid JSON or JSONP".
 
+## Bug S7 — getagendas/ + datetime/ retournent 0B (session PHP expirée) (2026-08-02)
+**Fichiers** : `spain-persistent-browser.ts` (`_prefetchBookititApis`, CDP handler, `callBookititEndpointViaBrowser`), `spain-http-booking.ts` (`callBookititEndpointBrowser`)
+
+**Cause** : La session PHP Bookitit expire ~20-24 min après le CF solve. `getservices/` et `getwidgetconfigurations/` sont servis depuis le cache prefetch (OK). `getagendas/` et `datetime/` sont appelés en live → session PHP morte → HTTP 200 corps vide.
+
+**Fix** (4 changements) :
+1. `_prefetchBookititApis` : après getservices/, parse les service IDs, appelle `getagendas/<svcId>` + `datetime/<month>/<svcId>` en parallèle (max 3 services × 4 appels) pendant que la session PHP est chaude. Stocke sous clé service-spécifique.
+2. CDP `requestWillBeSent` : stocke `"getagendas/:" + url` (comme datetime/) pour pouvoir extraire le service ID dans le handler.
+3. CDP `loadingFinished` : stocke DEUX clés pour getagendas/ et datetime/ : clé nue (`"getagendas/"`) pour les checks internes + clé service-spécifique (`"getagendas/<svcId>"`) pour `callBookititEndpointViaBrowser`.
+4. `callBookititEndpointViaBrowser` : après miss sur clé service-spécifique, fallback vers clé nue (chemin CDP).
+5. `callBookititEndpointBrowser` (booking) : dernier fallback cache construit dynamiquement avec clé service-spécifique depuis `params["services[]"]` et `params.start`.
+
+**Résultat attendu** : logs `[spain-pb] 📋 callBrowser getagendas/bkt1181774 → cache (NB)` au lieu de 0B. Booking peut utiliser le même cache.
+
 ## Autres observations (non-critiques)
 - `Accept-Encoding`: Burp = `gzip, deflate, br` (pas zstd) mais artifact Burp — Chrome 120+ supporte zstd, ne pas changer.
 - `Accept-Language`: Burp = `fr-FR` (locale user). Bot = `es-ES`. CF cookie lié à session CapSolver — laisser comme est.

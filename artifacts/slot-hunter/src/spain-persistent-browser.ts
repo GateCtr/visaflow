@@ -1298,7 +1298,8 @@ class SpainPersistentBrowserManager {
         } else if (url.includes("onlinebookings/getservices") && !url.includes("getagendas") && !url.includes("datetime")) {
           pendingApiRequests.set(ev.requestId, "getservices/");
         } else if (url.includes("onlinebookings/getagendas")) {
-          pendingApiRequests.set(ev.requestId, "getagendas/");
+          // Store full URL so loadingFinished can extract the service ID for cache keying
+          pendingApiRequests.set(ev.requestId, "getagendas/:" + url);
         } else if (url.includes("onlinebookings/datetime") && !url.includes("datetimetypes")) {
           // Store full URL so loadingFinished can extract the month for cache keying
           pendingApiRequests.set(ev.requestId, "datetime/:" + url);
@@ -1362,16 +1363,29 @@ class SpainPersistentBrowserManager {
         if (!pendingApiRequests.has(ev.requestId)) return;
         const rawEp = pendingApiRequests.get(ev.requestId)!;
         pendingApiRequests.delete(ev.requestId);
-        // Resolve endpoint name and cache key (datetime/ is month-keyed)
+        // Resolve endpoint name and cache key.
+        // getagendas/ and datetime/ are stored under service-specific keys AND bare keys:
+        //   - Bare key  : "getagendas/"            / "datetime/YYYY-MM"   (internal CDP checks)
+        //   - Svc key   : "getagendas/<svcId>"      / "datetime/YYYY-MM/<svcId>" (callBookititEndpointViaBrowser lookup)
         let ep = rawEp;
         let cacheKey = rawEp;
-        if (rawEp.startsWith("datetime/:")) {
+        let cacheKeyAlt: string | null = null; // second key to store under (service-specific)
+        if (rawEp.startsWith("getagendas/:")) {
+          ep = "getagendas/";
+          cacheKey = "getagendas/"; // bare key for internal signal checks
+          try {
+            const svcId = new URLSearchParams(new URL(rawEp.slice(12)).search).get("services[]") ?? "";
+            if (svcId) cacheKeyAlt = `getagendas/${svcId}`;
+          } catch { /* non-fatal */ }
+        } else if (rawEp.startsWith("datetime/:")) {
           ep = "datetime/";
           const dtUrl = rawEp.slice(10);
           try {
-            const startParam = new URLSearchParams(new URL(dtUrl).search).get("start") ?? "";
-            const month = startParam.slice(0, 7); // "YYYY-MM"
-            cacheKey = month ? `datetime/${month}` : "datetime/";
+            const params  = new URLSearchParams(new URL(dtUrl).search);
+            const month   = (params.get("start") ?? "").slice(0, 7); // "YYYY-MM"
+            const svcId   = params.get("services[]") ?? "";
+            cacheKey    = month ? `datetime/${month}` : "datetime/";
+            if (month && svcId) cacheKeyAlt = `datetime/${month}/${svcId}`;
           } catch { cacheKey = "datetime/"; }
         }
         try {
@@ -1380,12 +1394,9 @@ class SpainPersistentBrowserManager {
           });
           const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
           if (decoded.length > 10 && !decoded.startsWith("__ERR_")) {
-            if (ep === "datetime/") {
-              console.log(`[spain-pb] 📦 Widget API ${cacheKey} capturée via CDP (${decoded.length}B) raw="${decoded.slice(0, 150)}"`);
-            } else {
-              console.log(`[spain-pb] 📦 Widget API ${ep} capturée via CDP (${decoded.length}B)`);
-            }
+            console.log(`[spain-pb] 📦 Widget API ${cacheKey}${cacheKeyAlt ? ` + ${cacheKeyAlt}` : ""} capturée via CDP (${decoded.length}B)${ep === "datetime/" ? ` raw="${decoded.slice(0, 150)}"` : ""}`);
             this._apiPrefetchCache.set(cacheKey, decoded);
+            if (cacheKeyAlt) this._apiPrefetchCache.set(cacheKeyAlt, decoded);
             if (ep === "getwidgetconfigurations/" || ep === "getservices/") {
               widgetApisCount++;
               if (widgetApisCount >= 2 && widgetApisResolve) widgetApisResolve();
@@ -2923,6 +2934,14 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   if (cached !== undefined) {
     console.log(`[spain-pb] 📋 callBrowser ${cacheKey} → cache (${cached.length}B)`);
     return cached;
+  }
+  // Fallback : bare endpoint key (CDP path stores without service ID)
+  if (cacheKey !== endpoint) {
+    const bareCached = spainPersistentBrowser.getApiPrefetchCached(endpoint);
+    if (bareCached !== undefined) {
+      console.log(`[spain-pb] 📋 callBrowser ${endpoint} (bare fallback) → cache (${bareCached.length}B)`);
+      return bareCached;
+    }
   }
 
   let page = spainPersistentBrowser.getActivePage();
