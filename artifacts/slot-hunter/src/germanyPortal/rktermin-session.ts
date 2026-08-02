@@ -4,7 +4,7 @@
 import { RKTERMIN_BASE_URL, RKTERMIN_ENDPOINTS, RKTERMIN_HEADERS, RKTERMIN_TIMING, RKTERMIN_USER_AGENTS } from "./config.js";
 import type { RKTerminSession, RKTerminConfig } from "./types.js";
 import { ProxyAgent } from "undici";
-import { hasDecodoProxy, rotateDecodoUrl, getCurrentDecodoUrl } from "../spain-decodo-pool.js";
+import { hasGermanyDecodoProxy, rotateGermanyDecodoUrl, getCurrentGermanyDecodoUrl } from "../germany-decodo-pool.js";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -63,13 +63,12 @@ function buildProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | und
     } catch { /* fall through */ }
   }
 
-  // 3e fallback : pool Decodo CSV (même pool que l'Espagne, round-robin déjà avancé
-  // par rotateRKProxy() avant chaque nouvelle session).
-  if (hasDecodoProxy()) {
-    const decodoUrl = getCurrentDecodoUrl();
+  // 3e fallback : pool Decodo CSV dédié Germany (decodo-proxies-germany.csv).
+  if (hasGermanyDecodoProxy()) {
+    const decodoUrl = getCurrentGermanyDecodoUrl();
     if (decodoUrl) {
       try {
-        return { dispatcher: new ProxyAgent(decodoUrl), label: `Decodo ${decodoUrl.split(":").pop()}` };
+        return { dispatcher: new ProxyAgent(decodoUrl), label: `Decodo Germany ${decodoUrl.split(":").pop()}` };
       } catch { /* fall through */ }
     }
   }
@@ -92,8 +91,8 @@ function getProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undef
  * la nouvelle IP.
  */
 export function rotateRKProxy(): void {
-  if (hasDecodoProxy()) {
-    rotateDecodoUrl(); // avance l'index Decodo
+  if (hasGermanyDecodoProxy()) {
+    rotateGermanyDecodoUrl(); // avance l'index Decodo Germany
   }
   cachedDispatcher = undefined; // force la reconstruction avec la nouvelle IP
 }
