@@ -1,0 +1,111 @@
+Je dois lire deux zones clés en parallèle — le verdict Overview dans le setup CEV, et l'orchestrateur Germany pour trouver initSession.
+
+
+12 actions
+Je dois voir le type de retour du setup CEV et la partie orchestrateur Germany pour les retries, en parallèle.
+
+
+4 actions
+Je lis les pièces manquantes en parallèle avant d'implémenter.
+
+
+5 actions
+J'ai tout ce qu'il faut. Je vais implémenter les deux choses en parallèle :
+
+Verdict Overview dans le setup + cevHttpCancel.ts + test d'annulation
+Fix retry Germany pour ConnectTimeoutError
+
+3 actions
+J'implémente tout en parallèle — verdict Overview, cevHttpCancel.ts, test d'annulation, et fix Germany.
+
+
+2 actions
+Maintenant j'ajoute le verdict Overview dans la classification des résultats, puis je crée les deux fichiers en parallèle.
+
+
+2 actions
+Je crée les trois fichiers restants en parallèle.
+
+
+4 actions
+Je vérifie la compilation TypeScript avant de lancer le test.
+
+
+14 actions
+TSC clean. Je lance le test d'annulation.
+
+
+2 actions
+isLimitReached=true ✅ — le HTML Overview est capturé. Le parseur ne trouve pas le lien "Annuler". Je lis le HTML pour voir la structure réelle.
+
+
+2 actions
+La structure est claire — CEV utilise un flow AJAX avec data-id, pas un lien direct. Je cherche l'endpoint JavaScript dans le HTML.
+
+
+3 actions
+Le flow CEV est clair : le bouton envoie un email avec un lien d'annulation (pas de cancel direct). Je récupère le bundle JS pour trouver l'endpoint AJAX exact.
+
+
+6 actions
+Le bundle renvoie vers showModalToSendCancelLink qui est dans un autre bundle. Je cherche l'endpoint AJAX dans les bundles de la page.
+
+
+6 actions
+L'endpoint AJAX est SharedAjaxService.appointmentCancelRequest. Je cherche son URL HTTP exacte dans le bundle.
+
+
+4 actions
+L'endpoint est trouvé : POST /Shared/DoCancelRequestAppointment avec {uniqueToken: <data-id>, cultureCode: lang}. La réponse = {succeeded: true, message: "..."} → CEV envoie un email avec le lien d'annulation réel.
+
+Je mets à jour cevHttpCancel.ts avec le bon endpoint et parseur.
+
+
+2 actions
+Je réécris cevHttpCancel.ts avec le bon endpoint et parseur, puis je lance le test.
+
+
+2 actions
+Je mets à jour le test et le script de compilation, puis je lance le test.
+
+
+5 actions
+TSC clean. Je lance le test d'annulation avec le bon endpoint.
+
+
+2 actions
+Le serveur reçoit uniqueToken=null — problème de Content-Type ou d'encoding. Je vérifie ce que getCevBrowserHeaders génère en mode isFormPost, puis je corrige.
+
+
+6 actions
+Le problème est clair : isFormPost: true génère des headers Sec-Fetch-Mode: navigate sans X-Requested-With. Le serveur CEV attend un appel AJAX jQuery — il faut Sec-Fetch-Mode: cors + X-Requested-With: XMLHttpRequest + Content-Type: application/x-www-form-urlencoded; charset=UTF-8.
+
+
+6 actions
+emailSent=true ✅ — CEV confirme : "Vous avez reçu un e-mail avec un lien pour annuler votre rendez-vous."
+
+
+3 actions
+Récap de ce qui a été livré :
+
+CAS 2 — Annulation CEV ✅
+
+Flow réel découvert par reverse engineering du bundle JS CEV :
+
+La page Overview affiche les RDV sous forme de <button data-id="<uuid>">
+L'annulation passe par POST /Shared/DoCancelRequestAppointment avec X-Requested-With: XMLHttpRequest (AJAX jQuery, pas form-navigate) — c'est ce qui bloquait le premier essai
+CEV répond { succeeded: true } et envoie un email avec le lien d'annulation one-time
+L'utilisateur doit cliquer ce lien pour finaliser — l'annulation complète nécessiterait un accès IMAP
+Résultat du test : "Vous avez reçu un e-mail avec un lien pour annuler votre rendez-vous." ✅
+
+Fix Germany ConnectTimeoutError ✅
+
+initSession a maintenant 3 tentatives avec backoff (8s, 16s) pour les erreurs réseau transitoires (ConnectTimeoutError, ECONNRESET, ECONNREFUSED). Ces erreurs ne déclencheront plus l'auto-pause après 3 cycles — seules les vraies erreurs métier comptent.
+
+Fichiers touchés
+
+Fichier	Changement
+src/cevHttpSetup.ts	Interface + verdict isLimitReached / Overview/Booked
+src/cevHttpCancel.ts	Nouveau — extractBookedAppointments + cancelCevAppointment
+scripts/cev-cancel-test.ts	Nouveau — test e2e annulation
+germanyPortal/rktermin-session.ts	Retry × 3 avec backoff pour erreurs réseau transitoires
