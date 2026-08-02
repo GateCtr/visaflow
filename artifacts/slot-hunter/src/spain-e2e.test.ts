@@ -46,6 +46,7 @@ import {
   type SpainBookingConfig,
 } from "./spain-http-booking.js";
 import { clickInteractiveSpainAcceptFlow } from "./spain-persistent-browser.js";
+import { pickBestServiceCandidate, pickBestServiceLinkCandidate } from "./spain-service-mapping.js";
 
 // ─── Test harness ─────────────────────────────────────────────────────────────
 
@@ -84,7 +85,8 @@ function subsection(title: string): void {
 // ─── HTML Fixtures ────────────────────────────────────────────────────────────
 
 const PORTAL_URL =
-  "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services";
+  "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/#services";
+process.env.SPAIN_WIDGET_URL = PORTAL_URL;
 
 /** Padding to pass the length > 1 000 char guard in the scanner. */
 const PAD = `<!-- ${"x".repeat(1_200)} -->`;
@@ -385,6 +387,31 @@ subsection("1e. getservices JSONP payload with masked name");
   // First service name should fallback to 'Service bkt1181796' (masked name)
   assert(details.some((s) => s.id === "bkt1181796" && (s.name === "Service bkt1181796" || s.name.length > 2)), "masked service id present with sensible name");
   assert(details.some((s) => s.id === "bkt1181774" && s.name.includes("TRAMITACI")), "visible service name parsed");
+}
+
+subsection("1f. service visa réel priorisé sur le placeholder");
+{
+  const services = [
+    { serviceId: "bkt1181796", serviceName: "Service bkt1181796" },
+    { serviceId: "bkt1181774", serviceName: "TRAMITACIÓN DE VISADOS" },
+    { serviceId: "bkt9876543", serviceName: "Legalización de documentos" },
+  ];
+
+  const best = pickBestServiceCandidate(services);
+  assertEq(best?.serviceId, "bkt1181774", "le vrai service visa est choisi");
+  assertEq(best?.serviceName, "TRAMITACIÓN DE VISADOS", "le nom du service visa est conservé");
+}
+
+subsection("1g. service link candidate priorisé pour le clic navigateur");
+{
+  const links = [
+    { serviceId: "bkt1181796", serviceName: "<span style='display:none'></span>", href: "#selectservice/bkt1181796" },
+    { serviceId: "bkt1181774", serviceName: "TRAMITACIÓN DE VISADOS", href: "#selectservice/bkt1181774" },
+  ];
+
+  const best = pickBestServiceLinkCandidate(links);
+  assertEq(best?.serviceId, "bkt1181774", "le service visa est choisi pour le clic navigateur");
+  assertEq(best?.href, "#selectservice/bkt1181774", "le bon href est conservé");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

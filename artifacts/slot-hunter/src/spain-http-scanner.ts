@@ -57,6 +57,7 @@ import {
 } from "./spain-slot-explorer.js";
 import type { ExtractedSlotInfo } from "./spain-http-booking.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
+import { pickBestServiceCandidate } from "./spain-service-mapping.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -958,11 +959,18 @@ async function confirmSlotsViaDatetime(
     return stripped.length > 0;
   });
   const servicesToCheck = visibleServices.length > 0 ? visibleServices : services;
+  const prioritizedService = pickBestServiceCandidate(servicesToCheck);
+  const orderedServices = prioritizedService
+    ? [prioritizedService, ...servicesToCheck.filter((svc) => svc.serviceId !== prioritizedService.serviceId)]
+    : servicesToCheck;
   if (visibleServices.length < services.length) {
     console.log(`[spain-http] 🔍 ${services.length - visibleServices.length} service(s) hidden filtré(s) — ${visibleServices.length} visible(s) restant(s)`);
   }
+  if (prioritizedService) {
+    console.log(`[spain-http] 🎯 Service priorisé pour datetime/ : "${prioritizedService.serviceName}" (${prioritizedService.serviceId})`);
+  }
 
-  for (const svc of servicesToCheck.slice(0, 3)) {
+  for (const svc of orderedServices.slice(0, 3)) {
     const svcSlotsStart = allSlots.length; // repère pour détecter les créneaux de CE service
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
@@ -1005,7 +1013,14 @@ async function confirmSlotsViaDatetime(
     }
 
     // 2. datetime/ sur 3 mois (mois courant + 2 suivants — sept peut être le premier dispo)
-    // Params confirmés par Burp : start/end (pas date_from/date_to), services[]/agendas[].
+    // Alignement sur la requête observée du vrai portail :
+    //   - services[] obligatoire
+    //   - agendas[] ajouté quand l'appel getagendas/ a produit un agendaId
+    //   - start/end au format YYYY-MM-DD
+    //   - selectedPeople=1
+    //   - src = URL du widget (sans hash final, avec slash final)
+    //   - srvsrc = base citaconsular.es
+    const widgetSrc = referer.replace(/\/?$/, "/");
     for (let mo = 0; mo < 3; mo++) {
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
@@ -1019,7 +1034,7 @@ async function confirmSlotsViaDatetime(
         dtQ.append("publickey",      publickey);
         dtQ.append("lang",           "es");
         dtQ.append("version",        "4");
-        dtQ.append("src",            referer);
+        dtQ.append("src",            widgetSrc);
         dtQ.append("srvsrc",         srvsrc);
         dtQ.append("services[]",     svc.serviceId);
         if (agendaId) dtQ.append("agendas[]", agendaId);

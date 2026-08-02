@@ -252,7 +252,7 @@ const CF_POLL_INTERVAL_MS = 2_000;
 const BROWSER_HEALTH_TIMEOUT_MS = 5_000;
 
 /** URL widget cible par défaut. */
-const DEFAULT_WIDGET_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
+const DEFAULT_WIDGET_URL = process.env.SPAIN_WIDGET_URL || "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/";
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
@@ -278,6 +278,8 @@ class SpainPersistentBrowserManager {
   private _prefetchRetried = false;
   /** Page principale du browser persistant — réutilisée entre les cycles de scan. */
   private _page: import("puppeteer").Page | null = null;
+  /** URL du widget actuellement utilisée pour les navigations browser. */
+  private _currentTargetUrl: string = DEFAULT_WIDGET_URL;
 
   /**
    * Cache des réponses Bookitit API capturées immédiatement après /main/.
@@ -481,6 +483,14 @@ class SpainPersistentBrowserManager {
   /** Page Chromium principale — utilisée par callBookititEndpointViaBrowser pour les appels same-IP. */
   getActivePage(): import("puppeteer").Page | null {
     return this._page;
+  }
+
+  getCurrentTargetUrl(): string {
+    return this._currentTargetUrl || DEFAULT_WIDGET_URL;
+  }
+
+  setCurrentTargetUrl(targetUrl: string): void {
+    this._currentTargetUrl = targetUrl || DEFAULT_WIDGET_URL;
   }
 
   /**
@@ -773,6 +783,7 @@ class SpainPersistentBrowserManager {
   async ensureSession(
     targetUrl: string = DEFAULT_WIDGET_URL,
   ): Promise<SpainCfSession | null> {
+    this.setCurrentTargetUrl(targetUrl);
     if (this.isSessionValid()) {
       const remainMin = Math.round((this._cachedSession!.expiresAt - Date.now()) / 60_000);
       // Session valide — vérifier aussi que le browser/page est vivant.
@@ -806,6 +817,7 @@ class SpainPersistentBrowserManager {
   private async _ensureSessionImpl(
     targetUrl: string,
   ): Promise<SpainCfSession | null> {
+    this.setCurrentTargetUrl(targetUrl);
     // ── Tentative restauration Redis ──────────────────────────────────────────
     // Après un redéploiement, le PB manager repart avec _cachedSession=null mais
     // la session précédente (avec prefetchedMainHtml) peut encore être valide en Redis.
@@ -1746,11 +1758,24 @@ class SpainPersistentBrowserManager {
                   const links = Array.from(
                     document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'),
                   );
-                  for (const a of links) {
-                    const href = a.getAttribute("href") ?? "";
-                    if (href.includes("<%") || href.includes("%>")) continue;
-                    a.click();
-                    return href;
+                  const candidates = links
+                    .map((a) => ({
+                      href: a.getAttribute("href") ?? "",
+                      text: (a.textContent ?? "").replace(/<[^>]+>/g, "").trim(),
+                      element: a,
+                    }))
+                    .filter((c) => c.href && !c.href.includes("<%") && !c.href.includes("%>"));
+
+                  const visaLike = candidates.filter((c) => /tramitaci[oó]n.*visados?|visados?|visa/i.test(c.text || c.href));
+                  const preferred = visaLike[0] ?? candidates.find((c) => (c.text || c.href).trim().length > 0) ?? candidates[0];
+                  const selected = preferred?.href ?? null;
+                  if (selected) {
+                    const target = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'))
+                      .find((a) => (a.getAttribute("href") ?? "") === selected);
+                    if (target) {
+                      target.click();
+                      return selected;
+                    }
                   }
                   return null;
                 }).catch(() => null);
@@ -2341,6 +2366,7 @@ class SpainPersistentBrowserManager {
   async tryRenewSession(
     targetUrl: string = DEFAULT_WIDGET_URL,
   ): Promise<SpainCfSession | null> {
+    this.setCurrentTargetUrl(targetUrl);
     const backup = this._cachedSession;
     const backupRemainMin = backup
       ? Math.round((backup.expiresAt - Date.now()) / 60_000)
@@ -3008,7 +3034,8 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     const shouldReset = !currentOrigin.includes("citaconsular.es") || /\/XWFQ|\/cdn-cgi\//i.test(currentUrl) || currentUrl.includes("about:blank");
     if (shouldReset) {
       console.log(`[spain-pb] 🔄 callBrowser → contexte non-portail (${currentUrl}) — retour au widget cible…`);
-      await page.goto("https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/", {
+      const targetUrl = spainPersistentBrowser.getCurrentTargetUrl();
+      await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
         timeout: 20_000,
       }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ callBrowser navigation widget (non-fatal): ${e}`));

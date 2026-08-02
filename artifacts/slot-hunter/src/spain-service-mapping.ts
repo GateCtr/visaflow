@@ -83,6 +83,52 @@ export function extractVisaCategory(visaType: string): "C" | "D" | null {
  * @param visaType - Type de visa du dossier Joventy (ex: "Visa C — Tourisme / Affaires")
  * @returns Le service matché, ou null si aucun match
  */
+export function pickBestServiceCandidate(services: ExtractedSlotInfo[]): ExtractedSlotInfo | null {
+  if (!services.length) return null;
+
+  const visaLike = services.filter((service) => {
+    const name = service.serviceName ?? "";
+    return /tramitaci[oó]n.*visados?|visados?|visa/i.test(name);
+  });
+
+  if (visaLike.length > 0) {
+    return visaLike[0] ?? null;
+  }
+
+  const visible = services.filter((service) => {
+    const stripped = (service.serviceName ?? "").replace(/<[^>]+>/g, "").trim();
+    return stripped.length > 0;
+  });
+
+  return visible[0] ?? services[0] ?? null;
+}
+
+export interface ServiceLinkCandidate {
+  serviceId: string;
+  serviceName: string;
+  href?: string;
+}
+
+export function pickBestServiceLinkCandidate<T extends ServiceLinkCandidate>(services: T[]): T | null {
+  if (!services.length) return null;
+
+  const visaLike = services.filter((service) => {
+    const name = service.serviceName ?? "";
+    return /tramitaci[oó]n.*visados?|visados?|visa/i.test(name);
+  });
+
+  if (visaLike.length > 0) {
+    return visaLike[0] ?? null;
+  }
+
+  const visible = services.filter((service) => {
+    const stripped = (service.serviceName ?? "").replace(/<[^>]+>/g, "").trim();
+    return stripped.length > 0;
+  });
+
+  return visible[0] ?? services[0] ?? null;
+}
+
 export function matchServiceForVisa(
   services: ExtractedSlotInfo[],
   visaType: string,
@@ -113,10 +159,10 @@ export function matchServiceForVisa(
     }
   }
 
-  // Fallback : si un seul service disponible, le prendre (cas fréquent : un seul type de RDV ouvert)
-  if (services.length === 1) {
-    console.log(`[spain-mapping] ⚠️ Pas de match pattern pour "${visaType}" mais un seul service dispo → fallback "${services[0].serviceName}"`);
-    return services[0];
+  const fallback = pickBestServiceCandidate(services);
+  if (fallback) {
+    console.log(`[spain-mapping] ⚠️ Pas de match pattern pour "${visaType}" → fallback vers "${fallback.serviceName}"`);
+    return fallback;
   }
 
   console.warn(`[spain-mapping] ❌ Aucun service ne matche "${visaType}" parmi: ${services.map((s) => s.serviceName).join(", ")}`);
