@@ -1751,60 +1751,28 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
         return null;
       };
 
-      // ── Construire les tâches à tester ───────────────────────────────────────
-      // Priorité : si proxy disponible → HCaptchaTask ; sinon Proxyless.
-      // On lance aussi HCaptchaEnterpriseTaskProxyless en parallèle (CEV peut utiliser
-      // Enterprise hCaptcha depuis mi-2026 — type différent, workers différents).
+      // ── Construire la tâche ──────────────────────────────────────────────────
+      // Priorité : si proxy disponible → HCaptchaTask ; sinon HCaptchaTaskProxyless.
+      // HCaptchaEnterpriseTaskProxyless supprimé — Anti-Captcha retourne
+      // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
       const baseTask = proxyConfig
         ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent }
         : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
 
-      const enterpriseTask = { type: "HCaptchaEnterpriseTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+      const taskLabel = proxyConfig ? "HCaptchaTask" : "HCaptchaTaskProxyless";
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { type: taskLabel } });
 
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { baseType: baseTask.type, parallelEnterprise: true } });
-
-      // Race : retourner le premier token valide (régulier OU enterprise).
-      // La promesse ne se résout avec null que quand LES DEUX tâches ont terminé sans token.
-      let raceWon = false;
-      let settledCount = 0;
-      const taskCount = 2;
-      let raceResolve!: (v: string | null) => void;
-      const racePromise = new Promise<string | null>(resolve => { raceResolve = resolve; });
-
-      const runRace = async (task: Record<string, unknown>, label: string) => {
-        try {
-          const token = await createAndPoll(task, label);
-          if (token && !raceWon) {
-            raceWon = true;
-            raceResolve(token);
-          }
-        } catch (e) {
-          // Propager PROXY_CONNECT_REFUSED immédiatement
-          if (String(e).includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
-            raceResolve(null);
-            throw e;
-          }
-        } finally {
-          settledCount++;
-          // Résoudre avec null seulement quand TOUTES les tâches sont terminées
-          if (settledCount === taskCount && !raceWon) {
-            raceResolve(null);
-          }
+      try {
+        const token = await createAndPoll(baseTask, taskLabel);
+        if (token) {
+          return token;
         }
-      };
-
-      // Démarrer les deux en parallèle — runRace ne se résout que sur succès ou quand les deux ont fini
-      const p1 = runRace(baseTask, proxyConfig ? "HCaptchaTask" : "HCaptchaTaskProxyless");
-      const p2 = runRace(enterpriseTask, "HCaptchaEnterpriseTaskProxyless");
-
-      // racePromise se résout quand un token est trouvé ou que les deux tâches ont échoué
-      const [token] = await Promise.all([racePromise, p1.catch(() => {}), p2.catch(() => {})]);
-
-      if (token) {
-        return token;
-      }
-      if (!errors.some(e => e.includes("anticaptcha"))) {
-        errors.push("anticaptcha_both_tasks_failed");
+        if (!errors.some(e => e.includes("anticaptcha"))) {
+          errors.push("anticaptcha_task_failed");
+        }
+      } catch (e) {
+        if (String(e).includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) throw e;
+        errors.push(`anticaptcha_exception: ${String(e)}`);
       }
     } catch (e) {
       if (String(e).includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) throw e;

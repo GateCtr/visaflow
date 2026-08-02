@@ -176,13 +176,10 @@ async function runGermanyCycle(): Promise<void> {
 
 /** Traite un dossier Germany individuel. */
 async function processGermanyJob(job: HunterJob): Promise<void> {
-  // Rotation Decodo : changer d'IP UNIQUEMENT quand il n'y a pas de session valide en cache.
-  // diplo.de lie le JSESSIONID à l'IP source — tourner pendant une session valide
-  // l'invalide côté serveur et force un captcha supplémentaire inutile.
-  const hasCachedSession = sessionCache.has(job.id);
-  if (!hasCachedSession) {
-    rotateRKProxy();
-  }
+  // Pas de rotation proactive : on garde la même IP tant qu'elle fonctionne.
+  // diplo.de lie le JSESSIONID à l'IP source — tourner l'IP sans raison invalide
+  // les sessions en cours et force des captchas inutiles.
+  // La rotation n'est déclenchée que sur erreur réseau (voir handleScanError).
   log("INFO", `─── Scan: ${job.applicantName} (${job.visaType}) ───`);
   // Log de début de scan (visible dans Admin > Logs du bot et sur la fiche dossier)
   botLog({
@@ -309,6 +306,8 @@ async function handleScanError(job: HunterJob, errMsg: string, source: "scan" | 
   if (isTransientNetworkError(errMsg)) {
     const nb = (networkErrors.get(job.id) ?? 0) + 1;
     networkErrors.set(job.id, nb);
+    // Changer d'IP seulement sur échec réseau — pas de rotation proactive entre les scans.
+    rotateRKProxy();
 
     const cooldown = Math.min(networkCooldownMs.base * 2 ** (nb - 1), networkCooldownMs.max);
     nextAttemptAt.set(job.id, Date.now() + cooldown);
