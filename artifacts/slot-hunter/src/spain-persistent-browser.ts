@@ -564,11 +564,80 @@ class SpainPersistentBrowserManager {
     const cfgOk = cfgRaw.length > 0 && !cfgRaw.startsWith("__ERR_");
     const svcOk = svcRaw.length > 0 && !svcRaw.startsWith("__ERR_");
     console.log(
-      `[spain-pb] ⚡ Prefetch terminé — getwidgetconfigurations: ${cfgOk ? cfgRaw.length + "B ✅" : "0B ❌"} | getservices: ${svcOk ? svcRaw.length + "B ✅" : "0B ❌"}`,
+      `[spain-pb] ⚡ Prefetch 1/2 — getwidgetconfigurations: ${cfgOk ? cfgRaw.length + "B ✅" : "0B ❌"} | getservices: ${svcOk ? svcRaw.length + "B ✅" : "0B ❌"}`,
     );
 
     if (cfgOk) this._apiPrefetchCache.set("getwidgetconfigurations/", cfgRaw);
     if (svcOk) this._apiPrefetchCache.set("getservices/", svcRaw);
+
+    // ── Vague 2 : getagendas/ + datetime/ par service, pendant que la session PHP est chaude ──
+    // getagendas/ et datetime/ retournent 0B si la session PHP Bookitit a expiré
+    // (TTL ~20 min). getwidgetconfigurations/ et getservices/ ne sont pas impactés car
+    // ils sont mis en cache ci-dessus. On préfetch getagendas/ et datetime/ maintenant,
+    // immédiatement après /main/, pour les cacher avant expiration de la session PHP.
+    if (svcOk) {
+      // Parser JSONP inline (évite un import circulaire)
+      const parseJsonpInline = (raw: string): unknown => {
+        const m = raw.match(/^[\w$.]+\(([\s\S]*)\);?\s*$/);
+        if (m) { try { return JSON.parse(m[1]); } catch { /* fall through */ } }
+        try { return JSON.parse(raw); } catch { return null; }
+      };
+
+      const svcData = parseJsonpInline(svcRaw);
+      const serviceIds: string[] = [];
+      if (svcData && typeof svcData === "object") {
+        const p = svcData as Record<string, unknown>;
+        if (Array.isArray(p.Services)) {
+          for (const s of p.Services) {
+            const id = s && typeof s === "object" ? (s as Record<string, unknown>).id : undefined;
+            if (typeof id === "string" && id.length > 0) serviceIds.push(id);
+          }
+        }
+      }
+
+      if (serviceIds.length > 0) {
+        const now = new Date();
+        const months = [0, 1, 2].map((offset) => {
+          const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+          const start = d.toISOString().slice(0, 10);
+          const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+          return { start, end, key: start.slice(0, 7) };
+        });
+
+        let seq = 0;
+        const tasks: Array<{ url: string; cacheKey: string }> = [];
+        for (const svcId of serviceIds.slice(0, 3)) {
+          // getagendas/ par service
+          const agQ = new URLSearchParams(buildParams(`cbAg${Date.now() + (seq++)}`));
+          agQ.set("services[]", svcId);
+          tasks.push({ url: `${base}getagendas/?${agQ}`, cacheKey: `getagendas/${svcId}` });
+
+          // datetime/ par service × 3 mois
+          for (const mo of months) {
+            const dtQ = new URLSearchParams(buildParams(`cbDt${Date.now() + (seq++)}`));
+            dtQ.set("services[]", svcId);
+            dtQ.set("start",      mo.start);
+            dtQ.set("end",        mo.end);
+            tasks.push({ url: `${base}datetime/?${dtQ}`, cacheKey: `datetime/${mo.key}/${svcId}` });
+          }
+        }
+
+        console.log(`[spain-pb] ⚡ Prefetch 2/2 — getagendas/ + datetime/ pour ${serviceIds.length} service(s) (${tasks.length} appels)…`);
+        const results = await Promise.all(tasks.map(({ url }) => fetchFromPage(url)));
+        let nCached = 0;
+        for (let i = 0; i < tasks.length; i++) {
+          const raw = results[i];
+          if (raw.length > 0 && !raw.startsWith("__ERR_")) {
+            this._apiPrefetchCache.set(tasks[i].cacheKey, raw);
+            nCached++;
+          }
+        }
+        const summary = tasks.map((t, i) => `${t.cacheKey.replace("datetime/", "dt/").replace("getagendas/", "ag/")}: ${results[i].length}B`).join(" | ");
+        console.log(`[spain-pb] ⚡ Prefetch 2/2 terminé — ${nCached}/${tasks.length} mis en cache | ${summary}`);
+      } else {
+        console.log("[spain-pb] ⚡ Prefetch 2/2 — aucun service ID extrait de getservices/ (skip getagendas/datetime)");
+      }
+    }
   }
 
   /**
@@ -2833,13 +2902,21 @@ export async function navigateToSelecttime(
 export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
   // ── Cache-first : réponse déjà capturée pendant le solve (state PHP encore chaud) ──
   const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);
-  // datetime/ cache is keyed by month ("datetime/YYYY-MM") to avoid juillet/août collision
+  // Cache keys include service ID when available to distinguish per-service responses.
+  // datetime/ also keyed by month to avoid juillet/août collision.
   let cacheKey = endpoint;
-  if (endpoint === "datetime/") {
+  if (endpoint === "getagendas/") {
     try {
-      const startParam = new URLSearchParams(new URL(url).search).get("start") ?? "";
-      const month = startParam.slice(0, 7); // "YYYY-MM"
-      if (month) cacheKey = `datetime/${month}`;
+      const svcId = new URLSearchParams(new URL(url).search).get("services[]") ?? "";
+      if (svcId) cacheKey = `getagendas/${svcId}`;
+    } catch { /* keep cacheKey = "getagendas/" */ }
+  } else if (endpoint === "datetime/") {
+    try {
+      const params  = new URLSearchParams(new URL(url).search);
+      const month   = (params.get("start") ?? "").slice(0, 7); // "YYYY-MM"
+      const svcId   = params.get("services[]") ?? "";
+      if (month && svcId) cacheKey = `datetime/${month}/${svcId}`;
+      else if (month)     cacheKey = `datetime/${month}`;
     } catch { /* keep cacheKey = "datetime/" */ }
   }
   const cached = spainPersistentBrowser.getApiPrefetchCached(cacheKey);
