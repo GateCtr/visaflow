@@ -633,13 +633,63 @@ class SpainPersistentBrowserManager {
    *   5. Extrait tous les cookies + construit SpainCfSession
    *   6. Persiste dans Redis pour survie aux redéploiements
    */
+  /**
+   * Re-attache le browser à une session CF encore valide après un crash/redémarrage.
+   * Lance Chromium avec l'UA de la session existante, injecte les cookies CF via CDP
+   * et réutilise _page — sans re-solve CF (le clearance est encore valide).
+   */
+  private async _reattachBrowserWithSession(): Promise<SpainCfSession> {
+    const session = this._cachedSession!;
+    const remainMin = Math.round((session.expiresAt - Date.now()) / 60_000);
+    console.log(`[spain-pb] 🔄 Session CF valide (reste ${remainMin}min) mais browser fermé — réattachement Chromium…`);
+
+    const browser = await this.getOrLaunchBrowser(session.userAgent);
+    const pages = await browser.pages();
+    const page: import("puppeteer").Page = pages.length > 0 ? pages[0] : await browser.newPage();
+
+    await page.setUserAgent(session.userAgent);
+    await page.setViewport(this._viewport);
+    await page.setExtraHTTPHeaders({ "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7" });
+
+    // Injecter les cookies CF existants via CDP (évite le bug partitionKey Puppeteer 25+)
+    const cookiesToInject = session.allCookies.map((c) => ({
+      name: c.name,
+      value: c.value,
+      domain: ".citaconsular.es",
+      path: "/",
+      secure: c.name === "cf_clearance",
+    }));
+    if (cookiesToInject.length > 0) {
+      const cdp = await page.createCDPSession();
+      for (const ck of cookiesToInject) {
+        await cdp.send("Network.setCookie", ck).catch(() => {});
+      }
+      await cdp.detach().catch(() => {});
+    }
+
+    const { proxyAuth } = this.buildLaunchArgs(this.getProxyUrl());
+    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
+
+    this._page = page;
+    console.log(`[spain-pb] ✅ Réattachement terminé — browser prêt, ${cookiesToInject.length} cookie(s) injectés`);
+    return session;
+  }
+
   async ensureSession(
     targetUrl: string = DEFAULT_WIDGET_URL,
   ): Promise<SpainCfSession | null> {
     if (this.isSessionValid()) {
       const remainMin = Math.round((this._cachedSession!.expiresAt - Date.now()) / 60_000);
-      console.log(`[spain-pb] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
-      return this._cachedSession!;
+      // Session valide — vérifier aussi que le browser/page est vivant.
+      // Après un crash ou redémarrage, _cachedSession est valide mais _page=null
+      // → callBookititEndpointViaBrowser retourne 0B indéfiniment.
+      const pageAlive = this._page && await this.isBrowserAlive();
+      if (pageAlive) {
+        console.log(`[spain-pb] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
+        return this._cachedSession!;
+      }
+      // Browser mort mais session encore valide → réattacher sans re-solve CF
+      return this._reattachBrowserWithSession();
     }
 
     // ── Verrou in-flight : empêche deux solves CF simultanés ──────────────────
