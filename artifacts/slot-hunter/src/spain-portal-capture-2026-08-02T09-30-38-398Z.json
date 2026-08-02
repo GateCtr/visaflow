@@ -1,0 +1,76 @@
+{
+  "url": "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/#datetime",
+  "title": "Consulado general de España en São Paulo - S",
+  "htmlLength": 152891,
+  "markers": [
+    {
+      "name": "No hay horas disponibles visible",
+      "count": 0,
+      "sample": []
+    },
+    {
+      "name": "No hay horas disponibles caché",
+      "count": 1,
+      "sample": [
+        "<div style=\"display: none; text-align: center; font-size: 1.500em; font-weight: bold;\">No hay horas disponibles"
+      ]
+    },
+    {
+      "name": "Bouton ACEPTAR / Aceptar",
+      "count": 4,
+      "sample": [
+        "ACEPTAR",
+        "aceptar",
+        "ACEPTAR",
+        "Aceptar"
+      ]
+    },
+    {
+      "name": "idDivBktButtonContinueContainer",
+      "count": 1,
+      "sample": [
+        "idDivBktButtonContinueContainer"
+      ]
+    },
+    {
+      "name": "idBktDefaultCustomContainer",
+      "count": 1,
+      "sample": [
+        "idBktDefaultCustomContainer"
+      ]
+    },
+    {
+      "name": "idDivBktServicesContinueButton",
+      "count": 1,
+      "sample": [
+        "idDivBktServicesContinueButton"
+      ]
+    },
+    {
+      "name": "#selectservice rendered links",
+      "count": 1,
+      "sample": [
+        "#selectservice/bkt853215"
+      ]
+    },
+    {
+      "name": "#selectservice client-side templates",
+      "count": 2,
+      "sample": [
+        "#selectservice/<%= attributes.id %>",
+        "#selectservice/<%= attributes.id %>"
+      ]
+    },
+    {
+      "name": "Widget container landmark",
+      "count": 4,
+      "sample": [
+        "idBktWidgetDefaultBodyContainer",
+        "idDivBktServicesContainer",
+        "idBktWidgetDefaultBodyContainer",
+        "idBktWidgetDefaultBodyContainer"
+      ]
+    }
+  ],
+  "extractedAt": "2026-08-02T09:30:38.403Z"
+}

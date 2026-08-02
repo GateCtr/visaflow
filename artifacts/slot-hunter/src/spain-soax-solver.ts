@@ -1063,13 +1063,24 @@ export async function spainCfFetch(
     ...fetchOptions?.headers,
   };
 
-  try {
-    const res = await impit.fetch(url, { ...fetchOptions, headers: finalHeaders } as any) as unknown as Response;
-    return res;
-  } catch (err) {
-    console.error(`[spain-soax] ❌ Fetch error: ${err instanceof Error ? err.message : err}`);
-    return null;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await impit.fetch(url, { ...fetchOptions, headers: finalHeaders } as any) as unknown as Response;
+      return res;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTimeout = /timeout|timed out|request timeout/i.test(msg);
+      console.error(`[spain-soax] ❌ Fetch error: ${msg} (attempt ${attempt + 1}/${maxRetries + 1})`);
+      if (attempt < maxRetries && isTimeout) {
+        const backoff = 500 * (attempt + 1);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue; // retry on timeout
+      }
+      return null;
+    }
   }
+  return null;
 }
 
 /**

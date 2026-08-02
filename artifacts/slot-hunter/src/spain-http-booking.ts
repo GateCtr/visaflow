@@ -36,6 +36,7 @@ import {
   navigateToSelecttime,
   submitSigninFormViaDOM,
   acquireBrowserBookingLock,
+  spainPersistentBrowser,
 } from "./spain-persistent-browser.js";
 import {
   requestOtpChallenge,
@@ -299,6 +300,7 @@ async function callBookititEndpoint(
  * donc le risque de collision inter-dossiers est négligeable.
  */
 async function callBookititEndpointBrowser(
+  session: SpainCfSession,
   endpoint: string,
   params: Record<string, string>,
   portalUrl: string,
@@ -327,8 +329,33 @@ async function callBookititEndpointBrowser(
     body = await callBookititViaJQueryInPage(url);
   }
 
+  // Essai 3 : fallback HTTP via impit/session CF si le browser/jQuery est indisponible.
+  // C'est utile pour les tests et pour les environnements sans page Chromium active.
   if (!body) {
-    console.warn(`[spain-booking] ${endpoint} (browser+jQuery) — toujours 0B`);
+    console.warn(`[spain-booking] ${endpoint} (browser+jQuery) — toujours 0B — fallback HTTP…`);
+    const res = await spainCfFetch(url, session, {
+      headers: {
+        Referer: portalUrl,
+        "X-Requested-With": "XMLHttpRequest",
+        Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
+    });
+    body = res?.ok ? await res.text() : "";
+  }
+
+  if (!body) {
+    const cached = spainPersistentBrowser.getApiPrefetchCached(endpoint);
+    if (cached !== undefined) {
+      body = cached;
+      console.log(`[spain-booking] 🔁 ${endpoint} fallback → cache préfetch browser (${cached.length}B)`);
+    }
+  }
+
+  if (!body) {
+    console.warn(`[spain-booking] ${endpoint} (browser+jQuery+http) — toujours 0B`);
     return null;
   }
 
@@ -561,40 +588,48 @@ export async function executeHttpBooking(
   // Mode HTTP-only / impit :
   //   Le contexte incognito navigue vers /main/ → PHPSESSID isolé → appels impit
   //   passent par le même proxy IP → réponses normales.
-  const useBrowserCalls = session.source === "playwright";
+  const browserPageAvailable = Boolean(spainPersistentBrowser.getActivePage());
+  const useBrowserCalls = session.source === "playwright" && browserPageAvailable;
   // Sérialiser TOUT le flow browser — la page Chrome est un singleton partagé.
   // getagendas/, datetime/, signin/, summary/ utilisent tous callBookititEndpointBrowser
   // (→ this._page). Sans ce verrou, deux dossiers en Promise.all se marchent dessus
   // dès le premier appel → TargetCloseError / detached Frame.
   const releaseBrowserLock = useBrowserCalls ? await acquireBrowserBookingLock() : null;
   try {
-  let bookingSession: SpainCfSession;
+    let bookingSession: SpainCfSession;
 
-  if (useBrowserCalls) {
-    // Session principale = session browser chaude. Pas de contexte incognito.
-    bookingSession = session;
-    console.log(`${logPrefix} 🌐 Mode browser — PHPSESSID chaud (page principale Chromium)`);
-  } else if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
-    const pbSession = await createSpainPersistentBrowserDossierSession(session, portalUrl);
-    if (!pbSession) {
-      return {
-        status: "booking_failed",
-        errorMessage: "Impossible d'établir une session PHP Bookitit isolée (persistent-browser) pour ce dossier",
-        durationMs: Date.now() - t0,
-      };
+    if (useBrowserCalls) {
+      // Session principale = session browser chaude. Pas de contexte incognito.
+      bookingSession = session;
+      console.log(`${logPrefix} 🌐 Mode browser — PHPSESSID chaud (page principale Chromium)`);
+    } else {
+      // Fallback HTTP si aucune page Chromium n'est disponible (tests / environnements sans browser).
+      // On créé une session Bookitit isolée pour ce dossier, puis on utilise les appels impit.
+      if (session.source === "playwright") {
+        console.log(`${logPrefix} 🌐 Mode browser indisponible — fallback HTTP/isolé pour ce dossier`);
+      }
+      if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
+        const pbSession = await createSpainPersistentBrowserDossierSession(session, portalUrl);
+        if (!pbSession) {
+          return {
+            status: "booking_failed",
+            errorMessage: "Impossible d'établir une session PHP Bookitit isolée (persistent-browser) pour ce dossier",
+            durationMs: Date.now() - t0,
+          };
+        }
+        bookingSession = pbSession;
+      } else {
+        const isolated = await createIsolatedBookingSession(session, portalUrl);
+        if (!isolated) {
+          return {
+            status: "booking_failed",
+            errorMessage: "Impossible d'établir une session PHP Bookitit isolée pour ce dossier",
+            durationMs: Date.now() - t0,
+          };
+        }
+        bookingSession = isolated.session;
+      }
     }
-    bookingSession = pbSession;
-  } else {
-    const isolated = await createIsolatedBookingSession(session, portalUrl);
-    if (!isolated) {
-      return {
-        status: "booking_failed",
-        errorMessage: "Impossible d'établir une session PHP Bookitit isolée pour ce dossier",
-        durationMs: Date.now() - t0,
-      };
-    }
-    bookingSession = isolated.session;
-  }
 
   // ─── 2. Récupérer les agendas pour ce service ────────────────────────
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
@@ -615,7 +650,7 @@ export async function executeHttpBooking(
   // au moment où le serveur est le plus saturé).
   console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
   const callEndpoint = useBrowserCalls
-    ? (ep: string, p: Record<string, string>) => callBookititEndpointBrowser(ep, p, portalUrl)
+    ? (ep: string, p: Record<string, string>) => callBookititEndpointBrowser(bookingSession, ep, p, portalUrl)
     : (ep: string, p: Record<string, string>) => callBookititEndpoint(bookingSession, ep, p, portalUrl);
 
   const [agendasPayload, rawCfgPayload] = await Promise.all([
@@ -664,7 +699,16 @@ export async function executeHttpBooking(
       buildDatetimeParams(now.getFullYear(), now.getMonth()));
 
     if (datetimePayload && typeof datetimePayload === "object") {
-      const slot = extractFirstSlot(datetimePayload, config.groupSize);
+      // Compute minimal free slots threshold: if groupSize specified (>1) use it,
+      // otherwise use SPAIN_MIN_FREE_DEFAULT (env) or default to 1.
+      const defaultMinFree = Number(process.env.SPAIN_MIN_FREE_DEFAULT ?? "1");
+      const minFree = config.groupSize && config.groupSize > 1 ? config.groupSize : (Number.isFinite(defaultMinFree) && defaultMinFree > 0 ? defaultMinFree : 1);
+      let slot = extractFirstSlot(datetimePayload, minFree);
+      if (!slot && minFree > 1) {
+        // Fallback: if no slot meets the preferred threshold, accept a slot with 1 free place
+        slot = extractFirstSlot(datetimePayload, 1);
+        if (slot) console.log(`[spain-booking] ⚠️ Aucun créneau >= ${minFree}, fallback vers créneau avec 1 place`);
+      }
       if (slot) {
         slotDate = slot.date;
         slotTime = slot.time;
@@ -686,7 +730,13 @@ export async function executeHttpBooking(
       for (let m = 0; m < futurePayloads.length; m++) {
         const mPayload = futurePayloads[m];
         if (mPayload) {
-          const slot = extractFirstSlot(mPayload, config.groupSize);
+          const defaultMinFree2 = Number(process.env.SPAIN_MIN_FREE_DEFAULT ?? "1");
+          const minFree2 = config.groupSize && config.groupSize > 1 ? config.groupSize : (Number.isFinite(defaultMinFree2) && defaultMinFree2 > 0 ? defaultMinFree2 : 1);
+          let slot = extractFirstSlot(mPayload, minFree2);
+          if (!slot && minFree2 > 1) {
+            slot = extractFirstSlot(mPayload, 1);
+            if (slot) console.log(`[spain-booking] ⚠️ Aucun créneau >= ${minFree2}, fallback vers créneau avec 1 place`);
+          }
           if (slot) {
             slotDate = slot.date;
             slotTime = slot.time;

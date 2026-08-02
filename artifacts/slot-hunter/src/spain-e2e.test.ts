@@ -37,6 +37,7 @@ import {
   _setTestSessionProvider,
   scanSpainHttp,
   isCloudflareInteractiveChallenge,
+  extractServiceDetails,
 } from "./spain-http-scanner.js";
 import {
   extractServicesFromHtml,
@@ -44,6 +45,7 @@ import {
   createIsolatedBookingSession,
   type SpainBookingConfig,
 } from "./spain-http-booking.js";
+import { clickInteractiveSpainAcceptFlow } from "./spain-persistent-browser.js";
 
 // ─── Test harness ─────────────────────────────────────────────────────────────
 
@@ -116,6 +118,26 @@ const HTML_SLOTS_HIDDEN_WITH_SERVICES = [
   `      <div class="clsBktServiceDataName">Legalización de documentos</div>`,
   `    </div>`,
   `  </a>`,
+  CLOSE,
+  `</body></html>`,
+  PAD,
+].join("\n");
+
+// ②b "No hay horas" VISIBLE + templates client-side (Kinshasa-like)
+const HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES = [
+  `<html><body>`,
+  LANDMARKS,
+  `  <div style='text-align: center; font-size: 1.500em; font-weight: bold;'>No hay horas disponibles</div>`,
+  `  <div id="idBktDefaultCustomContainer"></div>`,
+  `  <div id="idDivBktButtonContinueContainer"></div>`,
+  `  <div id="idDivBktServicesContinueButton"></div>`,
+  `  <script type="text/template">`,
+  `    <a href='#selectservice/<%= attributes.id %>'>`,
+  `      <div class="clsBktServiceDataContainer clsBktServiceAtt">`,
+  `        <div class="clsBktServiceDataName">Tramitación de visas (Kinshasa)</div>`,
+  `      </div>`,
+  `    </a>`,
+  `  </script>`,
   CLOSE,
   `</body></html>`,
   PAD,
@@ -338,6 +360,33 @@ subsection("1d. Templates Underscore.js exclus du parsing");
   );
 }
 
+subsection("1e. getservices JSONP payload with masked name");
+{
+  const maskedPayload = {
+    Services: [
+      {
+        id: "bkt1181796",
+        groups_id: "bkt77",
+        name: "<span style='display:none'></span>",
+      },
+      {
+        id: "bkt1181774",
+        groups_id: "bkt77",
+        name: "TRAMITACIÓN DE  VISADOS",
+      },
+    ],
+    Agendas: [],
+    ExtraServices: [],
+    AllowAppointment: false,
+  };
+
+  const details = extractServiceDetails(maskedPayload);
+  assertEq(details.length, 2, "extractServiceDetails returns 2 services");
+  // First service name should fallback to 'Service bkt1181796' (masked name)
+  assert(details.some((s) => s.id === "bkt1181796" && (s.name === "Service bkt1181796" || s.name.length > 2)), "masked service id present with sensible name");
+  assert(details.some((s) => s.id === "bkt1181774" && s.name.includes("TRAMITACI")), "visible service name parsed");
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 2 — Détection CF interactive (pure)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -378,6 +427,21 @@ subsection("2d. Variantes du texte CF");
     isCloudflareInteractiveChallenge(403, "challenge-platform cdn-cgi"),
     "challenge-platform dans le corps → challenge détecté",
   );
+}
+
+subsection("2e. Clic du bouton Aceptar/Continue via browser");
+{
+  const fakePage = {
+    evaluate: async (_fn: (arg: unknown) => unknown, _arg?: unknown) => ({
+      clicked: true,
+      reason: "Aceptar",
+      htmlSnippet: "<div>services rendered</div>",
+    }),
+  } as any;
+
+  const result = await clickInteractiveSpainAcceptFlow(fakePage);
+  assert(result.clicked, "helper retourne clicked=true quand un bouton Aceptar/Continue est cliqué");
+  assert(result.reason.includes("Aceptar") || result.reason.includes("Continue"), "helper indique la cause du clic");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -501,7 +565,25 @@ subsection("3f. No hay horas CACHÉ + services + datetime vide → not_found");
   resetMocks();
 }
 
-subsection("3g. CF challenge dans le HTML de /main/ → error (corps non conforme)");
+subsection("3g. No hay horas VISIBLE + templates client-side → found via getservices/datetime");
+{
+  resetMocks();
+  const session = makeMockSession({ prefetchedMainHtml: HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES });
+  _setTestSessionProvider(async () => session);
+
+  _setTestFetch(makeMockFetch([
+    ["getagendas/",  () => jsonpResp(AGENDA_OK)],
+    ["datetime/",    () => jsonpResp(DATETIME_WITH_SLOT)],
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => jsonpResp([{ id: "bkt1181774", name: "Tramitación de visas" }])],
+  ]));
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "found", "No hay horas visible + templates client-side → found");
+  resetMocks();
+}
+
+subsection("3h. CF challenge dans le HTML de /main/ → error (corps non conforme)");
 {
   resetMocks();
   // CF challenge body from prefetchedMainHtml — will fail the length/landmark check

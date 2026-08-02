@@ -235,6 +235,19 @@ function parseJsonpPayload(text: string): unknown | null {
   try { return JSON.parse(m[1].trim()); } catch { return null; }
 }
 
+async function fetchBookititBodyWithFallback(
+  session: SpainCfSession,
+  url: string,
+  headers: Record<string, string>,
+): Promise<string> {
+  const browserBody = await callBookititEndpointViaBrowser(url);
+  if (browserBody) return browserBody;
+
+  const res = await spainCfFetch(url, session, { headers });
+  if (!res) return "";
+  return await res.text();
+}
+
 /**
  * Appelle un endpoint JSONP Bookitit via impit + session CF.
  * Retourne null si la réponse n'est pas du JSONP (CF challenge ou session expirée).
@@ -377,7 +390,7 @@ function collectIds(value: unknown, keyHint: RegExp): string[] {
  *   • Objet indexé numéric: {"0":{id:"897578", name:"Visa"}, "1":{...}}
  *   • Champs variés :       id/Id/idService/serviceId + name/description/label/nombre/titulo/title
  */
-function extractServiceDetails(payload: unknown): Array<{ id: string; name: string; duration?: number }> {
+export function extractServiceDetails(payload: unknown): Array<{ id: string; name: string; duration?: number }> {
   const results: Array<{ id: string; name: string; duration?: number }> = [];
 
   /** Champs valides pour l'identifiant d'un service. */
@@ -390,13 +403,28 @@ function extractServiceDetails(payload: unknown): Array<{ id: string; name: stri
   }
 
   /** Champs valides pour le nom d'un service (EN + ES + FR). */
+  function decodeHtmlEntities(s: string): string {
+    return s
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/g, "'");
+  }
+
   function extractName(obj: Record<string, unknown>): string | null {
     const raw = obj.name ?? obj.Name ?? obj.serviceName ?? obj.ServiceName
       ?? obj.description ?? obj.Description ?? obj.label ?? obj.Label
       ?? obj.title ?? obj.Title ?? obj.nombre ?? obj.Nombre ?? obj.titulo ?? obj.Titulo
       ?? obj.service_name ?? obj.service_description;
     if (raw === undefined || raw === null) return null;
-    const s = String(raw).trim();
+    let s = String(raw).trim();
+    // Remove HTML tags and decode common entities
+    s = s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+    s = decodeHtmlEntities(s);
+    // If name is empty or only punctuation after stripping, treat as absent
+    if (s.replace(/[^\w\d]/g, "").length === 0) return null;
     return s.length > 0 ? s : null;
   }
 
@@ -758,8 +786,8 @@ async function confirmSlotsViaDatetime(
 
       let cfgRaw: string;
       if (useBrowserFetch) {
-        cfgRaw = await callBookititEndpointViaBrowser(`${base}getwidgetconfigurations/?${cfgQ}`);
-        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init (browser) → ${cfgRaw.length}B`);
+        cfgRaw = await fetchBookititBodyWithFallback(session, `${base}getwidgetconfigurations/?${cfgQ}`, headers);
+        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → ${cfgRaw.length}B`);
       } else {
         const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
         cfgRaw = cfgRes ? await cfgRes.text() : "";
@@ -794,10 +822,10 @@ async function confirmSlotsViaDatetime(
 
       let svcRaw: string;
       if (useBrowserFetch) {
-        svcRaw = await callBookititEndpointViaBrowser(`${base}getservices/?${svcQ}`);
-        console.log(`[spain-http] 🔬 getservices/ (browser) → ${svcRaw.length}B`);
+        svcRaw = await fetchBookititBodyWithFallback(session, `${base}getservices/?${svcQ}`, headers);
+        console.log(`[spain-http] 🔬 getservices/ → ${svcRaw.length}B`);
         if (!svcRaw) {
-          console.log(`[spain-http] ⚠️ getservices/ fallback (browser) → 0B → not_found`);
+          console.log(`[spain-http] ⚠️ getservices/ fallback → 0B → not_found`);
           return null;
         }
       } else {
@@ -887,8 +915,8 @@ async function confirmSlotsViaDatetime(
       agQ.append("_",              String(Date.now()));
       let agRaw: string;
       if (useBrowserFetch) {
-        agRaw = await callBookititEndpointViaBrowser(`${base}getagendas/?${agQ}`);
-        console.log(`[spain-http] 🗓  getagendas/ (browser) → ${agRaw.length}B`);
+        agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
+        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B`);
       } else {
         const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
         agRaw = agRes?.ok ? await agRes.text() : "";
@@ -928,8 +956,8 @@ async function confirmSlotsViaDatetime(
         dtQ.append("_",              String(Date.now()));
         let dtRaw: string;
         if (useBrowserFetch) {
-          dtRaw = await callBookititEndpointViaBrowser(`${base}datetime/?${dtQ}`);
-          console.log(`[spain-http] 📅 datetime/ ${start}→${end} (browser) → ${dtRaw.length}B`);
+          dtRaw = await fetchBookititBodyWithFallback(session, `${base}datetime/?${dtQ}`, headers);
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B`);
         } else {
           const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
           dtRaw = dtRes?.ok ? await dtRes.text() : "";
@@ -1856,8 +1884,11 @@ async function scanViaMainEndpoint(
     const mainUrl = `${baseBookititUrl}main/?${mainParams}`;
     console.log(`[spain-http] 🌐 /main/ via browser (session Playwright — même IP que cf_clearance)`);
     try {
-      mainBody = await callBookititEndpointViaBrowser(mainUrl);
-      console.log(`[spain-http] 📡 /main/ browser → ${mainBody.length}B`);
+      mainBody = await fetchBookititBodyWithFallback(session, mainUrl, {
+        ...jsonpHeaders,
+        Cookie: buildCookieStr(),
+      });
+      console.log(`[spain-http] 📡 /main/ → ${mainBody.length}B`);
     } catch (err) {
       console.warn(`[spain-http] ⚠️ /main/ browser échoué: ${err}`);
       mainBody = "";
@@ -2036,6 +2067,9 @@ async function scanViaMainEndpoint(
 
   const hasVisibleNoSlots = VISIBLE_NO_SLOTS_RE.test(html);
   const hasHiddenNoSlots  = HIDDEN_NO_SLOTS_RE.test(html);
+  const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton|Aceptar/i.test(html);
+  const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
+  const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
 
   // Signal négatif fiable → pas besoin d'appel API
   if (hasVisibleNoSlots) {
@@ -2048,8 +2082,17 @@ async function scanViaMainEndpoint(
       console.log(`[spain-http] 🔬 Contexte HTML "No hay horas" (pos ${matchIdx}):`);
       console.log(`[spain-http]    ${html.slice(ctxStart, ctxEnd).replace(/\s+/g, " ").trim()}`);
     }
-    console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau`);
-    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+
+    const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
+    if (!hasInteractiveAcceptFlow) {
+      console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
+
+    console.log(
+      `[spain-http] ⚠️ "No hay horas disponibles" VISIBLE MAIS flow interactif détecté ` +
+      `(modal Aceptar ou services dynamiques) → vérification via getservices/datetime...`,
+    );
   }
 
   // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
@@ -2068,7 +2111,7 @@ async function scanViaMainEndpoint(
   if (hasHiddenNoSlots && !hasVisibleNoSlots) {
     const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
     // Check original (un-stripped) html for EJS template placeholders
-    const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
+    // reuse `hasClientSideTemplates` computed above
     if (!hasRenderedServiceLinks && !hasClientSideTemplates) {
       console.log(`[spain-http] ⚠️ "No hay horas" masquée MAIS aucun service rendu ni template Backbone détecté → not_found`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2099,6 +2142,27 @@ async function scanViaMainEndpoint(
   // [\w-]+ pour couvrir les IDs numériques ET alphanumériques (ex: bkt897578)
   const hasRenderedServices = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasRenderedServiceContainers = /clsBktServiceDataContainer\s+clsBktServiceAtt/i.test(renderedHtml);
+  if (hasClientSideTemplates && !hasRenderedServices && !hasRenderedServiceContainers) {
+    console.log(
+      `[spain-http] 🔍 "No hay horas" + templates client-side sans services rendus ` +
+      `— vérification via getservices/datetime...`,
+    );
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (!confirmed) {
+      console.log(`[spain-http] ⛔ Templates client-side MAIS datetime/ vide → pas de créneau réel`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
+    return {
+      status: "found",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
+      scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
+    };
+  }
 
   if (hasRenderedServices || hasRenderedServiceContainers) {
     console.log(`[spain-http] 🔍 Services RENDUS (hors template) — vérification datetime/…`);

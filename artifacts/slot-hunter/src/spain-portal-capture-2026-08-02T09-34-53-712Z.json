@@ -1,0 +1,71 @@
+{
+  "url": "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services",
+  "title": "Embajada de España en Kinshasa - VISADOS",
+  "htmlLength": 132397,
+  "markers": [
+    {
+      "name": "No hay horas disponibles visible",
+      "count": 1,
+      "sample": [
+        "<div style=\"text-align: center; font-size: 1.500em; font-weight: bold;\">No hay horas disponibles"
+      ]
+    },
+    {
+      "name": "No hay horas disponibles caché",
+      "count": 1,
+      "sample": [
+        "<div style=\"display: none; text-align: center; font-size: 1.500em; font-weight: bold;\">No hay horas disponibles"
+      ]
+    },
+    {
+      "name": "Bouton ACEPTAR / Aceptar",
+      "count": 1,
+      "sample": [
+        "Aceptar"
+      ]
+    },
+    {
+      "name": "idDivBktButtonContinueContainer",
+      "count": 1,
+      "sample": [
+        "idDivBktButtonContinueContainer"
+      ]
+    },
+    {
+      "name": "idBktDefaultCustomContainer",
+      "count": 1,
+      "sample": [
+        "idBktDefaultCustomContainer"
+      ]
+    },
+    {
+      "name": "idDivBktServicesContinueButton",
+      "count": 1,
+      "sample": [
+        "idDivBktServicesContinueButton"
+      ]
+    },
+    {
+      "name": "#selectservice rendered links",
+      "count": 0,
+      "sample": []
+    },
+    {
+      "name": "#selectservice client-side templates",
+      "count": 2,
+      "sample": [
+        "#selectservice/<%= attributes.id %>",
+        "#selectservice/<%= attributes.id %>"
+      ]
+    },
+    {
+      "name": "Widget container landmark",
+      "count": 2,
+      "sample": [
+        "idBktWidgetDefaultBodyContainer",
+        "idDivBktServicesContainer"
+      ]
+    }
+  ],
+  "extractedAt": "2026-08-02T09:34:53.716Z"
+}

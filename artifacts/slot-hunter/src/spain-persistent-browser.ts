@@ -1397,32 +1397,11 @@ class SpainPersistentBrowserManager {
           // Le cf_clearance obtenu pendant la navigation JSD est déjà valide pour /main/.
 
           // Tenter le clic Continuar
-          continueClicked = await page.evaluate(() => {
-            // Sélecteur exact bundle custom.js
-            const btn = document.getElementById("idDivBktCustomContinueButton");
-            if (btn && (btn as HTMLElement).offsetParent !== null) { (btn as HTMLElement).click(); return true; }
-            // Fallback : container custom → bouton "continuar/continue"
-            const container = document.getElementById("idBktDefaultCustomContainer");
-            if (container) {
-              const cands = container.querySelectorAll("button, a, div, input[type='button'], input[type='submit']");
-              for (let i = 0; i < cands.length; i++) {
-                const el = cands[i] as HTMLElement;
-                if (el.offsetParent !== null && /continuar|continue/i.test(el.textContent || "")) {
-                  el.click(); return true;
-                }
-              }
-            }
-            // Fallback global par texte
-            const allClickable = document.querySelectorAll("a, button, [role='button'], div[onclick]");
-            for (let i = 0; i < allClickable.length; i++) {
-              const el = allClickable[i] as HTMLElement;
-              const txt = (el.textContent || "").trim().toLowerCase();
-              if ((txt.indexOf("continu") >= 0 || txt.indexOf("siguiente") >= 0) && el.offsetParent !== null) {
-                el.click(); return true;
-              }
-            }
-            return false;
-          }).catch(() => false);
+          const acceptFlowResult = await clickInteractiveSpainAcceptFlow(page);
+          continueClicked = acceptFlowResult.clicked;
+          if (!continueClicked) {
+            console.log(`[spain-pb] 🖱️ clickInteractiveSpainAcceptFlow → ${acceptFlowResult.reason}`);
+          }
 
           if (!continueClicked) {
             const domState = await page.evaluate(() => ({
@@ -2437,6 +2416,79 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
  *
  * Retourne le hash Backbone résolu (ex: "#signupsecondappointment") ou "" si timeout.
  */
+export interface SpainAcceptFlowClickResult {
+  clicked: boolean;
+  reason: string;
+  htmlSnippet: string;
+}
+
+export async function clickInteractiveSpainAcceptFlow(page: Page): Promise<SpainAcceptFlowClickResult> {
+  try {
+    const result = await page.evaluate(() => {
+      const visible = (el: Element | null): boolean => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el as HTMLElement);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        const rect = (el as HTMLElement).getBoundingClientRect();
+        return rect.width > 0 || rect.height > 0;
+      };
+
+      const textOf = (el: Element | null): string => (el?.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+      const tryClick = (el: Element | null, reason: string): { clicked: boolean; reason: string; htmlSnippet: string } | null => {
+        if (!el || !visible(el)) return null;
+        const htmlSnippet = (el as HTMLElement).outerHTML.slice(0, 220);
+        (el as HTMLElement).click();
+        return { clicked: true, reason, htmlSnippet };
+      };
+
+      const candidates = [
+        document.getElementById("idDivBktCustomContinueButton"),
+        document.getElementById("idDivBktButtonContinueContainer"),
+        document.getElementById("idDivBktServicesContinueButton"),
+        document.getElementById("idBktDefaultCustomContainer"),
+      ];
+
+      for (const candidate of candidates) {
+        const reason = candidate?.id ?? "container";
+        const direct = tryClick(candidate, `container:${reason}`);
+        if (direct) return direct;
+      }
+
+      const buttons = Array.from(document.querySelectorAll("button, a, input[type='button'], input[type='submit'], div[role='button']"));
+      for (const el of buttons) {
+        const txt = textOf(el);
+        if (!visible(el)) continue;
+        if (/aceptar|accept|continuar|continue|siguiente|ok/i.test(txt)) {
+          const direct = tryClick(el, `text:${txt.slice(0, 40)}`);
+          if (direct) return direct;
+        }
+      }
+
+      const fallback = Array.from(document.querySelectorAll("#idBktDefaultCustomContainer button, #idBktDefaultCustomContainer a, #idBktDefaultCustomContainer input"));
+      for (const el of fallback) {
+        if (!visible(el)) continue;
+        const direct = tryClick(el, "fallback-container");
+        if (direct) return direct;
+      }
+
+      return { clicked: false, reason: "no_visible_accept_button", htmlSnippet: (document.body?.innerHTML ?? "").slice(0, 220) };
+    });
+
+    return {
+      clicked: Boolean((result as any)?.clicked),
+      reason: String((result as any)?.reason ?? "unknown"),
+      htmlSnippet: String((result as any)?.htmlSnippet ?? ""),
+    };
+  } catch (err) {
+    return {
+      clicked: false,
+      reason: `evaluate_error:${String(err).slice(0, 80)}`,
+      htmlSnippet: "",
+    };
+  }
+}
+
 export async function navigateToSelecttime(
   date: string,
   time: string,
