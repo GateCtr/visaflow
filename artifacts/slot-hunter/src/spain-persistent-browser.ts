@@ -2989,8 +2989,8 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     console.warn("[spain-pb] ⚠️ callBookititEndpointViaBrowser — _page null (browser non lancé ou fermé)");
     return "";
   }
-  // Logguer l'URL courante de la page pour détecter une navigation inattendue
-  const pageUrl = page.url().slice(0, 80);
+  // Logguer l'URL courante de la page sans tronquer la valeur utile
+  const pageUrl = page.url();
   console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
 
   try {
@@ -3009,7 +3009,15 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   }
 
   try {
-    const result: { status: number; bodyLen: number; body: string } = await page.evaluate(
+    const result: {
+      status: number;
+      statusText: string;
+      finalUrl: string;
+      contentType: string;
+      contentLength: string;
+      bodyLen: number;
+      body: string;
+    } = await page.evaluate(
       async (u: string) => {
         try {
           const resp = await fetch(u, {
@@ -3021,14 +3029,32 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
             },
           });
           const body = await resp.text();
-          return { status: resp.status, bodyLen: body.length, body: resp.ok ? body : `__ERR_STATUS_${resp.status}` };
+          return {
+            status: resp.status,
+            statusText: resp.statusText,
+            finalUrl: resp.url,
+            contentType: resp.headers.get("content-type") ?? "",
+            contentLength: resp.headers.get("content-length") ?? "",
+            bodyLen: body.length,
+            body: resp.ok ? body : `__ERR_STATUS_${resp.status}`,
+          };
         } catch (e: unknown) {
-          return { status: 0, bodyLen: 0, body: `__ERR_FETCH_${String(e).slice(0, 120)}` };
+          return {
+            status: 0,
+            statusText: "",
+            finalUrl: "",
+            contentType: "",
+            contentLength: "",
+            bodyLen: 0,
+            body: `__ERR_FETCH_${String(e).slice(0, 120)}`,
+          };
         }
       },
       url,
     );
-    console.log(`[spain-pb] 📡 callBrowser ${endpoint} → HTTP ${result.status} | ${result.bodyLen}B`);
+    console.log(
+      `[spain-pb] 📡 callBrowser ${endpoint} → HTTP ${result.status} ${result.statusText} | ${result.bodyLen}B | ct=${result.contentType || "-"} | cl=${result.contentLength || "-"} | url=${result.finalUrl || "-"}`,
+    );
     if (result.body.startsWith("__ERR_")) {
       console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser échoué: ${result.body.slice(0, 140)}`);
       return "";
