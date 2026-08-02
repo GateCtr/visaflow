@@ -215,57 +215,90 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
   
   log("DEBUG", `Initialisation session: ${config.locationCode} realm=${config.realmId} cat=${config.categoryId}`);
   
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
   const proxy = getProxyDispatcher();
   if (proxy) {
     log("DEBUG", `Via proxy: ${proxy.label}`);
   } else {
     log("DEBUG", "Direct (pas de proxy configuré — risque de blocage IP Railway/cloud)");
   }
-  
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        ...RKTERMIN_HEADERS,
-        "User-Agent": randomUA(),
-      },
-      redirect: "follow",
-      signal: controller.signal,
-      // @ts-ignore — undici dispatcher not in lib.dom types
-      dispatcher: proxy?.dispatcher,
-    });
-    
-    clearTimeout(timeout);
-    const html = await res.text();
-    const cookies = parseCookies(res.headers);
-    
-    if (!cookies.jsessionId) {
-      throw new Error("Pas de JSESSIONID dans la réponse — le serveur est peut-être down");
+
+  // Retry pour les erreurs réseau transitoires (ConnectTimeoutError, ECONNRESET, AbortError timeout).
+  // Ces erreurs surviennent lors de pics de charge réseau ou de micro-coupures proxy et ne doivent
+  // pas déclencher l'auto-pause du dossier. On retente 3 fois avec backoff exponentiel.
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RKTERMIN_TIMING.requestTimeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          ...RKTERMIN_HEADERS,
+          "User-Agent": randomUA(),
+        },
+        redirect: "follow",
+        signal: controller.signal,
+        // @ts-ignore — undici dispatcher not in lib.dom types
+        dispatcher: proxy?.dispatcher,
+      });
+
+      clearTimeout(timeout);
+      const html = await res.text();
+      const cookies = parseCookies(res.headers);
+
+      if (!cookies.jsessionId) {
+        throw new Error("Pas de JSESSIONID dans la réponse — le serveur est peut-être down");
+      }
+
+      const session: RKTerminSession = {
+        jsessionId: cookies.jsessionId,
+        keks: cookies.keks ?? "TERMINA",
+        createdAt: Date.now(),
+        monthCaptchaSolved: false,
+      };
+
+      log("DEBUG", `Session créée: JSESSIONID=${session.jsessionId.slice(0, 8)}... KEKS=${session.keks}`);
+      return { session, html };
+
+    } catch (err) {
+      clearTimeout(timeout);
+      lastErr = err;
+
+      // Détecter si c'est une erreur réseau transitoire (timeout, reset, connexion refusée)
+      const msg = err instanceof Error ? err.message : String(err);
+      const cause = (err as any)?.cause;
+      const causeMsg = cause instanceof Error ? cause.message : String(cause ?? "");
+      const isTransient = (
+        causeMsg.includes("ConnectTimeoutError") ||
+        causeMsg.includes("ConnectTimeout") ||
+        causeMsg.includes("ECONNRESET") ||
+        causeMsg.includes("ECONNREFUSED") ||
+        causeMsg.includes("UND_ERR_CONNECT_TIMEOUT") ||
+        msg.includes("aborted") ||
+        msg.includes("This operation was aborted")
+      );
+
+      if (isTransient && attempt < MAX_ATTEMPTS) {
+        const backoffMs = attempt * 8_000; // 8s, 16s
+        log("WARN", `initSession attempt ${attempt}/${MAX_ATTEMPTS} — erreur transitoire (${causeMsg || msg}). Retry dans ${backoffMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, backoffMs));
+        continue;
+      }
+
+      // Erreur non-transitoire ou tentatives épuisées — lever
+      const causeStr = cause ? ` (cause: ${cause})` : "";
+      const hint = !proxy
+        ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"
+        : "";
+      throw new Error(`initSession failed: ${msg}${causeStr}${hint}`);
     }
-    
-    const session: RKTerminSession = {
-      jsessionId: cookies.jsessionId,
-      keks: cookies.keks ?? "TERMINA",
-      createdAt: Date.now(),
-      monthCaptchaSolved: false,
-    };
-    
-    log("DEBUG", `Session créée: JSESSIONID=${session.jsessionId.slice(0, 8)}... KEKS=${session.keks}`);
-    
-    return { session, html };
-  } catch (err) {
-    clearTimeout(timeout);
-    // Exposer la cause sous-jacente (ECONNREFUSED, ECONNRESET, etc.) pour diagnostiquer
-    // les blocages IP (service2.diplo.de bloque les plages IP datacenter Railway/cloud).
-    const cause = (err as any)?.cause;
-    const causeStr = cause ? ` (cause: ${cause})` : "";
-    const hint = !proxy
-      ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"
-      : "";
-    throw new Error(`initSession failed: ${err instanceof Error ? err.message : String(err)}${causeStr}${hint}`);
   }
+
+  // Ne devrait jamais être atteint (la boucle throw avant)
+  throw lastErr;
 }
 
 /** Vérifie si la session est encore valide (pas expirée). */

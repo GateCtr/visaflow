@@ -551,7 +551,7 @@ async function submitSlotSelection(
   preferredEndpoint?: string, // endpoint confirmé depuis la config auto-découverte (essayé en premier)
   /** Cookie string complet du setup (contient __RequestVerificationToken anti-CSRF ASP.NET) */
   selectSlotCookies?: string,
-): Promise<{ success: boolean; html: string; finalUrl: string; confirmedEndpoint?: string; error?: string }> {
+): Promise<{ success: boolean; html: string; finalUrl: string; confirmedEndpoint?: string; error?: string; needsPlaywright?: boolean }> {
   // Si on a un endpoint confirmé → le tester en premier, avant les guesses
   const candidates = [
     preferredEndpoint ?? null,

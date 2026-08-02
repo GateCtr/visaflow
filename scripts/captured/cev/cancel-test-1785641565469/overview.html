@@ -1,0 +1,213 @@
+
+<!DOCTYPE html>
+<html lang="fr-BE">
+<head>
+    <title>e-Appointment</title>
+    <link href="/favicon.ico?v1" rel="shortcut icon" type="image/x-icon"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=EDGE"/>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://js.hcaptcha.com/1/api.js?hl=fr-BE" nonce="pT0JwOKt6dvt2j9Ol2bvj1Rn" async defer></script>
+    <link href="/Content/css/layoutBundle?v=5eWzRMCEiAYY8Zfc2I3QedX84KOxzijSwwG7L4sNDsc1" rel="stylesheet"/>
+
+
+    
+    <link href="/Content/css/vowStyleBundle?v=Yke9CWa_I08tm8K36xeYhR5yJmqdYgioOVlD-aOG43A1" rel="stylesheet"/>
+
+
+</head>
+<body>
+
+
+<header class="container-fluid containerpaddding">
+    <nav class="navbar row navbarcontent" role="navigation">
+        <div id="ofed-federal-header-logo" class="pull-right">
+            <img src="/Content/Images/logos/federalheader_logo.png" width="32" height="23" alt="Logo of the Belgian Federal Authorities">
+        </div>
+        <div id="federalmobileheader-left">
+            <ul class="navphone nav navbar-nav">
+                <li class="dropdown" id="dropdownheader">
+                    <a href="#" class="dropdown-toggle"
+                       data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" style="width: 40px">
+                        fr&nbsp;&nbsp;<span class="caret"></span>
+                    </a>
+                    <ul class="dropdown-menu" role="menu">
+                        
+
+    <li class="active"><a href="/Culture/SetCulture/fr-BE">FR</a></li>
+    <li class=""><a href="/Culture/SetCulture/nl-BE">NL</a></li>
+
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div id="federalheader-left" style="min-height: 24px;">
+            <ul class="navweb nav">
+                
+
+    <li class="active"><a href="/Culture/SetCulture/fr-BE">FR</a></li>
+    <li class=""><a href="/Culture/SetCulture/nl-BE">NL</a></li>
+
+            </ul>
+            <div id="ofed-federal-header-link" class="pull-right hidden-xs">
+                Autres informations et services officiels:&nbsp;<a href="http://www.belgium.be/fr">www.belgium.be</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="row">
+        <div class="col-sm-1" id="embassyIcon">
+            <img id="embassyImage" class="pull-left" src="/Content/Images/logos/logo.png" alt="">
+        </div>
+
+            <div class="col-sm-11" id="embassyText">
+                Syst&#232;me de rendez-vous en ligne Diplomatie Belgique<br />
+                Ambassade Kinshasa
+            </div>
+    </div>
+</header>
+
+<div class="container-fluid body-content">
+    <div id="ContentComplete">
+        <div class="hidden-print">
+            <noscript>
+                <div class="alert alert-danger alert-block">
+                    <h4>Attention</h4>
+                    Cette application n&#233;cessite l&#39;activation de JavaScript
+                </div>
+            </noscript>
+        </div>
+        
+        
+        <section>
+                        
+            
+<div class="row">
+    <div class="col-xs-12">
+        <h1>Prendre rendez-vous</h1>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-7">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <span class="panel-title">
+                    Aper&#231;u des rendez-vous pr&#233;vus
+                </span>
+            </div>
+            <div class="panel-body">
+                <div class="alert alert-info">
+                    Vous avez d&#233;j&#224; planifi&#233; le rendez-vous suivant. Cliquez sur le rendez-vous pour l&#39;annuler.
+                </div>
+
+                    <div class="list-group">
+                            <button type="button" class="btnSendCancellationLink list-group-item list-group-item-warning" id="pnlBookedAppointments" data-id="ae75e91a-8d36-48d4-9612-408be613e4a7 ">
+                                <i class="fa fa-calendar"></i>&nbsp; mardi 22 d&#233;cembre 2026 (14:20)
+                                <br/> 
+                                <span class="additionalData">
+                                    visa passeport diplomatique - Chrispin Kabangu - VOWINT6321793 - OP3445567
+                                </span>
+                                <i class="fa fa-close pull-right"></i>
+                                <div id="cancelFeedback" class="alert alert-success" style="display:none"></div>
+                            </button>
+                            <button type="button" class="btnSendCancellationLink list-group-item list-group-item-warning" id="pnlBookedAppointments" data-id="7f2b70ff-6534-43c6-8eda-b9a5a694da94 ">
+                                <i class="fa fa-calendar"></i>&nbsp; jeudi 24 d&#233;cembre 2026 (14:20)
+                                <br/> 
+                                <span class="additionalData">
+                                    visa passeport diplomatique - Chrispin Kabangu - VOWINT6323902 - P0045473
+                                </span>
+                                <i class="fa fa-close pull-right"></i>
+                                <div id="cancelFeedback" class="alert alert-success" style="display:none"></div>
+                            </button>
+                    </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <span class="panel-title">
+                    Nouveau rendez-vous
+                </span>
+            </div>
+            <div class="panel-body">
+                    <div class="alert alert-danger" style="margin-bottom:0px">
+                        Vous ne pouvez pas prendre un nouveau rendez-vous pour la ou les raisons suivantes:
+                            <ul class="newAppointmentViolations">
+                                <li>Vous avez atteint le nombre maximum de rendez-vous autorisés pour un VOWINT spécifié.</li><li>Vous avez atteint le nombre maximum de rendez-vous autorisés pour un numéro de document de voyage spécifié.</li>
+                            </ul>
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade collapse" id="confirmationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+                <h4 class="modal-title"></h4>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <div class="menuDefault">
+                    <button class="btnOk btn btn-default" data-dismiss="modal" type="button">
+                        OK
+                    </button>
+                </div>
+
+                <div class="menuConfirm">
+                    <button class="btnCancel btn btn-default pull-left" data-dismiss="modal" type="button">
+                        Fermer 
+                    </button> &nbsp;&nbsp;
+                    <button class="btnConfirm btn btn-danger" type="button">
+                        <i class="fa fa-check-circle-o"></i>&nbsp; Confirmer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+        </section>
+    </div>
+</div>
+
+<footer id="footer">
+  <div class="container-fluid">
+    <div class="row">
+      <a href="/Privacy" target="_blank">Protection de la vie priv&#233;e</a>
+      | <a href="/Disclaimer" target="_blank">Clause de non-responsabilit&#233;</a>
+      | <a href="/Cookies" target="_blank">Cookies</a>
+      | © SPF Affaires &#233;trang&#232;res, Commerce ext&#233;rieur et Coop&#233;ration au D&#233;veloppement
+      <div data-bs-toggle="tooltip" data-bs-placement="bottom" title="1.0.297_CommitDate:2026-07-16">
+        Version: 1.0.297.0
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/bundles/scripts/sharedScripts?v=8L4vh0MewozJvKP0LOZD6y_TIC5g7Weal8tv8svaKMA1"></script>
+
+
+<script type="text/javascript" nonce="pT0JwOKt6dvt2j9Ol2bvj1Rn">
+    var POST_FIRSTDAY_WEEK = null;
+    var currentLocation = window.location;
+    var ajaxUrl = currentLocation.protocol + '//' + 'appointment.cloud.diplomatie.be' + '/';
+</script>
+
+
+    <script type="text/javascript" nonce="pT0JwOKt6dvt2j9Ol2bvj1Rn">
+        var popupConfirmation_cancelRequest_title = 'Souhaitez-vous annuler votre rendez-vous?';
+        var popupConfirmation_cancelRequest_body = 'Un lien vous sera envoy&#233; par e-mail avec lequel vous pourrez annuler votre rendez-vous.';
+    </script>
+
+    <script src="/bundles/scripts/vowflow-overview?v=i5WueuzN7hRlVHBOX-OT73-Zt-i5klgDBzeddMVHNs41"></script>
+
+
+</body>
+</html>

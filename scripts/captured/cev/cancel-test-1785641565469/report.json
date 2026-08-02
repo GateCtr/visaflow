@@ -1,0 +1,53 @@
+{
+  "startedAt": "2026-08-02T03:32:45.468Z",
+  "input": {
+    "email": "balemadi35@gmail.com",
+    "vowintRef": "VOWINT6321793",
+    "appId": "cev-cancel-1785641565469"
+  },
+  "steps": [
+    {
+      "t": "2026-08-02T03:32:45.469Z",
+      "step": "setup_start"
+    },
+    {
+      "t": "2026-08-02T03:33:25.204Z",
+      "step": "setup_done",
+      "success": true,
+      "slotsAvailable": false,
+      "isLimitReached": true,
+      "hasOverviewHtml": true,
+      "hasOverviewCookies": true,
+      "overviewUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/Overview",
+      "overviewHtmlPreview": "e-Appointment fr&nbsp;&nbsp; FR NL FR NL Autres informations et services officiels:&nbsp; www.belgium.be Syst&#232;me de rendez-vous en ligne Diplomatie Belgique Ambassade Kinshasa Attention Cette application n&#233;cessite l&#39;activation de JavaScript Prendre rendez-vous Aper&#231;u des rendez-vous pr&#233;vus Vous avez d&#233;j&#224; planifi&#233; le rendez-vous suivant. Cliquez sur le rendez-"
+    },
+    {
+      "t": "2026-08-02T03:33:25.206Z",
+      "step": "cancel_start",
+      "overviewUrl": "https://appointment.cloud.diplomatie.be/Integration/VOW/Overview"
+    },
+    {
+      "t": "2026-08-02T03:33:25.706Z",
+      "step": "cancel_done",
+      "emailSent": true,
+      "message": "Vous avez reçu un e-mail avec un lien pour annuler votre rendez-vous.",
+      "appointment": {
+        "uniqueToken": "ae75e91a-8d36-48d4-9612-408be613e4a7",
+        "label": "mardi 22 décembre 2026 (14:20)",
+        "additionalData": "visa passeport diplomatique - Chrispin Kabangu - VOWINT6321793 - OP3445567"
+      },
+      "allAppointments": [
+        {
+          "label": "mardi 22 décembre 2026 (14:20)",
+          "additionalData": "visa passeport diplomatique - Chrispin Kabangu - VOWINT6321793 - OP3445567"
+        },
+        {
+          "label": "jeudi 24 décembre 2026 (14:20)",
+          "additionalData": "visa passeport diplomatique - Chrispin Kabangu - VOWINT6323902 - P0045473"
+        }
+      ]
+    }
+  ],
+  "result": "cancel_email_sent",
+  "endedAt": "2026-08-02T03:33:25.706Z"
+}

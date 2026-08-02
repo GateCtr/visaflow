@@ -129,6 +129,17 @@ export interface CevHttpSetupResult {
   selectSlotHtml?: string;
   /** Cookie string complet après la chaîne de redirects — inclut __RequestVerificationToken (anti-CSRF ASP.NET) */
   selectSlotCookies?: string;
+  /**
+   * true si le dossier a déjà un RDV confirmé (Overview ou Booked).
+   * L'annulation est possible via cancelCevAppointment(overviewHtml, overviewCookies, overviewUrl).
+   */
+  isLimitReached?: boolean;
+  /** HTML de la page Overview/Booked — contient le lien d'annulation */
+  overviewHtml?: string;
+  /** URL finale de la page Overview/Booked */
+  overviewUrl?: string;
+  /** Cookies complets après la chaîne de redirects — nécessaires pour le POST d'annulation */
+  overviewCookies?: string;
   error?: string;
 }
 
@@ -1248,7 +1259,37 @@ export async function setupCevSessionHttp(
       };
     }
 
-    // Cas 5 : Page calendrier / SelectSlot → SESSION ACTIVÉE, slots potentiellement disponibles
+    // Cas 5 : Overview / Booked → dossier a déjà un RDV (limite atteinte)
+    // Le portail redirige vers /Integration/VOW/Overview ou /Integration/VOW/Booked
+    // quand un créneau a déjà été réservé pour ce dossier.
+    if (chainPassedThrough("Overview") || chainPassedThrough("Booked")) {
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_overview_detected",
+        status: "warn",
+        data: {
+          finalUrl,
+          redirectChain,
+          bodyPreview: probeBodyPreview.slice(0, 400),
+          htmlRaw: probeBodyRaw.slice(0, 6000),
+        },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable: false,
+        needsPlaywrightNavigation: false,
+        isLimitReached: true,
+        overviewHtml: probeBodyRaw || undefined,
+        overviewUrl: finalUrl,
+        overviewCookies: fullCevCookie || undefined,
+      };
+    }
+
+    // Cas 6 : Page calendrier / SelectSlot → SESSION ACTIVÉE, slots potentiellement disponibles
     // Vérifier les marqueurs positifs dans le body pour confirmer
     const bodyLower = probeBodyRaw.toLowerCase();
     const hasCalendarMarkers = (
