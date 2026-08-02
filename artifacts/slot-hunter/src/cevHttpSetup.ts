@@ -130,6 +130,12 @@ export interface CevHttpSetupResult {
   /** Cookie string complet après la chaîne de redirects — inclut __RequestVerificationToken (anti-CSRF ASP.NET) */
   selectSlotCookies?: string;
   error?: string;
+  /**
+   * État de la page Overview (quand un autre dossier du même type passeport a déjà un RDV).
+   *   'new_appointment_available' — lien "Nouveau rendez-vous" détecté et suivi (Cas 1)
+   *   'limit_reached'            — seul "Annuler" disponible, limite atteinte (Cas 2)
+   */
+  overviewState?: 'new_appointment_available' | 'limit_reached';
 }
 
 /**
@@ -1218,7 +1224,172 @@ export async function setupCevSessionHttp(
       return { success: false, error: "MULTI_SESSION_NOT_ALLOWED" };
     }
 
-    // Cas 3 : Session expirée / re-captcha demandé (sans passer par NoAvailability)
+    // Cas 3 : Overview — un autre dossier du même type passeport a déjà un RDV planifié.
+    //
+    //   Cas 1 (différent dossier, même passeport) : page montre "Vous avez déjà planifié..."
+    //     + lien "Nouveau rendez-vous" → le suivre → SelectSlot pour CE dossier
+    //   Cas 2 (même dossier) : "Vous ne pouvez pas prendre un nouveau rendez-vous..."
+    //     → seul bouton "Annuler" → retourner APPOINTMENT_LIMIT_REACHED
+    if (chainPassedThrough("VOW/Overview") || finalUrl.includes("VOW/Overview")) {
+      // Log complet pour analyse forensique (on ne connaît pas encore la structure HTML réelle)
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_verdict_overview_detected",
+        status: "ok",
+        data: {
+          finalUrl,
+          redirectChain,
+          bodyPreview: probeBodyPreview.slice(0, 800),
+          // HTML brut complet pour analyse de la structure du lien "Nouveau rendez-vous"
+          htmlRaw: probeBodyRaw.slice(0, 10_000),
+          overviewHtmlLen: probeBodyRaw.length,
+        },
+      });
+
+      const newRdvHref = extractNouveauRdvLink(probeBodyRaw);
+      console.log(`[CEV-SETUP] 📋 Overview détecté — lien "Nouveau rendez-vous": ${newRdvHref ?? "(absent — Cas 2: limite atteinte)"}`);
+
+      if (!newRdvHref) {
+        // Cas 2 : même dossier, limite de RDV atteinte — seul "Annuler" est disponible
+        botLog({
+          applicationId: clientId,
+          step: "cev_http_overview_limit_reached",
+          status: "warn",
+          data: {
+            finalUrl,
+            bodyPreview: probeBodyPreview.slice(0, 500),
+            message: "Aucun lien Nouveau rendez-vous — limite de RDV atteinte pour ce dossier",
+          },
+        });
+        return {
+          success: true,
+          sessionCookie: cevSessionCookie,
+          validUntilMs,
+          integrationUrl,
+          redirectUrl: captchaRedirectUrl,
+          slotsAvailable: false,
+          overviewState: 'limit_reached',
+        };
+      }
+
+      // Cas 1 : lien "Nouveau rendez-vous" trouvé → le suivre (même chaîne de redirects)
+      const absoluteNewRdvUrl = newRdvHref.startsWith("http") ? newRdvHref : `${CEV_BASE}${newRdvHref}`;
+      console.log(`[CEV-SETUP] ✅ Overview Cas 1 — suivi "Nouveau rendez-vous": ${absoluteNewRdvUrl.slice(0, 120)}`);
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_overview_new_appointment_follow",
+        status: "ok",
+        data: { newRdvHref, absoluteNewRdvUrl: absoluteNewRdvUrl.slice(0, 150) },
+      });
+
+      // Suivre le lien vers SelectSlot (même logique que la chaîne principale)
+      let newRdvCurrentUrl = absoluteNewRdvUrl;
+      let newRdvBodyRaw = "";
+      const newRdvChain: string[] = [absoluteNewRdvUrl];
+
+      for (let hop = 0; hop < 10; hop++) {
+        const hopRes = await cevSetupFetch(newRdvCurrentUrl, {
+          method: "GET",
+          redirect: "manual",
+          headers: getCevBrowserHeaders({
+            fetchSite: "same-origin",
+            cookie: fullCevCookie,
+            referer: finalUrl,          // Overview page = referer naturel
+            userAgent: siphoned?.userAgent,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+
+        fullCevCookie = mergeCookies(fullCevCookie, hopRes);
+
+        if (hopRes.status >= 300 && hopRes.status < 400) {
+          const loc = hopRes.headers.get("location");
+          if (!loc) break;
+          const nextUrl = loc.startsWith("http") ? loc : `${CEV_BASE}${loc}`;
+          newRdvChain.push(nextUrl);
+          newRdvCurrentUrl = nextUrl;
+        } else {
+          try { newRdvBodyRaw = await hopRes.text(); } catch { /* ignore */ }
+          break;
+        }
+      }
+
+      const newRdvChainStr = newRdvChain.join(" ");
+      const newRdvBodyLower = newRdvBodyRaw.toLowerCase();
+      const newRdvHasCalendar = (
+        newRdvBodyLower.includes("getavailabletimeslotsforpublic") ||
+        newRdvBodyLower.includes("home/availabletimeslots") ||
+        newRdvBodyLower.includes("selectslot") ||
+        newRdvBodyLower.includes("data-slot-time") ||
+        newRdvBodyLower.includes("availability =") ||
+        newRdvBodyLower.includes("availability=")
+      );
+
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_overview_new_rdv_chain",
+        status: "ok",
+        data: {
+          redirectChain: newRdvChain,
+          finalUrl: newRdvCurrentUrl,
+          hasCalendar: newRdvHasCalendar,
+          htmlLen: newRdvBodyRaw.length,
+          htmlPreview: newRdvBodyRaw.slice(0, 4000),
+        },
+      });
+
+      if (newRdvChainStr.includes("SelectSlot") || newRdvHasCalendar) {
+        console.log(`[CEV-SETUP] 🎯 Overview → "Nouveau rendez-vous" → SelectSlot ✅`);
+        return {
+          success: true,
+          sessionCookie: cevSessionCookie,
+          validUntilMs,
+          integrationUrl,
+          redirectUrl: captchaRedirectUrl,
+          slotsAvailable: true,
+          overviewState: 'new_appointment_available',
+          selectSlotUrl: newRdvCurrentUrl,
+          selectSlotHtml: newRdvBodyRaw || undefined,
+          selectSlotCookies: fullCevCookie,
+        };
+      }
+
+      if (newRdvChainStr.includes("NoAvailability")) {
+        console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → NoAvailability (aucun créneau)`);
+        return {
+          success: true,
+          sessionCookie: cevSessionCookie,
+          validUntilMs,
+          integrationUrl,
+          redirectUrl: captchaRedirectUrl,
+          slotsAvailable: false,
+          overviewState: 'new_appointment_available',
+        };
+      }
+
+      // Résultat inconnu après le suivi — logguer pour analyse et retourner sans crash
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_overview_new_rdv_unknown_result",
+        status: "warn",
+        data: {
+          finalUrl: newRdvCurrentUrl,
+          chain: newRdvChain,
+          htmlPreview: newRdvBodyRaw.slice(0, 1000),
+        },
+      });
+      return {
+        success: true,
+        sessionCookie: cevSessionCookie,
+        validUntilMs,
+        integrationUrl,
+        redirectUrl: captchaRedirectUrl,
+        slotsAvailable: false,
+        overviewState: 'new_appointment_available',
+      };
+    }
+
+    // Cas 4 : Session expirée / re-captcha demandé (sans passer par NoAvailability)
     if (chainPassedThrough("SessionExpired") || chainPassedThrough("/Captcha")) {
       botLog({
         applicationId: clientId,
@@ -1322,6 +1493,43 @@ export async function setupCevSessionHttp(
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Extrait le href du lien "Nouveau rendez-vous" depuis la page Overview CEV.
+ *
+ * La page /Integration/VOW/Overview s'affiche quand un autre dossier du même
+ * type de passeport a déjà un rendez-vous planifié (Cas 1). Elle contient alors
+ * un lien "Nouveau rendez-vous" permettant de prendre RDV pour le dossier courant.
+ *
+ * Si seul "Annuler" est présent (Cas 2 — même dossier, limite atteinte), retourne null.
+ *
+ * Patterns couverts :
+ *   <a href="...">Nouveau rendez-vous</a>
+ *   <a href="..."> ... Nouveau rendez-vous ...</a>
+ *   href="..." suivi de texte "Nouveau rendez-vous" dans les ~300 chars
+ *   Variantes EN / NL : "New appointment" / "Nieuw afspraak"
+ */
+function extractNouveauRdvLink(html: string): string | null {
+  const patterns = [
+    // Cas direct : <a href="...">Nouveau rendez-vous</a>
+    /<a[^>]+href="([^"]+)"[^>]*>\s*(?:Nouveau\s+rendez-vous|New\s+appointment|Nieuw\s+afspraak)/i,
+    // Cas inversé : texte avant href dans la même balise <a>
+    /<a[^>]*>\s*(?:Nouveau\s+rendez-vous|New\s+appointment|Nieuw\s+afspraak)[\s\S]{0,50}<\/a>/i,
+    // href suivi du texte dans les 300 chars suivants (bouton ou span wrappé)
+    /href="([^"]+)"[^>]*>[\s\S]{0,300}(?:Nouveau\s+rendez-vous|New\s+appointment)/i,
+    // Texte "Nouveau rendez-vous" précédant un href dans les 300 chars
+    /(?:Nouveau\s+rendez-vous|New\s+appointment)[\s\S]{0,300}href="([^"]+)"/i,
+  ];
+
+  for (const p of patterns) {
+    const m = html.match(p);
+    // Le groupe 1 doit être une URL (relative /... ou absolute http...)
+    if (m?.[1] && (m[1].startsWith('/') || m[1].startsWith('http'))) {
+      return m[1];
+    }
+  }
+  return null;
+}
 
 /**
  * Parse une chaîne "k1=v1; k2=v2" en Map.
