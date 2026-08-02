@@ -1713,11 +1713,15 @@ class SpainPersistentBrowserManager {
             `[spain-pb] ⚡ Widget APIs — getwidgetconfigurations: ${cfgLen > 0 ? cfgLen + "B ✅" : "0B ❌"} | getservices: ${svcLen > 0 ? svcLen + "B ✅" : "0B ❌"}`,
           );
 
-          // ── Simulation clic service → déclenche getagendas/ + datetime/ naturellement ──
-          // Ces endpoints ne sont appelés par le widget QUE sur interaction utilisateur.
-          // Un appel page.evaluate(fetch()) retourne 0B : le PHPSESSID Bookitit est lié
-          // à la séquence natural du widget. On simule un clic pour que le widget fasse
-          // lui-même l'appel, et CDP intercepte la réponse.
+          // ── Laisser le widget suivre sa vraie séquence ─────────────────────────────
+          // 1) /main/ initialise le contexte Bookitit et le state du widget.
+          // 2) Ensuite, le widget lui-même émet getservices/, getagendas/ et datetime/
+          //    lorsque l'état de l'UI le demande.
+          // 3) On ne force pas ces appels artificiellement : on attend qu'ils soient
+          //    déclenchés par l'interaction réelle du widget, puis on capture la réponse.
+          //    C'est ce qui ressemble le plus au comportement réel du portail.
+          //    Un appel page.evaluate(fetch()) retourne souvent 0B parce que le PHPSESSID
+          //    Bookitit est lié à la séquence naturelle du widget.
           if (svcLen > 0) {
             try {
               const nowDt  = new Date();
@@ -3060,6 +3064,16 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     console.log(
       `[spain-pb] 📡 callBrowser ${endpoint} → HTTP ${result.status} ${result.statusText} | ${result.bodyLen}B | ct=${result.contentType || "-"} | cl=${result.contentLength || "-"} | url=${result.finalUrl || "-"}`,
     );
+
+    if (result.bodyLen === 0 || result.body.startsWith("__ERR_")) {
+      console.warn(`[spain-pb] ⚠️ callBrowser ${endpoint} fetch→${result.bodyLen}B/${result.body.slice(0, 80)} — fallback jQuery widget…`);
+      const jqueryBody = await callBookititViaJQueryInPage(url);
+      if (jqueryBody) {
+        console.log(`[spain-pb] ✅ callBrowser ${endpoint} jQuery fallback → ${jqueryBody.length}B`);
+        return jqueryBody;
+      }
+    }
+
     if (result.body.startsWith("__ERR_")) {
       console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser échoué: ${result.body.slice(0, 140)}`);
       return "";

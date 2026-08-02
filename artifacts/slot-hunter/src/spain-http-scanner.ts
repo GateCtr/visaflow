@@ -2241,11 +2241,13 @@ async function scanViaMainEndpoint(
     } else {
       console.log(`[spain-http] 🔍 "No hay horas" masquée + services visibles — vérification datetime/…`);
     }
+    console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ État service-state observé mais datetime/ vide → pas de créneau réel (état intermédiaire Bookitit)`);
+      console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
+    console.log(`[spain-http] 🧭 Phase 3 — décision finale: slot confirmé après vérification secondaire`);
     return {
       status: "found",
       slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
@@ -2267,11 +2269,13 @@ async function scanViaMainEndpoint(
       `[spain-http] 🔍 "No hay horas" + templates client-side sans services rendus ` +
       `— vérification via getservices/datetime...`,
     );
+    console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ Templates client-side et état service-state observé, mais datetime/ vide → pas de créneau réel`);
+      console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
+    console.log(`[spain-http] 🧭 Phase 3 — décision finale: slot confirmé après vérification secondaire`);
     return {
       status: "found",
       slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
@@ -2286,11 +2290,13 @@ async function scanViaMainEndpoint(
 
   if (hasRenderedServices || hasRenderedServiceContainers) {
     console.log(`[spain-http] 🔍 Services RENDUS (hors template) — vérification datetime/…`);
+    console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (!confirmed) {
-      console.log(`[spain-http] ⛔ Services rendus mais datetime/ vide → pas de créneau réel`);
+      console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
+    console.log(`[spain-http] 🧭 Phase 3 — décision finale: slot confirmé après vérification secondaire`);
     return {
       status: "found",
       slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
