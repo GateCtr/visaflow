@@ -738,6 +738,12 @@ export async function bookCevViaHttp(
    * Sans lui, le POST /Integration/VOW/SelectSlot retourne HTTP 500 "anti-forgery cookie not present".
    */
   selectSlotCookies?: string,
+  /**
+   * Nombre minimum de places libres requises sur un créneau pour le sélectionner.
+   * Si undefined ou ≤ 1 → comportement par défaut (préférer ≥ 3 places, fallback au max dispo).
+   * Si > 1 → ne sélectionner que les créneaux avec free ≥ groupSize.
+   */
+  groupSize?: number,
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
@@ -948,10 +954,22 @@ export async function bookCevViaHttp(
       return { success: false, error: 'NO_SLOTS_IN_RESPONSE' };
     }
 
-    // ═══ ÉTAPE 4 : Sélectionner le meilleur slot (le plus de places libres, min 3) ═══
-    // Trier par free décroissant — préférer les créneaux avec ≥3 places (moins de contention).
+    // ═══ ÉTAPE 4 : Sélectionner le meilleur slot ═══
+    // Trier par free décroissant — préférer les créneaux avec le plus de places libres.
+    // groupSize > 1 : ne sélectionner que les créneaux avec free ≥ groupSize.
+    // groupSize ≤ 1 ou absent : préférer ≥ 3 places (comportement historique), fallback au max dispo.
+    const minFree = groupSize && groupSize > 1 ? groupSize : 3;
     availableSlots.sort((a, b) => (b.free ?? 1) - (a.free ?? 1));
-    const slotsWithMinFree = availableSlots.filter(s => (s.free ?? 1) >= 3);
+    const slotsWithMinFree = availableSlots.filter(s => (s.free ?? 1) >= minFree);
+    if (groupSize && groupSize > 1 && slotsWithMinFree.length === 0) {
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_group_size_no_match',
+        status: 'ok',
+        data: { groupSize, bestFree: availableSlots[0]?.free ?? 1, totalSlots: availableSlots.length },
+      });
+      return { success: false, error: 'NO_SLOT_WITH_ENOUGH_FREE_PLACES' };
+    }
     const slot = (slotsWithMinFree.length > 0 ? slotsWithMinFree : availableSlots)[0];
     botLog({
       applicationId: clientId,
@@ -959,8 +977,10 @@ export async function bookCevViaHttp(
       status: 'ok',
       data: {
         date: slot.date, time: slot.time, id: slot.id, free: slot.free ?? 1,
+        groupSize: groupSize ?? null,
+        minFreeRequired: minFree,
         totalSlots: availableSlots.length,
-        slotsWithFree3Plus: slotsWithMinFree.length,
+        slotsWithMinFree: slotsWithMinFree.length,
         allSlots: availableSlots.slice(0, 10).map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
       },
     });

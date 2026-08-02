@@ -1104,6 +1104,8 @@ async function handleSlotFound(
   existingSelectSlotHtml?: string,
   /** URL finale SelectSlot capturée lors du setup */
   existingSelectSlotUrl?: string,
+  /** Nombre minimum de places libres requises (groupSize) */
+  groupSize?: number,
 ): Promise<void> {
   const logFn = logger || { 
     info: (msg: string) => log("INFO", msg), 
@@ -1156,7 +1158,7 @@ async function handleSlotFound(
     try {
       const httpResult = await bookCevViaHttp(
         integrationUrl, sessionCookie!, applicationId, siphoned, undefined,
-        existingSelectSlotHtml, existingSelectSlotUrl,
+        existingSelectSlotHtml, existingSelectSlotUrl, undefined, groupSize,
       );
       if (httpResult.success) {
         logFn.info(`  ✅ BOOKING RÉUSSI! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
@@ -1193,7 +1195,7 @@ async function handleSlotFound(
 
   // Tentative booking HTTP avec session fraîche
   try {
-    const httpResult = await bookCevViaHttp(session.integrationUrl!, session.sessionCookie!, applicationId, siphoned);
+    const httpResult = await bookCevViaHttp(session.integrationUrl!, session.sessionCookie!, applicationId, siphoned, undefined, undefined, undefined, undefined, groupSize);
     if (httpResult.success) {
       logFn.info(`  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
       await reportSlotFound({
@@ -1533,6 +1535,7 @@ async function runAccountLoop(job: any): Promise<void> {
             logger,
             result.selectSlotHtml,
             result.selectSlotUrl,
+            hunterConfig.groupSize,
           );
           break;
         case "rate_limited":
