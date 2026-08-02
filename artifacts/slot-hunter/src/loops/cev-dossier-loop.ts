@@ -1336,7 +1336,18 @@ async function runAccountLoop(job: any): Promise<void> {
   } else {
     dossiers = dossierPoolStr.split(",").map((s: string) => s.trim()).filter(Boolean);
   }
-  
+
+  // Filtrer les dossiers exclus (cevDossierExclude = liste CSV de VOWINT refs à ignorer)
+  const excludeStr: string = hunterConfig.cevDossierExclude ?? "";
+  if (excludeStr.trim()) {
+    const excluded = new Set(excludeStr.split(",").map((s: string) => s.trim()).filter(Boolean));
+    const before = dossiers.length;
+    dossiers = dossiers.filter((d: string) => !excluded.has(d));
+    if (dossiers.length < before) {
+      logger.info(`  → ${before - dossiers.length} dossier(s) exclu(s) du pool: ${[...excluded].join(", ")}`);
+    }
+  }
+
   // Créer un pool local pour ce compte
   const localPool = new CevDossierPool(logger);
   localPool.initialize(dossiers);

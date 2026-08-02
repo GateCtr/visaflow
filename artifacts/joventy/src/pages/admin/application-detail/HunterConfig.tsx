@@ -43,6 +43,7 @@ interface HunterConfigData {
   preferredProxy?: string;
   // CEV Dossier Loop v3 - Multi-comptes
   cevDossierPool?: string;
+  cevDossierExclude?: string;
   cevUseProxy?: boolean;
   cevScanIntervalSec?: number;
   // Group booking
@@ -98,6 +99,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [preferredProxy, setPreferredProxy] = useState("");
   // CEV Dossier Loop v3 - Multi-comptes
   const [cevDossierPool, setCevDossierPool] = useState("");
+  const [cevDossierExclude, setCevDossierExclude] = useState("");
   const [cevUseProxy, setCevUseProxy] = useState(false);
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
   // Group booking
@@ -141,6 +143,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setPreferredProxy(hc.preferredProxy ?? "");
       // CEV Dossier Loop v3 - Multi-comptes
       setCevDossierPool(hc.cevDossierPool ?? "");
+      setCevDossierExclude(hc.cevDossierExclude ?? "");
       setCevUseProxy(hc.cevUseProxy ?? false);
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
       // Group booking
@@ -174,7 +177,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         blindBookingEnabled: blindBooking, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy,
+        cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined, cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
         // Group booking
         groupSize: groupSize ? Number(groupSize) : undefined,
@@ -323,13 +326,26 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
             <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">Configuration CEV Schengen</p>
             <p className="text-[10px] text-slate-600">Laissez vide pour navigation automatique (premier dossier trouvé)</p>
             <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100/60 space-y-3">
-              <Field label="Dossiers (optionnel)">
+              <Field label="Dossiers à scanner (optionnel)">
                 <Input
                   value={cevDossierPool}
                   onChange={(e) => setCevDossierPool(e.target.value)}
                   placeholder="VOWINT6085888 ou VOWINT1,VOWINT2,VOWINT3 (vide = auto)"
                   className="h-9 bg-white text-sm font-mono"
                 />
+              </Field>
+              <Field label="Dossiers à ignorer">
+                <Input
+                  value={cevDossierExclude}
+                  onChange={(e) => setCevDossierExclude(e.target.value)}
+                  placeholder="VOWINT1,VOWINT2 — jamais scannés même s'ils sont dans le pool"
+                  className="h-9 bg-white text-sm font-mono"
+                />
+                {cevDossierExclude && (
+                  <p className="text-[10px] text-amber-700 mt-1">
+                    {cevDossierExclude.split(",").filter(Boolean).length} dossier(s) exclu(s) du scan
+                  </p>
+                )}
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Intervalle scan (sec)">
