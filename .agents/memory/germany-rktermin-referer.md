@@ -1,20 +1,43 @@
 ---
-name: Germany RK-Termin booking Referer fix + session reuse
-description: Root cause of session_error on booking; how to fix Referer headers; session cache to avoid per-scan captcha.
+name: Germany RK-Termin booking — root causes + confirmed fixes
+description: Three root causes of session_error on RK-Termin booking; session reuse to cut captcha cost; success detection via thanx.do URL.
 ---
 
-## session_error root cause
+## Root causes of `session_error` — ALL THREE confirmed e2e
 
-`service2.diplo.de` validates navigation coherence via the `Referer` header. A real browser sends:
-1. `GET appointment_showForm.do?...` with `Referer: .../appointment_showDay.do?...`
-2. `POST appointment_addAppointment.do` with `Referer: .../appointment_showForm.do?...`
+### 1. Wrong Referer on GET showForm
+`service2.diplo.de` validates navigation coherence via the `Referer` header.
+- `GET appointment_showForm.do?...` must have `Referer: .../appointment_showDay.do?...`
+- Without it the server stores "no referer" → later POST triggers "address changed manually"
 
-Without the Referer on the GET, the server stores "no referer" internally. When the POST arrives with a Referer pointing to showForm, the server sees inconsistency → "address changed manually" → session_error.
+**Fix:** `bookSlot` constructs the showDay URL and passes it as referer to `fetchForm` via `rkGet(..., { referer: showDayUrl })`.
 
-**Fix applied:**
-- `rkGet` now accepts `options?: { referer?: string }` and adds the header
-- `bookSlot` constructs the showDay URL and passes it as referer to `fetchForm`
-- `rkPost` already had the showForm referer fix from a prior session
+### 2. Wrong POST endpoint
+The form's `action` attribute is `/appointment_showForm.do`, NOT `/appointment_addAppointment.do`.
+Spring WebWork routes to the `addAppointment` method via the **button name** `action:appointment_addAppointment` in the body. The URL must be `showForm.do`.
+
+**Fix:** `bookSlot` POSTs to `RKTERMIN_ENDPOINTS.appointmentShowForm`, not `appointmentAddAppointment`.
+The key `"action:appointment_addAppointment": "Submit"` stays in the POST body — that's how Spring picks the method.
+
+### 3. Wrong `definitionId` values in POST body
+Config had hardcoded `dynamicFields[].definitionId = 14389/14390` (for realmId=731 national visa).
+The Kinshasa Schengen realm (realmId=1276) returns `definitionId=11598/11599` in the form's hidden fields.
+We were overwriting the form's correct values with the config's stale ones → server rejected.
+
+**Fix:** `bookSlot` now spreads `hiddenFields` (extracted from the form HTML) into `formData` FIRST,
+then only sets `fields[N].content` from config's `dynamicFields` — never overwrites `definitionId` or `index`.
+
+## Success detection — `appointment_thanx.do` redirect
+
+The RK-Termin confirmation page (`appointment_thanx.do`) renders its content via JavaScript.
+The static HTML has empty `<div>`s — no text to pattern-match. No confirmation number in the URL or HTML.
+
+**Fix:** `rkPost` now returns `finalUrl` (the URL after all redirects, via `res.url`).
+`bookSlot` checks `finalUrl.includes("appointment_thanx")` first, before calling `parseBookingResponse`.
+On match: returns `status: "booked"` with `confirmationNumber: "voir email"` (number is in the confirmation email).
+
+**Why:** Spring does a POST → redirect → GET to `appointment_thanx.do?categoryId=...`. That redirect is
+the canonical success signal on this portal; text patterns are unreliable because the page is JS-rendered.
 
 ## Session captcha reuse (10 min window)
 
@@ -23,19 +46,16 @@ JSESSIONID lifetime: **10 minutes** (`sessionMaxAgeMs: 10 * 60_000`). Scan inter
 Before: every `runGermanyScan` called `scanMonth` → `initSession` → fresh JSESSIONID → new captcha. ~60 captchas/hour per dossier.
 
 After: `germany-loop.ts` keeps `sessionCache: Map<jobId, RKTerminSession>`. Each scan:
-1. If cached session is locally valid → call `scanNextMonth` with current month dateStr → GET calendar, no captcha
-2. If `scanNextMonth` returns status=error (server showed captcha) → fall through to full `scanMonth` init
+1. If cached session is locally valid → call `scanNextMonth` (GET showMonth with existing JSESSIONID) → no captcha
+2. If `scanNextMonth` returns error (server showed captcha) → fall back to full `scanMonth` + new captcha
 3. On booking error or completion → `sessionCache.delete(jobId)` to force fresh session next cycle
 
-**Why:** `scanNextMonth` (GET showMonth with existing session) works because the server remembers the captcha was solved for this JSESSIONID. It does NOT re-show the captcha unless the session expired.
+`runGermanyScan` returns `{ ...RKTerminScanResult, updatedSession?: RKTerminSession }`.
+- `updatedSession` present: not_found, slot_found (detected/slot_taken) — session still valid
+- `updatedSession` absent: booking error, booking success, crash — session should be discarded
 
-## How `currentMonthDateStr()` works
+## `definitionId` values by realm (Kinshasa service2.diplo.de)
+- realmId=1276 (Schengen) → `definitionId` 11598 (Nationality), 11599 (Passport number)
+- realmId=731 (national) → `definitionId` 14389/14390 (stale config — NOT used anymore)
 
-Returns `"MM.YYYY"` (e.g. `"08.2026"`) — the dateStr format used by `appointment_showMonth.do?dateStr=...` navigation links. Computed from `new Date()` at scan time.
-
-## Return value change in orchestrator
-
-`runGermanyScan` now returns `{ ...RKTerminScanResult, updatedSession?: RKTerminSession }`.
-- `updatedSession` present on: not_found, slot_found (detected/slot_taken), 
-- `updatedSession` absent on: booking error (session_error), booking success (job done), crash
-- The loop uses presence/absence to decide whether to cache or invalidate.
+**Why:** Always read `definitionId` from the form HTML hidden fields, never trust config values for this portal.
