@@ -26,6 +26,31 @@ import {
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
+
+function isBookititServiceRedirect(body: string, pageUrl?: string): boolean {
+  if (!pageUrl) return false;
+
+  const expectedWidgetPath = "/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
+  try {
+    const url = new URL(pageUrl);
+    const isExpectedWidget = url.origin === "https://www.citaconsular.es" &&
+      url.pathname.replace(/\/$/, "/") === expectedWidgetPath.replace(/\/$/, "/") &&
+      (url.hash || "").toLowerCase() === "#services";
+
+    if (!isExpectedWidget) return false;
+
+    if (!body || body.trim().length === 0) return true;
+
+    const trimmed = body.trim();
+    if (/^<html|^<!doctype|^<!DOCTYPE/i.test(trimmed)) {
+      return /#services/i.test(trimmed) || /window\.location\.hash|location\.hash/i.test(trimmed);
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
 import {
   exploreAvailableSlots,
   type SlotExplorationResult,
@@ -786,9 +811,10 @@ async function confirmSlotsViaDatetime(
       // Étape 0 : getwidgetconfigurations/ — initialise la session Bookitit côté serveur.
       // Sans cet appel, certains portails (Cuba) retournent un body vide sur getservices/.
       // Non-fatal : on continue même si ça échoue.
-      const cfgCb = `cbCfg${Date.now()}`;
+      const cfgCb = `jQueryCfg${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
       const cfgQ = new URLSearchParams();
       cfgQ.append("callback",       cfgCb);
+      console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${cfgCb}`);
       cfgQ.append("type",           "default");
       cfgQ.append("publickey",      publickey);
       cfgQ.append("lang",           "es");
@@ -832,9 +858,10 @@ async function confirmSlotsViaDatetime(
         } catch { /* non-fatal */ }
       }
 
-      const svcCb = `cbSvc${Date.now()}`;
+      const svcCb = `jQuerySvc${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
       const svcQ = new URLSearchParams();
       svcQ.append("callback",       svcCb);
+      console.log(`[spain-http] 🔧 init callback getservices/ = ${svcCb}`);
       svcQ.append("type",           "default");
       svcQ.append("publickey",      publickey);
       svcQ.append("lang",           "es");
@@ -898,7 +925,7 @@ async function confirmSlotsViaDatetime(
     });
   }
 
-  const cbBase = `cb${Date.now()}`;
+  const cbBase = `jQuery${Date.now()}_`;
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
   // Même logique que pour getservices/ : session Playwright → PHPSESSID lié à l'IP Decodo
@@ -927,7 +954,9 @@ async function confirmSlotsViaDatetime(
     let agendaId = "";
     try {
       const agQ = new URLSearchParams();
-      agQ.append("callback",       `${cbBase}ag`);
+      const agCb = `${cbBase}ag`;
+      agQ.append("callback",       agCb);
+      console.log(`[spain-http] 🔧 callback getagendas/ = ${agCb}`);
       agQ.append("type",           "default");
       agQ.append("publickey",      publickey);
       agQ.append("lang",           "es");
@@ -940,7 +969,8 @@ async function confirmSlotsViaDatetime(
       let agRaw: string;
       if (useBrowserFetch) {
         agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
-        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B`);
+        const pageUrl = spainPersistentBrowser.getActivePage()?.url();
+        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B${isBookititServiceRedirect(agRaw, pageUrl) ? " [redirect:#services]" : ""}`);
       } else {
         const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
         agRaw = agRes?.ok ? await agRes.text() : "";
@@ -965,7 +995,9 @@ async function confirmSlotsViaDatetime(
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
-        dtQ.append("callback",       `${cbBase}dt${mo}`);
+        const dtCb = `${cbBase}dt${mo}`;
+        dtQ.append("callback",       dtCb);
+        console.log(`[spain-http] 🔧 callback datetime/ = ${dtCb}`);
         dtQ.append("type",           "default");
         dtQ.append("publickey",      publickey);
         dtQ.append("lang",           "es");
@@ -981,7 +1013,8 @@ async function confirmSlotsViaDatetime(
         let dtRaw: string;
         if (useBrowserFetch) {
           dtRaw = await fetchBookititBodyWithFallback(session, `${base}datetime/?${dtQ}`, headers);
-          console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B`);
+          const pageUrl = spainPersistentBrowser.getActivePage()?.url();
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B${isBookititServiceRedirect(dtRaw, pageUrl) ? " [redirect:#services]" : ""}`);
         } else {
           const dtRes = await spainCfFetch(`${base}datetime/?${dtQ}`, session, { headers });
           dtRaw = dtRes?.ok ? await dtRes.text() : "";

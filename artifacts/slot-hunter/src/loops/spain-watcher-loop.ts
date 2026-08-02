@@ -470,9 +470,13 @@ export async function startSpainWatcherLoop(): Promise<void> {
         const diagServices = extractServicesFromHtml(mainHtml);
         if (diagServices.length > 0) {
           detectedServicesJson = JSON.stringify(diagServices.map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName })));
+          const targetService = diagServices.find((svc) => /tramita|visados|visa/i.test(svc.serviceName || "")) ?? null;
           log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) rendu(s) dans le HTML :`);
           for (const svc of diagServices) {
             log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
+          }
+          if (targetService) {
+            log("INFO", `[SPAIN-WATCHER] 🎯 SERVICE CIBLE (visa) détecté : "${targetService.serviceName}" → serviceId: ${targetService.serviceId}`);
           }
 
           // ─── EXPLORATION: lancée en arrière-plan — ne bloque plus le booking ──
