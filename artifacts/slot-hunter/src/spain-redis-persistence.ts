@@ -496,6 +496,73 @@ export async function applyStableGaProfile(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// API PREFETCH CACHE (getwidgetconfigurations/ + getservices/ + getagendas/ + datetime/)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SPAIN_API_CACHE_KEY = "visaflow:spain-api-cache:v1";
+/**
+ * TTL aligné sur le cf_clearance (~2h) — le cache est valide tant que la session CF l'est.
+ * getwidgetconfigurations/ et getservices/ ne dépendent pas du PHPSESSID donc ils survivent
+ * au-delà des 30min du bookitit config.
+ */
+const REDIS_SPAIN_API_CACHE_TTL_SEC = 2 * 60 * 60; // 2h
+
+export interface SerializableApiPrefetchCache {
+  entries: Record<string, string>; // cacheKey → raw JSONP response
+  savedAt: number;
+}
+
+/**
+ * Sauvegarde le cache API prefetch dans Redis.
+ * Fire-and-forget — n'interrompt pas le scan.
+ */
+export function syncApiPrefetchCacheToRedis(cache: Map<string, string>): void {
+  if (!redisReady || !redisClient || cache.size === 0) return;
+
+  const serializable: SerializableApiPrefetchCache = {
+    entries: Object.fromEntries(cache),
+    savedAt: Date.now(),
+  };
+
+  redisClient
+    .set(REDIS_SPAIN_API_CACHE_KEY, JSON.stringify(serializable), { EX: REDIS_SPAIN_API_CACHE_TTL_SEC })
+    .catch((err: Error) => {
+      console.warn(`[spain-redis] API prefetch cache sync échouée: ${err.message}`);
+    });
+}
+
+/**
+ * Restaure le cache API prefetch depuis Redis.
+ * Retourne null si absent ou Redis indisponible.
+ */
+export async function restoreApiPrefetchCacheFromRedis(): Promise<Map<string, string> | null> {
+  if (!redisReady || !redisClient) return null;
+
+  try {
+    const data = await redisClient.get(REDIS_SPAIN_API_CACHE_KEY);
+    if (!data) return null;
+
+    const parsed = JSON.parse(data) as SerializableApiPrefetchCache;
+    const ageMin = Math.round((Date.now() - parsed.savedAt) / 60_000);
+    const map = new Map<string, string>(Object.entries(parsed.entries));
+
+    // Filtrer les entrées vides
+    for (const [k, v] of map) {
+      if (!v || v.length === 0) map.delete(k);
+    }
+
+    if (map.size === 0) return null;
+
+    console.log(`[spain-redis] ✅ API prefetch cache restauré (âge: ${ageMin}min, ${map.size} entrées)`);
+    return map;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[spain-redis] ⚠️ Restauration API prefetch cache échouée: ${msg}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
 

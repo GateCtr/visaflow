@@ -73,7 +73,12 @@ import {
   setActiveSpainCfSession,
 } from "./spain-soax-solver.js";
 import { solveTurnstileInPage, TURNSTILE_INTERCEPT_SCRIPT } from "./capsolver-turnstile.js";
-import { syncSpainCfSessionToRedis, type SerializableSpainCfSession } from "./spain-redis-persistence.js";
+import {
+  syncSpainCfSessionToRedis,
+  syncApiPrefetchCacheToRedis,
+  restoreApiPrefetchCacheFromRedis,
+  type SerializableSpainCfSession,
+} from "./spain-redis-persistence.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -638,6 +643,14 @@ class SpainPersistentBrowserManager {
         console.log("[spain-pb] ⚡ Prefetch 2/2 — aucun service ID extrait de getservices/ (skip getagendas/datetime)");
       }
     }
+
+    // Persister le cache dans Redis pour survie aux redémarrages.
+    // Restauré par _ensureSessionImpl juste après le restore de la session CF Redis,
+    // ce qui évite toute navigation root au restart.
+    try {
+      syncApiPrefetchCacheToRedis(this._apiPrefetchCache);
+      console.log(`[spain-pb] 💾 API prefetch cache persisté dans Redis (${this._apiPrefetchCache.size} entrées)`);
+    } catch { /* non-fatal */ }
   }
 
   /**
@@ -742,20 +755,12 @@ class SpainPersistentBrowserManager {
     this._page = page;
     console.log(`[spain-pb] ✅ Réattachement terminé — browser prêt, ${cookiesToInject.length} cookie(s) injectés`);
 
-    // Naviguer vers la racine citaconsular.es pour sortir de about:blank.
-    // Sans cette navigation, page.evaluate(fetch(...)) échoue avec "TypeError: Failed to fetch"
-    // car l'origine null (about:blank) est bloquée par CORS côté Chromium.
-    // On utilise domcontentloaded (pas "load") pour rester rapide — pas besoin que
-    // le JS CF s'exécute ici, juste établir un contexte same-origin citaconsular.es.
-    try {
-      await page.goto("https://www.citaconsular.es/", {
-        waitUntil: "domcontentloaded",
-        timeout: 20_000,
-      });
-      console.log("[spain-pb] 🌐 Réattachement : navigé vers citaconsular.es (contexte same-origin prêt)");
-    } catch (navErr) {
-      console.warn(`[spain-pb] ⚠️ Réattachement navigation root (non-fatal): ${navErr}`);
-    }
+    // Navigation root SUPPRIMÉE (Fix A revert) :
+    // page.goto(citaconsular.es) déclenche un CF re-challenge → page bloquée sur BTkBO URL
+    // → tous les fetch() depuis ce contexte retournent 0B.
+    // Solution : le cache Redis (getwidgetconfigurations/ + getservices/) est restauré par
+    // _ensureSessionImpl juste après, ce qui permet à callBrowser de retourner depuis le
+    // cache sans jamais toucher la page.
 
     return session;
   }
@@ -825,6 +830,16 @@ class SpainPersistentBrowserManager {
             `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
             `, prefetch: ${redisData.prefetchedMainHtml!.length}B)`,
           );
+          // Restaurer l'API prefetch cache depuis Redis pour que callBrowser
+          // (getwidgetconfigurations/ + getservices/ + getagendas/ + datetime/)
+          // retourne depuis le cache sans naviguer → évite CF re-challenge.
+          try {
+            const cachedApis = await restoreApiPrefetchCacheFromRedis();
+            if (cachedApis && cachedApis.size > 0) {
+              for (const [k, v] of cachedApis) this._apiPrefetchCache.set(k, v);
+              console.log(`[spain-pb] ⚡ API prefetch cache restauré depuis Redis (${cachedApis.size} entrées)`);
+            }
+          } catch { /* non-fatal */ }
           return restored;
         }
       }
@@ -2978,17 +2993,11 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   const pageUrl = page.url().slice(0, 80);
   console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
 
-  // Sécurité : si la page est sur about:blank (ou hors citaconsular.es), un fetch()
-  // via page.evaluate() échoue avec "TypeError: Failed to fetch" car Chromium bloque
-  // les requêtes cross-origin depuis une origine nulle (about:blank).
-  // On navigue d'abord vers citaconsular.es pour établir le contexte same-origin.
-  if (!pageUrl.includes("citaconsular.es")) {
-    console.log(`[spain-pb] 🔄 callBrowser: page hors citaconsular.es (${pageUrl}) — navigation root pour same-origin…`);
-    await page.goto("https://www.citaconsular.es/", {
-      waitUntil: "domcontentloaded",
-      timeout: 20_000,
-    }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Navigation root callBrowser (non-fatal): ${e}`));
-  }
+  // Navigation root SUPPRIMÉE (Fix B revert) :
+  // page.goto(citaconsular.es) déclenche un CF re-challenge → page bloquée sur BTkBO URL.
+  // Si on arrive ici hors cache, le fetch() retournera "" depuis about:blank (CORS),
+  // ce qui est acceptable — le scanner tombera en fallback impit plutôt que de
+  // bloquer toutes les requêtes en boucle sur une page CF challenge.
 
   try {
     const result: { status: number; bodyLen: number; body: string } = await page.evaluate(
