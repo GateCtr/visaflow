@@ -507,6 +507,7 @@ function buildRKTerminConfig(job: HunterJob): RKTerminConfig | null {
     dynamicFields,
     slotDateFrom: hc.slotDateFrom,
     slotDateDeadline: hc.slotDateDeadline,
+    groupSize: hc.groupSize,
   };
 }
 

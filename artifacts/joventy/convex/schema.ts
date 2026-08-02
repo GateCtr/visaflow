@@ -97,6 +97,10 @@ const hunterConfig = v.object({
   cevUseProxy: v.optional(v.boolean()),
   // Intervalle de scan personnalisé (secondes, défaut: 225 = 3min45)
   cevScanIntervalSec: v.optional(v.number()),
+  // Nombre minimum de places libres requis par créneau (group booking)
+  // CEV: remplace le seuil hardcodé 3 ; Spain: filtre freeslots≥N ; Germany: slots dispo/jour≥N
+  // Absent ou 0 = comportement par défaut (solo booking, aucun filtre)
+  groupSize: v.optional(v.number()),
   // ══════════════════════════════════════════════════════════════════════════
   // SIPHONNAGE F5 — Cookies WAF BIG-IP injectés depuis l'extérieur
   // ══════════════════════════════════════════════════════════════════════════

@@ -79,6 +79,8 @@ export interface HunterJob {
     cevDossierPool?: string;
     cevUseProxy?: boolean;
     cevScanIntervalSec?: number;
+    // Group booking — min places libres requises par créneau
+    groupSize?: number;
     // Session CEV active
     cevActiveSessionCookie?: string;
     cevActiveSessionValidUntil?: string;

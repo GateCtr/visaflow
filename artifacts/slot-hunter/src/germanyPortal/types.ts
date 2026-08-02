@@ -18,6 +18,13 @@ export interface RKTerminConfig {
   slotDateDeadline?: string;
   /** Nombre de mois supplémentaires à scanner après le mois courant (défaut: 2, max: 6) */
   maxExtraMonths?: number;
+  /**
+   * Nombre minimum de créneaux horaires (openingPeriodId distincts) requis sur un même jour
+   * pour que ce jour soit éligible au booking. Utile pour le group booking :
+   * groupSize=2 → ne réserver que si le jour expose ≥2 openingPeriodId différents.
+   * Absent ou ≤1 → comportement par défaut (premier créneau disponible).
+   */
+  groupSize?: number;
 }
 
 /** Champ dynamique du formulaire RK-Termin (ex: nationalité, n° passeport). */

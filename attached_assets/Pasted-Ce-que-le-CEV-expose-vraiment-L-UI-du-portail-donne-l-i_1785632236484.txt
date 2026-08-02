@@ -1,0 +1,69 @@
+Ce que le CEV expose vraiment
+L'UI du portail donne l'impression d'un flow en 3 étapes :
+
+Choisir une date → 2. Voir les heures → 3. Voir les places par heure
+Mais techniquement, le HTML de /Integration/VOW/SelectSlot embed en une seule fois toute la table de disponibilités dans la page, sous forme d'un tableau JSON inlinisé :
+
+availability = [
+  { datePart: "2026-12-22T00:00:00", timeSlot: "2026-12-22T14:20:00", scheduleLineId: "uuid-A" },
+  { datePart: "2026-12-22T00:00:00", timeSlot: "2026-12-22T14:20:00", scheduleLineId: "uuid-B" },
+  { datePart: "2026-12-23T00:00:00", timeSlot: "2026-12-23T14:20:00", scheduleLineId: "uuid-C" },
+  ...136 entrées...
+]
+
+Chaque entrée = 1 place (scheduleLineId = clé de réservation). Même date/heure = plusieurs places disponibles pour ce créneau.Notre stratégie actuelle
+Étape	Ce qu'on fait
+1. Setup	1 seul GET + résolution captcha → on récupère le HTML complet avec les 136 places
+2. Extraction	On parse le tableau availability[] en entier → on groupe par (date, heure) → on calcule free = nb de places par créneau
+3. Sélection	On trie par free décroissant, on préfère free ≥ 3 → le slot avec le plus de places = moins de concurrence
+4. Booking	On soumet directement via HTTP (POST /SelectSlot avec scheduleLineId) → confirmation en <1 seconde
+Group booking : si 3 personnes d'une même famille ont besoin d'un RDV le même jour à la même heure → le bot ne cherche pas ça. Il book le meilleur créneau disponible pour chaque dossier indépendamment, sans coordination inter-dossiers. Partage de session cross-dossiers : chaque dossier a sa propre session. Si demain on voulait optimiser, on pourrait tenter de partager certains cookies entre dossiers du même compte (ils partagent le même login VOWINT) — mais ça n'est pas implémenté., pour le group booking on peut le faire en regardant les places dispos pour cette heure et cette date, nous pourrons faires la meme chose sur spain qui affiche aussi les free ? ou sur germany?
+1 hour ago
+Analyzing group booking requirements
+Analyzing group booking requirements
+Bonne question. Avant d'implémenter, je dois vérifier ce que chaque portail expose comme données de capacité — est-ce qu'on voit plusieurs slots disponibles au même créneau horaire, ou est-ce qu'un slot = une seule place ?
+4 actions
+Laisse-moi d'abord explorer la structure des données de slots sur les 3 portails pour comprendre ce que chaque portail expose comme capacité.
+4 actions
+Je vois la clé : Spain expose freeslots: number explicitement — parfait pour le group booking. Germany expose plusieurs openingPeriodId distincts par jour. CEV dépend du JSON. Laisse-moi lire les détails de sélection/booking pour chaque.
+8 actions
+Let me explore the slot selection logic in the Spain and Germany loops before implementing.
+5 actions
+Maintenant je comprends l'architecture complète. Voici la réponse et l'implémentation :
+Spain ✅ — freeslots: number est déjà dans le scan. On peut filtrer freeslots >= groupSize.
+Germany ✅ — Chaque jour a potentiellement N openingPeriodId. On vérifie qu'il y a ≥ N slots disponibles.
+CEV ⏸ — Structure JSON /Home/AvailableTimeSlots pas encore parsée en capacité numérique, on le laisse pour plus tard.
+Implémentation en 3 parties en parallèle :
+Show less
+Searched for "groupSize|groupMin|grou…"
+Searched for "groupSize|groupMin|grou…"
+Searched for "groupSize|freeslots|_al…"
+Reviewing necessary project files
+Reviewing necessary project files
+Opened spain-watcher-loop.ts
+Opened spain-http-scanner.ts
+Searched for "groupSize|groupMin|Spai…"
+Implementing group booking functionality
+Implementing group booking functionality
+Opened schema.ts
+Opened spain-http-booking.ts
+Opened spain-http-scanner.ts
+Implementing group booking logic
+Implementing group booking logic
+Searched for "confirmSlotsViaDatetime…"
+Opened spain-http-scanner.ts
+Implementing group booking features
+Implementing group booking features
+Opened spain-http-scanner.ts
+Opened rktermin-orchestrator.ts
+Opened spain-http-scanner.ts
+Implementing group booking functionality
+Implementing group booking functionality
+Searched for "^export.*function|^expo…"
+Searched for "import.*spain-http-scan…"
+Implementing group booking functionality
+Implementing group booking functionality
+J'ai tout ce qu'il faut. Let me implement all the changes in parallel — schema, Germany, and Spain.
+8 actions
+Now I have everything. Let me read the last two pieces I need — the Spain watcher loop's dossier assembly and the scanViaMainEndpoint signature — then implement all changes in parallel.
+

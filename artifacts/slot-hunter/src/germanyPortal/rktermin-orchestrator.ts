@@ -174,13 +174,21 @@ export async function runGermanyScan(
       const { session: daySession, result: dayResult } = await scanDay(currentSession, config, dateStr);
       currentSession = daySession;
       
-      if (dayResult.status === "slots_found" && dayResult.slots.length > 0) {
+      const minSlots = config.groupSize && config.groupSize > 1 ? config.groupSize : 1;
+      if (dayResult.status === "slots_found" && dayResult.slots.length >= minSlots) {
         // Choisir le créneau le plus tôt de la journée (meilleur choix que « premier »)
         const sorted = [...dayResult.slots].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom));
         bestSlot = sorted[0];
         captchasSolved++; // captcha day résolu
-        log("INFO", `🎯 Créneau trouvé: ${bestSlot.date} ${bestSlot.timeFrom}-${bestSlot.timeTo} (openingPeriodId=${bestSlot.openingPeriodId})`);
+        if (minSlots > 1) {
+          log("INFO", `🎯 Créneau trouvé (group: ${dayResult.slots.length}≥${minSlots} places): ${bestSlot.date} ${bestSlot.timeFrom}-${bestSlot.timeTo} (openingPeriodId=${bestSlot.openingPeriodId})`);
+        } else {
+          log("INFO", `🎯 Créneau trouvé: ${bestSlot.date} ${bestSlot.timeFrom}-${bestSlot.timeTo} (openingPeriodId=${bestSlot.openingPeriodId})`);
+        }
         break;
+      } else if (dayResult.status === "slots_found" && dayResult.slots.length > 0 && dayResult.slots.length < minSlots) {
+        log("INFO", `⏭️ ${dateStr}: ${dayResult.slots.length} créneau(x) disponible(s) mais groupSize=${minSlots} requis — skip`);
+        captchasSolved++;
       }
       if (dayResult.status === "no_slots") {
         captchasSolved++;
