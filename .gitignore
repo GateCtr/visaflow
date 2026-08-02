@@ -48,6 +48,12 @@ Thumbs.db
 .cache/
 .local/
 
+# Redis runtime snapshots (contain live session/cookie data — never commit)
+dump.rdb
+
+# Agent transcript pastes (internal work artifacts — not project assets)
+attached_assets/Pasted-*.txt
+
 # Environment variables (all variants)
 .env
 .env.local

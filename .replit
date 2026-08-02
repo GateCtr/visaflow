@@ -47,7 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "export LD_LIBRARY_PATH=\"/nix/store/wilz94hzz4q3fss6qvv625zvww4a6s4s-mesa-libgbm-25.0.1/lib:/nix/store/x4dg7qhdg1yvnz1cwavs4r29ij8vfx23-libudev-zero-1.0.3/lib:$LD_LIBRARY_PATH\"; /nix/store/pnc74r60iz1g5bpqv4qh76a8cc3g0n97-redis-7.2.10/bin/redis-server --daemonize yes --logfile /tmp/redis.log 2>/dev/null; sleep 1 && cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
+args = "export LD_LIBRARY_PATH=\"/nix/store/wilz94hzz4q3fss6qvv625zvww4a6s4s-mesa-libgbm-25.0.1/lib:/nix/store/x4dg7qhdg1yvnz1cwavs4r29ij8vfx23-libudev-zero-1.0.3/lib:$LD_LIBRARY_PATH\"; /nix/store/pnc74r60iz1g5bpqv4qh76a8cc3g0n97-redis-7.2.10/bin/redis-server --bind 127.0.0.1 --daemonize yes --logfile /tmp/redis.log; sleep 2 && cd artifacts/slot-hunter && node_modules/.bin/tsx watch src/index.ts"
 
 [[workflows.workflow]]
 name = "artifacts/captcha-service: Captcha Service"

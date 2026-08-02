@@ -254,10 +254,10 @@ async function phase5_fullScan(): Promise<void> {
         ok(`_mainHtml : ${result._mainHtml.length}B (non-0B ✨)`);
         info(`  Aperçu /main/ : ${result._mainHtml.slice(0, 200).replace(/\n/g, " ")}`);
       }
-      if (result.slotDetails) {
-        ok(`Date     : ${result.slotDetails.date}`);
-        ok(`Heure    : ${result.slotDetails.time}`);
-        ok(`Service  : ${result.slotDetails.serviceName || "(inconnu)"}`);
+      if (result.slot) {
+        ok(`Date     : ${result.slot.date}`);
+        ok(`Heure    : ${result.slot.time}`);
+        ok(`Location : ${result.slot.location || "(inconnu)"}`);
       }
       break;
     }

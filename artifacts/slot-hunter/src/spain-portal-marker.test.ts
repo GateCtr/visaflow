@@ -4,6 +4,7 @@
  *
  * Usage : cd artifacts/slot-hunter && npx tsx src/spain-portal-marker.test.ts
  */
+export {};
 
 const PORTAL_URL =
   "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/#services";
