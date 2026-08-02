@@ -2993,11 +2993,18 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   const pageUrl = page.url().slice(0, 80);
   console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
 
-  // Navigation root SUPPRIMÉE (Fix B revert) :
-  // page.goto(citaconsular.es) déclenche un CF re-challenge → page bloquée sur BTkBO URL.
-  // Si on arrive ici hors cache, le fetch() retournera "" depuis about:blank (CORS),
-  // ce qui est acceptable — le scanner tombera en fallback impit plutôt que de
-  // bloquer toutes les requêtes en boucle sur une page CF challenge.
+  try {
+    const currentOrigin: string = await page.evaluate(() => window.location.origin).catch(() => "");
+    if (!currentOrigin.includes("citaconsular.es")) {
+      console.log(`[spain-pb] 🔄 callBrowser → contexte hors citaconsular.es (${currentOrigin}) — navigation root de secours…`);
+      await page.goto("https://www.citaconsular.es/", {
+        waitUntil: "domcontentloaded",
+        timeout: 20_000,
+      }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ callBrowser navigation root (non-fatal): ${e}`));
+    }
+  } catch {
+    // non-fatal
+  }
 
   try {
     const result: { status: number; bodyLen: number; body: string } = await page.evaluate(
