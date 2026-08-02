@@ -84,10 +84,28 @@ export const KINSHASA_CATEGORIES = {
 export const RKTERMIN_TIMING = {
   /** Délai entre requêtes HTTP (anti-rate-limit) */
   interRequestDelayMs: { min: 800, max: 2000 },
-  /** Timeout pour une requête HTTP */
-  requestTimeoutMs: 30_000,
-  /** Durée de vie max d'une session avant renouvellement */
-  sessionMaxAgeMs: 10 * 60_000, // 10 minutes
+  /** Timeout global d'une requête HTTP (connexion + lecture de la réponse) */
+  requestTimeoutMs: 45_000,
+  /**
+   * Timeout d'établissement de la connexion TCP/TLS.
+   * undici plafonne à 10s par défaut : service2.diplo.de répond souvent en
+   * 10-20s depuis une IP datacenter (Railway), ce qui produisait
+   * « ConnectTimeoutError » AVANT que le timeout global ne s'applique.
+   */
+  connectTimeoutMs: 25_000,
+  /** Retry automatique sur erreur réseau transitoire (ConnectTimeout, ECONNRESET…) */
+  networkRetry: {
+    /** Nombre total de tentatives par requête (1 = pas de retry) */
+    maxAttempts: 3,
+    /** Backoff exponentiel: base * 2^(n-1) + jitter */
+    baseDelayMs: 1_500,
+    maxDelayMs: 12_000,
+  },
+  /** Durée de vie max d'une session avant renouvellement.
+   * diplo.de expire les sessions après ~2-3 min d'inactivité (empirique).
+   * On expire en local à 100s : assez pour réutiliser au cycle suivant (~60s),
+   * assez court pour ne pas tenter un round-trip sur une session déjà morte. */
+  sessionMaxAgeMs: 100_000, // 100 secondes (~1min40)
   /** Délai entre les cycles de polling */
   pollingInterval: {
     normal: { min: 60_000, max: 60_000 },                 // 1 min
@@ -98,6 +116,21 @@ export const RKTERMIN_TIMING = {
   maxCaptchaRetries: 5,
   /** Pause entre captcha et soumission (simule lecture humaine) */
   postCaptchaPauseMs: { min: 500, max: 1500 },
+  /** Politique d'auto-pause d'un dossier dans la boucle Germany */
+  autoPause: {
+    /** Erreurs « métier » consécutives (captcha non trouvé, booking KO…) avant pause */
+    maxBusinessErrors: 3,
+    /**
+     * Erreurs purement réseau consécutives avant mise en pause.
+     * Bien plus tolérant : le portail allemand est régulièrement injoignable
+     * quelques minutes, ce n'est pas un problème de configuration du dossier.
+     */
+    maxNetworkErrors: 12,
+    /** Cooldown progressif après une erreur réseau (backoff exponentiel) */
+    networkCooldownMs: { base: 120_000, max: 900_000 },   // 2 min → 15 min
+    /** Durée de la pause automatique (reprise auto ensuite, pas de pause définitive) */
+    pauseDurationMs: 30 * 60_000,                          // 30 min
+  },
 } as const;
 
 /** Regex patterns pour parser le HTML RK-Termin */
@@ -131,6 +164,8 @@ export const RKTERMIN_PATTERNS = {
   isWaitlistMode: /appointment_showForm\.do\?locationCode/,
   /** Erreur de validation email */
   emailValidationError: /valid E-Mail|gültige E-Mail/i,
+  /** Erreur anti-CSRF / session expirée (tokens hidden manquants ou adresse modifiée manuellement) */
+  sessionError: /An error occurred while processing your appointment|address.*manually|Adresse.*manuell/i,
   /** Navigation mois suivant/précédent */
   nextMonth: /appointment_showMonth\.do[^"]*dateStr=([^"&]+)/g,
 } as const;

@@ -79,6 +79,8 @@ export interface HunterJob {
     cevDossierPool?: string;
     cevUseProxy?: boolean;
     cevScanIntervalSec?: number;
+    // Group booking — min places libres requises par créneau
+    groupSize?: number;
     // Session CEV active
     cevActiveSessionCookie?: string;
     cevActiveSessionValidUntil?: string;
@@ -99,6 +101,8 @@ export interface HunterJob {
     cevSiphonedUserAgent?: string;
     cevSiphonedAt?: number;
     cevSiphonedValidUntil?: number;
+    /** Active l'annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte */
+    cevAutoCancelOnLimitReached?: boolean;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";

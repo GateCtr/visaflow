@@ -4,7 +4,9 @@
 - [CEV implementation plan](cev-impl-plan.md) — complete anti-shadow-ban overhaul plan written to CEV_BOT_IMPLEMENTATION_PLAN.md (1259 lines); 15 detection vectors from real captures; full Puppeteer flow replaces HTTP-only setup; 6 phases ~20-27h effort.
 - [CEV anti-shadow-ban overhaul](cev-overhaul-done.md) — implementation done: cev-hcaptcha.ts + cev-session-manager.ts created; captureFullSessionForAccount() + stealth fixes in cev-dossier-loop.ts; ignoreTlsErrors removed + log-normal jitter in cev-shared-impit.ts; VOWINT TTL 24h→4h; activate with cev_full_puppeteer_mode=1.
 - [CEV HTTP booking e2e fixes](cev-http-booking-e2e.md) — 3 fixes to reach TimeSlotNoLongerAvailable (proof the flow works); confirmed endpoint /Integration/VOW/SelectSlot.
+- [Germany RK-Termin booking Referer fix](germany-rktermin-referer.md) — GET showForm needs Referer=showDay URL; POST addAppointment needs Referer=showForm URL; session cache reuse avoids captcha every scan.
 - [Playwright→Puppeteer migration](playwright-puppeteer-migration.md) — API diff cheatsheet and file-level strategy used to migrate browser.ts + 6 portal files; 0 TS errors after.
+- [Germany proxy rotation + Redis persistence](germany-redis-persistence-impl.md) — Decodo round-robin per scan (ConnectTimeoutError fix) + completedJobs/pausedJobs/lock in germany-redis-persistence.ts.
 - [CEV One-Shot (Predator) strategy](cev-one-shot-strategy.md) — dossier loop v4: no more 5-click/h quota; wake every 2 min, click once per dossier, sleep; session reuse via existing VOWINT cache (4h TTL in cevHttpSetup); DEFAULT_INTERVAL_SEC=120; pool is pure round-robin; build: 0 TS errors.
 - [Spain Bookitit fingerprint fixes](spain-bookitit-fingerprint.md) — Sec-Fetch/Accept/CH hint fixes (Burp 2026-06-25) + JSONP parser extended for `callback=jQuery...` prefix (Bug S6, 2026-07-30).
 - [Spain citaconsular session flow](spain-citaconsular-session-flow.md) — exact 8-step HTTP flow (GET entry→POST token→JSD oneshot→2nd POST widget→JSONP); cookie order, PHPSESSID forwarding, GA cookies, JSD oneshot extraction — confirmed by Burp 2026-06-25.
@@ -21,3 +23,4 @@
 - [Spain persistent-browser mode](spain-persistent-browser.md) — CF/impit asymmetry, session rules, cf_clearance deletion before Continuar, Chromium path, full install + Saopola e2e test confirmed 2026-07-30.
 - [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.
 - [Spain multi-dossier parallel booking](spain-multidossier-parallel.md) — 2 bugs fixed: acquireBrowserBookingLock (full flow, not just DOM submit) + closeAndInvalidate on /main/ 0B (not invalidateSession); test confirmed 2026-07-30.
+- [CEV Overview page flow](cev-overview-flow.md) — /VOW/Overview Cas 1: "Nouveau rendez-vous" href=/Integration/VOW/SelectSlot → suivi direct; Cas 2: limit_reached; implémenté + testé VOWINT6323902.

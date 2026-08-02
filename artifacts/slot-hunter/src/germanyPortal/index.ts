@@ -23,7 +23,7 @@ export {
   RKTERMIN_PATTERNS,
 } from "./config.js";
 
-export { initSession, isSessionValid } from "./rktermin-session.js";
+export { initSession, isSessionValid, rotateRKProxy } from "./rktermin-session.js";
 export { extractCaptchaBase64, solveImageCaptcha } from "./rktermin-captcha.js";
 export { scanMonth, scanDay, filterDatesByPreference } from "./rktermin-scan.js";
 export { bookSlot } from "./rktermin-book.js";

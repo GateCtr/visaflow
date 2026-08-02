@@ -111,15 +111,17 @@ const PAGE_SIZE = 20;
 
 const CATEGORY_META = CATEGORY_META_SHARED;
 
-// Determine if a log is USA or CEV based on step name
-function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" | "other" {
+// Determine if a log is USA, CEV, Germany based on step name
+function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" | "germany" | "other" {
   if (log.step.startsWith("cev_") || log.step.startsWith("cev ")) return "cev";
+  if (log.step.startsWith("germany_")) return "germany";
   // Check data.flow field
   if (log.data) {
     try {
       const d = JSON.parse(log.data);
       if (d.flow === "usa") return "usa";
       if (d.flow === "cev" || d.flow === "schengen") return "cev";
+      if (d.flow === "germany") return "germany";
     } catch { /* ignore */ }
   }
   // Default USA steps
@@ -277,7 +279,7 @@ function LogDataBlock({ data, isExpanded }: { data: string; isExpanded: boolean 
 
 // ─── Bot Logs Tab ─────────────────────────────────────────────────────────────
 
-type FlowTab = "usa" | "cev" | "all";
+type FlowTab = "usa" | "cev" | "germany" | "all";
 
 function BotLogsTab() {
   const [flowTab, setFlowTab]           = useState<FlowTab>("usa");
@@ -289,7 +291,7 @@ function BotLogsTab() {
   const [clearing, setClearing]         = useState(false);
   const [clearProgress, setClearProgress] = useState("");
   const [showClearDialog, setShowClearDialog] = useState(false);
-  const [clearTarget, setClearTarget]   = useState<"usa" | "cev" | "other" | "all">("all");
+  const [clearTarget, setClearTarget]   = useState<"usa" | "cev" | "germany" | "other" | "all">("all");
   const [timeUpdate, setTimeUpdate]    = useState(0);
 
   // Auto-update relative time every 10 seconds
@@ -346,6 +348,7 @@ function BotLogsTab() {
     const flow = getLogFlow(log);
     if (flowTab === "usa") return flow === "usa";
     if (flowTab === "cev") return flow === "cev";
+    if (flowTab === "germany") return flow === "germany";
     return true;
   });
 
@@ -355,8 +358,9 @@ function BotLogsTab() {
   const slice      = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // Counts per flow
-  const usaCount = (logs ?? []).filter(l => getLogFlow(l) === "usa").length;
-  const cevCount = (logs ?? []).filter(l => getLogFlow(l) === "cev").length;
+  const usaCount     = (logs ?? []).filter(l => getLogFlow(l) === "usa").length;
+  const cevCount     = (logs ?? []).filter(l => getLogFlow(l) === "cev").length;
+  const germanyCount = (logs ?? []).filter(l => getLogFlow(l) === "germany").length;
 
   const allSteps: string[] = logs
     ? ([...new Set(logs.map((l: Doc<"botLogs">) => l.step))] as string[]).sort()
@@ -411,6 +415,7 @@ function BotLogsTab() {
             {([
               { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
               { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
+              { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
               { id: "all" as FlowTab, label: "Tous", count: (logs ?? []).length },
             ]).map(tab => (
               <button
@@ -442,6 +447,7 @@ function BotLogsTab() {
               <option value="all">Supprimer : Tous</option>
               <option value="usa">Supprimer : USA seulement</option>
               <option value="cev">Supprimer : CEV seulement</option>
+              <option value="germany">Supprimer : Germany seulement</option>
               <option value="other">Supprimer : Autres</option>
             </select>
 
@@ -462,10 +468,12 @@ function BotLogsTab() {
                     {clearTarget === "all"
                       ? "Supprimer TOUS les logs bot ? Cette action est irréversible."
                       : clearTarget === "usa"
-                      ? "Supprimer uniquement les logs USA ? Les logs CEV seront conservés."
+                      ? "Supprimer uniquement les logs USA ? Les autres logs seront conservés."
                       : clearTarget === "cev"
-                      ? "Supprimer uniquement les logs CEV (Schengen) ? Les logs USA seront conservés."
-                      : "Supprimer les logs qui ne sont ni USA ni CEV ?"}
+                      ? "Supprimer uniquement les logs CEV (Schengen) ? Les autres logs seront conservés."
+                      : clearTarget === "germany"
+                      ? "Supprimer uniquement les logs Germany (RK-Termin) ? Les autres logs seront conservés."
+                      : "Supprimer les logs qui ne sont ni USA, ni CEV, ni Germany ?"}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

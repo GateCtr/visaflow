@@ -48,6 +48,9 @@ const hunterConfig = v.object({
   // Obligatoire quand un compte portail gère plusieurs personnes.
   // S'il est absent, le robot prend automatiquement le premier dossier actif.
   portalApplicationId: v.optional(v.string()),
+  // Nom/prénom applicant (RK-Termin Germany)
+  applicantFirstname: v.optional(v.string()),
+  applicantLastname: v.optional(v.string()),
   // Plage de dates de recherche : ne réserver que dans cette fenêtre
   // Format ISO "YYYY-MM-DD". slotDateFrom = date minimum (ex: dans 14 jours).
   // slotDateDeadline = date limite absolue (ex: date de voyage - 15 jours).
@@ -97,6 +100,10 @@ const hunterConfig = v.object({
   cevUseProxy: v.optional(v.boolean()),
   // Intervalle de scan personnalisé (secondes, défaut: 225 = 3min45)
   cevScanIntervalSec: v.optional(v.number()),
+  // Nombre minimum de places libres requis par créneau (group booking)
+  // CEV: remplace le seuil hardcodé 3 ; Spain: filtre freeslots≥N ; Germany: slots dispo/jour≥N
+  // Absent ou 0 = comportement par défaut (solo booking, aucun filtre)
+  groupSize: v.optional(v.number()),
   // ══════════════════════════════════════════════════════════════════════════
   // SIPHONNAGE F5 — Cookies WAF BIG-IP injectés depuis l'extérieur
   // ══════════════════════════════════════════════════════════════════════════

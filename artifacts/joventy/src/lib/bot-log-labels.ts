@@ -109,6 +109,16 @@ export const STEP_LABELS: Record<string, string> = {
   cev_http_submit_attempt: "📤 Soumission",
   cev_http_submit_response: "📥 Réponse soumission",
   cev_http_booking_crash: "💥 Booking crash",
+
+  // ── Germany RK-Termin ──
+  germany_scan_start: "🇩🇪 Scan Allemagne démarré",
+  germany_config_invalid: "⚠️ Config Germany invalide",
+  germany_not_found: "🔍 Aucun créneau Allemagne",
+  germany_captcha_failed: "🤖 Captcha Allemagne échoué",
+  germany_network_error: "🌐 Erreur réseau Allemagne",
+  germany_auto_pause: "⏸️ Pause automatique Allemagne",
+  germany_exception: "💥 Exception Allemagne",
+  germany_error: "❌ Erreur Allemagne",
 };
 
 // ─── Step Categories ──────────────────────────────────────────────────────────
@@ -154,7 +164,16 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   cev_http_hcaptcha_failed: "error", cev_http_captcha_submit_failed: "error",
   cev_http_no_integration_url: "error", cev_http_no_cev_cookie: "error",
   cev_http_no_app_id: "error", cev_session_expired: "error",
-  cev_http_booking_crash: "error", "409_retry_exhausted": "error",
+  cev_http_booking_crash: "error",
+  // Germany
+  germany_scan_start: "work",
+  germany_config_invalid: "error",
+  germany_not_found: "work",
+  germany_captcha_failed: "error",
+  germany_network_error: "error",
+  germany_auto_pause: "behavior",
+  germany_exception: "error",
+  germany_error: "error", "409_retry_exhausted": "error",
   // Comportement humain / anti-détection
   human_behavior: "behavior", anti_detection: "behavior", execution_time: "behavior",
   cooldown: "behavior", "409_retry_start": "behavior", "409_retry_success": "behavior",

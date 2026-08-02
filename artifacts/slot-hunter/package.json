@@ -42,6 +42,7 @@
     "usa:capture:cookies": "tsx scripts/usa-capture-with-cookies.ts",
     "usa:portal:capture": "tsx scripts/usa-portal-capture.ts",
     "usa:test:jwt-ip": "tsx src/test-usa-jwt-ip-binding.ts",
+    "germany:diag": "tsx scripts/germany-network-diag.ts",
     "test:anticaptcha": "tsx test-anticaptcha-soax.ts",
     "test:cev:anticaptcha": "tsx test-cev-anticaptcha-proxyless.ts"
   },
@@ -56,7 +57,7 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "redis": "^5.12.1",
-    "undici": "^7.24.6"
+    "undici": "^7.29.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

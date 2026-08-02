@@ -1,0 +1,75 @@
+Je dois d'abord explorer l'état actuel du code pour savoir exactement où en est l'implémentation du groupSize.
+
+Voilà le tableau exact de ce qui manque :
+
+    Admin UI (HunterConfig.tsx) — 0 groupSize (state, hydrate, save)
+    Spain watcher loop — déclaration type OK, mais aucun filtre appliqué
+    convexClient.ts — interface OK, pas de passage côté mutation Convex
+
+Je lis les 3 fichiers en parallèle avant d'éditer.
+
+Je lis maintenant la partie sélection de slot dans le watcher loop Spain (là où _allSlots est filtré pour le booking) en parallèle avec la fin du fichier HunterConfig.
+
+Je lis la suite du watcher loop pour trouver la sélection de slot (où _allSlots est trié/filtré avant booking).
+
+Je dois voir la signature de SpainBookingConfig et comment le slot est sélectionné dans executeHttpBooking avant d'implémenter.
+
+Je dois vérifier la signature de la fonction qui contient le slot selection avant d'injecter groupSize dedans.
+
+J'ai tout le contexte. Je vois que extractFirstSlot(payload) est appelé depuis executeHttpBooking où config est disponible. Je peux passer config.groupSize directement. Maintenant je fais tous les changements en parallèle.
+
+J'ai tout ce qu'il faut. Je fais les 5 éditions simultanément.
+
+J'enchaîne avec les 5 éditions restantes en parallèle : UI field, spain-watcher-loop dossier+booking, spain-http-booking config+filter.
+
+Il me reste la dernière pièce : modifier extractFirstSlot pour accepter minFree et filtrer dedans, puis mettre à jour les 2 appels.
+
+Je fais les 3 éditions finales : signature extractFirstSlot, filtre minFree, et les 2 appels callers.
+
+Maintenant je mets à jour les 2 callers de extractFirstSlot pour passer config.groupSize.
+
+Vérification TypeScript sur les 3 fichiers modifiés en parallèle avec un check build rapide.
+
+L'erreur slot-hunter est dans cevHttpBooking.ts — probablement préexistante. Vérification rapide.
+
+L'erreur importante : groupSize n'est pas dans les args du validator Convex de setHunterConfig. Je lis hunter.ts pour le corriger.
+
+L'erreur vient des types générés Convex (stale). hunter.ts a déjà groupSize dans les args (ligne 61), mais _generated/ ne le reflète pas encore. Il faut déployer Convex pour régénérer.
+
+Je déploie Convex pour régénérer les types _generated/ en parallèle avec la vérification que les autres erreurs sont bien préexistantes.
+
+Le deploy échoue car le schéma Convex ne contient pas applicantFirstname/applicantLastname mais ces champs existent déjà en base. Je dois les ajouter au schéma.
+
+applicantFirstname/applicantLastname sont dans la DB mais absents du schéma. Je lis l'endroit exact pour les ajouter.
+
+Je dois ajouter applicantFirstname et applicantLastname au schéma Convex ET aux args de setHunterConfig. Je lis hunter.ts pour voir le contexte exact des args.
+
+Il manque applicantFirstname/applicantLastname dans le schéma ET les args du mutation. Je fais les 3 éditions en parallèle.
+
+Je dois aussi ajouter ces champs au handler (patch) de hunter.ts, puis redéployer.
+
+Convex déployé ✅. Je vérifie maintenant la compilation TypeScript du frontend et contrôle les logs des workflows.
+
+Les 3 erreurs pré-existantes (requestRushPrep, sendPaymentProofRejectedClient) ne sont pas de mon ressort. Mais groupSize dans HunterConfig.tsx devrait être résolu — le deploy Convex a régénéré les types. Je vérifie.
+
+Les types Convex sont inférés directement depuis hunter.ts (pas inline dans api.d.ts). Le groupSize est dans hunter.ts ligne 61 depuis le début. L'erreur TS doit être résolue. Je relance le check.
+
+L'erreur persiste même avec applicantFirstname visible dans le type. Possible cache TS. Je vérifie que les edits sont en place et cherche le .tsbuildinfo.
+
+groupSize est dans hunter.ts. L'erreur TS est bizarre — applicantFirstname (ajouté en même temps) est bien reconnu. Je regarde si un fichier généré intermédiaire overriderait le type.
+
+Je dois lire l'api.d.ts généré pour comprendre exactement comment setHunterConfig est typé.
+
+@convex/* mappe vers ../../convex/* depuis le tsconfig de joventy. Je vérifie où ce chemin pointe réellement.
+
+Le path ../../convex/ depuis artifacts/joventy/ pointe vers le workspace root /convex/ — un répertoire DIFFÉRENT de artifacts/joventy/convex/. C'est là que TypeScript lit les types ! Je vérifie.
+
+La root /workspace/convex/ EST la vraie source que TypeScript lit. Je vérifie si c'est un symlink ou des fichiers séparés.
+
+Il y a deux convex directories : artifacts/joventy/convex/ (celle déployée) et /workspace/convex/ (celle lue par TypeScript via le path alias @convex/*). Je dois éditer les deux. Je lis d'abord le fichier workspace root.
+
+Le workspace root /workspace/convex/hunter.ts a applicantFirstname mais pas encore groupSize. Je lis les sections pertinentes pour appliquer les mêmes éditions.
+
+Je dois ajouter groupSize aux deux fichiers workspace root en parallèle.
+
+J'ajoute groupSize aux deux fichiers workspace root en parallèle.

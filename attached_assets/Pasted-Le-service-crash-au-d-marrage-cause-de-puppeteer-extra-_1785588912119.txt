@@ -1,0 +1,85 @@
+Le service crash au démarrage à cause de puppeteer-extra (import top-level dans browser.ts) — ça empêche toute la boucle Germany de démarrer. Je vais créer un script de test isolé qui ne touche qu'aux fichiers Germany (aucun puppeteer), pour voir les logs de Jean Bernard en live.
+
+D'abord je vérifie la structure du main et la config de Jean Bernard :
+
+
+6 actions
+Je crée un script de test isolé qui utilise uniquement les fichiers Germany (sans puppeteer) et exécute le scan de Jean Bernard ici sur Replit.
+
+
+5 actions
+Je crée le script de test isolé et l'exécute directement :
+
+
+10 actions
+Le Referer fix n'a pas résolu le problème. Le session_error persiste. La vraie cause est probablement un token CSRF caché dans l'HTML du formulaire que notre regex ne capture pas bien, ou un champ absent. Je dois voir l'HTML brut du showForm. Je modifie le test pour logger l'HTML du formulaire :
+
+
+2 actions
+Je réécris le test pour aller étape par étape et logger l'HTML brut du formulaire de booking :
+
+
+4 actions
+Deux bugs critiques trouvés dans l'HTML brut :
+
+Mauvais definitionId : Le formulaire retourne fields[0].definitionId=11598 et fields[1].definitionId=11599, mais notre config envoie 14389 et 14390. On écrase les vrais IDs du formulaire avec des valeurs incorrectes.
+
+Mauvais endpoint POST : Le <form action="/rktermin/extern/appointment_showForm.do"> — on doit POSTer à showForm.do, pas à addAppointment.do. Le bouton action:appointment_addAppointment dit à Spring quel méthode invoquer, mais l'URL cible c'est showForm.
+
+Je corrige les deux maintenant :
+
+
+Show less
+
+Edited rktermin-book.ts
+Verifying both fixes
+
+Verifying both fixes
+Je reteste immédiatement avec les deux fixes :
+
+
+2 actions
+Le POST body montre encore 14389 — le test script n'a pas été mis à jour avec ma correction. Je dois corriger le test script lui-même (il a son propre code de construction du body) et utiliser le bon endpoint :
+
+
+4 actions
+Le résultat est coupé — l'output dépasse la limite du terminal. Je relance en redirigeant vers un fichier pour voir le résultat complet :
+
+
+2 actions
+Le créneau du 19.08.2026 vient de disparaître — quelqu'un l'a pris. Je modifie le test pour utiliser la première date disponible dynamiquement :
+
+
+4 actions
+Le session_error a disparu — les bons definitionId sont envoyés (11598/11599). Mais la page est "vide". Je dois voir le HTML brut complet de la réponse POST pour comprendre ce qui se passe (redirect ? confirmation JS ? autre état ?) :
+
+
+4 actions
+C'est un succès ! L'URL finale est appointment_thanx.do?categoryId=3020 — la page de remerciement de RK-Termin. La réservation fonctionne ! Le seul problème : notre parser de succès ne détecte pas cette URL de redirect, alors il dit "inattendu".
+
+Il faut deux derniers fixes : (1) capturer l'URL finale dans rkPost pour détecter le redirect vers thanx, (2) voir si le HTML thanx contient le numéro de confirmation quelque part.
+
+
+3 actions
+La page thanx.do a le contenu rendu par JS — pas de confirmation number dans le HTML statique. Je dois :
+
+Faire retourner l'URL finale par rkPost (après les redirects)
+Détecter le succès via appointment_thanx.do dans bookSlot
+
+2 actions
+Je continue — il faut propager finalUrl dans rkFetchHtml, rkPost, puis détecter le succès dans bookSlot :
+
+
+3 actions
+Je fais les 3 changements restants en parallèle : propager finalUrl dans rkFetchHtml → rkPost, puis détecter le succès dans bookSlot :
+
+
+4 actions
+Maintenant je mets à jour bookSlot pour détecter le succès via appointment_thanx.do :
+
+
+2 actions
+Je vérifie les erreurs TS des fichiers modifiés et je relance le test final en parallèle :
+
+
+2 actions

@@ -111,6 +111,11 @@ interface SpainDossier {
   slotDateDeadline?: string;
   /** URL Bookitit du dossier — portalUrl ou hunterConfig.scheduleUrl */
   portalUrl: string;
+  /**
+   * Nombre minimum de places libres requises par créneau (group booking).
+   * Si défini et > 1, le booking est skippé si aucun créneau n'a freeslots ≥ groupSize.
+   */
+  groupSize?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -152,6 +157,7 @@ async function getActiveSpainDossiers(): Promise<SpainDossier[]> {
         slotDateFrom: j.hunterConfig.slotDateFrom,
         slotDateDeadline: j.hunterConfig.slotDateDeadline,
         portalUrl: j.portalUrl ?? (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl ?? "",
+        groupSize: j.hunterConfig.groupSize,
       }));
   } catch (err) {
     log("WARN", `[SPAIN-WATCHER] Échec récupération dossiers Espagne: ${err}`);
@@ -535,6 +541,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 applicantName: dossier.applicantName,
                 targetServiceId: matched.serviceId,
                 visaType: dossier.visaType,
+                groupSize: dossier.groupSize,
               };
 
               try {

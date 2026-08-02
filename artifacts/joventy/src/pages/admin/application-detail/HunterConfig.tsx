@@ -43,8 +43,11 @@ interface HunterConfigData {
   preferredProxy?: string;
   // CEV Dossier Loop v3 - Multi-comptes
   cevDossierPool?: string;
+  cevDossierExclude?: string;
   cevUseProxy?: boolean;
   cevScanIntervalSec?: number;
+  // Group booking
+  groupSize?: number;
 }
 
 interface Props {
@@ -96,8 +99,11 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [preferredProxy, setPreferredProxy] = useState("");
   // CEV Dossier Loop v3 - Multi-comptes
   const [cevDossierPool, setCevDossierPool] = useState("");
+  const [cevDossierExclude, setCevDossierExclude] = useState("");
   const [cevUseProxy, setCevUseProxy] = useState(false);
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
+  // Group booking
+  const [groupSize, setGroupSize] = useState("");
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -137,8 +143,11 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setPreferredProxy(hc.preferredProxy ?? "");
       // CEV Dossier Loop v3 - Multi-comptes
       setCevDossierPool(hc.cevDossierPool ?? "");
+      setCevDossierExclude(hc.cevDossierExclude ?? "");
       setCevUseProxy(hc.cevUseProxy ?? false);
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
+      // Group booking
+      setGroupSize(hc.groupSize ? String(hc.groupSize) : "");
     }
   }, [hc]);
 
@@ -168,8 +177,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         blindBookingEnabled: blindBooking, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: cevDossierPool || undefined, cevUseProxy: cevUseProxy,
+        cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined, cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
+        // Group booking
+        groupSize: groupSize ? Number(groupSize) : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -287,19 +298,54 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           <Field label="Date limite"><Input type="date" value={slotDateDeadline} onChange={(e) => setSlotDateDeadline(e.target.value)} className="h-9 bg-slate-50/80 text-sm" /></Field>
         </div>
 
+        {/* Group booking (Spain / Germany / Schengen) */}
+        {(destination === "spain" || destination === "germany" || destination === "schengen") && (
+          <Field label="Places minimum par créneau (group booking)">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={groupSize}
+                onChange={(e) => setGroupSize(e.target.value)}
+                placeholder="1"
+                className="h-9 bg-slate-50/80 text-sm font-mono w-24"
+              />
+              <span className="text-[11px] text-slate-500">
+                {groupSize && Number(groupSize) > 1
+                  ? `Bot ne booke que si ≥ ${groupSize} places libres simultanées`
+                  : "Laisser vide ou 1 = solo (défaut)"}
+              </span>
+            </div>
+          </Field>
+        )}
+
         {/* Destination-specific */}
         {destination === "schengen" && (
           <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100/60 space-y-4">
             <p className="text-[11px] text-indigo-700 uppercase font-bold tracking-wide">Configuration CEV Schengen</p>
             <p className="text-[10px] text-slate-600">Laissez vide pour navigation automatique (premier dossier trouvé)</p>
             <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100/60 space-y-3">
-              <Field label="Dossiers (optionnel)">
+              <Field label="Dossiers à scanner (optionnel)">
                 <Input
                   value={cevDossierPool}
                   onChange={(e) => setCevDossierPool(e.target.value)}
                   placeholder="VOWINT6085888 ou VOWINT1,VOWINT2,VOWINT3 (vide = auto)"
                   className="h-9 bg-white text-sm font-mono"
                 />
+              </Field>
+              <Field label="Dossiers à ignorer">
+                <Input
+                  value={cevDossierExclude}
+                  onChange={(e) => setCevDossierExclude(e.target.value)}
+                  placeholder="VOWINT1,VOWINT2 — jamais scannés même s'ils sont dans le pool"
+                  className="h-9 bg-white text-sm font-mono"
+                />
+                {cevDossierExclude && (
+                  <p className="text-[10px] text-amber-700 mt-1">
+                    {cevDossierExclude.split(",").filter(Boolean).length} dossier(s) exclu(s) du scan
+                  </p>
+                )}
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Intervalle scan (sec)">

@@ -58,8 +58,11 @@ export const setHunterConfig = mutation({
     preferredProxy: v.optional(v.string()),
     // CEV Dossier Loop v3 - Multi-comptes
     cevDossierPool: v.optional(v.string()),
+    cevDossierExclude: v.optional(v.string()),
     cevUseProxy: v.optional(v.boolean()),
     cevScanIntervalSec: v.optional(v.number()),
+    // Group booking — min places libres requises par créneau
+    groupSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -95,6 +98,7 @@ export const setHunterConfig = mutation({
       preferredProxy?: string;
       // CEV Dossier Loop v3 - Multi-comptes
       cevDossierPool?: string;
+      cevDossierExclude?: string;
       cevUseProxy?: boolean;
       cevScanIntervalSec?: number;
     } }).hunterConfig;
@@ -147,6 +151,7 @@ export const setHunterConfig = mutation({
         preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
         cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
+        cevDossierExclude: args.cevDossierExclude || existing?.cevDossierExclude || undefined,
         cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
         cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
       },

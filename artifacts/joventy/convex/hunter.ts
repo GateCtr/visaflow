@@ -34,6 +34,8 @@ export const setHunterConfig = mutation({
     twoCaptchaApiKey: v.optional(v.string()),
     scheduleUrl: v.optional(v.string()),
     portalApplicationId: v.optional(v.string()),
+    applicantFirstname: v.optional(v.string()),
+    applicantLastname: v.optional(v.string()),
     slotDateFrom: v.optional(v.string()),
     slotDateDeadline: v.optional(v.string()),
     // CEV / Schengen
@@ -55,8 +57,11 @@ export const setHunterConfig = mutation({
     preferredProxy: v.optional(v.string()),
     // CEV Dossier Loop v3 - Multi-comptes
     cevDossierPool: v.optional(v.string()),
+    cevDossierExclude: v.optional(v.string()),
     cevUseProxy: v.optional(v.boolean()),
     cevScanIntervalSec: v.optional(v.number()),
+    // Group booking — min places libres requises par créneau
+    groupSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -89,6 +94,7 @@ export const setHunterConfig = mutation({
       preferredProxy?: string;
       // CEV Dossier Loop v3 - Multi-comptes
       cevDossierPool?: string;
+      cevDossierExclude?: string;
       cevUseProxy?: boolean;
       cevScanIntervalSec?: number;
     } }).hunterConfig;
@@ -107,6 +113,8 @@ export const setHunterConfig = mutation({
         twoCaptchaApiKey: args.twoCaptchaApiKey ?? existing?.twoCaptchaApiKey,
         scheduleUrl: args.scheduleUrl || existing?.scheduleUrl,
         portalApplicationId: args.portalApplicationId || existing?.portalApplicationId,
+        applicantFirstname: args.applicantFirstname || (existing as any)?.applicantFirstname || undefined,
+        applicantLastname: args.applicantLastname || (existing as any)?.applicantLastname || undefined,
         slotDateFrom: args.slotDateFrom || undefined,
         slotDateDeadline: args.slotDateDeadline || undefined,
         lastCheckAt: existing?.lastCheckAt,
@@ -138,8 +146,11 @@ export const setHunterConfig = mutation({
         preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
         cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
+        cevDossierExclude: args.cevDossierExclude || existing?.cevDossierExclude || undefined,
         cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
         cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
+        // Group booking — min places libres requises par créneau
+        groupSize: args.groupSize ?? undefined,
       },
       updatedAt: Date.now(),
     });
