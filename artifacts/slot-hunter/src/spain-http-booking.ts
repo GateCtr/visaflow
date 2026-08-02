@@ -45,6 +45,7 @@ import {
 } from "./convexClient.js";
 import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./spain-confirmation-pdf.js";
+import { buildBookititQueryString } from "./spain-bookitit-params.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ function buildJQueryCallback(): string {
 async function callBookititEndpoint(
   session: SpainCfSession,
   endpoint: string,
-  params: Record<string, string>,
+  params: Record<string, string | string[]>,
   portalUrl: string,
   /** Max tentatives en cas de 5xx serveur (défaut: 4 = 1 initial + 3 retries) */
   maxAttempts = 4,
@@ -255,10 +256,12 @@ async function callBookititEndpoint(
     }
 
     // Regénérer callback + _ à chaque tentative pour éviter la mise en cache
-    const q = new URLSearchParams(params);
-    q.set("callback", buildJQueryCallback());
-    q.set("_", String(Date.now()));
-    const url = `${baseUrl}${endpoint}?${q.toString()}`;
+    const q = buildBookititQueryString({
+      ...params,
+      callback: buildJQueryCallback(),
+      _: String(Date.now()),
+    });
+    const url = `${baseUrl}${endpoint}?${q}`;
 
     const res = await spainCfFetch(url, session, { headers });
 
@@ -302,15 +305,17 @@ async function callBookititEndpoint(
 async function callBookititEndpointBrowser(
   session: SpainCfSession,
   endpoint: string,
-  params: Record<string, string>,
+  params: Record<string, string | string[]>,
   portalUrl: string,
 ): Promise<unknown | null> {
   const baseUrl = "https://www.citaconsular.es/onlinebookings/";
-  const q = new URLSearchParams(params);
-  // Utiliser le format jQuery JSONP — le serveur Bookitit valide que callback commence par "jQuery"
-  q.set("callback", buildJQueryCallback());
-  q.set("_", String(Date.now()));
-  const url = `${baseUrl}${endpoint}?${q.toString()}`;
+  const q = buildBookititQueryString({
+    ...params,
+    // Utiliser le format jQuery JSONP — le serveur Bookitit valide que callback commence par "jQuery"
+    callback: buildJQueryCallback(),
+    _: String(Date.now()),
+  });
+  const url = `${baseUrl}${endpoint}?${q}`;
 
   // DEBUG — montrer les params clés envoyés
   const debugKeys = ["logintype","login","date","time","services[]","agendas[]","name","email"];
@@ -663,13 +668,13 @@ export async function executeHttpBooking(
   // au moment où le serveur est le plus saturé).
   console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
   const callEndpoint = useBrowserCalls
-    ? (ep: string, p: Record<string, string>) => callBookititEndpointBrowser(bookingSession, ep, p, portalUrl)
-    : (ep: string, p: Record<string, string>) => callBookititEndpoint(bookingSession, ep, p, portalUrl);
+    ? (ep: string, p: Record<string, string | string[]>) => callBookititEndpointBrowser(bookingSession, ep, p, portalUrl)
+    : (ep: string, p: Record<string, string | string[]>) => callBookititEndpoint(bookingSession, ep, p, portalUrl);
 
   const [agendasPayload, rawCfgPayload] = await Promise.all([
     callEndpoint("getagendas/", {
       ...baseParams,
-      "services[]": targetService.serviceId, // PHP array notation confirmée par capture
+      "services[]": [targetService.serviceId], // PHP array notation confirmée par capture
       selectedPeople: "1",
     }),
     callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null),

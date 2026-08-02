@@ -31,6 +31,7 @@ import {
   type SlotExplorationResult,
 } from "./spain-slot-explorer.js";
 import type { ExtractedSlotInfo } from "./spain-http-booking.js";
+import { buildBookititQueryString } from "./spain-bookitit-params.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -128,19 +129,30 @@ function getCachedBookititConfig(portalUrl: string): BookititConfig | null {
  * ou
  *   bkt_init_widget = {...};
  */
-function extractBktInitFromHtml(html: string): Record<string, string> | null {
+function extractBktInitFromHtml(html: string): Record<string, string | string[]> | null {
   // Pattern 1: var bkt_init_widget = {...} — parse complet
   const m1 = html.match(/bkt_init_widget\s*=\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/s);
   if (m1) {
     const block = m1[1];
-    const params: Record<string, string> = {};
+    const params: Record<string, string | string[]> = {};
 
     // Extraire chaque propriété : key: 'value' ou key: "value" ou key: value
-    const propMatches = block.matchAll(/(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|([\w.]+))/g);
+    const propMatches = block.matchAll(/(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|([\w.]+)|\[([^\]]*)\])/g);
     for (const pm of propMatches) {
       const key = pm[1];
-      const value = pm[2] ?? pm[3] ?? pm[4] ?? "";
-      if (key && value && value !== "undefined" && !value.startsWith("[")) {
+      const value = pm[2] ?? pm[3] ?? pm[4] ?? pm[5] ?? "";
+      if (!key) continue;
+      if (value === "undefined") continue;
+      if (Array.isArray(value)) continue;
+      if (typeof value === "string" && value.startsWith("[")) continue;
+      if (typeof value === "string" && value.includes("'")) {
+        const items = value.split(/\s*,\s*/).map((item) => item.replace(/^['"]|['"]$/g, "").trim()).filter(Boolean);
+        if (items.length > 0) {
+          params[key] = items;
+          continue;
+        }
+      }
+      if (typeof value === "string" && value.trim()) {
         params[key] = value;
       }
     }
@@ -256,13 +268,23 @@ async function callBookititJsonp(
   session: SpainCfSession,
   baseUrl: string,
   endpoint: string,
-  params: Record<string, string>,
+  params: Record<string, string | string[]>,
   referer: string,
 ): Promise<unknown | null> {
-  const q = new URLSearchParams(params);
-  q.set("callback", `cb${Date.now()}${Math.floor(Math.random() * 10_000)}`);
-  q.set("_", String(Date.now()));
-  const url = `${baseUrl}${endpoint}?${q.toString()}`;
+  const q = buildBookititQueryString({
+    ...params,
+    callback: `jQuery${Math.floor(Math.random() * 10_000_000_000_000).toString().padStart(16, "0")}_${Date.now()}`,
+    _: String(Date.now()),
+  });
+  const url = `${baseUrl}${endpoint}?${q}`;
+
+  const browserBody = await callBookititEndpointViaBrowser(url);
+  if (browserBody) {
+    const trimmed = browserBody.trim();
+    if (trimmed && !/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmed.slice(0, 200))) {
+      return parseJsonpPayload(browserBody);
+    }
+  }
 
   const res = await spainCfFetch(url, session, {
     headers: {
@@ -669,7 +691,7 @@ async function buildConfigFromBase(
   if (services.length > 0) {
     const agPayload = await callBookititJsonp(session, baseUrl, "getagendas/", {
       ...params,
-      services: services.join(","),
+      "services[]": services,
       selectedPeople: "1",
     }, portalUrl);
     if (agPayload) {
@@ -679,7 +701,9 @@ async function buildConfigFromBase(
 
   const config: BookititConfig = {
     baseUrl,
-    initParams: params,
+    initParams: Object.fromEntries(
+      Object.entries(params).filter(([, value]) => typeof value === "string")
+    ) as Record<string, string>,
     services,
     agendas,
     referer: portalUrl,
@@ -1808,12 +1832,22 @@ async function scanViaMainEndpoint(
   const tWidget = Date.now();
   const cbName = `jQuery21109${tWidget}_${Math.floor(Math.random() * 1e9)}`;
 
-  // Extract publickey from portalUrl (override le defaut)
-  const pkMatch = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/);
-  const publickey = pkMatch?.[1] ?? "25028fcd7126544630b8da0c6e60722b5";
+  // Extraire les params du widget Bookitit depuis le HTML, puis utiliser
+  // la publickey/srvsrc détectées au lieu de se contenter uniquement du portal URL.
+  const initParams = extractBktInitFromHtml(widgetHtml1);
+  const widgetInit = initParams ?? {};
+  const publickey = typeof widgetInit.publickey === "string"
+    ? widgetInit.publickey
+    : portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] || "25028fcd7126544630b8da0c6e60722b5";
+  const preselectedServices = Array.isArray(widgetInit.services)
+    ? widgetInit.services.filter((s): s is string => typeof s === "string" && s.length > 0)
+    : [];
+  const preselectedAgendas = Array.isArray(widgetInit.agendas)
+    ? widgetInit.agendas.filter((s): s is string => typeof s === "string" && s.length > 0)
+    : [];
   const referer = widgetReferer;
-  const srvsrc = "https://www.citaconsular.es";
-  const baseBookititUrl = "https://www.citaconsular.es/onlinebookings/";
+  const srvsrc = typeof widgetInit.srvsrc === "string" ? widgetInit.srvsrc : "https://www.citaconsular.es";
+  const baseBookititUrl = `${srvsrc.replace(/\/$/, "")}/onlinebookings/`;
 
   const jsonpHeaders = {
     "Cookie": buildCookieStr(),
@@ -1828,22 +1862,26 @@ async function scanViaMainEndpoint(
     "Priority": "u=1, i",
   };
 
+  const widgetType = typeof widgetInit.type === "string" ? widgetInit.type : "default";
+  const widgetLang = typeof widgetInit.lang === "string" ? widgetInit.lang : "es";
+  const widgetVersion = typeof widgetInit.version === "string" ? widgetInit.version : "4";
+
   const mainParams = new URLSearchParams({
     callback: cbName,
-    type: "default",
+    type: widgetType,
     publickey,
-    lang: "es",
-    version: "4",
+    lang: widgetLang,
+    version: widgetVersion,
     src: referer,
     _: String(tWidget),
   });
 
   const companionParams = new URLSearchParams({
     callback: cbName,
-    type: "default",
+    type: widgetType,
     publickey,
-    lang: "es",
-    version: "4",
+    lang: widgetLang,
+    version: widgetVersion,
     src: referer,
     srvsrc,
     _: String(tWidget + 1),
@@ -1851,10 +1889,10 @@ async function scanViaMainEndpoint(
 
   const servicesParams = new URLSearchParams({
     callback: cbName,
-    type: "default",
+    type: widgetType,
     publickey,
-    lang: "es",
-    version: "4",
+    lang: widgetLang,
+    version: widgetVersion,
     src: referer,
     srvsrc,
     _: String(tWidget + 2),
@@ -1992,7 +2030,13 @@ async function scanViaMainEndpoint(
     await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
     const tNow = Date.now();
     const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
-    const svcParams  = new URLSearchParams({ ...Object.fromEntries(servicesParams),  _: String(tNow + 9) });
+    const svcParams = new URLSearchParams({ ...Object.fromEntries(servicesParams), _: String(tNow + 9) });
+    if (preselectedServices.length > 0) {
+      for (const service of preselectedServices) svcParams.append("services[]", service);
+    }
+    if (preselectedAgendas.length > 0) {
+      for (const agenda of preselectedAgendas) svcParams.append("agendas[]", agenda);
+    }
     await Promise.all([
       spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
       spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
