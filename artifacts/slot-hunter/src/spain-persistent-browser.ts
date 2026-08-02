@@ -2180,6 +2180,19 @@ class SpainPersistentBrowserManager {
         console.warn(
           `[spain-pb] ⚠️ Fetch direct /main/ échoué: "${evalBody.slice(0, 120)}" — scanner devra retenter`,
         );
+        // IP de confiance CF (cf_clearance obtenu en < 3s) + fetch-direct /main/ = 0B définitif.
+        // Dans cet état, TOUS les page.evaluate(fetch()) retournent 0B (contexte browser cassé).
+        // Les APIs Bookitit (getagendas/, datetime/) échoueront aussi via impit en production
+        // car le PHPSESSID est lié à l'IP Decodo du browser — une IP différente = 0B serveur.
+        // → closeAndInvalidate immédiat : le prochain solve utilisera la prochaine IP Decodo
+        //   du pool (round-robin), qui ne sera probablement pas trusted → JSD complet → /main/ valide.
+        if (jsdSolveMs > 0 && jsdSolveMs < 3_000) {
+          console.warn(
+            `[spain-pb] ⚡ Trusted IP (${jsdSolveMs}ms) + fetch-direct 0B — closeAndInvalidate pour rotation IP Decodo`,
+          );
+          await this.closeAndInvalidate();
+          return null;
+        }
       }
     }
 

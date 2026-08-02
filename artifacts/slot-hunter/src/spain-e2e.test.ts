@@ -110,9 +110,9 @@ const HTML_SLOTS_HIDDEN_WITH_SERVICES = [
   `<html><body>`,
   LANDMARKS,
   `  <div style='display: none; text-align: center;'>No hay horas disponibles</div>`,
-  `  <a href='#selectservice/bkt1181774'>`,
+  `  <a href='#selectservice/bkt3452974'>`,
   `    <div class="clsBktServiceDataContainer">`,
-  `      <div class="clsBktServiceDataName">Tramitación de visas (Kinshasa)</div>`,
+  `      <div class="clsBktServiceDataName">Tramitación de visas</div>`,
   `    </div>`,
   `  </a>`,
   `  <a href='#selectservice/bkt9876543'>`,
@@ -125,7 +125,7 @@ const HTML_SLOTS_HIDDEN_WITH_SERVICES = [
   PAD,
 ].join("\n");
 
-// ②b "No hay horas" VISIBLE + templates client-side (Kinshasa-like)
+// ②b "No hay horas" VISIBLE + templates client-side (portail client-side render)
 const HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES = [
   `<html><body>`,
   LANDMARKS,
@@ -136,7 +136,7 @@ const HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES = [
   `  <script type="text/template">`,
   `    <a href='#selectservice/<%= attributes.id %>'>`,
   `      <div class="clsBktServiceDataContainer clsBktServiceAtt">`,
-  `        <div class="clsBktServiceDataName">Tramitación de visas (Kinshasa)</div>`,
+  `        <div class="clsBktServiceDataName">Tramitación de visas</div>`,
   `      </div>`,
   `    </a>`,
   `  </script>`,
@@ -163,9 +163,9 @@ const HTML_MAIN_WITH_SERVICE = [
   `<html><body>`,
   LANDMARKS,
   `  <div style='display: none;'>No hay horas disponibles</div>`,
-  `  <a href='#selectservice/bkt1181774'>`,
+  `  <a href='#selectservice/bkt3452974'>`,
   `    <div class="clsBktServiceDataContainer">`,
-  `      <div class="clsBktServiceDataName">Tramitación de visas (Kinshasa)</div>`,
+  `      <div class="clsBktServiceDataName">Tramitación de visas</div>`,
   `    </div>`,
   `  </a>`,
   CLOSE,
@@ -310,7 +310,7 @@ subsection("1a. HTML avec services rendus");
 {
   const services = extractServicesFromHtml(HTML_MAIN_WITH_SERVICE);
   assert(services.length === 1, "1 service extrait du HTML");
-  assertEq(services[0]?.serviceId, "bkt1181774", "serviceId correct");
+  assertEq(services[0]?.serviceId, "bkt3452974", "serviceId correct");
   assert(
     (services[0]?.serviceName ?? "").includes("Tramitación"),
     `serviceName contient "Tramitación" (got: "${services[0]?.serviceName}")`,
@@ -322,8 +322,8 @@ subsection("1b. HTML avec 2 services");
   const services = extractServicesFromHtml(HTML_SLOTS_HIDDEN_WITH_SERVICES);
   assertEq(services.length, 2, "2 services extraits");
   assert(
-    services.some((s) => s.serviceId === "bkt1181774"),
-    "serviceId bkt1181774 présent",
+    services.some((s) => s.serviceId === "bkt3452974"),
+    "serviceId bkt3452974 présent",
   );
   assert(
     services.some((s) => s.serviceId === "bkt9876543"),
@@ -372,7 +372,7 @@ subsection("1e. getservices JSONP payload with masked name");
         name: "<span style='display:none'></span>",
       },
       {
-        id: "bkt1181774",
+        id: "bkt3452974",
         groups_id: "bkt77",
         name: "TRAMITACIÓN DE  VISADOS",
       },
@@ -386,19 +386,19 @@ subsection("1e. getservices JSONP payload with masked name");
   assertEq(details.length, 2, "extractServiceDetails returns 2 services");
   // First service name should fallback to 'Service bkt1181796' (masked name)
   assert(details.some((s) => s.id === "bkt1181796" && (s.name === "Service bkt1181796" || s.name.length > 2)), "masked service id present with sensible name");
-  assert(details.some((s) => s.id === "bkt1181774" && s.name.includes("TRAMITACI")), "visible service name parsed");
+  assert(details.some((s) => s.id === "bkt3452974" && s.name.includes("TRAMITACI")), "visible service name parsed");
 }
 
 subsection("1f. service visa réel priorisé sur le placeholder");
 {
   const services = [
     { serviceId: "bkt1181796", serviceName: "Service bkt1181796" },
-    { serviceId: "bkt1181774", serviceName: "TRAMITACIÓN DE VISADOS" },
+    { serviceId: "bkt3452974", serviceName: "TRAMITACIÓN DE VISADOS" },
     { serviceId: "bkt9876543", serviceName: "Legalización de documentos" },
   ];
 
   const best = pickBestServiceCandidate(services);
-  assertEq(best?.serviceId, "bkt1181774", "le vrai service visa est choisi");
+  assertEq(best?.serviceId, "bkt3452974", "le vrai service visa est choisi");
   assertEq(best?.serviceName, "TRAMITACIÓN DE VISADOS", "le nom du service visa est conservé");
 }
 
@@ -406,12 +406,12 @@ subsection("1g. service link candidate priorisé pour le clic navigateur");
 {
   const links = [
     { serviceId: "bkt1181796", serviceName: "<span style='display:none'></span>", href: "#selectservice/bkt1181796" },
-    { serviceId: "bkt1181774", serviceName: "TRAMITACIÓN DE VISADOS", href: "#selectservice/bkt1181774" },
+    { serviceId: "bkt3452974", serviceName: "TRAMITACIÓN DE VISADOS", href: "#selectservice/bkt3452974" },
   ];
 
   const best = pickBestServiceLinkCandidate(links);
-  assertEq(best?.serviceId, "bkt1181774", "le service visa est choisi pour le clic navigateur");
-  assertEq(best?.href, "#selectservice/bkt1181774", "le bon href est conservé");
+  assertEq(best?.serviceId, "bkt3452974", "le service visa est choisi pour le clic navigateur");
+  assertEq(best?.href, "#selectservice/bkt3452974", "le bon href est conservé");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -577,7 +577,7 @@ subsection("3e. No hay horas CACHÉ + services + datetime positif → found");
     ["datetime/",   () => jsonpResp(DATETIME_WITH_SLOT)],
     // getwidgetconfigurations and getservices may also be called — handle gracefully
     ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
-    ["getservices/", () => jsonpResp([{ id: "bkt1181774", name: "Tramitación de visas" }])],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
   ]));
 
   const result = await scanSpainHttp(PORTAL_URL);
@@ -599,7 +599,7 @@ subsection("3f. No hay horas CACHÉ + services + datetime vide → not_found");
     ["getagendas/",  () => jsonpResp(AGENDA_OK)],
     ["datetime/",    () => jsonpResp(DATETIME_EMPTY)],
     ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
-    ["getservices/", () => jsonpResp([{ id: "bkt1181774", name: "Tramitación de visas" }])],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
   ]));
 
   const result = await scanSpainHttp(PORTAL_URL);
@@ -617,7 +617,7 @@ subsection("3g. No hay horas VISIBLE + templates client-side → found via getse
     ["getagendas/",  () => jsonpResp(AGENDA_OK)],
     ["datetime/",    () => jsonpResp(DATETIME_WITH_SLOT)],
     ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
-    ["getservices/", () => jsonpResp([{ id: "bkt1181774", name: "Tramitación de visas" }])],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
   ]));
 
   const result = await scanSpainHttp(PORTAL_URL);
@@ -656,7 +656,7 @@ const BASE_BOOKING_CONFIG: SpainBookingConfig = {
   password: "PassTest2026",
   applicantName: "Jean Dupont",
   visaType: "Visa C — Tourisme",
-  targetServiceId: "bkt1181774",
+  targetServiceId: "bkt3452974",
 };
 
 subsection("4a. Happy path complet (getagendas → datetime → signin → summary)");
@@ -878,7 +878,7 @@ subsection("4j. datetime/ vide sur tous les mois → no_slots");
     login: "AB123456",
     password: "PassTest2026",
     visaType: "Tramitación de visas",
-    targetServiceId: "bkt1181774",
+    targetServiceId: "bkt3452974",
   });
   assertEq(result.status, "no_slots", "datetime vide sur tous les mois → no_slots");
   resetMocks();
