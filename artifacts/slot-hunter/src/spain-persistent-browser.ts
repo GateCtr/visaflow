@@ -741,6 +741,22 @@ class SpainPersistentBrowserManager {
 
     this._page = page;
     console.log(`[spain-pb] ✅ Réattachement terminé — browser prêt, ${cookiesToInject.length} cookie(s) injectés`);
+
+    // Naviguer vers la racine citaconsular.es pour sortir de about:blank.
+    // Sans cette navigation, page.evaluate(fetch(...)) échoue avec "TypeError: Failed to fetch"
+    // car l'origine null (about:blank) est bloquée par CORS côté Chromium.
+    // On utilise domcontentloaded (pas "load") pour rester rapide — pas besoin que
+    // le JS CF s'exécute ici, juste établir un contexte same-origin citaconsular.es.
+    try {
+      await page.goto("https://www.citaconsular.es/", {
+        waitUntil: "domcontentloaded",
+        timeout: 20_000,
+      });
+      console.log("[spain-pb] 🌐 Réattachement : navigé vers citaconsular.es (contexte same-origin prêt)");
+    } catch (navErr) {
+      console.warn(`[spain-pb] ⚠️ Réattachement navigation root (non-fatal): ${navErr}`);
+    }
+
     return session;
   }
 
@@ -2961,6 +2977,19 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   // Logguer l'URL courante de la page pour détecter une navigation inattendue
   const pageUrl = page.url().slice(0, 80);
   console.log(`[spain-pb] 🌐 callBrowser → ${endpoint} (page: ${pageUrl})`);
+
+  // Sécurité : si la page est sur about:blank (ou hors citaconsular.es), un fetch()
+  // via page.evaluate() échoue avec "TypeError: Failed to fetch" car Chromium bloque
+  // les requêtes cross-origin depuis une origine nulle (about:blank).
+  // On navigue d'abord vers citaconsular.es pour établir le contexte same-origin.
+  if (!pageUrl.includes("citaconsular.es")) {
+    console.log(`[spain-pb] 🔄 callBrowser: page hors citaconsular.es (${pageUrl}) — navigation root pour same-origin…`);
+    await page.goto("https://www.citaconsular.es/", {
+      waitUntil: "domcontentloaded",
+      timeout: 20_000,
+    }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Navigation root callBrowser (non-fatal): ${e}`));
+  }
+
   try {
     const result: { status: number; bodyLen: number; body: string } = await page.evaluate(
       async (u: string) => {
