@@ -787,7 +787,7 @@ async function confirmSlotsViaDatetime(
       let cfgRaw: string;
       if (useBrowserFetch) {
         cfgRaw = await fetchBookititBodyWithFallback(session, `${base}getwidgetconfigurations/?${cfgQ}`, headers);
-        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → ${cfgRaw.length}B`);
+        console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → ${cfgRaw.length}B${cfgRaw.length === 0 ? " (browser/session unavailable)" : ""}`);
       } else {
         const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
         cfgRaw = cfgRes ? await cfgRes.text() : "";
@@ -823,7 +823,7 @@ async function confirmSlotsViaDatetime(
       let svcRaw: string;
       if (useBrowserFetch) {
         svcRaw = await fetchBookititBodyWithFallback(session, `${base}getservices/?${svcQ}`, headers);
-        console.log(`[spain-http] 🔬 getservices/ → ${svcRaw.length}B`);
+        console.log(`[spain-http] 🔬 getservices/ → ${svcRaw.length}B${svcRaw.length === 0 ? " (browser/session unavailable)" : ""}`);
         if (!svcRaw) {
           console.log(`[spain-http] ⚠️ getservices/ fallback → 0B → not_found`);
           return null;

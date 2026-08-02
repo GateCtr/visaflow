@@ -30,7 +30,7 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer";
-import { rmSync, existsSync } from "node:fs";
+import { rmSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
@@ -121,6 +121,23 @@ async function setupPageProxyAuth(
 
 /** Dossier userDataDir pour le profil Chromium persistant. */
 const CF_PROFILE_DIR = process.env.SPAIN_CF_PROFILE_DIR ?? "/tmp/spain-cf-profile";
+
+function ensureProfileDirectory(profileDir: string): string {
+  try {
+    mkdirSync(profileDir, { recursive: true });
+    return profileDir;
+  } catch (err) {
+    const fallbackDir = join(process.cwd(), ".spain-cf-profile");
+    try {
+      mkdirSync(fallbackDir, { recursive: true });
+      console.warn(`[spain-pb] ⚠️ Impossible d'utiliser ${profileDir} pour Chromium — fallback vers ${fallbackDir}: ${err}`);
+      return fallbackDir;
+    } catch (fallbackErr) {
+      console.warn(`[spain-pb] ⚠️ Impossible de créer le profil Chromium: ${fallbackErr}`);
+      return profileDir;
+    }
+  }
+}
 
 /**
  * Purge les répertoires cache du profil Chromium sur disque AVANT le lancement.
@@ -389,14 +406,15 @@ class SpainPersistentBrowserManager {
     const maskedProxy = proxyUrl
       ? proxyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 80)
       : "direct (no proxy)";
+    const effectiveProfileDir = ensureProfileDirectory(CF_PROFILE_DIR);
     console.log(`[spain-pb] 🚀 Lancement Chromium persistant`);
-    console.log(`[spain-pb]    userDataDir : ${CF_PROFILE_DIR}`);
+    console.log(`[spain-pb]    userDataDir : ${effectiveProfileDir}`);
     console.log(`[spain-pb]    Proxy       : ${maskedProxy}`);
     console.log(`[spain-pb]    UA          : ${this._ua.slice(0, 80)}`);
 
     // Purger les caches disque AVANT le lancement pour éviter les tokens JSD stales.
     // Le fichier Cookies est conservé pour réutiliser les cf_clearance + PHPSESSID valides.
-    purgeProfileCacheOnDisk(CF_PROFILE_DIR);
+    purgeProfileCacheOnDisk(effectiveProfileDir);
 
     // CHROMIUM_EXECUTABLE_PATH : permet d'utiliser un Chromium préinstallé
     // (ex: celui de Playwright dans le nix store sur Replit) plutôt que le cache Puppeteer.
@@ -407,7 +425,7 @@ class SpainPersistentBrowserManager {
 
     this._launchPromise = ((puppeteer as any).launch({
       headless: true,
-      userDataDir: CF_PROFILE_DIR,
+      userDataDir: effectiveProfileDir,
       args,
       ...(executablePath ? { executablePath } : {}),
     }) as Promise<Browser>).then((browser: Browser) => {
@@ -2702,7 +2720,16 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     return cached;
   }
 
-  const page = spainPersistentBrowser.getActivePage();
+  let page = spainPersistentBrowser.getActivePage();
+  if (!page) {
+    console.log("[spain-pb] 🔄 callBookititEndpointViaBrowser — page absente, initialisation de la session persistante…");
+    const ensured = await ensureSpainPersistentBrowserSession();
+    if (!ensured) {
+      console.warn("[spain-pb] ⚠️ callBookititEndpointViaBrowser — session browser introuvable après initialisation");
+      return "";
+    }
+    page = spainPersistentBrowser.getActivePage();
+  }
   if (!page) {
     console.warn("[spain-pb] ⚠️ callBookititEndpointViaBrowser — _page null (browser non lancé ou fermé)");
     return "";
