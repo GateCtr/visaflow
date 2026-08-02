@@ -2513,104 +2513,113 @@ export interface SpainAcceptFlowClickResult {
 
 export async function clickInteractiveSpainAcceptFlow(page: Page): Promise<SpainAcceptFlowClickResult> {
   try {
-    const result = await page.evaluate(() => {
-      const visible = (el: Element | null): boolean => {
+    // IMPORTANT : utiliser une string littérale, PAS une fonction TypeScript.
+    // tsx/esbuild compile les arrow functions nommées (const visible = () => {}) en
+    // __name(() => {}, "visible") pour préserver Function.name. Dans le contexte browser
+    // Puppeteer, __name n'existe pas → ReferenceError: __name is not defined.
+    // La string littérale bypasse totalement la transformation esbuild.
+    const result = await page.evaluate(`(function() {
+      function visible(el) {
         if (!el) return false;
-        const style = window.getComputedStyle(el as HTMLElement);
-        if (style.display === "none" || style.visibility === "hidden") return false;
-        const rect = (el as HTMLElement).getBoundingClientRect();
+        var style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        var rect = el.getBoundingClientRect();
         return rect.width > 0 || rect.height > 0;
-      };
+      }
 
-      const textOf = (el: Element | null): string => (el?.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+      function textOf(el) {
+        return ((el && el.textContent) ? el.textContent : '').replace(/\\s+/g, ' ').trim().toLowerCase();
+      }
 
-      const tryClick = (el: Element | null, reason: string): { clicked: boolean; reason: string; htmlSnippet: string } | null => {
+      function tryClick(el, reason) {
         if (!el || !visible(el)) return null;
-        const htmlSnippet = (el as HTMLElement).outerHTML.slice(0, 220);
-        (el as HTMLElement).click();
-        return { clicked: true, reason, htmlSnippet };
-      };
+        var htmlSnippet = el.outerHTML ? el.outerHTML.slice(0, 220) : '';
+        el.click();
+        return { clicked: true, reason: reason, htmlSnippet: htmlSnippet };
+      }
 
-      const captchaContinueBtn = document.getElementById("idCaptchaButton") as HTMLElement | null;
-      const captchaTokenForm = Array.from(document.forms).find((form) => {
-        const tokenInput = form.querySelector('input[name="token"]');
-        const actionMatches = form.action.includes("widgetdefault") || form.action.includes("hosteds");
-        const textBlock = (form.innerText || "").toLowerCase();
+      var captchaContinueBtn = document.getElementById('idCaptchaButton');
+      var captchaTokenForm = Array.from(document.forms).find(function(form) {
+        var tokenInput = form.querySelector('input[name="token"]');
+        var actionMatches = form.action.includes('widgetdefault') || form.action.includes('hosteds');
+        var textBlock = (form.innerText || '').toLowerCase();
         return !!tokenInput && (actionMatches || /continue|continuar|click on the continue button/.test(textBlock));
       });
-      const captchaSubmit = captchaTokenForm?.querySelector("button, input[type='submit']") as HTMLElement | null;
-      const explicitContinue = captchaContinueBtn ?? captchaSubmit;
+      var captchaSubmit = captchaTokenForm ? captchaTokenForm.querySelector('button, input[type="submit"]') : null;
+      var explicitContinue = captchaContinueBtn || captchaSubmit;
       if (explicitContinue && visible(explicitContinue)) {
-        const direct = tryClick(explicitContinue, "captcha:token-form");
+        var direct = tryClick(explicitContinue, 'captcha:token-form');
         if (direct) return direct;
       }
 
-      const hiddenTokenForm = Array.from(document.forms).find((form) => {
-        const tokenInput = form.querySelector('input[name="token"]');
+      var hiddenTokenForm = Array.from(document.forms).find(function(form) {
+        var tokenInput = form.querySelector('input[name="token"]');
         if (!tokenInput) return false;
-        const action = (form.getAttribute("action") ?? "").toLowerCase();
-        const text = (form.innerText || "").toLowerCase();
-        return action.includes("widgetdefault") || action.includes("hosteds") || /continue|continuar|click on the continue button/.test(text);
+        var action = (form.getAttribute('action') || '').toLowerCase();
+        var text = (form.innerText || '').toLowerCase();
+        return action.includes('widgetdefault') || action.includes('hosteds') || /continue|continuar|click on the continue button/.test(text);
       });
       if (hiddenTokenForm) {
-        const submitTarget = hiddenTokenForm.querySelector("button, input[type='submit'], input[type='button']") as HTMLElement | null;
-        const tokenInput = hiddenTokenForm.querySelector('input[name="token"]') as HTMLInputElement | null;
+        var submitTarget = hiddenTokenForm.querySelector('button, input[type="submit"], input[type="button"]');
+        var tokenInput = hiddenTokenForm.querySelector('input[name="token"]');
         if (tokenInput && tokenInput.value) {
-          const formAction = hiddenTokenForm.getAttribute("action") || window.location.href;
-          const finalAction = formAction.startsWith("http") ? formAction : new URL(formAction, window.location.href).href;
-          const formData = new FormData(hiddenTokenForm);
-          const payload = new URLSearchParams();
-          for (const [key, value] of formData.entries()) {
-            if (typeof value === "string") payload.append(key, value);
-          }
-          const htmlSnippet = (hiddenTokenForm as HTMLFormElement).outerHTML.slice(0, 220);
+          var formAction = hiddenTokenForm.getAttribute('action') || window.location.href;
+          var finalAction = formAction.startsWith('http') ? formAction : new URL(formAction, window.location.href).href;
+          var formData = new FormData(hiddenTokenForm);
+          var payload = new URLSearchParams();
+          formData.forEach(function(value, key) {
+            if (typeof value === 'string') payload.append(key, value);
+          });
+          var htmlSnippet = hiddenTokenForm.outerHTML ? hiddenTokenForm.outerHTML.slice(0, 220) : '';
           fetch(finalAction, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
             body: payload.toString(),
-            credentials: "include",
-            redirect: "manual",
-          }).catch(() => {});
-          return { clicked: true, reason: "token-form:submit", htmlSnippet };
+            credentials: 'include',
+            redirect: 'manual'
+          }).catch(function(){});
+          return { clicked: true, reason: 'token-form:submit', htmlSnippet: htmlSnippet };
         }
         if (submitTarget && visible(submitTarget)) {
-          const direct = tryClick(submitTarget, "token-form:submit-button");
+          var direct = tryClick(submitTarget, 'token-form:submit-button');
           if (direct) return direct;
         }
       }
 
-      const candidates = [
-        document.getElementById("idDivBktCustomContinueButton"),
-        document.getElementById("idDivBktButtonContinueContainer"),
-        document.getElementById("idDivBktServicesContinueButton"),
-        document.getElementById("idBktDefaultCustomContainer"),
+      var candidateIds = [
+        'idDivBktCustomContinueButton',
+        'idDivBktButtonContinueContainer',
+        'idDivBktServicesContinueButton',
+        'idBktDefaultCustomContainer'
       ];
-
-      for (const candidate of candidates) {
-        const reason = candidate?.id ?? "container";
-        const direct = tryClick(candidate, `container:${reason}`);
-        if (direct) return direct;
+      for (var ci = 0; ci < candidateIds.length; ci++) {
+        var candidate = document.getElementById(candidateIds[ci]);
+        if (candidate) {
+          var direct = tryClick(candidate, 'container:' + candidateIds[ci]);
+          if (direct) return direct;
+        }
       }
 
-      const buttons = Array.from(document.querySelectorAll("button, a, input[type='button'], input[type='submit'], div[role='button']"));
-      for (const el of buttons) {
-        const txt = textOf(el);
+      var buttons = Array.from(document.querySelectorAll("button, a, input[type='button'], input[type='submit'], div[role='button']"));
+      for (var bi = 0; bi < buttons.length; bi++) {
+        var el = buttons[bi];
+        var txt = textOf(el);
         if (!visible(el)) continue;
         if (/aceptar|accept|continuar|continue|siguiente|ok/i.test(txt)) {
-          const direct = tryClick(el, `text:${txt.slice(0, 40)}`);
+          var direct = tryClick(el, 'text:' + txt.slice(0, 40));
           if (direct) return direct;
         }
       }
 
-      const fallback = Array.from(document.querySelectorAll("#idBktDefaultCustomContainer button, #idBktDefaultCustomContainer a, #idBktDefaultCustomContainer input"));
-      for (const el of fallback) {
-        if (!visible(el)) continue;
-        const direct = tryClick(el, "fallback-container");
+      var fallback = Array.from(document.querySelectorAll('#idBktDefaultCustomContainer button, #idBktDefaultCustomContainer a, #idBktDefaultCustomContainer input'));
+      for (var fi = 0; fi < fallback.length; fi++) {
+        if (!visible(fallback[fi])) continue;
+        var direct = tryClick(fallback[fi], 'fallback-container');
         if (direct) return direct;
       }
 
-      return { clicked: false, reason: "no_visible_accept_button", htmlSnippet: (document.body?.innerHTML ?? "").slice(0, 220) };
-    });
+      return { clicked: false, reason: 'no_visible_accept_button', htmlSnippet: (document.body ? document.body.innerHTML.slice(0, 220) : '') };
+    })()`)
 
     return {
       clicked: Boolean((result as any)?.clicked),
