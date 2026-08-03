@@ -19,6 +19,12 @@ export const KINSHASA_PORTAL_URL =
 export const KINSHASA_WIDGET_KEY = "25028fcd7126544630b8da0c6e60722b5";
 
 /**
+ * Fenêtre de publication calendrier Kinshasa : les créneaux sont publiés 36 jours à l'avance.
+ * Ex : le 3 août → premiers créneaux disponibles le 8 septembre → démarrer le scan en septembre.
+ */
+export const KINSHASA_CALENDAR_PUBLISH_DAYS = 36;
+
+/**
  * ID du service "Tramitación de visas" sur le portail Kinshasa.
  * Se termine par "74" — ne pas utiliser dans les fixtures de test Saopolo.
  */

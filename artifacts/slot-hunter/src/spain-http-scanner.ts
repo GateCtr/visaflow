@@ -1031,7 +1031,31 @@ async function confirmSlotsViaDatetime(
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
     }
 
-    // 2. datetime/ sur 3 mois (mois courant + 2 suivants — sept peut être le premier dispo)
+    // 2. datetime/ sur 3 mois — en démarrant au bon mois selon la fenêtre de publication.
+    //
+    // Certains portails publient les créneaux N jours à l'avance.
+    // Exemple Kinshasa : 36 jours → le 3 août, premier créneau publiable = 8 septembre.
+    // Démarrer depuis août est inutile (créneaux déjà épuisés ou pas encore publiés).
+    //
+    // Calcul : startMonthOffset = delta de mois entre aujourd'hui et (aujourd'hui + publishDays).
+    // Si publishDays = 0 (portail inconnu) → on démarre au mois courant comme avant.
+    const { KINSHASA_WIDGET_KEY, KINSHASA_CALENDAR_PUBLISH_DAYS } = await import("./spain-portals.js");
+    const CALENDAR_PUBLISH_DAYS_BY_KEY: Record<string, number> = {
+      [KINSHASA_WIDGET_KEY]: KINSHASA_CALENDAR_PUBLISH_DAYS,
+    };
+    const publishDays = CALENDAR_PUBLISH_DAYS_BY_KEY[publickey] ?? 0;
+    let startMonthOffset = 0;
+    if (publishDays > 0) {
+      const firstPublish = new Date(now.getFullYear(), now.getMonth(), now.getDate() + publishDays);
+      startMonthOffset = (firstPublish.getFullYear() - now.getFullYear()) * 12
+                       + (firstPublish.getMonth()    - now.getMonth());
+      if (startMonthOffset > 0) {
+        console.log(
+          `[spain-http] 📅 Fenêtre publication ${publishDays}j → premier mois pertinent : +${startMonthOffset} (${firstPublish.toISOString().slice(0, 7)})`,
+        );
+      }
+    }
+
     // Alignement sur la requête observée du vrai portail :
     //   - services[] obligatoire
     //   - agendas[] ajouté quand l'appel getagendas/ a produit un agendaId
@@ -1040,7 +1064,7 @@ async function confirmSlotsViaDatetime(
     //   - src = URL du widget (sans hash final, avec slash final)
     //   - srvsrc = base citaconsular.es
     const widgetSrc = referer.replace(/\/?$/, "/");
-    for (let mo = 0; mo < 3; mo++) {
+    for (let mo = startMonthOffset; mo < startMonthOffset + 3; mo++) {
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
