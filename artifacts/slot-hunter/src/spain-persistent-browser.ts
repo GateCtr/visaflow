@@ -252,8 +252,115 @@ const CF_POLL_INTERVAL_MS = 2_000;
 /** Timeout health-check du browser (avant de le considérer mort). */
 const BROWSER_HEALTH_TIMEOUT_MS = 5_000;
 
+/** Timeout CDP Puppeteer (Runtime.callFunctionOn, etc.) — évite les hangs silencieux. */
+const BROWSER_PROTOCOL_TIMEOUT_MS = 60_000;
+
+/** Timeout page.evaluate côté TS (Promise.race) — indépendant du protocolTimeout CDP. */
+const BROWSER_EVALUATE_TIMEOUT_MS = 26_000;
+
+/** Timeout navigation widget lors d'un reset de portail dans callBookititEndpointViaBrowser. */
+const BROWSER_WIDGET_GOTO_TIMEOUT_MS = 40_000;
+
 /** URL widget cible par défaut — Kinshasa (portail principal RDC). */
 const DEFAULT_WIDGET_URL = process.env.SPAIN_WIDGET_URL || KINSHASA_PORTAL_URL;
+
+/**
+ * fetch() brut depuis page.evaluate — fallback quand le JSONP widget natif échoue.
+ */
+async function fetchBookititRawFromPage(page: import("puppeteer").Page, url: string): Promise<string> {
+  try {
+    const evalPromise = page.evaluate(async (u: string) => {
+      try {
+        const r = await fetch(u, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "text/javascript, application/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        const body = await r.text();
+        return r.ok ? body : `__ERR_STATUS_${r.status}`;
+      } catch (e: unknown) {
+        return `__ERR_FETCH_${String(e).slice(0, 80)}`;
+      }
+    }, url);
+    const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), BROWSER_EVALUATE_TIMEOUT_MS),
+    );
+    const result = (await Promise.race([evalPromise, timeoutPromise])) as string;
+    if (result.startsWith("__ERR_")) return "";
+    return result;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Appelle un endpoint Bookitit via jQuery.ajax JSONP + bkt_init_widget — même mécanisme
+ * que le widget Backbone (services.fetch / widgetconfigurations.fetch).
+ *
+ * fetch() et script-tag JSONP retournent souvent 0B sur sessions CF fast-track ;
+ * jQuery.ajax dataType=jsonp avec bkt_init_widget est accepté par le serveur PHP.
+ */
+async function callBookititViaWidgetNativeJsonp(
+  page: import("puppeteer").Page,
+  endpoint: string,
+): Promise<string> {
+  const ep = JSON.stringify(endpoint);
+  try {
+    const evalPromise = page.evaluate(`
+      (function(endpoint) {
+        return new Promise(function(resolve) {
+          var jq = window.jQuery;
+          var init = window.bkt_init_widget;
+          if (!jq || !init || !init.srvsrc) {
+            resolve('__ERR_NO_WIDGET');
+            return;
+          }
+          var data = {};
+          for (var k in init) {
+            if (Object.prototype.hasOwnProperty.call(init, k)) data[k] = init[k];
+          }
+          var srvsrc = data.srvsrc;
+          delete data.srvsrc;
+          data._ = String(Date.now());
+          var timer = setTimeout(function() { resolve('__ERR_WIDGET_JSONP_TIMEOUT'); }, 22000);
+          jq.ajax({
+            url: srvsrc + '/onlinebookings/' + endpoint,
+            dataType: 'jsonp',
+            jsonp: 'callback',
+            data: data,
+            success: function(resp) {
+              clearTimeout(timer);
+              try { resolve(JSON.stringify(resp)); }
+              catch(e) { resolve('__ERR_STRINGIFY'); }
+            },
+            error: function(_xhr, status) {
+              clearTimeout(timer);
+              resolve('__ERR_WIDGET_AJAX_' + String(status || 'error'));
+            }
+          });
+        });
+      })(${ep})
+    `);
+    const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), BROWSER_EVALUATE_TIMEOUT_MS),
+    );
+    const result = (await Promise.race([evalPromise, timeoutPromise])) as string;
+    if (!result || result.startsWith("__ERR_")) {
+      if (result && result !== "__ERR_NO_WIDGET") {
+        console.warn(`[spain-pb] ⚠️ widget JSONP ${endpoint} → ${result.slice(0, 80)}`);
+      }
+      return "";
+    }
+    console.log(`[spain-pb] ✅ widget JSONP ${endpoint} → ${result.length}B`);
+    return result;
+  } catch (err) {
+    console.warn(`[spain-pb] ⚠️ callBookititViaWidgetNativeJsonp(${endpoint}): ${err}`);
+    return "";
+  }
+}
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
@@ -456,6 +563,7 @@ class SpainPersistentBrowserManager {
       headless: true,
       userDataDir: effectiveProfileDir,
       args,
+      protocolTimeout: BROWSER_PROTOCOL_TIMEOUT_MS,
       ...(executablePath ? { executablePath } : {}),
     }) as Promise<Browser>).then((browser: Browser) => {
       this._browser = browser;
@@ -521,6 +629,15 @@ class SpainPersistentBrowserManager {
   }
 
   /**
+   * Stocke une réponse API dans le cache prefetch (+ clé namespaced publickey).
+   */
+  private _storeApiPrefetch(endpoint: string, publickey: string, raw: string): void {
+    if (!raw || raw.startsWith("__ERR_")) return;
+    this._apiPrefetchCache.set(endpoint, raw);
+    if (publickey) this._apiPrefetchCache.set(`${endpoint}${publickey}`, raw);
+  }
+
+  /**
    * Appelle getwidgetconfigurations/ et getservices/ depuis la page browser
    * immédiatement après la capture de /main/, pendant que le state PHP Bookitit
    * côté serveur est encore chaud (~quelques centaines de ms après /main/).
@@ -556,31 +673,13 @@ class SpainPersistentBrowserManager {
     const cfgUrl = `${base}getwidgetconfigurations/?${buildBaseParams(`cbCfg${Date.now()}`)}`;
     const svcUrl = `${base}getservices/?${buildBaseParams(`cbSvc${Date.now() + 1}`)}`;
 
-    const fetchFromPage = async (url: string): Promise<string> => {
-      try {
-        return await page.evaluate(async (u: string) => {
-          try {
-            const r = await fetch(u, {
-              method: "GET",
-              credentials: "include",
-              headers: {
-                "Accept": "text/javascript, application/javascript, */*; q=0.01",
-                "X-Requested-With": "XMLHttpRequest",
-              },
-            });
-            const body = await r.text();
-            return r.ok ? body : `__ERR_STATUS_${r.status}`;
-          } catch (e: unknown) {
-            return `__ERR_FETCH_${String(e).slice(0, 80)}`;
-          }
-        }, url);
-      } catch {
-        return "";
-      }
-    };
-
     console.log("[spain-pb] ⚡ Prefetch Bookitit APIs (getwidgetconfigurations + getservices)…");
-    const [cfgRaw, svcRaw] = await Promise.all([fetchFromPage(cfgUrl), fetchFromPage(svcUrl)]);
+    // Séquentiel : getwidgetconfigurations/ initialise la session PHP — getservices/ en parallèle = 0B (Cuba/Kinshasa).
+    let cfgRaw = await callBookititViaWidgetNativeJsonp(page, "getwidgetconfigurations/");
+    if (!cfgRaw) cfgRaw = await fetchBookititRawFromPage(page, cfgUrl);
+    await new Promise((r) => setTimeout(r, 220));
+    let svcRaw = await callBookititViaWidgetNativeJsonp(page, "getservices/");
+    if (!svcRaw) svcRaw = await fetchBookititRawFromPage(page, svcUrl);
 
     const cfgOk = cfgRaw.length > 0 && !cfgRaw.startsWith("__ERR_");
     const svcOk = svcRaw.length > 0 && !svcRaw.startsWith("__ERR_");
@@ -650,7 +749,7 @@ class SpainPersistentBrowserManager {
         }
 
         console.log(`[spain-pb] ⚡ Prefetch 2/2 — getagendas/ + datetime/ pour ${serviceIds.length} service(s) (${tasks.length} appels)…`);
-        const results = await Promise.all(tasks.map(({ url }) => fetchFromPage(url)));
+        const results = await Promise.all(tasks.map(({ url }) => fetchBookititRawFromPage(page, url)));
         let nCached = 0;
         for (let i = 0; i < tasks.length; i++) {
           const raw = results[i];
@@ -2663,7 +2762,7 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
       })(${escapedUrl})
     `);
     const timeoutPromise: Promise<string> = new Promise<string>((resolve) =>
-      setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), 26_000),
+      setTimeout(() => resolve("__ERR_EVALUATE_TIMEOUT"), BROWSER_EVALUATE_TIMEOUT_MS),
     );
     const result = (await Promise.race([evalPromise, timeoutPromise])) as string;
 
@@ -3104,25 +3203,29 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
       const targetUrl = wrongPortal && requestedPublickey
         ? `https://www.citaconsular.es/es/hosteds/widgetdefault/${requestedPublickey}/`
         : spainPersistentBrowser.getCurrentTargetUrl();
-      await page.goto(targetUrl, {
+      const navOk = await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
-        timeout: 20_000,
-      }).catch((e: unknown) => console.warn(`[spain-pb] ⚠️ callBrowser navigation widget (non-fatal): ${e}`));
+        timeout: BROWSER_WIDGET_GOTO_TIMEOUT_MS,
+      }).then(() => true).catch((e: unknown) => {
+        console.warn(`[spain-pb] ⚠️ callBrowser navigation widget (non-fatal): ${e}`);
+        return false;
+      });
+      if (!navOk) {
+        // Page probablement gelée (CF challenge, proxy lent) — skip evaluate, tenter jQuery directement.
+        const jqueryBody = await callBookititViaJQueryInPage(url);
+        if (jqueryBody) {
+          console.log(`[spain-pb] ✅ callBrowser ${endpoint} jQuery fallback (post-nav-fail) → ${jqueryBody.length}B`);
+          return jqueryBody;
+        }
+        return "";
+      }
     }
   } catch {
     // non-fatal
   }
 
   try {
-    const result: {
-      status: number;
-      statusText: string;
-      finalUrl: string;
-      contentType: string;
-      contentLength: string;
-      bodyLen: number;
-      body: string;
-    } = await page.evaluate(
+    const evalPromise = page.evaluate(
       async (u: string) => {
         try {
           const resp = await fetch(u, {
@@ -3157,6 +3260,18 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
       },
       url,
     );
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("evaluate-timeout")), BROWSER_EVALUATE_TIMEOUT_MS),
+    );
+    const result: {
+      status: number;
+      statusText: string;
+      finalUrl: string;
+      contentType: string;
+      contentLength: string;
+      bodyLen: number;
+      body: string;
+    } = await Promise.race([evalPromise, timeoutPromise]);
     console.log(
       `[spain-pb] 📡 callBrowser ${endpoint} → HTTP ${result.status} ${result.statusText} | ${result.bodyLen}B | ct=${result.contentType || "-"} | cl=${result.contentLength || "-"} | url=${result.finalUrl || "-"}`,
     );
@@ -3177,6 +3292,11 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     return result.body;
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ callBookititEndpointViaBrowser exception: ${err}`);
+    const jqueryBody = await callBookititViaJQueryInPage(url).catch(() => "");
+    if (jqueryBody) {
+      console.log(`[spain-pb] ✅ callBrowser ${endpoint} jQuery fallback (post-exception) → ${jqueryBody.length}B`);
+      return jqueryBody;
+    }
     return "";
   }
 }
