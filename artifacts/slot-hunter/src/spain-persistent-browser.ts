@@ -2736,7 +2736,7 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
             delete window[cbName];
             if (sc && sc.parentNode) sc.parentNode.removeChild(sc);
             resolve('__ERR_JQUERY_SCRIPT_TIMEOUT');
-          }, 22000);
+          }, 45000);
           window[cbName] = function(data) {
             clearTimeout(timer);
             delete window[cbName];
