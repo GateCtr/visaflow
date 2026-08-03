@@ -3300,6 +3300,14 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     );
 
     if (result.bodyLen === 0 || result.body.startsWith("__ERR_")) {
+      // Si fetch retourne 0B avec content-type text/html → redirection Bookitit vers #services
+      // = aucun créneau pour ce service. Le fallback jQuery ne peut rien donner (le callback
+      // JSONP ne se déclenche jamais sur du HTML) → on retourne "" directement, sans attendre 45s.
+      const isBookititRedirect = result.bodyLen === 0 && result.contentType.startsWith("text/html");
+      if (isBookititRedirect) {
+        console.log(`[spain-pb] ⏭️ callBrowser ${endpoint} → 0B text/html = redirect #services Bookitit — pas de JSONP possible, skip jQuery`);
+        return "";
+      }
       console.warn(`[spain-pb] ⚠️ callBrowser ${endpoint} fetch→${result.bodyLen}B/${result.body.slice(0, 80)} — fallback jQuery widget…`);
       const jqueryBody = await callBookititViaJQueryInPage(url);
       if (jqueryBody) {
