@@ -34,8 +34,9 @@ const CRITICAL_ENDPOINTS = [
 ];
 
 // ─── Espagne — citaconsular.es / Bookitit (à synchroniser si le portail change) ──
+import { KINSHASA_WIDGET_KEY } from "./spain-portals.js";
 // Widget key extrait de l'URL citaconsular.es (widgetdefault/{key}/)
-const SPAIN_WIDGET_KEY      = "25028fcd7126544630b8da0c6e60722b5";
+const SPAIN_WIDGET_KEY      = KINSHASA_WIDGET_KEY;
 const SPAIN_WIDGET_PAGE_URL = `https://www.citaconsular.es/es/hosteds/widgetdefault/${SPAIN_WIDGET_KEY}/`;
 // ID du compte Bookitit de citaconsular.es — présent dans le global `oClientValues_{ID}`
 // injecté par le JS hôte (voir spainPortal.ts → getRuntimeContext)

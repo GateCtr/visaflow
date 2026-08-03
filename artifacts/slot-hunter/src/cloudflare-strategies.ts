@@ -306,6 +306,7 @@ export interface PortalConfig {
 export const PORTAL_CONFIGS: Record<string, PortalConfig> = {
   'spain': {
     name: 'Espagne (citaconsular.es)',
+    // URL défaut = Kinshasa. En production le portalUrl vient de Convex (champ job.portalUrl).
     url: 'https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5',
     recommendedStrategy: 'manual-cookies',
     notes: 'Utilise Cloudflare Managed Challenge. Cookies manuels fonctionnent bien.'

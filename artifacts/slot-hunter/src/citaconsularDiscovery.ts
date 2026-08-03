@@ -16,12 +16,12 @@ import { addExtra } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "playwright";
 import { randomUserAgent, randomViewport } from "./browser.js";
+import { KINSHASA_PORTAL_URL } from "./spain-portals.js";
 
 const playwrightChromium = addExtra(baseChromium);
 playwrightChromium.use(StealthPlugin());
 
-const DEFAULT_WIDGET =
-  "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services";
+const DEFAULT_WIDGET = KINSHASA_PORTAL_URL;
 
 /** Titres / interstitiels Cloudflare (FR / EN / ES). */
 const CF_TITLE =

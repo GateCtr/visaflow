@@ -26,15 +26,18 @@ import {
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
+import { DEFAULT_WIDGET_KEY } from "./spain-portals.js";
 
 function isBookititServiceRedirect(body: string, pageUrl?: string): boolean {
   if (!pageUrl) return false;
 
-  const expectedWidgetPath = "/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
+  // Détecte une redirection vers N'IMPORTE QUEL portail citaconsular.es — pas seulement Kinshasa.
+  // L'ancienne vérification codait en dur la clé Kinshasa (25028fcd…) et ratait les redirections
+  // sur d'autres portails (ex: Saopolo 2d01502f…).
   try {
     const url = new URL(pageUrl);
     const isExpectedWidget = url.origin === "https://www.citaconsular.es" &&
-      url.pathname.replace(/\/$/, "/") === expectedWidgetPath.replace(/\/$/, "/") &&
+      /^\/es\/hosteds\/widgetdefault\/[a-f0-9]{30,}\//i.test(url.pathname) &&
       (url.hash || "").toLowerCase() === "#services";
 
     if (!isExpectedWidget) return false;
@@ -1908,7 +1911,7 @@ async function scanViaMainEndpoint(
   const widgetInit = initParams ?? {};
   const publickey = typeof widgetInit.publickey === "string"
     ? widgetInit.publickey
-    : portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] || "25028fcd7126544630b8da0c6e60722b5";
+    : portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] || DEFAULT_WIDGET_KEY;
   const preselectedServices = Array.isArray(widgetInit.services)
     ? widgetInit.services.filter((s): s is string => typeof s === "string" && s.length > 0)
     : [];

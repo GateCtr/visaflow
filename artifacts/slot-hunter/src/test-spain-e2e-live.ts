@@ -18,8 +18,11 @@ process.env.REDIS_URL        = process.env.REDIS_URL        || "redis://localhos
 process.env.SPAIN_SESSION_MODE = "persistent-browser";
 
 // ─── Portal Kinshasa (visible dans les logs) ─────────────────────────────────
+// Clés définitives dans spain-portals.ts — KINSHASA_PORTAL_URL / KINSHASA_WIDGET_KEY.
+// Ce fichier teste explicitement Kinshasa en mode persistent-browser.
+// Pour tester São Paulo, utiliser scripts/test-saopola-live.ts.
 const PORTAL_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5";
-const PUBLICKEY  = "25028fcd7126544630b8da0c6e60722b5";
+const PUBLICKEY  = "25028fcd7126544630b8da0c6e60722b5"; // = KINSHASA_WIDGET_KEY
 const API_BASE   = "https://www.citaconsular.es/onlinebookings/";
 const REFERER    = PORTAL_URL.replace(/\/?$/, "/");
 

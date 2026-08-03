@@ -333,8 +333,10 @@ export class BookititApiClient {
 
 // Exemple d'utilisation
 export async function testBookititApi() {
+  // Exemple avec le portail Kinshasa (clé par défaut). En production, utiliser KINSHASA_WIDGET_KEY
+  // depuis spain-portals.ts ou passer la clé extraite du portalUrl du dossier.
   const client = new BookititApiClient({
-    publickey: '25028fcd7126544630b8da0c6e60722b5',
+    publickey: '25028fcd7126544630b8da0c6e60722b5', // KINSHASA_WIDGET_KEY — voir spain-portals.ts
     widgetId: '25028fcd7126544630b8da0c6e60722b5',
     lang: 'es',
     useProxy: true
