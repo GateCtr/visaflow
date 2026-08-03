@@ -145,7 +145,7 @@ const HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES = [
   PAD,
 ].join("\n");
 
-// ②c Backbone client-side + bkt_init_widget.dates=[] → not_found sans AJAX (HTTP-ONLY)
+// ②c Backbone client-side + bkt_init_widget.dates=[] + modal Aceptar → vérification API (São Paulo)
 const HTML_BKT_DATES_EMPTY_CLIENT_RENDER = [
   `<html><body>`,
   LANDMARKS,
@@ -159,6 +159,40 @@ const HTML_BKT_DATES_EMPTY_CLIENT_RENDER = [
   `      </div>`,
   `    </a>`,
   `  </script>`,
+  CLOSE,
+  `  <script type="text/javascript">`,
+  `    var bkt_init_widget = {`,
+  `      type: 'default', srvsrc: 'https://www.citaconsular.es',`,
+  `      publickey: '2d01502f12dc08400e22aea87fb00ae34', lang: 'es',`,
+  `      services: [], agendas: [], dates: []`,
+  `    };`,
+  `  </script>`,
+  `</body></html>`,
+  PAD,
+].join("\n");
+
+// ②d bkt_init_widget.dates=[] SANS flow Aceptar → not_found immédiat (signal autoritaire)
+const HTML_BKT_DATES_EMPTY_NO_ACCEPT_FLOW = [
+  `<html><body>`,
+  LANDMARKS,
+  `  <div style="display: none; text-align: center;">No hay horas disponibles</div>`,
+  CLOSE,
+  `  <script type="text/javascript">`,
+  `    var bkt_init_widget = {`,
+  `      type: 'default', srvsrc: 'https://www.citaconsular.es',`,
+  `      publickey: '2d01502f12dc08400e22aea87fb00ae34', lang: 'es',`,
+  `      services: [], agendas: [], dates: []`,
+  `    };`,
+  `  </script>`,
+  `</body></html>`,
+  PAD,
+].join("\n");
+
+// ②e São Paulo — service-state via idDivBktServicesContainer, dates=[] avant Aceptar
+const HTML_BKT_DATES_EMPTY_SERVICE_STATE = [
+  `<html><body>`,
+  LANDMARKS,
+  `  <div id="idDivBktServicesContainer"></div>`,
   CLOSE,
   `  <script type="text/javascript">`,
   `    var bkt_init_widget = {`,
@@ -651,12 +685,38 @@ subsection("3g. No hay horas VISIBLE + templates client-side → found via getse
   resetMocks();
 }
 
-subsection("3g2. bkt_init_widget.dates=[] + templates client-side → not_found (HTTP-ONLY, sans AJAX)");
+subsection("3g2. bkt_init_widget.dates=[] + modal Aceptar → found via getservices/datetime (São Paulo)");
 {
   resetMocks();
   const session = makeMockSession({
     source: "capsolver",
     prefetchedMainHtml: HTML_BKT_DATES_EMPTY_CLIENT_RENDER,
+  });
+  _setTestSessionProvider(async () => session);
+
+  let getservicesCalled = false;
+  _setTestFetch(makeMockFetch([
+    ["getagendas/",  () => jsonpResp(AGENDA_OK)],
+    ["datetime/",    () => jsonpResp(DATETIME_WITH_SLOT)],
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => {
+      getservicesCalled = true;
+      return jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }]);
+    }],
+  ]));
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "found", "bkt dates=[] + Aceptar flow → found via datetime/");
+  assert(getservicesCalled, "getservices/ appelé quand flow Aceptar détecté malgré dates=[]");
+  resetMocks();
+}
+
+subsection("3g2b. bkt_init_widget.dates=[] sans flow Aceptar → not_found immédiat");
+{
+  resetMocks();
+  const session = makeMockSession({
+    source: "capsolver",
+    prefetchedMainHtml: HTML_BKT_DATES_EMPTY_NO_ACCEPT_FLOW,
   });
   _setTestSessionProvider(async () => session);
 
@@ -667,8 +727,29 @@ subsection("3g2. bkt_init_widget.dates=[] + templates client-side → not_found 
   });
 
   const result = await scanSpainHttp(PORTAL_URL);
-  assertEq(result.status, "not_found", "bkt dates=[] → not_found immédiat");
-  assert(!getservicesCalled, "getservices/ non appelé quand bkt_init_widget.dates=[]");
+  assertEq(result.status, "not_found", "bkt dates=[] sans Aceptar → not_found immédiat");
+  assert(!getservicesCalled, "getservices/ non appelé sans flow Aceptar");
+  resetMocks();
+}
+
+subsection("3g2c. bkt dates=[] + service-state (idDivBktServicesContainer) → found via API");
+{
+  resetMocks();
+  const session = makeMockSession({
+    source: "capsolver",
+    prefetchedMainHtml: HTML_BKT_DATES_EMPTY_SERVICE_STATE,
+  });
+  _setTestSessionProvider(async () => session);
+
+  _setTestFetch(makeMockFetch([
+    ["getagendas/",  () => jsonpResp(AGENDA_OK)],
+    ["datetime/",    () => jsonpResp(DATETIME_WITH_SLOT)],
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
+  ]));
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "found", "service-state + dates=[] → found via datetime/");
   resetMocks();
 }
 
