@@ -186,11 +186,18 @@ function extractBktInitFromHtml(html: string): Record<string, string | string[]>
       }
     }
 
+    const arrays = extractBktInitArraysFromHtml(html);
+    if (arrays) {
+      if (arrays.services !== undefined) params.services = arrays.services;
+      if (arrays.agendas !== undefined) params.agendas = arrays.agendas;
+      if (arrays.dates !== undefined) params.dates = arrays.dates;
+    }
+
     if (Object.keys(params).length > 0) return params;
   }
 
   // Pattern 2: extraire les paires clé-valeur individuellement (fallback)
-  const params: Record<string, string> = {};
+  const params: Record<string, string | string[]> = {};
   const patterns = [
     /["']?idCentre["']?\s*[:=]\s*["']?(\d+)["']?/,
     /["']?idService["']?\s*[:=]\s*["']?(\d+)["']?/,
@@ -221,7 +228,87 @@ function extractBktInitFromHtml(html: string): Record<string, string | string[]>
     }
   }
 
+  const arrays = extractBktInitArraysFromHtml(html);
+  if (arrays) {
+    if (arrays.services !== undefined) params.services = arrays.services;
+    if (arrays.agendas !== undefined) params.agendas = arrays.agendas;
+    if (arrays.dates !== undefined) params.dates = arrays.dates;
+  }
+
   return Object.keys(params).length > 0 ? params : null;
+}
+
+/** Extrait le contenu interne de bkt_init_widget = { ... } avec comptage d'accolades. */
+function extractBktInitBlockContent(html: string): string | null {
+  const marker = html.match(/(?:var\s+)?bkt_init_widget\s*=\s*\{/);
+  if (!marker || marker.index === undefined) return null;
+
+  const openBrace = marker.index + marker[0].length - 1;
+  let depth = 0;
+  for (let i = openBrace; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return html.slice(openBrace + 1, i);
+    }
+  }
+  return null;
+}
+
+/** Parse services/agendas/dates depuis le bloc bkt_init_widget embarqué dans /main/. */
+function extractBktInitArraysFromHtml(html: string): {
+  services?: string[];
+  agendas?: string[];
+  dates?: string[];
+} | null {
+  const block = extractBktInitBlockContent(html);
+  if (!block) return null;
+
+  function parseJsStringArray(field: string): string[] | undefined {
+    const m = block.match(new RegExp(`${field}\\s*:\\s*\\[([^\\]]*)\\]`));
+    if (!m) return undefined;
+    const inner = m[1].trim();
+    if (!inner) return [];
+    return [...inner.matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]);
+  }
+
+  return {
+    services: parseJsStringArray("services"),
+    agendas: parseJsStringArray("agendas"),
+    dates: parseJsStringArray("dates"),
+  };
+}
+
+/**
+ * Détecte l'absence de créneaux depuis bkt_init_widget.dates embarqué dans le HTML.
+ * Sur les portails Backbone/SPA, le div "No hay horas" est masqué par défaut ;
+ * seul le tableau dates reflète la disponibilité réelle côté serveur.
+ * Accepte plusieurs sources (ex. /main/ + POST widget) — la première avec dates l'emporte.
+ */
+function noAvailableSlotsInBktPayload(...htmlSources: string[]): boolean | "unknown" {
+  for (const html of htmlSources) {
+    if (!html) continue;
+    const arrays = extractBktInitArraysFromHtml(html);
+    if (!arrays || arrays.dates === undefined) continue;
+    return arrays.dates.length === 0;
+  }
+  return "unknown";
+}
+
+/** Détecte "No hay horas" visible vs masqué (guillemets simples ou doubles). */
+function detectNoHayHorasVisibility(html: string): { visible: boolean; hidden: boolean } {
+  const divRe = /<div\s+style=(["'])([\s\S]*?)\1[^>]*>([\s\S]*?)<\/div>/gi;
+  let visible = false;
+  let hidden = false;
+  for (const m of html.matchAll(divRe)) {
+    const style = m[2];
+    const content = m[3];
+    if (!/No hay horas disponibles/i.test(content)) continue;
+    if (/display:\s*none/i.test(style)) hidden = true;
+    else visible = true;
+  }
+  return { visible, hidden };
 }
 
 /**
@@ -288,13 +375,36 @@ function parseJsonpPayload(text: string): unknown | null {
   try { return JSON.parse(src); } catch { return null; }
 }
 
+/** Session CapSolver/impit — pas de spin-up Chromium pour les endpoints AJAX. */
+function isHttpOnlySession(session: SpainCfSession): boolean {
+  return session.source !== "playwright";
+}
+
+/** Browser JSONP uniquement si PHPSESSID lié à l'IP Chromium (mode persistent-browser). */
+function shouldRouteBookititViaBrowser(session: SpainCfSession): boolean {
+  return session.source === "playwright";
+}
+
+/**
+ * Levée en mode HTTP-ONLY quand la sonde ne peut pas conclure sans navigateur.
+ * Évite la cascade False Positive → callBookititEndpointViaBrowser → rotation IP.
+ */
+export class HttpProbeInconclusiveError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HttpProbeInconclusiveError";
+  }
+}
+
 async function fetchBookititBodyWithFallback(
   session: SpainCfSession,
   url: string,
   headers: Record<string, string>,
 ): Promise<string> {
-  const browserBody = await callBookititEndpointViaBrowser(url);
-  if (browserBody) return browserBody;
+  if (shouldRouteBookititViaBrowser(session)) {
+    const browserBody = await callBookititEndpointViaBrowser(url);
+    if (browserBody) return browserBody;
+  }
 
   const res = await spainCfFetch(url, session, { headers });
   if (!res) return "";
@@ -319,11 +429,13 @@ async function callBookititJsonp(
   });
   const url = `${baseUrl}${endpoint}?${q}`;
 
-  const browserBody = await callBookititEndpointViaBrowser(url);
-  if (browserBody) {
-    const trimmed = browserBody.trim();
-    if (trimmed && !/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmed.slice(0, 200))) {
-      return parseJsonpPayload(browserBody);
+  if (shouldRouteBookititViaBrowser(session)) {
+    const browserBody = await callBookititEndpointViaBrowser(url);
+    if (browserBody) {
+      const trimmed = browserBody.trim();
+      if (trimmed && !/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmed.slice(0, 200))) {
+        return parseJsonpPayload(browserBody);
+      }
     }
   }
 
@@ -857,9 +969,10 @@ async function confirmSlotsViaDatetime(
       //   → Bookitit rejette le PHPSESSID → 0B. On appelle depuis la page Chromium
       //   elle-même (callBookititEndpointViaBrowser) : même IP, même cookies, same-origin.
       //
-      // Toujours passer par le browser : le PHPSESSID + cf_clearance sont liés à l'IP
-      // Decodo du browser — impit sur une IP différente → 0B systématique.
-      const useBrowserFetch = true;
+      // Browser uniquement en mode persistent-browser (PHPSESSID lié à l'IP Chromium).
+      // En HTTP-only (CapSolver), impit réutilise le même proxy → pas de spin-up browser
+      // (évite fast-track phantom cookie sur IP Decodo différente).
+      const useBrowserFetch = shouldRouteBookititViaBrowser(session);
 
       let cfgRaw: string;
       if (useBrowserFetch) {
@@ -916,6 +1029,20 @@ async function confirmSlotsViaDatetime(
           return null;
         }
         svcRaw = await svcRes.text();
+        if (!svcRaw.trim()) {
+          console.log(`[spain-http] ⚠️ getservices/ fallback → body vide (HTTP ${svcRes.status})`);
+          if (isHttpOnlySession(session)) {
+            const bktSignal = noAvailableSlotsInBktPayload(renderedHtml);
+            const { hidden: hiddenNoSlots } = detectNoHayHorasVisibility(renderedHtml);
+            if (bktSignal === true || hiddenNoSlots) {
+              console.log(
+                `[spain-http] ℹ️ getservices/ vide (HTTP-ONLY) + signal négatif embarqué → not_found`,
+              );
+              return null;
+            }
+            return "ajax_unavailable";
+          }
+        }
       }
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
@@ -958,10 +1085,8 @@ async function confirmSlotsViaDatetime(
   const cbBase = `jQuery${Date.now()}_`;
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
-  // Même logique que pour getservices/ : session Playwright → PHPSESSID lié à l'IP Decodo
-  // du browser → getagendas/ et datetime/ via impit (IP différente) = 0B. On passe par le browser.
-  // Toujours via browser : CF cookies + PHPSESSID liés à l'IP Decodo du browser.
-  const useBrowserFetch = true;
+  const useBrowserFetch = shouldRouteBookititViaBrowser(session);
+  const useNativeBrowserClick = useBrowserFetch;
 
   // Filtrer les services dont le nom est purement HTML invisible (placeholder Bookitit)
   // ex: "<span style='display:none;'></span>" — pas de contenu visible pour le booking
@@ -998,12 +1123,20 @@ async function confirmSlotsViaDatetime(
     const nativeDtRaws: string[] = []; // datetime/ capturés nativement, à parser avant AJAX
     let agRawForParsing = "";
     try {
-      // ── Approche 1 : clic natif via SpainPersistentBrowser ─────────────────
-      const nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
-        preferredServiceId: svc.serviceId,
-        agTimeoutMs: 8_000,
-        dtTimeoutMs: 7_000,
-      });
+      // ── Approche 1 : clic natif via SpainPersistentBrowser (persistent-browser uniquement) ──
+      let nativeCapture: {
+        getagendasRaw: string;
+        datetimeRaws: string[];
+        clickedHref: string | null;
+      } | null = null;
+
+      if (useNativeBrowserClick) {
+        nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+          preferredServiceId: svc.serviceId,
+          agTimeoutMs: 8_000,
+          dtTimeoutMs: 7_000,
+        });
+      }
 
       let agRaw: string;
       let agRedirect = false;
@@ -1181,6 +1314,39 @@ async function confirmSlotsViaDatetime(
     console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
   }
   return null;
+}
+
+/** Gère ajax_unavailable sans escalade browser en mode HTTP-ONLY. */
+async function resolveAjaxUnavailableOutcome(
+  session: SpainCfSession,
+  ctx: { hasVisibleNoSlots: boolean; hasHiddenNoSlots: boolean; bktNoSlots: boolean; mainFromCache: boolean },
+  scanDurationMs: number,
+): Promise<SpainHttpScanResult> {
+  if (isHttpOnlySession(session)) {
+    if (ctx.hasVisibleNoSlots || ctx.hasHiddenNoSlots || ctx.bktNoSlots) {
+      console.log(
+        `[spain-http] ℹ️ AJAX indisponible (HTTP-ONLY) — signal négatif embarqué ` +
+        `(visible=${ctx.hasVisibleNoSlots}, hidden=${ctx.hasHiddenNoSlots}, bkt.dates=[]=${ctx.bktNoSlots}) → not_found`,
+      );
+      return { status: "not_found", scanDurationMs };
+    }
+    const err = new HttpProbeInconclusiveError(
+      "Endpoints AJAX Bookitit indisponibles en HTTP-ONLY — pas de spin-up browser",
+    );
+    console.log(`[spain-http] ⚠️ ${err.message}`);
+    return { status: "error", errorMessage: err.message, scanDurationMs };
+  }
+
+  if (ctx.hasVisibleNoSlots && ctx.mainFromCache) {
+    console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+    await spainPersistentBrowser.closeAndInvalidate();
+  } else if (ctx.hasVisibleNoSlots) {
+    console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+  } else {
+    console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+    await spainPersistentBrowser.closeAndInvalidate();
+  }
+  return { status: "not_found", scanDurationMs };
 }
 
 function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
@@ -2294,15 +2460,40 @@ async function scanViaMainEndpoint(
   //   → div "No hay horas disponibles" VISIBLE (display sans none en début de style)
   // ─────────────────────────────────────────────────────────────────────────
 
-  const VISIBLE_NO_SLOTS_RE = /<div\s+style='text-align:\s*center;[^']*'[^>]*>\s*No hay horas disponibles/i;
-  const HIDDEN_NO_SLOTS_RE  = /<div\s+style='display:\s*none;[^']*'[^>]*>\s*No hay horas disponibles/i;
-
-  const hasVisibleNoSlots = VISIBLE_NO_SLOTS_RE.test(html);
-  const hasHiddenNoSlots  = HIDDEN_NO_SLOTS_RE.test(html);
+  const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
+  const VISIBLE_NO_SLOTS_RE = /<div\s+style=(["'])[^"']*\1[^>]*>\s*No hay horas disponibles/i;
   const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton|Aceptar/i.test(html);
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
+
+  // ─── Signal autoritaire : bkt_init_widget.dates embarqué (/main/ ou POST widget) ───
+  // Sur SPA Backbone, "No hay horas" est masqué par défaut — dates[] reflète l'état réel.
+  const bktSlotSignal = noAvailableSlotsInBktPayload(html, widgetHtml1);
+  const bktNoSlots = bktSlotSignal === true;
+  if (bktNoSlots) {
+    console.log(
+      `[spain-http] 📋 bkt_init_widget.dates=[] (main=${html.length}B, widget=${widgetHtml1.length}B) → pas de créneau — ` +
+      `escalade getservices/browser bloquée`,
+    );
+    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+  }
+  if (bktSlotSignal === false) {
+    const bktDates = extractBktInitArraysFromHtml(html)?.dates
+      ?? extractBktInitArraysFromHtml(widgetHtml1)?.dates
+      ?? [];
+    const preview = bktDates.slice(0, 5).join(", ");
+    console.log(
+      `[spain-http] 🟢 bkt_init_widget.dates=[${preview}${bktDates.length > 5 ? "…" : ""}] → vérification datetime/ via HTTP`,
+    );
+  }
+
+  const ajaxUnavailableCtx = {
+    hasVisibleNoSlots,
+    hasHiddenNoSlots,
+    bktNoSlots,
+    mainFromCache,
+  };
 
   // Signal négatif fiable → pas besoin d'appel API
   if (hasVisibleNoSlots) {
@@ -2372,16 +2563,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots && mainFromCache) {
-        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      } else if (hasVisibleNoSlots) {
-        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
-      } else {
-        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      }
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
     }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
@@ -2412,16 +2594,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots && mainFromCache) {
-        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      } else if (hasVisibleNoSlots) {
-        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
-      } else {
-        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      }
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
     }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
@@ -2445,16 +2618,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots && mainFromCache) {
-        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      } else if (hasVisibleNoSlots) {
-        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
-      } else {
-        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      }
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
     }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
@@ -2479,16 +2643,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 #idListServices non-vide — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots && mainFromCache) {
-        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      } else if (hasVisibleNoSlots) {
-        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
-      } else {
-        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      }
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
     }
     if (!confirmed) {
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2525,16 +2680,7 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 Pas de "No hay horas" dans le container — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots && mainFromCache) {
-        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      } else if (hasVisibleNoSlots) {
-        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
-      } else {
-        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-        await spainPersistentBrowser.closeAndInvalidate();
-      }
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
     }
     if (!confirmed) {
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2583,6 +2729,8 @@ export function _setTestSessionProvider(fn: SessionProvider | null): void {
 
 export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanResult> {
   const t0 = Date.now();
+  // Propager le portail courant au browser fallback (évite Kinshasa par défaut).
+  spainPersistentBrowser.setCurrentTargetUrl(portalUrl);
 
   // 1. Obtenir la session CF (solve si nécessaire)
   let session = _testSessionProvider

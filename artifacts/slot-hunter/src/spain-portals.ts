@@ -63,3 +63,21 @@ export function extractWidgetKey(portalUrl: string): string {
     portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$|#)/i)?.[1] ?? DEFAULT_WIDGET_KEY
   );
 }
+
+/** Construit l'URL widget citaconsular.es à partir d'une clé Bookitit (publickey). */
+export function buildPortalUrlFromWidgetKey(widgetKey: string): string {
+  return `https://www.citaconsular.es/es/hosteds/widgetdefault/${widgetKey}/`;
+}
+
+/**
+ * Format log-safe pour une URL portail — ne tronque jamais au milieu de la publickey.
+ * Les URLs widget font ~87 chars ; un slice(0, 80) coupe la clé et crée des faux positifs
+ * de "mutation" (ex: …87fb au lieu de …87fb00ae34/).
+ */
+export function formatPortalUrlForLog(url: string): string {
+  const key = extractWidgetKey(url);
+  if (key !== DEFAULT_WIDGET_KEY || url.includes(key)) {
+    return `…/widgetdefault/${key}/`;
+  }
+  return url.length > 100 ? `${url.slice(0, 100)}…` : url;
+}

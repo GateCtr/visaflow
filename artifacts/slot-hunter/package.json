@@ -31,6 +31,7 @@
     "cloudflare:test-free": "tsx test-free-cloudflare-solutions.ts",
     "cloudflare:free-solver": "tsx test-free-solver-simple.ts",
     "cloudflare:capture-free": "tsx capture-free-cookie.ts",
+    "jsd:test": "tsx test-jsd-solver.ts",
     "capture:spain-cuba": "tsx src/debug/spain-cuba-capture.ts",
     "cev:capture": "tsx scripts/cev-capture-interactive.ts",
     "spain:capture": "tsx scripts/spain-manual-capture.ts",
@@ -44,6 +45,7 @@
     "usa:test:jwt-ip": "tsx src/test-usa-jwt-ip-binding.ts",
     "germany:diag": "tsx scripts/germany-network-diag.ts",
     "spain:test:scrapedo": "tsx src/scripts/test-scrapedo-citaconsular.ts",
+    "spain:test:watcher-e2e": "tsx src/scripts/test-spain-watcher-portal-e2e.ts",
     "test:anticaptcha": "tsx test-anticaptcha-soax.ts",
     "test:cev:anticaptcha": "tsx test-cev-anticaptcha-proxyless.ts"
   },
@@ -51,6 +53,7 @@
     "dotenv": "^16.4.5",
     "https-proxy-agent": "^9.1.0",
     "impit": "^0.14.0",
+    "lz-string": "^1.5.0",
     "node-fetch": "^3.3.2",
     "playwright": "^1.60.0",
     "playwright-extra": "^4.3.6",

@@ -424,8 +424,13 @@ export async function humanScroll(page: Page): Promise<void> {
   const scrolls = 2 + Math.floor(Math.random() * 4);
   for (let i = 0; i < scrolls; i++) {
     const delta = 100 + Math.random() * 300;
-    // Puppeteer : mouse.wheel prend un objet options (Playwright : args positionnels)
-    await (page.mouse as any).wheel({ deltaY: delta });
+    const mouse = page.mouse as { wheel: (...args: unknown[]) => Promise<void> };
+    // Puppeteer : wheel({ deltaY }) — Playwright : wheel(deltaX, deltaY)
+    try {
+      await mouse.wheel({ deltaY: delta });
+    } catch {
+      await mouse.wheel(0, delta);
+    }
     await randomDelay(300, 800);
   }
 }

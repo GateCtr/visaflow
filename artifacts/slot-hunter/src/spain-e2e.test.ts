@@ -145,6 +145,32 @@ const HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES = [
   PAD,
 ].join("\n");
 
+// ②c Backbone client-side + bkt_init_widget.dates=[] → not_found sans AJAX (HTTP-ONLY)
+const HTML_BKT_DATES_EMPTY_CLIENT_RENDER = [
+  `<html><body>`,
+  LANDMARKS,
+  `  <div style="display: none; text-align: center;">No hay horas disponibles</div>`,
+  `  <div id="idBktDefaultCustomContainer"></div>`,
+  `  <div id="idDivBktButtonContinueContainer"></div>`,
+  `  <script type="text/template">`,
+  `    <a href='#selectservice/<%= attributes.id %>'>`,
+  `      <div class="clsBktServiceDataContainer clsBktServiceAtt">`,
+  `        <div class="clsBktServiceDataName">Tramitación de visas</div>`,
+  `      </div>`,
+  `    </a>`,
+  `  </script>`,
+  CLOSE,
+  `  <script type="text/javascript">`,
+  `    var bkt_init_widget = {`,
+  `      type: 'default', srvsrc: 'https://www.citaconsular.es',`,
+  `      publickey: '2d01502f12dc08400e22aea87fb00ae34', lang: 'es',`,
+  `      services: [], agendas: [], dates: []`,
+  `    };`,
+  `  </script>`,
+  `</body></html>`,
+  PAD,
+].join("\n");
+
 // ③ HTML court — déclenche l'erreur "réponse courte"
 const HTML_SHORT = `<div id="idBktWidgetDefaultBodyContainer"><p>Erreur</p></div>`;
 
@@ -622,6 +648,46 @@ subsection("3g. No hay horas VISIBLE + templates client-side → found via getse
 
   const result = await scanSpainHttp(PORTAL_URL);
   assertEq(result.status, "found", "No hay horas visible + templates client-side → found");
+  resetMocks();
+}
+
+subsection("3g2. bkt_init_widget.dates=[] + templates client-side → not_found (HTTP-ONLY, sans AJAX)");
+{
+  resetMocks();
+  const session = makeMockSession({
+    source: "capsolver",
+    prefetchedMainHtml: HTML_BKT_DATES_EMPTY_CLIENT_RENDER,
+  });
+  _setTestSessionProvider(async () => session);
+
+  let getservicesCalled = false;
+  _setTestFetch(async (url) => {
+    if (url.includes("getservices/")) getservicesCalled = true;
+    return null;
+  });
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "not_found", "bkt dates=[] → not_found immédiat");
+  assert(!getservicesCalled, "getservices/ non appelé quand bkt_init_widget.dates=[]");
+  resetMocks();
+}
+
+subsection("3g3. HTTP-ONLY + templates + getservices/ vide → not_found (pas error)");
+{
+  resetMocks();
+  const session = makeMockSession({
+    source: "capsolver",
+    prefetchedMainHtml: HTML_SLOTS_VISIBLE_WITH_CLIENT_TEMPLATES,
+  });
+  _setTestSessionProvider(async () => session);
+
+  _setTestFetch(makeMockFetch([
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => new Response("", { status: 200 })],
+  ]));
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "not_found", "HTTP-ONLY + getservices vide + No hay horas visible → not_found");
   resetMocks();
 }
 

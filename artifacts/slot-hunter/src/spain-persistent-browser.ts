@@ -79,7 +79,7 @@ import {
   restoreApiPrefetchCacheFromRedis,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
-import { KINSHASA_PORTAL_URL } from "./spain-portals.js";
+import { buildPortalUrlFromWidgetKey, formatPortalUrlForLog, KINSHASA_PORTAL_URL } from "./spain-portals.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -1488,7 +1488,7 @@ class SpainPersistentBrowserManager {
     //   token lié à la SESSION de la 1ère navigation (déjà périmée de X minutes)
     //   → oneshot rejeté → /main/ = 0B. Le seul moyen d'avoir un oneshot frais
     //   est de cliquer Continuar DANS LA MÊME SESSION que le cf_clearance.
-    console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${targetUrl.slice(0, 80)}`);
+    console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${formatPortalUrlForLog(targetUrl)}`);
     try {
       await page.goto(targetUrl, { waitUntil: "load", timeout: 70_000 });
     } catch (navErr) {
@@ -1784,7 +1784,7 @@ class SpainPersistentBrowserManager {
       // Le JSD oneshot doit être envoyé dans la MÊME session que le cf_clearance.
       // Un 2ème goto() déclencherait un challenge CF lié à la session périmée → token stale.
       const currentUrl = page.url();
-      console.log(`[spain-pb] 🖱️ Page courante après JSD : ${currentUrl.slice(0, 80)} — attente widget Bookitit…`);
+      console.log(`[spain-pb] 🖱️ Page courante après JSD : ${formatPortalUrlForLog(currentUrl)} — attente widget Bookitit…`);
 
       // Attendre et cliquer le bouton Continuar (max 60s depuis la page courante)
       // La 1ère navigation est en "load" → widget peut déjà être initialisé.
@@ -2259,7 +2259,7 @@ class SpainPersistentBrowserManager {
         console.log(`[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue`);
 
         // 2. Re-navigation vers le widget — CF ne re-challenge PAS (cf_clearance valide)
-        console.log(`[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : ${targetUrl.slice(0, 80)}`);
+        console.log(`[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : ${formatPortalUrlForLog(targetUrl)}`);
         await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 40_000 })
           .catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Re-navigation (non-fatal): ${e}`));
 
@@ -3307,6 +3307,15 @@ export async function navigateToSelecttime(
   }
 }
 
+/** Dérive l'URL widget depuis la publickey d'une URL Bookitit JSONP. */
+function derivePortalUrlFromBookititUrl(url: string): string {
+  try {
+    const pk = new URLSearchParams(new URL(url).search).get("publickey");
+    if (pk) return buildPortalUrlFromWidgetKey(pk);
+  } catch { /* non-fatal */ }
+  return spainPersistentBrowser.getCurrentTargetUrl();
+}
+
 export async function callBookititEndpointViaBrowser(url: string): Promise<string> {
   // ── Cache-first : réponse déjà capturée pendant le solve (state PHP encore chaud) ──
   const endpoint = url.match(/\/onlinebookings\/([^?]+)/)?.[1] ?? url.slice(0, 60);
@@ -3349,8 +3358,12 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
 
   let page = spainPersistentBrowser.getActivePage();
   if (!page) {
-    console.log("[spain-pb] 🔄 callBookititEndpointViaBrowser — page absente, initialisation de la session persistante…");
-    const ensured = await ensureSpainPersistentBrowserSession();
+    const portalUrl = derivePortalUrlFromBookititUrl(url);
+    console.log(
+      `[spain-pb] 🔄 callBookititEndpointViaBrowser — page absente, initialisation de la session persistante… (${portalUrl})`,
+    );
+    spainPersistentBrowser.setCurrentTargetUrl(portalUrl);
+    const ensured = await ensureSpainPersistentBrowserSession(portalUrl);
     if (!ensured) {
       console.warn("[spain-pb] ⚠️ callBookititEndpointViaBrowser — session browser introuvable après initialisation");
       return "";

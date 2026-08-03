@@ -1756,6 +1756,10 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
       }
     }
 
+    // Scroll naturel post-chargement — réduit les signaux bot comportementaux CF
+    await humanScroll(page).catch(() => undefined);
+    await randomDelay(800, 1500);
+
     try {
       // ── Attente initialisation widget Bookitit (max 40s) ─────────────────────
       // Le dialog natif "Welcome / Bienvenido" (window.alert) est géré par
@@ -1820,6 +1824,9 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
           console.log("[spain-watcher] ⚠️ Widget Bookitit non initialisé après 40s — tentative de continuer quand même");
         }
       }
+
+      await humanScroll(page).catch(() => undefined);
+      await randomDelay(500, 1200);
 
       // ── Navigation multi-étapes Bookitit ──────────────────────────────────────
       // Flux : #services → (sélection service) → #agendas → (sélection agenda) → #datetime → datetime/ API
