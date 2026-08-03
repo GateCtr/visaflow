@@ -594,6 +594,170 @@ class SpainPersistentBrowserManager {
     return this._page;
   }
 
+  /**
+   * Navigue le widget Bookitit vers la vue #services (hash-based SPA router).
+   * Nécessaire pour réinitialiser l'état entre deux services lors d'un scan multi-services.
+   * Appelée par spain-http-scanner.ts après chaque service sans agenda.
+   */
+  async navigateToServicesView(): Promise<void> {
+    const page = this._page;
+    if (!page) return;
+    try {
+      const hash = await page.evaluate(() => window.location.hash).catch(() => "");
+      if (hash === "#services" || hash === "") return; // déjà là
+      await page.evaluate(() => { window.location.hash = "#services"; });
+      await new Promise<void>((r) => setTimeout(r, 600)); // laisser Backbone router réagir
+    } catch { /* non-fatal */ }
+  }
+
+  /**
+   * Clique sur un service dans le widget Bookitit et capture les réponses
+   * getagendas/ + datetime/ via interception réseau.
+   *
+   * POURQUOI cette approche :
+   *   getagendas/ appelé directement via AJAX (fetch hors-état) retourne TOUJOURS
+   *   0B + text/html car le serveur PHP Bookitit exige que l'appel soit déclenché
+   *   par le clic utilisateur sur le service — c'est une machine à états côté serveur.
+   *   En cliquant le lien #selectservice/, le JS natif du widget déclenche getagendas/
+   *   dans le bon état → réponse JSONP valide si des agendas existent.
+   *
+   * @param opts.preferredServiceId  ID du service à cliquer en priorité (ex: "bkt1181774")
+   * @param opts.agTimeoutMs         Délai max pour getagendas/ (défaut 8 000 ms)
+   * @param opts.dtTimeoutMs         Délai max pour datetime/ après getagendas/ (défaut 7 000 ms)
+   * @returns null si la page n'est pas disponible ou si aucun lien #selectservice/ n'est dans le DOM.
+   *          Sinon : { getagendasRaw, datetimeRaws, clickedHref }
+   *          — getagendasRaw vide = widget a navigué vers #services (pas d'agenda pour ce service)
+   *          — getagendasRaw non-vide = agenda(s) disponibles → datetimeRaws contient les réponses datetime/ capturées
+   */
+  async clickServiceAndCaptureSlots(opts?: {
+    preferredServiceId?: string;
+    agTimeoutMs?: number;
+    dtTimeoutMs?: number;
+  }): Promise<{
+    getagendasRaw: string;
+    datetimeRaws: string[];
+    clickedHref: string | null;
+  } | null> {
+    const page = this._page;
+    if (!page) {
+      console.warn("[spain-pb] ⚠️ clickServiceAndCaptureSlots — page non disponible");
+      return null;
+    }
+
+    const agTimeout = opts?.agTimeoutMs ?? 8_000;
+    const dtTimeout = opts?.dtTimeoutMs ?? 7_000;
+    const preferredId = opts?.preferredServiceId ?? "";
+
+    // ── Interception réseau ────────────────────────────────────────────────────
+    // On enregistre le listener AVANT le clic pour ne rater aucune réponse.
+    let agResolve: ((raw: string) => void) | null = null;
+    const agPromise = new Promise<string>((resolve) => { agResolve = resolve; });
+    const dtRawsList: string[] = [];
+    let dtSignalResolve: (() => void) | null = null;
+    const dtSignal = new Promise<void>((r) => { dtSignalResolve = r; });
+    let dtTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onResponse = async (response: import("puppeteer").HTTPResponse): Promise<void> => {
+      const url = response.url();
+      try {
+        if (url.includes("/getagendas/")) {
+          const ct = response.headers()["content-type"] ?? "";
+          const body = await response.text().catch(() => "");
+          // 0B + text/html = redirect Bookitit vers #services = pas d'agenda (hors-état OU vraiment vide)
+          const isRedirect = body.length < 30 && ct.startsWith("text/html");
+          console.log(
+            `[spain-pb] 🎯 clickSvc→getagendas/ intercepté: ${body.length}B ct=${ct.slice(0, 30)} redirect=${isRedirect}`,
+          );
+          agResolve?.(isRedirect ? "" : body);
+          agResolve = null;
+        } else if (url.includes("/datetime/")) {
+          const body = await response.text().catch(() => "");
+          if (body.length > 20) {
+            console.log(`[spain-pb] 🎯 clickSvc→datetime/ intercepté: ${body.length}B`);
+            dtRawsList.push(body);
+            // Armer un timer de drain : on attend dtTimeout après le PREMIER datetime/
+            // pour laisser le widget émettre les mois suivants s'il le fait naturellement.
+            if (dtRawsList.length === 1 && dtTimer === null) {
+              dtTimer = setTimeout(() => dtSignalResolve?.(), dtTimeout);
+            }
+          }
+        }
+      } catch { /* non-fatal */ }
+    };
+
+    page.on("response", onResponse);
+
+    try {
+      // ── Clic sur le service ────────────────────────────────────────────────
+      const clickedHref = await page.evaluate((prefId: string): string | null => {
+        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'));
+        const candidates = links
+          .map((a) => ({
+            href: a.getAttribute("href") ?? "",
+            text: (a.textContent ?? "").replace(/<[^>]+>/g, "").trim(),
+            el: a,
+          }))
+          .filter((c) => c.href && !c.href.includes("<%") && !c.href.includes("%>"));
+
+        if (candidates.length === 0) return null;
+
+        // 1. Correspondance exacte sur l'ID préféré
+        const byId = prefId ? candidates.find((c) => c.href.includes(prefId)) : null;
+        // 2. Service visa (heuristique nom)
+        const byName = candidates.find((c) =>
+          /tramitaci[oó]n.*visados?|visados?|visa/i.test(c.text || c.href),
+        );
+        // 3. Premier service visible
+        const fallback = candidates.find((c) => (c.text || c.href).trim().length > 0) ?? candidates[0];
+
+        const chosen = byId ?? byName ?? fallback;
+        if (chosen) {
+          chosen.el.click();
+          return chosen.href;
+        }
+        return null;
+      }, preferredId).catch(() => null);
+
+      if (!clickedHref) {
+        console.warn("[spain-pb] ⚠️ clickServiceAndCaptureSlots — aucun lien #selectservice/ dans le DOM");
+        return null;
+      }
+      console.log(`[spain-pb] 🖱️ clickServiceAndCaptureSlots — clic: ${clickedHref}`);
+
+      // ── Attente getagendas/ ────────────────────────────────────────────────
+      const agRaw = await Promise.race([
+        agPromise,
+        new Promise<string>((r) => setTimeout(() => r(""), agTimeout)),
+      ]);
+
+      if (!agRaw) {
+        console.log(
+          "[spain-pb] ⏭️  clickServiceAndCaptureSlots — getagendas/ vide/redirect " +
+          "→ pas d'agenda (widget revenu sur #services)",
+        );
+        return { getagendasRaw: "", datetimeRaws: [], clickedHref };
+      }
+
+      // ── getagendas/ a répondu avec des données → attendre datetime/ ────────
+      console.log(
+        `[spain-pb] ✅ clickServiceAndCaptureSlots — getagendas/ ${agRaw.length}B ` +
+        `— attente datetime/ (max ${dtTimeout}ms)…`,
+      );
+      await Promise.race([
+        dtSignal,
+        new Promise<void>((r) => setTimeout(r, dtTimeout + 1_000)),
+      ]);
+
+      console.log(
+        `[spain-pb] ✅ clickServiceAndCaptureSlots — ${dtRawsList.length} datetime/ capturé(s)`,
+      );
+      return { getagendasRaw: agRaw, datetimeRaws: [...dtRawsList], clickedHref };
+    } finally {
+      if (dtTimer !== null) clearTimeout(dtTimer);
+      page.off("response", onResponse);
+    }
+  }
+
   getCurrentTargetUrl(): string {
     return this._currentTargetUrl || DEFAULT_WIDGET_URL;
   }

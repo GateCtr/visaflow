@@ -985,46 +985,75 @@ async function confirmSlotsViaDatetime(
     const svcSlotsStart = allSlots.length; // repère pour détecter les créneaux de CE service
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
-    // 1. getagendas/ pour ce service
-    // Params confirmés par capture Burp réelle Chrome 150 (portail Cuba 2026-07-27).
-    // Universels Bookitit : services[] notation tableau, type, version, src, srvsrc requis.
+    // 1. getagendas/ via CLIC NATIF (machine à états correcte)
+    //
+    // POURQUOI le clic natif et non un fetch/AJAX direct :
+    //   getagendas/ appelé directement (hors-état) est systématiquement rejeté par le
+    //   serveur PHP Bookitit — il retourne 0B + text/html (redirection vers le début
+    //   du flux : OK → Continuar → /main/ → "No hay horas"). Ce 0B ne signifie PAS
+    //   "pas de créneaux" — il signifie "tu n'as pas passé par le clic service".
+    //   En cliquant #selectservice/, le JS natif Backbone déclenche getagendas/ dans
+    //   le bon état → réponse JSONP réelle.
     let agendaId = "";
+    const nativeDtRaws: string[] = []; // datetime/ capturés nativement, à parser avant AJAX
+    let agRawForParsing = "";
     try {
-      const agQ = new URLSearchParams();
-      const agCb = `${cbBase}ag`;
-      agQ.append("callback",       agCb);
-      console.log(`[spain-http] 🔧 callback getagendas/ = ${agCb}`);
-      agQ.append("type",           "default");
-      agQ.append("publickey",      publickey);
-      agQ.append("lang",           "es");
-      agQ.append("version",        "4");
-      agQ.append("src",            referer);
-      agQ.append("srvsrc",         srvsrc);
-      agQ.append("services[]",     svc.serviceId);
-      agQ.append("_",              String(Date.now()));
+      // ── Approche 1 : clic natif via SpainPersistentBrowser ─────────────────
+      const nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+        preferredServiceId: svc.serviceId,
+        agTimeoutMs: 8_000,
+        dtTimeoutMs: 7_000,
+      });
+
       let agRaw: string;
       let agRedirect = false;
-      if (useBrowserFetch) {
-        agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
-        const pageUrl = spainPersistentBrowser.getActivePage()?.url();
-        agRedirect = isBookititServiceRedirect(agRaw, pageUrl);
-        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B${agRedirect ? " [redirect:#services]" : ""}`);
+
+      if (nativeCapture !== null) {
+        agRaw = nativeCapture.getagendasRaw;
+        agRedirect = !agRaw;
+        console.log(
+          `[spain-http] 🗓  getagendas/ (clic natif) → ${agRaw.length}B` +
+          `${agRedirect ? " [redirect:#services → pas d'agenda]" : ""}` +
+          `${nativeCapture.datetimeRaws.length > 0
+            ? ` | datetime/ natif: ${nativeCapture.datetimeRaws.length} réponse(s)`
+            : ""}`,
+        );
+        nativeDtRaws.push(...nativeCapture.datetimeRaws);
       } else {
-        const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
-        agRaw = agRes?.ok ? await agRes.text() : "";
-        console.log(`[spain-http] 🗓  getagendas/ (impit) → HTTP ${agRes?.status ?? "null"} | ${agRaw.length}B`);
+        // ── Approche 2 : AJAX direct (fallback si page Chromium indisponible) ─
+        const agQ = new URLSearchParams();
+        const agCb = `${cbBase}ag`;
+        agQ.append("callback",   agCb);
+        console.log(`[spain-http] 🔧 getagendas/ fallback AJAX = ${agCb}`);
+        agQ.append("type",       "default");
+        agQ.append("publickey",  publickey);
+        agQ.append("lang",       "es");
+        agQ.append("version",    "4");
+        agQ.append("src",        referer);
+        agQ.append("srvsrc",     srvsrc);
+        agQ.append("services[]", svc.serviceId);
+        agQ.append("_",          String(Date.now()));
+        if (useBrowserFetch) {
+          agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
+          const pageUrl = spainPersistentBrowser.getActivePage()?.url();
+          agRedirect = isBookititServiceRedirect(agRaw, pageUrl);
+          console.log(`[spain-http] 🗓  getagendas/ (AJAX) → ${agRaw.length}B${agRedirect ? " [redirect:#services]" : ""}`);
+        } else {
+          const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
+          agRaw = agRes?.ok ? await agRes.text() : "";
+          console.log(`[spain-http] 🗓  getagendas/ (impit) → HTTP ${agRes?.status ?? "null"} | ${agRaw.length}B`);
+        }
       }
 
-      // Redirection vers #services = signal Bookitit "aucun agenda disponible pour ce service".
-      // Le widget JS navigue lui-même vers #services quand getagendas/ renvoie vide — ce n'est
-      // pas une erreur de session mais la vraie réponse du serveur. On saute datetime/ pour ce
-      // service et on passe au suivant.
       if (agRedirect) {
-        console.log(`[spain-http] ⏭️  getagendas/ redirect:#services → "${svc.serviceName}" sans agenda — service suivant`);
+        // Le widget a navigué vers #services après le clic — réinitialiser pour le prochain service
+        await spainPersistentBrowser.navigateToServicesView().catch(() => {});
+        console.log(`[spain-http] ⏭️  getagendas/ → "${svc.serviceName}" sans agenda — service suivant`);
         continue;
       }
 
       if (agRaw.length > 0) {
+        agRawForParsing = agRaw;
         const agData = parseJsonpPayload(agRaw);
         const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
         agendaId = ids[0] ?? "";
@@ -1034,6 +1063,7 @@ async function confirmSlotsViaDatetime(
     } catch (agErr) {
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
     }
+    void agRawForParsing; // utilisé implicitement via agendaId
 
     // 2. datetime/ sur 3 mois — en démarrant au bon mois selon la fenêtre de publication.
     //
