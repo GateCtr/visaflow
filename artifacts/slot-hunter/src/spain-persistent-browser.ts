@@ -716,7 +716,11 @@ class SpainPersistentBrowserManager {
         if (Array.isArray(p.Services)) {
           for (const s of p.Services) {
             const id = s && typeof s === "object" ? (s as Record<string, unknown>).id : undefined;
-            if (typeof id === "string" && id.length > 0) serviceIds.push(id);
+            const name = s && typeof s === "object" ? (s as Record<string, unknown>).name : undefined;
+            // Filter out disabled/invisible services (e.g., name contains <span style="display:none">)
+            const isVisible =
+              typeof name === "string" && !name.includes("display:none") && !name.includes("display: none");
+            if (typeof id === "string" && id.length > 0 && isVisible) serviceIds.push(id);
           }
         }
       }
@@ -1851,10 +1855,29 @@ class SpainPersistentBrowserManager {
             new Promise<void>((r) => setTimeout(r, 10_000)),
           ]);
           const cfgLen = this._apiPrefetchCache.get("getwidgetconfigurations/")?.length ?? 0;
-          const svcLen = this._apiPrefetchCache.get("getservices/")?.length ?? 0;
+          let svcLen = this._apiPrefetchCache.get("getservices/")?.length ?? 0;
           console.log(
             `[spain-pb] ⚡ Widget APIs — getwidgetconfigurations: ${cfgLen > 0 ? cfgLen + "B ✅" : "0B ❌"} | getservices: ${svcLen > 0 ? svcLen + "B ✅" : "0B ❌"}`,
           );
+
+          // ── Fallback prefetch si les APIs widget n'ont pas été capturées ──────
+          // Le widget JS peut ne pas appeler getservices/ quand "No hay horas"
+          // est affiché directement dans /main/ (pas de services à afficher).
+          // Sans ce fallback, le cache _apiPrefetchCache reste vide → les probes
+          // suivants doivent appeler getservices/ en live, mais le PHPSESSID
+          // expire après ~20 min → 0B → faux "not_found" en boucle.
+          // On force l'appel via _prefetchBookititApis (jQuery.ajax natif widget
+          // + fetch direct) pendant que la session PHP est encore fraîche.
+          if (cfgLen === 0 || svcLen === 0) {
+            console.log(`[spain-pb] ⚡ APIs widget incomplètes — fallback _prefetchBookititApis…`);
+            await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
+              console.warn(`[spain-pb] ⚠️ _prefetchBookititApis fallback (non-fatal): ${e}`),
+            );
+            svcLen = this._apiPrefetchCache.get("getservices/")?.length ?? 0;
+            console.log(
+              `[spain-pb] ⚡ Après fallback — getservices: ${svcLen > 0 ? svcLen + "B ✅" : "0B ❌"}`,
+            );
+          }
 
           // ── Laisser le widget suivre sa vraie séquence ─────────────────────────────
           // 1) /main/ initialise le contexte Bookitit et le state du widget.

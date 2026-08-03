@@ -490,6 +490,10 @@ export function extractServiceDetails(payload: unknown): Array<{ id: string; nam
     // Remove HTML tags and decode common entities
     s = s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
     s = decodeHtmlEntities(s);
+    // Filter out services with display:none (invisible placeholders)
+    // Check raw string BEFORE stripping tags for better accuracy
+    const rawStr = String(raw);
+    if (rawStr.includes("display:none") || rawStr.includes("display: none")) return null;
     // If name is empty or only punctuation after stripping, treat as absent
     if (s.replace(/[^\w\d]/g, "").length === 0) return null;
     return s.length > 0 ? s : null;
@@ -2031,9 +2035,35 @@ async function scanViaMainEndpoint(
   // • Autres sessions → impit comme avant (step 2b a normalement validé cf_clearance).
   let mainBody = "";
   let mainCfRay = "";
+  // Piste le fait que /main/ vient du cache prefetch (session.prefetchedMainHtml)
+  // plutôt que d'un fetch live. Quand l'AJAX (getservices/getwidgetconfigurations)
+  // retourne 0B et que /main/ vient du cache, le PHPSESSID a probablement expiré
+  // (TTL ~20 min) — le "No hay horas" du cache est potentiellement stale.
+  // On invalide la session pour forcer un solve frais au prochain probe.
+  let mainFromCache = false;
+
+  // ── PROACTIVE STALE-CACHE REFRESH ───────────────────────────────────────
+  // La session CF dure ~115 min, mais le PHPSESSID Bookitit a un TTL serveur
+  // de ~20 min. Après 20 min sans requête, la session PHP expire →
+  // getservices/getwidgetconfigurations retournent 0B (HTTP 200 body vide).
+  // Quand l'âge de la session dépasse 12 min (seuil conservateur avant le
+  // TTL de 20 min), on efface le /main/ caché pour forcer un fetch live depuis
+  // le contexte browser. Ce fetch envoie le PHPSESSID → le serveur étend
+  // le TTL de la session PHP → les appels AJAX suivants fonctionnent.
+  // Le /main/ frais reflète aussi la disponibilité actuelle des créneaux.
+  const PHP_SESSION_REFRESH_MS = 12 * 60_000; // 12 min (TTL réel ~20 min)
+  if (session.prefetchedMainHtml && session.createdAt && (Date.now() - session.createdAt) > PHP_SESSION_REFRESH_MS) {
+    const sessionAgeMin = Math.round((Date.now() - session.createdAt) / 60_000);
+    console.log(
+      `[spain-http] ⏰ /main/ cache stale (session âgée de ${sessionAgeMin}min > ${PHP_SESSION_REFRESH_MS / 60_000}min) — ` +
+      `clear cache → fetch live (refresh PHPSESSID)`,
+    );
+    session.prefetchedMainHtml = undefined;
+  }
 
   if (session.prefetchedMainHtml) {
     mainBody = session.prefetchedMainHtml;
+    mainFromCache = true;
     console.log(
       `[spain-http] 📦 /main/ pré-fetchée via Chromium (${mainBody.length}B) — appel impit ignoré`,
     );
@@ -2312,7 +2342,10 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots) {
+      if (hasVisibleNoSlots && mainFromCache) {
+        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      } else if (hasVisibleNoSlots) {
         console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
       } else {
         console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
@@ -2349,7 +2382,10 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots) {
+      if (hasVisibleNoSlots && mainFromCache) {
+        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      } else if (hasVisibleNoSlots) {
         console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
       } else {
         console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
@@ -2379,7 +2415,10 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots) {
+      if (hasVisibleNoSlots && mainFromCache) {
+        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      } else if (hasVisibleNoSlots) {
         console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
       } else {
         console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
@@ -2410,7 +2449,10 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 #idListServices non-vide — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots) {
+      if (hasVisibleNoSlots && mainFromCache) {
+        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      } else if (hasVisibleNoSlots) {
         console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
       } else {
         console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
@@ -2453,7 +2495,10 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 Pas de "No hay horas" dans le container — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
-      if (hasVisibleNoSlots) {
+      if (hasVisibleNoSlots && mainFromCache) {
+        console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      } else if (hasVisibleNoSlots) {
         console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
       } else {
         console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
