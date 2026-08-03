@@ -136,6 +136,13 @@ export interface SpainCfSession {
    * l'appel impit) car CF bloque /main/ pour les user-agents non-browser (0B text/html).
    */
   prefetchedMainHtml?: string;
+  /**
+   * Publickey Bookitit du portail pour lequel cette session a été résolue.
+   * Ex: "25028fcd7126544630b8da0c6e60722b5" (Kinshasa).
+   * Permet de détecter une contamination inter-portail (ex: session Saopolo réutilisée
+   * pour Kinshasa) et d'invalider prefetchedMainHtml + apiPrefetchCache stale.
+   */
+  portalKey?: string;
 }
 
 /**
