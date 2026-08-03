@@ -999,15 +999,27 @@ async function confirmSlotsViaDatetime(
       agQ.append("services[]",     svc.serviceId);
       agQ.append("_",              String(Date.now()));
       let agRaw: string;
+      let agRedirect = false;
       if (useBrowserFetch) {
         agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
         const pageUrl = spainPersistentBrowser.getActivePage()?.url();
-        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B${isBookititServiceRedirect(agRaw, pageUrl) ? " [redirect:#services]" : ""}`);
+        agRedirect = isBookititServiceRedirect(agRaw, pageUrl);
+        console.log(`[spain-http] 🗓  getagendas/ → ${agRaw.length}B${agRedirect ? " [redirect:#services]" : ""}`);
       } else {
         const agRes = await spainCfFetch(`${base}getagendas/?${agQ}`, session, { headers });
         agRaw = agRes?.ok ? await agRes.text() : "";
         console.log(`[spain-http] 🗓  getagendas/ (impit) → HTTP ${agRes?.status ?? "null"} | ${agRaw.length}B`);
       }
+
+      // Redirection vers #services = signal Bookitit "aucun agenda disponible pour ce service".
+      // Le widget JS navigue lui-même vers #services quand getagendas/ renvoie vide — ce n'est
+      // pas une erreur de session mais la vraie réponse du serveur. On saute datetime/ pour ce
+      // service et on passe au suivant.
+      if (agRedirect) {
+        console.log(`[spain-http] ⏭️  getagendas/ redirect:#services → "${svc.serviceName}" sans agenda — service suivant`);
+        continue;
+      }
+
       if (agRaw.length > 0) {
         const agData = parseJsonpPayload(agRaw);
         const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
@@ -1055,15 +1067,25 @@ async function confirmSlotsViaDatetime(
         console.log(`[spain-http] 📡 datetime params → callback=${dtCb} service=${svc.serviceId} agenda=${agendaId || "<none>"} start=${start} end=${end} selectedPeople=1`);
 
         let dtRaw: string;
+        let dtRedirect = false;
         if (useBrowserFetch) {
           dtRaw = await fetchBookititBodyWithFallback(session, datetimeUrl, headers);
           const pageUrl = spainPersistentBrowser.getActivePage()?.url();
-          console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B${isBookititServiceRedirect(dtRaw, pageUrl) ? " [redirect:#services]" : ""}`);
+          dtRedirect = isBookititServiceRedirect(dtRaw, pageUrl);
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B${dtRedirect ? " [redirect:#services]" : ""}`);
         } else {
           const dtRes = await spainCfFetch(datetimeUrl, session, { headers });
           dtRaw = dtRes?.ok ? await dtRes.text() : "";
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit) → HTTP ${dtRes?.status ?? "null"} | ${dtRaw.length}B`);
         }
+
+        // Redirection #services sur datetime/ = Bookitit confirme "aucun créneau" pour ce mois.
+        // Les mois suivants donneront le même résultat — on sort du loop de mois.
+        if (dtRedirect) {
+          console.log(`[spain-http] ⏭️  datetime/ ${start} redirect:#services → aucun créneau confirmé — stop mois`);
+          break;
+        }
+
         if (dtRaw.length > 0) {
           const parsed = parseJsonpPayload(dtRaw);
           // ── Log structure brute du premier jour (voir les champs réels Bookitit) ──
