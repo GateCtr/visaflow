@@ -796,7 +796,7 @@ async function confirmSlotsViaDatetime(
   allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
   /** Config widget capturée (captcha, registration_type, waiting_list, confirmation…) */
   widgetConfig?: Record<string, unknown>;
-} | null> {
+} | null | "ajax_unavailable"> {
   const base = "https://www.citaconsular.es/onlinebookings/";
   // Accumulateurs — peuplés au fil des appels datetime/ puis retournés avec le résultat.
   const allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }> = [];
@@ -898,8 +898,12 @@ async function confirmSlotsViaDatetime(
         svcRaw = await fetchBookititBodyWithFallback(session, `${base}getservices/?${svcQ}`, headers);
         console.log(`[spain-http] 🔬 getservices/ → ${svcRaw.length}B${svcRaw.length === 0 ? " (browser/session unavailable)" : ""}`);
         if (!svcRaw) {
-          console.log(`[spain-http] ⚠️ getservices/ fallback → 0B → not_found`);
-          return null;
+          // 0B = CF bloque les appels fetch() explicites depuis une session fast-track (ghost cookie).
+          // Ce n'est PAS un vrai "no-slots" — l'AJAX est indisponible, pas le portail.
+          // Le sentinel "ajax_unavailable" permet aux appelants de distinguer ce cas
+          // d'un vrai `null` (datetime/ a tourné et n'a trouvé aucun créneau).
+          console.log(`[spain-http] ⚠️ getservices/ fallback → 0B — AJAX indisponible (session fast-track)`);
+          return "ajax_unavailable";
         }
       } else {
         const svcRes = await spainCfFetch(`${base}getservices/?${svcQ}`, session, { headers });
@@ -2261,6 +2265,15 @@ async function scanViaMainEndpoint(
     }
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      if (hasVisibleNoSlots) {
+        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+      } else {
+        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      }
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2289,6 +2302,15 @@ async function scanViaMainEndpoint(
     );
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      if (hasVisibleNoSlots) {
+        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+      } else {
+        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      }
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2310,6 +2332,15 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🔍 Services RENDUS (hors template) — vérification datetime/…`);
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      if (hasVisibleNoSlots) {
+        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+      } else {
+        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      }
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     if (!confirmed) {
       console.log(`[spain-http] 🧭 Phase 3 — décision finale: pas de slot après vérification secondaire`);
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
@@ -2332,6 +2363,15 @@ async function scanViaMainEndpoint(
   if (listServicesMatch && listServicesMatch[1].trim().length > 10) {
     console.log(`[spain-http] 🔍 #idListServices non-vide — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      if (hasVisibleNoSlots) {
+        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+      } else {
+        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      }
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     if (!confirmed) {
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
@@ -2366,6 +2406,15 @@ async function scanViaMainEndpoint(
   if (!hasNoHorasInContainer && containerHtml.length > 100) {
     console.log(`[spain-http] 🔍 Pas de "No hay horas" dans le container — vérification datetime/…`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      if (hasVisibleNoSlots) {
+        console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
+      } else {
+        console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
+        await spainPersistentBrowser.closeAndInvalidate();
+      }
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
     if (!confirmed) {
       return { status: "not_found", scanDurationMs: Date.now() - t0 };
     }
