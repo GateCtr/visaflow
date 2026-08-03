@@ -79,6 +79,7 @@ import {
   restoreApiPrefetchCacheFromRedis,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
+import { KINSHASA_PORTAL_URL } from "./spain-portals.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -251,8 +252,8 @@ const CF_POLL_INTERVAL_MS = 2_000;
 /** Timeout health-check du browser (avant de le considérer mort). */
 const BROWSER_HEALTH_TIMEOUT_MS = 5_000;
 
-/** URL widget cible par défaut. */
-const DEFAULT_WIDGET_URL = process.env.SPAIN_WIDGET_URL || "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/";
+/** URL widget cible par défaut — Kinshasa (portail principal RDC). */
+const DEFAULT_WIDGET_URL = process.env.SPAIN_WIDGET_URL || KINSHASA_PORTAL_URL;
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
@@ -587,8 +588,14 @@ class SpainPersistentBrowserManager {
       `[spain-pb] ⚡ Prefetch 1/2 — getwidgetconfigurations: ${cfgOk ? cfgRaw.length + "B ✅" : "0B ❌"} | getservices: ${svcOk ? svcRaw.length + "B ✅" : "0B ❌"}`,
     );
 
-    if (cfgOk) this._apiPrefetchCache.set("getwidgetconfigurations/", cfgRaw);
-    if (svcOk) this._apiPrefetchCache.set("getservices/", svcRaw);
+    if (cfgOk) {
+      this._apiPrefetchCache.set("getwidgetconfigurations/", cfgRaw);
+      if (publickey) this._apiPrefetchCache.set(`getwidgetconfigurations/${publickey}`, cfgRaw);
+    }
+    if (svcOk) {
+      this._apiPrefetchCache.set("getservices/", svcRaw);
+      if (publickey) this._apiPrefetchCache.set(`getservices/${publickey}`, svcRaw);
+    }
 
     // ── Vague 2 : getagendas/ + datetime/ par service, pendant que la session PHP est chaude ──
     // getagendas/ et datetime/ retournent 0B si la session PHP Bookitit a expiré
@@ -1342,9 +1349,11 @@ class SpainPersistentBrowserManager {
         }
         // Track widget JSONP APIs — capturés naturellement par le widget JS
         if (url.includes("onlinebookings/getwidgetconfigurations")) {
-          pendingApiRequests.set(ev.requestId, "getwidgetconfigurations/");
+          // Store full URL so loadingFinished can extract publickey for namespaced cache key
+          pendingApiRequests.set(ev.requestId, "getwidgetconfigurations/:" + url);
         } else if (url.includes("onlinebookings/getservices") && !url.includes("getagendas") && !url.includes("datetime")) {
-          pendingApiRequests.set(ev.requestId, "getservices/");
+          // Store full URL so loadingFinished can extract publickey for namespaced cache key
+          pendingApiRequests.set(ev.requestId, "getservices/:" + url);
         } else if (url.includes("onlinebookings/getagendas")) {
           // Store full URL so loadingFinished can extract the service ID for cache keying
           pendingApiRequests.set(ev.requestId, "getagendas/:" + url);
@@ -1417,8 +1426,17 @@ class SpainPersistentBrowserManager {
         //   - Svc key   : "getagendas/<svcId>"      / "datetime/YYYY-MM/<svcId>" (callBookititEndpointViaBrowser lookup)
         let ep = rawEp;
         let cacheKey = rawEp;
-        let cacheKeyAlt: string | null = null; // second key to store under (service-specific)
-        if (rawEp.startsWith("getagendas/:")) {
+        let cacheKeyAlt: string | null = null; // second key to store under (namespaced)
+        if (rawEp.startsWith("getwidgetconfigurations/:") || rawEp.startsWith("getservices/:")) {
+          // Format: "endpoint/:" + fullUrl — extract publickey for namespaced cache key
+          const colonIdx = rawEp.indexOf(":");
+          ep = rawEp.slice(0, colonIdx); // "getwidgetconfigurations/" or "getservices/"
+          cacheKey = ep; // bare key (backward compat + internal signal checks)
+          try {
+            const pk = new URLSearchParams(new URL(rawEp.slice(colonIdx + 1)).search).get("publickey") ?? "";
+            if (pk) cacheKeyAlt = `${ep}${pk}`;
+          } catch { /* non-fatal */ }
+        } else if (rawEp.startsWith("getagendas/:")) {
           ep = "getagendas/";
           cacheKey = "getagendas/"; // bare key for internal signal checks
           try {
@@ -2995,7 +3013,13 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   // Cache keys include service ID when available to distinguish per-service responses.
   // datetime/ also keyed by month to avoid juillet/août collision.
   let cacheKey = endpoint;
-  if (endpoint === "getagendas/") {
+  if (endpoint === "getwidgetconfigurations/" || endpoint === "getservices/") {
+    // Prefer publickey-namespaced key to avoid cross-portal contamination
+    try {
+      const pk = new URLSearchParams(new URL(url).search).get("publickey") ?? "";
+      if (pk) cacheKey = `${endpoint}${pk}`;
+    } catch { /* keep cacheKey = endpoint */ }
+  } else if (endpoint === "getagendas/") {
     try {
       const svcId = new URLSearchParams(new URL(url).search).get("services[]") ?? "";
       if (svcId) cacheKey = `getagendas/${svcId}`;
@@ -3044,10 +3068,28 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
   try {
     const currentUrl = page.url();
     const currentOrigin = await page.evaluate(() => window.location.origin).catch(() => "");
-    const shouldReset = !currentOrigin.includes("citaconsular.es") || /\/XWFQ|\/cdn-cgi\//i.test(currentUrl) || currentUrl.includes("about:blank");
+
+    // Fix 3 : détecter un mauvais portail (publickey de la page ≠ publickey de l'URL demandée)
+    // Exemple : page sur Saopolo (2d01502f) mais requête pour Kinshasa (25028fcd) → 0B garanti.
+    let requestedPublickey = "";
+    try { requestedPublickey = new URLSearchParams(new URL(url).search).get("publickey") ?? ""; } catch { /* non-fatal */ }
+    const currentPublickey = currentUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/i)?.[1] ?? "";
+    const wrongPortal = requestedPublickey.length > 0 && currentPublickey.length > 0 && requestedPublickey !== currentPublickey;
+
+    const shouldReset = !currentOrigin.includes("citaconsular.es")
+      || /\/XWFQ|\/cdn-cgi\//i.test(currentUrl)
+      || currentUrl.includes("about:blank")
+      || wrongPortal;
+
     if (shouldReset) {
-      console.log(`[spain-pb] 🔄 callBrowser → contexte non-portail (${currentUrl}) — retour au widget cible…`);
-      const targetUrl = spainPersistentBrowser.getCurrentTargetUrl();
+      const reason = wrongPortal
+        ? `mauvais portail (page=${currentPublickey.slice(0, 8)}…, req=${requestedPublickey.slice(0, 8)}…)`
+        : `contexte non-portail (${currentUrl.slice(0, 80)})`;
+      console.log(`[spain-pb] 🔄 callBrowser → ${reason} — navigation vers le bon portail…`);
+      // Si mauvais portail : naviguer vers l'URL contenant la bonne publickey
+      const targetUrl = wrongPortal && requestedPublickey
+        ? `https://www.citaconsular.es/es/hosteds/widgetdefault/${requestedPublickey}/`
+        : spainPersistentBrowser.getCurrentTargetUrl();
       await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
         timeout: 20_000,
