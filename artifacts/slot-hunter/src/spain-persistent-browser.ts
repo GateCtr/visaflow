@@ -1670,16 +1670,24 @@ class SpainPersistentBrowserManager {
         //   → Si on arme l'intercepteur et attend un JSD POST, celui-ci ne vient jamais
         //     → timeout 8s → /main/ libéré mais retourne 0B (CF n'a pas validé le POST).
         //
-        // FIX : Si un JSD a déjà eu lieu avant le clic Continuar (jsdOneShotAt > 0),
-        //   CF a DÉJÀ validé le fingerprint TLS → ne pas bloquer /main/.
+        // FIX 1 — JSD pré-Continuar : Si un JSD a déjà eu lieu avant le clic Continuar
+        //   (jsdOneShotAt > 0), CF a DÉJÀ validé le fingerprint TLS → ne pas bloquer /main/.
         //   On laisse le widget appeler /main/ naturellement et le capture via
         //   Network.loadingFinished (cdpNet, déjà armé en début de function).
-        //   Si au contraire aucun JSD spontané n'a eu lieu, on arme l'intercepteur
-        //   comme avant (ancien comportement CF).
+        //
+        // FIX 2 — Fast-track IP (jsdSolveMs < 3s) : CF reconnaît l'IP Decodo comme fiable
+        //   et émet cf_clearance IMMÉDIATEMENT sans challenge réel. Dans ce cas :
+        //   - Aucun JSD ne fire avant ni après Continuar (CF juge la session déjà valide)
+        //   - Si on arme l'intercepteur, il attend 8s un JSD POST qui ne vient jamais
+        //     → /main/ libéré mais cookie fantôme → 0B garanti.
+        //   Fix : ne pas armer l'intercepteur — laisser /main/ se déclencher naturellement.
+        //   CF enverra le cf_clearance fast-track avec /main/ ; si 0B, le Round 2 ou
+        //   closeAndInvalidate prendront le relais (détection fast-track déjà en place).
 
         const preContinuarJsdFired = jsdOneShotAt > 0;
+        const isFastTrack = jsdSolveMs > 0 && jsdSolveMs < 3_000;
 
-        if (!preContinuarJsdFired) {
+        if (!preContinuarJsdFired && !isFastTrack) {
           // Ancien comportement : JSD attendu après le POST Continuar.
           jsdOneShotAccepted = false; // Reset — on attend le JSD POST
           const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
@@ -1713,9 +1721,15 @@ class SpainPersistentBrowserManager {
           } catch (fetchInterceptErr) {
             console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ POST (non-fatal): ${fetchInterceptErr}`);
           }
+        } else if (isFastTrack) {
+          // IP de confiance CF (fast-track) — aucun JSD ne fire avant ni après Continuar.
+          // Armer l'intercepteur bloquerait /main/ pendant 8s pour rien → cookie fantôme → 0B.
+          // On laisse Network.loadingFinished (déjà armé) capturer le body naturellement.
+          console.log(
+            `[spain-pb] ⚡ Fast-track IP (cf_clearance en ${jsdSolveMs}ms) — intercepteur Fetch désactivé, /main/ libre naturellement`,
+          );
         } else {
-          // JSD spontané avant Continuar — ne devrait plus arriver maintenant qu'on ne supprime
-          // plus cf_clearance. CF a validé le fingerprint → /main/ peut s'exécuter librement.
+          // JSD spontané avant Continuar — CF a validé le fingerprint → /main/ peut s'exécuter librement.
           // On laisse Network.loadingFinished (déjà armé) capturer le body.
           console.log(`[spain-pb] ℹ️ JSD pré-Continuar détecté (${Date.now() - jsdOneShotAt}ms ago) — intercepteur Fetch désactivé, /main/ libre`);
         }
