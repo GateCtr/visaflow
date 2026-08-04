@@ -588,9 +588,14 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
   );
 
   // ── Cas 1 : signin (compte existant) ──────────────────────────────────────
-  // Si le hash contient "signin" (mais pas "signup"), c'est le flow compte existant.
+  // Couvre #signin (registration_type=3) ET #signupsecondappointment (registration_type=2).
+  // signupsecondappointment.js extends SignInContainer → même formulaire login+password,
+  // même endpoint signin/ — PAS un formulaire name+email comme signupfirstappointment.
   // Si hash non-résolu → on tente signin par défaut (les champs seront absents → section skip).
-  if (postSelectHash.includes("signin") && !postSelectHash.includes("signup")) {
+  if (
+    (postSelectHash.includes("signin") && !postSelectHash.includes("signup")) ||
+    postSelectHash.includes("signupsecondappointment")
+  ) {
     // Formulaire signin : #idIptBktSignInlogin + #idIptBktSignInpassword
     const signInInput = page.locator("#idIptBktSignInlogin");
     const signInPass = page.locator("#idIptBktSignInpassword");
@@ -621,8 +626,11 @@ async function tryAutoBookSpainSlot(page: Page, job: HunterJob, slot: SpainSlot)
 
   // ── Cas 2 : signup / signupfirstappointment (nouveau compte) ─────────────
   // Le formulaire signup demande name, email, éventuellement passport number.
-  // On remplit avec les données du job (applicantName, userEmail, passportNumber).
-  if (postSelectHash.includes("signup") || postSelectHash.includes("signupfirstappointment")) {
+  // EXCLURE #signupsecondappointment : extends SignInContainer → Cas 1 (login+password), pas Cas 2.
+  if (
+    (postSelectHash.includes("signup") || postSelectHash.includes("signupfirstappointment")) &&
+    !postSelectHash.includes("signupsecondappointment")
+  ) {
     const nameInput = page.locator("#idIptBktname");
     const emailInput = page.locator("#idIptBktemail");
     const acceptCheck = page.locator("#idIptBktAcceptCondtions");
