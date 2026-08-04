@@ -2465,7 +2465,10 @@ async function scanViaMainEndpoint(
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
   const VISIBLE_NO_SLOTS_RE = /<div\s+style=(["'])[^"']*\1[^>]*>\s*No hay horas disponibles/i;
-  const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton|Aceptar/i.test(html);
+  // dialog-confirm + bktContinue = marqueurs server-side spécifiques à citaconsular.es
+  // présents UNIQUEMENT quand des créneaux existent (São Paulo pattern confirmé sur HTML réel).
+  // idDivBktButtonContinueContainer / idBktDefaultCustomContainer = fallbacks génériques Bookitit.
+  const hasAcceptModal = /id=['"]dialog-confirm['"]|id=['"]bktContinue['"]|idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton/i.test(html);
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
