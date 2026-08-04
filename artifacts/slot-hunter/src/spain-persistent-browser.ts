@@ -1535,6 +1535,18 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ Navigation initiale (non-fatal, boucle widget prend le relais): ${navErr}`);
     }
 
+    // Vérifier si la navigation a abouti à une page d'erreur Chrome (ERR_TUNNEL_CONNECTION_FAILED,
+    // ERR_PROXY_CONNECTION_FAILED, etc.) — dans ce cas la page ne chargera jamais et le JSD ne
+    // s'exécutera pas. Inutile d'attendre 65s pour rien.
+    {
+      const navUrl = page.url();
+      if (navUrl.startsWith("chrome-error://") || navUrl.startsWith("about:")) {
+        console.error(`[spain-pb] ❌ Navigation échouée — page d'erreur Chrome détectée: ${navUrl}`);
+        console.error(`[spain-pb] ❌ Cause probable: proxy injoignable ou tunnel HTTPS refusé (ERR_TUNNEL_CONNECTION_FAILED / ERR_PROXY_CONNECTION_FAILED)`);
+        return null;
+      }
+    }
+
     // ── Refresh page après navigation — CF peut avoir redirigé vers une nouvelle Frame ──
     // Si CF fait window.location.replace() ou crée une nouvelle Frame pendant la navigation,
     // l'ancienne variable `page` devient obsolète (detached Frame). On prend toujours
