@@ -299,16 +299,44 @@ function noAvailableSlotsInBktPayload(...htmlSources: string[]): boolean | "unkn
 
 /** Détecte "No hay horas" visible vs masqué (guillemets simples ou doubles). */
 function detectNoHayHorasVisibility(html: string): { visible: boolean; hidden: boolean } {
-  const divRe = /<div\s+style=(["'])([\s\S]*?)\1[^>]*>([\s\S]*?)<\/div>/gi;
+  // Strip <script> blocks (templates Underscore.js etc.) pour éviter les faux positifs
+  // dans les blocs <script type="text/template"> qui ne sont jamais "visibles".
+  const stripped = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+
+  const TARGET = "No hay horas disponibles";
   let visible = false;
-  let hidden = false;
-  for (const m of html.matchAll(divRe)) {
-    const style = m[2];
-    const content = m[3];
-    if (!/No hay horas disponibles/i.test(content)) continue;
-    if (/display:\s*none/i.test(style)) hidden = true;
-    else visible = true;
+  let hidden  = false;
+
+  let searchFrom = 0;
+  while (true) {
+    const idx = stripped.indexOf(TARGET, searchFrom);
+    if (idx === -1) break;
+    searchFrom = idx + TARGET.length;
+
+    // Remonter jusqu'au dernier <div qui précède le texte cible (≤ 1000 chars).
+    // On cherche le tag le plus proche pour éviter que le style d'un parent lointain
+    // soit confondu avec le style du div direct (bug regex [\s\S]*? sur divs imbriqués).
+    const lookback   = stripped.slice(Math.max(0, idx - 1000), idx);
+    const lastDivPos = lookback.lastIndexOf("<div");
+    if (lastDivPos === -1) { visible = true; continue; }
+
+    const divFragment = lookback.slice(lastDivPos);
+    const divEnd      = divFragment.indexOf(">");
+    if (divEnd === -1) { visible = true; continue; }
+    const divTag = divFragment.slice(0, divEnd + 1);
+
+    // Extraire la valeur de l'attribut style
+    const styleMatch = divTag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+    if (!styleMatch) { visible = true; continue; }
+
+    const style = (styleMatch[1] ?? styleMatch[2] ?? "");
+    if (/display\s*:\s*none/i.test(style)) {
+      hidden = true;
+    } else {
+      visible = true;
+    }
   }
+
   return { visible, hidden };
 }
 
