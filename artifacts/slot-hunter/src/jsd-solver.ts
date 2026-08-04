@@ -83,14 +83,16 @@ export class JSDSolver {
   private siteKey?: string;
 
   /**
-   * @param portalUrl  - Full URL of the CF-protected portal (e.g. https://www.citaconsular.es/...)
-   * @param userAgent  - Browser UA string (defaults to Chrome 136 Win)
-   * @param proxyUrl   - Optional proxy URL for sticky sessions (REQUIRED when cf_clearance is IP-bound)
+   * @param portalUrl      - Full URL of the CF-protected portal (e.g. https://www.citaconsular.es/...)
+   * @param userAgent      - Browser UA string (defaults to Chrome 136 Win)
+   * @param proxyUrl       - Optional proxy URL for sticky sessions (REQUIRED when cf_clearance is IP-bound)
+   * @param existingImpit  - Optional pre-initialised impit instance to reuse (same TLS session as probe)
    */
   constructor(
     portalUrl: string,
     userAgent: string = DEFAULT_USER_AGENT,
     proxyUrl?: string,
+    existingImpit?: InstanceType<typeof Impit>,
   ) {
     this.portalUrl = portalUrl;
     this.userAgent = userAgent;
@@ -103,14 +105,22 @@ export class JSDSolver {
     // Single impit instance per solver — all requests share the same TLS session.
     // This is critical: cf_clearance is tied to the (IP, TLS fingerprint) pair.
     // If we switch instances mid-solve, the cookie will be rejected.
-    this._impit = new Impit({
-      browser: "chrome",
-      ...(proxyUrl ? { proxyUrl } : {}),
-    } as any);
-
-    console.log(
-      `[jsd-solver] 🔧 Initialisé pour ${this.baseUrl}${proxyUrl ? " (proxy)" : " (direct)"}`,
-    );
+    // When the caller (e.g. solveViaImpit) already made a probe request, reuse that
+    // impit instance so the TLS session is continuous from probe → challenge → clearance.
+    if (existingImpit) {
+      this._impit = existingImpit;
+      console.log(
+        `[jsd-solver] 🔧 Initialisé pour ${this.baseUrl}${proxyUrl ? " (proxy)" : " (direct)"} — impit réutilisé (TLS session continue)`,
+      );
+    } else {
+      this._impit = new Impit({
+        browser: "chrome",
+        ...(proxyUrl ? { proxyUrl } : {}),
+      } as any);
+      console.log(
+        `[jsd-solver] 🔧 Initialisé pour ${this.baseUrl}${proxyUrl ? " (proxy)" : " (direct)"}`,
+      );
+    }
   }
 
   /** The impit instance used — callers MUST reuse it for all subsequent requests. */
@@ -125,14 +135,18 @@ export class JSDSolver {
    *
    * The returned `session.impit` MUST be used for all subsequent requests —
    * it is the same impit instance that obtained the cookie (same TLS session).
+   *
+   * @param timeoutMs      - Max time for the full solve (default 30s)
+   * @param prefetchedHtml - Optional HTML already fetched by the caller (avoids a redundant GET)
    */
-  public async solve(timeoutMs = 30_000): Promise<JSDSolveResult> {
+  public async solve(timeoutMs = 30_000, prefetchedHtml?: string): Promise<JSDSolveResult> {
     console.log(`[jsd-solver] 🚀 Début résolution JSD pour: ${this.portalUrl}`);
     const t0 = Date.now();
 
     try {
       // Step 1 : Fetch portal HTML and extract CF challenge params
-      const challengeParams = await this.fetchChallengeParams(timeoutMs);
+      // If the caller already has the HTML (e.g. from a probe request), skip the GET.
+      const challengeParams = await this.fetchChallengeParams(timeoutMs, prefetchedHtml);
       if (!challengeParams) {
         throw new Error("Impossible d'extraire les paramètres du challenge JSD (__CF$cv$params absent)");
       }
@@ -172,30 +186,46 @@ export class JSDSolver {
 
   // ─── Step 1 : Fetch challenge params ────────────────────────────────────────
 
-  private async fetchChallengeParams(timeoutMs: number): Promise<JSDChallengeParams | null> {
+  private async fetchChallengeParams(
+    timeoutMs: number,
+    prefetchedHtml?: string,
+  ): Promise<JSDChallengeParams | null> {
     try {
-      const res = await this.fetchViaImpit(this.portalUrl, {
-        headers: {
-          "User-Agent": this.userAgent,
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "none",
-          "Upgrade-Insecure-Requests": "1",
-        },
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      let html: string;
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} fetching portal`);
+      if (prefetchedHtml) {
+        // Reuse HTML already fetched by the caller — avoids a redundant GET and keeps
+        // the TLS session intact (no extra round-trip that could alter CF state).
+        html = prefetchedHtml;
+        console.log(
+          `[jsd-solver] Portal HTML réutilisé depuis probe (${html.length} chars)`,
+        );
+      } else {
+        const res = await this.fetchViaImpit(this.portalUrl, {
+          headers: {
+            "User-Agent": this.userAgent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Upgrade-Insecure-Requests": "1",
+          },
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        // CF challenge pages return 403 — allow it and parse the HTML body.
+        // Any other non-2xx error (500, 429, etc.) is a real failure.
+        if (!res.ok && res.status !== 403) {
+          throw new Error(`HTTP ${res.status} fetching portal`);
+        }
+
+        html = await res.text();
+        console.log(
+          `[jsd-solver] Portal HTML reçu (${html.length} chars, status=${res.status})`,
+        );
       }
-
-      const html = await res.text();
-      console.log(
-        `[jsd-solver] Portal HTML reçu (${html.length} chars, status=${res.status})`,
-      );
 
       // Extract __CF$cv$params
       const paramsMatch = html.match(/window\.__CF\$cv\$params\s*=\s*(\{[^}]+\})/);

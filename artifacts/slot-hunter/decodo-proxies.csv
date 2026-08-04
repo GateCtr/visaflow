@@ -1,10 +1,14 @@
-dc.decodo.com:10001:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10002:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10003:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10004:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10005:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10006:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10007:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10008:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10009:sp8zzigoui:5mK3kr_L9uu3wiwMyT
-dc.decodo.com:10010:sp8zzigoui:5mK3kr_L9uu3wiwMyT
+# Decodo proxy pool for Spain citaconsular.es scanner
+# Format: host:port:username:password
+#
+# DC proxies (dc.decodo.com) have been removed because Cloudflare recognises them
+# as "trusted" IPs and issues cf_clearance in <3 s (fast-track). The JSD oneshot
+# that follows returns a phantom cookie (CF says "already valid — no new clearance"),
+# causing /main/ to return 0 B on every solve attempt.
+#
+# Fix: leave this file empty so spain-decodo-pool.ts falls back to DECODO_PROXY_URL
+# (ISP residential proxy). ISP IPs are unknown to CF → full JSD challenge (~10-40 s)
+# → real cf_clearance → /main/ returns the expected 124 KB HTML body.
+#
+# To add dedicated ISP or residential IP entries, uncomment and edit:
+# isp.decodo.com:10010:USERNAME:PASSWORD

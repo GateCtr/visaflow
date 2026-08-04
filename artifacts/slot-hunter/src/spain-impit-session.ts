@@ -1,19 +1,23 @@
 /**
  * spain-impit-session.ts — Session CF citaconsular.es entièrement via impit
  *
- * OBJECTIF : obtenir une session CF (cf_clearance + PHPSESSID) sans CapSolver
- * ni Playwright, en passant uniquement par impit (Chrome TLS JA3/JA4).
+ * OBJECTIF : obtenir une session CF (cf_clearance + PHPSESSID) sans lancer Chromium.
+ * Toutes les requêtes HTTP passent par impit (Chrome TLS JA3/JA4) → le cf_clearance
+ * est lié au MÊME fingerprint TLS que les appels JSONP suivants.
  *
- * POURQUOI CE MODULE EXISTE :
- *   - CapSolver produit un cf_clearance lié à son propre TLS (CapSolver ≠ Chrome JA3)
- *   - impit rejetait ce cookie sur les JSONP car CF détecte la discordance fingerprint
- *   - Solution : JSDSolver (maintenant impit-based) obtient cf_clearance avec le MÊME
- *     fingerprint TLS que les appels JSONP → cohérence totale
+ * DEUX TYPES DE CHALLENGE CF :
+ *   A. JSD (__CF$cv$params présent) → JSDSolver extrait les params + POST oneshot
+ *   B. Managed Challenge (_cf_chl_opt / Turnstile) → solveManagedChallengeViaImpit()
+ *      1. Extrait sitekey depuis l'URL du script challenges.cloudflare.com
+ *      2. CapSolver AntiTurnstileTaskProxyLess → token Turnstile
+ *      3. POST #challenge-form avec le token via impit → Set-Cookie cf_clearance
+ *      CF lie le cf_clearance à NOTRE TLS impit (pas celui de CapSolver).
  *
  * FLOW :
- *   1. Probe GET portal via impit → CF challenge ou accès direct ?
- *   2a. Accès direct → PHPSESSID dans Set-Cookie → session prête
- *   2b. CF challenge → JSDSolver.solve() → cf_clearance
+ *   1. Probe GET portal via impit → type de challenge ?
+ *   2a. Pas de challenge → session directe (PHPSESSID depuis Set-Cookie)
+ *   2b. JSD → JSDSolver (même impit, HTML pré-fetchée)
+ *   2c. Managed Challenge → solveManagedChallengeViaImpit()
  *   3. GET portal avec cf_clearance (même impit instance) → PHPSESSID dans Set-Cookie
  *   4. Retourner SpainCfSession (compatible avec spain-soax-solver.ts + spain-http-scanner.ts)
  *
@@ -23,6 +27,7 @@
 
 import { Impit } from "impit";
 import { JSDSolver } from "./jsd-solver.js";
+import { solveTurnstileToken } from "./capsolver-turnstile.js";
 import type { SpainCfSession } from "./spain-soax-solver.js";
 import {
   syncSpainCfSessionToRedis,
@@ -59,6 +64,188 @@ function isCfChallengePage(html: string): boolean {
   return /just a moment|jetzt einen moment|verifying|_cf_chl_opt|challenge-platform/i.test(
     html.slice(0, 4000),
   );
+}
+
+/** True when the challenge is a CF Managed Challenge (Turnstile widget) */
+function isManagedChallenge(html: string): boolean {
+  return /_cf_chl_opt|challenges\.cloudflare\.com\/turnstile/i.test(html.slice(0, 8000));
+}
+
+/** True when the challenge is a plain JSD challenge (__CF$cv$params present) */
+function isJsdChallenge(html: string): boolean {
+  return /window\.__CF\$cv\$params/.test(html);
+}
+
+/** Decode HTML entities in attribute values (&amp; → &, &#x2F; → /, etc.) */
+function htmlDecode(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"');
+}
+
+/**
+ * Extracts the Turnstile sitekey from a CF Managed Challenge HTML page.
+ * Tries multiple strategies in order:
+ *  1. Script src: challenges.cloudflare.com/turnstile/v0/g/{SITEKEY}/api.js
+ *  2. data-sitekey attribute
+ *  3. _cf_chl_opt.cH (sometimes carries the sitekey hash)
+ */
+function extractTurnstileSitekey(html: string): string | null {
+  const m1 = html.match(/challenges\.cloudflare\.com\/turnstile\/v[\d]+\/[a-z]\/([a-f0-9]{8,32})\/api\.js/);
+  if (m1) return m1[1];
+  const m2 = html.match(/data-sitekey="([a-zA-Z0-9_\-]{8,64})"/);
+  if (m2) return m2[1];
+  const m3 = html.match(/["']cH["']\s*:\s*["']([a-f0-9]{8,32})["']/);
+  if (m3) return m3[1];
+  return null;
+}
+
+/**
+ * Extracts the CF challenge form action URL and all hidden field values.
+ * Handles attribute ordering variations and HTML-encoded values.
+ */
+function extractChallengeForm(html: string): {
+  action: string;
+  fields: Record<string, string>;
+} | null {
+  // Match <form id="challenge-form" ...> or <form ... id="challenge-form">
+  const formMatch = html.match(/<form[^>]+id="challenge-form"[^>]*>/i) ??
+                    html.match(/<form[^>]*id="challenge-form"[^>]*>/i);
+  if (!formMatch) return null;
+
+  const formTag = formMatch[0];
+  const actionM = formTag.match(/\baction="([^"]*)"/i);
+  if (!actionM) return null;
+
+  const action = htmlDecode(actionM[1]);
+
+  // Extract all hidden inputs inside the page (CF challenge form spans the whole body)
+  const fields: Record<string, string> = {};
+  const inputRe = /<input[^>]+type="hidden"[^>]*>/gi;
+  let inputM: RegExpExecArray | null;
+  while ((inputM = inputRe.exec(html)) !== null) {
+    const tag = inputM[0];
+    const nameM  = tag.match(/\bname="([^"]*)"/i);
+    const valueM = tag.match(/\bvalue="([^"]*)"/i);
+    if (nameM && valueM) {
+      fields[nameM[1]] = htmlDecode(valueM[1]);
+    }
+  }
+
+  return { action, fields };
+}
+
+/**
+ * Solves a CF Managed Challenge (Turnstile) entirely via impit.
+ *
+ * Flow:
+ *   1. Extract sitekey from HTML
+ *   2. CapSolver AntiTurnstileTaskProxyLess → Turnstile token
+ *   3. POST #challenge-form with token via the same impit instance
+ *   4. CF returns Set-Cookie: cf_clearance bound to OUR impit TLS fingerprint
+ *
+ * Returns cf_clearance value, or null on failure.
+ */
+async function solveManagedChallengeViaImpit(
+  html: string,
+  targetUrl: string,
+  impitInstance: InstanceType<typeof Impit>,
+): Promise<string | null> {
+  const t0 = Date.now();
+  const baseUrl = `${new URL(targetUrl).protocol}//${new URL(targetUrl).hostname}`;
+
+  // ── 1. Sitekey ─────────────────────────────────────────────────────────────
+  const sitekey = extractTurnstileSitekey(html);
+  if (!sitekey) {
+    console.error(`[spain-impit] ❌ Managed Challenge: sitekey Turnstile introuvable dans le HTML`);
+    console.warn(`[spain-impit]    HTML preview: ${html.slice(0, 400).replace(/\s+/g, " ")}`);
+    return null;
+  }
+  console.log(`[spain-impit] 🔑 Managed Challenge sitekey: ${sitekey}`);
+
+  // ── 2. CapSolver AntiTurnstileTaskProxyLess ────────────────────────────────
+  const capsolverKey = process.env.CAPSOLVER_API_KEY ?? process.env.ANTICAPTCHA_API_KEY;
+  if (!capsolverKey) {
+    console.error(`[spain-impit] ❌ CAPSOLVER_API_KEY non définie — impossible de résoudre Managed Challenge`);
+    return null;
+  }
+
+  console.log(`[spain-impit] 🤖 CapSolver AntiTurnstileTaskProxyLess pour ${targetUrl.slice(0, 60)}…`);
+  const tokenResult = await solveTurnstileToken(
+    targetUrl,
+    sitekey,
+    process.env.CAPSOLVER_API_KEY ?? capsolverKey,
+    { action: "managed" },
+  );
+  if (!tokenResult) {
+    console.error(`[spain-impit] ❌ Token Turnstile non obtenu depuis CapSolver`);
+    return null;
+  }
+  console.log(`[spain-impit] ✅ Token Turnstile obtenu (${Math.round((Date.now() - t0) / 1000)}s)`);
+
+  // ── 3. Extraire le formulaire CF ───────────────────────────────────────────
+  const formData = extractChallengeForm(html);
+  if (!formData) {
+    console.error(`[spain-impit] ❌ Managed Challenge: #challenge-form introuvable dans le HTML`);
+    return null;
+  }
+  console.log(`[spain-impit]    Form action: ${formData.action}`);
+  console.log(`[spain-impit]    Hidden fields: ${Object.keys(formData.fields).join(", ")}`);
+
+  // ── 4. POST solution via impit ─────────────────────────────────────────────
+  // CF lies the cf_clearance to the TLS session that POSTs the solution.
+  // By using the same impit instance that made the probe, we guarantee that
+  // cf_clearance will be valid for all subsequent impit requests.
+  const postUrl = formData.action.startsWith("http")
+    ? formData.action
+    : `${baseUrl}${formData.action}`;
+
+  const body = new URLSearchParams(formData.fields);
+  body.set("cf-turnstile-response", tokenResult.token);
+
+  console.log(`[spain-impit] 📤 POST challenge solution → ${postUrl.slice(0, 80)}…`);
+
+  let cfClearance: string | null = null;
+  try {
+    const postRes = await (impitInstance.fetch(postUrl, {
+      method:  "POST",
+      headers: {
+        "User-Agent":   CHROME_UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Referer":      targetUrl,
+        "Origin":       baseUrl,
+        "Accept":       "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: body.toString(),
+    } as any) as unknown as Response);
+
+    const setCookie = postRes.headers.get("set-cookie") ?? "";
+    const m = setCookie.match(/cf_clearance=([^;]+)/);
+    if (m) {
+      cfClearance = m[1];
+      console.log(
+        `[spain-impit] ✅ cf_clearance dans réponse POST (status=${postRes.status}) : ${cfClearance.slice(0, 40)}…`,
+      );
+    } else {
+      console.warn(
+        `[spain-impit] ⚠️ cf_clearance absent dans réponse POST (status=${postRes.status})`,
+      );
+      const body2 = await postRes.text();
+      console.warn(`[spain-impit]    Réponse POST preview: ${body2.slice(0, 300).replace(/\s+/g, " ")}`);
+    }
+  } catch (err) {
+    console.error(`[spain-impit] ❌ POST challenge échoué: ${err}`);
+    return null;
+  }
+
+  return cfClearance;
 }
 
 /** Parse multiple Set-Cookie header values into name/value pairs */
@@ -175,18 +362,48 @@ export async function solveViaImpit(
     return session;
   }
 
-  // ── Étape 2b : CF challenge → JSDSolver ─────────────────────────────────────
-  console.log(`[spain-impit] 🔐 CF challenge détecté — JSDSolver (impit)…`);
+  // ── Étape 2b : CF challenge → router selon le type ───────────────────────────
+  // CF sert deux types de challenges :
+  //   A. JSD (__CF$cv$params) → JSDSolver extrait les params + POST oneshot via impit
+  //   B. Managed Challenge (_cf_chl_opt / Turnstile) → CapSolver token + POST form via impit
+  // Dans les deux cas, le MÊME probeImpit est réutilisé pour que cf_clearance soit lié
+  // à notre fingerprint TLS Chrome et non à celui de CapSolver.
 
-  const solver = new JSDSolver(targetUrl, CHROME_UA, proxyUrl);
-  const solveResult = await solver.solve(40_000);
+  let cfClearance: string;
+  let cfCookies: Array<{ name: string; value: string }> = [];
+  const solverImpit = probeImpit; // always reuse the probe's TLS session
 
-  if (!solveResult.success || !solveResult.session) {
-    console.error(`[spain-impit] ❌ JSDSolver échoué: ${solveResult.error}`);
+  if (isManagedChallenge(probeHtml)) {
+    // ── Cas B : Managed Challenge (Turnstile) ────────────────────────────────
+    console.log(`[spain-impit] 🛡️ Managed Challenge (Turnstile) détecté — solveManagedChallengeViaImpit…`);
+    const clearance = await solveManagedChallengeViaImpit(probeHtml, targetUrl, probeImpit);
+    if (!clearance) {
+      console.error(`[spain-impit] ❌ solveManagedChallengeViaImpit échoué`);
+      return null;
+    }
+    cfClearance = clearance;
+    cfCookies   = [{ name: "cf_clearance", value: clearance }];
+  } else if (isJsdChallenge(probeHtml)) {
+    // ── Cas A : JSD challenge (__CF$cv$params) ───────────────────────────────
+    // CRITICAL: pass probeImpit so JSDSolver reuses the SAME TLS session as the probe.
+    // Also pass probeHtml to skip the redundant GET (challenge params already in hand).
+    console.log(`[spain-impit] 🔐 JSD challenge (__CF$cv$params) détecté — JSDSolver (impit réutilisé, HTML pré-fetchée)…`);
+    const solver = new JSDSolver(targetUrl, CHROME_UA, proxyUrl, probeImpit);
+    const solveResult = await solver.solve(40_000, probeHtml);
+    if (!solveResult.success || !solveResult.session) {
+      console.error(`[spain-impit] ❌ JSDSolver échoué: ${solveResult.error}`);
+      return null;
+    }
+    cfClearance = solveResult.session.cfClearance;
+    cfCookies   = solveResult.session.cookies;
+  } else {
+    // Unknown challenge type — log HTML preview and bail
+    console.error(
+      `[spain-impit] ❌ Type de challenge CF inconnu — ni JSD ni Managed.\n` +
+      `   Preview: ${probeHtml.slice(0, 400).replace(/\s+/g, " ")}`,
+    );
     return null;
   }
-
-  const { cfClearance, cookies: cfCookies, impit: solverImpit } = solveResult.session;
   console.log(`[spain-impit] ✅ cf_clearance obtenu (${Math.round((Date.now() - t0) / 1000)}s)`);
 
   // ── Étape 3 : GET portal avec cf_clearance (même impit) → PHPSESSID ─────────
