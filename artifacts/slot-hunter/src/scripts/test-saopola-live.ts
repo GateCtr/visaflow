@@ -23,7 +23,8 @@ import "dotenv/config";
 import { SAOPOLO_PORTAL_URL, SAOPOLO_WIDGET_KEY } from "../spain-portals.js";
 import { runSpainHttpProbe, scanSpainHttp } from "../spain-http-scanner.js";
 import { ensureSpainCfSession, spainCfFetch, getActiveSpainCfSession } from "../spain-soax-solver.js";
-import { initSpainRedis } from "../spain-redis-persistence.js";
+import { initSpainRedis, removeSpainCfSessionFromRedis } from "../spain-redis-persistence.js";
+import { spainPersistentBrowser } from "../spain-persistent-browser.js";
 
 // ─── Forcer le mode HTTP ──────────────────────────────────────────────────────
 // Nécessaire pour que ensureSpainCfSession / spainCfFetch soient actifs.
@@ -89,6 +90,15 @@ async function main() {
     return false;
   });
   log(redisOk ? "OK" : "WARN", redisOk ? "Redis connecté — session CF persistée" : "Redis absent — session CF en mémoire uniquement");
+
+  // ─── Étape 0b : Reset session (force solve frais pour Saopolo) ───────────
+  // Le slot-hunter peut avoir sauvegardé une session Kinshasa dans Redis.
+  // On invalide tout (mémoire + Redis + browser) pour obtenir un PHPSESSID
+  // lié au portail Saopolo et non à un autre portail.
+  section("Étape 0b — Reset session (solve frais Saopolo)");
+  await removeSpainCfSessionFromRedis();
+  await spainPersistentBrowser.closeAndInvalidate();
+  log("OK", "Session Redis + browser invalidés — solve frais en cours…");
 
   // ─── Étape 1 : Session Cloudflare ─────────────────────────────────────────
   section("Étape 1 — Obtention session Cloudflare pour Saopolo");
