@@ -831,7 +831,7 @@ class SpainPersistentBrowserManager {
           if (dtTimer !== null) { clearTimeout(dtTimer); dtTimer = null; }
           let nextDtResolve: (() => void) | null = null;
           const nextDtSignal = new Promise<void>((r) => { nextDtResolve = r; });
-          const origDtSignalResolve = dtSignalResolve;
+          const origDtSignalResolve = dtSignalResolve as (() => void) | null;
           dtSignalResolve = () => { origDtSignalResolve?.(); nextDtResolve?.(); };
 
           const nextClicked = await page.evaluate((): string | null => {
@@ -1934,7 +1934,9 @@ class SpainPersistentBrowserManager {
     // "déjà valide") → nonce épuisée → post-Continuar JSD = phantom → /main/ = 0B.
     //
     // FIX Round 1 : intercepter et BLOQUER ce JSD spontané (avant Continuar) pour
-    // préserver la nonce. Le bloqueur est désarmé juste avant clickInteractiveSpainAcceptFlow.
+    // préserver la nonce. Le bloqueur reste armé durant toutes les tentatives de clic
+    // et n'est désarmé QUE lorsque continueClicked=true (après le clic réussi) pour éviter
+    // que le JSD se glisse entre le désarmage et le vrai clic Continuar.
     // Le post-Continuar JSD fire ensuite avec une nonce fraîche → cf_clearance réel.
     let cdpJsdBlocker: any = null;
     let jsdSpontaneousBlocked = false;
