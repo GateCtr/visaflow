@@ -2465,10 +2465,11 @@ async function scanViaMainEndpoint(
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
   const VISIBLE_NO_SLOTS_RE = /<div\s+style=(["'])[^"']*\1[^>]*>\s*No hay horas disponibles/i;
-  // dialog-confirm + bktContinue = marqueurs server-side spécifiques à citaconsular.es
-  // présents UNIQUEMENT quand des créneaux existent (São Paulo pattern confirmé sur HTML réel).
-  // idDivBktButtonContinueContainer / idBktDefaultCustomContainer = fallbacks génériques Bookitit.
-  const hasAcceptModal = /id=['"]dialog-confirm['"]|id=['"]bktContinue['"]|idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton/i.test(html);
+  // idDivBktButtonContinueContainer / idBktDefaultCustomContainer = marqueurs Bookitit server-side
+  // fiables (présents dans le HTML rendu par le serveur quand le flux service-accept est actif).
+  // dialog-confirm / bktContinue : initialisés côté CLIENT par jQuery UI — présents dans le
+  // template HTML même sans créneaux, donc non fiables comme signal de disponibilité.
+  const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton/i.test(html);
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
