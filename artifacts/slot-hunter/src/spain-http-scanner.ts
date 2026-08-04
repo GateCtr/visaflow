@@ -262,8 +262,9 @@ function extractBktInitArraysFromHtml(html: string): {
   agendas?: string[];
   dates?: string[];
 } | null {
-  const block = extractBktInitBlockContent(html);
-  if (!block) return null;
+  const blockOrNull = extractBktInitBlockContent(html);
+  if (!blockOrNull) return null;
+  const block: string = blockOrNull;
 
   function parseJsStringArray(field: string): string[] | undefined {
     const m = block.match(new RegExp(`${field}\\s*:\\s*\\[([^\\]]*)\\]`));
