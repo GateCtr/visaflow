@@ -602,12 +602,16 @@ export async function executeHttpBooking(
   //   Le contexte incognito navigue vers /main/ → PHPSESSID isolé → appels impit
   //   passent par le même proxy IP → réponses normales.
   const browserPageAvailable = Boolean(spainPersistentBrowser.getActivePage());
-  const hasMainHtml = Boolean(mainHtml && mainHtml.trim().length > 0);
-  // Quand le scan a déjà fourni le HTML principal, on reste sur le flux HTTP isolé.
-  // Cela évite d'utiliser la page browser partagée pour un booking qui a déjà
-  // obtenu un service et un créneau validés; le booking gagne ainsi un PHPSESSID
-  // unique par dossier et les retries /main/ sont correctement déclenchés.
-  const useBrowserCalls = session.source === "playwright" && browserPageAvailable && !hasMainHtml;
+  // useBrowserCalls=true dès que la page Chromium est disponible, même quand mainHtml est
+  // pré-fourni par le scanner. Raisons :
+  //   1. signin/ retourne toujours 0B via HTTP isolé pour registration_type=2 (signupsecondappointment
+  //      extends SignInContainer) — le nonce PHP de getsigninfields/ n'existe que dans la session
+  //      widget native, jamais dans une session isolée créée côté HTTP.
+  //   2. submitSigninFormViaDOM() (navigateToSelecttime → remplissage DOM → clic submit) est le
+  //      SEUL path fonctionnel pour signin/ sur ces portails.
+  //   3. acquireBrowserBookingLock() sérialise déjà tout accès concurrent à la page Chrome.
+  // Note : mainHtml pré-fourni reste utilisé pour getservices (injection directe, pas re-fetch).
+  const useBrowserCalls = session.source === "playwright" && browserPageAvailable;
   // Sérialiser TOUT le flow browser — la page Chrome est un singleton partagé.
   // getagendas/, datetime/, signin/, summary/ utilisent tous callBookititEndpointBrowser
   // (→ this._page). Sans ce verrou, deux dossiers en Promise.all se marchent dessus
@@ -901,6 +905,52 @@ export async function executeHttpBooking(
   // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
   // fonctionnera.
   if (useBrowserCalls) {
+    // ── Pré-navigation : réinitialiser l'état Backbone avant navigateToSelecttime ──
+    // Problème : après le scan, le widget peut être dans un état arbitraire (post-CF, post-scan,
+    // hash inconnu). navigateToSelecttime change window.location.hash = "#selecttime/..."
+    // directement, mais le Backbone router l'ignore si le modèle interne (active event)
+    // n'a pas été chargé via le flux naturel service→agendas→datetime.
+    // Aucune requête réseau n'est émise → hash non résolu → getsigninfields/ jamais appelé
+    // → signin/ retourne 0B.
+    //
+    // Fix : cliquer le service dans le DOM (déclenchement naturel par le widget JS),
+    // ce qui charge getagendas/ + datetime/ dans les modèles Backbone.
+    // Ensuite navigateToSelecttime peut faire #selecttime → #signupsecondappointment.
+    const activePage = spainPersistentBrowser.getActivePage();
+    if (activePage) {
+      try {
+        // 1. Réinitialiser à #services (état de départ connu)
+        const currentHash = (await activePage.evaluate(`window.location.hash`).catch(() => "")) as string;
+        if (!currentHash.includes("services") && currentHash !== "") {
+          await activePage.evaluate(`window.location.hash = "#services"`).catch(() => {});
+          await new Promise<void>((r) => setTimeout(r, 800));
+        }
+        // 2. Cliquer le service pour déclencher getagendas/ + datetime/ naturellement
+        const serviceId = targetService.serviceId;
+        const clicked = (await activePage.evaluate(`
+          (function(sid) {
+            var links = document.querySelectorAll(
+              'a[href*="selectservice/' + sid + '"], ' +
+              'a[href="#selectservice/' + sid + '"]'
+            );
+            for (var i = 0; i < links.length; i++) {
+              if (links[i].offsetParent !== null || links[i].closest('[style*="display:none"]') === null) {
+                links[i].click(); return true;
+              }
+            }
+            // Fallback : naviguer via hash directement
+            window.location.hash = "#selectservice/" + sid;
+            return false;
+          })(${JSON.stringify(serviceId)})
+        `).catch(() => false)) as boolean;
+        console.log(`[spain-booking] 🖱️ Pré-nav service ${serviceId}: ${clicked ? "cliqué" : "hash fallback"}`);
+        // Attendre que getagendas/ + datetime/ soient traités par le widget (max 4s)
+        await new Promise<void>((r) => setTimeout(r, 4_000));
+      } catch (preNavErr) {
+        console.warn(`[spain-booking] ⚠️ Pré-nav service exception (non-fatal): ${preNavErr}`);
+      }
+    }
+
     await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
