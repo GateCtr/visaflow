@@ -967,6 +967,23 @@ export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
   }
 }
 
+// ── Chromium page-fetch provider ─────────────────────────────────────────────
+// Enregistré par spain-persistent-browser au chargement du module (évite la
+// dépendance circulaire spain-soax-solver ↔ spain-persistent-browser).
+// Quand une session Playwright est active, spainCfFetch route les endpoints
+// Bookitit via la page Chromium → même IP garantie, PHPSESSID toujours valide.
+type SpainPageFetchFn = (url: string) => Promise<string | null>;
+let _spainPageFetcher: SpainPageFetchFn | null = null;
+
+/**
+ * Enregistre le fournisseur de fetch via page Chromium.
+ * Doit être appelé par spain-persistent-browser après avoir défini
+ * callBookititEndpointViaBrowser (aucun import circulaire requis).
+ */
+export function registerSpainPageFetcher(fn: SpainPageFetchFn | null): void {
+  _spainPageFetcher = fn;
+}
+
 let _spainImpit: InstanceType<typeof Impit> | undefined;
 let _spainImpitProxyUrl: string | undefined;
 
@@ -1030,6 +1047,27 @@ export async function spainCfFetch(
   fetchOptions?: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
 ): Promise<Response | null> {
   if (_testFetchImpl) return _testFetchImpl(url, session, fetchOptions);
+
+  // ── Synchronisation impit ↔ Chromium ────────────────────────────────────────
+  // Quand la session vient de Playwright, le PHPSESSID est lié à la connexion
+  // TLS Chromium et non à l'IP seule → impit retourne 0B même avec le même proxy.
+  // On délègue les endpoints Bookitit à la page Chromium active (même IP garantie)
+  // et on ne tombe sur impit qu'en fallback (page absente ou réponse vide).
+  if (session.source === "playwright" && _spainPageFetcher && url.includes("/onlinebookings/")) {
+    try {
+      const pageBody = await _spainPageFetcher(url);
+      if (pageBody !== null && pageBody !== "") {
+        return new Response(pageBody, {
+          status: 200,
+          headers: { "content-type": "text/javascript; charset=utf-8" },
+        });
+      }
+      console.log(`[spain-soax] ⚠️  page-fetch vide pour ${url.slice(0, 80)} — fallback impit`);
+    } catch (err) {
+      console.warn(`[spain-soax] ⚠️  page-fetch error: ${err} — fallback impit`);
+    }
+  }
+
   const impit = getSpainImpit(session);
 
   // Keep the cookie order observed in the browser flow and place the

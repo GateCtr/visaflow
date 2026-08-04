@@ -71,6 +71,7 @@ import {
   isSpainCfSessionExpiringSoon,
   getActiveSpainCfSession,
   setActiveSpainCfSession,
+  registerSpainPageFetcher,
 } from "./spain-soax-solver.js";
 import { solveTurnstileInPage, TURNSTILE_INTERCEPT_SCRIPT } from "./capsolver-turnstile.js";
 import {
@@ -3854,3 +3855,9 @@ export async function submitSigninFormViaDOM(
     return { signinBody: "", summaryBody: "" };
   }
 }
+
+// ── Synchronisation impit ↔ Chromium ─────────────────────────────────────────
+// On enregistre callBookititEndpointViaBrowser comme fournisseur de fetch pour
+// spainCfFetch. Quand session.source === "playwright", toutes les requêtes
+// /onlinebookings/ passent par la page Chromium active → même IP, même PHPSESSID.
+registerSpainPageFetcher(callBookititEndpointViaBrowser);
