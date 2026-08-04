@@ -12,7 +12,7 @@
 
 process.env.CHROMIUM_EXECUTABLE_PATH =
   process.env.CHROMIUM_EXECUTABLE_PATH ||
-  "/home/runner/workspace/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome";
+  "/home/runner/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome";
 
 process.env.REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 process.env.SPAIN_SESSION_MODE = "persistent-browser";
