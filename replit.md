@@ -1,59 +1,55 @@
-# Joventy — Slot Hunter Platform
+# VisaFlow — Replit Project Overview
 
-Visa appointment slot-hunting platform for clients in Kinshasa, DRC. Monitors embassy portals (Spain, France/CEV, Canada, USA) and auto-books available slots.
+## What this is
+VisaFlow is a visa appointment booking automation monorepo. It monitors and auto-books appointment slots across multiple consular portals (USA, Spain, Belgium/CEV, Germany) on behalf of clients.
 
-## Architecture
+## Architecture (4 services)
 
-Four services run in parallel:
+| Service | Location | Port | Purpose |
+|---|---|---|---|
+| **Joventy** | `artifacts/joventy/` | 5000 | React/Vite frontend — admin dashboard & client portal |
+| **Slot Hunter** | `artifacts/slot-hunter/` | — | Puppeteer bot — scans & books visa slots |
+| **Captcha Service** | `artifacts/captcha-service/` | 3001 | AntiCaptcha / CapSolver proxy |
+| **Proxy Service** | `artifacts/proxy-service/` | 3002 | Proxy pool management |
 
-| Service | Port | Description |
-|---|---|---|
-| **Joventy** (frontend) | 5000 | React + Vite web app (Clerk auth, Convex backend) |
-| **Slot Hunter** | — | Core booking engine: Spain, CEV, Canada, USA portals + Redis scheduler |
-| **Captcha Service** | 3001 | Captcha solver proxy (2captcha / AntiCaptcha / CapSolver) |
-| **Proxy Service** | 3002 | Residential proxy pool manager (Decodo / SOAX) |
+Backend is **Convex** (hosted at `https://famous-albatross-420.convex.cloud`).
 
-Redis runs daemonized on localhost:6379, started by the Slot Hunter workflow.
+## How to run
 
-## Running
+All 4 workflows are pre-configured. Start them from the Replit workflow panel:
 
-All four workflows start automatically. Run them individually from the Workflows panel or click **Run** to start all at once.
+- `artifacts/joventy: web` → Vite dev server on port 5000
+- `artifacts/captcha-service: Captcha Service` → Express on port 3001
+- `artifacts/proxy-service: Proxy Service` → Express on port 3002
+- `artifacts/slot-hunter: Slot Hunter` → Bot process (no HTTP port)
 
-- Joventy web app: http://localhost:5000
-- Captcha service: http://localhost:3001
-- Proxy service: http://localhost:3002
+## Environment secrets (already configured)
 
-## Environment Variables (configured in Replit)
-
-| Key | Purpose |
+| Secret | Used by |
 |---|---|
-| `VITE_CONVEX_URL` | Convex deployment URL |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (prod — works only on joventy.cd) |
-| `REDIS_URL` | Redis connection string (default: redis://localhost:6379) |
-| `CAPTCHA_SERVICE_API_KEY` | Internal auth key for captcha service |
-| `PROXY_SERVICE_API_KEY` | Internal auth key for proxy service |
-| `HUNTER_API_KEY` | Internal auth key for slot-hunter API |
-| `SPAIN_HTTP_MODE` | Use HTTP mode for Spain portal |
-| `SPAIN_SESSION_MODE` | Spain session strategy (`persistent-browser`) |
-| `SPAIN_SCAN_DISABLED` | Set to `1` to disable Spain scanning (prevents collision with Railway instance) |
-| `SESSION_SECRET` | Secret for session signing |
+| `ANTICAPTCHA_API_KEY` | captcha-service, slot-hunter |
+| `CAPSOLVER_API_KEY` | captcha-service, slot-hunter |
+| `CONVEX_DEPLOY_KEY` | Convex deployments |
+| `DECODO_PROXY_URL` | slot-hunter (Spain HTTP mode) |
+| `DECODO_UNLOCKER_TOKEN` | slot-hunter |
+| `OXYLABS_USERNAME` / `OXYLABS_PASSWORD` | slot-hunter |
+| `SESSION_SECRET` | app sessions |
 
-### Captcha service needs at least one of:
-- `TWOCAPTCHA_API_KEY`
-- `ANTICAPTCHA_API_KEY`
-- `CAPSOLVER_API_KEY`
+## Non-secret env vars (set in Replit shared env)
 
-### Proxy service needs at least one of:
-- `DECODO_*` variables
-- `SOAX_*` variables
+| Key | Value |
+|---|---|
+| `CAPTCHA_SERVICE_API_KEY` | Auto-generated internal service key |
+| `PROXY_SERVICE_API_KEY` | Auto-generated internal service key |
+| `CONVEX_SITE_URL` | `https://famous-albatross-420.convex.site` |
+| `HUNTER_API_KEY` | Bot auth key for Convex HTTP API |
 
-## Notes
+## Known limitations on Replit dev domain
 
-- Clerk production keys only work on `joventy.cd`; auth errors in Replit dev preview are expected.
-- Spain scanning is disabled (`SPAIN_SCAN_DISABLED=1`) to avoid collision with the Railway production instance.
-- Redis is installed via `nix-env`; the Slot Hunter workflow adds `~/.nix-profile/bin` to PATH before starting it.
-- Convex schema/function changes require `npx convex deploy` with `CONVEX_DEPLOY_KEY`; `convex dev` sync alone is not enough.
+- **Clerk auth** is bound to `joventy.cd` (production domain). Login/signup won't work on the `.replit.dev` preview URL. Public-facing pages render fine. To test auth, deploy to the production domain or add a Clerk dev-instance key (`VITE_CLERK_PUBLISHABLE_KEY_DEV`).
 
-## User Preferences
+## Convex deployments
 
-- Keep existing project structure and stack.
+Schema/function changes require an explicit deploy — `npx convex deploy` with `CONVEX_DEPLOY_KEY`. There is no local `convex dev` sync. See `.agents/memory/convex-prod-deploy-flow.md`.
+
+## User preferences
