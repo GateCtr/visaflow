@@ -407,13 +407,45 @@ class SpainPersistentBrowserManager {
 
   // ── Proxy helpers ─────────────────────────────────────────────────────────
 
+  /**
+   * Construit l'URL proxy Oxylabs résidentiel.
+   * Format identique à spain-soax-solver.ts : customer-{user}-cc-{cc}:{pass}@pr.oxylabs.io:7777
+   * Chaque connexion depuis un nouveau sessionid Puppeteer → IP résidentielle différente.
+   */
+  private buildOxylabsUrl(): string | undefined {
+    const oxUser = process.env.OXYLABS_USERNAME;
+    const oxPass = process.env.OXYLABS_PASSWORD;
+    if (!oxUser || !oxPass) return undefined;
+    const cc = process.env.SPAIN_SOAX_COUNTRY ?? "es";
+    const url = `http://customer-${oxUser}-cc-${cc}:${oxPass}@pr.oxylabs.io:7777`;
+    const masked = url.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[spain-pb] 🌐 Oxylabs résidentiel (cc=${cc}) → ${masked.slice(0, 80)}`);
+    return url;
+  }
+
   private getProxyUrl(): string | undefined {
-    // Utilise le pool Decodo (DECODO_PROXY_URLS ou DECODO_PROXY_URL) en priorité
+    // Oxylabs résidentiel prioritaire si SPAIN_USE_OXYLABS=1
+    // (bypasse le pool Decodo datacenter qui génère des fast-track phantoms sur tous les PoPs SJC)
+    if (process.env.SPAIN_USE_OXYLABS === "1") {
+      const ox = this.buildOxylabsUrl();
+      if (ox) return ox;
+      console.warn("[spain-pb] ⚠️ SPAIN_USE_OXYLABS=1 mais OXYLABS_USERNAME/PASSWORD absents — fallback Decodo");
+    }
+    // DECODO_PROXY_URL seul (résidentiel/ISP) : forcer sans CSV si DECODO_SKIP_CSV=1
+    if (process.env.DECODO_SKIP_CSV === "1") {
+      const single = process.env.DECODO_PROXY_URL;
+      if (single) return single.trim();
+    }
+    // Sinon : pool Decodo (CSV → DECODO_PROXY_URLS → DECODO_PROXY_URL) ou SOAX
     return getCurrentDecodoUrl() ?? process.env.SOAX_PROXY_URL;
   }
 
   /**
    * Retourne l'URL proxy suivante du pool pour forcer une nouvelle IP.
+   *
+   * Mode Oxylabs (SPAIN_USE_OXYLABS=1) :
+   *   Retourne la même URL de base — Oxylabs alloue une IP résidentielle fraîche
+   *   à chaque nouvelle connexion TCP (pas de sessionid nécessaire en mode rotatif).
    *
    * Mode A — IPs dédiées (DECODO_PROXY_URLS avec plusieurs ports) :
    *   Avance l'index du pool → port 10010 → 10011 → … → 10010.
@@ -424,8 +456,15 @@ class SpainPersistentBrowserManager {
    *   différente pour chaque valeur de session → CF voit une IP inconnue.
    */
   private buildRotatedProxyUrl(baseUrl: string): string {
+    // Mode Oxylabs : nouvelle connexion = nouvelle IP (rotatif natif)
+    if (process.env.SPAIN_USE_OXYLABS === "1") {
+      const ox = this.buildOxylabsUrl();
+      if (ox) return ox;
+    }
+
     // Mode A : pool multi-URLs (IPs dédiées à ports fixes)
-    if (isDecodoMultiPool()) {
+    // Skip si DECODO_SKIP_CSV=1 — on veut la rotation sessionid sur DECODO_PROXY_URL
+    if (process.env.DECODO_SKIP_CSV !== "1" && isDecodoMultiPool()) {
       const nextUrl = rotateDecodoUrl();
       if (nextUrl) return nextUrl;
     }

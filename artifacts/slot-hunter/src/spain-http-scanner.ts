@@ -297,11 +297,42 @@ function noAvailableSlotsInBktPayload(...htmlSources: string[]): boolean | "unkn
   return "unknown";
 }
 
-/** Détecte "No hay horas" visible vs masqué (guillemets simples ou doubles). */
+/**
+ * Détecte si "No hay horas disponibles" est réellement rendu visible dans le DOM.
+ *
+ * Stratégie en trois passes :
+ *
+ * 1. Portails Bookitit SPA (idTemNotAvailableSlots présent en tant que template) :
+ *    - Le texte "No hay horas" dans idDivBktServicesContainer est un placeholder statique
+ *      serveur, toujours présent dans le HTML — jamais un signal fiable en mode HTTP.
+ *    - Signal fiable : idDivNotAvailableSlotsContainer apparaissant HORS des tags
+ *      <script type="text/template"> (= le JS SPA l'a cloné dans #idTimeListTable).
+ *    - En mode HTTP pur (pas d'exécution JS), ce container ne sera jamais hors-template
+ *      → retourne {visible:false, hidden:false} → flux tombe sur l'appel API datetime/.
+ *
+ * 2. Portails non-SPA / legacy : backward-scan du div le plus proche portant un style.
+ */
 function detectNoHayHorasVisibility(html: string): { visible: boolean; hidden: boolean } {
-  // Strip <script> blocks (templates Underscore.js etc.) pour éviter les faux positifs
-  // dans les blocs <script type="text/template"> qui ne sont jamais "visibles".
-  const stripped = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  // Étape 1 — Supprimer les blocs <script type="text/template"> (templates Backbone/Underscore)
+  const withoutTemplates = html.replace(
+    /<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi,
+    "",
+  );
+
+  // Étape 2 — Portail Bookitit SPA : idTemNotAvailableSlots template présent dans le HTML ?
+  const isSpaPortal = /id=(["'])idTemNotAvailableSlots\1/i.test(html);
+
+  if (isSpaPortal) {
+    // Signal fiable : le SPA a rendu idDivNotAvailableSlotsContainer hors-template
+    // (= JS a cloné le template dans #idTimeListTable → pas de créneaux).
+    // En mode HTTP pur, ce container ne sera JAMAIS hors-template → retour neutre.
+    const spaRenderedNoSlots = /id=(["'])idDivNotAvailableSlotsContainer\1/i.test(withoutTemplates);
+    return { visible: spaRenderedNoSlots, hidden: false };
+  }
+
+  // Étape 3 — Portail legacy / non-SPA : backward-scan du div le plus proche avec style.
+  // Supprimer les scripts restants (JS, JSON, etc.)
+  const stripped = withoutTemplates.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
 
   const TARGET = "No hay horas disponibles";
   let visible = false;
@@ -313,28 +344,39 @@ function detectNoHayHorasVisibility(html: string): { visible: boolean; hidden: b
     if (idx === -1) break;
     searchFrom = idx + TARGET.length;
 
-    // Remonter jusqu'au dernier <div qui précède le texte cible (≤ 1000 chars).
-    // On cherche le tag le plus proche pour éviter que le style d'un parent lointain
-    // soit confondu avec le style du div direct (bug regex [\s\S]*? sur divs imbriqués).
-    const lookback   = stripped.slice(Math.max(0, idx - 1000), idx);
-    const lastDivPos = lookback.lastIndexOf("<div");
-    if (lastDivPos === -1) { visible = true; continue; }
+    // Remonter ≤ 2000 chars pour trouver le div AVEC style le plus proche.
+    // On cherche le dernier <div qui porte un attribut style — les divs sans style
+    // (containers neutres) sont ignorés pour éviter les faux positifs.
+    const lookback = stripped.slice(Math.max(0, idx - 2000), idx);
 
-    const divFragment = lookback.slice(lastDivPos);
-    const divEnd      = divFragment.indexOf(">");
-    if (divEnd === -1) { visible = true; continue; }
-    const divTag = divFragment.slice(0, divEnd + 1);
+    // Chercher en remontant tous les <div pour trouver celui avec style le plus proche
+    let searchPos = lookback.length;
+    let foundStyle = false;
+    while (searchPos > 0) {
+      const divPos = lookback.lastIndexOf("<div", searchPos - 1);
+      if (divPos === -1) break;
+      searchPos = divPos;
 
-    // Extraire la valeur de l'attribut style
-    const styleMatch = divTag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
-    if (!styleMatch) { visible = true; continue; }
+      const divFragment = lookback.slice(divPos);
+      const divEnd = divFragment.indexOf(">");
+      if (divEnd === -1) { searchPos = divPos; continue; }
+      const divTag = divFragment.slice(0, divEnd + 1);
 
-    const style = (styleMatch[1] ?? styleMatch[2] ?? "");
-    if (/display\s*:\s*none/i.test(style)) {
-      hidden = true;
-    } else {
-      visible = true;
+      const styleMatch = divTag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+      if (!styleMatch) continue; // pas de style sur ce div → remonter encore
+
+      const style = (styleMatch[1] ?? styleMatch[2] ?? "");
+      if (/display\s*:\s*none/i.test(style)) {
+        hidden = true;
+      } else {
+        visible = true;
+      }
+      foundStyle = true;
+      break;
     }
+
+    // Aucun div avec style trouvé dans le lookback → texte nu = visible
+    if (!foundStyle) visible = true;
   }
 
   return { visible, hidden };
