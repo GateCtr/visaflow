@@ -86,21 +86,25 @@ Symptôme caractéristique : `✅ cf_clearance obtenu via JSD natif (1s)` — un
 
 **How to apply:** Si le solve prend <3s, c'est un cf_clearance récupéré du profil, pas un vrai JSD solve. Vérifier que `Default/Network/Cookies` est bien absent du profil avant le lancement.
 
-## Rule: IP de confiance CF (fast-track) → Round 2 inutile, skip directement
+## Rule: IP de confiance CF (fast-track) → Round 2 TOUJOURS tenté, jsdSolveMs ne doit PAS bypasser Round 2
 
-**Root cause (2026-07-31):** Certains ports Decodo sont reconnus par CF comme "fiables" → CF émet cf_clearance en ~1s SANS JSD complet. Quand le widget Bookitit tire son JSD post-Continuar, CF répond "phantom" (déjà valide) → `/main/` = 0B. Le Round 2 (reset PHPSESSID uniquement, garder cf_clearance) échoue également : CF réutilise le **même challenge token** (même timestamp dans `/cdn-cgi/challenge-platform/h/b/…`) → JSD oneshot encore phantom → 0B garanti.
+**Diagnostic corrigé (2026-08-04):** L'hypothèse "IPs DC = fast-track systématique = Round 2 inutile" était fausse. Même avec des IPs DC (dc.decodo.com), CF ne fast-tracke pas toujours, et le problème du phantom cookie est lié à la nonce PHPSESSID, pas à l'IP. Round 2 (reset PHPSESSID uniquement) fonctionne avec les IPs DC.
 
-**Pourquoi Round 2 ne peut pas aider pour les IPs de confiance :** CF lie le challenge à l'IP, pas au PHPSESSID. Un reset PHPSESSID ne crée pas une nouvelle session CF pour une IP déjà connue.
+**Root cause réelle du phantom cookie :** La nonce JSD est liée au PHPSESSID côté serveur. Le JSD natif consomme la nonce lors du solve initial. Le widget tente la même nonce post-Continuar → phantom. Le reset PHPSESSID crée un nouveau PHPSESSID → nouvelle nonce → Round 2 résout le problème INDÉPENDAMMENT du type d'IP.
 
-**Fix appliqué (2026-07-31):** `jsdSolveMs` mesuré au moment où cf_clearance apparaît. Dans le bloc Round 2 : si `jsdSolveMs < 3000ms` (IP de confiance détectée) → skip Round 2, log explicite, tomber directement dans le fallback fetch puis `closeAndInvalidate` → rotation vers le port Decodo suivant (qui sera peut-être inconnu de CF → JSD complet 10-40s → vrai cf_clearance).
+**Ancien code incorrect (supprimé) :** `if (jsdSolveMs < 3000ms) { skip Round 2; }` et `if (jsdSolveMs < 3000ms) { closeAndInvalidate(); return null; }`. Ces deux bypasses basés sur `jsdSolveMs` ont été retirés.
 
-**How to apply:** Si dans les logs on voit `✅ cf_clearance obtenu via JSD natif (1s) ⚡ IP de confiance CF` + JSD phantom → c'est ce scénario. Le fix skip automatiquement Round 2. La vraie résolution est la rotation IP (`closeAndInvalidate` → port suivant).
+**Fix appliqué (2026-08-04):** Round 2 s'exécute TOUJOURS quand `prefetchedMainHtml < 100B && jsdOneShotAt > 0 && !jsdOneShotAccepted`, sans condition sur `jsdSolveMs`. La détection fast-track `isFastTrack` reste pour le choix de l'intercepteur Fetch (si fast-track, pas d'intercepteur POST Continuar car CF ne refirerait pas de JSD POST), mais ne saute plus Round 2.
 
-**Tableau comportements CF:**
-| Scénario | JSD solve | JSD post-Continuar | /main/ |
-|---|---|---|---|
-| IP inconnue | 10-40s → vrai cf_clearance | nouveau cf_clearance ✅ | 124KB ✅ |
-| IP de confiance | 1s → phantom | phantom ❌ | 0B ❌ |
+**Résultat confirmé en live (2026-08-04):** Avec dc.decodo.com:10002, cf_clearance obtenu en 1s (fast-track), JSD phantom, Round 2 exécuté → `/main/` retourne 124117B ✅. Scanner tourne toutes les 10s avec session réutilisée sur 115min.
+
+**How to apply:** Ne jamais utiliser `jsdSolveMs` pour bypasser Round 2. Si Round 2 échoue aussi (0B), ne pas `closeAndInvalidate` immédiatement — laisser le scanner HTTP gérer les retries.
+
+**Tableau comportements CF (corrigé):**
+| Scénario | JSD solve time | JSD post-Continuar | Round 2 | /main/ |
+|---|---|---|---|---|
+| IP inconnue | 10-40s → vrai cf_clearance | nouveau cf_clearance ✅ | non nécessaire | 124KB ✅ |
+| IP DC fast-track | ~1s → phantom | phantom ❌ | reset PHPSESSID → nonce fraîche → 124KB ✅ | 124KB ✅ |
 
 ## Saopola e2e test (confirmed working 2026-07-30)
 

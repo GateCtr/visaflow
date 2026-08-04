@@ -2581,24 +2581,13 @@ class SpainPersistentBrowserManager {
     //   cf_clearance est toujours valide → CF ne lance pas de Managed Challenge →
     //   JSD natif ne fire pas → nonce préservée pour le widget JSD post-Continuar.
     if (prefetchedMainHtml.length < 100 && jsdOneShotAt > 0 && !jsdOneShotAccepted) {
-      // ── Détection IP de confiance CF (fast-track) ──────────────────────────────
-      // Si cf_clearance a été obtenu en < 3s, CF reconnaît l'IP Decodo comme fiable
-      // et émet cf_clearance sans JSD complet. Dans ce cas, le JSD post-Continuar
-      // est toujours phantom car CF dit "déjà valide" → Round 2 est inutile :
-      //   • Round 2 reset PHPSESSID seulement → même IP → CF réutilise le même
-      //     challenge token (même timestamp dans /cdn-cgi/challenge-platform/…) →
-      //     JSD oneshot encore phantom → /main/ = 0B garanti.
-      // Fix : sauter Round 2, laisser closeAndInvalidate tourner vers une IP inconnue
-      // de CF (qui fera un JSD complet 10-40s → vrai cf_clearance → /main/ = 124KB).
-      const TRUSTED_IP_THRESHOLD_MS = 3_000;
-      if (jsdSolveMs > 0 && jsdSolveMs < TRUSTED_IP_THRESHOLD_MS) {
-        console.log(
-          `[spain-pb] ⚡ IP de confiance CF (cf_clearance en ${jsdSolveMs}ms < ${TRUSTED_IP_THRESHOLD_MS}ms) — ` +
-          `Round 2 ignoré (même challenge token garanti → phantom) — closeAndInvalidate + rotation IP nécessaire`,
-        );
-        // Ne pas entrer dans le bloc Round 2 — on tombe directement dans le fallback
-        // fetch puis la session sera invalidée par l'HTTP scanner (0B → closeAndInvalidate).
-      } else {
+      // ── Round 2 : reset PHPSESSID uniquement + re-navigation pour nonce fraîche ──
+      // Exécuté toujours quand /main/ = 0B après JSD phantom, INDÉPENDAMMENT de la
+      // vitesse du solve (jsdSolveMs). Le raisonnement "< 3s = trusted IP = Round 2
+      // inutile" était faux : même les IPs DC obtiennent parfois un vrai JSD challenge
+      // (non fast-track), et même avec fast-track, Round 2 génère un nouveau PHPSESSID
+      // → nouvelle nonce CF → le widget JSD la consomme en premier → cf_clearance frais.
+      {
       console.log(
         `[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) ` +
         `+ re-navigation pour nonce fraîche…`,
@@ -2755,7 +2744,7 @@ class SpainPersistentBrowserManager {
       } catch (retryErr) {
         console.warn(`[spain-pb] ⚠️ Retry cookie fantôme (non-fatal): ${retryErr}`);
       }
-      } // fin else (non-trusted-IP Round 2)
+      } // fin Round 2
     }
 
     // ── Fallback : fetch /main/ directement depuis le contexte browser ────────
@@ -2858,19 +2847,10 @@ class SpainPersistentBrowserManager {
         console.warn(
           `[spain-pb] ⚠️ Fetch direct /main/ échoué: "${evalBody.slice(0, 120)}" — scanner devra retenter`,
         );
-        // IP de confiance CF (cf_clearance obtenu en < 3s) + fetch-direct /main/ = 0B définitif.
-        // Dans cet état, TOUS les page.evaluate(fetch()) retournent 0B (contexte browser cassé).
-        // Les APIs Bookitit (getagendas/, datetime/) échoueront aussi via impit en production
-        // car le PHPSESSID est lié à l'IP Decodo du browser — une IP différente = 0B serveur.
-        // → closeAndInvalidate immédiat : le prochain solve utilisera la prochaine IP Decodo
-        //   du pool (round-robin), qui ne sera probablement pas trusted → JSD complet → /main/ valide.
-        if (jsdSolveMs > 0 && jsdSolveMs < 3_000) {
-          console.warn(
-            `[spain-pb] ⚡ Trusted IP (${jsdSolveMs}ms) + fetch-direct 0B — closeAndInvalidate pour rotation IP Decodo`,
-          );
-          await this.closeAndInvalidate();
-          return null;
-        }
+        // /main/ = 0B après Round 2 + fetch-direct.
+        // On ne closeAndInvalidate pas ici sur la seule base du jsdSolveMs : les IPs DC
+        // peuvent obtenir un cf_clearance rapide ET un /main/ valide par la suite.
+        // Le scanner HTTP appellera closeAndInvalidate si /main/ retourne 0B lors du scan.
       }
     }
 
