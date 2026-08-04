@@ -3982,6 +3982,21 @@ export async function submitSigninFormViaDOM(
     return { signinBody: "", summaryBody: "" };
   }
 
+  // ── 0. Attendre que le formulaire Backbone soit rendu (hash résolu ≠ form rendu) ──
+  // navigateToSelecttime() retourne dès que window.location.hash passe à
+  // #signupsecondappointment, mais le rendu Backbone est asynchrone. Sans cette
+  // attente, findField() trouve la page en cours de chargement (juste un bouton
+  // "Volver") → no_login_field.
+  try {
+    await page.waitForSelector(
+      '#idBktSigninLogin, #idBktLogin, [name="login"], input[type="text"], input[type="email"]',
+      { timeout: 8_000, visible: true },
+    );
+    console.log("[spain-pb] ✅ Champ login visible dans le DOM — formulaire prêt");
+  } catch {
+    console.warn("[spain-pb] ⚠️ Champ login non visible après 8s — formulaire pas encore rendu (Backbone lent ou état incorrect)");
+  }
+
   // ── 1. Diagnostic DOM : voir ce que Backbone a rendu ────────────────────────
   const domDiag = (await page.evaluate(`
     (function() {

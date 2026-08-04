@@ -944,8 +944,16 @@ export async function executeHttpBooking(
           })(${JSON.stringify(serviceId)})
         `).catch(() => false)) as boolean;
         console.log(`[spain-booking] 🖱️ Pré-nav service ${serviceId}: ${clicked ? "cliqué" : "hash fallback"}`);
-        // Attendre que getagendas/ + datetime/ soient traités par le widget (max 4s)
-        await new Promise<void>((r) => setTimeout(r, 4_000));
+        // Attendre que datetime/ soit complète et que les créneaux apparaissent dans le DOM.
+        // 4s fixe était insuffisant sur proxy lent → navigateToSelecttime tombait en hash fallback
+        // → Backbone n'avait pas les données du modèle → clsDivBackErrorButton au lieu du form login.
+        // On attend spécifiquement un lien selecttime (preuve que le calendrier est rendu).
+        try {
+          await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 10_000 });
+          console.log("[spain-booking] ✅ Créneaux datetime/ rendus dans le DOM — prêt pour navigateToSelecttime");
+        } catch {
+          console.warn("[spain-booking] ⚠️ Aucun lien selecttime après 10s — datetime/ lente ou aucun créneau ce mois-ci (hash fallback sera tenté)");
+        }
       } catch (preNavErr) {
         console.warn(`[spain-booking] ⚠️ Pré-nav service exception (non-fatal): ${preNavErr}`);
       }
