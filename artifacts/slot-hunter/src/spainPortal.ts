@@ -1980,6 +1980,45 @@ export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatc
         }
         if (autoNavigated) continue;
 
+        // ── Pré-requis Saopolo/custom : cliquer ACEPTAR si #idListServices caché ──
+        // Certains portails (ex: Saopolo Kinshasa) injectent dans #idBktDefaultServicesTextBeforeServicesList
+        // un panel d'instructions (#dialog-confirm) + bouton #bktContinue (texte "ACEPTAR").
+        // jQuery cache #idListServices au chargement et ne le montre qu'après ce clic.
+        // Le bot doit détecter cette situation et cliquer avant de chercher les cartes service.
+        if (currentHash.indexOf("agendas") < 0) {
+          const acceptClicked: boolean = await page.evaluate(() => {
+            const list = document.getElementById("idListServices");
+            // Services déjà visibles → pas besoin d'ACEPTAR
+            if (!list || list.offsetParent !== null) return false;
+            // 1. Clic direct sur #bktContinue (Saopolo)
+            const bktContinue = document.getElementById("bktContinue") as HTMLElement | null;
+            if (bktContinue && bktContinue.offsetParent !== null) { bktContinue.click(); return true; }
+            // 2. Tout élément visible dans #idBktDefaultServicesTextBeforeServicesList
+            const beforeList = document.getElementById("idBktDefaultServicesTextBeforeServicesList");
+            if (beforeList && beforeList.offsetParent !== null) {
+              const candidates = beforeList.querySelectorAll("button, a, div[id], span[id], input[type='button'], input[type='submit'], [role='button']");
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                const txt = (el.textContent || "").trim().toUpperCase();
+                if (el.offsetParent !== null && (txt.indexOf("ACEPTAR") >= 0 || txt.indexOf("ACCEPT") >= 0 || txt.indexOf("CONTINUAR") >= 0 || txt.indexOf("CONTINUE") >= 0 || txt.indexOf("SUIVANT") >= 0)) {
+                  el.click(); return true;
+                }
+              }
+              // Fallback : tout élément visible dans la zone
+              for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i] as HTMLElement;
+                if (el.offsetParent !== null && (el.id || el.getAttribute("role"))) { el.click(); return true; }
+              }
+            }
+            return false;
+          }).catch(() => false);
+          if (acceptClicked) {
+            console.log(`[spain-watcher] ✅ ACEPTAR (#bktContinue) cliqué — #idListServices caché → attente affichage services`);
+            await randomDelay(800, 1500);
+            continue;
+          }
+        }
+
         // ── Pas d'auto-nav → sélectionner la première carte visible ─────────────
         const isAtAgendas = currentHash.indexOf("agendas") >= 0;
         const cardSels = isAtAgendas ? AGENDA_CARD_SELS : SERVICE_CARD_SELS;
