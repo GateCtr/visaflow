@@ -21,6 +21,16 @@ CF validates `/main/` based on the TLS fingerprint + cf_clearance combination. i
 
 **Why impit fails for /main/:** CF ties the cf_clearance to the Chrome TLS fingerprint established during the JSD solve. impit has a different TLS fingerprint → CF returns 0B even with a valid cf_clearance cookie.
 
+## Rule: JSONP endpoints (getservices/getagendas/datetime) — impit first, browser fallback
+
+`session.soaxProxyUrl` stores the exact proxy URL used by Chromium at session creation. With dedicated fixed IPs (Decodo multi-pool), impit reads `session.soaxProxyUrl` → same IP X as Chromium → PHPSESSID and cf_clearance both valid.
+
+**Fix (2026-08-04):** `fetchBookititBodyWithFallback` and `callBookititJsonp` now try impit first. Browser is only called if impit returns 0B (i.e. TCP session stale or server-side rejection). Eliminates one `callBookititEndpointViaBrowser` round-trip per endpoint per probe in the normal case.
+
+**Why browser was used before:** Comment dated from before `soaxProxyUrl` was locked at session creation; assumed pool rotation could diverge. With fixed IPs this never happens.
+
+**How to apply:** If impit consistently returns 0B for JSONP despite same IP, check if Bookitit is doing TCP-session-level binding (not just IP). In that case, remove the impit-first attempt for that endpoint.
+
 ## CF JSD flow (2026-07+)
 
 1. Chrome navigates to citaconsular.es → CF challenge

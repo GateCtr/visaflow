@@ -472,14 +472,20 @@ async function fetchBookititBodyWithFallback(
   url: string,
   headers: Record<string, string>,
 ): Promise<string> {
+  // Stratégie : impit d'abord (session.soaxProxyUrl = même IP que Chromium pour les IPs fixes),
+  // browser en fallback si 0B. Évite un aller-retour Chromium inutile à chaque probe.
+  const res = await spainCfFetch(url, session, { headers });
+  const body = res ? await res.text() : "";
+  if (body.length > 100) return body;
+
+  // 0B via impit → fallback browser (PHPSESSID rejeté ou TCP session stale)
   if (shouldRouteBookititViaBrowser(session)) {
+    console.log(`[spain-http] ⚡ impit → 0B — fallback browser pour ${url.split("?")[0].split("/").pop()}`);
     const browserBody = await callBookititEndpointViaBrowser(url);
     if (browserBody) return browserBody;
   }
 
-  const res = await spainCfFetch(url, session, { headers });
-  if (!res) return "";
-  return await res.text();
+  return body;
 }
 
 /**
@@ -500,26 +506,18 @@ async function callBookititJsonp(
   });
   const url = `${baseUrl}${endpoint}?${q}`;
 
-  if (shouldRouteBookititViaBrowser(session)) {
-    const browserBody = await callBookititEndpointViaBrowser(url);
-    if (browserBody) {
-      const trimmed = browserBody.trim();
-      if (trimmed && !/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmed.slice(0, 200))) {
-        return parseJsonpPayload(browserBody);
-      }
-    }
-  }
+  const jsonpHeaders = {
+    Referer: referer,
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+  };
 
-  const res = await spainCfFetch(url, session, {
-    headers: {
-      Referer: referer,
-      "X-Requested-With": "XMLHttpRequest",
-      "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-    },
-  });
+  // Impit d'abord (session.soaxProxyUrl = même IP que Chromium pour IPs fixes).
+  // Browser en fallback si réponse vide ou HTML.
+  const res = await spainCfFetch(url, session, { headers: jsonpHeaders });
 
   if (!res) return null;
   if (!res.ok) {
@@ -533,9 +531,22 @@ async function callBookititJsonp(
   const body = await res.text();
   const trimmed = body.trim();
 
-  // Détecter challenge CF ou HTML (pas JSONP)
+  // Détecter challenge CF ou HTML (pas JSONP) → fallback browser
   if (/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmed.slice(0, 200))) {
     console.warn(`[spain-http] Réponse HTML au lieu de JSONP sur ${endpoint} → session CF morte`);
+    return null;
+  }
+
+  // 0B via impit → fallback browser
+  if (!trimmed && shouldRouteBookititViaBrowser(session)) {
+    console.log(`[spain-http] ⚡ impit → 0B sur ${endpoint} — fallback browser`);
+    const browserBody = await callBookititEndpointViaBrowser(url);
+    if (browserBody) {
+      const trimmedBrowser = browserBody.trim();
+      if (trimmedBrowser && !/<!DOCTYPE|<html|un instant|just a moment/i.test(trimmedBrowser.slice(0, 200))) {
+        return parseJsonpPayload(browserBody);
+      }
+    }
     return null;
   }
 
