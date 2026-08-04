@@ -2581,7 +2581,11 @@ async function scanViaMainEndpoint(
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
-  const hasPreSlotInteractiveFlow = hasInteractiveAcceptFlow || diagnosticState === "service-state";
+  // NOTE: diagnosticState === "service-state" retiré intentionnellement — faux positif confirmé.
+  // Les IDs idDivBktServicesContainer/idDivBktButtonContinueContainer sont présents dans
+  // TOUS les HTML (containers vides / templates Underscore.js) même quand aucun créneau
+  // n'existe. Le seul signal fiable est le signal serveur SPA ci-dessus.
+  const hasPreSlotInteractiveFlow = hasInteractiveAcceptFlow;
 
   // ─── Signal bkt_init_widget.dates embarqué (/main/ ou POST widget) ───
   // dates=[] est autoritaire UNIQUEMENT si le flux Aceptar/service n'est pas en cours :
@@ -2837,32 +2841,6 @@ async function scanViaMainEndpoint(
   const hasNoHorasInContainer = /No hay horas disponibles/i.test(containerHtml);
   if (!hasNoHorasInContainer && containerHtml.length > 100) {
     console.log(`[spain-http] 🔍 Pas de "No hay horas" dans le container — vérification datetime/…`);
-    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
-    if (confirmed === "ajax_unavailable") {
-      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
-    }
-    if (!confirmed) {
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
-    }
-    return {
-      status: "found",
-      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
-      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
-      scanDurationMs: Date.now() - t0,
-      _mainHtml: html,
-      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
-      _allSlots: confirmed.allSlots,
-      _widgetConfig: confirmed.widgetConfig,
-    };
-  }
-
-  // Cas 6 : service-state / modal Aceptar sans signal HTML explicite (ex. São Paulo)
-  // dates[] vide côté serveur tant que le flux interactif n'est pas terminé.
-  if (hasPreSlotInteractiveFlow && diagnosticState === "service-state") {
-    console.log(
-      `[spain-http] 🔍 service-state + flow Aceptar sans signal HTML conclusif — ` +
-      `vérification getservices/getagendas/datetime...`,
-    );
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
     if (confirmed === "ajax_unavailable") {
       return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
