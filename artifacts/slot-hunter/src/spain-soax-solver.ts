@@ -552,6 +552,15 @@ export function setActiveSpainCfSession(session: SpainCfSession): void {
 export async function ensureSpainCfSession(
   targetUrl: string = DEFAULT_SPAIN_TARGET_URL,
 ): Promise<SpainCfSession | null> {
+  // ── Mode impit : JSD solve direct sans CapSolver ─────────────────────────────
+  // SPAIN_SESSION_MODE=impit → JSDSolver (impit-based) résout le challenge CF
+  // directement. cf_clearance + PHPSESSID obtenus avec le MÊME fingerprint TLS
+  // que les appels JSONP suivants → cohérence garantie.
+  if (process.env.SPAIN_SESSION_MODE === "impit") {
+    const { ensureSpainImpitSession } = await import("./spain-impit-session.js");
+    return ensureSpainImpitSession(targetUrl);
+  }
+
   // ── Mode persistent-browser : déléguer entièrement au PB manager ────────────
   // Quand SPAIN_SESSION_MODE=persistent-browser, le solve CF et la capture /main/
   // sont gérés par SpainPersistentBrowserManager (Chromium Puppeteer + Decodo ISP).

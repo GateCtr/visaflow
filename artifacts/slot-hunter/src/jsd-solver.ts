@@ -1,23 +1,27 @@
 /**
  * jsd-solver.ts — Cloudflare JavaScript Detection (JSD) solver
- * 
+ *
  * JSD (JavaScript Detection) is Cloudflare's invisible challenge that works by:
- * 1. Extracting __CF$cv$params (r, t, m, s parameters) from HTML
- * 2. Fetching /cdn-cgi/challenge-platform/scripts/jsd/main.js to get nonce
- * 3. Generating browser fingerprint (WebGL, Canvas, Screen, Timezone, etc.)
- * 4. Compressing fingerprint using LZ-string algorithm
- * 5. Submitting POST oneshot request with compressed payload
- * 6. Receiving cf_clearance cookie in response
- * 
- * This solver supports both:
- * - Direct mode (no proxy, for IPs CF already trusts)
- * - Proxy mode (uses configured proxy for sticky sessions)
+ *  1. Extracting __CF$cv$params (r, t, m, s parameters) from HTML
+ *  2. Fetching /cdn-cgi/challenge-platform/scripts/jsd/main.js to get nonce
+ *  3. Generating browser fingerprint (WebGL, Canvas, Screen, Timezone, etc.)
+ *  4. Compressing fingerprint using LZ-string algorithm
+ *  5. Submitting POST oneshot request with compressed payload
+ *  6. Receiving cf_clearance cookie in response
+ *
+ * TRANSPORT : toutes les requêtes HTTP passent par une instance Impit (Chrome JA3/JA4).
+ * Node.js fetch() natif est volontairement BANNI — il expose un fingerprint TLS détectable
+ * par Cloudflare, qui renverrait une erreur silencieuse ou un 403.
+ *
+ * BUG CORRIGÉ : l'ancienne implémentation dérivait la base URL depuis le `rayId` (une chaîne
+ * hex CF sans aucune relation avec un domaine). La base URL est maintenant dérivée du
+ * `portalUrl` passé au constructeur.
  */
 
 // ─── Dependencies ─────────────────────────────────────────────────────────────
 
 import * as lzstring from "lz-string";
-import { ProxyAgent } from "undici";
+import { Impit } from "impit";
 
 // ─── Types & Interfaces ───────────────────────────────────────────────────────
 
@@ -32,7 +36,7 @@ interface JSDChallengeParams {
   s: string;
 }
 
-interface JSDOneshotResponse {
+export interface JSDOneshotResponse {
   /** cf_clearance cookie value */
   cfClearance: string;
   /** All cookies returned by Cloudflare */
@@ -43,9 +47,11 @@ interface JSDOneshotResponse {
   obtainedAt: number;
   /** Expiration time (cf_clearance typically valid ~2 hours) */
   expiresAt: number;
+  /** The impit instance used (same TLS session — MUST be reused for subsequent calls) */
+  impit: InstanceType<typeof Impit>;
 }
 
-interface JSDSolveResult {
+export interface JSDSolveResult {
   success: boolean;
   /** Solution if successful */
   session?: JSDOneshotResponse;
@@ -55,121 +61,131 @@ interface JSDSolveResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CF_JSD_SCRIPT_PATH = "/cdn-cgi/challenge-platform/scripts/jsd/main.js";
-const CF_ONESHOT_PATH_PATTERN = "/cdn-cgi/challenge-platform/h/[bg]/jsd/oneshot";
-const DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
-const CF_CLEARANCE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours (CF default)
-const RETRY_BACKOFF_MS = 2000;
+const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+/** cf_clearance is typically valid for ~2 hours */
+const CF_CLEARANCE_TTL_MS = 2 * 60 * 60 * 1000;
+
 const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = 2000;
 
 // ─── JSD Solver Class ─────────────────────────────────────────────────────────
 
 export class JSDSolver {
+  private portalUrl: string;
+  private baseUrl: string;
   private userAgent: string;
   private proxyUrl?: string;
-  private proxyAgent?: ProxyAgent;
+  private _impit: InstanceType<typeof Impit>;
   private oneshotPath?: string;
   private nonce?: string;
   private siteKey?: string;
 
   /**
-   * Create a new JSD Solver instance
-   * 
-   * @param userAgent - Browser User-Agent string (defaults to Chrome 136)
-   * @param proxyUrl - Optional proxy URL for sticky sessions
+   * @param portalUrl  - Full URL of the CF-protected portal (e.g. https://www.citaconsular.es/...)
+   * @param userAgent  - Browser UA string (defaults to Chrome 136 Win)
+   * @param proxyUrl   - Optional proxy URL for sticky sessions (REQUIRED when cf_clearance is IP-bound)
    */
-  constructor(userAgent: string = DEFAULT_USER_AGENT, proxyUrl?: string) {
+  constructor(
+    portalUrl: string,
+    userAgent: string = DEFAULT_USER_AGENT,
+    proxyUrl?: string,
+  ) {
+    this.portalUrl = portalUrl;
     this.userAgent = userAgent;
     this.proxyUrl = proxyUrl;
-    
-    if (proxyUrl) {
-      this.proxyAgent = new ProxyAgent(proxyUrl);
-    }
+
+    // Derive base URL from the actual portal URL — NOT from the CF rayId
+    const parsed = new URL(portalUrl);
+    this.baseUrl = `${parsed.protocol}//${parsed.hostname}`;
+
+    // Single impit instance per solver — all requests share the same TLS session.
+    // This is critical: cf_clearance is tied to the (IP, TLS fingerprint) pair.
+    // If we switch instances mid-solve, the cookie will be rejected.
+    this._impit = new Impit({
+      browser: "chrome",
+      ...(proxyUrl ? { proxyUrl } : {}),
+    } as any);
+
+    console.log(
+      `[jsd-solver] 🔧 Initialisé pour ${this.baseUrl}${proxyUrl ? " (proxy)" : " (direct)"}`,
+    );
   }
 
-  /**
-   * Main entry point: Solve a Cloudflare JSD challenge
-   * 
-   * @param portalUrl - URL of the portal protected by Cloudflare JSD
-   * @param timeoutMs - Request timeout in milliseconds
-   * @returns Promise<JSDSolveResult> with cf_clearance and cookies
-   */
-  public async solve(
-    portalUrl: string,
-    timeoutMs: number = 30000,
-  ): Promise<JSDSolveResult> {
-    console.log(`[jsd-solver] 🚀 Début résolution JSD pour: ${portalUrl}`);
-    
-    const startTime = Date.now();
-    
-    try {
-      // Step 1: Fetch portal HTML and extract challenge parameters
-      const challengeParams = await this.fetchChallengeParams(portalUrl, timeoutMs);
-      if (!challengeParams) {
-        throw new Error("Impossible d'extraire les paramètres du challenge JSD");
-      }
-      console.log(`[jsd-solver] ✅ Paramètres extraits: r=${challengeParams.ray.slice(0, 8)}...`);
+  /** The impit instance used — callers MUST reuse it for all subsequent requests. */
+  get impit(): InstanceType<typeof Impit> {
+    return this._impit;
+  }
 
-      // Step 2: Fetch JSD main script and extract oneshot path
+  // ─── Public API ─────────────────────────────────────────────────────────────
+
+  /**
+   * Solve a Cloudflare JSD challenge and return cf_clearance.
+   *
+   * The returned `session.impit` MUST be used for all subsequent requests —
+   * it is the same impit instance that obtained the cookie (same TLS session).
+   */
+  public async solve(timeoutMs = 30_000): Promise<JSDSolveResult> {
+    console.log(`[jsd-solver] 🚀 Début résolution JSD pour: ${this.portalUrl}`);
+    const t0 = Date.now();
+
+    try {
+      // Step 1 : Fetch portal HTML and extract CF challenge params
+      const challengeParams = await this.fetchChallengeParams(timeoutMs);
+      if (!challengeParams) {
+        throw new Error("Impossible d'extraire les paramètres du challenge JSD (__CF$cv$params absent)");
+      }
+      console.log(`[jsd-solver] ✅ Paramètres CF extraits: r=${challengeParams.ray.slice(0, 12)}…`);
+
+      // Step 2 : Fetch JSD main.js and extract oneshot path
       const oneshotPath = await this.fetchJSDScript(challengeParams, timeoutMs);
       if (!oneshotPath) {
         throw new Error("Impossible d'extraire le chemin oneshot depuis main.js");
       }
       this.oneshotPath = oneshotPath;
-      console.log(`[jsd-solver] ✅ Oneshot path: ${oneshotPath.slice(0, 60)}...`);
+      console.log(`[jsd-solver] ✅ Oneshot path: ${oneshotPath.slice(0, 70)}…`);
 
-      // Step 3: Generate browser fingerprint
+      // Step 3 : Generate browser fingerprint
       const fingerprint = this.generateBrowserFingerprint();
-      console.log(`[jsd-solver] ✅ Fingerprint généré (${JSON.stringify(fingerprint).length} bytes)`);
 
-      // Step 4: Compress fingerprint
+      // Step 4 : Compress fingerprint (LZ-string)
       const compressedPayload = this.compressFingerprint(fingerprint);
       console.log(`[jsd-solver] ✅ Payload compressé (${compressedPayload.length} chars)`);
 
-      // Step 5: Submit oneshot request
+      // Step 5 : POST oneshot → receive cf_clearance
       const solution = await this.submitOneshot(compressedPayload, challengeParams, timeoutMs);
-      const duration = Date.now() - startTime;
-      
-      console.log(`[jsd-solver] 🎉 Résolution JSD terminée en ${duration}ms`);
-      console.log(`[jsd-solver]    cf_clearance: ${solution.cfClearance.slice(0, 20)}...`);
-      console.log(`[jsd-solver]    Cookies: ${solution.cookies.length} retournés`);
-      
-      return {
-        success: true,
-        session: solution,
-      };
-      
+      const duration = Date.now() - t0;
+
+      console.log(`[jsd-solver] 🎉 JSD résolu en ${duration}ms`);
+      console.log(`[jsd-solver]    cf_clearance: ${solution.cfClearance.slice(0, 30)}…`);
+      console.log(`[jsd-solver]    Cookies reçus: ${solution.cookies.length}`);
+
+      return { success: true, session: solution };
     } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[jsd-solver] ❌ Échec JSD en ${duration}ms:`, error);
-      
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      const duration = Date.now() - t0;
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[jsd-solver] ❌ Échec JSD en ${duration}ms: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
-  /**
-   * Step 1: Fetch portal HTML and extract __CF$cv$params
-   */
-  private async fetchChallengeParams(
-    portalUrl: string,
-    timeoutMs: number,
-  ): Promise<JSDChallengeParams | null> {
+  // ─── Step 1 : Fetch challenge params ────────────────────────────────────────
+
+  private async fetchChallengeParams(timeoutMs: number): Promise<JSDChallengeParams | null> {
     try {
-      const res = await this.fetchWithRetry(portalUrl, {
+      const res = await this.fetchViaImpit(this.portalUrl, {
         headers: {
           "User-Agent": this.userAgent,
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
           "Accept-Encoding": "gzip, deflate, br",
           "Sec-Fetch-Dest": "document",
           "Sec-Fetch-Mode": "navigate",
           "Sec-Fetch-Site": "none",
           "Upgrade-Insecure-Requests": "1",
         },
-        timeout: timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!res.ok) {
@@ -177,59 +193,53 @@ export class JSDSolver {
       }
 
       const html = await res.text();
-      
-      // Extract __CF$cv$params using regex
+      console.log(
+        `[jsd-solver] Portal HTML reçu (${html.length} chars, status=${res.status})`,
+      );
+
+      // Extract __CF$cv$params
       const paramsMatch = html.match(/window\.__CF\$cv\$params\s*=\s*(\{[^}]+\})/);
       if (!paramsMatch) {
-        console.warn("[jsd-solver] ⚠️ window.__CF$cv$params non trouvé dans le HTML");
+        // Log a preview to diagnose why params are missing
+        const preview = html.slice(0, 600).replace(/\s+/g, " ");
+        console.warn(`[jsd-solver] ⚠️ __CF$cv$params absent. Preview: ${preview}`);
         return null;
       }
 
-      const paramsStr = paramsMatch[1];
-      
-      // Parse the parameters object
-      const params: JSDChallengeParams = {
-        ray: paramsMatch[1].match(/\br:\s*['"]([^'"]+)['"]/)?.[1] || "",
-        timestamp: paramsMatch[1].match(/\bt:\s*['"]([^'"]+)['"]/)?.[1] || "",
-        m: paramsMatch[1].match(/\bm:\s*['"]([^'"]+)['"]/)?.[1] || "",
-        s: paramsMatch[1].match(/\bs:\s*['"]([^'"]+)['"]/)?.[1] || "",
+      const block = paramsMatch[1];
+      return {
+        ray:       block.match(/\br:\s*['"]([^'"]+)['"]/)?.[1]  ?? "",
+        timestamp: block.match(/\bt:\s*['"]([^'"]+)['"]/)?.[1]  ?? "",
+        m:         block.match(/\bm:\s*['"]([^'"]+)['"]/)?.[1]  ?? "",
+        s:         block.match(/\bs:\s*['"]([^'"]+)['"]/)?.[1]  ?? "",
       };
-
-      return params;
-      
-    } catch (error) {
-      console.error("[jsd-solver] Erreur fetchChallengeParams:", error);
+    } catch (err) {
+      console.error("[jsd-solver] Erreur fetchChallengeParams:", err);
       return null;
     }
   }
 
-  /**
-   * Step 2: Fetch JSD main.js and extract oneshot path
-   */
+  // ─── Step 2 : Fetch JSD main.js ─────────────────────────────────────────────
+
   private async fetchJSDScript(
     params: JSDChallengeParams,
     timeoutMs: number,
   ): Promise<string | null> {
-    if (!params.ray) {
-      throw new Error("Ray ID required for JSD script fetch");
-    }
-
     try {
-      // Build JSD script URL
-      const url = this.buildJSDScriptUrl(params.ray);
-      
-      const res = await this.fetchWithRetry(url, {
+      const scriptUrl = `${this.baseUrl}/cdn-cgi/challenge-platform/scripts/jsd/main.js?t=${Date.now()}`;
+
+      const res = await this.fetchViaImpit(scriptUrl, {
         headers: {
           "User-Agent": this.userAgent,
           "Accept": "*/*",
-          "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+          "Accept-Language": "fr-FR,fr;q=0.9",
           "Accept-Encoding": "gzip, deflate, br",
-          "Referer": this.getBaseURL(params.ray),
+          "Referer": this.portalUrl,
           "Sec-Fetch-Dest": "script",
           "Sec-Fetch-Mode": "no-cors",
           "Sec-Fetch-Site": "same-origin",
         },
-        timeout: timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!res.ok) {
@@ -237,298 +247,218 @@ export class JSDSolver {
       }
 
       const script = await res.text();
-      
-      // Extract oneshot path from script
-      // Pattern: /jsd/oneshot/<siteKey>/<nonce>/
-      const oneshotMatch = script.match(/\/jsd\/oneshot\/([a-f0-9]{10,14})\/([\w.:\-_~]+)\//);
-      
+      console.log(`[jsd-solver] JSD script reçu (${script.length} chars)`);
+
+      // Extract: /jsd/oneshot/<siteKey>/<nonce>/<ray>
+      const oneshotMatch = script.match(
+        /\/jsd\/oneshot\/([a-f0-9]{10,14})\/([\w.:\-_~]+)\//,
+      );
+
       if (!oneshotMatch) {
-        console.warn("[jsd-solver] ⚠️ Oneshot path non trouvé dans main.js");
+        console.warn("[jsd-solver] ⚠️ Oneshot path absent dans main.js. Script preview:", script.slice(0, 400));
         return null;
       }
 
       this.siteKey = oneshotMatch[1];
-      this.nonce = oneshotMatch[2];
-      
-      const oneshotPath = `/cdn-cgi/challenge-platform/h/b/jsd/oneshot/${this.siteKey}/${this.nonce}/${params.ray}`;
-      
-      return oneshotPath;
-      
-    } catch (error) {
-      console.error("[jsd-solver] Erreur fetchJSDScript:", error);
+      this.nonce   = oneshotMatch[2];
+
+      return `/cdn-cgi/challenge-platform/h/b/jsd/oneshot/${this.siteKey}/${this.nonce}/${params.ray}`;
+    } catch (err) {
+      console.error("[jsd-solver] Erreur fetchJSDScript:", err);
       return null;
     }
   }
 
-  /**
-   * Step 3: Generate browser fingerprint
-   */
+  // ─── Step 3 : Browser fingerprint (Node.js compatible) ───────────────────────
+
   private generateBrowserFingerprint(): Record<string, unknown> {
-    // Screen properties available in Node.js JSDOM-like environment
-    const availableScreen = {
-      width: 1920,
-      height: 1080,
-      colorDepth: 24,
-      pixelRatio: 1,
-      availableWidth: 1920,
-      availableHeight: 1040,
-    };
-    
-    // Navigator properties available in Node.js environment
-    const availableNavigator = {
-      platform: "Win32",
-      languages: ["fr-FR", "fr", "en-US", "en"],
-      hardwareConcurrency: 8,
-      maxTouchPoints: 0,
-    };
-    
     return {
-      // Screen information
-      screen: availableScreen,
-      // Navigator information
-      navigator: availableNavigator,
-      // Timezone
+      screen: {
+        width: 1920,
+        height: 1080,
+        colorDepth: 24,
+        pixelRatio: 1,
+        availableWidth: 1920,
+        availableHeight: 1040,
+      },
+      navigator: {
+        platform: "Win32",
+        languages: ["fr-FR", "fr", "en-US", "en"],
+        hardwareConcurrency: 8,
+        maxTouchPoints: 0,
+      },
       timezone: {
         offset: new Date().getTimezoneOffset(),
         name: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
       },
-      // WebGL
       webgl: {
         vendor: "Google Inc. (NVIDIA)",
-        renderer: "ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 3GB Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        renderer:
+          "ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 3GB Direct3D11 vs_5_0 ps_5_0, D3D11)",
       },
-      // Canvas hash (simplified - real implementation would render and hash)
-      canvas: "canvas_hash_placeholder",
-      // Timestamp
+      canvas: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0",
       timestamp: Date.now(),
-      // User-Agent
       userAgent: this.userAgent,
     };
   }
 
-  /**
-   * Step 4: Compress fingerprint using LZ-string
-   */
+  // ─── Step 4 : Compress ───────────────────────────────────────────────────────
+
   private compressFingerprint(fingerprint: Record<string, unknown>): string {
-    // Convert to JSON
-    const jsonString = JSON.stringify(fingerprint);
-    
-    // Compress using LZ-string
-    const compressed = lzstring.compressToEncodedURIComponent(jsonString);
-    
-    // Format: v_<ray>=<compressed_payload>
-    const payload = `v_${this.oneshotPath?.split("/").pop() ?? "unknown"}=${compressed}`;
-    
-    return payload;
+    const json = JSON.stringify(fingerprint);
+    const compressed = lzstring.compressToEncodedURIComponent(json);
+    // Format expected by CF: v_<ray>=<compressed>
+    const rayId = this.oneshotPath?.split("/").pop() ?? "unknown";
+    return `v_${rayId}=${compressed}`;
   }
 
-  /**
-   * Step 5: Submit oneshot request and extract cf_clearance
-   */
+  // ─── Step 5 : POST oneshot ───────────────────────────────────────────────────
+
   private async submitOneshot(
     compressedPayload: string,
     params: JSDChallengeParams,
     timeoutMs: number,
   ): Promise<JSDOneshotResponse> {
-    if (!this.oneshotPath) {
-      throw new Error("Oneshot path not set");
-    }
+    if (!this.oneshotPath) throw new Error("oneshotPath non défini");
 
-    const oneshotUrl = `${this.getBaseURL(params.ray)}${this.oneshotPath}`;
-    
-    // Build request body with token and timestamp
-    const body = this.buildOneshotBody(compressedPayload, params);
-    
-    const res = await this.fetchWithRetry(oneshotUrl, {
+    const oneshotUrl = `${this.baseUrl}${this.oneshotPath}`;
+
+    const bodyParts = [compressedPayload];
+    if (params.timestamp) bodyParts.push(`t=${encodeURIComponent(params.timestamp)}`);
+    if (params.m)         bodyParts.push(`m=${encodeURIComponent(params.m)}`);
+    const body = bodyParts.join("&");
+
+    const res = await this.fetchViaImpit(oneshotUrl, {
       method: "POST",
       headers: {
         "User-Agent": this.userAgent,
         "Accept": "*/*",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Origin": this.getBaseURL(params.ray),
-        "Referer": this.getBaseURL(params.ray),
+        "Origin": this.baseUrl,
+        "Referer": this.portalUrl,
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
       },
       body,
-      timeout: timeoutMs,
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status} submitting oneshot`);
+      const bodyText = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} au POST oneshot. Body: ${bodyText.slice(0, 200)}`);
     }
 
     // Extract cf_clearance from Set-Cookie header
-    const setCookie = res.headers.get("set-cookie") || "";
-    const cfClearanceMatch = setCookie.match(/cf_clearance=([^;]+)/);
-    
+    // impit peut retourner les cookies via set-cookie ou getSetCookie()
+    const rawSetCookie = res.headers.get("set-cookie") ?? "";
+    const cfClearanceMatch = rawSetCookie.match(/cf_clearance=([^;]+)/);
+
     if (!cfClearanceMatch) {
-      throw new Error("cf_clearance cookie not found in response");
+      const bodyText = await res.text().catch(() => "");
+      console.warn(`[jsd-solver] ⚠️ cf_clearance absent dans Set-Cookie.`);
+      console.warn(`[jsd-solver]    Set-Cookie: ${rawSetCookie.slice(0, 200)}`);
+      console.warn(`[jsd-solver]    Body: ${bodyText.slice(0, 200)}`);
+      throw new Error("cf_clearance cookie absent dans la réponse oneshot");
     }
 
     const cfClearance = cfClearanceMatch[1];
-    
-    // Parse all cookies
-    const cookies = this.parseSetCookie(setCookie);
-    
+    const cookies = this.parseSetCookieHeader(rawSetCookie);
+
     return {
       cfClearance,
       cookies,
       userAgent: this.userAgent,
       obtainedAt: Date.now(),
-      expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
+      expiresAt:  Date.now() + CF_CLEARANCE_TTL_MS,
+      impit: this._impit,
     };
   }
 
-  // ─── Helper Methods ─────────────────────────────────────────────────────────
+  // ─── Transport : impit (Chrome TLS) ─────────────────────────────────────────
 
   /**
-   * Build JSD script URL with cache-bust
+   * All HTTP calls go through this method.
+   * Uses the class-level impit instance — same TLS session throughout the solve.
+   * Node.js fetch() is NEVER called.
    */
-  private buildJSDScriptUrl(rayId: string): string {
-    // JSD script URL typically includes the ray ID
-    const baseUrl = this.getBaseURL(rayId);
-    return `${baseUrl}${CF_JSD_SCRIPT_PATH}?t=${Date.now()}`;
-  }
-
-  /**
-   * Extract base URL from ray ID
-   */
-  private getBaseURL(rayId: string): string {
-    // For citaconsular.es: https://www.citaconsular.es
-    // This would need to be configurable per portal
-    if (rayId.includes("citaconsular")) {
-      return "https://www.citaconsular.es";
-    }
-    
-    // Generic fallback - extract from portal URL
-    return "https://example.com"; // Placeholder
-  }
-
-  /**
-   * Build oneshot request body
-   */
-  private buildOneshotBody(compressedPayload: string, params: JSDChallengeParams): string {
-    // Format: v_<ray>=<compressed>&t=<timestamp>
-    const bodyParts = [compressedPayload];
-    
-    if (params.timestamp) {
-      bodyParts.push(`t=${encodeURIComponent(params.timestamp)}`);
-    }
-    
-    // For citaconsular.es, we may also need token from widget
-    // This would be extracted from the portal HTML form
-    
-    return bodyParts.join("&");
-  }
-
-  /**
-   * Parse Set-Cookie header into array
-   */
-  private parseSetCookie(setCookie: string): Array<{ name: string; value: string }> {
-    const cookies: Array<{ name: string; value: string }> = [];
-    
-    const cookieParts = setCookie.split(",");
-    for (const part of cookieParts) {
-      const cookieStr = part.trim();
-      const eqIndex = cookieStr.indexOf("=");
-      if (eqIndex > 0) {
-        const name = cookieStr.slice(0, eqIndex).trim();
-        const value = cookieStr.slice(eqIndex + 1).split(";")[0].trim();
-        if (name && value) {
-          cookies.push({ name, value });
-        }
-      }
-    }
-    
-    return cookies;
-  }
-
-  /**
-   * Fetch with retry and backoff
-   */
-  private async fetchWithRetry(
+  private async fetchViaImpit(
     url: string,
-    options: RequestInit & { timeout?: number } = {},
+    options: RequestInit & { signal?: AbortSignal } = {},
   ): Promise<Response> {
-    const timeoutMs = options.timeout || 30000;
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
-        
-        // Build options with dispatcher if using proxy
-        const fetchOptions = { ...options };
-        if (this.proxyAgent) {
-          // @ts-ignore - dispatcher is undici-specific
-          fetchOptions.dispatcher = this.proxyAgent;
-        }
-        
-        const res = await fetch(url, {
-          ...fetchOptions,
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeout);
+        const res = await (
+          this._impit.fetch(url, options as any) as unknown as Promise<Response>
+        );
         return res;
-        
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
         if (attempt < MAX_RETRIES - 1) {
           const backoff = RETRY_BACKOFF_MS * Math.pow(2, attempt);
-          console.log(`[jsd-solver] ⏳ Retry in ${backoff}ms (${attempt + 1}/${MAX_RETRIES})...`);
-          await new Promise(resolve => setTimeout(resolve, backoff));
+          console.log(
+            `[jsd-solver] ⏳ Retry ${attempt + 1}/${MAX_RETRIES} dans ${backoff}ms (${lastError.message.slice(0, 80)})`,
+          );
+          await new Promise((r) => setTimeout(r, backoff));
         }
       }
     }
-    
-    throw lastError || new Error(`Fetch failed after ${MAX_RETRIES} attempts`);
+
+    throw lastError ?? new Error(`fetch échoué après ${MAX_RETRIES} tentatives`);
   }
 
-  /**
-   * Validate that the session is still valid
-   */
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  /** Parse a Set-Cookie header string into name/value pairs. */
+  private parseSetCookieHeader(rawSetCookie: string): Array<{ name: string; value: string }> {
+    const result: Array<{ name: string; value: string }> = [];
+    // Each cookie directive is separated by ", " but values can contain commas.
+    // Split on ", " followed by a token that looks like a cookie name.
+    for (const part of rawSetCookie.split(/,\s*(?=[A-Za-z_][^=]*=)/)) {
+      const directive = part.trim();
+      const eqIdx = directive.indexOf("=");
+      if (eqIdx > 0) {
+        const name  = directive.slice(0, eqIdx).trim();
+        const value = directive.slice(eqIdx + 1).split(";")[0].trim();
+        if (name && value) result.push({ name, value });
+      }
+    }
+    return result;
+  }
+
+  // ─── Public helpers ──────────────────────────────────────────────────────────
+
   public isSessionValid(session: JSDOneshotResponse): boolean {
     return Date.now() < session.expiresAt;
   }
 
-  /**
-   * Get remaining time for a session
-   */
   public getSessionRemainingMs(session: JSDOneshotResponse): number {
     return Math.max(0, session.expiresAt - Date.now());
   }
 
-  /**
-   * Get session cookies as header string
-   */
   public getCookieHeader(session: JSDOneshotResponse): string {
-    return session.cookies.map(c => `${c.name}=${c.value}`).join("; ");
+    return session.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   }
 }
 
-// ─── Utility Functions ───────────────────────────────────────────────────────
+// ─── Convenience export ───────────────────────────────────────────────────────
 
 /**
- * Convenience function to solve JSD challenge
+ * Solve a Cloudflare JSD challenge using impit (Chrome TLS fingerprint).
+ *
+ * @param portalUrl  Full URL protected by CF (e.g. https://www.citaconsular.es/...)
+ * @param proxyUrl   Proxy URL (REQUIRED if cf_clearance is IP-bound: Decodo, SOAX, etc.)
+ * @param userAgent  Optional UA override (defaults to Chrome 136 Win)
  */
 export async function solveJSDChallenge(
   portalUrl: string,
-  options?: {
-    userAgent?: string;
-    proxyUrl?: string;
-    timeoutMs?: number;
-  },
+  proxyUrl?: string,
+  userAgent?: string,
 ): Promise<JSDSolveResult> {
-  const solver = new JSDSolver(
-    options?.userAgent,
-    options?.proxyUrl,
-  );
-  return await solver.solve(portalUrl, options?.timeoutMs);
+  const solver = new JSDSolver(portalUrl, userAgent, proxyUrl);
+  return solver.solve();
 }
