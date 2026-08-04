@@ -21,15 +21,15 @@ CF validates `/main/` based on the TLS fingerprint + cf_clearance combination. i
 
 **Why impit fails for /main/:** CF ties the cf_clearance to the Chrome TLS fingerprint established during the JSD solve. impit has a different TLS fingerprint → CF returns 0B even with a valid cf_clearance cookie.
 
-## Rule: JSONP endpoints (getservices/getagendas/datetime) — impit first, browser fallback
+## Rule: JSONP endpoints en mode PB → browser direct (pas impit-first), même avec IPs fixes
 
-`session.soaxProxyUrl` stores the exact proxy URL used by Chromium at session creation. With dedicated fixed IPs (Decodo multi-pool), impit reads `session.soaxProxyUrl` → same IP X as Chromium → PHPSESSID and cf_clearance both valid.
+Testé en live 2026-08-04 : impit retourne 0B systématiquement pour getwidgetconfigurations/ et getservices/ même quand `session.soaxProxyUrl` = exact port Decodo utilisé par Chromium (même IP fixe).
 
-**Fix (2026-08-04):** `fetchBookititBodyWithFallback` and `callBookititJsonp` now try impit first. Browser is only called if impit returns 0B (i.e. TCP session stale or server-side rejection). Eliminates one `callBookititEndpointViaBrowser` round-trip per endpoint per probe in the normal case.
+**Cause racine :** Le PHPSESSID est lié à la **session TLS Chromium** (JA3/JA4), pas seulement à l'IP. impit simule Chrome TLS mais diverge sur les détails fin (cipher suite order, ticket session) → serveur Bookitit rejette avec 0B silencieux.
 
-**Why browser was used before:** Comment dated from before `soaxProxyUrl` was locked at session creation; assumed pool rotation could diverge. With fixed IPs this never happens.
+**Comportement correct (actuel) :** `callBookititEndpointViaBrowser` d'abord → sert depuis le cache CDP capturé pendant le solve (370B getwidgetconfigurations, 852B getservices) → aucun réseau live. Très rapide.
 
-**How to apply:** If impit consistently returns 0B for JSONP despite same IP, check if Bookitit is doing TCP-session-level binding (not just IP). In that case, remove the impit-first attempt for that endpoint.
+**Ne pas faire :** Inverser la priorité (impit first) → ajoute un aller-retour réseau inutile (impit 0B) avant le hit cache. Testé et revert fait.
 
 ## CF JSD flow (2026-07+)
 
