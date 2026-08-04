@@ -1095,6 +1095,209 @@ class SpainPersistentBrowserManager {
     }
   }
 
+  /**
+   * Rafraîchit la session PHP Bookitit (PHPSESSID) sans fermer le browser.
+   *
+   * Contrairement à closeAndInvalidate() qui détruit le browser entier et force
+   * un re-solve CF complet (30-120s), refreshPhpSession() :
+   *   1. Garde le cf_clearance et le browser existants (même IP Decodo)
+   *   2. Supprime seulement PHPSESSID + localStorage JSD
+   *   3. Re-navigue vers le widget → CF ne re-challenge pas (cf_clearance valide)
+   *      → Bookitit émet un PHPSESSID frais + /main/ est capturé (~5-15s)
+   *   4. Met à jour session.phpSessionCreatedAt + session.prefetchedMainHtml en place
+   *   5. Sync Redis
+   *
+   * Retourne true si le refresh a réussi. En cas d'échec, appelle closeAndInvalidate()
+   * en interne et retourne false — comportement garanti au moins aussi bon qu'avant.
+   */
+  async refreshPhpSession(): Promise<boolean> {
+    const session = this._cachedSession;
+    if (!session || !this._page || !this._browser) {
+      console.log("[spain-pb] 🔄 refreshPhpSession → pas de session/browser actif — fallback closeAndInvalidate");
+      await this.closeAndInvalidate();
+      return false;
+    }
+
+    const t0 = Date.now();
+    console.log("[spain-pb] 🔄 refreshPhpSession — delete PHPSESSID + re-nav widget (cf_clearance conservé)…");
+
+    try {
+      let page = this._page;
+      const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
+
+      // ── 1. Armer le listener CDP /main/ AVANT la navigation ────────────────
+      let capturedMainBody = "";
+      let capturedPhpSessId = "";
+      let cdpNet: any = null;
+      const pendingMainRequests = new Map<string, string>();
+
+      try {
+        cdpNet = await page.createCDPSession();
+        await cdpNet.send("Network.enable", {});
+
+        cdpNet.on("Network.responseReceived", (ev: any) => {
+          const url: string = ev.response?.url ?? "";
+          if (url.includes("citaconsular.es")) {
+            const setCookie: string = ev.response.headers?.["set-cookie"] ?? "";
+            const php = setCookie.match(/PHPSESSID=([^;]+)/)?.[1];
+            if (php) {
+              capturedPhpSessId = php;
+              console.log(`[spain-pb] 🍪 refreshPhpSession — PHPSESSID via Set-Cookie: ${php.slice(0, 12)}…`);
+            }
+          }
+          if (url.includes("onlinebookings/main")) {
+            pendingMainRequests.set(ev.requestId, url);
+            console.log(
+              `[spain-pb] 📡 refreshPhpSession — /main/ status=${ev.response.status}` +
+              ` mimeType=${ev.response.mimeType}`,
+            );
+          }
+        });
+
+        cdpNet.on("Network.loadingFinished", async (ev: any) => {
+          if (!pendingMainRequests.has(ev.requestId)) return;
+          pendingMainRequests.delete(ev.requestId);
+          try {
+            const { body, base64Encoded } = await cdpNet.send("Network.getResponseBody", { requestId: ev.requestId });
+            const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
+            if (decoded.length > capturedMainBody.length) {
+              capturedMainBody = decoded;
+              console.log(`[spain-pb] 📥 refreshPhpSession — /main/ body: ${decoded.length}B`);
+            }
+          } catch { /* non-fatal */ }
+        });
+      } catch (cdpErr) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSession CDP setup (non-fatal): ${cdpErr}`);
+      }
+
+      // ── 2. Supprimer PHPSESSID + localStorage JSD ─────────────────────────
+      // La nonce CF est liée au PHPSESSID côté serveur. Sans purge du localStorage,
+      // CF génèrerait la même nonce périmée pour la nouvelle session PHP → /main/ = 0B.
+      try {
+        const cdpCookie = await page.createCDPSession();
+        await cdpCookie.send("Network.deleteCookies", { name: "PHPSESSID", domain: ".citaconsular.es" }).catch(() => {});
+        await cdpCookie.send("Network.deleteCookies", { name: "PHPSESSID", domain: "www.citaconsular.es" }).catch(() => {});
+        await cdpCookie.send("Storage.clearDataForOrigin", {
+          origin: "https://www.citaconsular.es",
+          storageTypes: "local_storage,session_storage,indexeddb",
+        }).catch(() => {});
+        await cdpCookie.detach().catch(() => {});
+        console.log("[spain-pb] 🗑️ refreshPhpSession — PHPSESSID + localStorage JSD supprimés (cf_clearance conservé)");
+      } catch (delErr) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSession delete cookies (non-fatal): ${delErr}`);
+      }
+
+      // ── 3. Re-navigation widget ────────────────────────────────────────────
+      // CF ne re-challenge pas (cf_clearance toujours valide) → widget se charge
+      // directement → Bookitit émet un PHPSESSID frais dans Set-Cookie.
+      console.log(`[spain-pb] 🌐 refreshPhpSession — re-nav : ${formatPortalUrlForLog(targetUrl)}`);
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 40_000 })
+        .catch((e: unknown) => console.warn(`[spain-pb] ⚠️ refreshPhpSession re-nav (non-fatal): ${e}`));
+
+      // Rafraîchir la référence page (CF peut rediriger vers une nouvelle Frame)
+      try {
+        const freshPages = await this._browser.pages();
+        if (freshPages.length > 0) { page = freshPages[0]; this._page = page; }
+      } catch { /* non-fatal */ }
+
+      // ── 4. Cliquer Continuar ──────────────────────────────────────────────
+      let continueClicked = false;
+      const contDeadline = Date.now() + 25_000;
+      while (Date.now() < contDeadline && !continueClicked) {
+        const cfDone = await page.evaluate(() => {
+          const title = document.title.toLowerCase();
+          return !(title.includes("instant") || title.includes("moment") || title.includes("checking")) &&
+            !document.querySelector("iframe[src*='challenges.cloudflare.com'], iframe[src*='cdn-cgi/challenge-platform']");
+        }).catch(() => true);
+
+        if (!cfDone) {
+          await new Promise((r) => setTimeout(r, 1_000));
+          continue;
+        }
+
+        const acceptResult = await clickInteractiveSpainAcceptFlow(page);
+        continueClicked = acceptResult.clicked;
+        if (!continueClicked) {
+          console.log(`[spain-pb] 🖱️ refreshPhpSession — ${acceptResult.reason}`);
+          await new Promise((r) => setTimeout(r, 1_000));
+        }
+      }
+
+      if (continueClicked) {
+        console.log(`[spain-pb] ✅ refreshPhpSession — Continuar cliqué, attente /main/ (15s)…`);
+      } else {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSession — Continuar introuvable après 25s`);
+      }
+
+      // ── 5. Attendre la capture /main/ ────────────────────────────────────
+      const xhrDeadline = Date.now() + 15_000;
+      while (Date.now() < xhrDeadline && capturedMainBody.length < 100) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      if (cdpNet) { cdpNet.detach().catch(() => {}); cdpNet = null; }
+
+      // ── 6. Capturer PHPSESSID depuis les cookies de la page (fallback) ────
+      if (!capturedPhpSessId) {
+        try {
+          const pageCookies = await page.cookies("https://www.citaconsular.es");
+          const phpFromPage = pageCookies.find((c: any) => c.name === "PHPSESSID")?.value;
+          if (phpFromPage) {
+            capturedPhpSessId = phpFromPage;
+            console.log(`[spain-pb] 🍪 refreshPhpSession — PHPSESSID depuis page.cookies: ${phpFromPage.slice(0, 12)}…`);
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      // ── 7. Évaluation du résultat ─────────────────────────────────────────
+      if (capturedMainBody.length > 100) {
+        const elapsed = Math.round((Date.now() - t0) / 1000);
+        console.log(
+          `[spain-pb] ✅ refreshPhpSession terminé (${elapsed}s) — /main/ ${capturedMainBody.length}B` +
+          ` PHPSESSID=${capturedPhpSessId ? "✅ " + capturedPhpSessId.slice(0, 12) + "…" : "❌ absent (non mis à jour)"}`,
+        );
+
+        // Mettre à jour la session en place
+        const now = Date.now();
+        if (capturedPhpSessId) {
+          session.allCookies = [
+            ...session.allCookies.filter((c) => c.name !== "PHPSESSID"),
+            { name: "PHPSESSID", value: capturedPhpSessId },
+          ];
+        }
+        session.prefetchedMainHtml = capturedMainBody;
+        session.phpSessionCreatedAt = now;
+
+        // Sync Redis
+        try {
+          syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
+        } catch { /* non-fatal */ }
+
+        // Vider le cache prefetch — les données Bookitit sont maintenant stales
+        this._apiPrefetchCache.clear();
+
+        // Prefetch immédiat pendant que la session PHP est encore chaude
+        await this._prefetchBookititApis(page, targetUrl).catch((e: unknown) =>
+          console.warn(`[spain-pb] ⚠️ refreshPhpSession _prefetchBookititApis (non-fatal): ${e}`),
+        );
+
+        return true;
+      } else {
+        const elapsed = Math.round((Date.now() - t0) / 1000);
+        console.warn(
+          `[spain-pb] ⚠️ refreshPhpSession échec (${elapsed}s) — /main/ ${capturedMainBody.length}B` +
+          ` — fallback closeAndInvalidate (rotation IP + re-solve CF)`,
+        );
+        await this.closeAndInvalidate();
+        return false;
+      }
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ refreshPhpSession exception: ${err} — fallback closeAndInvalidate`);
+      await this.closeAndInvalidate();
+      return false;
+    }
+  }
+
   getSession(): SpainCfSession | null {
     return this.isSessionValid() ? this._cachedSession : null;
   }
@@ -2678,6 +2881,9 @@ class SpainPersistentBrowserManager {
       allCookies,
       extraHeaders: {},
       source: "playwright",
+      // phpSessionCreatedAt = moment où le PHPSESSID Bookitit a été établi.
+      // Mis à jour par refreshPhpSession() sans toucher createdAt (cf_clearance).
+      phpSessionCreatedAt: prefetchedMainHtml.length > 0 ? createdAt : undefined,
       ...(prefetchedMainHtml ? { prefetchedMainHtml } : {}),
     };
 

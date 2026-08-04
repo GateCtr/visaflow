@@ -1455,13 +1455,20 @@ async function resolveAjaxUnavailableOutcome(
   }
 
   if (ctx.hasVisibleNoSlots && ctx.mainFromCache) {
-    console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (session PHP expirée) — "No hay horas" potentiellement stale → session invalidée pour probe fraîche`);
-    await spainPersistentBrowser.closeAndInvalidate();
+    // PHPSESSID expiré (TTL ~20 min) — /main/ vient du cache prefetch qui peut être stale.
+    // refreshPhpSession() garde le browser + cf_clearance, obtient un PHPSESSID frais +
+    // /main/ frais en ~5-15s (vs 30-120s pour un re-solve CF complet).
+    // En cas d'échec de refreshPhpSession(), closeAndInvalidate() est appelé en interne.
+    console.log(`[spain-http] ⚠️ AJAX indisponible + /main/ depuis cache (PHPSESSID expiré) — refreshPhpSession() pour probe fraîche`);
+    await spainPersistentBrowser.refreshPhpSession();
   } else if (ctx.hasVisibleNoSlots) {
     console.log(`[spain-http] ℹ️ AJAX indisponible (ghost cookie fast-track) — "No hay horas" VISIBLE → not_found confirmé depuis /main/`);
   } else {
-    console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → session invalidée pour probe fraîche`);
-    await spainPersistentBrowser.closeAndInvalidate();
+    // Pas de signal "No hay horas" — PHPSESSID potentiellement expiré ou session corrompue.
+    // Tenter refreshPhpSession() en premier (plus rapide que closeAndInvalidate si le browser
+    // est encore actif). En cas d'échec, closeAndInvalidate() est appelé en interne.
+    console.log(`[spain-http] ⚠️ AJAX indisponible (ghost cookie fast-track) + aucun "No hay horas" → refreshPhpSession() pour probe fraîche`);
+    await spainPersistentBrowser.refreshPhpSession();
   }
   return { status: "not_found", scanDurationMs };
 }
@@ -2365,10 +2372,13 @@ async function scanViaMainEndpoint(
   // le TTL de la session PHP → les appels AJAX suivants fonctionnent.
   // Le /main/ frais reflète aussi la disponibilité actuelle des créneaux.
   const PHP_SESSION_REFRESH_MS = 12 * 60_000; // 12 min (TTL réel ~20 min)
-  if (session.prefetchedMainHtml && session.createdAt && (Date.now() - session.createdAt) > PHP_SESSION_REFRESH_MS) {
-    const sessionAgeMin = Math.round((Date.now() - session.createdAt) / 60_000);
+  // Utiliser phpSessionCreatedAt si disponible — plus précis que createdAt (age du cf_clearance).
+  // Après refreshPhpSession(), phpSessionCreatedAt se remet à zéro sans changer createdAt.
+  const phpSessTs = session.phpSessionCreatedAt ?? session.createdAt;
+  if (session.prefetchedMainHtml && phpSessTs && (Date.now() - phpSessTs) > PHP_SESSION_REFRESH_MS) {
+    const phpSessAgeMin = Math.round((Date.now() - phpSessTs) / 60_000);
     console.log(
-      `[spain-http] ⏰ /main/ cache stale (session âgée de ${sessionAgeMin}min > ${PHP_SESSION_REFRESH_MS / 60_000}min) — ` +
+      `[spain-http] ⏰ /main/ cache stale (PHPSESSID âgé de ${phpSessAgeMin}min > ${PHP_SESSION_REFRESH_MS / 60_000}min) — ` +
       `clear cache → fetch live (refresh PHPSESSID)`,
     );
     session.prefetchedMainHtml = undefined;

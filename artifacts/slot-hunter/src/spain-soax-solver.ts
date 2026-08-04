@@ -137,6 +137,15 @@ export interface SpainCfSession {
    */
   prefetchedMainHtml?: string;
   /**
+   * Timestamp de création de la session PHP Bookitit (PHPSESSID).
+   * Distinct de createdAt (qui marque la création du cf_clearance CF).
+   * Permet de détecter l'expiration du PHPSESSID (~20 min TTL) indépendamment
+   * du cf_clearance (~115 min) et de déclencher refreshPhpSession() plutôt
+   * que closeAndInvalidate() quand seul le PHPSESSID a expiré.
+   * Remis à Date.now() par refreshPhpSession() à chaque refresh de PHPSESSID.
+   */
+  phpSessionCreatedAt?: number;
+  /**
    * Publickey Bookitit du portail pour lequel cette session a été résolue.
    * Ex: "25028fcd7126544630b8da0c6e60722b5" (Kinshasa).
    * Permet de détecter une contamination inter-portail (ex: session Saopolo réutilisée

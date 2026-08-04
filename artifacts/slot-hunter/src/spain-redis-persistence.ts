@@ -74,6 +74,12 @@ export interface SerializableSpainCfSession {
    * ~100-120 KB ; TTL aligné sur cf_clearance (~2h).
    */
   prefetchedMainHtml?: string;
+  /**
+   * Timestamp du dernier refresh du PHPSESSID Bookitit.
+   * Aligné sur phpSessionCreatedAt de SpainCfSession — persisté en Redis pour
+   * que le scanner puisse calculer l'âge du PHPSESSID après un redéploiement.
+   */
+  phpSessionCreatedAt?: number;
 }
 
 export interface SerializableSoaxRotation {
