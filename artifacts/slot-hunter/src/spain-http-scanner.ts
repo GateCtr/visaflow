@@ -2391,13 +2391,15 @@ async function scanViaMainEndpoint(
       `[spain-http] 📦 /main/ pré-fetchée via Chromium (${mainBody.length}B) — appel impit ignoré`,
     );
     // ── Effacer le cache après lecture ──────────────────────────────────────
-    // Le probe suivant appellera /main/ live via page.evaluate (ligne ~2395) :
+    // Le probe suivant appellera /main/ live via page.evaluate :
     //   • même IP Decodo + même cf_clearance + PHPSESSID → CF accepte
-    //   • contenu toujours frais → créneaux détectés dès leur apparition (pas de délai T0+12min)
+    //   • contenu toujours frais → créneaux détectés dès leur apparition
     //   • chaque fetch étend le TTL PHPSESSID côté serveur → pas d'expiration à 20min
-    // Redis garde le prefetchedMainHtml pour le premier probe après redéploiement —
-    // on ne touche pas au Redis ici, seulement à la copie en mémoire.
     session.prefetchedMainHtml = undefined;
+    // Sync Redis pour que le premier probe APRÈS un redéploiement ne réutilise
+    // pas ce snapshot stale.  Sans ce sync, la session Redis garderait l'ancien
+    // prefetchedMainHtml pendant 12 min, trompant le scan post-redéploiement.
+    spainPersistentBrowser.clearPrefetchFromRedis();
     // Fire beacon RUM #29 malgré l'absence de requête réseau (CF corrèle avec l'IP proxy)
     fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
   } else if (session.source === "playwright") {

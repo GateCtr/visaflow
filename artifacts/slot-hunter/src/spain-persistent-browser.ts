@@ -385,6 +385,16 @@ class SpainPersistentBrowserManager {
    * servi 2h38min plus tard → CF refuse → 0B → destroy → même token → 0B…).
    */
   private _prefetchRetried = false;
+  /**
+   * True quand ensureSession() a retourné la session depuis le cache mémoire
+   * (sans déclencher un nouveau solve CF).  Remis à false dès qu'un solve
+   * complet (_ensureSessionImpl) démarre.
+   *
+   * Utilisé par spain-soax-solver pour distinguer :
+   *   • "prefetch jamais capturé lors d'un solve frais"  → rotation IP nécessaire
+   *   • "prefetch légitimement consommé sur probe précédent" → PAS de rotation
+   */
+  private _lastEnsureFromCache = false;
   /** Page principale du browser persistant — réutilisée entre les cycles de scan. */
   private _page: import("puppeteer").Page | null = null;
   /** URL du widget actuellement utilisée pour les navigations browser. */
@@ -889,6 +899,10 @@ class SpainPersistentBrowserManager {
     return this._prefetchRetried;
   }
 
+  get wasLastEnsureFromCache(): boolean {
+    return this._lastEnsureFromCache;
+  }
+
   /** Marque que le retry prefetch a été effectué (appeler depuis ensureSpainCfSession). */
   markPrefetchRetried(): void {
     this._prefetchRetried = true;
@@ -1302,6 +1316,25 @@ class SpainPersistentBrowserManager {
     return this.isSessionValid() ? this._cachedSession : null;
   }
 
+  /**
+   * Efface le prefetchedMainHtml de la session persistée dans Redis.
+   *
+   * À appeler juste après avoir consommé session.prefetchedMainHtml dans le
+   * scanner HTTP — garantit que le premier probe après un redéploiement
+   * dans la fenêtre de 12 min fait un fetch /main/ live plutôt que d'utiliser
+   * un snapshot potentiellement stale (créneaux apparus/disparus depuis la capture).
+   */
+  clearPrefetchFromRedis(): void {
+    if (!this._cachedSession) return;
+    try {
+      import("./spain-redis-persistence.js").then(({ syncSpainCfSessionToRedis }) => {
+        if (!this._cachedSession) return;
+        const sessionWithoutPrefetch = { ...this._cachedSession, prefetchedMainHtml: undefined };
+        syncSpainCfSessionToRedis(sessionWithoutPrefetch as SerializableSpainCfSession);
+      }).catch(() => { /* non-fatal */ });
+    } catch { /* non-fatal */ }
+  }
+
   // ── CF Session via Chromium persistant ────────────────────────────────────
 
   /**
@@ -1354,6 +1387,7 @@ class SpainPersistentBrowserManager {
     if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
 
     this._page = page;
+    this._lastEnsureFromCache = true; // réattachement = session depuis cache (pas de nouveau solve)
     console.log(`[spain-pb] ✅ Réattachement terminé — browser prêt, ${cookiesToInject.length} cookie(s) injectés`);
 
     // Navigation root SUPPRIMÉE (Fix A revert) :
@@ -1377,6 +1411,7 @@ class SpainPersistentBrowserManager {
       // → callBookititEndpointViaBrowser retourne 0B indéfiniment.
       const pageAlive = this._page && await this.isBrowserAlive();
       if (pageAlive) {
+        this._lastEnsureFromCache = true; // retour depuis cache — prefetch déjà consommé est normal
         console.log(`[spain-pb] ♻️ Session CF réutilisée (reste ${remainMin}min)`);
         return this._cachedSession!;
       }
@@ -1403,6 +1438,7 @@ class SpainPersistentBrowserManager {
   private async _ensureSessionImpl(
     targetUrl: string,
   ): Promise<SpainCfSession | null> {
+    this._lastEnsureFromCache = false; // solve frais en cours — pas depuis cache
     this.setCurrentTargetUrl(targetUrl);
     // ── Tentative restauration Redis ──────────────────────────────────────────
     // Après un redéploiement, le PB manager repart avec _cachedSession=null mais

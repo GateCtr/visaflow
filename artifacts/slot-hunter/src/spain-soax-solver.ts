@@ -587,7 +587,13 @@ export async function ensureSpainCfSession(
     // token émis à 07:05 toujours servi 2h38min plus tard), chaque retry produit
     // aussi 0B → closeAndInvalidate toutes les 10s → destroy en boucle d'une session
     // valide. On limite à UN seul retry par cycle de session via prefetchRetried.
-    if (pbSession && !(pbSession as any).prefetchedMainHtml) {
+    //
+    // IMPORTANT : vérifier wasLastEnsureFromCache avant de déclencher la rotation.
+    // Sans ce garde-fou, le scanner consomme le prefetch (session.prefetchedMainHtml = undefined)
+    // et le probe SUIVANT voit !prefetchedMainHtml sur une session parfaitement valide
+    // → closeAndInvalidate + re-solve CF à chaque cycle (toutes les 10s) alors que
+    // la session est encore bonne pour ~115 min.
+    if (pbSession && !(pbSession as any).prefetchedMainHtml && !spainPersistentBrowser.wasLastEnsureFromCache) {
       if (spainPersistentBrowser.prefetchRetried) {
         // Retry déjà effectué dans ce cycle — ne pas relancer closeAndInvalidate.
         // Retourner la session telle quelle ; le scanner gérera le 0B via son propre retry.
