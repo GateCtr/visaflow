@@ -2550,6 +2550,39 @@ async function scanViaMainEndpoint(
   // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
   //   → Seule réponse datetime/ avec des Slots réels = "found"
 
+  // Cas 0 : custom-dialog « Important / Aceptar » visible (idBktDefaultCustomContainer) ─────
+  // Sur citaconsular.es (São Paulo, etc.), quand des créneaux existent le portail affiche
+  // d'abord une custom-dialog avec un bouton « Aceptar » avant de lister les services.
+  // À ce stade bkt_init_widget.dates=[] EST ATTENDU (aucun service sélectionné).
+  // La présence de la dialog est le signal le plus fiable : on appelle toujours
+  // getservices/datetime pour confirmer la disponibilité réelle.
+  if (hasAcceptModal && !hasVisibleNoSlots) {
+    console.log(
+      `[spain-http] 🔍 custom-dialog/Aceptar (idBktDefaultCustomContainer) détecté — ` +
+      `vérification via getservices/datetime...`,
+    );
+    console.log(`[spain-http] ⏳ Phase 2 — custom-dialog présente, appel getservices/getagendas/datetime...`);
+    const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+    if (confirmed === "ajax_unavailable") {
+      return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
+    }
+    if (!confirmed) {
+      console.log(`[spain-http] 🧭 Phase 3 — pas de créneau après vérification datetime/ (custom-dialog)`);
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
+    console.log(`[spain-http] 🧭 Phase 3 — créneau confirmé via datetime/ (custom-dialog/Aceptar)`);
+    return {
+      status: "found",
+      slotInfo: `Créneau confirmé via datetime/: ${confirmed.date} ${confirmed.time} — "${confirmed.serviceName}"`,
+      slot: { date: confirmed.date, time: confirmed.time, location: confirmed.serviceName },
+      scanDurationMs: Date.now() - t0,
+      _mainHtml: html,
+      _services: [{ serviceId: confirmed.serviceId, serviceName: confirmed.serviceName }],
+      _allSlots: confirmed.allSlots,
+      _widgetConfig: confirmed.widgetConfig,
+    };
+  }
+
   // Cas 1 : "No hay horas" masquée (signal positif potentiel)
   // NOTE : le portail Kinshasa (et d'autres) utilisent un rendu Backbone.js / Underscore.js
   // client-side. Les liens #selectservice ne sont JAMAIS dans le HTML serveur —
