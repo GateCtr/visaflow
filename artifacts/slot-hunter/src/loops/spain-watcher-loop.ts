@@ -451,6 +451,20 @@ export async function startSpainWatcherLoop(): Promise<void> {
         `[SPAIN-WATCHER] [${cycleModeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
+      // ─── Pool IP épuisé : toutes les IPs Decodo sont bloquées par Bookitit ──
+      // Le bloc Bookitit est typiquement transitoire (quelques minutes).
+      // Inutile de recréditer le pool toutes les 10s — on attend 5 min avant de retenter.
+      if (result.status === "ip_pool_blocked") {
+        const backoffMs = 5 * 60_000;
+        log("WARN", `[SPAIN-WATCHER] 🚫 IP pool épuisé (Bookitit block) — backoff ${backoffMs / 60_000} min avant retry`);
+        await reportSpainWatcherScan({
+          status: "error",
+          errorMessage: result.errorMessage,
+        }).catch(() => {});
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      }
+
       // ─── DIAGNOSTIC: quand found, toujours extraire et logger les services ──
       // Permet de vérifier si c'est un vrai créneau (services rendus) ou un faux positif
       let detectedServicesJson: string | undefined;

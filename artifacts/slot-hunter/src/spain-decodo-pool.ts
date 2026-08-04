@@ -130,3 +130,8 @@ export function rotateDecodoUrl(): string | undefined {
 export function isDecodoMultiPool(): boolean {
   return getPool().length > 1;
 }
+
+/** Retourne le nombre d'IPs dans le pool (0 si non configuré). */
+export function getDecodoPoolSize(): number {
+  return getPool().length;
+}

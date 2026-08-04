@@ -27,6 +27,7 @@ import {
 } from "./spain-soax-solver.js";
 import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
 import { DEFAULT_WIDGET_KEY } from "./spain-portals.js";
+import { getDecodoPoolSize } from "./spain-decodo-pool.js";
 
 function isBookititServiceRedirect(body: string, pageUrl?: string): boolean {
   if (!pageUrl) return false;
@@ -72,7 +73,7 @@ export interface SpainSlotHttp {
 }
 
 export interface SpainHttpScanResult {
-  status: "found" | "not_found" | "cf_blocked" | "session_expired" | "error";
+  status: "found" | "not_found" | "cf_blocked" | "session_expired" | "error" | "ip_pool_blocked";
   slot?: SpainSlotHttp;
   slotInfo?: string;
   errorMessage?: string;
@@ -2971,30 +2972,48 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     };
   }
 
-  // 2. Scan via /onlinebookings/main/ (méthode optimisée — 1 seul appel)
+  // 2. Scan via /onlinebookings/main/ — rotation pool complète si Bookitit bloque l'IP.
+  //
+  // Comportement réel du watcher : quand /main/ retourne 0B (Bookitit block, pas CF),
+  // closeAndInvalidate() a déjà été appelé en interne et a pivoté vers la prochaine IP.
+  // On tente toutes les IPs du pool avant de rendre la main, sans attendre l'intervalle
+  // watcher entre chaque tentative. CF se résout en ~1s (fast-track) pour toutes les IPs
+  // dédiées Decodo → seul Bookitit est le goulot ; la boucle est aussi rapide que possible.
   let mainResult = await scanViaMainEndpoint(session, portalUrl);
-  if (!mainResult) {
-    // Après invalidation, une nouvelle session navigateur est demandée avec
-    // le même proxy, puis le scan est rejoué une seule fois.
-    console.warn("[spain-http] ♻️ Premier scan refusé — renouvellement de session CF puis retry unique");
-    session = _testSessionProvider
-      ? await _testSessionProvider(portalUrl)
-      : await ensureSpainCfSession(portalUrl);
-    if (session) {
-      mainResult = await scanViaMainEndpoint(session, portalUrl);
+
+  const poolSize = getDecodoPoolSize();
+  // Nombre de rotations supplémentaires à tenter (0 si pool ≤ 1 ou test provider).
+  const maxIpRotations = _testSessionProvider ? 0 : Math.max(0, poolSize - 1);
+  let ipRotations = 0;
+
+  while (!mainResult && ipRotations < maxIpRotations) {
+    ipRotations++;
+    console.warn(
+      `[spain-http] ♻️ /main/ 0B (Bookitit block) — rotation IP ${ipRotations}/${maxIpRotations} (pool ${poolSize} IPs)`,
+    );
+    session = await ensureSpainCfSession(portalUrl);
+    if (!session) {
+      console.warn("[spain-http] ⚠️ ensureSpainCfSession → null lors de la rotation pool — CF ou proxy indisponible");
+      break;
     }
+    mainResult = await scanViaMainEndpoint(session, portalUrl);
   }
+
   if (mainResult) {
     return mainResult;
   }
 
-  // 3. Les deux tentatives ont échoué.
+  // 3. Toutes les tentatives ont échoué.
   // Si c'était un vrai blocage CF (403 / challenge), la rotation a déjà été
   // déclenchée dans scanViaMainEndpoint au moment de la détection.
-  // Si c'était un body vide (JSD manquant), la session a été invalidée — pas de rotation.
+  // Si toutes les IPs Decodo sont bloquées par Bookitit → ip_pool_blocked :
+  // le watcher applique un backoff long (5 min) avant de retenter.
+  const allIpsBlocked = ipRotations >= maxIpRotations && poolSize > 1;
   return {
-    status: "error",
-    errorMessage: "Scan /main/ échoué après retry (session invalidée pour le prochain cycle)",
+    status: allIpsBlocked ? "ip_pool_blocked" : "error",
+    errorMessage: allIpsBlocked
+      ? `Toutes les IPs Decodo (${poolSize}) retournent 0B pour /main/ — Bookitit block transitoire, backoff 5 min`
+      : "Scan /main/ échoué (session invalidée pour le prochain cycle)",
     scanDurationMs: Date.now() - t0,
   };
 }
@@ -3012,7 +3031,7 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
  * suivants sont HTTP avec la même jar de cookies et le même proxy.
  */
 export async function runSpainHttpProbe(portalUrl: string): Promise<{
-  status: "found" | "not_found" | "error";
+  status: "found" | "not_found" | "error" | "ip_pool_blocked";
   slotInfo?: string;
   screenshotBase64?: string;
   errorMessage?: string;
@@ -3026,6 +3045,8 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
       return { status: "found", slotInfo: result.slotInfo, _mainHtml: result._mainHtml };
     case "not_found":
       return { status: "not_found" };
+    case "ip_pool_blocked":
+      return { status: "ip_pool_blocked", errorMessage: result.errorMessage };
     case "cf_blocked":
     case "session_expired":
     case "error":
