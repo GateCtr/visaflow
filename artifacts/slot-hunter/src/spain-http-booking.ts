@@ -908,12 +908,19 @@ export async function executeHttpBooking(
 
   // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
   // type=1 → signupfirstappointment/ (premier RDV, pas de compte existant)
-  // type=2 → signin/ via #signupsecondappointment (SignUpSecondAppointmentContainer extends SignInContainer)
+  // type=2 → signin/ UNIQUEMENT via #signupsecondappointment (SignUpSecondAppointmentContainer extends
+  //           SignInContainer → formulaire login+password, PAS name+email). Il n'existe PAS d'endpoint
+  //           HTTP "signupsecondappointment/" — le widget appelle signin/ directement.
+  //           ⚠️ Ne pas inclure signupfirstappointment/ ni signup/ comme fallback : ce sont des
+  //           formulaires name+email (type=1) qui renvoient "There was an error" pour type=2.
   // type=3 → signin/ direct (#signin)
-  // inconnu → signin en premier (Kinshasa confirmé 2026-07-28)
-  const authCandidates: AuthCandidate[] = registrationType === "1"
-    ? [candidateSignupFirst, candidateSignin, candidateSignup]
-    : [candidateSignin, candidateSignupFirst, candidateSignup];
+  // inconnu → signin en premier, puis signupfirstappointment/ et signup/ en fallback
+  const authCandidates: AuthCandidate[] =
+    registrationType === "1"
+      ? [candidateSignupFirst, candidateSignin, candidateSignup]
+      : registrationType === "2"
+      ? [candidateSignin] // signupsecondappointment → signin/ seulement (extends SignInContainer)
+      : [candidateSignin, candidateSignupFirst, candidateSignup];
 
   console.log(
     `[spain-booking] 🔍 Auto-découverte endpoint auth — registration_type=${registrationType} — ` +
