@@ -1252,10 +1252,20 @@ async function confirmSlotsViaDatetime(
       }
 
       if (agRedirect) {
-        // Le widget a navigué vers #services après le clic — réinitialiser pour le prochain service
-        await spainPersistentBrowser.navigateToServicesView().catch(() => {});
-        console.log(`[spain-http] ⏭️  getagendas/ → "${svc.serviceName}" sans agenda — service suivant`);
-        continue;
+        // Si des datetime/ ont quand même été capturés nativement (le widget peut émettre
+        // datetime/ avant que getagendas/ revienne en redirect — ex: Saopolo September),
+        // on les utilise directement sans skipper le service.
+        if (nativeDtRaws.length > 0) {
+          console.log(
+            `[spain-http] ℹ️  getagendas/ redirect MAIS ${nativeDtRaws.length} datetime/ natif(s) capturé(s) — ` +
+            `on continue avec ces données (agendaId absent, pas de getagendas/)`,
+          );
+        } else {
+          // Aucune donnée utile — réinitialiser et passer au service suivant
+          await spainPersistentBrowser.navigateToServicesView().catch(() => {});
+          console.log(`[spain-http] ⏭️  getagendas/ → "${svc.serviceName}" sans agenda — service suivant`);
+          continue;
+        }
       }
 
       if (agRaw.length > 0) {
@@ -1303,6 +1313,20 @@ async function confirmSlotsViaDatetime(
     //   - selectedPeople=1
     //   - src = URL du widget (sans hash final, avec slash final)
     //   - srvsrc = base citaconsular.es
+    // Index nativeDtRaws par mois YYYY-MM pour prioriser les données capturées nativement
+    // (via clic service dans clickServiceAndCaptureSlots) sur les appels browser/impit directs.
+    // Ceci couvre le cas où le widget ne déclenche datetime/ que sur clic service puis
+    // navigation "mois suivant" — les appels directs hors-état retournent 0B/redirect.
+    const nativeDtByMonth = new Map<string, string>();
+    for (const raw of nativeDtRaws) {
+      const monthKey = raw.match(/"date"\s*:\s*"(\d{4}-\d{2})/)?.[1]
+        ?? raw.match(/"maxDays"\s*:\s*"(\d{4}-\d{2})/)?.[1];
+      if (monthKey && !nativeDtByMonth.has(monthKey)) {
+        nativeDtByMonth.set(monthKey, raw);
+        console.log(`[spain-http] 📦 nativeDtRaws index: ${monthKey} → ${raw.length}B`);
+      }
+    }
+
     const widgetSrc = referer.replace(/\/?$/, "/");
     for (let mo = startMonthOffset; mo < startMonthOffset + 3; mo++) {
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
@@ -1332,22 +1356,38 @@ async function confirmSlotsViaDatetime(
 
         let dtRaw: string;
         let dtRedirect = false;
-        if (useBrowserFetch) {
+
+        // Priorité : données capturées nativement (clic service + next-month nav)
+        const nativeForMonth = nativeDtByMonth.get(start.slice(0, 7));
+        if (nativeForMonth) {
+          dtRaw = nativeForMonth;
+          console.log(`[spain-http] 📅 datetime/ ${start}→${end} (native) → ${dtRaw.length}B`);
+        } else if (useBrowserFetch) {
           dtRaw = await fetchBookititBodyWithFallback(session, datetimeUrl, headers);
           const pageUrl = spainPersistentBrowser.getActivePage()?.url();
           dtRedirect = isBookititServiceRedirect(dtRaw, pageUrl);
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} → ${dtRaw.length}B${dtRedirect ? " [redirect:#services]" : ""}`);
+
+          // Redirect browser ≠ "aucun créneau" — ça signifie que la session widget est perdue
+          // (état Bookitit réinitialisé entre deux appels datetime/ successifs).
+          // Fallback impit pour ce mois avant d'abandonner.
+          if (dtRedirect) {
+            console.log(`[spain-http] 🔄 datetime/ ${start} redirect browser → fallback impit…`);
+            const dtResFallback = await spainCfFetch(datetimeUrl, session, { headers });
+            const dtRawFallback = dtResFallback?.ok ? await dtResFallback.text() : "";
+            console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit fallback) → HTTP ${dtResFallback?.status ?? "null"} | ${dtRawFallback.length}B`);
+            if (dtRawFallback.length > 0) {
+              dtRaw = dtRawFallback;
+              dtRedirect = false;
+            } else {
+              console.log(`[spain-http] ⏭️  datetime/ ${start} redirect:#services + impit vide → aucun créneau confirmé — stop mois`);
+              break;
+            }
+          }
         } else {
           const dtRes = await spainCfFetch(datetimeUrl, session, { headers });
           dtRaw = dtRes?.ok ? await dtRes.text() : "";
           console.log(`[spain-http] 📅 datetime/ ${start}→${end} (impit) → HTTP ${dtRes?.status ?? "null"} | ${dtRaw.length}B`);
-        }
-
-        // Redirection #services sur datetime/ = Bookitit confirme "aucun créneau" pour ce mois.
-        // Les mois suivants donneront le même résultat — on sort du loop de mois.
-        if (dtRedirect) {
-          console.log(`[spain-http] ⏭️  datetime/ ${start} redirect:#services → aucun créneau confirmé — stop mois`);
-          break;
         }
 
         if (dtRaw.length > 0) {

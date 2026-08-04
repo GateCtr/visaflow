@@ -770,11 +770,30 @@ class SpainPersistentBrowserManager {
       ]);
 
       if (!agRaw) {
+        // Même si getagendas/ est redirect, datetime/ peut avoir déjà répondu
+        // (ex: portail Saopolo — Aceptar dialog → click service → datetime/ September
+        // arrive avant getagendas/ qui revient sur #services).
+        // On conserve les datetime/ capturés et on les injecte dans _apiPrefetchCache
+        // pour que callBookititEndpointViaBrowser les retrouve pour les services suivants.
+        if (dtRawsList.length > 0) {
+          for (const raw of dtRawsList) {
+            const month = raw.match(/"date"\s*:\s*"(\d{4}-\d{2})/)?.[1]
+              ?? raw.match(/"maxDays"\s*:\s*"(\d{4}-\d{2})/)?.[1];
+            if (month) {
+              this._apiPrefetchCache.set(`datetime/${month}`, raw);
+              // Extraire svcId depuis clickedHref (#selectservice/bktXXX)
+              const svcId = clickedHref?.match(/#selectservice\/([\w-]+)/)?.[1];
+              if (svcId) this._apiPrefetchCache.set(`datetime/${month}/${svcId}`, raw);
+              console.log(`[spain-pb] 💾 datetime/${month}${svcId ? `/${svcId}` : ""} injecté dans prefetchCache (${raw.length}B) depuis clic service`);
+            }
+          }
+        }
         console.log(
-          "[spain-pb] ⏭️  clickServiceAndCaptureSlots — getagendas/ vide/redirect " +
-          "→ pas d'agenda (widget revenu sur #services)",
+          `[spain-pb] ⏭️  clickServiceAndCaptureSlots — getagendas/ vide/redirect ` +
+          `→ pas d'agenda (widget revenu sur #services)` +
+          `${dtRawsList.length > 0 ? ` | ${dtRawsList.length} datetime/ conservé(s) et mis en cache` : ""}`,
         );
-        return { getagendasRaw: "", datetimeRaws: [], clickedHref };
+        return { getagendasRaw: "", datetimeRaws: [...dtRawsList], clickedHref };
       }
 
       // ── getagendas/ a répondu avec des données → attendre datetime/ ────────
@@ -786,6 +805,56 @@ class SpainPersistentBrowserManager {
         dtSignal,
         new Promise<void>((r) => setTimeout(r, dtTimeout + 1_000)),
       ]);
+
+      // ── Navigation mois suivant si maxDays ≤ aujourd'hui ──────────────────
+      // Quand le widget retourne {"Slots":[],"maxDays":"<aujourd'hui>"} pour le mois courant,
+      // il n'appelle PAS automatiquement datetime/ pour le mois suivant — il attend un clic
+      // utilisateur sur la flèche ">". On simule ce clic pour capturer les créneaux de M+1.
+      const today = new Date().toISOString().slice(0, 10);
+      const firstDt = dtRawsList[0] ?? "";
+      const maxDaysM = firstDt.match(/"maxDays"\s*:\s*"(\d{4}-\d{2}-\d{2})"/)?.[1];
+      if (maxDaysM && maxDaysM <= today && dtRawsList.length < 2) {
+        console.log(`[spain-pb] 🗓 maxDays=${maxDaysM} ≤ aujourd'hui — clic mois suivant pour capturer M+1…`);
+        try {
+          // Réarmer le timer datetime/ pour capturer la réponse du mois suivant
+          if (dtTimer !== null) { clearTimeout(dtTimer); dtTimer = null; }
+          let nextDtResolve: (() => void) | null = null;
+          const nextDtSignal = new Promise<void>((r) => { nextDtResolve = r; });
+          const origDtSignalResolve = dtSignalResolve;
+          dtSignalResolve = () => { origDtSignalResolve?.(); nextDtResolve?.(); };
+
+          const nextClicked = await page.evaluate((): string | null => {
+            const candidates = Array.from(document.querySelectorAll<HTMLElement>(
+              ".ui-datepicker-next, .fc-next-button, " +
+              "[class*='next'][class*='month'], [class*='month'][class*='next'], " +
+              "[class*='calendar'] [class*='next'], [class*='cal'] [class*='next'], " +
+              "a.next, button.next, span.next, i.next, " +
+              "a[title*='siguiente'], a[title*='next'], button[title*='next'], " +
+              "a[aria-label*='next'], button[aria-label*='next'], " +
+              ".ui-icon-circle-triangle-e, [class*='datepicker-next']",
+            ));
+            for (const btn of candidates) {
+              if (!btn.offsetParent) continue;
+              btn.click();
+              return btn.className + "|" + btn.tagName;
+            }
+            return null;
+          }).catch(() => null);
+
+          if (nextClicked) {
+            console.log(`[spain-pb] 🖱️ Bouton mois suivant cliqué (${nextClicked}) — attente datetime/ M+1 (max 6s)…`);
+            await Promise.race([
+              nextDtSignal,
+              new Promise<void>((r) => setTimeout(r, 6_000)),
+            ]);
+            console.log(`[spain-pb] 🗓 datetime/ M+1 capturé(s): ${dtRawsList.length} total`);
+          } else {
+            console.warn(`[spain-pb] ⚠️ Bouton mois suivant introuvable — datetime/ M+1 non capturé`);
+          }
+        } catch (nmErr) {
+          console.warn(`[spain-pb] ⚠️ Navigation mois suivant (non-fatal): ${nmErr}`);
+        }
+      }
 
       console.log(
         `[spain-pb] ✅ clickServiceAndCaptureSlots — ${dtRawsList.length} datetime/ capturé(s)`,
