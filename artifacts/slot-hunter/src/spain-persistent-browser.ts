@@ -1926,6 +1926,36 @@ class SpainPersistentBrowserManager {
       return null;
     }
 
+    // ── Bloquer JSD spontané si fast-track détecté ────────────────────────────
+    //
+    // En fast-track (cf_clearance < 3s), CF reconnaît l'IP et émet cf_clearance
+    // sans attendre de JSD. Mais le widget JS déclenche ENSUITE un JSD oneshot
+    // spontané qui consomme la nonce pour ce PHPSESSID → réponse phantom (CF dit
+    // "déjà valide") → nonce épuisée → post-Continuar JSD = phantom → /main/ = 0B.
+    //
+    // FIX Round 1 : intercepter et BLOQUER ce JSD spontané (avant Continuar) pour
+    // préserver la nonce. Le bloqueur est désarmé juste avant clickInteractiveSpainAcceptFlow.
+    // Le post-Continuar JSD fire ensuite avec une nonce fraîche → cf_clearance réel.
+    let cdpJsdBlocker: any = null;
+    let jsdSpontaneousBlocked = false;
+
+    if (jsdSolveMs < 3_000) {
+      try {
+        cdpJsdBlocker = await page.createCDPSession();
+        await cdpJsdBlocker.send("Fetch.enable", {
+          patterns: [{ urlPattern: "*jsd/oneshot*", requestStage: "Request" }],
+        });
+        cdpJsdBlocker.on("Fetch.requestPaused", async (ev: any) => {
+          console.log(`[spain-pb] 🚫 JSD spontané bloqué — nonce préservée pour post-Continuar`);
+          jsdSpontaneousBlocked = true;
+          await cdpJsdBlocker?.send("Fetch.failRequest", { requestId: ev.requestId, errorReason: "Aborted" }).catch(() => {});
+        });
+        console.log(`[spain-pb] 🚫 Bloqueur JSD spontané armé (fast-track ${jsdSolveMs}ms) — nonce préservée`);
+      } catch (err) {
+        console.warn(`[spain-pb] ⚠️ Bloqueur JSD spontané (non-fatal): ${err}`);
+      }
+    }
+
     // ── Étape 5 : Armer le listener XHR /main/ ────────────────────────────────
     // CF bloque les navigations top-level (page.goto) vers /main/ même avec un
     // cf_clearance valide → retourne 0B. Mais quand le JS du portail appelle
@@ -2265,6 +2295,22 @@ class SpainPersistentBrowserManager {
             console.log(`[spain-pb] 🖱️ clickInteractiveSpainAcceptFlow → ${acceptFlowResult.reason}`);
           }
 
+          // ── Désarmer le bloqueur JSD APRÈS le clic Continuar réussi ──────────
+          // Le bloqueur doit rester armé pendant toutes les itérations du while
+          // (tant que Continuar n'est pas cliqué) pour bloquer le JSD spontané qui
+          // peut se glisser entre deux tentatives de clic.
+          // Désarmer seulement quand continueClicked=true : le post-Continuar JSD
+          // (s'il y en a un) passera librement et CF ne verra pas de phantom.
+          if (continueClicked && cdpJsdBlocker) {
+            await cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
+            await cdpJsdBlocker.detach().catch(() => {});
+            cdpJsdBlocker = null;
+            console.log(
+              `[spain-pb] ✅ Bloqueur JSD désarmé (Continuar cliqué) — ` +
+              (jsdSpontaneousBlocked ? `JSD spontané bloqué ✅ cf_clearance intact` : `aucun JSD spontané intercepté`),
+            );
+          }
+
           if (!continueClicked) {
             const domState = await page.evaluate(() => ({
               hash: window.location.hash,
@@ -2314,8 +2360,10 @@ class SpainPersistentBrowserManager {
         const preContinuarJsdFired = jsdOneShotAt > 0;
         const isFastTrack = jsdSolveMs > 0 && jsdSolveMs < 3_000;
 
-        if (!preContinuarJsdFired && !isFastTrack) {
-          // Ancien comportement : JSD attendu après le POST Continuar.
+        // Si le bloqueur JSD a préservé la nonce (jsdSpontaneousBlocked=true), le post-Continuar
+        // JSD va obtenir un cf_clearance frais → traiter comme non-fast-track : armer l'intercepteur.
+        if (!preContinuarJsdFired && (!isFastTrack || jsdSpontaneousBlocked)) {
+          // Comportement standard : JSD attendu après le POST Continuar.
           jsdOneShotAccepted = false; // Reset — on attend le JSD POST
           const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
 
@@ -2553,6 +2601,12 @@ class SpainPersistentBrowserManager {
         cdpFetch.send("Fetch.disable", {}).catch(() => {});
         cdpFetch.detach().catch(() => {});
         cdpFetch = null;
+      }
+      if (cdpJsdBlocker) {
+        // Sécurité : désarmer le bloqueur JSD si pas encore fait (ex: Continuar jamais cliqué)
+        cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
+        cdpJsdBlocker.detach().catch(() => {});
+        cdpJsdBlocker = null;
       }
       // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
       if (jsdOneShotResolve) jsdOneShotResolve();
