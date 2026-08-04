@@ -1035,7 +1035,7 @@ async function confirmSlotsViaDatetime(
           if (isHttpOnlySession(session)) {
             const bktSignal = noAvailableSlotsInBktPayload(renderedHtml);
             const { hidden: hiddenNoSlots } = detectNoHayHorasVisibility(renderedHtml);
-            const hasAcceptFlowInHtml = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton|Aceptar|#selectservice\/<%=/i.test(renderedHtml);
+            const hasAcceptFlowInHtml = /id=['"]dialog-confirm['"]|id=['"]bktContinue['"]|#selectservice\/[\w-]+/i.test(renderedHtml);
             const bktSignalAuthoritative = bktSignal === true && !hasAcceptFlowInHtml;
             if (bktSignalAuthoritative || hiddenNoSlots) {
               console.log(
@@ -2465,11 +2465,15 @@ async function scanViaMainEndpoint(
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
   const VISIBLE_NO_SLOTS_RE = /<div\s+style=(["'])[^"']*\1[^>]*>\s*No hay horas disponibles/i;
-  // idDivBktButtonContinueContainer / idBktDefaultCustomContainer = marqueurs Bookitit server-side
-  // fiables (présents dans le HTML rendu par le serveur quand le flux service-accept est actif).
-  // dialog-confirm / bktContinue : initialisés côté CLIENT par jQuery UI — présents dans le
-  // template HTML même sans créneaux, donc non fiables comme signal de disponibilité.
-  const hasAcceptModal = /idDivBktButtonContinueContainer|idBktDefaultCustomContainer|idDivBktServicesContinueButton/i.test(html);
+  // dialog-confirm / bktContinue = HTML rendu côté SERVEUR, inclus uniquement quand des créneaux
+  // sont disponibles. Le serveur envoie les instructions + bouton ACEPTAR avec les créneaux.
+  // Sans créneaux → ces IDs absents du HTML → "No hay horas" visible.
+  // Chaque portail citaconsular.es a ses propres instructions mais toujours dans ce bloc HTML.
+  //
+  // ATTENTION : idDivBktButtonContinueContainer, idBktDefaultCustomContainer,
+  // idDivBktServicesContinueButton sont présents dans TOUS les HTML (containers vides /
+  // templates Underscore.js) — ils ne discriminent PAS la disponibilité.
+  const hasAcceptModal = /id=['"]dialog-confirm['"]|id=['"]bktContinue['"]/i.test(html);
   const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
   const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
