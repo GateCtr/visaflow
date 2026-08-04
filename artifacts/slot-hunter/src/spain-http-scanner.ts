@@ -2517,6 +2517,39 @@ async function scanViaMainEndpoint(
   const diagnosticState = hasWidgetServiceState || hasServiceTransitionSignal ? "service-state" : "no-service-state";
   console.log(`[spain-http] 🧭 Widget state: ${diagnosticState}${hasWidgetServiceState ? " (services/accept flow visible)" : ""}`);
 
+  // ─── Signal serveur primaire : idBktDefaultServicesTextBeforeServicesList ─
+  //
+  // Sur les portails Bookitit SPA (idTemNotAvailableSlots présent comme template),
+  // le serveur ne rend idBktDefaultServicesTextBeforeServicesList QUE quand des
+  // créneaux existent — il y inclut alors le modal dialog-confirm/Aceptar.
+  //
+  //   • Présent + dialog-confirm dedans → créneaux potentiels → datetime/ obligatoire
+  //   • Absent                          → le serveur n'a rien à présenter → not_found
+  //
+  // Ce signal est plus fiable que toute analyse de "No hay horas" : ce texte est
+  // toujours présent comme placeholder statique dans le HTML, peu importe la dispo.
+  // ─────────────────────────────────────────────────────────────────────────
+  const isSpaPortal = /id=(["'])idTemNotAvailableSlots\1/i.test(html);
+  const serviceContainerIdx = renderedHtml.indexOf("idBktDefaultServicesTextBeforeServicesList");
+  const hasServiceTextContainer = serviceContainerIdx !== -1;
+  // dialog-confirm doit être DANS le conteneur (pas ailleurs dans le HTML)
+  const hasServerAcceptDialog = hasServiceTextContainer &&
+    /id=(["'])dialog-confirm\1/i.test(renderedHtml.slice(serviceContainerIdx, serviceContainerIdx + 6000));
+
+  console.log(
+    `[spain-http] 🏷️  Signal serveur: isSpa=${isSpaPortal} | serviceContainer=${hasServiceTextContainer} | dialogConfirm=${hasServerAcceptDialog}`,
+  );
+
+  if (isSpaPortal && !hasServiceTextContainer) {
+    // Portail SPA sans conteneur de services → le serveur n'a pas de créneaux
+    // à présenter — signal négatif fiable sans avoir besoin de parser "No hay horas".
+    console.log(`[spain-http] 📋 SPA: idBktDefaultServicesTextBeforeServicesList absent → not_found (signal serveur)`);
+    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+  }
+  if (hasServerAcceptDialog) {
+    console.log(`[spain-http] 🟢 SPA: dialog-confirm dans idBktDefaultServicesTextBeforeServicesList → créneaux potentiels, datetime/ obligatoire`);
+  }
+
   // ─── DÉTECTION DE DISPONIBILITÉ ──────────────────────────────────────────
   //
   // Flux UI réel observé :
@@ -2531,6 +2564,7 @@ async function scanViaMainEndpoint(
   //
   // Signal négatif fiable (pas de datetime/ nécessaire) :
   //   → div "No hay horas disponibles" VISIBLE (display sans none en début de style)
+  //   → Remplacé en pratique par le signal serveur ci-dessus pour les portails SPA.
   // ─────────────────────────────────────────────────────────────────────────
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
