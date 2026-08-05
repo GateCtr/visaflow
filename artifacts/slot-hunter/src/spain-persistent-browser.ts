@@ -911,16 +911,50 @@ class SpainPersistentBrowserManager {
     if (!page) return false;
 
     const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
-    const bookingUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_booking=${Date.now()}`;
 
     try {
-      console.log(`[spain-pb] 🔄 Préparation booking — rechargement widget + Aceptar : ${formatPortalUrlForLog(targetUrl)}`);
-      await page.goto(bookingUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: BROWSER_WIDGET_GOTO_TIMEOUT_MS,
-      }).catch((err: unknown) => {
-        console.warn(`[spain-pb] ⚠️ Préparation booking navigation (non-fatal): ${err}`);
-      });
+      // ── Vérifier si on est déjà sur le bon portail avec le widget chargé ──
+      // Après un scan, le browser est déjà sur la page portail (modal Aceptar visible).
+      // Un page.goto() supplémentaire déclenche un nouveau CF Turnstile challenge
+      // depuis le proxy datacenter SJC → timeout → booking impossible.
+      // → On saute le goto si le widget est déjà chargé sur le bon portail.
+      const currentState = await page.evaluate(`(function() {
+        var isCfChallenge = document.title === 'Un instant\u2026'
+          || !!document.querySelector('[id^="challenge-"]')
+          || !!document.querySelector('form#challenge-form');
+        var hasWidget = !!document.getElementById('idBktWidgetDefaultBodyContainer');
+        var serviceLinks = document.querySelectorAll('a[href*="#selectservice/"]').length;
+        var selecttimeLinks = document.querySelectorAll('a[href*="selecttime"]').length;
+        return { href: window.location.href, isCfChallenge: isCfChallenge,
+                 hasWidget: hasWidget, serviceLinks: serviceLinks,
+                 selecttimeLinks: selecttimeLinks };
+      })()`).catch(() => ({ href: '', isCfChallenge: false, hasWidget: false, serviceLinks: 0, selecttimeLinks: 0 })) as {
+        href: string; isCfChallenge: boolean; hasWidget: boolean;
+        serviceLinks: number; selecttimeLinks: number;
+      };
+
+      const sameOrigin = currentState.href.includes("citaconsular.es");
+      const widgetReady = currentState.hasWidget && !currentState.isCfChallenge;
+
+      if (sameOrigin && widgetReady) {
+        // Widget déjà chargé sur le bon portail — pas de goto
+        console.log(
+          `[spain-pb] ✅ Préparation booking — widget déjà chargé (serviceLinks=${currentState.serviceLinks}, selecttime=${currentState.selecttimeLinks}) — pas de rechargement`,
+        );
+        // Si le calendrier est déjà chaud (selecttime visibles), on retourne directement
+        if (currentState.selecttimeLinks > 0) return true;
+        // Sinon on tombe dans la boucle Aceptar→service ci-dessous sans goto
+      } else {
+        // Page perdue (CF challenge, mauvais domaine, about:blank) → goto obligatoire
+        const bookingUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_booking=${Date.now()}`;
+        console.log(`[spain-pb] 🔄 Préparation booking — rechargement widget + Aceptar : ${formatPortalUrlForLog(targetUrl)}`);
+        await page.goto(bookingUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: BROWSER_WIDGET_GOTO_TIMEOUT_MS,
+        }).catch((err: unknown) => {
+          console.warn(`[spain-pb] ⚠️ Préparation booking navigation (non-fatal): ${err}`);
+        });
+      }
 
       const deadline = Date.now() + 40_000;
       let lastClickAt = 0;
@@ -3836,6 +3870,36 @@ export async function clickInteractiveSpainAcceptFlow(page: Page): Promise<Spain
         var htmlSnippet = el.outerHTML ? el.outerHTML.slice(0, 220) : '';
         el.click();
         return { clicked: true, reason: reason, htmlSnippet: htmlSnippet };
+      }
+
+      // ── État d'erreur Bookitit : bouton "Volver" visible ─────────────────
+      // Quand le widget est en état d'erreur (slot expiré, session PHP expirée,
+      // erreur serveur…), Bookitit affiche un bouton "Volver" (retour).
+      // Cliquer dessus recharge le widget et reprend le flow depuis le début :
+      // OK → Continuar → Aceptar → liste des services.
+      // DOIT être testé EN PREMIER — sinon la boucle cherche Aceptar indéfiniment.
+      var volverCandidates = Array.from(document.querySelectorAll(
+        '.clsDivBackErrorButton, a.clsDivBackErrorButton, div.clsDivBackErrorButton, ' +
+        'a[href*="javascript:void"], a[href="#services"], a[href=""]'
+      ));
+      for (var vi = 0; vi < volverCandidates.length; vi++) {
+        var vc = volverCandidates[vi];
+        var vcTxt = ((vc.textContent || '').replace(/\s+/g, ' ').trim()).toLowerCase();
+        if (visible(vc) && /volver|back|retour/i.test(vcTxt)) {
+          var vr = tryClick(vc, 'volver:error-reset');
+          if (vr) return vr;
+        }
+      }
+      // Fallback : tout bouton/lien visible avec texte "Volver" quel que soit le conteneur
+      var allButtons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
+      for (var vi2 = 0; vi2 < allButtons.length; vi2++) {
+        var vb = allButtons[vi2];
+        if (!visible(vb)) continue;
+        var vbTxt = ((vb.textContent || '').replace(/\s+/g, ' ').trim()).toLowerCase();
+        if (vbTxt === 'volver') {
+          var vr2 = tryClick(vb, 'volver:text-match');
+          if (vr2) return vr2;
+        }
       }
 
       var captchaContinueBtn = document.getElementById('idCaptchaButton');
