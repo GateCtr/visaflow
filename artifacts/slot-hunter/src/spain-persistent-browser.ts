@@ -1811,6 +1811,47 @@ class SpainPersistentBrowserManager {
       console.log("[spain-pb] 🗑️ Cache HTTP désactivé via page.setCacheEnabled(false) — nonce frais garanti sur TOUTES les navigations");
     } catch { /* non-fatal */ }
 
+    // ── JSD script CDN rewriter — cache-bust du script versionné ────────────────
+    //
+    // ROOT-CAUSE (observée 2026-08-05) : CF CDN SJC PoP cache le script versionné
+    //   h/g/scripts/jsd/{hash}/main.js qui contient la nonce JSD baked-in.
+    //   Cache-Control: no-cache + _cb sur l'URL HTML ne suffisent PAS : CF CDN traite
+    //   ces scripts CF comme des ressources immuables et ignore les directives client.
+    //   Résultat : MÊME nonce périmée (ex: 1785906323, vieille d'1h) servie à toutes
+    //   les IPs DC → JSD oneshot phantom → /main/ = 0B sur chaque tentative.
+    //
+    // FIX : CDP Fetch.enable intercepte la requête du script versionné et réécrit l'URL
+    //   en ajoutant ?_t=<timestamp>. Cela crée un cache-key CDN UNIQUE à chaque solve.
+    //   CF CDN n'ayant jamais vu cette URL exacte, il forwarde à CF origin → origin
+    //   génère une nonce fraîche pour ce PHPSESSID → JSD oneshot accepté → cf_clearance
+    //   réel → /main/ retourne 124KB.
+    let cdpJsdScriptRewriter: any = null;
+    try {
+      cdpJsdScriptRewriter = await page.createCDPSession();
+      await cdpJsdScriptRewriter.send("Fetch.enable", {
+        patterns: [{
+          urlPattern: "*challenge-platform/h/g/scripts/jsd*main.js*",
+          requestStage: "Request",
+        }],
+      });
+      const rewriteTs = Date.now();
+      cdpJsdScriptRewriter.on("Fetch.requestPaused", async (ev: any) => {
+        const origUrl: string = ev.request?.url ?? "";
+        // Remplacer tout éventuel query existant (CF ajoute parfois "?") par _t=<ts>
+        const bustUrl = origUrl.includes("?")
+          ? `${origUrl.split("?")[0]}?_t=${rewriteTs}`
+          : `${origUrl}?_t=${rewriteTs}`;
+        console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
+        await cdpJsdScriptRewriter?.send("Fetch.continueRequest", {
+          requestId: ev.requestId,
+          url: bustUrl,
+        }).catch(() => {});
+      });
+      console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé (nonce fraîche garantie depuis CF origin)`);
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ JSD script rewriter (non-fatal): ${err}`);
+    }
+
     // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
     //
     // STRATÉGIE (basée sur la doc CF JavaScript Detections) :
@@ -2639,6 +2680,11 @@ class SpainPersistentBrowserManager {
         cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
         cdpJsdBlocker.detach().catch(() => {});
         cdpJsdBlocker = null;
+      }
+      if (cdpJsdScriptRewriter) {
+        cdpJsdScriptRewriter.send("Fetch.disable", {}).catch(() => {});
+        cdpJsdScriptRewriter.detach().catch(() => {});
+        cdpJsdScriptRewriter = null;
       }
       // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
       if (jsdOneShotResolve) jsdOneShotResolve();
