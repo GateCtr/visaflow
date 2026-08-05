@@ -88,18 +88,34 @@ puppeteer.use(StealthPlugin());
 
 /**
  * Installe un handler CDP Fetch pour répondre aux challenges proxy 407.
+ * Combine optionnellement le cache-bust du script JSD versionné (CDN nonce périmée).
  *
  * `page.authenticate()` ne fonctionne pas de façon fiable pour les proxies HTTP
  * en mode headless dans Puppeteer v22+ : il cible la couche page-level auth
  * (WWW-Authenticate) mais pas le proxy-level (Proxy-Authenticate / 407).
  * La solution correcte est `Fetch.enable { handleAuthRequests: true }` via CDP.
+ *
+ * Le cache-bust JSD est intégré ICI (plutôt que dans une session séparée) car
+ * deux sessions avec Fetch.enable distinctes sur la même page se perturbent :
+ * la session rewriter bloque les challenges proxy 407 de la session auth.
+ * Une seule session gère les deux responsabilités sans conflit.
+ *
+ * @param jsdRewriteTs  Si fourni, réécrit l'URL du script JSD versionné en
+ *                      ajoutant ?_t=<ts> → cache-key CDN unique → nonce fraîche.
  */
 async function setupPageProxyAuth(
   page: Page,
   creds: { username: string; password: string },
+  jsdRewriteTs?: number,
 ): Promise<void> {
   const client = await (page as any).createCDPSession();
-  await client.send("Fetch.enable", { handleAuthRequests: true });
+  // Si jsdRewriteTs fourni : intercepter aussi le script JSD (requestPaused).
+  // Sans pattern, seul authRequired fire (pas de requestPaused pour requests normales).
+  const patterns = jsdRewriteTs
+    ? [{ urlPattern: "*challenge-platform/h/g/scripts/jsd*main.js*", requestStage: "Request" }]
+    : [];
+  await client.send("Fetch.enable", { handleAuthRequests: true, patterns });
+
   client.on("Fetch.authRequired", async (event: any) => {
     const { requestId, authChallenge } = event;
     if (authChallenge?.source === "Proxy") {
@@ -119,10 +135,28 @@ async function setupPageProxyAuth(
       }).catch(() => {});
     }
   });
+
   client.on("Fetch.requestPaused", async (event: any) => {
-    // Laisser passer toutes les requêtes non-auth interceptées
-    await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+    const origUrl: string = event.request?.url ?? "";
+    if (jsdRewriteTs && /challenge-platform\/h\/g\/scripts\/jsd.*main\.js/i.test(origUrl)) {
+      // Cache-bust : URL unique → CF CDN forward à l'origin → nonce fraîche générée
+      const bustUrl = origUrl.includes("?")
+        ? `${origUrl.split("?")[0]}?_t=${jsdRewriteTs}`
+        : `${origUrl}?_t=${jsdRewriteTs}`;
+      console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
+      await client.send("Fetch.continueRequest", {
+        requestId: event.requestId,
+        url: bustUrl,
+      }).catch(() => {});
+    } else {
+      // Laisser passer toutes les requêtes non-JSD interceptées
+      await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+    }
   });
+
+  if (jsdRewriteTs) {
+    console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé dans la session proxy-auth (nonce fraîche garantie)`);
+  }
 }
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -1577,8 +1611,8 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ CDP setUserAgentOverride (non-fatal): ${cdpUAErr}`);
     }
 
-    // CDP Fetch handler remplace page.authenticate() — voir setupPageProxyAuth.
-    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
+    // CDP Fetch handler : proxy auth 407 + cache-bust JSD nonce (session unique — pas de conflit).
+    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth, Date.now());
 
     // ── Intercepter window.turnstile.render pour capturer le sitekey ─────────
     // CF Managed Challenge avec render=explicit ne met JAMAIS data-sitekey dans
@@ -1820,37 +1854,9 @@ class SpainPersistentBrowserManager {
     //   Résultat : MÊME nonce périmée (ex: 1785906323, vieille d'1h) servie à toutes
     //   les IPs DC → JSD oneshot phantom → /main/ = 0B sur chaque tentative.
     //
-    // FIX : CDP Fetch.enable intercepte la requête du script versionné et réécrit l'URL
-    //   en ajoutant ?_t=<timestamp>. Cela crée un cache-key CDN UNIQUE à chaque solve.
-    //   CF CDN n'ayant jamais vu cette URL exacte, il forwarde à CF origin → origin
-    //   génère une nonce fraîche pour ce PHPSESSID → JSD oneshot accepté → cf_clearance
-    //   réel → /main/ retourne 124KB.
-    let cdpJsdScriptRewriter: any = null;
-    try {
-      cdpJsdScriptRewriter = await page.createCDPSession();
-      await cdpJsdScriptRewriter.send("Fetch.enable", {
-        patterns: [{
-          urlPattern: "*challenge-platform/h/g/scripts/jsd*main.js*",
-          requestStage: "Request",
-        }],
-      });
-      const rewriteTs = Date.now();
-      cdpJsdScriptRewriter.on("Fetch.requestPaused", async (ev: any) => {
-        const origUrl: string = ev.request?.url ?? "";
-        // Remplacer tout éventuel query existant (CF ajoute parfois "?") par _t=<ts>
-        const bustUrl = origUrl.includes("?")
-          ? `${origUrl.split("?")[0]}?_t=${rewriteTs}`
-          : `${origUrl}?_t=${rewriteTs}`;
-        console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
-        await cdpJsdScriptRewriter?.send("Fetch.continueRequest", {
-          requestId: ev.requestId,
-          url: bustUrl,
-        }).catch(() => {});
-      });
-      console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé (nonce fraîche garantie depuis CF origin)`);
-    } catch (err) {
-      console.warn(`[spain-pb] ⚠️ JSD script rewriter (non-fatal): ${err}`);
-    }
+    // FIX nonce CDN périmée : géré dans setupPageProxyAuth via jsdRewriteTs (session unique).
+    // Le cache-bust ?_t=<ts> est injecté dans la même session que le proxy auth 407 —
+    // plus de conflit entre deux Fetch.enable sur la même page.
 
     // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
     //
@@ -2680,11 +2686,6 @@ class SpainPersistentBrowserManager {
         cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
         cdpJsdBlocker.detach().catch(() => {});
         cdpJsdBlocker = null;
-      }
-      if (cdpJsdScriptRewriter) {
-        cdpJsdScriptRewriter.send("Fetch.disable", {}).catch(() => {});
-        cdpJsdScriptRewriter.detach().catch(() => {});
-        cdpJsdScriptRewriter = null;
       }
       // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
       if (jsdOneShotResolve) jsdOneShotResolve();
