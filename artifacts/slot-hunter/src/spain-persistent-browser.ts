@@ -34,6 +34,7 @@ import { rmSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as https from "node:https";
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
 
@@ -89,46 +90,86 @@ puppeteer.use(StealthPlugin());
 
 /**
  * Extrait la nonce baked-in dans le script JSD CF versionné.
- * Format réel : "0.7383901960498597:1785917128:fqRJma"
- *   → randomFloat:timestamp:token
+ *
+ * Format réel dans le bundle (template literal backtick) :
+ *   `/jsd/oneshot/f70cb37711aa/0.8382244272956271:1785920723:bKjLy…/`
+ *   → randomFloat:timestamp:token   (trailing slash possible)
+ *
+ * On cherche d'abord la nonce dans le chemin oneshot (le plus fiable),
+ * puis en fallback le float:timestamp:token nu n'importe où dans le body.
  */
 function extractJsdNonce(body: string): string {
   const m =
-    body.match(/["']([0-9]+\.[0-9]+:\d{9,}:[A-Za-z0-9_\-+/]{4,})["']/) ??
-    body.match(/["'](\d{9,}:[A-Za-z0-9_\-+/]{4,})["']/) ??
-    body.match(/nonce\s*[=:]\s*["']([^"']{8,})["']/);
-  return m?.[1] ?? "(non trouvée)";
+    // Chemin oneshot dans template literal : `/jsd/oneshot/{hash}/{nonce}/`
+    body.match(/oneshot\/[a-f0-9]{6,}\/([0-9]+\.[0-9]+:\d{9,}:[A-Za-z0-9_\-+\/]{10,})/) ??
+    // Fallback : float:timestamp:token nu (toute quote ou backtick)
+    body.match(/([0-9]+\.[0-9]+:\d{9,}:[A-Za-z0-9_\-+\/]{20,})/);
+  // Supprimer le slash terminal éventuel (chemin URL)
+  return m?.[1]?.replace(/\/$/, "") ?? "(non trouvée)";
 }
 
 /**
- * Fetche le script JSD CF versionné directement via Node HTTPS sans proxy.
+ * Fetche le script JSD CF versionné en passant par un proxy Decodo.
  *
- * POURQUOI : CF CDN SJC cache ce script avec une nonce périmée et ignore
- *   à la fois ?_t= et Cache-Control: no-cache en request. En passant par
- *   Node (sans proxy), la requête sort depuis l'IP Replit → CF PoP différent
- *   de SJC ou origin directe → nonce fraîche servie.
+ * POURQUOI :
+ *   CF CDN SJC cache ce script avec une nonce périmée (1h+) et ignore
+ *   à la fois ?_t= et Cache-Control: no-cache en request header.
+ *   Replit lui-même est à SJC → un fetch Node direct sans proxy tape le
+ *   même PoP SJC → même nonce stale.
+ *   En routant via Decodo (datacenter US-East ou EU), la requête sort
+ *   depuis une IP Decodo → CF PoP différent de SJC → nonce fraîche servie.
+ *
+ * Fallback : si aucun proxy Decodo configuré, fetch direct Node (best-effort).
  *
  * @returns { status, headers[], body } — corps brut du script JS
  */
-function fetchJsdDirect(
+async function fetchJsdDirect(
   url: string,
   ua: string,
 ): Promise<{ status: number; headers: Array<{ name: string; value: string }>; body: string }> {
+  const freshUrl = `${url}?_t=${Date.now()}`;
+  const reqHeaders = {
+    "User-Agent":      ua,
+    "Accept":          "*/*",
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+    "Cache-Control":   "no-cache",
+    "Pragma":          "no-cache",
+    "Referer":         `https://${new URL(url).hostname}/`,
+  };
+
+  // ── Tentative via proxy Decodo (PoP non-SJC → nonce fraîche) ────────────
+  const proxyUrl = getCurrentDecodoUrl() ?? process.env.DECODO_PROXY_URL?.trim();
+  if (proxyUrl) {
+    try {
+      const dispatcher = new ProxyAgent(proxyUrl);
+      const resp = await (undiciFetch as any)(freshUrl, {
+        method:     "GET",
+        headers:    reqHeaders,
+        dispatcher,
+        signal:     AbortSignal.timeout(9_000),
+      });
+      const body = await resp.text() as string;
+      const headers: Array<{ name: string; value: string }> = [];
+      (resp.headers as any).forEach((value: string, name: string) => {
+        if (/^(content-encoding|transfer-encoding|content-length)$/i.test(name)) return;
+        headers.push({ name, value });
+      });
+      console.log(`[spain-pb] 🌐 JSD via Decodo → HTTP ${resp.status} | body=${body.length}B`);
+      return { status: resp.status, headers, body };
+    } catch (e) {
+      console.warn(`[spain-pb] ⚠️ JSD via Decodo échoué (${e}) — fallback HTTPS direct`);
+    }
+  }
+
+  // ── Fallback : HTTPS direct Node (best-effort, peut toujours être SJC) ──
   return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
+    const parsed = new URL(freshUrl);
     const req = https.request(
       {
         hostname: parsed.hostname,
-        path:     `${parsed.pathname}?_t=${Date.now()}`, // unique chez origin aussi
+        path:     parsed.pathname + parsed.search,
         method:   "GET",
-        headers:  {
-          "User-Agent":      ua,
-          "Accept":          "*/*",
-          "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-          "Cache-Control":   "no-cache",
-          "Pragma":          "no-cache",
-          "Referer":         `https://${parsed.hostname}/`,
-        },
+        headers:  reqHeaders,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -138,7 +179,6 @@ function fetchJsdDirect(
           const headers: Array<{ name: string; value: string }> = [];
           for (const [name, val] of Object.entries(res.headers)) {
             if (val == null) continue;
-            // Exclure les headers qui pourraient casser l'injection (content-encoding, etc.)
             if (/^(content-encoding|transfer-encoding|content-length)$/i.test(name)) continue;
             const value = Array.isArray(val) ? val.join(", ") : val;
             headers.push({ name, value });
@@ -149,7 +189,7 @@ function fetchJsdDirect(
       },
     );
     req.on("error", reject);
-    req.setTimeout(8000, () => { req.destroy(new Error("fetchJsdDirect timeout")); });
+    req.setTimeout(8_000, () => { req.destroy(new Error("fetchJsdDirect timeout")); });
     req.end();
   });
 }
@@ -232,8 +272,16 @@ async function setupPageProxyAuth(
           console.log(`[spain-pb] 🌐 JSD direct-fetch → hash=${hashKey} (bypass CDN SJC, nonce fraîche)`);
           const fresh = await fetchJsdDirect(origUrl, pageUa);
           const nonce = extractJsdNonce(fresh.body);
+          // Calculer l'âge de la nonce (timestamp est la 2ème partie : float:timestamp:token)
+          const nonceParts = nonce.split(":");
+          const nonceTs = nonceParts.length >= 2 ? parseInt(nonceParts[1], 10) : NaN;
+          const nonceAgeMs = !isNaN(nonceTs) ? Date.now() - nonceTs * 1_000 : NaN;
+          const nonceAgeLbl = !isNaN(nonceAgeMs)
+            ? `${Math.round(nonceAgeMs / 1_000)}s (${Math.round(nonceAgeMs / 60_000)}min)`
+            : "inconnu";
+          const staleness = !isNaN(nonceAgeMs) && nonceAgeMs > 60 * 60_000 ? " ⚠️ STALE >1h" : "";
           console.log(
-            `[spain-pb] 📜 JSD origin → HTTP ${fresh.status} | nonce=${nonce} | body=${fresh.body.length}B`,
+            `[spain-pb] 📜 JSD origin → HTTP ${fresh.status} | nonce=${nonce} | âge=${nonceAgeLbl}${staleness} | body=${fresh.body.length}B`,
           );
           jsdFreshByHash.set(hashKey, fresh);
         } else {
@@ -316,8 +364,12 @@ function ensureProfileDirectory(profileDir: string): string {
  * le profil (ex: timestamp 1785287132 vieux de 21 jours) est réutilisé indéfiniment.
  *
  * FIX : Supprimer ces répertoires sur disque avant puppeteer.launch() pour forcer
- * Chrome à reconstruire un cache propre. Le fichier Cookies est conservé (cf_clearance
- * + PHPSESSID de sessions antérieures restent disponibles si valides).
+ * Chrome à reconstruire un cache propre.
+ *
+ * CRITIQUE : Le fichier Cookies (cf_clearance) est CONSERVÉ intentionnellement.
+ * cf_clearance présent → CF fast-track (solve <1s) → /main/ répond avec JSONP ✅.
+ * cf_clearance absent  → CF exige solve JSD complet (11s) → nonce CDN ~30min
+ * insuffisante pour /main/ → 0B ❌. Ne jamais purger Default/Cookies ni Default/Network.
  */
 function purgeProfileCacheOnDisk(profileDir: string): void {
   // CHIRURGIE PRÉCISE : on ne purge QUE le cache HTTP sur disque (Default/Cache).
@@ -348,18 +400,25 @@ function purgeProfileCacheOnDisk(profileDir: string): void {
     "Default/Session Storage", // Tokens session CF
     "Default/Service Worker",  // SW CF enregistré
     "Default/Cache Storage",   // CacheAPI du SW CF
-    // CRITIQUE : le fichier Cookies est relu depuis le disque AU DÉMARRAGE de Chrome.
-    // Notre purge CDP (Network.deleteCookies) s'exécute APRÈS le lancement — trop tard :
-    // cf_clearance + PHPSESSID stale sont déjà rechargés en mémoire depuis le profil.
-    // CF voit ce cf_clearance "connu" → sert le même script JSD avec le nonce figé
-    // → JSD oneshot rejeté → /main/ = 0B.
+    // CRUCIAL — NE PAS purger les Cookies ici.
     //
-    // PIÈGE Chrome 96+ : les cookies ne sont PLUS dans Default/Cookies mais dans
-    // Default/Network/Cookies (sous-répertoire Network). L'ancien chemin n'existe
-    // pas → le purge rate → cf_clearance survit → solve en 1s → nonce morte → 0B.
-    // Fix : purger les DEUX chemins pour couvrir toutes les versions de Chromium.
-    "Default/Cookies",         // Chromium < 96 (compatibilité)
-    "Default/Network",         // Chromium 96+ : Cookies déplacé dans Default/Network/Cookies
+    // Le cf_clearance doit SURVIVRE entre les scans. Quand il est présent, CF reconnaît
+    // l'IP comme déjà validée → fast-track (solve <1s) → /main/ répond avec le JSONP.
+    // Sans cf_clearance, CF impose un solve JSD complet (11s) → la nonce CDN (~30 min) ne
+    // suffit pas à établir le niveau de confiance requis pour /main/ → retourne 0B.
+    //
+    // Tests empiriques :
+    //   • cf_clearance présent  → fast-track ≤1s  → /main/ = JSONP plein  ✅
+    //   • cf_clearance absent   → solve JSD 11s   → /main/ = 0B            ❌
+    //
+    // Le PHPSESSID stale est supprimé APRÈS le lancement via CDP Network.deleteCookies
+    // (cf. _resetPhpSessionInBrowser) — pas besoin de purger les Cookies sur disque.
+    //
+    // ATTENTION : si cf_clearance expire réellement (TTL ~2h), le prochain solve sera
+    // non-fast-track. Dans ce cas, il vaut mieux fermer + changer d'IP Decodo (rotation)
+    // pour obtenir une IP fraîche qui recevra fast-track sur la prochaine session.
+    //
+    // NE PAS ajouter "Default/Cookies" ni "Default/Network" ici.
   ];
   let purged = 0;
   for (const dir of cacheDirs) {
@@ -1250,6 +1309,27 @@ class SpainPersistentBrowserManager {
     } else {
       console.log("[spain-pb] 🗑️ Session invalidée (browser déjà fermé)");
     }
+
+    // ── Purger le cf_clearance lors de la rotation d'IP ──────────────────────
+    // cf_clearance est lié à l'IP Decodo qui l'a obtenu. Quand closeAndInvalidate()
+    // est appelé, la prochaine session utilisera une IP DIFFÉRENTE → le cf_clearance
+    // actuel est invalide pour cette nouvelle IP → CF détecte la mismatch → fo/
+    // fingerprint checks → /main/ = 0B.
+    //
+    // refreshPhpSession() (même IP, même browser) NE passe PAS ici → cf_clearance
+    // conservé correctement pour la réutilisation fast-track sur la même IP.
+    const profileDir = CF_PROFILE_DIR;
+    for (const cookieDir of ["Default/Cookies", "Default/Network"]) {
+      const fullPath = join(profileDir, cookieDir);
+      if (existsSync(fullPath)) {
+        try {
+          rmSync(fullPath, { recursive: true, force: true });
+        } catch {
+          // non-fatal
+        }
+      }
+    }
+    console.log("[spain-pb] 🍪 cf_clearance purgé (rotation IP — invalide pour la prochaine IP Decodo)");
   }
 
   /**
