@@ -867,6 +867,36 @@ class SpainPersistentBrowserManager {
   }
 
   /**
+   * Vérifie si le calendrier Bookitit est encore chaud depuis le dernier scan :
+   * liens `a[href*="selecttime"]` visibles dans le DOM, session PHP encore active.
+   *
+   * Appelé au début d'un booking pour décider si on peut cliquer directement
+   * sur le créneau (état chaud) ou s'il faut relancer le parcours Aceptar→service
+   * (état périmé). Évite de recharger la page inutilement quand le scan vient
+   * de traverser le flow entier et a laissé le calendrier ouvert.
+   *
+   * @returns nombre de liens selecttime visibles (0 = état périmé ou inconnu)
+   */
+  async checkCalendarHotState(): Promise<number> {
+    const page = this._page;
+    if (!page) return 0;
+    try {
+      const count = await page.evaluate(`(function() {
+        var links = document.querySelectorAll('a[href*="selecttime"]');
+        var visible = 0;
+        for (var i = 0; i < links.length; i++) {
+          var el = links[i];
+          if (el.offsetParent !== null) visible++;
+        }
+        return visible;
+      })()`).catch(() => 0) as number;
+      return count;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * Rejoue le début du parcours Bookitit dans le navigateur avant un booking.
    *
    * Après un scan, le widget peut être revenu à #services avec un DOM partiel :

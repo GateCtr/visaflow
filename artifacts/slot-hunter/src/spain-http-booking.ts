@@ -905,99 +905,107 @@ export async function executeHttpBooking(
   // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
   // fonctionnera.
   if (useBrowserCalls) {
-    // ── Pré-navigation : rejouer le parcours natif service → agenda → calendrier ──
-    // Problème : après le scan, le widget peut être dans un état arbitraire. Poser
-    // directement #selectservice ou #selecttime ne suffit pas : le routeur Backbone
-    // ne renseigne selectedServices/selectedAgendas que lorsque les vues natives
-    // sont réellement traversées. Dans ce cas, getsigninfields/ répond avec la vue
-    // d'erreur et le formulaire signupsecondappointment n'est jamais rendu.
+    // ── Navigation native vers le créneau ─────────────────────────────────────
     //
-    // Fix : utiliser exactement le même clic DOM que le scanner. Cela initialise
-    // l'état Backbone, déclenche getagendas/ + datetime/ et laisse un lien selecttime
-    // réel que navigateToSelecttime pourra cliquer.
+    // Principe : le scan vient de traverser Aceptar→service→getagendas→datetime
+    // et a laissé le calendrier rendu. Le serveur ouvre directement sur le premier
+    // mois disponible (datetime/ driven) — on n'a pas à chercher de mois, ni à
+    // relancer le flow Aceptar si le calendrier est encore chaud.
+    //
+    // 1. Vérifier état chaud : liens selecttime déjà visibles → clic direct.
+    // 2. État périmé : prepareWidgetForBooking() + clickServiceAndCaptureSlots()
+    //    → attendre que le serveur rende le premier mois disponible naturellement.
+    // 3. Retry unique si navigateToSelecttime échoue (portail lent, slot expiré).
     const activePage = spainPersistentBrowser.getActivePage();
     if (activePage) {
       try {
         const serviceId = targetService.serviceId;
-        const prepared = await spainPersistentBrowser.prepareWidgetForBooking();
-        if (!prepared) {
-          console.warn("[spain-booking] ⚠️ Préparation Aceptar/services échouée — arrêt de la navigation native");
+
+        // ── 1. État chaud depuis le scan ? ──────────────────────────────────
+        const hotLinks = await spainPersistentBrowser.checkCalendarHotState();
+        if (hotLinks > 0) {
+          console.log(
+            `[spain-booking] ✅ Calendrier chaud — ${hotLinks} créneau(x) visible(s), clic direct sans rechargement`,
+          );
         } else {
-          const nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
-            preferredServiceId: serviceId,
-            agTimeoutMs: 10_000,
-            dtTimeoutMs: 10_000,
-          });
-
-          if (!nativeCapture) {
-            console.warn(`[spain-booking] ⚠️ Pré-nav service ${serviceId}: lien natif introuvable`);
+          // ── 2. État périmé — relancer le parcours natif ────────────────────
+          console.log(`[spain-booking] 🔄 Calendrier périmé — relance parcours Aceptar→service→datetime…`);
+          const prepared = await spainPersistentBrowser.prepareWidgetForBooking();
+          if (!prepared) {
+            console.warn("[spain-booking] ⚠️ prepareWidgetForBooking échoué — poursuite sans garantie");
           } else {
-            console.log(
-              `[spain-booking] ✅ Pré-nav native service ${serviceId}` +
-              ` — agenda=${nativeCapture.getagendasRaw.length > 0 ? "oui" : "non"}` +
-              ` — datetime=${nativeCapture.datetimeRaws.length}`,
-            );
-          }
+            const nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+              preferredServiceId: serviceId,
+              agTimeoutMs: 10_000,
+              dtTimeoutMs: 10_000,
+            });
+            if (!nativeCapture) {
+              console.warn(`[spain-booking] ⚠️ Service ${serviceId} : lien natif introuvable`);
+            } else {
+              console.log(
+                `[spain-booking] ✅ Service ${serviceId} cliqué` +
+                ` — agenda=${nativeCapture.getagendasRaw.length > 0 ? "oui" : "non"}` +
+                ` — datetime=${nativeCapture.datetimeRaws.length}`,
+              );
+            }
 
-          // La transition finale devra être un clic sur une heure réellement
-          // rendue par le calendrier.
-          try {
-            await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 15_000 });
-            console.log("[spain-booking] ✅ Calendrier rendu — créneau horaire prêt pour clic DOM");
-          } catch {
-            console.warn("[spain-booking] ⚠️ Aucun créneau horaire rendu après service → agenda → datetime");
+            // Le serveur rend le calendrier sur le premier mois disponible
+            // (datetime/ driven). Attendre sans forcer de navigation de mois.
+            try {
+              await activePage.waitForSelector('a[href*="selecttime"]', {
+                timeout: 20_000,
+                visible: true,
+              });
+              const freshLinks = await spainPersistentBrowser.checkCalendarHotState();
+              console.log(`[spain-booking] ✅ Calendrier rendu — ${freshLinks} créneau(x) disponible(s)`);
+            } catch {
+              console.warn("[spain-booking] ⚠️ Aucun créneau visible après datetime/ (portail lent ?)");
+            }
           }
         }
       } catch (preNavErr) {
-        console.warn(`[spain-booking] ⚠️ Pré-nav service exception (non-fatal): ${preNavErr}`);
+        console.warn(`[spain-booking] ⚠️ Préparation navigation native (non-fatal): ${preNavErr}`);
       }
     }
 
     const navResult = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
 
-    // ── Retry complet si navigateToSelecttime a déclenché un rechargement page ─
-    // Quand hash = "#selecttime/..." est posé alors que le modèle Backbone est vide
-    // (widget pas encore passé par service→agendas→datetime), le router Backbone
-    // déclenche un Document GET (rechargement complet). La page revient à l'état
-    // initial (idCaptchaButton visible, hash vide). On détecte ce cas et on refait
-    // le flow entier : attendre init widget → Continue → service → datetime → selecttime.
+    // ── Retry unique si navigateToSelecttime échoue ────────────────────────────
+    // Causes possibles : portail lent (créneau pas encore rendu), slot expiré entre
+    // le scan et le booking, ou erreur transitoire "data has changed" côté serveur.
+    // On relance le parcours natif complet une fois — sans hash de secours.
     if (!navResult && activePage) {
-      console.log("[spain-booking] 🔁 navigateToSelecttime → page rechargée — retry avec attente init widget…");
+      console.log("[spain-booking] 🔁 navigateToSelecttime échoué — retry parcours natif complet…");
       try {
         const serviceId = targetService.serviceId;
         const prepared = await spainPersistentBrowser.prepareWidgetForBooking();
-        let retryCapture: Awaited<ReturnType<typeof spainPersistentBrowser.clickServiceAndCaptureSlots>> = null;
         if (prepared) {
-          retryCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+          const retryCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
             preferredServiceId: serviceId,
             agTimeoutMs: 10_000,
             dtTimeoutMs: 10_000,
           });
           console.log(
-            `[spain-booking] 🖱️ Retry pré-nav service ${serviceId}: ` +
-            `${retryCapture ? "parcours natif rejoué" : "service non rendu"}`,
+            `[spain-booking] 🖱️ Retry service ${serviceId}: ` +
+            `${retryCapture ? "parcours rejoué" : "service non rendu"}`,
           );
+          if (retryCapture) {
+            try {
+              await activePage.waitForSelector('a[href*="selecttime"]', {
+                timeout: 20_000,
+                visible: true,
+              });
+              const retryNav = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+              console.log(`[spain-booking] 🔁 Retry navigateToSelecttime → ${retryNav || "échec"}`);
+            } catch {
+              console.warn("[spain-booking] ⚠️ Retry: aucun créneau rendu après parcours complet");
+            }
+          }
         } else {
-          console.warn("[spain-booking] ⚠️ Retry : Aceptar/services non rendu");
+          console.warn("[spain-booking] ⚠️ Retry: prepareWidgetForBooking échoué");
         }
-
-        // Le retry ne navigue que si le calendrier a réellement rendu une
-        // heure cliquable. Aucun hash de secours.
-        let hasTimeLink = false;
-        try {
-          await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 15_000, visible: true });
-          hasTimeLink = true;
-          console.log("[spain-booking] ✅ Retry calendrier rendu — clic horaire retry…");
-        } catch {
-          console.warn("[spain-booking] ⚠️ Retry aucun créneau rendu — transition annulée");
-        }
-
-        const retryNav = hasTimeLink
-          ? await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl)
-          : "";
-        console.log(`[spain-booking] 🔁 Retry navigateToSelecttime → ${retryNav || "échec encore"}`);
       } catch (retryErr) {
-        console.warn(`[spain-booking] ⚠️ Retry flow complet (non-fatal): ${retryErr}`);
+        console.warn(`[spain-booking] ⚠️ Retry (non-fatal): ${retryErr}`);
       }
     }
 
