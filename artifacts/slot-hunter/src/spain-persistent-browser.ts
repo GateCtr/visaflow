@@ -1836,6 +1836,27 @@ class SpainPersistentBrowserManager {
     //   token lié à la SESSION de la 1ère navigation (déjà périmée de X minutes)
     //   → oneshot rejeté → /main/ = 0B. Le seul moyen d'avoir un oneshot frais
     //   est de cliquer Continuar DANS LA MÊME SESSION que le cf_clearance.
+    // ── Cache-bust CDN Cloudflare avant la navigation ────────────────────────
+    //
+    // PROBLÈME ROOT-CAUSE : CF met en cache la page portail PHP côté CDN edge.
+    // Conséquence : TOUS les IPs du pool Decodo (même PoP SJC) reçoivent la MÊME
+    // page HTML avec le MÊME nonce JSD baked-in (observé : nonce identique sur 2 runs
+    // distincts avec disk-cache purgé + browser redémarré + IP différente → preuve que
+    // le nonce vient du CDN CF, pas du cache navigateur).
+    //
+    // Quand la nonce stale est consommée par notre JSD natif, le JSD widget post-Continuar
+    // envoie la MÊME nonce → CF dit "déjà utilisée" → cookie fantôme → /main/ = 0B.
+    //
+    // FIX : Cache-Control: no-cache + Pragma: no-cache dans les en-têtes de REQUÊTE.
+    // CF edge respecte ces directives RFC 7234 §5.2 sur les requêtes : il bypasse son
+    // cache et va chercher une page fraîche à l'origine → nonce fraîche garantie.
+    // On les retire IMMÉDIATEMENT après page.goto() pour ne pas polluer les XHR widget.
+    console.log(`[spain-pb] 🚫 CDN cache-bust activé (Cache-Control: no-cache) — nonce fraîche depuis l'origine`);
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+    }).catch(() => {});
     console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${formatPortalUrlForLog(targetUrl)}`);
     try {
       await page.goto(targetUrl, { waitUntil: "load", timeout: 70_000 });
@@ -1843,6 +1864,11 @@ class SpainPersistentBrowserManager {
       // Timeout non-fatal — CF challenge peut dépasser 35s, la boucle Continuar prend le relais
       console.warn(`[spain-pb] ⚠️ Navigation initiale (non-fatal, boucle widget prend le relais): ${navErr}`);
     }
+    // Retirer les headers no-cache dès que la page est chargée — les requêtes XHR du widget
+    // (JSD oneshot, /main/, getagendas/, etc.) ne doivent pas les porter (comportement naturel).
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    }).catch(() => {});
 
     // Vérifier si la navigation a abouti à une page d'erreur Chrome (ERR_TUNNEL_CONNECTION_FAILED,
     // ERR_PROXY_CONNECTION_FAILED, etc.) — dans ce cas la page ne chargera jamais et le JSD ne
@@ -2039,7 +2065,7 @@ class SpainPersistentBrowserManager {
           console.log(
             `[spain-pb] 🔑 JSD oneshot resp: status=${ev.response.status}` +
             ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}` +
-            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non — cookie fantôme, /main/ sera annulé"}`,
+            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non — nonce consommée (CDN cache stale) → Round 2 no-cache requis"}`,
           );
           jsdOneShotAt = Date.now(); // marquer le moment pour le délai post-JSD
           pendingJsdRequests.delete(ev.requestId);
@@ -2663,10 +2689,24 @@ class SpainPersistentBrowserManager {
         await cdpPhpReset.detach().catch(() => {});
         console.log(`[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue`);
 
-        // 2. Re-navigation vers le widget — CF ne re-challenge PAS (cf_clearance valide)
-        console.log(`[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche) : ${formatPortalUrlForLog(targetUrl)}`);
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 40_000 })
+        // 2. Re-navigation vers le widget avec cache-bust double couche :
+        //    a) Cache-Control: no-cache + Pragma: no-cache → bypass CDN CF edge cache (RFC 7234)
+        //    b) ?_cb=<timestamp> dans l'URL → cache-key distinct → CF ne peut pas servir
+        //       une réponse mise en cache même si les headers no-cache sont ignorés par une règle
+        //    Les deux ensemble garantissent un nonce frais de l'origine même sur PoPs SJC.
+        const cacheBustUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_cb=${Date.now()}`;
+        console.log(`[spain-pb] 🌐 Re-navigation widget (round 2 — nonce fraîche, CDN cache-bust) : ${formatPortalUrlForLog(targetUrl)}`);
+        await page.setExtraHTTPHeaders({
+          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+        }).catch(() => {});
+        await page.goto(cacheBustUrl, { waitUntil: "domcontentloaded", timeout: 40_000 })
           .catch((e: unknown) => console.warn(`[spain-pb] ⚠️ Re-navigation (non-fatal): ${e}`));
+        // Retirer no-cache immédiatement — les XHR du widget Round 2 doivent être naturels
+        await page.setExtraHTTPHeaders({
+          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        }).catch(() => {});
 
         // Refresh page reference après navigation
         try {
