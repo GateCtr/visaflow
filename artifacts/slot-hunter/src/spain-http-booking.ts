@@ -991,18 +991,29 @@ export async function executeHttpBooking(
 
   for (const candidate of authCandidates) {
     console.log(`[spain-booking] 🔑 Tentative ${candidate.label} (${candidate.endpoint})…`);
-    let payload = await callEndpoint(candidate.endpoint, candidate.params);
+
+    // ── En mode browser, signin/ passe DIRECTEMENT par le formulaire DOM ─────
+    // NE PAS appeler callEndpoint pour signin/ en mode browser :
+    // - fetch() retourne 0B text/html (le serveur PHP valide une variable de session
+    //   définie UNIQUEMENT par le widget Backbone lui-même, pas via fetch externe).
+    // - callBookititViaJQueryInPage injecte un <script> tag pour signin/ → le serveur
+    //   répond avec du contenu qui déclenche une navigation Backbone vers #services,
+    //   corrompant l'état de la page AVANT que submitSigninFormViaDOM soit appelé
+    //   (le widget quitte #signupsecondappointment et les inputs deviennent cachés).
+    // Solution : sauter callEndpoint entièrement pour signin/ en browser mode et aller
+    // directement au DOM form submit ci-dessous.
+    let payload = (useBrowserCalls && candidate.endpoint === "signin/")
+      ? null
+      : await callEndpoint(candidate.endpoint, candidate.params);
 
     // ── Fallback DOM form submit pour signin/ en mode browser ────────────────
-    // fetch() et jQuery script tag retournent 0B pour signin/ et getsigninfields/
-    // car le serveur PHP valide une variable de session définie uniquement par le
-    // widget Backbone lui-même. On remplit le formulaire DOM pour que le widget
-    // émette l'appel signin/ avec le bon state PHP.
+    // On remplit le formulaire DOM pour que le widget émette l'appel signin/ avec
+    // le bon state PHP.
     // IMPORTANT : submitSigninFormViaDOM intercepte aussi summary/ automatiquement —
     // le widget Backbone le fire juste après un signin réussi. On stocke summaryBody
     // pour court-circuiter l'appel manuel callEndpoint("summary/") plus bas.
     if (!payload && useBrowserCalls && candidate.endpoint === "signin/") {
-      console.log(`[spain-booking] 🖊️ signin/ → 0B via fetch/jQuery — fallback DOM form submit…`);
+      console.log(`[spain-booking] 🖊️ signin/ → DOM form submit direct (skip fetch/jQuery pour éviter corruption Backbone)…`);
       const domResult = await submitSigninFormViaDOM(config.login, config.password);
       const domBody = domResult.signinBody;
       if (domResult.summaryBody) {
