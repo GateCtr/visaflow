@@ -867,6 +867,91 @@ class SpainPersistentBrowserManager {
   }
 
   /**
+   * Rejoue le début du parcours Bookitit dans le navigateur avant un booking.
+   *
+   * Après un scan, le widget peut être revenu à #services avec un DOM partiel :
+   * le serveur a bien répondu, mais la vue Backbone des services n'est plus
+   * montée. Un simple changement de hash ne rejoue donc pas le clic Aceptar.
+   * On recharge le widget dans le même contexte Chromium, clique Aceptar/Continue
+   * comme un utilisateur, puis attend que les vrais liens selectservice soient
+   * rendus avant de laisser le booking poursuivre.
+   */
+  async prepareWidgetForBooking(): Promise<boolean> {
+    const page = this._page;
+    if (!page) return false;
+
+    const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
+    const bookingUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_booking=${Date.now()}`;
+
+    try {
+      console.log(`[spain-pb] 🔄 Préparation booking — rechargement widget + Aceptar : ${formatPortalUrlForLog(targetUrl)}`);
+      await page.goto(bookingUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: BROWSER_WIDGET_GOTO_TIMEOUT_MS,
+      }).catch((err: unknown) => {
+        console.warn(`[spain-pb] ⚠️ Préparation booking navigation (non-fatal): ${err}`);
+      });
+
+      const deadline = Date.now() + 40_000;
+      let lastClickAt = 0;
+      while (Date.now() < deadline) {
+        const state = await page.evaluate(`(function() {
+          function visible(el) {
+            if (!el) return false;
+            var s = window.getComputedStyle(el);
+            if (s.display === 'none' || s.visibility === 'hidden') return false;
+            var r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          }
+          var serviceLinks = Array.from(document.querySelectorAll('a[href*="#selectservice/"]'))
+            .filter(visible).length;
+          var controls = Array.from(document.querySelectorAll(
+            'button, a, input[type="button"], input[type="submit"], div[role="button"]'
+          )).filter(function(el) {
+            return visible(el) && /aceptar|accept|continuar|continue|siguiente|ok/i.test(
+              (el.textContent || el.value || '').replace(/\\s+/g, ' ')
+            );
+          }).length;
+          return {
+            hash: window.location.hash,
+            serviceLinks: serviceLinks,
+            acceptControls: controls,
+            title: document.title
+          };
+        })()`).catch(() => ({ serviceLinks: 0, acceptControls: 0, hash: "" })) as {
+          serviceLinks: number;
+          acceptControls: number;
+          hash: string;
+          title: string;
+        };
+
+        if (state.serviceLinks > 0) {
+          console.log(`[spain-pb] ✅ Préparation booking terminée — ${state.serviceLinks} lien(s) service rendu(s), hash=${state.hash}`);
+          return true;
+        }
+
+        if (Date.now() - lastClickAt > 1_000) {
+          const accepted = await clickInteractiveSpainAcceptFlow(page);
+          if (accepted.clicked) {
+            lastClickAt = Date.now();
+            console.log(`[spain-pb] 🖱️ Préparation booking — ${accepted.reason}`);
+            await new Promise<void>((r) => setTimeout(r, 800));
+            continue;
+          }
+        }
+
+        await new Promise<void>((r) => setTimeout(r, 500));
+      }
+
+      console.warn("[spain-pb] ⚠️ Préparation booking timeout — liens selectservice absents");
+      return false;
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ Préparation booking exception: ${err}`);
+      return false;
+    }
+  }
+
+  /**
    * Clique sur un service dans le widget Bookitit et capture les réponses
    * getagendas/ + datetime/ via interception réseau.
    *
@@ -3682,7 +3767,8 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
  *  1. Clic DOM réel sur l'élément du créneau si le widget est déjà à la vue datetime.
  *     (La click-handler Backbone peut faire un call HTTP AVANT de changer le hash —
  *      en changeant juste window.location.hash on saute cette étape.)
- *  2. Fallback : changer window.location.hash directement si aucun élément trouvé.
+ *  2. Si aucun élément n'est rendu, échouer explicitement : changer le hash
+ *     contournerait l'état Backbone et produirait une fausse transition.
  *
  * Capture réseau : CDP Network.requestWillBeSent (attrape JSONP/script tags en plus
  * de XHR et fetch) + patch JS document.createElement('script') pour backup.
@@ -3956,9 +4042,11 @@ export async function navigateToSelecttime(
     const domClickSucceeded = clickResult.startsWith("clicked");
 
     if (!domClickSucceeded) {
-      // ── 4. Fallback : changer le hash directement ──────────────────────────
-      console.log(`[spain-pb] ↩️  Fallback hash direct → ${hashTarget}`);
-      await page.evaluate(`window.location.hash = ${JSON.stringify(hashTarget)}`) as unknown;
+      // Ne jamais contourner le routeur Backbone : il doit avoir initialisé
+      // selectedServices/selectedAgendas/selectedDate/selectedTime via le clic
+      // réel sur une heure du calendrier.
+      console.warn("[spain-pb] ⚠️ Aucun créneau visible — navigation hash interdite, transition annulée");
+      return "";
     }
 
     // ── 5. Attendre que le router Backbone résolve vers la vue auth (max 5s) ──

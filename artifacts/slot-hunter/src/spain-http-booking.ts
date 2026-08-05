@@ -905,54 +905,48 @@ export async function executeHttpBooking(
   // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
   // fonctionnera.
   if (useBrowserCalls) {
-    // ── Pré-navigation : réinitialiser l'état Backbone avant navigateToSelecttime ──
-    // Problème : après le scan, le widget peut être dans un état arbitraire (post-CF, post-scan,
-    // hash inconnu). navigateToSelecttime change window.location.hash = "#selecttime/..."
-    // directement, mais le Backbone router l'ignore si le modèle interne (active event)
-    // n'a pas été chargé via le flux naturel service→agendas→datetime.
-    // Aucune requête réseau n'est émise → hash non résolu → getsigninfields/ jamais appelé
-    // → signin/ retourne 0B.
+    // ── Pré-navigation : rejouer le parcours natif service → agenda → calendrier ──
+    // Problème : après le scan, le widget peut être dans un état arbitraire. Poser
+    // directement #selectservice ou #selecttime ne suffit pas : le routeur Backbone
+    // ne renseigne selectedServices/selectedAgendas que lorsque les vues natives
+    // sont réellement traversées. Dans ce cas, getsigninfields/ répond avec la vue
+    // d'erreur et le formulaire signupsecondappointment n'est jamais rendu.
     //
-    // Fix : cliquer le service dans le DOM (déclenchement naturel par le widget JS),
-    // ce qui charge getagendas/ + datetime/ dans les modèles Backbone.
-    // Ensuite navigateToSelecttime peut faire #selecttime → #signupsecondappointment.
+    // Fix : utiliser exactement le même clic DOM que le scanner. Cela initialise
+    // l'état Backbone, déclenche getagendas/ + datetime/ et laisse un lien selecttime
+    // réel que navigateToSelecttime pourra cliquer.
     const activePage = spainPersistentBrowser.getActivePage();
     if (activePage) {
       try {
-        // 1. Réinitialiser à #services (état de départ connu)
-        const currentHash = (await activePage.evaluate(`window.location.hash`).catch(() => "")) as string;
-        if (!currentHash.includes("services") && currentHash !== "") {
-          await activePage.evaluate(`window.location.hash = "#services"`).catch(() => {});
-          await new Promise<void>((r) => setTimeout(r, 800));
-        }
-        // 2. Cliquer le service pour déclencher getagendas/ + datetime/ naturellement
         const serviceId = targetService.serviceId;
-        const clicked = (await activePage.evaluate(`
-          (function(sid) {
-            var links = document.querySelectorAll(
-              'a[href*="selectservice/' + sid + '"], ' +
-              'a[href="#selectservice/' + sid + '"]'
+        const prepared = await spainPersistentBrowser.prepareWidgetForBooking();
+        if (!prepared) {
+          console.warn("[spain-booking] ⚠️ Préparation Aceptar/services échouée — arrêt de la navigation native");
+        } else {
+          const nativeCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+            preferredServiceId: serviceId,
+            agTimeoutMs: 10_000,
+            dtTimeoutMs: 10_000,
+          });
+
+          if (!nativeCapture) {
+            console.warn(`[spain-booking] ⚠️ Pré-nav service ${serviceId}: lien natif introuvable`);
+          } else {
+            console.log(
+              `[spain-booking] ✅ Pré-nav native service ${serviceId}` +
+              ` — agenda=${nativeCapture.getagendasRaw.length > 0 ? "oui" : "non"}` +
+              ` — datetime=${nativeCapture.datetimeRaws.length}`,
             );
-            for (var i = 0; i < links.length; i++) {
-              if (links[i].offsetParent !== null || links[i].closest('[style*="display:none"]') === null) {
-                links[i].click(); return true;
-              }
-            }
-            // Fallback : naviguer via hash directement
-            window.location.hash = "#selectservice/" + sid;
-            return false;
-          })(${JSON.stringify(serviceId)})
-        `).catch(() => false)) as boolean;
-        console.log(`[spain-booking] 🖱️ Pré-nav service ${serviceId}: ${clicked ? "cliqué" : "hash fallback"}`);
-        // Attendre que datetime/ soit complète et que les créneaux apparaissent dans le DOM.
-        // 4s fixe était insuffisant sur proxy lent → navigateToSelecttime tombait en hash fallback
-        // → Backbone n'avait pas les données du modèle → clsDivBackErrorButton au lieu du form login.
-        // On attend spécifiquement un lien selecttime (preuve que le calendrier est rendu).
-        try {
-          await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 10_000 });
-          console.log("[spain-booking] ✅ Créneaux datetime/ rendus dans le DOM — prêt pour navigateToSelecttime");
-        } catch {
-          console.warn("[spain-booking] ⚠️ Aucun lien selecttime après 10s — datetime/ lente ou aucun créneau ce mois-ci (hash fallback sera tenté)");
+          }
+
+          // La transition finale devra être un clic sur une heure réellement
+          // rendue par le calendrier.
+          try {
+            await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 15_000 });
+            console.log("[spain-booking] ✅ Calendrier rendu — créneau horaire prêt pour clic DOM");
+          } catch {
+            console.warn("[spain-booking] ⚠️ Aucun créneau horaire rendu après service → agenda → datetime");
+          }
         }
       } catch (preNavErr) {
         console.warn(`[spain-booking] ⚠️ Pré-nav service exception (non-fatal): ${preNavErr}`);
@@ -971,66 +965,36 @@ export async function executeHttpBooking(
       console.log("[spain-booking] 🔁 navigateToSelecttime → page rechargée — retry avec attente init widget…");
       try {
         const serviceId = targetService.serviceId;
-
-        // 1. Attendre que le widget soit initialisé (idCaptchaButton OU liens services)
-        try {
-          await activePage.waitForSelector(
-            '#idCaptchaButton, a[href*="selectservice"]',
-            { timeout: 10_000, visible: true },
+        const prepared = await spainPersistentBrowser.prepareWidgetForBooking();
+        let retryCapture: Awaited<ReturnType<typeof spainPersistentBrowser.clickServiceAndCaptureSlots>> = null;
+        if (prepared) {
+          retryCapture = await spainPersistentBrowser.clickServiceAndCaptureSlots({
+            preferredServiceId: serviceId,
+            agTimeoutMs: 10_000,
+            dtTimeoutMs: 10_000,
+          });
+          console.log(
+            `[spain-booking] 🖱️ Retry pré-nav service ${serviceId}: ` +
+            `${retryCapture ? "parcours natif rejoué" : "service non rendu"}`,
           );
-          console.log("[spain-booking] ✅ Widget initialisé après rechargement");
-        } catch {
-          console.warn("[spain-booking] ⚠️ Widget init timeout après rechargement — tentative quand même");
+        } else {
+          console.warn("[spain-booking] ⚠️ Retry : Aceptar/services non rendu");
         }
 
-        // 2. Cliquer Continue si la page Bookitit initiale est affichée
-        const continueClicked = await activePage.evaluate(`
-          (function() {
-            var btn = document.getElementById('idCaptchaButton');
-            if (btn && btn.offsetParent !== null) { btn.click(); return 'captcha_btn'; }
-            return 'none';
-          })()
-        `).catch(() => "error") as string;
-        console.log(`[spain-booking] 🖱️ Retry Continue: ${continueClicked}`);
-
-        // 3. Attendre que les liens services soient visibles (widget post-Continue)
-        try {
-          await activePage.waitForSelector(
-            'a[href*="selectservice"]',
-            { timeout: 8_000, visible: true },
-          );
-          console.log("[spain-booking] ✅ Retry #services visible — clic service…");
-        } catch {
-          console.warn("[spain-booking] ⚠️ Retry #services timeout — hash fallback");
-          await activePage.evaluate(`window.location.hash = "#services"`).catch(() => {});
-          await new Promise<void>((r) => setTimeout(r, 1_000));
-        }
-
-        // 4. Cliquer le service pour déclencher getagendas/ + datetime/
-        const retryClicked = await (activePage.evaluate(`
-          (function(sid) {
-            var links = document.querySelectorAll(
-              'a[href*="selectservice/' + sid + '"], a[href="#selectservice/' + sid + '"]'
-            );
-            for (var i = 0; i < links.length; i++) {
-              if (links[i].offsetParent !== null) { links[i].click(); return 'clicked'; }
-            }
-            window.location.hash = '#selectservice/' + sid;
-            return 'hash';
-          })(${JSON.stringify(serviceId)})
-        `) as Promise<unknown>).catch(() => "error");
-        console.log(`[spain-booking] 🖱️ Retry pré-nav service ${serviceId}: ${retryClicked}`);
-
-        // 5. Attendre que les créneaux datetime/ soient rendus dans le DOM
+        // Le retry ne navigue que si le calendrier a réellement rendu une
+        // heure cliquable. Aucun hash de secours.
+        let hasTimeLink = false;
         try {
           await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 15_000, visible: true });
-          console.log("[spain-booking] ✅ Retry datetime/ rendu — navigateToSelecttime retry…");
+          hasTimeLink = true;
+          console.log("[spain-booking] ✅ Retry calendrier rendu — clic horaire retry…");
         } catch {
-          console.warn("[spain-booking] ⚠️ Retry datetime/ timeout — tentative selecttime quand même");
+          console.warn("[spain-booking] ⚠️ Retry aucun créneau rendu — transition annulée");
         }
 
-        // 6. Retry navigateToSelecttime
-        const retryNav = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+        const retryNav = hasTimeLink
+          ? await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl)
+          : "";
         console.log(`[spain-booking] 🔁 Retry navigateToSelecttime → ${retryNav || "échec encore"}`);
       } catch (retryErr) {
         console.warn(`[spain-booking] ⚠️ Retry flow complet (non-fatal): ${retryErr}`);
