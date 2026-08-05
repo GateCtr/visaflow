@@ -222,6 +222,7 @@ async function setupPageProxyAuth(
   page: Page,
   creds: { username: string; password: string },
   _ts: number = 0, // obsolète — gardé pour rétrocompat des call sites
+  nonceAgeRef?: { ms: number }, // sortie optionnelle : âge de la nonce en ms pour l'appelant
 ): Promise<any> {
   const JSD_PATTERN = /challenge-platform\/h\/g\/scripts\/jsd.*main\.js/;
 
@@ -276,6 +277,9 @@ async function setupPageProxyAuth(
           const nonceParts = nonce.split(":");
           const nonceTs = nonceParts.length >= 2 ? parseInt(nonceParts[1], 10) : NaN;
           const nonceAgeMs = !isNaN(nonceTs) ? Date.now() - nonceTs * 1_000 : NaN;
+          // Exposer l'âge de la nonce à l'appelant (_ensureSessionImpl) pour décider
+          // si Round 2 est utile ou si la fenêtre CF est trop vieille.
+          if (nonceAgeRef && !isNaN(nonceAgeMs)) nonceAgeRef.ms = nonceAgeMs;
           const nonceAgeLbl = !isNaN(nonceAgeMs)
             ? `${Math.round(nonceAgeMs / 1_000)}s (${Math.round(nonceAgeMs / 60_000)}min)`
             : "inconnu";
@@ -2918,15 +2922,21 @@ class SpainPersistentBrowserManager {
         const cdpPhpReset = await page.createCDPSession();
         await cdpPhpReset.send("Network.deleteCookies", { name: "PHPSESSID", domain: ".citaconsular.es" }).catch(() => {});
         await cdpPhpReset.send("Network.deleteCookies", { name: "PHPSESSID", domain: "www.citaconsular.es" }).catch(() => {});
-        // Purger le storage CF lié à la session (localStorage JSD, IndexedDB) — la nonce
-        // est également mise en cache dans localStorage. La vider garantit que CF recalcule
-        // une nonce fraîche depuis le serveur lors du prochain chargement du widget.
-        await cdpPhpReset.send("Storage.clearDataForOrigin", {
-          origin: "https://www.citaconsular.es",
-          storageTypes: "local_storage,session_storage,indexeddb",
-        }).catch(() => {});
+        // ⚠️ NE PAS purger localStorage/IndexedDB ici.
+        //
+        // OBSERVATION (2026-08-05) : purger localStorage + IndexedDB en Round 2 invalide
+        // les données CF bot-management qui supportent le cf_clearance courant.
+        // Résultat : CF re-challenge avec fo/eb tokens périmés (même timestamp que la nonce
+        // stale) → captcha.css reload → JSD script injecté avec nonce stale à nouveau
+        // → oneshot rejeté → /main/ = 0B une deuxième fois.
+        //
+        // Sans purge : cf_clearance valide + localStorage CF intact → CF fast-track
+        // (aucun JSD challenge) → le widget charge directement → /main/ retourne JSONP ✅.
+        //
+        // La nonce fraîche vient du NOUVEAU PHPSESSID côté serveur Bookitit (supprimé
+        // ci-dessus), pas du localStorage client. Seul le PHPSESSID doit être supprimé.
         await cdpPhpReset.detach().catch(() => {});
-        console.log(`[spain-pb] 🗑️ PHPSESSID + localStorage JSD purgés — nonce fraîche attendue`);
+        console.log(`[spain-pb] 🗑️ PHPSESSID purgé (localStorage CF préservé — fast-track Round 2 garanti)`);
 
         // 2. Re-navigation vers le widget avec cache-bust double couche :
         //    a) Cache-Control: no-cache + Pragma: no-cache → bypass CDN CF edge cache (RFC 7234)
