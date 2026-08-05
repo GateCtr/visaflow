@@ -1857,9 +1857,13 @@ class SpainPersistentBrowserManager {
       "Cache-Control": "no-cache, no-store, must-revalidate",
       "Pragma": "no-cache",
     }).catch(() => {});
-    console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${formatPortalUrlForLog(targetUrl)}`);
+    // Ajouter _cb=<ts> à l'URL de Round 1 pour forcer un cache-key distinct au CDN CF.
+    // no-cache seul ne suffit pas : CF SJC ignore ces headers pour les pages en cache forte.
+    // Changer l'URL garantit un cache-miss absolu → nonce fraîche depuis l'origine pour chaque solve.
+    const r1BustUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_cb=${Date.now()}`;
+    console.log(`[spain-pb] 🌐 Navigation unique → JSD CF + widget Bookitit en parallèle : ${formatPortalUrlForLog(targetUrl)} (_cb cache-bust)`);
     try {
-      await page.goto(targetUrl, { waitUntil: "load", timeout: 70_000 });
+      await page.goto(r1BustUrl, { waitUntil: "load", timeout: 70_000 });
     } catch (navErr) {
       // Timeout non-fatal — CF challenge peut dépasser 35s, la boucle Continuar prend le relais
       console.warn(`[spain-pb] ⚠️ Navigation initiale (non-fatal, boucle widget prend le relais): ${navErr}`);
