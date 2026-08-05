@@ -33,6 +33,7 @@ import type { Browser, Page } from "puppeteer";
 import { rmSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import * as https from "node:https";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
 
@@ -84,12 +85,88 @@ import { buildPortalUrlFromWidgetKey, formatPortalUrlForLog, KINSHASA_PORTAL_URL
 
 puppeteer.use(StealthPlugin());
 
+// ─── Fetch direct JSD (bypass CDN) ───────────────────────────────────────────
+
+/**
+ * Extrait la nonce baked-in dans le script JSD CF versionné.
+ * Format réel : "0.7383901960498597:1785917128:fqRJma"
+ *   → randomFloat:timestamp:token
+ */
+function extractJsdNonce(body: string): string {
+  const m =
+    body.match(/["']([0-9]+\.[0-9]+:\d{9,}:[A-Za-z0-9_\-+/]{4,})["']/) ??
+    body.match(/["'](\d{9,}:[A-Za-z0-9_\-+/]{4,})["']/) ??
+    body.match(/nonce\s*[=:]\s*["']([^"']{8,})["']/);
+  return m?.[1] ?? "(non trouvée)";
+}
+
+/**
+ * Fetche le script JSD CF versionné directement via Node HTTPS sans proxy.
+ *
+ * POURQUOI : CF CDN SJC cache ce script avec une nonce périmée et ignore
+ *   à la fois ?_t= et Cache-Control: no-cache en request. En passant par
+ *   Node (sans proxy), la requête sort depuis l'IP Replit → CF PoP différent
+ *   de SJC ou origin directe → nonce fraîche servie.
+ *
+ * @returns { status, headers[], body } — corps brut du script JS
+ */
+function fetchJsdDirect(
+  url: string,
+  ua: string,
+): Promise<{ status: number; headers: Array<{ name: string; value: string }>; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        path:     `${parsed.pathname}?_t=${Date.now()}`, // unique chez origin aussi
+        method:   "GET",
+        headers:  {
+          "User-Agent":      ua,
+          "Accept":          "*/*",
+          "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+          "Cache-Control":   "no-cache",
+          "Pragma":          "no-cache",
+          "Referer":         `https://${parsed.hostname}/`,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          const headers: Array<{ name: string; value: string }> = [];
+          for (const [name, val] of Object.entries(res.headers)) {
+            if (val == null) continue;
+            // Exclure les headers qui pourraient casser l'injection (content-encoding, etc.)
+            if (/^(content-encoding|transfer-encoding|content-length)$/i.test(name)) continue;
+            const value = Array.isArray(val) ? val.join(", ") : val;
+            headers.push({ name, value });
+          }
+          resolve({ status: res.statusCode ?? 200, headers, body });
+        });
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(8000, () => { req.destroy(new Error("fetchJsdDirect timeout")); });
+    req.end();
+  });
+}
+
 // ─── Proxy auth helper ────────────────────────────────────────────────────────
 
 /**
  * Installe UN SEUL handler CDP Fetch qui gère simultanément :
  *   1. L'authentification proxy 407 (Fetch.authRequired)
- *   2. La réécriture cache-bust du script JSD CF versionné (Fetch.requestPaused)
+ *   2. L'injection du script JSD CF avec une nonce fraîche (Fetch.fulfillRequest)
+ *
+ * FIX CDN STALE NONCE :
+ *   CF CDN SJC cache le script JSD versionné h/g/scripts/jsd/{hash}/main.js
+ *   avec une nonce périmée (1h+). Ni ?_t= ni Cache-Control: no-cache en request
+ *   ne forcent un bypass CDN. Solution : intercepter via CDP et servir le corps
+ *   fetchté directement depuis Node.js (sans proxy → PoP CF différent → nonce fraîche).
+ *   Une seule fetch par {hash} par solve (cache Map local) pour la cohérence.
  *
  * CRITIQUE — une seule session, pas deux :
  *   Quand deux sessions CDP ont toutes les deux handleAuthRequests: true,
@@ -99,15 +176,24 @@ puppeteer.use(StealthPlugin());
  *   cela comme un échec d'auth → ERR_INVALID_AUTH_CREDENTIALS.
  *   Solution : une seule session gère tout.
  *
- * @param ts - timestamp pour le cache-bust du script JSD (0 = pas de réécriture JSD)
  * @returns le client CDP (à detach() en cleanup)
  */
 async function setupPageProxyAuth(
   page: Page,
   creds: { username: string; password: string },
-  ts: number = 0,
+  _ts: number = 0, // obsolète — gardé pour rétrocompat des call sites
 ): Promise<any> {
   const JSD_PATTERN = /challenge-platform\/h\/g\/scripts\/jsd.*main\.js/;
+
+  // Cache par hash ({hash} dans l'URL) — une seule fetch direct par solve.
+  // Évite d'appeler CF origin plusieurs fois pour le même script dans un solve.
+  const jsdFreshByHash = new Map<string, { status: number; headers: Array<{ name: string; value: string }>; body: string }>();
+
+  // UA de la page pour les requêtes directes
+  const pageUa: string = await (page as any).evaluate(() => navigator.userAgent).catch(
+    () => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+  );
+
   const client = await (page as any).createCDPSession();
   // Pas de patterns : on intercepte TOUT pour gérer auth sur n'importe quelle requête.
   // Les patterns filtrent Fetch.requestPaused mais PAS Fetch.authRequired — avoir des
@@ -135,24 +221,46 @@ async function setupPageProxyAuth(
 
   client.on("Fetch.requestPaused", async (event: any) => {
     const origUrl: string = event.request?.url ?? "";
-    // Réécriture JSD cache-bust (uniquement si ts > 0 et URL correspond)
-    if (ts > 0 && JSD_PATTERN.test(origUrl)) {
-      const bustUrl = origUrl.includes("?")
-        ? `${origUrl.split("?")[0]}?_t=${ts}`
-        : `${origUrl}?_t=${ts}`;
-      console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
-      await client.send("Fetch.continueRequest", {
-        requestId: event.requestId,
-        url: bustUrl,
-      }).catch(() => {});
+    if (JSD_PATTERN.test(origUrl)) {
+      // Clé de cache = hash de version dans l'URL (ex: "f70cb37711aa")
+      const hashMatch = origUrl.match(/\/jsd\/([a-f0-9]{8,})\//) ;
+      const hashKey   = hashMatch?.[1] ?? origUrl;
+
+      try {
+        if (!jsdFreshByHash.has(hashKey)) {
+          // Première interception pour ce hash → fetch direct Node (sans proxy)
+          console.log(`[spain-pb] 🌐 JSD direct-fetch → hash=${hashKey} (bypass CDN SJC, nonce fraîche)`);
+          const fresh = await fetchJsdDirect(origUrl, pageUa);
+          const nonce = extractJsdNonce(fresh.body);
+          console.log(
+            `[spain-pb] 📜 JSD origin → HTTP ${fresh.status} | nonce=${nonce} | body=${fresh.body.length}B`,
+          );
+          jsdFreshByHash.set(hashKey, fresh);
+        } else {
+          console.log(`[spain-pb] 📦 JSD cache-hit hash=${hashKey} (nonce fraîche réutilisée)`);
+        }
+
+        const { status, headers, body } = jsdFreshByHash.get(hashKey)!;
+        // Injecter le corps frais dans la page — CDN complètement court-circuité
+        await client.send("Fetch.fulfillRequest", {
+          requestId:       event.requestId,
+          responseCode:    status,
+          responseHeaders: headers,
+          body:            Buffer.from(body, "utf8").toString("base64"),
+        }).catch(() => {
+          // fulfillRequest échoue si la requête a déjà été résolue → fallback continue
+          client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+        });
+      } catch (e) {
+        console.warn(`[spain-pb] ⚠️ JSD direct-fetch échoué (${e}) — fallback continue sans nonce fraîche`);
+        await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+      }
     } else {
       await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
     }
   });
 
-  if (ts > 0) {
-    console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé (nonce fraîche garantie depuis CF origin)`);
-  }
+  console.log(`[spain-pb] 🔧 JSD origin-injector armé (bypass CDN SJC via Node HTTPS direct)`);
   return client;
 }
 
