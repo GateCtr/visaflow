@@ -4295,14 +4295,57 @@ export async function submitSigninFormViaDOM(
   // #signupsecondappointment, mais le rendu Backbone est asynchrone. Sans cette
   // attente, findField() trouve la page en cours de chargement (juste un bouton
   // "Volver") → no_login_field.
+  //
+  // Cas de rechargement complet (navigateToSelecttime exception) :
+  //   Quand le hash change déclenche un Document GET (rechargement widget), la page
+  //   revient à l'état initial Bookitit : bouton idCaptchaButton "Continue to request
+  //   appointment" visible, hash vide. On clique ce bouton pour entrer dans le flow,
+  //   puis on navigue directement vers #signupsecondappointment.
+  const loginSelector = '#idBktSigninLogin, #idBktLogin, [name="login"], input[type="text"], input[type="email"]';
+  let loginVisible = false;
   try {
-    await page.waitForSelector(
-      '#idBktSigninLogin, #idBktLogin, [name="login"], input[type="text"], input[type="email"]',
-      { timeout: 8_000, visible: true },
-    );
+    await page.waitForSelector(loginSelector, { timeout: 8_000, visible: true });
+    loginVisible = true;
     console.log("[spain-pb] ✅ Champ login visible dans le DOM — formulaire prêt");
   } catch {
-    console.warn("[spain-pb] ⚠️ Champ login non visible après 8s — formulaire pas encore rendu (Backbone lent ou état incorrect)");
+    console.warn("[spain-pb] ⚠️ Champ login non visible après 8s — tentative récupération (page rechargée ?)…");
+  }
+
+  if (!loginVisible) {
+    // Vérifier si le bouton Continue Bookitit initial est visible (rechargement complet)
+    const continueClicked = await page.evaluate(`
+      (function() {
+        // idCaptchaButton = bouton "Continue / Continuar" de la landing page Bookitit
+        var btn = document.getElementById('idCaptchaButton');
+        if (btn && btn.offsetParent !== null) { btn.click(); return 'clicked_captcha_btn'; }
+        // Fallback : tout bouton contenant "Continue" ou "Continuar" visible
+        var all = document.querySelectorAll('button, a, [role="button"]');
+        for (var i = 0; i < all.length; i++) {
+          var el = all[i];
+          var txt = (el.textContent || '').trim().toLowerCase();
+          if (el.offsetParent !== null && (txt.includes('continu') || txt.includes('siguiente'))) {
+            el.click(); return 'clicked_continue:' + txt.slice(0, 30);
+          }
+        }
+        return 'no_continue_btn';
+      })()
+    `).catch(() => "error") as string;
+    console.log(`[spain-pb] 🖱️ Récupération page rechargée — bouton Continue: ${continueClicked}`);
+
+    if (continueClicked !== "no_continue_btn" && continueClicked !== "error") {
+      // Attendre que le widget charge après le clic Continue (getagendas/ + datetime/)
+      await new Promise<void>((r) => setTimeout(r, 2_000));
+      // Naviguer directement vers #signupsecondappointment
+      await page.evaluate(`window.location.hash = "#signupsecondappointment"`).catch(() => {});
+      console.log("[spain-pb] 🔀 Navigation directe → #signupsecondappointment (fallback rechargement)");
+      try {
+        await page.waitForSelector(loginSelector, { timeout: 10_000, visible: true });
+        loginVisible = true;
+        console.log("[spain-pb] ✅ Champ login visible après navigation directe #signupsecondappointment");
+      } catch {
+        console.warn("[spain-pb] ⚠️ Champ login non visible après navigation directe — formulaire pas encore rendu");
+      }
+    }
   }
 
   // ── 1. Diagnostic DOM : voir ce que Backbone a rendu ────────────────────────

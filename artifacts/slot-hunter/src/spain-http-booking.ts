@@ -865,7 +865,7 @@ export async function executeHttpBooking(
 
   const candidateSignin: AuthCandidate = {
     endpoint: "signin/",
-    label: "signin (logintype=document)",
+    label: "signsecondappointment",
     params: {
       ...authBookingBase,
       logintype: "document",
@@ -959,7 +959,84 @@ export async function executeHttpBooking(
       }
     }
 
-    await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+    const navResult = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+
+    // ── Retry complet si navigateToSelecttime a déclenché un rechargement page ─
+    // Quand hash = "#selecttime/..." est posé alors que le modèle Backbone est vide
+    // (widget pas encore passé par service→agendas→datetime), le router Backbone
+    // déclenche un Document GET (rechargement complet). La page revient à l'état
+    // initial (idCaptchaButton visible, hash vide). On détecte ce cas et on refait
+    // le flow entier : attendre init widget → Continue → service → datetime → selecttime.
+    if (!navResult && activePage) {
+      console.log("[spain-booking] 🔁 navigateToSelecttime → page rechargée — retry avec attente init widget…");
+      try {
+        const serviceId = targetService.serviceId;
+
+        // 1. Attendre que le widget soit initialisé (idCaptchaButton OU liens services)
+        try {
+          await activePage.waitForSelector(
+            '#idCaptchaButton, a[href*="selectservice"]',
+            { timeout: 10_000, visible: true },
+          );
+          console.log("[spain-booking] ✅ Widget initialisé après rechargement");
+        } catch {
+          console.warn("[spain-booking] ⚠️ Widget init timeout après rechargement — tentative quand même");
+        }
+
+        // 2. Cliquer Continue si la page Bookitit initiale est affichée
+        const continueClicked = await activePage.evaluate(`
+          (function() {
+            var btn = document.getElementById('idCaptchaButton');
+            if (btn && btn.offsetParent !== null) { btn.click(); return 'captcha_btn'; }
+            return 'none';
+          })()
+        `).catch(() => "error") as string;
+        console.log(`[spain-booking] 🖱️ Retry Continue: ${continueClicked}`);
+
+        // 3. Attendre que les liens services soient visibles (widget post-Continue)
+        try {
+          await activePage.waitForSelector(
+            'a[href*="selectservice"]',
+            { timeout: 8_000, visible: true },
+          );
+          console.log("[spain-booking] ✅ Retry #services visible — clic service…");
+        } catch {
+          console.warn("[spain-booking] ⚠️ Retry #services timeout — hash fallback");
+          await activePage.evaluate(`window.location.hash = "#services"`).catch(() => {});
+          await new Promise<void>((r) => setTimeout(r, 1_000));
+        }
+
+        // 4. Cliquer le service pour déclencher getagendas/ + datetime/
+        const retryClicked = await (activePage.evaluate(`
+          (function(sid) {
+            var links = document.querySelectorAll(
+              'a[href*="selectservice/' + sid + '"], a[href="#selectservice/' + sid + '"]'
+            );
+            for (var i = 0; i < links.length; i++) {
+              if (links[i].offsetParent !== null) { links[i].click(); return 'clicked'; }
+            }
+            window.location.hash = '#selectservice/' + sid;
+            return 'hash';
+          })(${JSON.stringify(serviceId)})
+        `) as Promise<unknown>).catch(() => "error");
+        console.log(`[spain-booking] 🖱️ Retry pré-nav service ${serviceId}: ${retryClicked}`);
+
+        // 5. Attendre que les créneaux datetime/ soient rendus dans le DOM
+        try {
+          await activePage.waitForSelector('a[href*="selecttime"]', { timeout: 15_000, visible: true });
+          console.log("[spain-booking] ✅ Retry datetime/ rendu — navigateToSelecttime retry…");
+        } catch {
+          console.warn("[spain-booking] ⚠️ Retry datetime/ timeout — tentative selecttime quand même");
+        }
+
+        // 6. Retry navigateToSelecttime
+        const retryNav = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+        console.log(`[spain-booking] 🔁 Retry navigateToSelecttime → ${retryNav || "échec encore"}`);
+      } catch (retryErr) {
+        console.warn(`[spain-booking] ⚠️ Retry flow complet (non-fatal): ${retryErr}`);
+      }
+    }
+
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
   }
