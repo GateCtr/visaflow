@@ -21,7 +21,9 @@ All 4 workflows are configured and start automatically. To restart any service i
 
 **Install dependencies** (first time or after cloning):
 ```bash
-cd artifacts/joventy && pnpm install
+# From workspace root (installs all pnpm workspace packages including Joventy)
+pnpm install
+# npm-based services
 cd artifacts/captcha-service && npm install
 cd artifacts/proxy-service && npm install
 cd artifacts/slot-hunter && npm install
