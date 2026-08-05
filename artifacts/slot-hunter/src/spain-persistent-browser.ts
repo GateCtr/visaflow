@@ -1805,7 +1805,10 @@ class SpainPersistentBrowserManager {
     }
 
     // Session CDP unique : proxy auth 407 + réécriture cache-bust du script JSD (une seule session évite le double-fire Fetch.authRequired).
-    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth, Date.now());
+    // nonceAgeRef : sortie — l'âge de la nonce CF (ms depuis le timestamp encodé dans le script JSD).
+    // Utilisé plus bas pour décider si Round 2 est utile (nonce > 50min = fenêtre CF expirée).
+    const nonceAgeRef: { ms: number } = { ms: NaN };
+    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth, Date.now(), nonceAgeRef);
 
     // ── Intercepter window.turnstile.render pour capturer le sitekey ─────────
     // CF Managed Challenge avec render=explicit ne met JAMAIS data-sitekey dans
@@ -2912,7 +2915,23 @@ class SpainPersistentBrowserManager {
       // inutile" était faux : même les IPs DC obtiennent parfois un vrai JSD challenge
       // (non fast-track), et même avec fast-track, Round 2 génère un nouveau PHPSESSID
       // → nouvelle nonce CF → le widget JSD la consomme en premier → cf_clearance frais.
-      {
+
+      // ── Guard : fenêtre CF expirée (nonce > 50min) → Round 2 voué à l'échec ─────
+      // Quand la nonce JSD encode un timestamp > 50min, la fenêtre temporelle CF entière
+      // est expirée : CF force un re-challenge complet sur TOUTES les requêtes de la
+      // session, même si localStorage est intact. Round 2 (reset PHPSESSID seul) ne
+      // peut pas régénérer la fenêtre CF — il faut un nouveau solve complet.
+      const nonceAgeMin = isNaN(nonceAgeRef.ms) ? 0 : Math.round(nonceAgeRef.ms / 60_000);
+      if (!isNaN(nonceAgeRef.ms) && nonceAgeRef.ms > 50 * 60_000) {
+        console.warn(
+          `[spain-pb] ⏰ Nonce expirée (${nonceAgeMin}min > 50min) — fenêtre CF complète expirée. ` +
+          `Round 2 voué à l'échec → closeAndInvalidate + nouveau solve.`,
+        );
+        // Pas de Round 2 — invalider et laisser le prochain cycle faire un solve frais
+      } else {
+      if (!isNaN(nonceAgeRef.ms)) {
+        console.log(`[spain-pb] ⏱️ Nonce âge=${nonceAgeMin}min ≤ 50min — Round 2 viable`);
+      }
       console.log(
         `[spain-pb] 🔄 Cookie fantôme + /main/ 0B — reset PHPSESSID (cf_clearance conservé) ` +
         `+ re-navigation pour nonce fraîche…`,

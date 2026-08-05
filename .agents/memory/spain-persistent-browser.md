@@ -106,7 +106,23 @@ Symptôme caractéristique : `✅ cf_clearance obtenu via JSD natif (1s)` — un
 | IP inconnue | 10-40s → vrai cf_clearance | nouveau cf_clearance ✅ | non nécessaire | 124KB ✅ |
 | IP DC fast-track | ~1s → phantom | phantom ❌ | reset PHPSESSID → nonce fraîche → 124KB ✅ | 124KB ✅ |
 
-## Saopola e2e test (confirmed working 2026-07-30)
+## Rule: nonce age > 50min → skip Round 2, closeAndInvalidate directement
+
+**Root cause:** Quand la nonce JSD encode un timestamp > 50min, la fenêtre temporelle CF entière est expirée. CF force un re-challenge complet sur toutes les requêtes, même avec localStorage intact. Round 2 (reset PHPSESSID seul) ne peut pas régénérer la fenêtre CF.
+
+**Fix appliqué (2026-08-05):** `nonceAgeRef: { ms: number }` déclaré dans `_resolveWithTurnstileInjection` et passé à `setupPageProxyAuth` (4ème arg). Avant Round 2, guard: si `nonceAgeRef.ms > 50 * 60_000` → warn + skip Round 2, laisser le prochain cycle faire un solve frais. Sinon, Round 2 tourne normalement.
+
+**How to apply:** Ne jamais baser la décision Round 2 sur `jsdSolveMs`. Seul l'âge de la nonce (encodé dans le script JSD) détermine si la fenêtre CF est encore valide.
+
+## Rule: decodo-proxies.csv credentials — vérifier avant utilisation
+
+**Root cause (2026-08-05):** Le CSV `dc.decodo.com` avec user `sp8zzigoui` était expiré → Chrome `ERR_TOO_MANY_RETRIES` sur toutes les IPs → tous les scans Spain bloqués. `getCurrentDecodoUrl()` prend la priorité sur `DECODO_PROXY_URL` — si le CSV a des credentials invalides, tout échoue silencieusement.
+
+**Fix:** Mettre à jour `decodo-proxies.csv` avec les nouveaux credentials. Pour bypasser le CSV temporairement: `DECODO_PROXY_FILE=/nonexistent` → tombe sur `DECODO_PROXY_URL`. Pour tester la connectivité proxy: `curl --proxy "http://user:pass@dc.decodo.com:10001" https://ip.decodo.com/json`.
+
+**How to apply:** Si Spain watcher retourne `cf_blocked` en <3s avec `ERR_TOO_MANY_RETRIES`, vérifier les credentials CSV en premier (proxy auth échoue → Chrome boucle sur 407 → abandonne).
+
+## Saopola e2e test (confirmed working 2026-08-05)
 
 ```bash
 redis-server --daemonize yes --logfile /tmp/redis.log
@@ -114,4 +130,5 @@ cd artifacts/slot-hunter && node_modules/.bin/tsx src/test-saopola-live.ts
 ```
 
 Expected: `✅ Scan: found` + `✅ Booking: signin_failed` (wrong credentials rejected = success).
-Typical timing: Scan ~52s, Booking ~60s.
+Typical timing: Scan ~50s, Booking ~10s.
+Note: si `cf_blocked` en <3s → credentials CSV expirés (voir rule ci-dessus).
