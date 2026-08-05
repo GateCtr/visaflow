@@ -87,72 +87,32 @@ puppeteer.use(StealthPlugin());
 // ─── Proxy auth helper ────────────────────────────────────────────────────────
 
 /**
- * Installe un handler CDP Fetch pour répondre aux challenges proxy 407.
+ * Installe UN SEUL handler CDP Fetch qui gère simultanément :
+ *   1. L'authentification proxy 407 (Fetch.authRequired)
+ *   2. La réécriture cache-bust du script JSD CF versionné (Fetch.requestPaused)
  *
- * `page.authenticate()` ne fonctionne pas de façon fiable pour les proxies HTTP
- * en mode headless dans Puppeteer v22+ : il cible la couche page-level auth
- * (WWW-Authenticate) mais pas le proxy-level (Proxy-Authenticate / 407).
- * La solution correcte est `Fetch.enable { handleAuthRequests: true }` via CDP.
+ * CRITIQUE — une seule session, pas deux :
+ *   Quand deux sessions CDP ont toutes les deux handleAuthRequests: true,
+ *   Chrome fire Fetch.authRequired sur LES DEUX simultanément pour le même CONNECT
+ *   proxy. Les deux répondent avec continueWithAuth(ProvideCredentials). La deuxième
+ *   réponse arrive après que Chrome a déjà consommé la première → Chrome interprète
+ *   cela comme un échec d'auth → ERR_INVALID_AUTH_CREDENTIALS.
+ *   Solution : une seule session gère tout.
  *
- * IMPORTANT — pas de `patterns` ici : quand patterns est défini dans Fetch.enable,
- * Chrome ne fire authRequired QUE pour les requêtes qui matchent ces patterns.
- * La navigation principale (citaconsular.es) ne matcherait aucun pattern JSD
- * → proxy 407 non géré → ERR_INVALID_AUTH_CREDENTIALS.
- * Le cache-bust JSD est géré dans une SESSION SÉPARÉE (setupJsdScriptRewriter)
- * qui a elle aussi handleAuthRequests: true pour couvrir ses propres 407.
+ * @param ts - timestamp pour le cache-bust du script JSD (0 = pas de réécriture JSD)
+ * @returns le client CDP (à detach() en cleanup)
  */
 async function setupPageProxyAuth(
   page: Page,
   creds: { username: string; password: string },
-): Promise<void> {
-  const client = await (page as any).createCDPSession();
-  await client.send("Fetch.enable", { handleAuthRequests: true });
-  client.on("Fetch.authRequired", async (event: any) => {
-    const { requestId, authChallenge } = event;
-    if (authChallenge?.source === "Proxy") {
-      await client.send("Fetch.continueWithAuth", {
-        requestId,
-        authChallengeResponse: {
-          response: "ProvideCredentials",
-          username: creds.username,
-          password: creds.password,
-        },
-      }).catch(() => {});
-    } else {
-      // Pas un challenge proxy — continuer sans auth
-      await client.send("Fetch.continueWithAuth", {
-        requestId,
-        authChallengeResponse: { response: "Default" },
-      }).catch(() => {});
-    }
-  });
-  client.on("Fetch.requestPaused", async (event: any) => {
-    // Laisser passer toutes les requêtes non-auth interceptées
-    await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
-  });
-}
-
-/**
- * Installe un intercepteur CDP Fetch qui réécrit l'URL du script JSD versionné
- * pour créer un cache-key CDN unique → CF origin génère une nonce fraîche.
- *
- * DOIT avoir handleAuthRequests: true pour gérer les 407 proxy des requêtes JSD
- * interceptées par ce session — sans ça, Chrome attend une réponse auth qui ne vient
- * jamais depuis cette session et la requête reste bloquée.
- *
- * La session auth principale (setupPageProxyAuth) couvre toutes les autres requêtes.
- * Les deux sessions répondent indépendamment aux 407 qu'elles voient.
- */
-async function setupJsdScriptRewriter(
-  page: Page,
-  creds: { username: string; password: string },
-  ts: number,
+  ts: number = 0,
 ): Promise<any> {
+  const JSD_PATTERN = /challenge-platform\/h\/g\/scripts\/jsd.*main\.js/;
   const client = await (page as any).createCDPSession();
-  await client.send("Fetch.enable", {
-    handleAuthRequests: true,
-    patterns: [{ urlPattern: "*challenge-platform/h/g/scripts/jsd*main.js*", requestStage: "Request" }],
-  });
+  // Pas de patterns : on intercepte TOUT pour gérer auth sur n'importe quelle requête.
+  // Les patterns filtrent Fetch.requestPaused mais PAS Fetch.authRequired — avoir des
+  // patterns sur une session avec handleAuthRequests:true ne résout pas le double-fire.
+  await client.send("Fetch.enable", { handleAuthRequests: true });
 
   client.on("Fetch.authRequired", async (event: any) => {
     const { requestId, authChallenge } = event;
@@ -175,17 +135,24 @@ async function setupJsdScriptRewriter(
 
   client.on("Fetch.requestPaused", async (event: any) => {
     const origUrl: string = event.request?.url ?? "";
-    const bustUrl = origUrl.includes("?")
-      ? `${origUrl.split("?")[0]}?_t=${ts}`
-      : `${origUrl}?_t=${ts}`;
-    console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
-    await client.send("Fetch.continueRequest", {
-      requestId: event.requestId,
-      url: bustUrl,
-    }).catch(() => {});
+    // Réécriture JSD cache-bust (uniquement si ts > 0 et URL correspond)
+    if (ts > 0 && JSD_PATTERN.test(origUrl)) {
+      const bustUrl = origUrl.includes("?")
+        ? `${origUrl.split("?")[0]}?_t=${ts}`
+        : `${origUrl}?_t=${ts}`;
+      console.log(`[spain-pb] 🔄 JSD script réécrit → …${bustUrl.slice(-55)} (cache-bust CDN nonce)`);
+      await client.send("Fetch.continueRequest", {
+        requestId: event.requestId,
+        url: bustUrl,
+      }).catch(() => {});
+    } else {
+      await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+    }
   });
 
-  console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé (nonce fraîche garantie depuis CF origin)`);
+  if (ts > 0) {
+    console.log(`[spain-pb] 🔧 JSD script CDN rewriter armé (nonce fraîche garantie depuis CF origin)`);
+  }
   return client;
 }
 
@@ -602,17 +569,13 @@ class SpainPersistentBrowserManager {
     if (proxyUrl) {
       const parsed = parseProxyForPuppeteer(proxyUrl);
       if (parsed) {
+        // IMPORTANT : Chrome ne supporte PAS les credentials dans l'URL --proxy-server
+        // (format http://user:pass@host:port → ERR_NO_SUPPORTED_PROXIES).
+        // Les credentials sont gérés par CDP Fetch.enable { handleAuthRequests: true }
+        // dans setupPageProxyAuth (sans patterns) + setupJsdScriptRewriter (avec patterns).
+        args.push(`--proxy-server=${parsed.server}`);
         if (parsed.username) {
-          // Embarquer les credentials directement dans l'URL --proxy-server.
-          // Chrome envoie alors Proxy-Authorization automatiquement sans 407 challenge.
-          // Cela contourne le problème CDP Fetch.enable { handleAuthRequests } qui ne
-          // fire pas authRequired de façon fiable dans Chrome v149+.
-          const u = encodeURIComponent(parsed.username);
-          const p = encodeURIComponent(parsed.password ?? "");
-          args.push(`--proxy-server=http://${u}:${p}@${parsed.server}`);
           proxyAuth = { username: parsed.username, password: parsed.password ?? "" };
-        } else {
-          args.push(`--proxy-server=${parsed.server}`);
         }
       }
     }
@@ -1649,8 +1612,8 @@ class SpainPersistentBrowserManager {
       console.warn(`[spain-pb] ⚠️ CDP setUserAgentOverride (non-fatal): ${cdpUAErr}`);
     }
 
-    // CDP Fetch handler proxy auth 407 — session dédiée sans patterns (voir commentaire setupPageProxyAuth).
-    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth);
+    // Session CDP unique : proxy auth 407 + réécriture cache-bust du script JSD (une seule session évite le double-fire Fetch.authRequired).
+    if (proxyAuth) await setupPageProxyAuth(page, proxyAuth, Date.now());
 
     // ── Intercepter window.turnstile.render pour capturer le sitekey ─────────
     // CF Managed Challenge avec render=explicit ne met JAMAIS data-sitekey dans
@@ -1892,16 +1855,8 @@ class SpainPersistentBrowserManager {
     //   Résultat : MÊME nonce périmée (ex: 1785906323, vieille d'1h) servie à toutes
     //   les IPs DC → JSD oneshot phantom → /main/ = 0B sur chaque tentative.
     //
-    // FIX nonce CDN périmée — session séparée avec handleAuthRequests: true
-    // pour que cette session gère aussi les 407 proxy des requêtes JSD qu'elle intercepte.
-    let cdpJsdScriptRewriter: any = null;
-    if (proxyAuth) {
-      try {
-        cdpJsdScriptRewriter = await setupJsdScriptRewriter(page, proxyAuth, Date.now());
-      } catch (err) {
-        console.warn(`[spain-pb] ⚠️ JSD script rewriter (non-fatal): ${err}`);
-      }
-    }
+    // Note : la réécriture JSD est déjà intégrée dans setupPageProxyAuth (ts > 0)
+    // appelé plus haut — pas de session séparée.
 
     // ── Étape 4 : Navigation → JSD s'exécute dans notre Chromium → cf_clearance ──
     //
@@ -2731,11 +2686,6 @@ class SpainPersistentBrowserManager {
         cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
         cdpJsdBlocker.detach().catch(() => {});
         cdpJsdBlocker = null;
-      }
-      if (cdpJsdScriptRewriter) {
-        cdpJsdScriptRewriter.send("Fetch.disable", {}).catch(() => {});
-        cdpJsdScriptRewriter.detach().catch(() => {});
-        cdpJsdScriptRewriter = null;
       }
       // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
       if (jsdOneShotResolve) jsdOneShotResolve();
