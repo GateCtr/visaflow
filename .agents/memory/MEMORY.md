@@ -25,3 +25,4 @@
 - [Spain multi-dossier parallel booking](spain-multidossier-parallel.md) — 2 bugs fixed: acquireBrowserBookingLock (full flow, not just DOM submit) + closeAndInvalidate on /main/ 0B (not invalidateSession); test confirmed 2026-07-30.
 - [CEV Overview page flow](cev-overview-flow.md) — /VOW/Overview Cas 1: "Nouveau rendez-vous" href=/Integration/VOW/SelectSlot → suivi direct; Cas 2: limit_reached; implémenté + testé VOWINT6323902.
 - [Spain portal constants](spain-portal-constants.md) — spain-portals.ts centralise Kinshasa/Saopolo keys; isBookititServiceRedirect rendu générique; test live Saopolo dans scripts/test-saopola-live.ts.
+- [Monorepo package installation](package-install.md) — restaurer tous les workspaces avec pnpm frozen-lockfile, jamais npm dans le package racine.
