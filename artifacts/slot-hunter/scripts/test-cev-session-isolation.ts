@@ -31,7 +31,11 @@
  *   CEV_TEST_VOWINT_A     Premier dossier  VOWINT ref (obligatoire)
  *   CEV_TEST_VOWINT_B     Deuxième dossier VOWINT ref (obligatoire)
  *   CEV_TEST_PROBE        "1" → tenter un pollCevSlot sur chaque session après isolation
- *   ANTICAPTCHA_API_KEY   Clé Anti-Captcha
+ *   CEV_TEST_HCAPTCHA     Token hCaptcha pré-résolu (optionnel) — injecté dans les deux setups
+ *                         → permet de tester l'isolation SANS résolveur captcha
+ *                         → obtenir sur : https://accounts.hcaptcha.com/demo?sitekey=5f64399c-14a8-415e-ad1a-7ebccdc4943a
+ *                            ou via le captcha-service local (port 3001)
+ *   ANTICAPTCHA_API_KEY   Clé Anti-Captcha (si pas de CEV_TEST_HCAPTCHA)
  *   CAPSOLVER_API_KEY     Clé CapSolver (alternative)
  *   SOAX_PROXY_URL        Proxy résidentiel (optionnel)
  */
@@ -40,14 +44,64 @@ import "dotenv/config";
 import { setupCevSessionHttp, invalidateVowintCache } from "../src/cevHttpSetup.js";
 import { pollCevSlot } from "../src/cevPolling.js";
 
+// ─── Captcha service local ─────────────────────────────────────────────────────
+
+const CEV_HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
+const CEV_HCAPTCHA_PAGE    = "https://appointment.cloud.diplomatie.be/Captcha";
+const CAPTCHA_SVC_PORT     = process.env.CAPTCHA_SVC_PORT ?? "3001";
+const CAPTCHA_SVC_KEY      = process.env.CAPTCHA_SERVICE_API_KEY ?? "";
+
+/** Résout un hCaptcha via le captcha-service local (localhost:3001).
+ *  Renvoie le token ou null si le service est indisponible. */
+async function solveViaCaptchaService(label: string): Promise<string | null> {
+  if (!CAPTCHA_SVC_KEY) {
+    console.log(`     [captcha-svc] CAPTCHA_SERVICE_API_KEY absent — skip`);
+    return null;
+  }
+  const url = `http://localhost:${CAPTCHA_SVC_PORT}/captcha/solve`;
+  console.log(`     [captcha-svc] ${label} → POST ${url}`);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": CAPTCHA_SVC_KEY,
+      },
+      body: JSON.stringify({
+        type:    "hcaptcha",
+        sitekey: CEV_HCAPTCHA_SITEKEY,
+        pageUrl: CEV_HCAPTCHA_PAGE,
+      }),
+      signal: AbortSignal.timeout(200_000),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.warn(`     [captcha-svc] HTTP ${res.status}: ${err.slice(0, 120)}`);
+      return null;
+    }
+    const data = await res.json() as { token?: string; error?: string };
+    if (!data.token) {
+      console.warn(`     [captcha-svc] Pas de token: ${JSON.stringify(data).slice(0, 120)}`);
+      return null;
+    }
+    console.log(`     [captcha-svc] ${label} ✅ token obtenu (len=${data.token.length}, provider=${(data as any).provider})`);
+    return data.token;
+  } catch (e) {
+    console.warn(`     [captcha-svc] Fetch échoué: ${e}`);
+    return null;
+  }
+}
+
 // ─── Configuration ─────────────────────────────────────────────────────────────
 
 const EMAIL      = process.env.CEV_TEST_EMAIL      ?? "";
 const PASSWORD   = process.env.CEV_TEST_PASSWORD   ?? "";
 const VOWINT_A   = (process.env.CEV_TEST_VOWINT_A  ?? "").toUpperCase().trim();
 const VOWINT_B   = (process.env.CEV_TEST_VOWINT_B  ?? "").toUpperCase().trim();
-const DO_PROBE   = process.env.CEV_TEST_PROBE      === "1";
-const CLIENT_ID  = `cev-isolation-test-${Date.now()}`;
+const DO_PROBE       = process.env.CEV_TEST_PROBE        === "1";
+const MANUAL_TOKEN_A = process.env.CEV_TEST_HCAPTCHA_A   ?? "";
+const MANUAL_TOKEN_B = process.env.CEV_TEST_HCAPTCHA_B   ?? "";
+const CLIENT_ID      = `cev-isolation-test-${Date.now()}`;
 
 // ─── Couleurs terminal ─────────────────────────────────────────────────────────
 
@@ -142,6 +196,52 @@ async function main() {
   invalidateVowintCache(EMAIL);
   info("Cache VOWINT invalidé — deux logins frais vont être émis");
 
+  // ─── PRÉ-RÉSOLUTION hCaptcha via captcha-service local ────────────────────
+  // Deux tokens distincts (single-use) : un par session.
+
+  section("PRÉ-RÉSOLUTION hCaptcha (captcha-service local port 3001)");
+
+  // Vérifier que le service est joignable
+  let svcAvailable = false;
+  try {
+    const health = await fetch(`http://localhost:${CAPTCHA_SVC_PORT}/health`, { signal: AbortSignal.timeout(3000) });
+    const hj = await health.json() as { status?: string; providers?: string[] };
+    svcAvailable = hj.status === "ok";
+    info(`Captcha service : ${svcAvailable ? "✅ joignable" : "⚠️ non joignable"} — providers=${JSON.stringify(hj.providers)}`);
+  } catch {
+    warn("Captcha service non joignable sur localhost:3001 — tentative Anti-Captcha directe en fallback");
+  }
+
+  let tokenA: string | undefined = MANUAL_TOKEN_A || undefined;
+  let tokenB: string | undefined = MANUAL_TOKEN_B || undefined;
+
+  if (tokenA && tokenB) {
+    ok(`Tokens manuels injectés via CEV_TEST_HCAPTCHA_A / B (bypass résolveur)`);
+  } else if (svcAvailable) {
+    info("Résolution de 2 tokens hCaptcha en parallèle via le service local...");
+    const tCap = Date.now();
+    const [tkA, tkB] = await Promise.all([
+      solveViaCaptchaService("Token-A"),
+      solveViaCaptchaService("Token-B"),
+    ]);
+    info(`Durée résolution captcha : ${Date.now() - tCap}ms`);
+    if (tkA && tkB) {
+      tokenA = tkA;
+      tokenB = tkB;
+      ok("Deux tokens hCaptcha pré-résolus — bypass solveHcaptcha() activé");
+    } else {
+      warn("Captcha service a échoué — fallback résolution directe dans setupCevSessionHttp");
+      warn("Si Anti-Captcha est injoignable depuis ce réseau, injecter les tokens manuellement :");
+      dim("  Ouvrir https://appointment.cloud.diplomatie.be/Captcha dans le navigateur");
+      dim("  Résoudre le captcha → copier le token de réponse depuis les DevTools (Network > SetCaptchaToken)");
+      dim("  Relancer avec : CEV_TEST_HCAPTCHA_A='token1' CEV_TEST_HCAPTCHA_B='token2' npx tsx ...");
+    }
+  } else {
+    warn("Captcha service non joignable → solveHcaptcha() interne");
+    warn("Si Anti-Captcha est injoignable depuis ce réseau, injecter les tokens manuellement :");
+    dim("  CEV_TEST_HCAPTCHA_A='...' CEV_TEST_HCAPTCHA_B='...' npx tsx scripts/test-cev-session-isolation.ts");
+  }
+
   // ─── PHASE 1 : Setup parallèle des deux sessions ──────────────────────────
 
   section("PHASE 1 — Setup parallèle (même email, deux VOWINT refs distincts)");
@@ -150,8 +250,8 @@ async function main() {
   const t0 = Date.now();
 
   const [resultA, resultB] = await Promise.allSettled([
-    setupCevSessionHttp(EMAIL, PASSWORD, VOWINT_A, CLIENT_ID, VOWINT_A, undefined),
-    setupCevSessionHttp(EMAIL, PASSWORD, VOWINT_B, CLIENT_ID, VOWINT_B, undefined),
+    setupCevSessionHttp(EMAIL, PASSWORD, VOWINT_A, CLIENT_ID, VOWINT_A, undefined, undefined, tokenA),
+    setupCevSessionHttp(EMAIL, PASSWORD, VOWINT_B, CLIENT_ID, VOWINT_B, undefined, undefined, tokenB),
   ]);
 
   const elapsedMs = Date.now() - t0;

@@ -624,6 +624,8 @@ export async function setupCevSessionHttp(
     validUntil?: number;
   },
   ipSlotId?: string,
+  /** Token hCaptcha pré-résolu — bypasse solveHcaptcha() entièrement (utile pour les tests) */
+  presolvedHcaptchaToken?: string,
 ): Promise<CevHttpSetupResult> {
   try {
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
@@ -901,33 +903,39 @@ export async function setupCevSessionHttp(
     botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie!.length, usingSiphoned: !!siphoned } });
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 5 : Résoudre hCaptcha
+    // ÉTAPE 5 : Résoudre hCaptcha (ou utiliser token pré-résolu)
     // ══════════════════════════════════════════════════════════════════════════
-    let hcaptchaToken;
-    try {
-      hcaptchaToken = await solveHcaptcha(clientId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // 🔥 DÉTECTION SPÉCIALE : ERREUR PROXY CONNECT REFUSED → ROTATION REQUISE
-      if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
-        botLog({ 
-          applicationId: clientId, 
-          step: "cev_http_proxy_connect_refused", 
-          status: "fail", 
-          data: { 
-            error: msg,
-            recommendation: "ROTATE_PROXY_IMMEDIATELY"
-          } 
-        });
-        return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
+    let hcaptchaToken: string | null = null;
+    if (presolvedHcaptchaToken) {
+      hcaptchaToken = presolvedHcaptchaToken;
+      console.log(`[CEV-SETUP] ⚡ Token hCaptcha pré-résolu injecté (bypass solveHcaptcha) — len=${hcaptchaToken.length}`);
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_presolved", status: "ok", data: { tokenLen: hcaptchaToken.length } });
+    } else {
+      try {
+        hcaptchaToken = await solveHcaptcha(clientId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // 🔥 DÉTECTION SPÉCIALE : ERREUR PROXY CONNECT REFUSED → ROTATION REQUISE
+        if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
+          botLog({ 
+            applicationId: clientId, 
+            step: "cev_http_proxy_connect_refused", 
+            status: "fail", 
+            data: { 
+              error: msg,
+              recommendation: "ROTATE_PROXY_IMMEDIATELY"
+            } 
+          });
+          return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
+        }
+        // Autre erreur
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg } });
+        return { success: false, error: "HCAPTCHA_FAILED" };
       }
-      // Autre erreur
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg } });
-      return { success: false, error: "HCAPTCHA_FAILED" };
-    }
-    
-    if (!hcaptchaToken) {
-      return { success: false, error: "HCAPTCHA_FAILED" };
+      
+      if (!hcaptchaToken) {
+        return { success: false, error: "HCAPTCHA_FAILED" };
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
