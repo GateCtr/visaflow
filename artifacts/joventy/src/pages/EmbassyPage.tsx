@@ -303,6 +303,31 @@ export default function EmbassyPage() {
           </section>
         )}
 
+        {/* ── ALERTE SCHENGEN (Schengen embassies CTA — hors Espagne) ── */}
+        {["ambassade-schengen-france-kinshasa", "ambassade-belgique-kinshasa"].includes(embassy.slug) && (
+          <section className="bg-gradient-to-br from-primary/5 via-blue-50 to-indigo-50 border border-primary/20 rounded-3xl p-8 sm:p-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <div className="text-5xl flex-shrink-0">📲</div>
+              <div className="flex-1">
+                <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Groupe WhatsApp privé · 10 USD à vie</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
+                  Vous souhaitez prendre votre créneau vous-même ?
+                </h2>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  Rejoignez notre groupe d'alertes privé et soyez notifié dès qu'un créneau apparaît sur TLScontact, BLS ou VFS Global — avec l'ambassade concernée, la plage horaire exacte et les conseils pour le capturer rapidement. France, Belgique, Allemagne, Pays-Bas et plus. Paiement unique 10 USD via Mobile Money, accès à vie.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/alerte-schengen">
+                    <Button className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 gap-2">
+                      Rejoindre le groupe d'alertes <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ── ALERTE ESPAGNE (Spain-only CTA) ── */}
         {embassy.slug === "ambassade-espagne-kinshasa" && (
           <section className="bg-gradient-to-br from-primary/5 via-blue-50 to-orange-50 border border-primary/20 rounded-3xl p-8 sm:p-10">

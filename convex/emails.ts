@@ -166,6 +166,122 @@ function urgentBanner(text: string): string {
   </table>`;
 }
 
+/* ─── ALERTE SCHENGEN — NOTIFICATION ADMIN (nouvelle commande) ─── */
+export const sendSchengenAlertNewOrderAdmin = internalAction({
+  args: {
+    orderId: v.string(),
+    name: v.string(),
+    email: v.string(),
+    phone: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const adminUrl = `${APP_URL}/admin/schengen-alerts`;
+    const rows =
+      info("Nom", escHtml(args.name)) +
+      info("Email", escHtml(args.email)) +
+      (args.phone ? info("Téléphone", escHtml(args.phone)) : "");
+
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🇪🇺 Nouvelle commande Alerte Schengen</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Un client vient de soumettre une preuve de paiement pour l'accès au groupe WhatsApp d'alerte créneaux Schengen (10 USD).</p>
+      ${infoTable(rows)}
+      ${cta(adminUrl, "Voir et confirmer la commande")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: getAdminEmail(),
+      subject: `🇪🇺 Nouvelle commande Alerte Schengen — ${escHtml(args.name)}`,
+      html: htmlWrapper("Nouvelle commande Alerte Schengen", body),
+    });
+  },
+});
+
+/* ─── ALERTE SCHENGEN — CONFIRMATION CLIENT (paiement validé) ─── */
+export const sendSchengenAlertConfirmed = internalAction({
+  args: {
+    to: v.string(),
+    name: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const groupUrl = process.env.SCHENGEN_ALERT_WHATSAPP_GROUP_URL ?? "#";
+    const adminWhatsapp = process.env.SCHENGEN_ALERT_ADMIN_WHATSAPP ?? process.env.SPAIN_ALERT_ADMIN_WHATSAPP ?? "";
+    const adminMsg = encodeURIComponent(
+      `Bonjour, je viens de rejoindre le groupe Alerte Schengen. Mon email de paiement : ${args.to}. Merci de valider mon accès au groupe.`
+    );
+    const adminWaUrl = adminWhatsapp
+      ? `https://wa.me/${adminWhatsapp.replace(/\D/g, "")}?text=${adminMsg}`
+      : "#";
+
+    const body = `
+      <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🎉 Accès confirmé — Groupe Alerte Schengen 🇪🇺</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">
+        Bonjour <strong>${escHtml(args.name)}</strong>,<br/><br/>
+        Votre paiement a été validé ! Voici vos accès — <strong>lisez attentivement les 2 étapes ci-dessous</strong>.
+      </p>
+
+      <!-- ÉTAPE 1 : Rejoindre le groupe -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#166534;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 1 — Rejoindre le groupe WhatsApp</p>
+            <p style="margin:0 0 14px;color:#15803d;font-size:15px;line-height:1.7;">Cliquez sur le lien ci-dessous pour intégrer le groupe. L'accès est <strong>à vie</strong> — ne partagez pas ce lien.</p>
+            ${cta(groupUrl, "Rejoindre le groupe 🇪🇺")}
+          </td>
+        </tr>
+      </table>
+
+      <!-- ÉTAPE 2 : Contacter l'admin -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr>
+          <td style="background:#fefce8;border:1.5px solid #fbbf24;border-radius:12px;padding:22px 24px;">
+            <p style="margin:0 0 10px;color:#92400e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;">Étape 2 — Obligatoire : Envoyer un message à l'admin</p>
+            <p style="margin:0 0 14px;color:#78350f;font-size:15px;line-height:1.7;">
+              ⚠️ <strong>Après avoir rejoint le groupe</strong>, envoyez ce message à l'admin WhatsApp pour que votre accès soit approuvé dans le groupe.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+              <tr>
+                <td style="background:#0f172a;border-radius:8px;padding:14px 16px;">
+                  <p style="margin:0;font-family:monospace;font-size:13px;color:#86efac;line-height:1.8;">
+                    Bonjour, je viens de rejoindre le groupe Alerte Schengen.<br/>
+                    Mon email de paiement : ${escHtml(args.to)}<br/>
+                    Merci de valider mon accès au groupe.
+                  </p>
+                </td>
+              </tr>
+            </table>
+            ${cta(adminWaUrl, "Envoyer le message à l'admin WhatsApp →")}
+          </td>
+        </tr>
+      </table>
+
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px 24px;">
+            <p style="margin:0 0 12px;color:#0f172a;font-size:14px;font-weight:700;">📲 Ce que vous recevrez dans le groupe :</p>
+            <ul style="margin:0;padding-left:18px;color:#475569;font-size:14px;line-height:2;">
+              <li>Alertes créneaux en temps réel (ambassade + plage horaire exacte)</li>
+              <li>Conseils pratiques pour capturer un créneau rapidement (TLScontact, BLS, VFS)</li>
+              <li>Partage des créneaux manqués entre membres</li>
+              <li>France 🇫🇷, Belgique 🇧🇪, Allemagne 🇩🇪, Pays-Bas 🇳🇱, Italie 🇮🇹 et plus</li>
+            </ul>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.7;">
+        Cet accès est strictement personnel et non transférable. Tout partage du lien entraîne la révocation immédiate de l'accès.
+      </p>
+    `;
+
+    await sendEmail({
+      from: FROM,
+      to: args.to,
+      subject: "🇪🇺 Accès confirmé — Groupe Alerte Rendez-vous Schengen",
+      html: htmlWrapper("Accès Alerte Schengen confirmé", body),
+    });
+  },
+});
+
 /* ─── ALERTE ESPAGNE — NOTIFICATION ADMIN (nouvelle commande) ─── */
 export const sendSpainAlertNewOrderAdmin = internalAction({
   args: {

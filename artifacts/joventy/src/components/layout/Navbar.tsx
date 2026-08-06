@@ -94,6 +94,16 @@ export function Navbar() {
             >
               🇪🇸 Alerte Espagne
             </Link>
+            <Link
+              href="/alerte-schengen"
+              className={`text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                solid
+                  ? "text-primary hover:text-primary/80"
+                  : "text-secondary hover:text-orange-300"
+              }`}
+            >
+              🇪🇺 Alerte Schengen
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -212,6 +222,11 @@ export function Navbar() {
           <Link href="/alerte-espagne" onClick={close}>
             <span className="block px-6 py-4 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors">
               🇪🇸 Alerte Espagne
+            </span>
+          </Link>
+          <Link href="/alerte-schengen" onClick={close}>
+            <span className="block px-6 py-4 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors">
+              🇪🇺 Alerte Schengen
             </span>
           </Link>
         </nav>

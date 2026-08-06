@@ -24,6 +24,7 @@ import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as relay from "../relay.js";
 import type * as reviews from "../reviews.js";
+import type * as schengenAlert from "../schengenAlert.js";
 import type * as slotBroadcast from "../slotBroadcast.js";
 import type * as slotDiscoveries from "../slotDiscoveries.js";
 import type * as slotFoundHelper from "../slotFoundHelper.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   relay: typeof relay;
   reviews: typeof reviews;
+  schengenAlert: typeof schengenAlert;
   slotBroadcast: typeof slotBroadcast;
   slotDiscoveries: typeof slotDiscoveries;
   slotFoundHelper: typeof slotFoundHelper;

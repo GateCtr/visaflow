@@ -61,6 +61,8 @@ const staticEntries: SitemapEntry[] = [
   { loc: `${SITE}/guides`, changefreq: "daily", priority: "0.8" },
   { loc: `${SITE}/prix`, changefreq: "monthly", priority: "0.8" },
   { loc: `${SITE}/audit-diagnostic`, changefreq: "monthly", priority: "0.8" },
+  { loc: `${SITE}/alerte-espagne`, changefreq: "weekly", priority: "0.85" },
+  { loc: `${SITE}/alerte-schengen`, changefreq: "weekly", priority: "0.85" },
   { loc: `${SITE}/a-propos`, changefreq: "monthly", priority: "0.7" },
   { loc: `${SITE}/mentions-legales`, changefreq: "yearly", priority: "0.3" },
   { loc: `${SITE}/confidentialite`, changefreq: "yearly", priority: "0.3" },

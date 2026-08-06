@@ -29,6 +29,7 @@ import EmbassiesIndex from "@/pages/EmbassiesIndex";
 import EmbassyPage from "@/pages/EmbassyPage";
 
 import AlerteEspagne from "@/pages/AlerteEspagne";
+import AlerteSchengen from "@/pages/AlerteSchengen";
 import Prix from "@/pages/Prix";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
@@ -48,6 +49,7 @@ import ClientMessages from "@/pages/client/Messages";
 import MyContract from "@/pages/client/MyContract";
 
 import SpainAlerts from "@/pages/admin/SpainAlerts";
+import SchengenAlerts from "@/pages/admin/SchengenAlerts";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminApplications from "@/pages/admin/Applications";
 import AdminApplicationDetail from "@/pages/admin/application-detail/index";
@@ -170,8 +172,9 @@ function Router() {
       <Route path="/ambassade-chine-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-bresil-kinshasa" component={EmbassyPage} />
 
-      {/* Alerte Espagne */}
+      {/* Alertes */}
       <Route path="/alerte-espagne" component={AlerteEspagne} />
+      <Route path="/alerte-schengen" component={AlerteSchengen} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
@@ -252,6 +255,9 @@ function Router() {
       </Route>
       <Route path="/admin/spain-alerts">
         {() => <ProtectedRoute adminOnly component={SpainAlerts} />}
+      </Route>
+      <Route path="/admin/schengen-alerts">
+        {() => <ProtectedRoute adminOnly component={SchengenAlerts} />}
       </Route>
 
       <Route component={NotFound} />

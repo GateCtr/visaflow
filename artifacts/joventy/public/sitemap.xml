@@ -111,6 +111,14 @@
     <priority>0.85</priority>
   </url>
 
+  <!-- Alerte Rendez-vous Schengen (conversion page) -->
+  <url>
+    <loc>https://joventy.cd/alerte-schengen</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
   <!-- Embassies index -->
   <url>
     <loc>https://joventy.cd/ambassades</loc>

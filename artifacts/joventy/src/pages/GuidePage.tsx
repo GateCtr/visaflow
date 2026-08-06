@@ -435,6 +435,7 @@ export default function GuidePage() {
                 <li><Link href="/" className="hover:text-white transition-colors">Accueil</Link></li>
                 <li><Link href="/guides" className="hover:text-white transition-colors">Guides</Link></li>
                 <li><Link href="/alerte-espagne" className="hover:text-white transition-colors">🇪🇸 Alerte Espagne</Link></li>
+                <li><Link href="/alerte-schengen" className="hover:text-white transition-colors">🇪🇺 Alerte Schengen</Link></li>
                 <li><Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link></li>
                 <li><a href="https://wa.me/243840808122" className="hover:text-white transition-colors">WhatsApp</a></li>
               </ul>
