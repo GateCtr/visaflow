@@ -223,29 +223,65 @@ function mergeSetCookies(headers: Headers, jar: Map<string, string>): void {
 
 async function impitFetch(
   url: string,
-  proxyUrl: string,
+  impit: InstanceType<typeof Impit>,
   jar: Map<string, string>,
   userAgent: string,
   referer: string,
   method: "GET" | "POST" = "GET",
   body?: string,
+  mode: "navigate" | "jsonp" | "form" = "navigate",
 ): Promise<{ status: number; body: string; ct: string; headers: Headers }> {
-  const impit = new Impit({ browser: "chrome", proxyUrl } as any);
+
+  // ── Headers selon le mode (Bug S1 — Burp 2026-06-25) ──────────────────────
+  // JSONP = jQuery XHR → Sec-Fetch-Mode:cors, Sec-Fetch-Dest:empty
+  // navigate = navigation normale → Sec-Fetch-Mode:navigate, Dest:document
+  const secFetch: Record<string, string> = mode === "jsonp"
+    ? {
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      }
+    : mode === "navigate"
+    ? {
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      }
+    : {
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      };
+
+  // ── sec-ch-ua hints (Bug S2 — CF envoie Accept-CH, Chrome répond vides) ───
+  const chHints: Record<string, string> = {
+    "Sec-Ch-Ua-Platform-Version": '""',
+    "Sec-Ch-Ua-Full-Version": '""',
+    "Sec-Ch-Ua-Full-Version-List": '""',
+    "Sec-Ch-Ua-Arch": '""',
+    "Sec-Ch-Ua-Bitness": '""',
+    "Sec-Ch-Ua-Model": '""',
+  };
+
   const res = await impit.fetch(url, {
     method,
     headers: {
-      "Cookie":           buildCookieHeader(jar),
-      "User-Agent":       userAgent,
-      "Referer":          referer,
-      "Accept":           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      ...(method === "GET"
-        ? { "Accept": "*/*", "X-Requested-With": "XMLHttpRequest" }
-        : { "Content-Type": "application/x-www-form-urlencoded" }),
+      "Cookie":     buildCookieHeader(jar),
+      "User-Agent": userAgent,
+      "Referer":    referer,
+      ...secFetch,
+      ...chHints,
     },
     ...(body ? { body } : {}),
   } as any);
   const text = await res.text();
-  // Merge any Set-Cookie back into the jar
   mergeSetCookies(res.headers, jar);
   return { status: res.status, body: text, ct: res.headers.get("content-type") ?? "", headers: res.headers };
 }
@@ -271,28 +307,99 @@ async function main() {
   if (!API_KEY) throw new Error("CAPSOLVER_API_KEY manquant");
   const proxyUrl = getProxy();
 
+  // ── Instance impit UNIQUE pour toute la session ──────────────────────────────
+  // Une seule instance = une seule session TLS → CF accepte le cf_clearance sur
+  // tous les appels suivants (le fingerprint TLS reste cohérent).
+  const impit = new Impit({ browser: "chrome", proxyUrl } as any);
+
   // ── Étape 1 : Solve CF ──────────────────────────────────────────────────────
   const { cfClearance, userAgent, allCookies } = await solveWithCapsolver(proxyUrl);
 
   const jar = buildJar(cfClearance, allCookies);
   const ua  = userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-  info(`Cookies jar initiaux : ${[...jar.keys()].join(", ")}`);
+
+  // ── Cookies dans l'ordre exact du Burp 2026-06-25 ──────────────────────────
+  // Ordre obligatoire : _ga ; _ga_F3TYSDL945 ; PHPSESSID ; cf_clearance (en dernier)
+  // CF pose cf_clearance lui-même en dernier → le browser l'envoie en dernier.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const rnd9   = Math.floor(100_000_000 + Math.random() * 900_000_000);
+  const pastTs = nowSec - Math.floor(Math.random() * 30 * 86400);
+  const gaVal  = `GA1.1.${rnd9}.${pastTs}`;
+  const ga4Val = `GS2.1.s${nowSec}$o1$g0$t${nowSec}$j60$l0$h0`;
+
+  // Jar initial = GA only (pas encore de PHPSESSID ni cf_clearance)
+  // cf_clearance sera ajouté EN DERNIER après que PHPSESSID soit connu.
+  jar.clear();
+  jar.set("_ga",            gaVal);
+  jar.set("_ga_F3TYSDL945", ga4Val);
+  // Pour le GET portail on ajoute cf_clearance temporairement, puis on le retire pour le remettre en dernier
+  info(`Cookies jar initiaux : _ga, _ga_F3TYSDL945 (cf_clearance + PHPSESSID ajoutés après portail)`);
 
   // ── Étape 1b : GET portail → PHPSESSID ──────────────────────────────────────
-  // CapSolver retourne seulement cf_clearance. PHPSESSID est émis par Bookitit
-  // quand on charge le portail widget avec le cf_clearance valide.
+  // Envoi : _ga + _ga_F3 + cf_clearance (nécessaire pour passer CF)
+  // Après réponse : reconstruire le jar dans l'ordre exact Burp :
+  //   _ga ; _ga_F3TYSDL945 ; PHPSESSID ; cf_clearance (CF en dernier)
   sep("ÉTAPE 1b — GET portail → PHPSESSID (même proxy)");
   info(`GET ${PORTAL_URL}`);
-  const t1b = Date.now();
-  const portalResult = await impitFetch(PORTAL_URL, proxyUrl, jar, ua, "https://www.citaconsular.es/");
-  info(`Status : ${portalResult.status} | ${portalResult.body.length}B | ct=${portalResult.ct} | ${elapsed(Date.now()-t1b)}`);
-  info(`Cookies jar après portail : ${[...jar.keys()].join(", ")}`);
 
-  if (jar.has("PHPSESSID")) {
-    ok(`PHPSESSID obtenu : ${jar.get("PHPSESSID")!.slice(0, 20)}…`);
+  // Ajouter cf_clearance temporairement pour passer CF sur le GET portail
+  jar.set("cf_clearance", cfClearance);
+  const t1b = Date.now();
+  const portalResult = await impitFetch(PORTAL_URL, impit, jar, ua, "https://www.citaconsular.es/", "GET", undefined, "navigate");
+  info(`Status : ${portalResult.status} | ${portalResult.body.length}B | ct=${portalResult.ct} | ${elapsed(Date.now()-t1b)}`);
+
+  const phpSessId = jar.get("PHPSESSID") ?? "";
+  if (phpSessId) {
+    ok(`PHPSESSID obtenu : ${phpSessId.slice(0, 20)}…`);
   } else {
     warn("PHPSESSID absent — le portail n'a peut-être pas chargé correctement");
     info(`Corps (200c) : ${portalResult.body.slice(0, 200)}`);
+  }
+
+  // ── Reconstruire le jar dans l'ordre exact Burp ─────────────────────────────
+  jar.clear();
+  jar.set("_ga",            gaVal);
+  jar.set("_ga_F3TYSDL945", ga4Val);
+  if (phpSessId) jar.set("PHPSESSID", phpSessId);
+  jar.set("cf_clearance", cfClearance); // en dernier ← ordre CF
+  info(`Cookies jar (ordre final) : ${[...jar.keys()].join(", ")}`);
+
+  // ── Étape 1c : POST portail avec le token Bookitit → initialiser session ───
+  // Le portail Bookitit affiche une page "Continue / Continuar" avec un token
+  // hidden dans un formulaire. Le PHP attend ce POST pour marquer la session
+  // comme "initialisée". Sans ça, getservices/ renvoie 0B.
+  sep("ÉTAPE 1c — POST portail avec token Bookitit (Continue / Continuar)");
+
+  // Extraire le token depuis le HTML du portail
+  const tokenMatch = portalResult.body.match(
+    /<input[^>]*name=["']token["'][^>]*value=["']([^"']+)["']/
+  ) ?? portalResult.body.match(
+    /name="token"\s+value="([^"]+)"/
+  ) ?? portalResult.body.match(
+    /value="([a-f0-9]{30,40})"/
+  );
+
+  if (!tokenMatch) {
+    warn("Token Bookitit introuvable dans le HTML du portail");
+    info(`HTML extrait : ${portalResult.body.slice(0, 500)}`);
+  } else {
+    const bookititToken = tokenMatch[1];
+    ok(`Token Bookitit extrait : ${bookititToken}`);
+
+    const postBody = `token=${encodeURIComponent(bookititToken)}`;
+    const t1c = Date.now();
+    const postResult = await impitFetch(
+      PORTAL_URL, impit, jar, ua, PORTAL_URL,
+      "POST", postBody, "form"
+    );
+    info(`Status : ${postResult.status} | ${postResult.body.length}B | ct=${postResult.ct} | ${elapsed(Date.now()-t1c)}`);
+    info(`Cookies jar après POST : ${[...jar.keys()].join(", ")}`);
+
+    info(`POST token → ${postResult.body.length}B`);
+    // Afficher le HTML complet du POST response pour comprendre l'état suivant
+    console.log("\n--- POST RESPONSE BODY ---");
+    console.log(postResult.body);
+    console.log("--- FIN POST RESPONSE ---\n");
   }
 
   const ts = `${Date.now()}`;
@@ -305,8 +412,9 @@ async function main() {
   info(`Cookies envoyés : ${[...jar.keys()].join(", ")}`);
 
   const t2 = Date.now();
-  const mainResult = await impitFetch(mainUrl, proxyUrl, jar, ua, PORTAL_URL);
+  const mainResult = await impitFetch(mainUrl, impit, jar, ua, PORTAL_URL, "GET", undefined, "jsonp");
   info(`Status : ${mainResult.status} | ${mainResult.body.length}B | ct=${mainResult.ct} | ${elapsed(Date.now()-t2)}`);
+  info(`Cookies jar après /main/ : ${[...jar.keys()].join(", ")}`);
 
   if (mainResult.body.length === 0) {
     fail("/main/ → 0B (CF ou PHPSESSID invalide)");
@@ -317,14 +425,69 @@ async function main() {
   } else {
     ok(`/main/ → ${mainResult.body.length}B (${mainResult.ct})`);
     info(`Extrait : ${mainResult.body.slice(0, 150)}…`);
+
+    // ── Parser le corps de /main/ ──────────────────────────────────────────────
+    sep("PARSE /main/ — contenu embarqué");
+    const mainBody = mainResult.body;
+
+    // 1. oClientValues_<id> global config
+    const oClientMatch = mainBody.match(/var (oClientValues_\d+)\s*=\s*(\{[\s\S]*?\})\s*[;\n]/);
+    if (oClientMatch) {
+      ok(`oClientValues trouvé : ${oClientMatch[1]}`);
+      try {
+        const cfg = JSON.parse(oClientMatch[2]);
+        info(`  widgetconfiguration.captcha  = ${cfg.widgetconfiguration?.captcha}`);
+        info(`  widgetconfiguration.reg_type = ${cfg.widgetconfiguration?.registration_type}`);
+        info(`  waiting_list                 = ${cfg.widgetconfiguration?.waiting_list}`);
+        info(`  widgetcustom présent         = ${!!cfg.widgetcustom}`);
+      } catch { warn("parse oClientValues JSON échoué"); }
+    } else {
+      warn("oClientValues non trouvé dans /main/");
+    }
+
+    // 2. Services embarqués (format JSON dans les templates Backbone)
+    const serviceIds: string[] = [];
+    const serviceRe = /"id"\s*:\s*"(\d{3,8})"\s*,\s*"name"\s*:\s*"([^"]{1,100})"/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = serviceRe.exec(mainBody)) !== null) {
+      serviceIds.push(sm[1]);
+      const name = sm[2].replace(/<[^>]*>/g, "").trim().slice(0, 60);
+      console.log(`       🔹 Service id=${sm[1]} | ${name}`);
+    }
+    if (serviceIds.length > 0) ok(`${serviceIds.length} service(s) trouvé(s) dans /main/`);
+    else warn("Aucun service embarqué dans /main/ (getservices/ requis)");
+
+    // 3. "No hay horas" / "No hay citas" — signal de scan
+    const noHoras = /no hay horas|no_hours|no hay citas disponibles|No dates available/i.test(mainBody);
+    if (noHoras) ok("Signal 'No hay horas' présent → scanner fonctionnel");
+    else         info("Signal 'No hay horas' absent (peut signifier des créneaux dispo ou template non chargé)");
+
+    // 4. Agendas embarqués
+    const agendaRe = /"idAgenda"\s*:\s*"?(\d{3,8})"?/g;
+    const agendaIds: string[] = [];
+    let am: RegExpExecArray | null;
+    while ((am = agendaRe.exec(mainBody)) !== null) agendaIds.push(am[1]);
+    if (agendaIds.length > 0) ok(`${agendaIds.length} agenda(s) trouvé(s) : ${[...new Set(agendaIds)].slice(0,5).join(", ")}`);
+    else info("Pas d'agenda embarqué dans /main/");
+
+    // 5. Cookie order check — CF behavioral scoring attend _ga en premier
+    const cookiesSent = buildCookieHeader(jar);
+    const gaFirst = cookiesSent.startsWith("_ga=");
+    if (!gaFirst) warn(`Cookie order : ${cookiesSent.slice(0,60)}… — CF attend _ga en premier`);
+    else ok("Cookie order correct (_ga en premier)");
   }
 
   // ── Étape 3 : getwidgetconfigurations/ ──────────────────────────────────────
-  sep("ÉTAPE 3 — getwidgetconfigurations/");
+  // Bug S4 : companions arrivent ~3s après /main/ (GTM doit charger d'abord)
+  sep("ÉTAPE 3 — getwidgetconfigurations/ (délai ~3s comme navigateur réel)");
+  const delay3s = 2800 + Math.floor(Math.random() * 800); // 2800–3600ms
+  info(`Attente ${delay3s}ms (GTM load)…`);
+  await new Promise(r => setTimeout(r, delay3s));
+
   const cfgCb  = `jQuery_cfg_${ts}`;
   const cfgUrl = `${BASE_BOOK}getwidgetconfigurations/?callback=${cfgCb}&type=default&publickey=${WIDGET_KEY}&lang=es&version=4&src=${encodeURIComponent(PORTAL_URL)}&_=${ts}`;
   const t3 = Date.now();
-  const cfgResult = await impitFetch(cfgUrl, proxyUrl, jar, ua, PORTAL_URL);
+  const cfgResult = await impitFetch(cfgUrl, impit, jar, ua, PORTAL_URL, "GET", undefined, "jsonp");
   info(`Status : ${cfgResult.status} | ${cfgResult.body.length}B | ${elapsed(Date.now()-t3)}`);
   const cfgParsed = parseJsonp(cfgResult.body) as any;
   if (cfgParsed?.WidgetConfiguration) {
@@ -337,11 +500,13 @@ async function main() {
   }
 
   // ── Étape 4 : getservices/ ───────────────────────────────────────────────────
-  sep("ÉTAPE 4 — getservices/");
+  // Bug S4 : getservices/ arrive 9ms après getwidgetconfigurations/
+  sep("ÉTAPE 4 — getservices/ (9ms après getwidgetconfigurations/)");
+  await new Promise(r => setTimeout(r, 9));
   const svcCb  = `jQuery_svc_${ts}`;
   const svcUrl = `${BASE_BOOK}getservices/?callback=${svcCb}&type=default&publickey=${WIDGET_KEY}&lang=es&version=4&src=${encodeURIComponent(PORTAL_URL)}&_=${ts}`;
   const t4 = Date.now();
-  const svcResult = await impitFetch(svcUrl, proxyUrl, jar, ua, PORTAL_URL);
+  const svcResult = await impitFetch(svcUrl, impit, jar, ua, PORTAL_URL, "GET", undefined, "jsonp");
   info(`Status : ${svcResult.status} | ${svcResult.body.length}B | ct=${svcResult.ct} | ${elapsed(Date.now()-t4)}`);
 
   let serviceId = "";
@@ -370,7 +535,7 @@ async function main() {
     const agCb  = `jQuery_ag_${ts}`;
     const agUrl = `${BASE_BOOK}getagendas/?callback=${agCb}&type=default&publickey=${WIDGET_KEY}&lang=es&version=4&src=${encodeURIComponent(PORTAL_URL)}&services%5B%5D=${serviceId}&_=${ts}`;
     const t5 = Date.now();
-    const agResult = await impitFetch(agUrl, proxyUrl, jar, ua, PORTAL_URL);
+    const agResult = await impitFetch(agUrl, impit, jar, ua, PORTAL_URL, "GET", undefined, "jsonp");
     info(`Status : ${agResult.status} | ${agResult.body.length}B | ct=${agResult.ct} | ${elapsed(Date.now()-t5)}`);
 
     const agParsed = parseJsonp(agResult.body) as any;
