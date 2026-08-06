@@ -11,9 +11,11 @@
  *   6. Résultat final : found / not_found / error / cf_blocked
  *
  * ─── Usage standard (headless) ───────────────────────────────────────────────
- *   SPAIN_HTTP_MODE=1 npx tsx src/scripts/test-saopola-live.ts
+ *   cd artifacts/slot-hunter
+ *   npx tsx src/scripts/test-saopola-live.ts
  *
  * ─── Usage avec navigateur visible (mode démo) ───────────────────────────────
+ *   cd artifacts/slot-hunter                              ← toujours ce dossier
  *   npx tsx src/scripts/test-saopola-live.ts --headed
  *   # ou via env var :
  *   SPAIN_HEADED=1 npx tsx src/scripts/test-saopola-live.ts
