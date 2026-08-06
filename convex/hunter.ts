@@ -59,6 +59,7 @@ export const setHunterConfig = mutation({
     // CEV Dossier Loop v3 - Multi-comptes
     cevDossierPool: v.optional(v.string()),
     cevDossierExclude: v.optional(v.string()),
+    cevBookingTargetPool: v.optional(v.string()),
     cevUseProxy: v.optional(v.boolean()),
     cevScanIntervalSec: v.optional(v.number()),
     // Group booking — min places libres requises par créneau
@@ -99,6 +100,7 @@ export const setHunterConfig = mutation({
       // CEV Dossier Loop v3 - Multi-comptes
       cevDossierPool?: string;
       cevDossierExclude?: string;
+      cevBookingTargetPool?: string;
       cevUseProxy?: boolean;
       cevScanIntervalSec?: number;
     } }).hunterConfig;
@@ -152,6 +154,7 @@ export const setHunterConfig = mutation({
         // CEV Dossier Loop v3 - Multi-comptes
         cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
         cevDossierExclude: args.cevDossierExclude || existing?.cevDossierExclude || undefined,
+        cevBookingTargetPool: args.cevBookingTargetPool || existing?.cevBookingTargetPool || undefined,
         cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
         cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
       },

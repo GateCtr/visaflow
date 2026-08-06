@@ -96,6 +96,8 @@ const hunterConfig = v.object({
   // Pool de dossiers VOWINT pour ce compte (ex: "VOWINT1,VOWINT2,VOWINT3")
   // Si vide, utilise vowintAppId comme seul dossier
   cevDossierPool: v.optional(v.string()),
+  // Dossiers qui tentent le booking quand un créneau est détecté (vide = tous les dossiers du pool)
+  cevBookingTargetPool: v.optional(v.string()),
   // Activer/désactiver proxy pour ce compte (hérite de la config globale si null)
   cevUseProxy: v.optional(v.boolean()),
   // Intervalle de scan personnalisé (secondes, défaut: 225 = 3min45)

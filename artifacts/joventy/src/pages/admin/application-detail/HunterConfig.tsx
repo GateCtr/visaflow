@@ -44,6 +44,7 @@ interface HunterConfigData {
   // CEV Dossier Loop v3 - Multi-comptes
   cevDossierPool?: string;
   cevDossierExclude?: string;
+  cevBookingTargetPool?: string;
   cevUseProxy?: boolean;
   cevScanIntervalSec?: number;
   // Group booking
@@ -100,6 +101,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   // CEV Dossier Loop v3 - Multi-comptes
   const [cevDossierPool, setCevDossierPool] = useState("");
   const [cevDossierExclude, setCevDossierExclude] = useState("");
+  const [cevBookingTargetPool, setCevBookingTargetPool] = useState("");
   const [cevUseProxy, setCevUseProxy] = useState(false);
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
   // Group booking
@@ -144,6 +146,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       // CEV Dossier Loop v3 - Multi-comptes
       setCevDossierPool(hc.cevDossierPool ?? "");
       setCevDossierExclude(hc.cevDossierExclude ?? "");
+      setCevBookingTargetPool(hc.cevBookingTargetPool ?? "");
       setCevUseProxy(hc.cevUseProxy ?? false);
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
       // Group booking
@@ -177,7 +180,9 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         blindBookingEnabled: blindBooking, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined, cevUseProxy: cevUseProxy,
+        cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined,
+        cevBookingTargetPool: cevBookingTargetPool || undefined,
+        cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
         // Group booking
         groupSize: groupSize ? Number(groupSize) : undefined,
@@ -334,7 +339,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
                   className="h-9 bg-white text-sm font-mono"
                 />
               </Field>
-              <Field label="Dossiers à ignorer">
+              <Field label="Dossiers à ignorer (scan)">
                 <Input
                   value={cevDossierExclude}
                   onChange={(e) => setCevDossierExclude(e.target.value)}
@@ -344,6 +349,23 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
                 {cevDossierExclude && (
                   <p className="text-[10px] text-amber-700 mt-1">
                     {cevDossierExclude.split(",").filter(Boolean).length} dossier(s) exclu(s) du scan
+                  </p>
+                )}
+              </Field>
+              <Field label="Dossiers qui bookent (optionnel)">
+                <Input
+                  value={cevBookingTargetPool}
+                  onChange={(e) => setCevBookingTargetPool(e.target.value)}
+                  placeholder="VOWINT1,VOWINT2 — vide = tous les dossiers du pool tentent le booking"
+                  className="h-9 bg-white text-sm font-mono"
+                />
+                {cevBookingTargetPool ? (
+                  <p className="text-[10px] text-indigo-700 mt-1">
+                    Quand un créneau est trouvé, seuls ces {cevBookingTargetPool.split(",").filter(Boolean).length} dossier(s) ouvrent une session isolée pour booker
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Vide = tous les dossiers du pool concourent (chacun avec session isolée)
                   </p>
                 )}
               </Field>
