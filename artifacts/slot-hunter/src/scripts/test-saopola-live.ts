@@ -10,16 +10,43 @@
  *   5. datetime/ → créneaux disponibles par mois
  *   6. Résultat final : found / not_found / error / cf_blocked
  *
- * Usage :
- *   SPAIN_HTTP_MODE=1 tsx src/scripts/test-saopola-live.ts
+ * ─── Usage standard (headless) ───────────────────────────────────────────────
+ *   SPAIN_HTTP_MODE=1 npx tsx src/scripts/test-saopola-live.ts
  *
- * Prérequis env vars :
+ * ─── Usage avec navigateur visible (mode démo) ───────────────────────────────
+ *   npx tsx src/scripts/test-saopola-live.ts --headed
+ *   # ou via env var :
+ *   SPAIN_HEADED=1 npx tsx src/scripts/test-saopola-live.ts
+ *
+ *   Options additionnelles en mode headed :
+ *   --slow-mo=120    Ralentir les interactions à 120ms (défaut : 60)
+ *   --devtools       Ouvrir les DevTools automatiquement
+ *   SPAIN_SESSION_MODE=persistent-browser   (défaut en mode headed)
+ *
+ * ─── Prérequis env vars ───────────────────────────────────────────────────────
  *   DECODO_PROXY_URL    — URL proxy Decodo ISP (ex: http://user:pass@dc.decodo.com:10000)
  *   CAPSOLVER_API_KEY   — Clé CapSolver pour résoudre le Turnstile CF
  *   REDIS_URL           — (optionnel) Persistance session CF entre runs
+ *
+ *   → Voir DEMO.md pour la procédure complète de clonage + lancement local.
  */
 
 import "dotenv/config";
+
+// ─── Parsing des flags CLI ─────────────────────────────────────────────────────
+// --headed, --slow-mo=N, --devtools peuvent être passés directement en ligne de cmd
+const argv = process.argv.slice(2);
+const isHeadedArg   = argv.includes("--headed");
+const isDevtoolsArg = argv.includes("--devtools");
+const slowMoArg     = argv.find(a => a.startsWith("--slow-mo="));
+const slowMoVal     = slowMoArg ? slowMoArg.split("=")[1] : undefined;
+
+if (isHeadedArg)   process.env.SPAIN_HEADED   = "1";
+if (isDevtoolsArg) process.env.SPAIN_DEVTOOLS = "1";
+if (slowMoVal)     process.env.SPAIN_SLOW_MO  = slowMoVal;
+
+const DEMO_MODE = process.env.SPAIN_HEADED === "1";
+
 import { SAOPOLO_PORTAL_URL, SAOPOLO_WIDGET_KEY } from "../spain-portals.js";
 import { runSpainHttpProbe, scanSpainHttp } from "../spain-http-scanner.js";
 import { ensureSpainCfSession, spainCfFetch, getActiveSpainCfSession } from "../spain-soax-solver.js";
@@ -29,6 +56,10 @@ import { spainPersistentBrowser } from "../spain-persistent-browser.js";
 // ─── Forcer le mode HTTP ──────────────────────────────────────────────────────
 // Nécessaire pour que ensureSpainCfSession / spainCfFetch soient actifs.
 process.env.SPAIN_HTTP_MODE = "1";
+// En mode headed, on utilise toujours le browser persistant (pas impit HTTP pur)
+if (DEMO_MODE && !process.env.SPAIN_SESSION_MODE) {
+  process.env.SPAIN_SESSION_MODE = "persistent-browser";
+}
 
 const PORTAL_URL = process.env.SAOPOLO_PORTAL_URL ?? SAOPOLO_PORTAL_URL;
 const WIDGET_KEY  = SAOPOLO_WIDGET_KEY;
@@ -75,10 +106,23 @@ function parseJsonp(raw: string): unknown {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
+
+  // ── Bannière mode démo ──────────────────────────────────────────────────────
+  if (DEMO_MODE) {
+    console.log("\n" + "█".repeat(72));
+    console.log("█" + " ".repeat(70) + "█");
+    console.log("█" + "  🟢  JOVENTY SLOT HUNTER — MODE DÉMONSTRATION NAVIGATEUR VISIBLE".padEnd(70) + "█");
+    console.log("█" + "  Le navigateur Chrome va s'ouvrir. Tu vas voir le bot en action.".padEnd(70) + "█");
+    console.log("█" + `  slowMo : ${process.env.SPAIN_SLOW_MO ?? "60"}ms  |  devtools : ${process.env.SPAIN_DEVTOOLS === "1" ? "ON" : "OFF"}  |  mode : persistent-browser`.padEnd(70) + "█");
+    console.log("█" + " ".repeat(70) + "█");
+    console.log("█".repeat(72) + "\n");
+  }
+
   section("TEST LIVE SAOPOLO — " + now());
   log("INFO", `Portail ciblé  : ${PORTAL_URL}`);
   log("INFO", `Widget key      : ${WIDGET_KEY}`);
-  log("INFO", `Mode            : SPAIN_HTTP_MODE=1 (HTTP-only + proxy Decodo)`);
+  log("INFO", `Mode navigateur : ${DEMO_MODE ? "👁️  HEADED (visible)" : "headless"}`);
+  log("INFO", `Session mode    : ${process.env.SPAIN_SESSION_MODE ?? "persistent-browser"}`);
   log("INFO", `Proxy           : ${(process.env.DECODO_PROXY_URL ?? "").replace(/:([^@:]+)@/, ":***@")}`);
 
   if (!checkPrerequisites()) process.exit(1);

@@ -815,10 +815,23 @@ class SpainPersistentBrowserManager {
       console.log(`[spain-pb]    executablePath: ${executablePath}`);
     }
 
+    // ── Mode headed (démonstration locale) ──────────────────────────────────
+    // Activer via SPAIN_HEADED=1 (ou --headed dans les scripts de test).
+    // SPAIN_SLOW_MO=80 pour ralentir les interactions (ms, défaut 60 en mode headed).
+    // SPAIN_DEVTOOLS=1 pour ouvrir automatiquement les DevTools.
+    const isHeaded   = process.env.SPAIN_HEADED === "1";
+    const slowMo     = isHeaded ? Number(process.env.SPAIN_SLOW_MO ?? "60") : 0;
+    const devtools   = process.env.SPAIN_DEVTOOLS === "1";
+    if (isHeaded) {
+      console.log(`[spain-pb] 👁️  Mode headed activé (slowMo=${slowMo}ms, devtools=${devtools})`);
+    }
+
     this._launchPromise = ((puppeteer as any).launch({
-      headless: true,
+      headless: isHeaded ? false : true,
       userDataDir: effectiveProfileDir,
       args,
+      slowMo,
+      devtools,
       protocolTimeout: BROWSER_PROTOCOL_TIMEOUT_MS,
       ...(executablePath ? { executablePath } : {}),
     }) as Promise<Browser>).then((browser: Browser) => {
