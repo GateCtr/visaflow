@@ -1092,19 +1092,25 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
         }
       }
 
-      if (res.status === 502 || res.status === 503) {
-        console.warn(`${logPrefix} ⚠️ Proxy error ${res.status} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1})`);
-        lastError = new Error(`PROXY_ERROR_${res.status}`);
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        console.warn(`${logPrefix} ⚠️ HTTP ${res.status} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1})`);
+        lastError = new Error(`ERROR_${res.status}`);
         if (attempt < PROXY_MAX_RETRIES) {
-          // ── Rotation IP SOAX entre les retries (HTTP 502/503) ──────────────
-          if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
-            rotateCevSoaxSession("cev-retry");
-            const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
-            process.env.IPROYAL_PROXY_URL = newProxyUrl;
-            resetCevImpitInstances();
-            console.log(`${logPrefix} 🔄 Rotation SOAX IP pour retry #${attempt + 2} (HTTP ${res.status})`);
+          if (res.status === 502) {
+            // 502 = erreur gateway proxy → rotation IP immédiate
+            if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
+              rotateCevSoaxSession("cev-retry");
+              const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
+              process.env.IPROYAL_PROXY_URL = newProxyUrl;
+              resetCevImpitInstances();
+              console.log(`${logPrefix} 🔄 Rotation SOAX IP pour retry #${attempt + 2} (HTTP 502)`);
+            }
+            await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
+          } else {
+            // 503/504 = charge serveur CEV (pas un blocage) → retry immédiat, même IP
+            console.log(`${logPrefix} ⚡ HTTP ${res.status} = charge serveur — retry immédiat (même IP, pas de rotation)`);
+            // Pas de délai, pas de rotation : le serveur CEV est surchargé momentanément
           }
-          await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
           continue;
         }
         break;
