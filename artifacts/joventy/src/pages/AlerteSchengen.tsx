@@ -565,16 +565,19 @@ export default function AlerteSchengen() {
         </div>
       </section>
 
-      {/* ════════════════════════════════════════════════ FOOTER CTA ═══ */}
-      <section className="py-16 px-4 bg-slate-900">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-white/50 text-sm mb-2">Une autre option disponible</p>
-          <p className="text-white font-bold text-base mb-4">Vous préférez qu'on gère tout votre dossier Schengen ?</p>
-          <a href="/prix" className="inline-flex items-center gap-2 text-secondary text-sm font-semibold hover:underline">
-            Voir nos services complets à partir de 150 USD <ChevronRight className="w-4 h-4" />
-          </a>
+      {/* ══════════════════════════════════════════════════ FOOTER ═══ */}
+      <footer className="py-8 px-4 bg-slate-900 text-center border-t border-white/10">
+        <div className="max-w-3xl mx-auto">
+          <p className="text-slate-500 text-xs">
+            © {new Date().getFullYear()} Joventy · Akollad Groupe · RCCM CD/KNG/RCCM/25-A-07960 ·{" "}
+            <a href="/confidentialite" className="hover:text-slate-300 transition-colors">Confidentialité</a>{" · "}
+            <a href="/conditions" className="hover:text-slate-300 transition-colors">CGU</a>
+          </p>
+          <p className="text-slate-600 text-xs mt-2">
+            Joventy facilite l'accès à l'information. Les rendez-vous sont pris directement auprès du CEV via le portail officiel visaonweb.be. Joventy n'est pas affilié au Centre d'Enregistrement des Visas.
+          </p>
         </div>
-      </section>
+      </footer>
     </div>
   );
 }

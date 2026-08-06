@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { LogOut, User as UserIcon, Menu, X } from "lucide-react";
+import { LogOut, User as UserIcon, Menu, X, ChevronDown } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [alertesOpen, setAlertesOpen] = useState(false);
+  const [alertesMobileOpen, setAlertesMobileOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -17,7 +20,18 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const close = () => setIsOpen(false);
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setAlertesOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const close = () => { setIsOpen(false); setAlertesMobileOpen(false); };
   const solid = scrolled || isOpen;
 
   return (
@@ -84,26 +98,44 @@ export function Navbar() {
             >
               Audit & Diagnostic
             </Link>
-            <Link
-              href="/alerte-espagne"
-              className={`text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                solid
-                  ? "text-primary hover:text-primary/80"
-                  : "text-secondary hover:text-orange-300"
-              }`}
-            >
-              🇪🇸 Alerte Espagne
-            </Link>
-            <Link
-              href="/alerte-schengen"
-              className={`text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                solid
-                  ? "text-primary hover:text-primary/80"
-                  : "text-secondary hover:text-orange-300"
-              }`}
-            >
-              🇪🇺 Alerte Schengen
-            </Link>
+
+            {/* Alertes dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setAlertesOpen((v) => !v)}
+                className={`text-sm font-semibold transition-colors flex items-center gap-1 ${
+                  solid
+                    ? "text-primary hover:text-primary/80"
+                    : "text-secondary hover:text-orange-300"
+                }`}
+              >
+                🔔 Alertes
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${alertesOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {alertesOpen && (
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-border overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <Link href="/alerte-espagne" onClick={() => setAlertesOpen(false)}>
+                    <span className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors border-b border-border">
+                      <span className="text-lg">🇪🇸</span>
+                      <span>
+                        Alerte Espagne
+                        <span className="block text-xs font-normal text-muted-foreground">citaconsular.es</span>
+                      </span>
+                    </span>
+                  </Link>
+                  <Link href="/alerte-schengen" onClick={() => setAlertesOpen(false)}>
+                    <span className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors">
+                      <span className="text-lg">🇧🇪</span>
+                      <span>
+                        Alerte Schengen
+                        <span className="block text-xs font-normal text-muted-foreground">visaonweb.be · CEV</span>
+                      </span>
+                    </span>
+                  </Link>
+                </div>
+              )}
+            </div>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -219,16 +251,31 @@ export function Navbar() {
               Audit & Diagnostic
             </span>
           </Link>
-          <Link href="/alerte-espagne" onClick={close}>
-            <span className="block px-6 py-4 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors">
-              🇪🇸 Alerte Espagne
-            </span>
-          </Link>
-          <Link href="/alerte-schengen" onClick={close}>
-            <span className="block px-6 py-4 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors">
-              🇪🇺 Alerte Schengen
-            </span>
-          </Link>
+
+          {/* Alertes mobile — accordion */}
+          <div>
+            <button
+              className="w-full flex items-center justify-between px-6 py-4 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+              onClick={() => setAlertesMobileOpen((v) => !v)}
+            >
+              <span>🔔 Alertes</span>
+              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${alertesMobileOpen ? "rotate-180" : ""}`} />
+            </button>
+            {alertesMobileOpen && (
+              <div className="bg-slate-50 border-t border-border">
+                <Link href="/alerte-espagne" onClick={close}>
+                  <span className="flex items-center gap-3 px-8 py-3 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-b border-border">
+                    🇪🇸 Alerte Espagne <span className="text-xs text-muted-foreground ml-auto">citaconsular.es</span>
+                  </span>
+                </Link>
+                <Link href="/alerte-schengen" onClick={close}>
+                  <span className="flex items-center gap-3 px-8 py-3 text-sm font-medium text-primary hover:bg-primary/5 transition-colors">
+                    🇧🇪 Alerte Schengen <span className="text-xs text-muted-foreground ml-auto">visaonweb.be</span>
+                  </span>
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="p-4 flex flex-col gap-3">
