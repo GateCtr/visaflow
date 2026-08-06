@@ -968,7 +968,7 @@ export async function executeHttpBooking(
       }
     }
 
-    const navResult = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+    const navResult = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl, targetService.serviceId);
 
     // ── Retry unique si navigateToSelecttime échoue ────────────────────────────
     // Causes possibles : portail lent (créneau pas encore rendu), slot expiré entre
@@ -995,7 +995,7 @@ export async function executeHttpBooking(
                 timeout: 20_000,
                 visible: true,
               });
-              const retryNav = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl);
+              const retryNav = await navigateToSelecttime(slotDate, slotTime, agendaId, portalUrl, targetService.serviceId);
               console.log(`[spain-booking] 🔁 Retry navigateToSelecttime → ${retryNav || "échec"}`);
             } catch {
               console.warn("[spain-booking] ⚠️ Retry: aucun créneau rendu après parcours complet");

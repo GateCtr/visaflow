@@ -897,14 +897,21 @@ class SpainPersistentBrowserManager {
   }
 
   /**
-   * Rejoue le début du parcours Bookitit dans le navigateur avant un booking.
+   * Prépare le widget Bookitit pour un booking en pilotant le routeur Backbone
+   * via location.hash — sans dépendre des liens DOM `#selectservice/`.
    *
-   * Après un scan, le widget peut être revenu à #services avec un DOM partiel :
-   * le serveur a bien répondu, mais la vue Backbone des services n'est plus
-   * montée. Un simple changement de hash ne rejoue donc pas le clic Aceptar.
-   * On recharge le widget dans le même contexte Chromium, clique Aceptar/Continue
-   * comme un utilisateur, puis attend que les vrais liens selectservice soient
-   * rendus avant de laisser le booking poursuivre.
+   * PROBLÈME PRÉCÉDENT : l'ancienne version attendait des liens `a[href*="#selectservice/"]`
+   * qui n'apparaissent JAMAIS sur les portails avec custom view (ex: Saopolo) car
+   * le handler `services()` du routeur Backbone redirige vers `#custom` tant que
+   * `oClientValues.customData.backToCustom` n'est pas défini.
+   *
+   * NOUVELLE APPROCHE :
+   *   1. Cliquer Aceptar si la custom view est affichée — ce clic définit
+   *      `customData.backToCustom` dans oClientValues, déclenchant la navigation
+   *      vers `#services` via le routeur Backbone.
+   *   2. Si le hash n'est plus `#custom`, `servicesView` est créé — le routeur
+   *      est prêt pour `#selectservice/{id}` dans navigateToSelecttime.
+   *   3. Retourner true dès que le hash sort de `#custom`/vide.
    */
   async prepareWidgetForBooking(): Promise<boolean> {
     const page = this._page;
@@ -913,101 +920,99 @@ class SpainPersistentBrowserManager {
     const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
 
     try {
-      // ── Vérifier si on est déjà sur le bon portail avec le widget chargé ──
-      // Après un scan, le browser est déjà sur la page portail (modal Aceptar visible).
-      // Un page.goto() supplémentaire déclenche un nouveau CF Turnstile challenge
-      // depuis le proxy datacenter SJC → timeout → booking impossible.
-      // → On saute le goto si le widget est déjà chargé sur le bon portail.
+      // ── Vérifier l'état courant du widget ────────────────────────────────────
       const currentState = await page.evaluate(`(function() {
         var isCfChallenge = document.title === 'Un instant\u2026'
           || !!document.querySelector('[id^="challenge-"]')
           || !!document.querySelector('form#challenge-form');
         var hasWidget = !!document.getElementById('idBktWidgetDefaultBodyContainer');
-        var serviceLinks = document.querySelectorAll('a[href*="#selectservice/"]').length;
         var selecttimeLinks = document.querySelectorAll('a[href*="selecttime"]').length;
-        return { href: window.location.href, isCfChallenge: isCfChallenge,
-                 hasWidget: hasWidget, serviceLinks: serviceLinks,
+        return { href: window.location.href, hash: window.location.hash,
+                 isCfChallenge: isCfChallenge, hasWidget: hasWidget,
                  selecttimeLinks: selecttimeLinks };
-      })()`).catch(() => ({ href: '', isCfChallenge: false, hasWidget: false, serviceLinks: 0, selecttimeLinks: 0 })) as {
-        href: string; isCfChallenge: boolean; hasWidget: boolean;
-        serviceLinks: number; selecttimeLinks: number;
+      })()`).catch(() => ({ href: '', hash: '', isCfChallenge: false, hasWidget: false, selecttimeLinks: 0 })) as {
+        href: string; hash: string; isCfChallenge: boolean; hasWidget: boolean; selecttimeLinks: number;
       };
 
       const sameOrigin = currentState.href.includes("citaconsular.es");
       const widgetReady = currentState.hasWidget && !currentState.isCfChallenge;
 
-      if (sameOrigin && widgetReady) {
-        // Widget déjà chargé sur le bon portail — pas de goto
+      // Calendrier déjà chaud depuis le dernier scan → pas de rechargement nécessaire
+      if (sameOrigin && widgetReady && currentState.selecttimeLinks > 0) {
         console.log(
-          `[spain-pb] ✅ Préparation booking — widget déjà chargé (serviceLinks=${currentState.serviceLinks}, selecttime=${currentState.selecttimeLinks}) — pas de rechargement`,
+          `[spain-pb] ✅ Préparation booking — calendrier chaud (${currentState.selecttimeLinks} créneau(x)), hash=${currentState.hash}`,
         );
-        // Si le calendrier est déjà chaud (selecttime visibles), on retourne directement
-        if (currentState.selecttimeLinks > 0) return true;
-        // Sinon on tombe dans la boucle Aceptar→service ci-dessous sans goto
-      } else {
+        return true;
+      }
+
+      if (!sameOrigin || !widgetReady) {
         // Page perdue (CF challenge, mauvais domaine, about:blank) → goto obligatoire
         const bookingUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}_booking=${Date.now()}`;
-        console.log(`[spain-pb] 🔄 Préparation booking — rechargement widget + Aceptar : ${formatPortalUrlForLog(targetUrl)}`);
+        console.log(`[spain-pb] 🔄 Préparation booking — rechargement widget : ${formatPortalUrlForLog(targetUrl)}`);
         await page.goto(bookingUrl, {
           waitUntil: "domcontentloaded",
           timeout: BROWSER_WIDGET_GOTO_TIMEOUT_MS,
         }).catch((err: unknown) => {
           console.warn(`[spain-pb] ⚠️ Préparation booking navigation (non-fatal): ${err}`);
         });
+        await new Promise<void>((r) => setTimeout(r, 2_000));
       }
 
-      const deadline = Date.now() + 40_000;
+      // ── Boucle : Aceptar → #services via routeur Backbone ───────────────────
+      //
+      // Stratégie pour portails avec custom view (ex: Saopolo) :
+      //   – Widget démarre sur #custom (dialog-confirm ou page d'instructions)
+      //   – Cliquer Aceptar définit oClientValues.customData.backToCustom
+      //     → routeur navigue vers #services → showServices() crée servicesView
+      //   – Une fois sur #services (ou tout hash ≠ #custom), servicesView est
+      //     initialisé et navigateToSelecttime peut piloter #selectservice/{id}
+      //
+      // Stratégie pour portails sans custom view (ex: Kinshasa) :
+      //   – Widget démarre sur #services directement
+      //   – Pas de clic Aceptar nécessaire
+      const deadline = Date.now() + 30_000;
       let lastClickAt = 0;
+
       while (Date.now() < deadline) {
         const state = await page.evaluate(`(function() {
-          function visible(el) {
-            if (!el) return false;
-            var s = window.getComputedStyle(el);
-            if (s.display === 'none' || s.visibility === 'hidden') return false;
-            var r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0;
-          }
-          var serviceLinks = Array.from(document.querySelectorAll('a[href*="#selectservice/"]'))
-            .filter(visible).length;
-          var controls = Array.from(document.querySelectorAll(
-            'button, a, input[type="button"], input[type="submit"], div[role="button"]'
-          )).filter(function(el) {
-            return visible(el) && /aceptar|accept|continuar|continue|siguiente|ok/i.test(
-              (el.textContent || el.value || '').replace(/\\s+/g, ' ')
-            );
-          }).length;
           return {
             hash: window.location.hash,
-            serviceLinks: serviceLinks,
-            acceptControls: controls,
-            title: document.title
+            hasWidget: !!document.getElementById('idBktWidgetDefaultBodyContainer')
           };
-        })()`).catch(() => ({ serviceLinks: 0, acceptControls: 0, hash: "" })) as {
-          serviceLinks: number;
-          acceptControls: number;
-          hash: string;
-          title: string;
-        };
+        })()`).catch(() => ({ hash: "", hasWidget: false })) as { hash: string; hasWidget: boolean };
 
-        if (state.serviceLinks > 0) {
-          console.log(`[spain-pb] ✅ Préparation booking terminée — ${state.serviceLinks} lien(s) service rendu(s), hash=${state.hash}`);
+        // Succès : hash ≠ #custom/#vide = servicesView initialisé par le routeur
+        const isCustomOrEmpty = state.hash === "" || state.hash === "#" || state.hash === "#custom";
+        if (!isCustomOrEmpty) {
+          console.log(
+            `[spain-pb] ✅ Préparation booking terminée — hash=${state.hash} (routeur Backbone prêt pour #selectservice)`,
+          );
           return true;
         }
 
-        if (Date.now() - lastClickAt > 1_000) {
+        if (Date.now() - lastClickAt > 1_200) {
+          // Tenter de cliquer Aceptar (déclenche la transition #custom → #services)
           const accepted = await clickInteractiveSpainAcceptFlow(page);
           if (accepted.clicked) {
             lastClickAt = Date.now();
             console.log(`[spain-pb] 🖱️ Préparation booking — ${accepted.reason}`);
-            await new Promise<void>((r) => setTimeout(r, 800));
+            await new Promise<void>((r) => setTimeout(r, 900));
             continue;
           }
+
+          // Pas de bouton Aceptar trouvé → forcer la navigation via hash
+          // (utile si le widget a déjà passé le custom mais le hash reste vide)
+          await page.evaluate(() => { window.location.hash = "#services"; }).catch(() => {});
+          console.log(`[spain-pb] 🔀 Préparation booking — hash forcé → #services`);
+          lastClickAt = Date.now();
+          await new Promise<void>((r) => setTimeout(r, 800));
+          continue;
         }
 
-        await new Promise<void>((r) => setTimeout(r, 500));
+        await new Promise<void>((r) => setTimeout(r, 400));
       }
 
-      console.warn("[spain-pb] ⚠️ Préparation booking timeout — liens selectservice absents");
+      console.warn("[spain-pb] ⚠️ Préparation booking timeout — routeur Backbone non sorti de #custom");
       return false;
     } catch (err) {
       console.warn(`[spain-pb] ⚠️ Préparation booking exception: ${err}`);
@@ -3389,6 +3394,28 @@ class SpainPersistentBrowserManager {
     }
     const allCookies = allPuppeteerCookies.map((c) => ({ name: c.name, value: c.value }));
 
+    // ── Naviguer vers #services pour état initial connu ───────────────────────
+    // Après la capture de /main/ et des APIs widget, le widget Backbone est soit
+    // sur #custom (portails avec vue personnalisée, ex: Saopolo) soit sur #services.
+    // On navigue explicitement vers #services → URL finale :
+    //   https://www.citaconsular.es/es/hosteds/widgetdefault/{key}/#services
+    // Ce hash permet de savoir si on est au début du parcours :
+    //   – "No hay horas disponibles" visible → pas de créneaux
+    //   – Bouton Aceptar visible              → créneaux disponibles, flow OK
+    try {
+      const currentHash = await page.evaluate(() => window.location.hash).catch(() => "");
+      if (currentHash !== "#services") {
+        await page.evaluate(() => { window.location.hash = "#services"; }).catch(() => {});
+        await new Promise<void>((r) => setTimeout(r, 800));
+        const newHash = await page.evaluate(() => window.location.hash).catch(() => "");
+        console.log(`[spain-pb] 🏁 Fin solve → hash=${newHash} (page ancrée sur #services)`);
+      } else {
+        console.log(`[spain-pb] 🏁 Fin solve → déjà sur #services`);
+      }
+    } catch (hashNavErr) {
+      console.warn(`[spain-pb] ⚠️ Navigation #services fin-solve (non-fatal): ${hashNavErr}`);
+    }
+
     // Récupérer le cf_clearance final (peut avoir été mis à jour par CF post-Continuar)
     const finalCf = allCookies.find((c) => c.name === "cf_clearance")?.value ?? "";
 
@@ -3824,21 +3851,26 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
 }
 
 /**
- * Navigue le widget Bookitit vers #selecttime/DATE/TIME/AGENDA et capture TOUS les
- * appels réseau émis pendant la transition (XHR, fetch, JSONP via script tags).
- *
- * Stratégie en deux passes :
- *  1. Clic DOM réel sur l'élément du créneau si le widget est déjà à la vue datetime.
- *     (La click-handler Backbone peut faire un call HTTP AVANT de changer le hash —
- *      en changeant juste window.location.hash on saute cette étape.)
- *  2. Si aucun élément n'est rendu, échouer explicitement : changer le hash
- *     contournerait l'état Backbone et produirait une fausse transition.
- *
- * Capture réseau : CDP Network.requestWillBeSent (attrape JSONP/script tags en plus
- * de XHR et fetch) + patch JS document.createElement('script') pour backup.
- *
- * Retourne le hash Backbone résolu (ex: "#signupsecondappointment") ou "" si timeout.
+ * Attend que le hash de la page contienne l'un des fragments cibles.
+ * Retourne le hash courant dès qu'une correspondance est trouvée,
+ * ou le hash final (quelle que soit sa valeur) si le timeout expire.
  */
+async function waitForHash(page: Page, targets: string[], timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise<void>((r) => setTimeout(r, 200));
+    try {
+      const hash = (await page.evaluate(() => window.location.hash)) as string;
+      if (targets.some((t) => hash.includes(t))) return hash;
+    } catch { /* page fermée ou navigate en cours — réessayer */ }
+  }
+  try {
+    return (await page.evaluate(() => window.location.hash)) as string;
+  } catch {
+    return "";
+  }
+}
+
 export interface SpainAcceptFlowClickResult {
   clicked: boolean;
   reason: string;
@@ -3999,11 +4031,30 @@ export async function clickInteractiveSpainAcceptFlow(page: Page): Promise<Spain
   }
 }
 
+/**
+ * Navigue le widget Bookitit vers le formulaire d'auth en pilotant le routeur
+ * Backbone directement via location.hash — séquence complète :
+ *
+ *   #selectservice/{serviceId}  → router: servicesView.setSelected([id]) + #agendas
+ *   #selectagenda/{agendaId}    → router: agendasView.setSelected([id])  + #datetime
+ *   #selecttime/{date}/{time}/{agenda} → router: oClientValues.selectedDate/Time + #signin|#signup
+ *
+ * POURQUOI cette approche est meilleure que le clic DOM :
+ *   – fonctionne sur tous les portails (Saopolo, Kinshasa…) sans dépendre de
+ *     l'état visuel du calendrier (créneaux rendus ou non)
+ *   – initialise proprement oClientValues.selectedServices / selectedAgendas /
+ *     selectedDate / selectedTime via les handlers natifs Backbone
+ *   – zero-clic DOM → pas de race condition sur le rendu du calendrier
+ *
+ * @param serviceId  ID du service à sélectionner (ex: "bkt853215") — requis pour
+ *                   que servicesView.setSelected() initialise selectedServices.
+ */
 export async function navigateToSelecttime(
   date: string,
   time: string,
   agendaId: string,
   portalUrl: string,
+  serviceId?: string,
 ): Promise<string> {
   const page = spainPersistentBrowser.getActivePage();
   if (!page) {
@@ -4011,181 +4062,108 @@ export async function navigateToSelecttime(
     return "";
   }
 
-  const hashTarget = `#selecttime/${encodeURIComponent(date)}/${encodeURIComponent(time)}${agendaId ? "/" + encodeURIComponent(agendaId) : ""}`;
-  console.log(`[spain-pb] 🔀 navigateToSelecttime → ${hashTarget}`);
+  console.log(
+    `[spain-pb] 🔀 navigateToSelecttime — service=${serviceId || "?"} agenda=${agendaId} date=${date} time=${time}`,
+  );
 
-  // ── 1. CDP listener — attrape TOUT : XHR, fetch, script JSONP ────────────────
+  // ── CDP listener pour rapport réseau ─────────────────────────────────────────
   let cdp: any = null;
-  const cdpCaptured: string[] = [];
   try {
     cdp = await page.createCDPSession();
     await cdp.send("Network.enable", {});
     cdp.on("Network.requestWillBeSent", (ev: any) => {
       const url: string = ev.request?.url ?? "";
       if (url.includes("onlinebookings") || url.includes("citaconsular.es/es/")) {
-        const entry = `[${(ev.resourceType ?? ev.type ?? "?").slice(0, 8)}] ${ev.request.method} ${url}`;
-        cdpCaptured.push(entry);
-        console.log(`[spain-pb] 🕵️ CDP: ${entry.slice(0, 200)}`);
+        console.log(
+          `[spain-pb] 🕵️ CDP: [${(ev.resourceType ?? "?").slice(0, 8)}] ${ev.request.method} ${url.slice(0, 180)}`,
+        );
       }
     });
   } catch (cdpErr) {
-    console.warn(`[spain-pb] ⚠️ CDP session échouée (fallback JS patch seulement): ${cdpErr}`);
+    console.warn(`[spain-pb] ⚠️ CDP session échouée (non-fatal): ${cdpErr}`);
   }
 
   try {
-    // ── 2. Patch JS — reset propre puis intercepte XHR + fetch + createElement(script) ──
-    // IMPORTANT : réinitialiser __bkt_intercepted SANS || [] pour ne pas mélanger
-    // les appels d'une invocation précédente.
-    await page.evaluate(`
-      window.__bkt_intercepted = [];
-      if (!window.__bkt_patched) {
-        window.__bkt_patched = true;
-        (function() {
-          var origOpen = XMLHttpRequest.prototype.open;
-          XMLHttpRequest.prototype.open = function(method, url) {
-            if (typeof url === 'string' && url.includes('onlinebookings')) {
-              window.__bkt_intercepted.push('XHR ' + method + ' ' + url);
-            }
-            return origOpen.apply(this, arguments);
-          };
-          var origFetch = window.fetch;
-          window.fetch = function(input, init) {
-            var url = typeof input === 'string' ? input : (input && input.url) || '';
-            if (url.includes('onlinebookings')) {
-              window.__bkt_intercepted.push('FETCH ' + (init && init.method || 'GET') + ' ' + url);
-            }
-            return origFetch.apply(this, arguments);
-          };
-          // JSONP script tag injection — le vrai mécanisme Bookitit
-          var origCreate = document.createElement.bind(document);
-          document.createElement = function(tag, opts) {
-            var el = origCreate(tag, opts);
-            if (typeof tag === 'string' && tag.toLowerCase() === 'script') {
-              var srcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
-              if (srcDesc && srcDesc.set) {
-                Object.defineProperty(el, 'src', {
-                  configurable: true,
-                  enumerable: true,
-                  set: function(v) {
-                    if (typeof v === 'string' && v.includes('onlinebookings')) {
-                      window.__bkt_intercepted.push('JSONP GET ' + v);
-                    }
-                    srcDesc.set.call(this, v);
-                  },
-                  get: function() {
-                    return srcDesc.get ? srcDesc.get.call(this) : '';
-                  }
-                });
-              }
-            }
-            return el;
-          };
-        })();
-      }
-    `) as unknown;
+    // ── Étape 1 : #selectservice/{id} → attente #agendas ou #datetime ──────────
+    // Le handler Backbone appelle servicesView.setSelected([id]) puis navigate("agendas").
+    // servicesView doit être initialisé par prepareWidgetForBooking() au préalable.
+    if (serviceId) {
+      console.log(`[spain-pb] 🔀 Hash → #selectservice/${serviceId}`);
+      await page.evaluate((svcId: string) => {
+        window.location.hash = "#selectservice/" + svcId;
+      }, serviceId).catch(() => {});
 
-    // ── 3. Tentative de clic DOM réel sur le créneau ───────────────────────────
-    // Si le widget affiche déjà la grille de créneaux pour la bonne date, on
-    // clique l'élément directement — la click-handler Backbone fera les appels
-    // HTTP naturellement (AVANT de changer le hash).
-    const timeFormatted = time; // ex: "09:00"
-    const clickResult = (await page.evaluate(`
-      (function(targetTime, targetDate, targetAgenda) {
-        // Sélecteurs connus du widget Bookitit pour les créneaux horaires
-        var selectors = [
-          'a[href*="selecttime/' + targetDate + '/' + encodeURIComponent(targetTime) + '"]',
-          'a[href*="selecttime"][href*="' + targetTime.replace(':', '%3A') + '"]',
-          'a[href*="selecttime"][href*="' + targetTime + '"]',
-          '.clsBktTimeSlotsItem a',
-          '.clsBktAvailableTime a',
-          '[data-time="' + targetTime + '"]',
-          '.bkt-time-slot a',
-          'li.clsBktSlot a',
-        ];
-        for (var i = 0; i < selectors.length; i++) {
-          var els = document.querySelectorAll(selectors[i]);
-          for (var j = 0; j < els.length; j++) {
-            var el = els[j];
-            var txt = (el.textContent || '').trim();
-            var href = el.getAttribute('href') || '';
-            if (txt.includes(targetTime) || href.includes(encodeURIComponent(targetTime)) || href.includes(targetTime)) {
-              if (el.offsetParent !== null) {
-                el.click();
-                return 'clicked:' + el.tagName + '[' + href.slice(0, 80) + '] text=' + txt.slice(0, 20);
-              }
-            }
-          }
-        }
-        // Fallback: chercher n'importe quel lien selecttime contenant l'heure
-        var allLinks = document.querySelectorAll('a[href*="selecttime"]');
-        for (var k = 0; k < allLinks.length; k++) {
-          var l = allLinks[k];
-          var lhref = l.getAttribute('href') || '';
-          if (lhref.includes(encodeURIComponent(targetTime)) || lhref.includes(targetTime)) {
-            if (l.offsetParent !== null) {
-              l.click();
-              return 'clicked_fallback:' + lhref.slice(0, 80);
-            }
-          }
-        }
-        return 'no_element_visible';
-      })(${JSON.stringify(timeFormatted)}, ${JSON.stringify(date)}, ${JSON.stringify(agendaId)})
-    `)) as string;
-    console.log(`[spain-pb] 🖱️ Clic DOM selecttime: ${clickResult}`);
+      // Attendre que le routeur navigue vers #agendas ou directement #datetime
+      // (si le portail n'a qu'un seul agenda et que agendasView l'auto-sélectionne)
+      const afterSvc = await waitForHash(page, ["#agendas", "#datetime", "#selectagenda"], 7_000);
+      console.log(`[spain-pb] 🔀 Après #selectservice → hash=${afterSvc}`);
 
-    const domClickSucceeded = clickResult.startsWith("clicked");
-
-    if (!domClickSucceeded) {
-      // Ne jamais contourner le routeur Backbone : il doit avoir initialisé
-      // selectedServices/selectedAgendas/selectedDate/selectedTime via le clic
-      // réel sur une heure du calendrier.
-      console.warn("[spain-pb] ⚠️ Aucun créneau visible — navigation hash interdite, transition annulée");
-      return "";
-    }
-
-    // ── 5. Attendre que le router Backbone résolve vers la vue auth (max 5s) ──
-    const resolved = await (async () => {
-      for (let i = 0; i < 25; i++) {
-        await new Promise((r) => setTimeout(r, 200));
-        const hash = (await page.evaluate(`window.location.hash`)) as string;
-        if (
-          hash.includes("signin") ||
-          hash.includes("signup") ||
-          hash.includes("signupsecond") ||
-          hash.includes("signupfirst")
-        ) {
-          return hash;
+      if (!afterSvc.includes("#agendas") && !afterSvc.includes("#datetime") && !afterSvc.includes("#selectagenda")) {
+        // #selectservice n'a pas déclenché de navigation Backbone
+        // → servicesView probablement pas initialisé (prepareWidgetForBooking() non appelé)
+        // Fallback : tenter un clic DOM sur le lien #selectservice
+        console.warn("[spain-pb] ⚠️ #selectservice n'a pas déclenché de navigation Backbone — tentative clic DOM");
+        const clickedHref = await page.evaluate((prefId: string): string | null => {
+          const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="#selectservice/"]'));
+          const target = links.find((a) => (a.getAttribute("href") ?? "").includes(prefId))
+            ?? links.find((a) => (a.getAttribute("href") ?? "").length > 0);
+          if (target) { target.click(); return target.getAttribute("href") ?? null; }
+          return null;
+        }, serviceId).catch(() => null);
+        if (clickedHref) {
+          console.log(`[spain-pb] 🖱️ Clic DOM service : ${clickedHref}`);
+          await waitForHash(page, ["#agendas", "#datetime"], 5_000);
+        } else {
+          console.warn("[spain-pb] ⚠️ Aucun lien #selectservice/ dans le DOM — passage direct à #selecttime");
         }
       }
-      return "";
-    })();
-
-    // ── 6. Laisser les appels async se terminer + rapport ─────────────────────
-    await new Promise((r) => setTimeout(r, 800));
-
-    if (cdpCaptured.length > 0) {
-      console.log(`[spain-pb] 🔍 CDP selecttime → ${cdpCaptured.length} requête(s) réseau capturée(s) :`);
-      for (const u of cdpCaptured) console.log(`[spain-pb]    ${u.slice(0, 220)}`);
-    } else {
-      console.log(`[spain-pb] 🔍 CDP selecttime → 0 requêtes réseau détectées (pure routing client ?)`);
     }
 
-    try {
-      const jsCaptured = (await page.evaluate(`window.__bkt_intercepted || []`)) as string[];
-      if (jsCaptured.length > 0) {
-        console.log(`[spain-pb] 🔍 JS patch selecttime → ${jsCaptured.length} appel(s) :`);
-        for (const c of jsCaptured) console.log(`[spain-pb]    ${c.slice(0, 220)}`);
+    // ── Étape 2 : #selectagenda/{id} → attente #datetime ────────────────────────
+    // Seulement si on est sur #agendas (pas encore auto-redirigé vers #datetime).
+    // Le handler Backbone appelle agendasView.setSelected([agendaId]) puis navigate("datetime").
+    if (agendaId) {
+      const hashBeforeAgenda = await page.evaluate(() => window.location.hash).catch(() => "");
+      if (hashBeforeAgenda === "#agendas" || hashBeforeAgenda.includes("#selectagenda")) {
+        console.log(`[spain-pb] 🔀 Hash → #selectagenda/${agendaId}`);
+        await page.evaluate((agId: string) => {
+          window.location.hash = "#selectagenda/" + agId;
+        }, agendaId).catch(() => {});
+
+        const afterAgenda = await waitForHash(page, ["#datetime"], 7_000);
+        console.log(`[spain-pb] 🔀 Après #selectagenda → hash=${afterAgenda}`);
       } else {
-        console.log(`[spain-pb] 🔍 JS patch selecttime → 0 appels (XHR/fetch/JSONP) interceptés`);
+        console.log(`[spain-pb] ℹ️ hash=${hashBeforeAgenda} — #selectagenda déjà passé ou inutile`);
       }
-    } catch { /* ignore */ }
-
-    if (resolved) {
-      console.log(`[spain-pb] ✅ selecttime résolu → ${resolved}`);
-    } else {
-      console.warn(`[spain-pb] ⚠️ selecttime — hash non résolu après 5s (router lent ou widget pas chargé ?)`);
     }
-    return resolved;
+
+    // ── Étape 3 : #selecttime/{date}/{time}/{agenda} → attente #signin|#signup ──
+    // Le handler Backbone définit oClientValues.selectedDate/selectedTime,
+    // puis navigue vers #signin ou #signup selon registration_type.
+    const hashTarget = `#selecttime/${encodeURIComponent(date)}/${encodeURIComponent(time)}${agendaId ? "/" + encodeURIComponent(agendaId) : ""}`;
+    console.log(`[spain-pb] 🔀 Hash → ${hashTarget}`);
+    await page.evaluate((h: string) => { window.location.hash = h; }, hashTarget).catch(() => {});
+
+    const authHash = await waitForHash(
+      page,
+      ["#signin", "#signup", "#signupsecond", "#signupfirst", "#confirmclient"],
+      8_000,
+    );
+
+    // Laisser getsigninfields/ du widget se terminer côté PHP (~600ms)
+    await new Promise<void>((r) => setTimeout(r, 600));
+
+    if (authHash && (authHash.includes("signin") || authHash.includes("signup") || authHash.includes("confirm"))) {
+      console.log(`[spain-pb] ✅ navigateToSelecttime résolu → ${authHash}`);
+    } else {
+      const finalHash = await page.evaluate(() => window.location.hash).catch(() => "?");
+      console.warn(
+        `[spain-pb] ⚠️ navigateToSelecttime — hash non résolu après 8s` +
+        ` (hash actuel: ${finalHash}, attendu: #signin|#signup)`,
+      );
+    }
+
+    return authHash;
   } catch (err) {
     console.warn(`[spain-pb] ⚠️ navigateToSelecttime exception: ${err}`);
     return "";
