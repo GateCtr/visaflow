@@ -380,7 +380,7 @@ export default function DestinationPage() {
                   Alerte créneaux Schengen — Faites-le vous-même pour 10 USD
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Vous préférez prendre vous-même votre rendez-vous sur TLScontact, BLS ou VFS Global ? Rejoignez notre groupe WhatsApp privé : vous recevrez l'ambassade concernée et la plage horaire exacte dès qu'un créneau apparaît, plus des conseils pratiques pour le capturer en moins de 30 secondes. France, Belgique, Allemagne, Pays-Bas et plus. Accès à vie, paiement unique de 10 USD via Mobile Money.
+                  Vous préférez prendre vous-même votre rendez-vous sur visaonweb.be ? Rejoignez notre groupe WhatsApp privé : vous recevrez la plage horaire exacte dès qu'un créneau CEV apparaît, plus des conseils pratiques pour le capturer en moins de 30 secondes. Accès à vie, paiement unique de 10 USD via Mobile Money.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/alerte-schengen">

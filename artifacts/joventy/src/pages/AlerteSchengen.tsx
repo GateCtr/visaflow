@@ -31,28 +31,28 @@ const BENEFITS = [
     icon: Clock,
     emoji: "🎯",
     title: "Sachez exactement quand chercher — pas en aveugle",
-    desc: "Le groupe publie la plage horaire précise dès qu'un créneau est repéré : « demain mercredi, surveillez de 9h00 à 9h30 ». Plus de journées entières à rafraîchir TLScontact, BLS ou VFS Global pour rien.",
-    proof: "Les créneaux Schengen durent en moyenne 30 à 120 secondes avant d'être pris.",
+    desc: "Le groupe publie la plage horaire précise dès qu'un créneau est repéré sur visaonweb.be : « demain mercredi, surveillez de 9h00 à 9h30 ». Plus de journées entières à rafraîchir le portail du CEV pour rien.",
+    proof: "Les créneaux Schengen sur visaonweb.be durent en moyenne 30 à 90 secondes avant d'être pris.",
   },
   {
     icon: Zap,
     emoji: "⚡",
     title: "La technique exacte pour saisir un créneau en moins de 20 secondes",
-    desc: "Checklist pré-recherche, raccourcis de navigation, ordre des clics — nos membres ont testé et affiné chaque étape pour chaque portail Schengen. La différence entre rater et réussir se joue souvent à 3 clics.",
+    desc: "Checklist pré-recherche, raccourcis de navigation sur visaonweb.be, ordre des clics — nos membres ont testé et affiné chaque étape. La différence entre rater et réussir se joue souvent à 3 clics.",
     proof: "Membres ayant obtenu leur créneau en suivant la méthode du groupe : délai moyen de prise < 25 sec.",
   },
   {
     icon: Users,
     emoji: "🤝",
     title: "Quand un membre rate, il publie — les autres peuvent prendre",
-    desc: "Les créneaux manqués sont partagés immédiatement dans le groupe. Si quelqu'un n'a pas pu prendre à temps, il alerte les autres. C'est de l'entraide réelle entre demandeurs Schengen depuis Kinshasa.",
+    desc: "Les créneaux manqués sont partagés immédiatement dans le groupe. Si quelqu'un n'a pas pu prendre à temps, il alerte les autres. C'est de l'entraide réelle entre demandeurs de visa Schengen (Belgique) depuis Kinshasa.",
     proof: "Une alerte ratée par un membre = une seconde chance pour les autres présents dans le groupe.",
   },
   {
     icon: Lock,
     emoji: "♾️",
     title: "10 USD une seule fois — valable pour vous, vos enfants, votre famille",
-    desc: "Pas d'abonnement mensuel, pas de renouvellement, pas de frais cachés. Un seul paiement et vous restez dans le groupe pour ce visa, les suivants (France, Belgique, Allemagne…), et ceux de votre famille.",
+    desc: "Pas d'abonnement mensuel, pas de renouvellement, pas de frais cachés. Un seul paiement et vous restez dans le groupe pour ce visa, les suivants, et ceux de votre famille.",
     proof: "Coût ramené sur 2 demandes de visa = 5 USD par rendez-vous. Sur 5 demandes = 2 USD chacune.",
   },
 ];
@@ -60,40 +60,40 @@ const BENEFITS = [
 const TESTIMONIALS = [
   {
     name: "Christelle M.",
-    detail: "Visa France · Kinshasa, Gombe",
+    detail: "Visa Schengen Belgique · Kinshasa, Gombe",
     stars: 5,
-    text: "J'attendais un créneau TLScontact depuis des semaines. Le 3ème jour après avoir rejoint le groupe, une alerte est arrivée à 8h47. J'ai suivi les étapes exactement comme expliqué et le créneau était confirmé en 19 secondes. Incroyable.",
+    text: "J'attendais un créneau CEV sur visaonweb.be depuis des semaines. Le 3ème jour après avoir rejoint le groupe, une alerte est arrivée à 8h47. J'ai suivi les étapes exactement comme expliqué et le créneau était confirmé en 19 secondes. Incroyable.",
   },
   {
     name: "Emmanuel K.",
-    detail: "Visa Belgique · Kinshasa, Lingwala",
+    detail: "Visa Schengen Belgique · Kinshasa, Lingwala",
     stars: 5,
-    text: "La vraie valeur c'est la méthode, pas juste les alertes. Avant je cliquais dans tous les sens sur le portail BLS et je ratais. Maintenant je sais exactement où aller et dans quel ordre. 10 USD les mieux dépensés de toute ma démarche Schengen.",
+    text: "La vraie valeur c'est la méthode, pas juste les alertes. Avant je cliquais dans tous les sens sur visaonweb.be et je ratais. Maintenant je sais exactement où aller et dans quel ordre. 10 USD les mieux dépensés de toute ma démarche Schengen.",
   },
   {
     name: "Prisca N.",
-    detail: "Visa Allemagne · Kinshasa, Kalamu",
+    detail: "Visa Schengen Belgique · Kinshasa, Kalamu",
     stars: 5,
-    text: "Mon visa pour rejoindre ma famille en Europe. Sans ce groupe j'attendrais encore. L'alerte est arrivée à 6h53 du matin, j'ai eu le créneau avant de prendre mon café. Le groupe couvre France, Belgique, Allemagne — vraiment complet.",
+    text: "Mon visa pour rejoindre ma famille en Belgique. Sans ce groupe j'attendrais encore. L'alerte est arrivée à 6h53 du matin, j'ai eu le créneau CEV avant de prendre mon café. Le groupe est sérieux, les alertes sont précises, l'admin répond rapidement.",
   },
 ];
 
 const OBJECTIONS = [
   {
     q: "Et si je n'arrive toujours pas à prendre le créneau ?",
-    a: "La méthode du groupe maximise vos chances — elle ne les garantit pas à 100%, personne ne peut le faire. Ce que le groupe garantit : vous serez alerté AVANT les gens qui cherchent seuls, et vous saurez exactement comment agir vite. Le reste dépend de votre disponibilité au moment de l'alerte.",
+    a: "La méthode du groupe maximise vos chances — elle ne les garantit pas à 100%, personne ne peut le faire. Ce que le groupe garantit : vous serez alerté AVANT les gens qui cherchent seuls, et vous saurez exactement comment agir vite sur visaonweb.be. Le reste dépend de votre disponibilité au moment de l'alerte.",
   },
   {
-    q: "Le groupe couvre quelle ambassade Schengen ?",
-    a: "Le groupe couvre les principales ambassades Schengen à Kinshasa : France (TLScontact), Belgique (BLS International), Allemagne (VFS Global), Pays-Bas, et autres. Les alertes précisent toujours l'ambassade concernée pour que vous sachiez exactement où chercher.",
+    q: "C'est pour quel visa exactement ?",
+    a: "Ce groupe couvre le visa Schengen Belgique — les créneaux au CEV (Centre d'Enregistrement des Visas) à Kinshasa, via le portail visaonweb.be. Si vous faites une demande pour la Belgique ou un pays Schengen via la Belgique, ce groupe est fait pour vous.",
   },
   {
     q: "10 USD c'est cher pour un groupe WhatsApp ?",
-    a: "Un café à Bruxelles coûte 4 EUR. 10 USD vous donne un accès à vie à des alertes précises pour toutes les ambassades Schengen, une méthode testée, et une communauté active. Comparé aux 150 USD des frais Joventy pour la gestion complète, c'est la meilleure valeur disponible pour ceux qui veulent le faire eux-mêmes.",
+    a: "Un café à Bruxelles coûte 4 EUR. 10 USD vous donne un accès à vie à des alertes précises sur visaonweb.be, une méthode testée, et une communauté active. Comparé aux 150 USD des frais Joventy pour la gestion complète, c'est la meilleure valeur disponible pour ceux qui veulent le faire eux-mêmes.",
   },
   {
     q: "Comment je sais que le groupe est vraiment actif ?",
-    a: "Le groupe compte des membres actifs de Kinshasa qui surveillent réellement les portails Schengen chaque jour. Les alertes sont publiées manuellement — pas des bots. L'admin répond personnellement dans les heures qui suivent votre intégration.",
+    a: "Le groupe compte des membres actifs de Kinshasa qui surveillent réellement le portail CEV chaque jour. Les alertes sont publiées manuellement — pas des bots. L'admin répond personnellement dans les heures qui suivent votre intégration.",
   },
 ];
 
@@ -176,25 +176,25 @@ export default function AlerteSchengen() {
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight mb-6">
             Arrêtez de surveiller<br />
-            <span className="text-secondary">TLScontact, BLS & VFS</span><br />
+            <span className="text-secondary">visaonweb.be</span><br />
             toute la journée.
           </h1>
 
           <p className="text-xl text-blue-200 leading-relaxed mb-4 max-w-2xl mx-auto">
-            Pendant que vous rafraîchissez les portails Schengen, quelqu'un dans notre groupe reçoit l'alerte — et prend le créneau en 20 secondes. Pour <strong className="text-white">10 USD une seule fois</strong>, ce quelqu'un peut être vous.
+            Pendant que vous rafraîchissez le portail CEV, quelqu'un dans notre groupe reçoit l'alerte — et prend le créneau en 20 secondes. Pour <strong className="text-white">10 USD une seule fois</strong>, ce quelqu'un peut être vous.
           </p>
 
           {/* Urgency nudge */}
           <div className="inline-flex items-center gap-2 bg-amber-500/15 border border-amber-400/30 text-amber-200 text-sm px-4 py-2 rounded-full mb-10">
             <AlertTriangle className="w-4 h-4" />
-            Les créneaux Schengen durent moins de 2 minutes — chaque seconde compte
+            Les créneaux CEV durent moins de 2 minutes — chaque seconde compte
           </div>
 
-          {/* Embassy flags strip */}
+          {/* Portal badge */}
           <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
-            {["🇫🇷 France", "🇧🇪 Belgique", "🇩🇪 Allemagne", "🇳🇱 Pays-Bas", "🇮🇹 Italie"].map((f) => (
-              <span key={f} className="bg-white/10 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">{f}</span>
-            ))}
+            <span className="bg-white/10 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">🇧🇪 Visa Schengen Belgique</span>
+            <span className="bg-white/10 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">📋 Portail : visaonweb.be</span>
+            <span className="bg-white/10 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">🏢 CEV Kinshasa</span>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -222,9 +222,9 @@ export default function AlerteSchengen() {
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-6 sm:gap-12">
           {[
             { n: "10 USD", label: "accès à vie, sans abonnement" },
-            { n: "< 2 min", label: "durée moyenne d'un créneau disponible" },
+            { n: "< 2 min", label: "durée moyenne d'un créneau CEV disponible" },
             { n: "20 sec", label: "pour saisir un créneau avec la méthode" },
-            { n: "5 pays", label: "Schengen couverts dans le groupe" },
+            { n: "visaonweb.be", label: "portail CEV Belgique surveillé en continu" },
           ].map((s) => (
             <div key={s.n} className="text-center">
               <p className="text-secondary font-black text-2xl">{s.n}</p>
@@ -241,14 +241,14 @@ export default function AlerteSchengen() {
             <p className="text-red-500 font-bold text-xs uppercase tracking-widest mb-4">Ce que vous vivez en ce moment</p>
             <p className="text-2xl sm:text-3xl font-black text-primary leading-snug mb-6">
               Il est 9h14.<br />
-              Un créneau vient d'apparaître sur TLScontact.<br />
+              Un créneau vient d'apparaître sur visaonweb.be.<br />
               <span className="text-red-500">Vous ne le voyez pas.</span>
             </p>
             <p className="text-slate-600 text-base leading-relaxed mb-4">
-              Quelqu'un dans notre groupe, lui, a reçu l'alerte. Il avait déjà son navigateur ouvert, il savait exactement où cliquer. En 21 secondes, le créneau est pris. Vous continuez à attendre.
+              Quelqu'un dans notre groupe, lui, a reçu l'alerte. Il avait déjà son navigateur ouvert sur le portail CEV, il savait exactement où cliquer. En 21 secondes, le créneau est pris. Vous continuez à attendre.
             </p>
             <p className="text-slate-500 text-sm leading-relaxed">
-              Ce scénario se répète chaque semaine pour des centaines de personnes qui cherchent seules — sans savoir <em>quand</em> regarder, ni <em>comment</em> agir assez vite quand le moment arrive. Et ça concerne toutes les ambassades Schengen : France, Belgique, Allemagne, Pays-Bas, Italie.
+              Ce scénario se répète chaque semaine pour des centaines de personnes qui cherchent seules sur visaonweb.be — sans savoir <em>quand</em> regarder, ni <em>comment</em> agir assez vite quand le moment arrive.
             </p>
           </div>
         </div>
@@ -351,14 +351,14 @@ export default function AlerteSchengen() {
             <div className="text-5xl mb-6">🇪🇺</div>
             <h2 className="text-3xl sm:text-4xl font-black mb-4">Tout ça pour 10 USD.<br />Une seule fois.</h2>
             <p className="text-white/70 text-base mb-8 max-w-xl mx-auto leading-relaxed">
-              D'autres paient 150 USD pour qu'on gère leur rendez-vous. Vous préférez le faire vous-même — c'est tout à fait possible. Ce groupe vous donne les outils pour y arriver pour toutes les ambassades Schengen. 10 USD, accès à vie, aucun abonnement.
+              D'autres paient 150 USD pour qu'on gère leur rendez-vous. Vous préférez le faire vous-même sur visaonweb.be — c'est tout à fait possible. Ce groupe vous donne les outils pour y arriver. 10 USD, accès à vie, aucun abonnement.
             </p>
             <ul className="text-left max-w-sm mx-auto space-y-3 mb-10">
               {[
-                "Alertes avec ambassade + plage horaire précise",
+                "Alertes créneaux CEV avec plage horaire précise",
                 "Méthode pour capturer un créneau en < 20 sec",
                 "Partage de créneaux manqués entre membres",
-                "France, Belgique, Allemagne, Pays-Bas, Italie…",
+                "Visa Schengen Belgique via visaonweb.be",
                 "Valable pour tous vos rendez-vous futurs",
                 "Famille et enfants inclus dans votre accès",
               ].map((item) => (
@@ -417,7 +417,7 @@ export default function AlerteSchengen() {
             <RefreshCw className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-amber-800 text-sm">Pendant que vous lisez cette page…</p>
-              <p className="text-amber-700 text-sm mt-0.5">Des créneaux apparaissent et disparaissent sur TLScontact, BLS et VFS. Les membres du groupe sont déjà alertés. Rejoignez-les maintenant.</p>
+              <p className="text-amber-700 text-sm mt-0.5">Des créneaux apparaissent et disparaissent sur visaonweb.be. Les membres du groupe sont déjà alertés. Rejoignez-les maintenant.</p>
             </div>
           </div>
 
@@ -469,7 +469,7 @@ export default function AlerteSchengen() {
                       <Copy className="w-3.5 h-3.5" /> Copier
                     </button>
                   </div>
-                  <p className="text-xs text-blue-600 mt-2">Motif du paiement : <strong>ALERTE SCHENGEN</strong></p>
+                  <p className="text-xs text-blue-600 mt-2">Motif du paiement : <strong>ALERTE CEV SCHENGEN</strong></p>
                 </div>
               </div>
 
