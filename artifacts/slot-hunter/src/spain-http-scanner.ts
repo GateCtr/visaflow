@@ -2601,15 +2601,55 @@ async function scanViaMainEndpoint(
   const hasServerAcceptDialog = hasServiceTextContainer &&
     /id=(["'])dialog-confirm\1/i.test(renderedHtml.slice(serviceContainerIdx, serviceContainerIdx + 6000));
 
+  // ── Signaux de liens service — calculés ICI pour pouvoir les utiliser dans
+  // le check SPA ci-dessous (évite un faux not_found quand les liens sont rendus
+  // sans que idBktDefaultServicesTextBeforeServicesList soit présent).
+  //
+  // hasRenderedServiceLinks : liens #selectservice/ID réellement rendus dans le HTML
+  //   (hors templates Underscore.js) — signifie que Aceptar a déjà été cliqué ou
+  //   que le portail n'a pas de dialog-confirm.
+  // hasClientSideTemplates  : templates Backbone/Underscore (<%= attributes.id %>) —
+  //   les liens seront rendus côté client (ex: Kinshasa). getservices/ est nécessaire.
+  const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
+  const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
+
   console.log(
-    `[spain-http] 🏷️  Signal serveur: isSpa=${isSpaPortal} | serviceContainer=${hasServiceTextContainer} | dialogConfirm=${hasServerAcceptDialog}`,
+    `[spain-http] 🏷️  Signal serveur: isSpa=${isSpaPortal}` +
+    ` | serviceContainer=${hasServiceTextContainer}` +
+    ` | dialogConfirm=${hasServerAcceptDialog}` +
+    ` | serviceLinks=${hasRenderedServiceLinks}` +
+    ` | templates=${hasClientSideTemplates}`,
   );
 
   if (isSpaPortal && !hasServiceTextContainer) {
-    // Portail SPA sans conteneur de services → le serveur n'a pas de créneaux
-    // à présenter — signal négatif fiable sans avoir besoin de parser "No hay horas".
-    console.log(`[spain-http] 📋 SPA: idBktDefaultServicesTextBeforeServicesList absent → not_found (signal serveur)`);
-    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    // Portail SPA sans idBktDefaultServicesTextBeforeServicesList.
+    //
+    // Ce conteneur est normalement rendu par le serveur quand des créneaux existent
+    // (il contient le dialog-confirm / instructions + bouton ACEPTAR).
+    //
+    // EXCEPTION : certains portails rendent les liens #selectservice/ directement
+    // dans le HTML sans passer par ce conteneur — notamment :
+    //   • Saopolo après Aceptar (session POST-widget réutilisée par le scanner)
+    //   • Portails sans dialog-confirm (Kinshasa et équivalents)
+    //   • Portails à custom-view où le flow Aceptar passe par idBktDefaultCustomContainer
+    //
+    // Dans ces cas, hasRenderedServiceLinks ou hasClientSideTemplates sera vrai —
+    // on laisse passer et on vérifie via confirmSlotsViaDatetime (getservices/ + datetime/).
+    // Si aucun signal de lien n'est présent → signal négatif fiable → not_found.
+    if (!hasRenderedServiceLinks && !hasClientSideTemplates) {
+      console.log(
+        `[spain-http] 📋 SPA: idBktDefaultServicesTextBeforeServicesList absent` +
+        ` + pas de liens #selectservice/ ni templates Backbone → not_found (signal serveur)`,
+      );
+      return { status: "not_found", scanDurationMs: Date.now() - t0 };
+    }
+    // Des liens ou templates de service sont présents → le portail a potentiellement
+    // des créneaux accessibles sans le conteneur standard. On continue la détection.
+    console.log(
+      `[spain-http] 📋 SPA: idBktDefaultServicesTextBeforeServicesList absent mais` +
+      ` ${hasRenderedServiceLinks ? "liens #selectservice/ rendus" : "templates Backbone"}` +
+      ` présents → vérification datetime/ (Aceptar peut-être déjà traité ou portail sans dialog-confirm)`,
+    );
   }
   if (hasServerAcceptDialog) {
     console.log(`[spain-http] 🟢 SPA: dialog-confirm dans idBktDefaultServicesTextBeforeServicesList → créneaux potentiels, datetime/ obligatoire`);
@@ -2617,34 +2657,28 @@ async function scanViaMainEndpoint(
 
   // ─── DÉTECTION DE DISPONIBILITÉ ──────────────────────────────────────────
   //
-  // Flux UI réel observé :
-  //   1. /main/ charge → modal "Important / Aceptar" affiché
-  //   2. Utilisateur clique Aceptar → liste des services apparaît
-  //      (dont "tramitacion de visas" → lien #selectservice/ID)
-  //   3. Utilisateur clique sur le service → datetime/ appelé → créneaux affichés
+  // Flux UI réel Bookitit (confirmé captures 2026-08-06 Saopolo) :
+  //   1. /main/ charge → #services avec dialog-confirm + bouton ACEPTAR (scrollable)
+  //   2. Utilisateur clique ACEPTAR → liens #selectservice/ apparaissent (même hash #services)
+  //   3. Utilisateur clique sur un service → #selectservice/ID → #agendas → #datetime
+  //   4. datetime/ retourne les créneaux disponibles
   //
-  // Conséquence : les liens #selectservice dans /main/ signifient UNIQUEMENT que
-  // l'étape Aceptar est passée — PAS que des créneaux existent.
-  // Un appel datetime/ est OBLIGATOIRE pour confirmer la disponibilité réelle.
+  // En HTTP, on ne simule pas le clic ACEPTAR — on appelle directement getservices/
+  // puis getagendas/ puis datetime/ via confirmSlotsViaDatetime.
   //
-  // Signal négatif fiable (pas de datetime/ nécessaire) :
-  //   → div "No hay horas disponibles" VISIBLE (display sans none en début de style)
-  //   → Remplacé en pratique par le signal serveur ci-dessus pour les portails SPA.
+  // Signal négatif fiable (sans appel datetime/) :
+  //   → div "No hay horas disponibles" VISIBLE (style sans display:none)
+  //   → isSpa + !hasServiceTextContainer + !hasRenderedServiceLinks + !hasClientSideTemplates
   // ─────────────────────────────────────────────────────────────────────────
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
   const VISIBLE_NO_SLOTS_RE = /<div\s+style=(["'])[^"']*\1[^>]*>\s*No hay horas disponibles/i;
-  // dialog-confirm / bktContinue = HTML rendu côté SERVEUR, inclus uniquement quand des créneaux
-  // sont disponibles. Le serveur envoie les instructions + bouton ACEPTAR avec les créneaux.
-  // Sans créneaux → ces IDs absents du HTML → "No hay horas" visible.
-  // Chaque portail citaconsular.es a ses propres instructions mais toujours dans ce bloc HTML.
-  //
+  // dialog-confirm / bktContinue = HTML rendu côté SERVEUR quand des créneaux existent.
   // ATTENTION : idDivBktButtonContinueContainer, idBktDefaultCustomContainer,
   // idDivBktServicesContinueButton sont présents dans TOUS les HTML (containers vides /
   // templates Underscore.js) — ils ne discriminent PAS la disponibilité.
   const hasAcceptModal = /id=['"]dialog-confirm['"]|id=['"]bktContinue['"]/i.test(html);
-  const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
-  const hasClientSideTemplates  = /#selectservice\/<%=\s*[\w.]+\s*%>/i.test(html);
+  // hasRenderedServiceLinks et hasClientSideTemplates déjà calculés ci-dessus.
   const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
   // NOTE: diagnosticState === "service-state" retiré intentionnellement — faux positif confirmé.
   // Les IDs idDivBktServicesContainer/idDivBktButtonContinueContainer sont présents dans
