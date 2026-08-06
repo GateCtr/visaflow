@@ -897,21 +897,28 @@ class SpainPersistentBrowserManager {
   }
 
   /**
-   * Prépare le widget Bookitit pour un booking en pilotant le routeur Backbone
-   * via location.hash — sans dépendre des liens DOM `#selectservice/`.
+   * Prépare le widget Bookitit pour un booking en s'assurant que les liens
+   * `#selectservice/` sont visibles — autrement dit, que `servicesView` est
+   * initialisé et que le dialog-confirm d'instructions a été accepté.
    *
-   * PROBLÈME PRÉCÉDENT : l'ancienne version attendait des liens `a[href*="#selectservice/"]`
-   * qui n'apparaissent JAMAIS sur les portails avec custom view (ex: Saopolo) car
-   * le handler `services()` du routeur Backbone redirige vers `#custom` tant que
-   * `oClientValues.customData.backToCustom` n'est pas défini.
+   * FLOW RÉEL Bookitit (confirmé captures 2026-08-06 Saopolo / São Paulo) :
+   *   – Tout se passe sur `#services` — pas de hash `#custom` séparé.
+   *   – À l'arrivée sur #services, le widget affiche d'abord un panel
+   *     d'instructions scrollable (dialog-confirm) avec le bouton ACCEPTER
+   *     tout en bas de la page.
+   *   – Après clic sur ACCEPTER, les liens de service apparaissent TOUJOURS
+   *     sur #services (ex: "[A] PASSEPORTS (RENOUVELLEMENT OU PREMIER PASSEPORT)").
+   *   – Clic sur un service → #selectservice/bkt… → #agendas → #datetime
+   *     (quasi instantané — routeur Backbone enchaîne les trois en une fraction
+   *     de seconde).
    *
-   * NOUVELLE APPROCHE :
-   *   1. Cliquer Aceptar si la custom view est affichée — ce clic définit
-   *      `customData.backToCustom` dans oClientValues, déclenchant la navigation
-   *      vers `#services` via le routeur Backbone.
-   *   2. Si le hash n'est plus `#custom`, `servicesView` est créé — le routeur
-   *      est prêt pour `#selectservice/{id}` dans navigateToSelecttime.
-   *   3. Retourner true dès que le hash sort de `#custom`/vide.
+   * CONDITION DE SUCCÈS : liens `a[href*="#selectservice/"]` présents dans le DOM.
+   * (pas l'état du hash, qui est déjà #services dès l'affichage du dialog-confirm)
+   *
+   * NOTE SCROLL : ACCEPTER est souvent hors viewport (en bas du panel). Le clic
+   * via clickInteractiveSpainAcceptFlow() fonctionne sans scroll car el.click()
+   * en JS déclenche l'événement même hors viewport. En dernier recours on scroll
+   * puis on réessaie.
    */
   async prepareWidgetForBooking(): Promise<boolean> {
     const page = this._page;
@@ -926,21 +933,26 @@ class SpainPersistentBrowserManager {
           || !!document.querySelector('[id^="challenge-"]')
           || !!document.querySelector('form#challenge-form');
         var hasWidget = !!document.getElementById('idBktWidgetDefaultBodyContainer');
+        var serviceLinks = document.querySelectorAll('a[href*="#selectservice/"]').length;
         var selecttimeLinks = document.querySelectorAll('a[href*="selecttime"]').length;
         return { href: window.location.href, hash: window.location.hash,
                  isCfChallenge: isCfChallenge, hasWidget: hasWidget,
-                 selecttimeLinks: selecttimeLinks };
-      })()`).catch(() => ({ href: '', hash: '', isCfChallenge: false, hasWidget: false, selecttimeLinks: 0 })) as {
-        href: string; hash: string; isCfChallenge: boolean; hasWidget: boolean; selecttimeLinks: number;
+                 serviceLinks: serviceLinks, selecttimeLinks: selecttimeLinks };
+      })()`).catch(() => ({
+        href: '', hash: '', isCfChallenge: false, hasWidget: false, serviceLinks: 0, selecttimeLinks: 0,
+      })) as {
+        href: string; hash: string; isCfChallenge: boolean; hasWidget: boolean;
+        serviceLinks: number; selecttimeLinks: number;
       };
 
       const sameOrigin = currentState.href.includes("citaconsular.es");
       const widgetReady = currentState.hasWidget && !currentState.isCfChallenge;
 
-      // Calendrier déjà chaud depuis le dernier scan → pas de rechargement nécessaire
-      if (sameOrigin && widgetReady && currentState.selecttimeLinks > 0) {
+      // Liens de service déjà présents → servicesView initialisé, prêt pour le booking
+      if (sameOrigin && widgetReady && currentState.serviceLinks > 0) {
         console.log(
-          `[spain-pb] ✅ Préparation booking — calendrier chaud (${currentState.selecttimeLinks} créneau(x)), hash=${currentState.hash}`,
+          `[spain-pb] ✅ Préparation booking — ${currentState.serviceLinks} lien(s) service visible(s)` +
+          `, hash=${currentState.hash} (servicesView prêt)`,
         );
         return true;
       }
@@ -958,61 +970,81 @@ class SpainPersistentBrowserManager {
         await new Promise<void>((r) => setTimeout(r, 2_000));
       }
 
-      // ── Boucle : Aceptar → #services via routeur Backbone ───────────────────
+      // ── Boucle : ACCEPTER → liens #selectservice/ ────────────────────────────
       //
-      // Stratégie pour portails avec custom view (ex: Saopolo) :
-      //   – Widget démarre sur #custom (dialog-confirm ou page d'instructions)
-      //   – Cliquer Aceptar définit oClientValues.customData.backToCustom
-      //     → routeur navigue vers #services → showServices() crée servicesView
-      //   – Une fois sur #services (ou tout hash ≠ #custom), servicesView est
-      //     initialisé et navigateToSelecttime peut piloter #selectservice/{id}
+      // Sur Saopolo (et portails similaires) :
+      //   1. Widget chargé → #services avec dialog-confirm (instructions scrollable)
+      //   2. Clic ACCEPTER (bouton en bas du panel, peut être hors viewport)
+      //      → dialog-confirm disparaît, liens service s'affichent (toujours #services)
+      //   3. Succès : a[href*="#selectservice/"] présents → servicesView initialisé
       //
-      // Stratégie pour portails sans custom view (ex: Kinshasa) :
-      //   – Widget démarre sur #services directement
-      //   – Pas de clic Aceptar nécessaire
-      const deadline = Date.now() + 30_000;
+      // Sur Kinshasa (portails sans dialog-confirm) :
+      //   1. Widget chargé → #services avec liens service directement
+      //   2. Succès immédiat au 1er tour de boucle
+      const deadline = Date.now() + 35_000;
       let lastClickAt = 0;
+      let scrollAttempts = 0;
 
       while (Date.now() < deadline) {
         const state = await page.evaluate(`(function() {
-          return {
-            hash: window.location.hash,
-            hasWidget: !!document.getElementById('idBktWidgetDefaultBodyContainer')
-          };
-        })()`).catch(() => ({ hash: "", hasWidget: false })) as { hash: string; hasWidget: boolean };
+          var serviceLinks = document.querySelectorAll('a[href*="#selectservice/"]').length;
+          var hasWidget = !!document.getElementById('idBktWidgetDefaultBodyContainer');
+          var hash = window.location.hash;
+          return { serviceLinks: serviceLinks, hasWidget: hasWidget, hash: hash };
+        })()`).catch(() => ({ serviceLinks: 0, hasWidget: false, hash: "" })) as {
+          serviceLinks: number; hasWidget: boolean; hash: string;
+        };
 
-        // Succès : hash ≠ #custom/#vide = servicesView initialisé par le routeur
-        const isCustomOrEmpty = state.hash === "" || state.hash === "#" || state.hash === "#custom";
-        if (!isCustomOrEmpty) {
+        // ✅ Succès : liens de service présents — servicesView a été rendu par Backbone
+        if (state.serviceLinks > 0) {
           console.log(
-            `[spain-pb] ✅ Préparation booking terminée — hash=${state.hash} (routeur Backbone prêt pour #selectservice)`,
+            `[spain-pb] ✅ Préparation booking terminée — ${state.serviceLinks} lien(s) service rendu(s), hash=${state.hash}`,
           );
           return true;
         }
 
         if (Date.now() - lastClickAt > 1_200) {
-          // Tenter de cliquer Aceptar (déclenche la transition #custom → #services)
+          // Tenter de cliquer ACCEPTER / Aceptar / Continue (bouton du dialog-confirm)
           const accepted = await clickInteractiveSpainAcceptFlow(page);
           if (accepted.clicked) {
             lastClickAt = Date.now();
-            console.log(`[spain-pb] 🖱️ Préparation booking — ${accepted.reason}`);
-            await new Promise<void>((r) => setTimeout(r, 900));
+            console.log(`[spain-pb] 🖱️ Préparation booking — clic ${accepted.reason} (hash=${state.hash})`);
+            await new Promise<void>((r) => setTimeout(r, 1_000));
             continue;
           }
 
-          // Pas de bouton Aceptar trouvé → forcer la navigation via hash
-          // (utile si le widget a déjà passé le custom mais le hash reste vide)
-          await page.evaluate(() => { window.location.hash = "#services"; }).catch(() => {});
-          console.log(`[spain-pb] 🔀 Préparation booking — hash forcé → #services`);
-          lastClickAt = Date.now();
-          await new Promise<void>((r) => setTimeout(r, 800));
-          continue;
+          // Pas de bouton trouvé → bouton peut-être hors viewport (ACCEPTER nécessite scroll)
+          if (scrollAttempts < 3) {
+            scrollAttempts++;
+            await page.evaluate(`
+              (function() {
+                // Scroll vers le bas du widget pour exposer le bouton ACCEPTER
+                var widget = document.getElementById('idBktWidgetDefaultBodyContainer');
+                if (widget) {
+                  widget.scrollTop = widget.scrollHeight;
+                } else {
+                  window.scrollTo(0, document.body.scrollHeight);
+                }
+                // Aussi essayer de scroller tout conteneur .dialog-confirm
+                var dialogs = document.querySelectorAll('.dialog-confirm, [class*="confirm"], [class*="custom"], [id*="custom"]');
+                dialogs.forEach(function(d) { d.scrollTop = d.scrollHeight; });
+              })()
+            `).catch(() => {});
+            console.log(`[spain-pb] 📜 Scroll vers le bas (tentative ${scrollAttempts}/3) — ACCEPTER peut être hors viewport`);
+            lastClickAt = Date.now() - 800; // re-tenter le clic au prochain tour
+            await new Promise<void>((r) => setTimeout(r, 600));
+            continue;
+          }
+
+          // Après 3 scrolls sans bouton → log diagnostique et attendre
+          console.log(`[spain-pb] ⏳ Préparation booking — pas de bouton ACCEPTER trouvé, hash=${state.hash}, attente…`);
+          scrollAttempts = 0; // reset pour réessayer plus tard
         }
 
-        await new Promise<void>((r) => setTimeout(r, 400));
+        await new Promise<void>((r) => setTimeout(r, 500));
       }
 
-      console.warn("[spain-pb] ⚠️ Préparation booking timeout — routeur Backbone non sorti de #custom");
+      console.warn("[spain-pb] ⚠️ Préparation booking timeout — liens #selectservice/ absents après 35s");
       return false;
     } catch (err) {
       console.warn(`[spain-pb] ⚠️ Préparation booking exception: ${err}`);
