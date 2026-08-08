@@ -11,6 +11,7 @@ import { getEmbassiesForDestination } from "@/data/embassies-seo";
 import { LegalFooterNote } from "@/components/LegalFooterNote";
 import { Why100PercentOnline } from "@/components/Why100PercentOnline";
 import { TrustFAQ } from "@/components/TrustFAQ";
+import { AdSenseBanner } from "@/components/AdSenseBanner";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -225,6 +226,13 @@ export default function DestinationPage() {
       {/* ── POURQUOI 100% EN LIGNE ── */}
       <Why100PercentOnline />
 
+      {/* ── ADSENSE ── */}
+      <section className="py-8 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <AdSenseBanner slot="9701469428" />
+        </div>
+      </section>
+
       {/* ── PRICING BANNER ── */}
       <section className="bg-amber-50 border-b border-amber-200 py-5">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-4">
@@ -289,6 +297,13 @@ export default function DestinationPage() {
           </div>
         </section>
 
+        {/* ── ADSENSE ── */}
+        <section className="py-8 bg-muted">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <AdSenseBanner slot="9701469428" />
+          </div>
+        </section>
+
         {/* ── HOW IT WORKS ── */}
         <section>
           <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
@@ -324,6 +339,13 @@ export default function DestinationPage() {
               </li>
             ))}
           </ul>
+        </section>
+
+        {/* ── ADSENSE ── */}
+        <section className="py-8 bg-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <AdSenseBanner slot="9701469428" />
+          </div>
         </section>
 
         {/* ── EMBASSY LINK ── */}
@@ -447,6 +469,13 @@ export default function DestinationPage() {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* ── ADSENSE ── */}
+        <section className="py-8 bg-muted">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <AdSenseBanner slot="9701469428" />
           </div>
         </section>
 

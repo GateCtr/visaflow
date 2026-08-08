@@ -9,6 +9,7 @@ import { Why100PercentOnline } from "@/components/Why100PercentOnline";
 import { TrustFAQ } from "@/components/TrustFAQ";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
+import { AdSenseBanner } from "@/components/AdSenseBanner";
 import {
   ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
@@ -829,6 +830,13 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══ ADSENSE ═══ */}
+      <section className="py-8 bg-muted">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <AdSenseBanner slot="9701469428" />
+        </div>
+      </section>
+
       {/* ═══ JOVENTY VS AGENCE PHYSIQUE ═══ */}
       <section className="py-20 bg-primary text-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -952,6 +960,13 @@ export default function Landing() {
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* ═══ ADSENSE ═══ */}
+      <section className="py-8 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <AdSenseBanner slot="9701469428" />
         </div>
       </section>
 
@@ -1086,6 +1101,13 @@ export default function Landing() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ═══ ADSENSE ═══ */}
+      <section className="py-8 bg-muted">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <AdSenseBanner slot="9701469428" />
         </div>
       </section>
 

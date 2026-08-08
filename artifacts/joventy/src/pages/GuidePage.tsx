@@ -7,6 +7,7 @@ import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
 import { ShieldCheck } from "lucide-react";
 import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { AdSenseInArticle } from "@/components/AdSenseInArticle";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
@@ -216,7 +217,11 @@ export default function GuidePage() {
                   <WhatsAppAuditCTA className="flex-shrink-0" />
                 </div>
               )}
-            </section>
+              {/* In-article ad after every 3 sections */}
+              {(i + 1) % 3 === 0 && i < guide.sections.length - 1 && (
+                <AdSenseInArticle slot="4084632507" />
+              )}4
+            </section>4
           ))}
         </div>
 
