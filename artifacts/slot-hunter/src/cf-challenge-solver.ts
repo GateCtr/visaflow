@@ -581,31 +581,135 @@ async function waitForClearance(
  * Strategie : trouver input[id*="cf-chl-widget"] → remonter au parent avec taille.
  */
 async function findTurnstileWidgetCoords(
+/**
+ * Coordonnees du widget Turnstile CF 2026.
+ *
+ * CF 2026 ne met PAS d'<iframe> dans le DOM HTML. Le widget Turnstile est rendu
+ * par Chromium comme une browser-level frame superposee sur un div conteneur.
+ *
+ * Structure DOM :
+ *   div#Untl7  style="display:grid"    ← conteneur final (896x68 quand pret)
+ *     div > div
+ *       input#cf-chl-widget-XXXXX_response  (hidden)
+ *
+ * IMPORTANT : au chargement initial, le conteneur peut avoir une hauteur
+ * temporaire plus grande (ex: 176px) avant que le widget CF soit rendu.
+ * On attend donc que la hauteur se stabilise dans la plage attendue (40-120px).
+ *
+ * @param timeoutMs - temps max d'attente pour que le widget soit pret (default 8s)
+ */
+async function findTurnstileWidgetCoords(
   page: Page,
+  timeoutMs = 8_000,
 ): Promise<{ x: number; y: number; w: number; h: number; widgetId: string } | null> {
+  // Hauteur typique du widget Turnstile CF : 40-120px
+  // Largeur : peut aller jusqu'a la largeur de la page, mais hauteur est le critere cle
+  const WIDGET_MIN_H = 40;
+  const WIDGET_MAX_H = 120;
+  const WIDGET_MIN_W = 100;
+
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const result = await page.evaluate(
+        (minH: number, maxH: number, minW: number) => {
+          const input = document.querySelector(
+            'input[id*="cf-chl-widget"][id$="_response"]',
+          ) as HTMLInputElement | null;
+          if (!input) return null;
+
+          const widgetId = input.id
+            .replace('cf-chl-widget-', '')
+            .replace('_response', '');
+
+          // Collecter tous les ancetres avec leur taille
+          const ancestors: { x: number; y: number; w: number; h: number }[] = [];
+          let el: HTMLElement | null = input.parentElement;
+          while (el && el !== document.body) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width >= minW && rect.x >= 0 && rect.y >= 0) {
+              ancestors.push({
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                w: Math.round(rect.width),
+                h: Math.round(rect.height),
+              });
+            }
+            el = el.parentElement;
+          }
+
+          // 1. Chercher le plus petit ancetre dont la hauteur est dans la plage widget
+          const ideal = ancestors.find(
+            (a) => a.h >= minH && a.h <= maxH && a.y > 0,
+          );
+          if (ideal) return { ...ideal, widgetId, ready: true };
+
+          // 2. Pas encore dans la plage — retourner le plus petit ancetre visible
+          //    pour signaler que le widget existe mais n'est pas pret
+          const smallest = ancestors.reduce(
+            (prev, cur) => (cur.h < prev.h ? cur : prev),
+            { x: 0, y: 0, w: 9999, h: 9999 },
+          );
+          if (smallest.w < 9999) {
+            return { ...smallest, widgetId, ready: false };
+          }
+
+          return null;
+        },
+        WIDGET_MIN_H,
+        WIDGET_MAX_H,
+        WIDGET_MIN_W,
+      ).catch(() => null);
+
+      if (result) {
+        if ((result as any).ready) {
+          // Widget pret — taille dans la plage attendue
+          const r = result as { x: number; y: number; w: number; h: number; widgetId: string };
+          console.log(
+            `${LOG_PREFIX} 🎯 Widget CF pret: id=${r.widgetId} rect=[${r.x},${r.y} ${r.w}x${r.h}]`,
+          );
+          return r;
+        }
+        // Widget present mais pas encore dans la bonne taille — attendre
+        const r = result as { x: number; y: number; w: number; h: number };
+        console.log(
+          `${LOG_PREFIX} ⏳ Widget CF en cours de rendu (h=${r.h}px, attente...)`,
+        );
+      }
+    } catch { /* non-fatal */ }
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  // Timeout — essayer quand meme avec n'importe quelle taille visible
   try {
-    const coords: { x: number; y: number; w: number; h: number; widgetId: string } | null = await page.evaluate(() => {
-      const input = document.querySelector('input[id*="cf-chl-widget"][id$="_response"]') as HTMLInputElement | null;
+    const fallback = await page.evaluate(() => {
+      const input = document.querySelector(
+        'input[id*="cf-chl-widget"][id$="_response"]',
+      ) as HTMLInputElement | null;
       if (!input) return null;
       const widgetId = input.id.replace('cf-chl-widget-', '').replace('_response', '');
       let el: HTMLElement | null = input.parentElement;
-      while (el) {
+      while (el && el !== document.body) {
         const rect = el.getBoundingClientRect();
-        if (rect.width >= 100 && rect.height >= 20 && rect.x >= 0 && rect.y > 0) {
+        if (rect.width >= 100 && rect.height >= 20 && rect.y > 0) {
           return { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height), widgetId };
         }
         el = el.parentElement;
       }
       return null;
-    });
-    if (coords) {
-      console.log(`${LOG_PREFIX} 🎯 Widget CF: id=${coords.widgetId} rect=[${coords.x},${coords.y} ${coords.w}x${coords.h}]`);
-      return coords;
+    }).catch(() => null);
+    if (fallback) {
+      console.log(
+        `${LOG_PREFIX} 🎯 Widget CF (fallback timeout): id=${(fallback as any).widgetId} rect=[${(fallback as any).x},${(fallback as any).y} ${(fallback as any).w}x${(fallback as any).h}]`,
+      );
+      return fallback as { x: number; y: number; w: number; h: number; widgetId: string };
     }
   } catch { /* non-fatal */ }
+
   return null;
 }
-
 function computeCfWidgetClickCoords(
   container: { x: number; y: number; w: number; h: number },
 ): { x: number; y: number } {

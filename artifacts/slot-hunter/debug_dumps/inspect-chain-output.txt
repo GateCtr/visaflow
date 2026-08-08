@@ -1,0 +1,18 @@
+Widget ID: rm4qk
+
+=== CHAIN ===
+{"d":0,"tag":"INPUT","id":"cf-chl-widget-rm4qk_response","class":"","style":null,"rect":{"x":0,"y":0,"w":0,"h":0}}
+{"d":1,"tag":"DIV","id":"","class":"","style":null,"rect":{"x":181,"y":304,"w":896,"h":68}}
+{"d":2,"tag":"DIV","id":"","class":"","style":null,"rect":{"x":181,"y":304,"w":896,"h":68}}
+{"d":3,"tag":"DIV","id":"Untl7","class":"","style":"display: grid;","rect":{"x":181,"y":304,"w":896,"h":68}}
+{"d":4,"tag":"DIV","id":"","class":"main-content","style":null,"rect":{"x":149,"y":128,"w":960,"h":244}}
+{"d":5,"tag":"DIV","id":"","class":"main-wrapper ZUSR4","style":null,"rect":{"x":0,"y":0,"w":1258,"h":632}}
+{"d":6,"tag":"BODY","id":"","class":"","style":null,"rect":{"x":0,"y":0,"w":1258,"h":702}}
+{"d":7,"tag":"HTML","id":"","class":"","style":null,"rect":{"x":0,"y":0,"w":1258,"h":702}}
+
+=== CANDIDATES ===
+{"id":"","class":"footer-wrapper","style":null,"rect":{"x":497,"y":649,"w":264,"h":37}}
+
+=== FRAMES ===
+name="" url=https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/
+name="" url=https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/rm4qk/0x4AAAAAAAAjq6WYeRDKmebM/dark
