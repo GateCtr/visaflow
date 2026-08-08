@@ -8,30 +8,6 @@ import { hasGermanyDecodoProxy, rotateGermanyDecodoUrl, getCurrentGermanyDecodoU
 
 declare const process: { env: Record<string, string | undefined> };
 
-/**
- * Construit une URL SOAX sticky pour Germany.
- *
- * service2.diplo.de bloque les plages IP datacenter (Railway, AWS, Decodo ISP, etc.) —
- * le symptôme est "fetch failed" en ~1-3s (connexion reset/refusée, pas un timeout).
- * SOAX résidentiel contourne ce blocage.
- *
- * Format URL SOAX : http://package-XXXXX:PASSWORD@proxy.soax.com:5000
- * On ajoute "-sessionid-XXXX" pour une IP sticky de 10min (évite les rotations mid-session).
- * Pas de contrainte de pays (-country-de serait plus "naturel" mais réduit le pool).
- */
-function makeSoaxGermanyUrl(baseUrl: string): string {
-  try {
-    const u = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
-    const decodedUser = decodeURIComponent(u.username);
-    const baseUser = decodedUser.replace(/-sessionid-[a-z0-9]+$/i, "");
-    const sessionId = Math.random().toString(36).slice(2, 10);
-    u.username = encodeURIComponent(`${baseUser}-sessionid-${sessionId}`);
-    return u.toString();
-  } catch {
-    return baseUrl;
-  }
-}
-
 // ─── Proxy cache (module-level, stable par session) ─────────────────────────
 // diplo.de lie le JSESSIONID à l'IP source → le proxy ne doit PAS changer
 // en cours de session. On cache le dispatcher et on ne le régénère que sur
@@ -42,28 +18,12 @@ let cachedDispatcher: { dispatcher: ProxyAgent; label: string } | undefined;
  * Construit un ProxyAgent frais pour Germany (sans cache).
  *
  * Ordre de priorité :
- *  1. GERMANY_PROXY_URL — URL proxy dédiée Germany (résidentiel recommandé)
- *  2. SOAX_PROXY_URL    — SOAX résidentiel sticky (nouvelle sessionId à chaque appel)
- *  3. Pool Decodo CSV   — Round-robin partagé avec Espagne (3e fallback)
- *  4. Direct            — OK en local/Replit, bloqué sur Railway/cloud
+ *  1. Pool Decodo CSV   — Fichier decodo-proxies-germany.csv (priorité)
+ *  2. GERMANY_PROXY_URL — URL proxy dédiée Germany (fallback)
+ *  3. Direct            — OK en local/Replit, bloqué sur Railway/cloud
  */
 function buildProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | undefined {
-  const germanyUrl = process.env["GERMANY_PROXY_URL"];
-  if (germanyUrl) {
-    try {
-      return { dispatcher: new ProxyAgent(germanyUrl), label: "GERMANY_PROXY_URL" };
-    } catch { /* fall through */ }
-  }
-
-  const soaxBase = process.env["SOAX_PROXY_URL"];
-  if (soaxBase) {
-    try {
-      const stickyUrl = makeSoaxGermanyUrl(soaxBase);
-      return { dispatcher: new ProxyAgent(stickyUrl), label: "SOAX résidentiel (sticky)" };
-    } catch { /* fall through */ }
-  }
-
-  // 3e fallback : pool Decodo CSV dédié Germany (decodo-proxies-germany.csv).
+  // 1er choix : pool Decodo CSV dédié Germany (decodo-proxies-germany.csv).
   if (hasGermanyDecodoProxy()) {
     const decodoUrl = getCurrentGermanyDecodoUrl();
     if (decodoUrl) {
@@ -71,6 +31,13 @@ function buildProxyDispatcher(): { dispatcher: ProxyAgent; label: string } | und
         return { dispatcher: new ProxyAgent(decodoUrl), label: `Decodo Germany ${decodoUrl.split(":").pop()}` };
       } catch { /* fall through */ }
     }
+  }
+
+  const germanyUrl = process.env["GERMANY_PROXY_URL"];
+  if (germanyUrl) {
+    try {
+      return { dispatcher: new ProxyAgent(germanyUrl), label: "GERMANY_PROXY_URL" };
+    } catch { /* fall through */ }
   }
 
   return undefined;
@@ -359,7 +326,7 @@ export async function initSession(config: RKTerminConfig): Promise<{ session: RK
       const cause = (err as any)?.cause;
       const causeStr = cause ? ` (cause: ${cause})` : "";
       const hint = !proxy
-        ? " — configurer GERMANY_PROXY_URL ou SOAX_PROXY_URL pour contourner le blocage IP"
+        ? " — configurer GERMANY_PROXY_URL ou vérifier le fichier decodo-proxies-germany.csv"
         : "";
       throw new Error(`initSession failed: ${msg}${causeStr}${hint}`);
     }
