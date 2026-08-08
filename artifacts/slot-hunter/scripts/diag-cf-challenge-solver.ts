@@ -1,5 +1,4 @@
-#!/usr/bin/env npx tsx
-/**
+﻿/**
  * diag-cf-challenge-solver.ts — Diagnostic du solver CF unifié
  *
  * Teste la résolution de challenges Cloudflare sur citaconsular.es
@@ -13,6 +12,7 @@
  *   - Chromium installé via Puppeteer
  */
 
+import "dotenv/config";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import puppeteer from "puppeteer-extra";

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * capsolver-turnstile.ts — Résolution Cloudflare Turnstile via CapSolver (injection browser)
  *
  * ARCHITECTURE (différente de AntiCloudflareTask) :
@@ -53,6 +53,7 @@ export async function solveTurnstileToken(
   websiteKey: string,
   apiKey: string,
   metadata?: { action?: string; cdata?: string },
+  taskType?: 'AntiTurnstileTaskProxyLess' | 'AntiCloudflareTask',
 ): Promise<{ token: string; userAgent?: string } | null> {
   const key = apiKey.trim();
   console.log(
@@ -87,13 +88,13 @@ export async function solveTurnstileToken(
   let taskId: string;
   try {
     const taskBody: Record<string, unknown> = {
-      type: "AntiTurnstileTaskProxyLess",
+      type: taskType ?? "AntiTurnstileTaskProxyLess",
       websiteURL,
       websiteKey,
     };
-    if (metadata) taskBody.metadata = metadata;
+    if (metadata && (taskType ?? "AntiTurnstileTaskProxyLess") === "AntiTurnstileTaskProxyLess") taskBody.metadata = metadata;
 
-    console.log(`[capsolver-ts] 📤 createTask AntiTurnstileTaskProxyLess…`);
+    console.log(`[capsolver-ts] 📤 createTask ${taskType ?? "AntiTurnstileTaskProxyLess"}…`);
     const createRes = await fetch(`${CAPSOLVER_BASE}/createTask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -178,6 +179,27 @@ export async function solveTurnstileToken(
  * NOTE : pour que la stratégie 1 fonctionne, appeler `injectTurnstileInterceptScript(page)`
  * via evaluateOnNewDocument AVANT la navigation.
  */
+/**
+ * Extrait la vraie sitekey Turnstile CF depuis l'URL de l'iframe challenge.
+ *
+ * Citaconsular.es (Managed Challenge interactif, 2026) :
+ *   L'iframe Turnstile a pour URL :
+ *     https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/le0f4/0x4AAAAAAAAjq6WYeRDKmebM/dark/fbE/new/normal?lang=auto
+ *   Sitekey = segment commençant par "0x4" dans le chemin.
+ *
+ * ATTENTION : "8eb6d5cd556e" (dans api.js) est le hash de BUILD du bundle CF, PAS la sitekey.
+ */
+function extractSitekeyFromCfUrl(url: string): string | null {
+  const m1 = url.match(/\/(0x4[A-Za-z0-9_-]{10,})\//);
+  if (m1) return m1[1];
+  try {
+    const u = new URL(url);
+    const sk = u.searchParams.get('sitekey') ?? u.searchParams.get('k');
+    if (sk && sk.startsWith('0x') && sk.length > 10) return sk;
+  } catch { /* ignore */ }
+  return null;
+}
+
 export async function waitForTurnstileSitekey(
   page: Page,
   timeoutMs = 30_000,
@@ -185,46 +207,59 @@ export async function waitForTurnstileSitekey(
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
+    // ── Stratégie 0 : frames Puppeteer (URL iframe CF) ───────────────────────
+    try {
+      const frames = page.frames();
+      for (const frame of frames) {
+        const frameUrl = frame.url();
+        if (frameUrl.includes('challenges.cloudflare.com')) {
+          const sk = extractSitekeyFromCfUrl(frameUrl);
+          if (sk) {
+            console.log(`[capsolver-ts] 🔑 Sitekey via frame Puppeteer: ${sk.slice(0, 30)}…`);
+            return sk;
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
+
     const sitekey: string | null = await page.evaluate(() => {
-      // ── Stratégie 1 : intercepté via window.turnstile.render hook ────────────
+      // ── Stratégie 1 : intercepté via window.turnstile.render hook ──────────
       const intercepted = (window as any).__cf_intercepted_sitekey as string | undefined;
       if (intercepted && intercepted.length > 5) return intercepted;
 
-      // ── Stratégie 2 : data-sitekey DOM (widgets tiers) ───────────────────────
-      const selectors = [
-        '[data-sitekey]',
-        '.cf-turnstile[data-sitekey]',
-        '#challenge-form [data-sitekey]',
-        'div[data-sitekey]',
-      ];
-      for (const sel of selectors) {
+      // ── Stratégie 2 : data-sitekey DOM (filtrer les hashes de build) ────────
+      for (const sel of ['[data-sitekey]', '.cf-turnstile[data-sitekey]', '#challenge-form [data-sitekey]', 'div[data-sitekey]']) {
         const el = document.querySelector(sel);
         if (el) {
           const key = el.getAttribute('data-sitekey');
-          if (key && key.length > 5) return key;
+          // Sitekeys réelles commencent par "0x4" ; les hashes de build CF sont hex purs courts
+          if (key && key.length > 10 && (key.startsWith('0x') || !key.match(/^[a-f0-9]+$/))) return key;
         }
       }
 
-      // ── Stratégie 3 : URL du script Turnstile CF ─────────────────────────────
-      // Format CF Managed Challenge : turnstile/v0/g/<SITEKEY>/api.js
-      // Ex: https://challenges.cloudflare.com/turnstile/v0/g/b0da9f4911ba/api.js
+      // ── Stratégie 3 : iframes DOM avec sitekey 0x4 dans l'URL ──────────────
+      for (const f of Array.from(document.querySelectorAll('iframe'))) {
+        const src = f.src || f.getAttribute('src') || '';
+        if (src.includes('challenges.cloudflare.com')) {
+          const m = src.match(/\/(0x4[A-Za-z0-9_-]{10,})\//);
+          if (m) return m[1];
+          try { const sk = new URL(src).searchParams.get('sitekey'); if (sk && sk.startsWith('0x')) return sk; } catch { /**/ }
+        }
+      }
+
+      // ── Stratégie 4 : URL script Turnstile avec sitekey= param ──────────────
       for (const s of Array.from(document.querySelectorAll('script[src]'))) {
         const src = (s as HTMLScriptElement).src;
         if (src.includes('challenges.cloudflare.com/turnstile')) {
-          const m = src.match(/\/turnstile\/v[\d]+\/[a-z]\/([a-f0-9]{8,32})\/api\.js/);
-          if (m) return m[1];
-          // Format alternatif : /turnstile/v0/api.js?sitekey=xxx (iframes)
-          const url = new URL(src);
-          const sk = url.searchParams.get('sitekey');
-          if (sk && sk.length > 5) return sk;
+          try { const sk = new URL(src).searchParams.get('sitekey'); if (sk && sk.startsWith('0x') && sk.length > 10) return sk; } catch { /**/ }
         }
       }
 
-      // ── Stratégie 4 : scripts inline ─────────────────────────────────────────
+      // ── Stratégie 5 : scripts inline avec sitekey 0x4 ───────────────────────
       for (const s of Array.from(document.querySelectorAll('script'))) {
-        const m = s.textContent?.match(/["']sitekey["']\s*:\s*["']([^"']{6,})["']/);
+        const m = s.textContent?.match(/['"]sitekey['"]\\s*:\\s*['\"](0x4[^'"]{10,})['\"]/);
         if (m) return m[1];
-        const m2 = s.textContent?.match(/data-sitekey=["']([^"']{6,})["']/);
+        const m2 = s.textContent?.match(/data-sitekey=['\"](0x4[^'"]{10,})['"\"]/);
         if (m2) return m2[1];
       }
 
@@ -233,7 +268,6 @@ export async function waitForTurnstileSitekey(
 
     if (sitekey) return sitekey;
 
-    // Vérifier si on est encore sur un challenge CF
     const isChallenge: boolean = await page.evaluate(() => {
       const t = document.title.toLowerCase();
       return t.includes('just a moment') || t.includes('un instant') || t.includes('checking') ||
@@ -242,8 +276,7 @@ export async function waitForTurnstileSitekey(
     }).catch(() => false);
 
     if (!isChallenge) {
-      // Plus de challenge — page réelle chargée, pas besoin du sitekey
-      console.log('[capsolver-ts] ℹ️ Challenge CF disparu avant extraction sitekey (challenge auto-résolu ?)');
+      console.log('[capsolver-ts] ℹ️ Challenge CF disparu avant extraction sitekey');
       return null;
     }
 
@@ -412,10 +445,14 @@ export async function solveTurnstileInPage(
   console.log(`[capsolver-ts] 🔑 Sitekey extrait: ${sitekey.slice(0, 40)}…`);
 
   // 2. Résoudre le token via CapSolver
-  // CF Managed Challenge interactive → metadata action:"managed" + type:"turnstile"
-  const result = await solveTurnstileToken(targetUrl, sitekey, apiKey, {
-    action: "managed",
-  });
+  // Sitekeys CF Managed Challenge (0x4AAAA...) → essayer d'abord AntiTurnstileTaskProxyLess,
+  // puis AntiCloudflareTask si rejeté (CapSolver distingue les deux types)
+  let result = await solveTurnstileToken(targetUrl, sitekey, apiKey, { action: "managed" }, "AntiTurnstileTaskProxyLess");
+  if (!result) {
+    // Retry avec AntiCloudflareTask (Managed Challenge CF)
+    console.log('[capsolver-ts] 🔄 Retry avec AntiCloudflareTask (Managed Challenge CF)…');
+    result = await solveTurnstileToken(targetUrl, sitekey, apiKey, undefined, "AntiCloudflareTask");
+  }
   if (!result) {
     console.error('[capsolver-ts] ❌ Token Turnstile non obtenu');
     return false;

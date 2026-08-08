@@ -1,4 +1,4 @@
-/**
+﻿/**
  * cf-challenge-solver.ts — Résolution robuste de TOUS les challenges Cloudflare 2026
  *
  * TYPES DE CHALLENGES CF GÉRÉS :
@@ -570,87 +570,72 @@ async function waitForClearance(
 }
 
 // ─── Résolution Turnstile par clic CDP ──────────────────────────────────────
+// ─── Résolution Turnstile par clic CDP ──────────────────────────────────────
 
 /**
- * Trouve l'iframe Cloudflare Turnstile dans la page.
+ * Coordonnees du widget Turnstile CF 2026.
  *
- * CF 2026 utilise des iframes cross-origin imbriquées avec des attributs
- * dynamiques. Cette fonction utilise plusieurs stratégies de recherche.
+ * CF 2026 ne met PAS d'<iframe> dans le DOM HTML. Le widget est rendu par le moteur
+ * Chromium comme une browser-level frame superposee sur un div conteneur.
+ *
+ * Strategie : trouver input[id*="cf-chl-widget"] → remonter au parent avec taille.
  */
+async function findTurnstileWidgetCoords(
+  page: Page,
+): Promise<{ x: number; y: number; w: number; h: number; widgetId: string } | null> {
+  try {
+    const coords: { x: number; y: number; w: number; h: number; widgetId: string } | null = await page.evaluate(() => {
+      const input = document.querySelector('input[id*="cf-chl-widget"][id$="_response"]') as HTMLInputElement | null;
+      if (!input) return null;
+      const widgetId = input.id.replace('cf-chl-widget-', '').replace('_response', '');
+      let el: HTMLElement | null = input.parentElement;
+      while (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width >= 100 && rect.height >= 20 && rect.x >= 0 && rect.y > 0) {
+          return { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height), widgetId };
+        }
+        el = el.parentElement;
+      }
+      return null;
+    });
+    if (coords) {
+      console.log(`${LOG_PREFIX} 🎯 Widget CF: id=${coords.widgetId} rect=[${coords.x},${coords.y} ${coords.w}x${coords.h}]`);
+      return coords;
+    }
+  } catch { /* non-fatal */ }
+  return null;
+}
+
+function computeCfWidgetClickCoords(
+  container: { x: number; y: number; w: number; h: number },
+): { x: number; y: number } {
+  return {
+    x: container.x + 33 + (Math.random() - 0.5) * 10,
+    y: container.y + container.h / 2 + (Math.random() - 0.5) * 8,
+  };
+}
+
+/** Legacy — CF 2026 n'utilise plus d'iframe DOM */
 async function findTurnstileIframe(page: Page): Promise<ElementHandle | null> {
   for (const selector of CF_IFRAME_SELECTORS) {
     try {
       const iframe = await page.$(selector);
       if (iframe) {
         const src = await iframe.evaluate((el: Element) => (el as HTMLIFrameElement).src).catch(() => "");
-        if (src.includes("challenges.cloudflare.com") || src.includes("turnstile")) {
-          console.log(`${LOG_PREFIX} 🎯 Iframe CF trouvée via "${selector}" — src: ${src.slice(0, 80)}`);
-          return iframe;
-        }
+        if (src.includes("challenges.cloudflare.com") || src.includes("turnstile")) return iframe;
       }
     } catch { /* non-fatal */ }
   }
-
-  // Fallback : recherche par URL dans toutes les iframes
-  try {
-    const iframes = await page.$$("iframe");
-    for (const iframe of iframes) {
-      const src = await iframe.evaluate((el: Element) => (el as HTMLIFrameElement).src).catch(() => "");
-      if (src.includes("challenges.cloudflare.com") || src.includes("turnstile") || src.includes("cdn-cgi")) {
-        console.log(`${LOG_PREFIX} 🎯 Iframe CF trouvée (fallback scan) — src: ${src.slice(0, 80)}`);
-        return iframe;
-      }
-    }
-  } catch { /* non-fatal */ }
-
   return null;
 }
 
-/**
- * Calcule les coordonnées de la checkbox Turnstile pour un clic CDP précis.
- *
- * POURQUOI CDP et pas element.click() :
- *   - L'iframe CF est cross-origin → Puppeteer ne peut pas accéder à son DOM
- *   - page.click() nécessite un sélecteur dans le contexte de la page principale
- *   - CDP Input.dispatchMouseEvent fonctionne en coordonnées viewport absolues
- *     → contourne la restriction cross-origin car le clic est au niveau du navigateur
- *
- * POSITION DE LA CHECKBOX CF 2026 :
- *   - L'iframe Turnstile fait ~300x65 pixels
- *   - La checkbox est positionnée dans le quart gauche (x: ~30-40 depuis le bord gauche)
- *   - Centré verticalement dans l'iframe
- *   - CF randomise légèrement la position → on ajoute du jitter
- */
-async function computeTurnstileClickCoords(
-  iframe: ElementHandle,
-): Promise<{ x: number; y: number } | null> {
+async function computeTurnstileClickCoords(iframe: ElementHandle): Promise<{ x: number; y: number } | null> {
   try {
     const box = await iframe.boundingBox();
-    if (!box || box.width < 10 || box.height < 10) {
-      console.warn(`${LOG_PREFIX} ⚠️ BoundingBox iframe invalide: ${JSON.stringify(box)}`);
-      return null;
-    }
-
-    // Jitter humain : ±5px autour du centre de la checkbox
-    const jitterX = (Math.random() - 0.5) * 10;
-    const jitterY = (Math.random() - 0.5) * 8;
-
-    // La checkbox Turnstile est typiquement à ~33px du bord gauche, centrée verticalement
-    const x = box.x + 33 + jitterX;
-    const y = box.y + (box.height / 2) + jitterY;
-
-    console.log(
-      `${LOG_PREFIX} 📐 Coordonnées checkbox: [${Math.round(x)}, ${Math.round(y)}]` +
-      ` (iframe: ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)})`,
-    );
-
-    return { x, y };
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} ⚠️ Erreur calcul coordonnées: ${err}`);
-    return null;
-  }
+    if (!box || box.width < 10 || box.height < 10) return null;
+    return { x: box.x + 33 + (Math.random() - 0.5) * 10, y: box.y + box.height / 2 + (Math.random() - 0.5) * 8 };
+  } catch { return null; }
 }
-
 /**
  * Calcule un point sur une courbe de Bézier cubique.
  * B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3
@@ -843,69 +828,28 @@ async function solveTurnstileByClick(
     }
 
     console.log(`${LOG_PREFIX} 🔄 Tentative clic ${attempt}/${maxClicks}…`);
+    console.log(`${LOG_PREFIX} 🔄 Tentative clic ${attempt}/${maxClicks}…`);
 
-    // Trouver l'iframe Turnstile
-    const iframe = await findTurnstileIframe(page);
-    if (!iframe) {
-      // L'iframe peut ne pas être encore chargée — attendre et réessayer
+    // CF 2026 : le widget n'est PAS une <iframe> dans le DOM — chercher via input[id*="cf-chl-widget"]
+    const widgetCoords = await findTurnstileWidgetCoords(page);
+
+    if (!widgetCoords) {
       if (attempt < maxClicks) {
-        console.log(`${LOG_PREFIX} ⏳ Iframe CF absente — attente ${clickDelay}ms…`);
+        console.log(`${LOG_PREFIX} ⏳ Widget CF absent — attente ${clickDelay}ms…`);
         await new Promise((r) => setTimeout(r, clickDelay));
-
-        // Vérifier si le challenge s'est résolu tout seul (JSD passif)
         if (await isTurnstileResolved(page, domain)) {
           const clearance = await getClearanceValue(page, domain);
-          return {
-            success: true,
-            challengeType: "managed",
-            cfClearance: clearance ?? undefined,
-            durationMs: Date.now() - t0,
-            solvedBy: "jsd_passive",
-          };
+          return { success: true, challengeType: "managed", cfClearance: clearance ?? undefined, durationMs: Date.now() - t0, solvedBy: "jsd_passive" };
         }
         continue;
       }
-      return {
-        success: false,
-        challengeType: "turnstile",
-        durationMs: Date.now() - t0,
-        error: "Iframe Turnstile introuvable après toutes les tentatives",
-      };
+      return { success: false, challengeType: "turnstile", durationMs: Date.now() - t0, error: "Widget CF Turnstile introuvable apres toutes les tentatives" };
     }
 
-    // Attendre que l'iframe soit visible et prête
-    try {
-      await iframe.waitForSelector?.("body", { timeout: 3_000 }).catch(() => {});
-    } catch { /* non-fatal — cross-origin */ }
+    // Coordonnees de clic (checkbox a ~33px du bord gauche, centree verticalement)
+    const coords = computeCfWidgetClickCoords(widgetCoords);
+    console.log(`${LOG_PREFIX} 🖱️ Clic CF widget [${Math.round(coords.x)}, ${Math.round(coords.y)}] (conteneur: ${widgetCoords.w}x${widgetCoords.h})`);
 
-    // Calculer les coordonnées de clic
-    const coords = await computeTurnstileClickCoords(iframe);
-    if (!coords) {
-      console.warn(`${LOG_PREFIX} ⚠️ Coordonnées invalides — skip tentative ${attempt}`);
-      await new Promise((r) => setTimeout(r, clickDelay));
-      continue;
-    }
-
-    // Vérifier si l'iframe est visible dans le viewport, scroller si nécessaire
-    try {
-      const needsScroll = await page.evaluate((iframeSelector: string) => {
-        const el = document.querySelector(iframeSelector) as HTMLElement | null;
-        if (!el) return false;
-        const rect = el.getBoundingClientRect();
-        const inViewport = rect.top >= 0 && rect.bottom <= window.innerHeight &&
-                           rect.left >= 0 && rect.right <= window.innerWidth;
-        if (!inViewport) {
-          window.scrollBy({ top: rect.top - window.innerHeight / 2, behavior: "smooth" });
-          return true;
-        }
-        return false;
-      }, 'iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"]').catch(() => false);
-
-      if (needsScroll) {
-        console.log(`${LOG_PREFIX} 📜 Scroll vers l'iframe Turnstile (hors viewport)`);
-        await new Promise((r) => setTimeout(r, 500 + Math.random() * 300));
-      }
-    } catch { /* non-fatal */ }
 
     // Clic CDP humanisé
     await humanLikeCdpClick(page, coords.x, coords.y);
