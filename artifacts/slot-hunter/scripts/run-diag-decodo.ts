@@ -172,21 +172,51 @@ async function main(): Promise<void> {
     }
   }
 
-  // Post-solve : widget Bookitit
+  // Post-solve : vérifier que CF nous a laissé passer SANS re-naviguer
   if (solveResult.success) {
     console.log("\n── Vérification post-solve ─────────────────────────────────────────");
     try {
-      await page.goto(portalConfig.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      // Attendre que CF redirige automatiquement (ne PAS re-naviguer = nouveau challenge!)
+      console.log("  ⏳ Attente redirection CF automatique (3s)…");
+      await new Promise((r) => setTimeout(r, 3_000));
+
       const postTitle = await page.title().catch(() => "?");
+      const postUrl = page.url();
       const w = await page.evaluate(() => ({
         hasJquery: typeof (window as any).jQuery === "function",
-        hasBkt: typeof (window as any).bkt_init_widget === "object",
+        hasBkt: typeof (window as any).bkt_init_widget === "object" && (window as any).bkt_init_widget !== null,
         bodyLen: document.body?.innerHTML?.length ?? 0,
         isChallenge: document.title.toLowerCase().includes("moment"),
-      })).catch(() => ({ hasJquery: false, hasBkt: false, bodyLen: 0, isChallenge: false }));
-      console.log(`  📄 Titre post-solve: "${postTitle}"`);
-      console.log(`  jQuery: ${w.hasJquery ? "✅" : "❌"} | bkt_init_widget: ${w.hasBkt ? "✅" : "❌"} | body: ${w.bodyLen}B`);
-      console.log(`  CF encore actif: ${w.isChallenge ? "⚠️ OUI" : "✅ NON"}`);
+        bodyText: document.body?.innerText?.slice(0, 200) ?? "",
+        hasBookitit: !!document.querySelector("[class*='bookitit'], script[src*='bookitit']"),
+      })).catch(() => ({ hasJquery: false, hasBkt: false, bodyLen: 0, isChallenge: false, bodyText: "", hasBookitit: false }));
+
+      console.log(`  📄 Titre: "${postTitle}"`);
+      console.log(`  🔗 URL: ${postUrl.slice(0, 80)}`);
+      console.log(`  Body: ${w.bodyLen}B | CF actif: ${w.isChallenge ? "⚠️ OUI" : "✅ NON"}`);
+      console.log(`  jQuery: ${w.hasJquery ? "✅" : "❌"} | bkt_init_widget: ${w.hasBkt ? "✅" : "❌"}`);
+      console.log(`  Bookitit DOM: ${w.hasBookitit ? "✅" : "❌"}`);
+      if (w.bodyText) console.log(`  Body: "${w.bodyText.slice(0, 150)}"`);
+
+      // Test fetch depuis la page avec cookies CF actifs
+      console.log("  🌐 Fetch direct avec cookies CF…");
+      const fetchResult = await page.evaluate(async (url: string) => {
+        try {
+          const resp = await fetch(url, { credentials: "include", headers: { "Cache-Control": "no-cache" } });
+          const text = await resp.text();
+          return {
+            status: resp.status,
+            bodyLen: text.length,
+            isChallenge: text.toLowerCase().includes("just a moment"),
+            hasBkt: text.includes("bkt_init_widget") || text.includes("bookitit"),
+            title: text.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "?",
+          };
+        } catch(err: any) { return { status: 0, bodyLen: 0, isChallenge: false, hasBkt: false, title: err.message }; }
+      }, portalConfig.url).catch(() => null);
+      if (fetchResult) {
+        console.log(`  Fetch → HTTP ${fetchResult.status} | ${fetchResult.bodyLen}B | titre: "${fetchResult.title}"`);
+        console.log(`  CF bloqué: ${fetchResult.isChallenge ? "⚠️ OUI" : "✅ NON"} | Bookitit: ${fetchResult.hasBkt ? "✅ OUI" : "❌ NON"}`);
+      }
     } catch (e: any) {
       console.warn(`  ⚠️ Post-solve: ${e.message?.slice(0, 80)}`);
     }

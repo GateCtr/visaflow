@@ -570,17 +570,7 @@ async function waitForClearance(
 }
 
 // ─── Résolution Turnstile par clic CDP ──────────────────────────────────────
-// ─── Résolution Turnstile par clic CDP ──────────────────────────────────────
 
-/**
- * Coordonnees du widget Turnstile CF 2026.
- *
- * CF 2026 ne met PAS d'<iframe> dans le DOM HTML. Le widget est rendu par le moteur
- * Chromium comme une browser-level frame superposee sur un div conteneur.
- *
- * Strategie : trouver input[id*="cf-chl-widget"] → remonter au parent avec taille.
- */
-async function findTurnstileWidgetCoords(
 /**
  * Coordonnees du widget Turnstile CF 2026.
  *
