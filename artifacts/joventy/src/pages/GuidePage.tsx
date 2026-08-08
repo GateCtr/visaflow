@@ -217,11 +217,11 @@ export default function GuidePage() {
                   <WhatsAppAuditCTA className="flex-shrink-0" />
                 </div>
               )}
-              {/* In-article ad after every 3 sections */}
-              {(i + 1) % 3 === 0 && i < guide.sections.length - 1 && (
+              {/* In-article ad after every 4 sections */}
+              {(i + 1) % 4 === 0 && i < guide.sections.length - 1 && (
                 <AdSenseInArticle slot="4084632507" />
-              )}4
-            </section>4
+              )}
+            </section>
           ))}
         </div>
 
