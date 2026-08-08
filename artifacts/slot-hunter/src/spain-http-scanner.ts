@@ -499,7 +499,7 @@ async function callBookititJsonp(
 ): Promise<unknown | null> {
   const q = buildBookititQueryString({
     ...params,
-    callback: `jQuery${Math.floor(Math.random() * 10_000_000_000_000).toString().padStart(16, "0")}_${Date.now()}`,
+    callback: `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`,
     _: String(Date.now()),
   });
   const url = `${baseUrl}${endpoint}?${q}`;
@@ -1027,7 +1027,9 @@ async function confirmSlotsViaDatetime(
       // Étape 0 : getwidgetconfigurations/ — initialise la session Bookitit côté serveur.
       // Sans cet appel, certains portails (Cuba) retournent un body vide sur getservices/.
       // Non-fatal : on continue même si ça échoue.
-      const cfgCb = `jQueryCfg${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+      // CRITIQUE : le callback JSONP doit être au format jQuery 2.1.1 natif : jQuery21109{timestamp}_{counter}
+      // Un callback au mauvais format (ex: "jQueryCfg...") est rejeté silencieusement par Bookitit → 0B.
+      const cfgCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
       const cfgQ = new URLSearchParams();
       cfgQ.append("callback",       cfgCb);
       console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${cfgCb}`);
@@ -1074,7 +1076,7 @@ async function confirmSlotsViaDatetime(
         } catch { /* non-fatal */ }
       }
 
-      const svcCb = `jQuerySvc${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+      const svcCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
       const svcQ = new URLSearchParams();
       svcQ.append("callback",       svcCb);
       console.log(`[spain-http] 🔧 init callback getservices/ = ${svcCb}`);
@@ -1160,7 +1162,9 @@ async function confirmSlotsViaDatetime(
     });
   }
 
-  const cbBase = `jQuery${Date.now()}_`;
+  // Générateur de callback jQuery 2.1.1 natif — format exact attendu par Bookitit.
+  const jqCbGen = () => `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  const cbBase = `jQuery${Date.now()}_`; // conservé pour compatibilité log uniquement
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
   const useBrowserFetch = shouldRouteBookititViaBrowser(session);
@@ -1234,7 +1238,7 @@ async function confirmSlotsViaDatetime(
       } else {
         // ── Approche 2 : AJAX direct (fallback si page Chromium indisponible) ─
         const agQ = new URLSearchParams();
-        const agCb = `${cbBase}ag`;
+        const agCb = jqCbGen();
         agQ.append("callback",   agCb);
         console.log(`[spain-http] 🔧 getagendas/ fallback AJAX = ${agCb}`);
         agQ.append("type",       "default");
@@ -1340,7 +1344,7 @@ async function confirmSlotsViaDatetime(
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
-        const dtCb = `${cbBase}dt${mo}`;
+        const dtCb = jqCbGen();
         dtQ.append("callback",       dtCb);
         console.log(`[spain-http] 🔧 callback datetime/ = ${dtCb}`);
         dtQ.append("type",           "default");

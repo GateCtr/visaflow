@@ -1,0 +1,422 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Configurer l'environnement de test (vitest + fast-check)": [
+      {
+        "executionId": "daa51139-452a-463a-af07-b01fe1166529",
+        "chatSessionId": "sess_0bb72943-4949-4572-993c-304ca07b3f35",
+        "timestamp": 1786147118070
+      },
+      {
+        "executionId": "daa51139-452a-463a-af07-b01fe1166529",
+        "chatSessionId": "sess_0bb72943-4949-4572-993c-304ca07b3f35",
+        "timestamp": 1786147401718
+      }
+    ],
+    "2.1 Ajouter les nouvelles interfaces au début de `cf-challenge-solver.ts`": [
+      {
+        "executionId": "6d76df56-6c79-473b-969b-30d5af76d5eb",
+        "chatSessionId": "sess_ee1d9d26-0566-43fc-8791-a7ed3866c4f8",
+        "timestamp": 1786147475714
+      },
+      {
+        "executionId": "6d76df56-6c79-473b-969b-30d5af76d5eb",
+        "chatSessionId": "sess_ee1d9d26-0566-43fc-8791-a7ed3866c4f8",
+        "timestamp": 1786147817602
+      }
+    ],
+    "2. Types et interfaces v2": [
+      {
+        "executionId": "6d76df56-6c79-473b-969b-30d5af76d5eb",
+        "chatSessionId": "sess_ee1d9d26-0566-43fc-8791-a7ed3866c4f8",
+        "timestamp": 1786147817789
+      }
+    ],
+    "3.1 Implémenter le SessionCache en mémoire avec TTL": [
+      {
+        "executionId": "5a62ea2a-286b-472a-8a88-982c362e1f3c",
+        "chatSessionId": "sess_ebb9836d-dc2b-4ae8-a8a9-71e9db1a4370",
+        "timestamp": 1786147886532
+      },
+      {
+        "executionId": "5a62ea2a-286b-472a-8a88-982c362e1f3c",
+        "chatSessionId": "sess_ebb9836d-dc2b-4ae8-a8a9-71e9db1a4370",
+        "timestamp": 1786148092063
+      }
+    ],
+    "3.2 Implémenter les métriques et la persistence disque optionnelle": [
+      {
+        "executionId": "5a62ea2a-286b-472a-8a88-982c362e1f3c",
+        "chatSessionId": "sess_ebb9836d-dc2b-4ae8-a8a9-71e9db1a4370",
+        "timestamp": 1786147887580
+      },
+      {
+        "executionId": "5a62ea2a-286b-472a-8a88-982c362e1f3c",
+        "chatSessionId": "sess_ebb9836d-dc2b-4ae8-a8a9-71e9db1a4370",
+        "timestamp": 1786148092915
+      }
+    ],
+    "3. SessionCache singleton": [
+      {
+        "executionId": "5a62ea2a-286b-472a-8a88-982c362e1f3c",
+        "chatSessionId": "sess_ebb9836d-dc2b-4ae8-a8a9-71e9db1a4370",
+        "timestamp": 1786148093004
+      }
+    ],
+    "3.3 Tests unitaires et property tests du SessionCache": [
+      {
+        "executionId": "babfbbf0-c382-4765-b3c7-33afa7a890b9",
+        "chatSessionId": "sess_3136526d-b2aa-41f1-8da8-128e28581acd",
+        "timestamp": 1786148214799
+      },
+      {
+        "executionId": "babfbbf0-c382-4765-b3c7-33afa7a890b9",
+        "chatSessionId": "sess_3136526d-b2aa-41f1-8da8-128e28581acd",
+        "timestamp": 1786148898843
+      },
+      {
+        "executionId": "8e0e19a1-7593-4a11-976d-68e70dc14b46",
+        "chatSessionId": "sess_4f4e45b1-b4cc-4fae-8f8f-213b8d3996f6",
+        "timestamp": 1786149449684
+      },
+      {
+        "executionId": "8e0e19a1-7593-4a11-976d-68e70dc14b46",
+        "chatSessionId": "sess_4f4e45b1-b4cc-4fae-8f8f-213b8d3996f6",
+        "timestamp": 1786149650320
+      }
+    ],
+    "4. ChallengeDetector réécrit": [
+      {
+        "executionId": "1bf55862-63a1-4802-a196-3c57e00f13e1",
+        "chatSessionId": "sess_20c5736b-7cbb-4e9a-a243-a17d749e02d4",
+        "timestamp": 1786149100175
+      },
+      {
+        "executionId": "1bf55862-63a1-4802-a196-3c57e00f13e1",
+        "chatSessionId": "sess_20c5736b-7cbb-4e9a-a243-a17d749e02d4",
+        "timestamp": 1786149381362
+      }
+    ],
+    "4.1 Réécrire `detectChallengeType` avec ordre de priorité strict et `CfPageSignals`": [
+      {
+        "executionId": "1bf55862-63a1-4802-a196-3c57e00f13e1",
+        "chatSessionId": "sess_20c5736b-7cbb-4e9a-a243-a17d749e02d4",
+        "timestamp": 1786149101753
+      },
+      {
+        "executionId": "1bf55862-63a1-4802-a196-3c57e00f13e1",
+        "chatSessionId": "sess_20c5736b-7cbb-4e9a-a243-a17d749e02d4",
+        "timestamp": 1786149381263
+      }
+    ],
+    "4.2 Tests unitaires et property tests de la détection": [
+      {
+        "executionId": "78b9e0b7-9fd7-4b9a-b82b-dccba2b2c0a4",
+        "chatSessionId": "sess_92d1be16-d41a-4197-a302-cf905f7b1830",
+        "timestamp": 1786149703588
+      },
+      {
+        "executionId": "1fe5b43f-5f12-49b8-b378-6b14755edb9a",
+        "chatSessionId": "sess_cd6d2baf-e56d-41d3-ab11-dc6e322e0c74",
+        "timestamp": 1786150204145
+      },
+      {
+        "executionId": "1fe5b43f-5f12-49b8-b378-6b14755edb9a",
+        "chatSessionId": "sess_cd6d2baf-e56d-41d3-ab11-dc6e322e0c74",
+        "timestamp": 1786150509564
+      }
+    ],
+    "5.1 Ajouter les nouveaux patches dans `preparePageStealth`": [
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150561785
+      },
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150836995
+      }
+    ],
+    "5.2 Ajouter le support timezone via `geoTimezone`": [
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150562442
+      },
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150837426
+      }
+    ],
+    "5.3 Ajouter `page.bringToFront()` dans `solveCfChallenge`": [
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150563271
+      },
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150838315
+      }
+    ],
+    "5. StealthManager enrichi (patches v2)": [
+      {
+        "executionId": "7b5963d8-d2b2-4a4d-a463-8d74f338607d",
+        "chatSessionId": "sess_63ac3f61-6fbc-4658-9e1e-508e6b95f936",
+        "timestamp": 1786150838454
+      }
+    ],
+    "5.4 Tests unitaires du StealthManager": [
+      {
+        "executionId": "fe963f9f-cdae-4f4c-b098-d3608b51a226",
+        "chatSessionId": "sess_eb68ded9-13e8-4413-81de-b9366cad19a0",
+        "timestamp": 1786150932166
+      },
+      {
+        "executionId": "fe963f9f-cdae-4f4c-b098-d3608b51a226",
+        "chatSessionId": "sess_eb68ded9-13e8-4413-81de-b9366cad19a0",
+        "timestamp": 1786151372129
+      }
+    ],
+    "6.1 Implémenter `cubicBezier` et `generateBezierTrajectory`": [
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151441583
+      },
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151859525
+      }
+    ],
+    "6.2 Mettre à jour `humanLikeCdpClick` avec la trajectoire Bézier": [
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151448377
+      },
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151865786
+      }
+    ],
+    "6.3 Ajouter scroll pré-clic et délai post-navigation dans `solveTurnstileByClick`": [
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151454187
+      },
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151872219
+      }
+    ],
+    "6. Trajectoire Bézier et TurnstileClickSolver mis à jour": [
+      {
+        "executionId": "299d7e1e-5ff2-44ba-a0fe-b54c884de0ed",
+        "chatSessionId": "sess_8e1f46b0-deeb-4ed6-854f-18dcbe2478ec",
+        "timestamp": 1786151872311
+      }
+    ],
+    "7.1 Mettre à jour `solveCfChallenge` avec check cache et enregistrement métriques": [
+      {
+        "executionId": "f92e4a43-f023-4426-b85a-27d33ead897e",
+        "chatSessionId": "sess_9d1129c5-6441-4932-bbe5-6fe4f51251b5",
+        "timestamp": 1786151932729
+      },
+      {
+        "executionId": "f92e4a43-f023-4426-b85a-27d33ead897e",
+        "chatSessionId": "sess_9d1129c5-6441-4932-bbe5-6fe4f51251b5",
+        "timestamp": 1786152233239
+      }
+    ],
+    "7.2 Mettre à jour la cascade de stratégies dans `solveCfChallenge`": [
+      {
+        "executionId": "f92e4a43-f023-4426-b85a-27d33ead897e",
+        "chatSessionId": "sess_9d1129c5-6441-4932-bbe5-6fe4f51251b5",
+        "timestamp": 1786151933585
+      },
+      {
+        "executionId": "f92e4a43-f023-4426-b85a-27d33ead897e",
+        "chatSessionId": "sess_9d1129c5-6441-4932-bbe5-6fe4f51251b5",
+        "timestamp": 1786152233833
+      }
+    ],
+    "7. CfSolverOrchestrator — cascade de stratégies et intégration cache": [
+      {
+        "executionId": "f92e4a43-f023-4426-b85a-27d33ead897e",
+        "chatSessionId": "sess_9d1129c5-6441-4932-bbe5-6fe4f51251b5",
+        "timestamp": 1786152233918
+      }
+    ],
+    "6.4 Tests unitaires et property tests du mouvement Bézier": [
+      {
+        "executionId": "d73f35fc-bf83-437f-8155-99b84ab270a6",
+        "chatSessionId": "sess_aa249364-c0df-4d87-91fe-3cf1435a0263",
+        "timestamp": 1786152263576
+      },
+      {
+        "executionId": "d73f35fc-bf83-437f-8155-99b84ab270a6",
+        "chatSessionId": "sess_aa249364-c0df-4d87-91fe-3cf1435a0263",
+        "timestamp": 1786152466441
+      }
+    ],
+    "7.3 Tests unitaires du CfSolverOrchestrator": [
+      {
+        "executionId": "fd38ea87-f1ed-41d2-a99b-9a8d9ddfe1c4",
+        "chatSessionId": "sess_6b21323b-a937-4247-bbb5-82e96f4bbbc2",
+        "timestamp": 1786152571781
+      },
+      {
+        "executionId": "fd38ea87-f1ed-41d2-a99b-9a8d9ddfe1c4",
+        "chatSessionId": "sess_6b21323b-a937-4247-bbb5-82e96f4bbbc2",
+        "timestamp": 1786152849469
+      }
+    ],
+    "9.1 Mettre à jour la boucle retry avec backoff exponentiel borné": [
+      {
+        "executionId": "5d3b4e10-8e6e-4e55-8b08-79b6ecd48f82",
+        "chatSessionId": "sess_87d13195-17e3-4842-a9ea-119d0ee5171e",
+        "timestamp": 1786173078177
+      },
+      {
+        "executionId": "5d3b4e10-8e6e-4e55-8b08-79b6ecd48f82",
+        "chatSessionId": "sess_87d13195-17e3-4842-a9ea-119d0ee5171e",
+        "timestamp": 1786173371026
+      }
+    ],
+    "9.2 Mettre à jour la rotation IP Decodo": [
+      {
+        "executionId": "5d3b4e10-8e6e-4e55-8b08-79b6ecd48f82",
+        "chatSessionId": "sess_87d13195-17e3-4842-a9ea-119d0ee5171e",
+        "timestamp": 1786173078894
+      },
+      {
+        "executionId": "5d3b4e10-8e6e-4e55-8b08-79b6ecd48f82",
+        "chatSessionId": "sess_87d13195-17e3-4842-a9ea-119d0ee5171e",
+        "timestamp": 1786173371759
+      }
+    ],
+    "9. `solveCfChallengeWithRetry` — retry et rotation IP": [
+      {
+        "executionId": "5d3b4e10-8e6e-4e55-8b08-79b6ecd48f82",
+        "chatSessionId": "sess_87d13195-17e3-4842-a9ea-119d0ee5171e",
+        "timestamp": 1786173371872
+      }
+    ],
+    "9.3 Tests unitaires et property tests du retry": [
+      {
+        "executionId": "292e8358-8f99-4368-b9bf-cafb72b18217",
+        "chatSessionId": "sess_739905d7-f20b-4055-a4e5-03ec7b755317",
+        "timestamp": 1786173435683
+      },
+      {
+        "executionId": "292e8358-8f99-4368-b9bf-cafb72b18217",
+        "chatSessionId": "sess_739905d7-f20b-4055-a4e5-03ec7b755317",
+        "timestamp": 1786175638915
+      }
+    ],
+    "10.1 Vérifier et compléter les exports du module": [
+      {
+        "executionId": "98eb4bdb-b9c0-4314-94dd-6c9fc94ad165",
+        "chatSessionId": "sess_399a25e1-1dc2-4f74-9ee5-3bf22b186c16",
+        "timestamp": 1786175757635
+      },
+      {
+        "executionId": "98eb4bdb-b9c0-4314-94dd-6c9fc94ad165",
+        "chatSessionId": "sess_399a25e1-1dc2-4f74-9ee5-3bf22b186c16",
+        "timestamp": 1786176307124
+      }
+    ],
+    "10. Exports rétrocompatibles et nouvelles exports": [
+      {
+        "executionId": "98eb4bdb-b9c0-4314-94dd-6c9fc94ad165",
+        "chatSessionId": "sess_399a25e1-1dc2-4f74-9ee5-3bf22b186c16",
+        "timestamp": 1786176307464
+      }
+    ],
+    "11.1 Câbler tous les composants dans `cf-challenge-solver.ts`": [
+      {
+        "executionId": "3cb136bb-2e18-4b2c-87b9-60ed3bda2f7d",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786176567993
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177585738
+      }
+    ],
+    "11. Intégration finale et câblage": [
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177586255
+      }
+    ],
+    "12. Vérification TypeScript strict et compilation": [
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177604347
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177883107
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786179533746
+      }
+    ],
+    "13. Checkpoint final — tous les tests passent": [
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177604603
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786179542713
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786179964707
+      }
+    ],
+    "8. Checkpoint — vérification intermédiaire": [
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177624962
+      },
+      {
+        "executionId": "b616fdb5-8146-45a6-94ef-b8cd98786a54",
+        "chatSessionId": "sess_27f42051-10fd-409b-8b2e-9d6f68b0e80c",
+        "timestamp": 1786177847007
+      }
+    ],
+    "11.2 Tests d'intégration du flux complet": [
+      {
+        "executionId": "bfece3ae-efe3-4b17-953c-5dcf954c44c4",
+        "chatSessionId": "sess_8fb400b8-fae1-464d-b1a0-ac50a1ad65dd",
+        "timestamp": 1786180002952
+      },
+      {
+        "executionId": "bfece3ae-efe3-4b17-953c-5dcf954c44c4",
+        "chatSessionId": "sess_8fb400b8-fae1-464d-b1a0-ac50a1ad65dd",
+        "timestamp": 1786180289125
+      }
+    ]
+  }
+}

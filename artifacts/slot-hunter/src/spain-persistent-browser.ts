@@ -1362,8 +1362,12 @@ class SpainPersistentBrowserManager {
       return q.toString();
     };
 
-    const cfgUrl = `${base}getwidgetconfigurations/?${buildBaseParams(`cbCfg${Date.now()}`)}`;
-    const svcUrl = `${base}getservices/?${buildBaseParams(`cbSvc${Date.now() + 1}`)}`;
+    // CRITIQUE : le serveur Bookitit valide que callback commence par "jQuery" suivi de digits.
+    // Les anciens noms "cbCfg"/"cbSvc" ne respectaient pas ce format → réponses 0B.
+    // Format jQuery 2.1.1 natif : jQuery21109{timestamp}_{counter} — utilisé par le widget Backbone de Bookitit.
+    const jqCb = () => `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+    const cfgUrl = `${base}getwidgetconfigurations/?${buildBaseParams(jqCb())}`;
+    const svcUrl = `${base}getservices/?${buildBaseParams(jqCb())}`;
 
     console.log("[spain-pb] ⚡ Prefetch Bookitit APIs (getwidgetconfigurations + getservices)…");
     // Séquentiel : getwidgetconfigurations/ initialise la session PHP — getservices/ en parallèle = 0B (Cuba/Kinshasa).
@@ -1430,13 +1434,14 @@ class SpainPersistentBrowserManager {
         const tasks: Array<{ url: string; cacheKey: string }> = [];
         for (const svcId of serviceIds.slice(0, 3)) {
           // getagendas/ par service
-          const agQ = new URLSearchParams(buildBaseParams(`cbAg${Date.now() + (seq++)}`));
+          // CRITIQUE : callback doit être au format jQuery{digits}_{timestamp} — sinon Bookitit retourne 0B.
+          const agQ = new URLSearchParams(buildBaseParams(jqCb()));
           agQ.set("services[]", svcId);
           tasks.push({ url: `${base}getagendas/?${agQ}`, cacheKey: `getagendas/${svcId}` });
 
           // datetime/ par service × 3 mois
           for (const mo of months) {
-            const dtQ = new URLSearchParams(buildDatetimeParams(`cbDt${Date.now() + (seq++)}`));
+            const dtQ = new URLSearchParams(buildDatetimeParams(jqCb()));
             dtQ.set("services[]", svcId);
             dtQ.set("start",      mo.start);
             dtQ.set("end",        mo.end);
@@ -3846,7 +3851,7 @@ export async function callBookititViaJQueryInPage(url: string): Promise<string> 
         return new Promise(function(resolve) {
           // IMPORTANT : le serveur Bookitit valide que callback= commence par "jQuery".
           // Toute autre valeur (ex: "__bkt_", "cb12345") retourne un body vide/incorrect.
-          var cbName = 'jQuery__bkt_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+          var cbName = 'jQuery21109' + Date.now() + '_' + Math.floor(Math.random() * 1e9);
           var timer = setTimeout(function() {
             delete window[cbName];
             if (sc && sc.parentNode) sc.parentNode.removeChild(sc);
@@ -4340,12 +4345,18 @@ export async function callBookititEndpointViaBrowser(url: string): Promise<strin
     const evalPromise = page.evaluate(
       async (u: string) => {
         try {
+          // IMPORTANT : reproduire exactement les headers du widget jQuery Backbone natif.
+          // - Accept : identique à jQuery.ajax({dataType: 'jsonp'})
+          // - X-Requested-With : envoyé par jQuery.ajax par défaut
+          // - Referer : envoyé automatiquement par le browser sur les script-tags JSONP
+          //   → le serveur PHP Bookitit valide le Referer pour le PHPSESSID
           const resp = await fetch(u, {
             method: "GET",
             credentials: "include",
             headers: {
               "Accept": "text/javascript, application/javascript, */*; q=0.01",
               "X-Requested-With": "XMLHttpRequest",
+              "Referer": window.location.href,
             },
           });
           const body = await resp.text();

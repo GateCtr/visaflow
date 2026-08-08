@@ -561,6 +561,16 @@ export function setActiveSpainCfSession(session: SpainCfSession): void {
 export async function ensureSpainCfSession(
   targetUrl: string = DEFAULT_SPAIN_TARGET_URL,
 ): Promise<SpainCfSession | null> {
+  // ── Mode 2captcha-browser : navigateur cloud 2Captcha avec résolution CF native ──
+  // SPAIN_SESSION_MODE=2captcha-browser → Se connecte à un navigateur distant
+  // 2Captcha via CDP WebSocket. Le navigateur cloud gère les challenges CF
+  // nativement (JSD, Turnstile, Managed) via l'interface CDP Captcha.
+  // Avantages : fingerprint réel, pas de headless à gérer, résolution auto des captchas.
+  if (process.env.SPAIN_SESSION_MODE === "2captcha-browser") {
+    const { ensureSpain2CaptchaBrowserSession } = await import("./spain-2captcha-browser.js");
+    return ensureSpain2CaptchaBrowserSession(targetUrl);
+  }
+
   // ── Mode impit : JSD solve direct sans CapSolver ─────────────────────────────
   // SPAIN_SESSION_MODE=impit → JSDSolver (impit-based) résout le challenge CF
   // directement. cf_clearance + PHPSESSID obtenus avec le MÊME fingerprint TLS
@@ -1104,12 +1114,20 @@ export async function spainCfFetch(
   // Extract Chrome major version from UA
   const chromeMajor = session.userAgent.match(/Chrome\/(\d+)/)?.[1] ?? "136";
 
+  // Referer : le serveur PHP Bookitit valide le Referer pour lier le PHPSESSID.
+  // Sans Referer, la session PHP n'est pas initialisée → réponses 0B.
+  // Le widget jQuery natif envoie toujours le Referer de la page portail.
+  const referer = url.includes("/onlinebookings/") && session.portalKey
+    ? `https://www.citaconsular.es/es/hosteds/widgetdefault/${session.portalKey}/`
+    : "https://www.citaconsular.es/es/";
+
   // Base headers, can be overridden by session.extraHeaders and fetchOptions.headers
   const baseHeaders: Record<string, string> = {
     "User-Agent": session.userAgent,
     "Accept": "*/*",
     "Accept-Language": "fr-FR,fr;q=0.9",
     "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Referer": referer,
     "Cookie": cookieParts.join("; "),
     // Sec-Ch-Ua: ordre réel Chrome = "Not/A)Brand" first, then Chromium, then Google Chrome
     // La chaîne "Not(A;Brand" change de format à chaque version — Chrome 136 utilise "Not/A)Brand"

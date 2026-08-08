@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "anti-detect-browser": {
+      "source": "antibrow/anti-detect-browser-skills",
+      "sourceType": "github",
+      "skillPath": "anti-detect-browser/SKILL.md",
+      "computedHash": "592e17914dd1f03e0acb28d7d35235f0c2bf8593f001e0b29fd89928e80bb47f"
+    },
+    "browser-automation": {
+      "source": "davila7/claude-code-templates",
+      "sourceType": "github",
+      "skillPath": "cli-tool/components/skills/utilities/browser-automation/SKILL.md",
+      "computedHash": "ba917ad78916c2441db6cefd126176df427fd692c322dc395f13a7ae06042034"
+    },
+    "php-session-cookie-audit": {
+      "source": "0xshe/php-code-audit-skill",
+      "sourceType": "github",
+      "skillPath": "php-session-cookie-audit/SKILL.md",
+      "computedHash": "9fdb5cd1aac827e30cf1be952089e2abda43ad89b80cdaa5a44f0864b5022961"
+    },
+    "turnstile-spin": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/turnstile-spin/SKILL.md",
+      "computedHash": "5a0782ee40ef5a4833f7a414ec3e40be60dc70543033256fd1e746ad72368906"
+    }
+  }
+}
