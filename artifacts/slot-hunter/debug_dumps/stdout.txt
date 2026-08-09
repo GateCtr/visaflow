@@ -1,0 +1,89 @@
+══════════════════════════════════════════════════════════════════════
+  DIAGNOSTIC CF CHALLENGE SOLVER — Decodo ISP
+══════════════════════════════════════════════════════════════════════
+  Portail  : Kinshasa (RDC)
+  URL      : https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/
+  Proxy    : isp.decodo.com:10010 (user: spqsfc74…)
+  Mode     : headed (visible)
+  CapSolver: ✅ disponible
+
+  ✅ CDP Client Hints alignés (Chrome/136 Windows)
+
+── Navigation ──────────────────────────────────────────────────────
+  🌐 https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb…
+  ✅ Chargé en 2s — URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  📄 Titre: "Just a moment..."
+
+── Détection du challenge ─────────────────────────────────────────
+  🏷️  Type: turnstile
+  🍪 cf_clearance pré-solve: absent
+  🍪 0 cookies: 
+
+── Résolution challenge CF ────────────────────────────────────────
+[cf-solver] 🚀 Début résolution challenge CF — timeout: 90s
+[cf-solver] 🔍 Type de challenge détecté: turnstile
+[cf-solver] 🔘 Résolution Turnstile par clic CDP (max 5 tentatives)…
+[cf-solver] ⏳ Délai post-navigation: 2537ms…
+[cf-solver] 🔄 Tentative clic 1/5…
+[cf-solver] 🔄 Tentative clic 1/5…
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ⏳ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] 🎯 Widget CF pret: id=33ygf rect=[192,304 896x68]
+[cf-solver] 🖱️ Clic CF widget [229, 341] (conteneur: 896x68)
+[cf-solver] 🖱️ Clic CDP Bézier exécuté [229, 341] (34 points)
+[cf-solver] ⏳ Attente résolution post-clic (max 8s)…
+[cf-solver] 🔍 État iframe post-clic: absent
+[cf-solver] ⏳ Délai inter-tentative: 3429ms
+[cf-solver] 🔄 Tentative clic 2/5…
+[cf-solver] 🔄 Tentative clic 2/5…
+[cf-solver] 🎯 Widget CF pret: id=33ygf rect=[192,304 896x68]
+[cf-solver] 🖱️ Clic CF widget [220, 337] (conteneur: 896x68)
+[cf-solver] 🖱️ Clic CDP Bézier exécuté [220, 337] (30 points)
+[cf-solver] ⏳ Attente résolution post-clic (max 8s)…
+[cf-solver] ✅ Turnstile résolu par clic CDP (tentative 2) — cf_clearance: 8oN6i5fuaRSXgsY9o6IypFJXFW6Jpv…
+[cf-solver] 💾 Session mise en cache — domaine: www.citaconsular.es — expiresAt: 2027-08-08T13:36:58.660Z
+
+══════════════════════════════════════════════════════════════════════
+  RAPPORT FINAL
+══════════════════════════════════════════════════════════════════════
+  Résultat       : ✅ SUCCÈS
+  Type challenge : turnstile
+  Résolu par     : turnstile_cdp
+  Durée          : 23s
+  cf_clearance   : 8oN6i5fuaRSXgsY9o6IypFJXFW6JpvNX1WXDN4uqTII-178619…
+  Cookies (3):
+    cf_clearance: 8oN6i5fuaRSXgsY9o6IypFJXFW6JpvNX1WXDN4uqTII-178619
+    PHPSESSID: tGU%2Cp9VOtAWDb5tiHWhBCzhY
+    cf_chl_rc_ni: 1
+
+── Vérification post-solve ─────────────────────────────────────────
+  ⏳ Attente redirection CF automatique (3s)…
+  📄 Titre: "Consulado general de España en São Paulo - S"
+  🔗 URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  Body: 2233B | CF actif: ✅ NON
+  jQuery: ❌ | bkt_init_widget: ❌
+  Bookitit DOM: ❌
+  Body: "To request an appointment, click on the continue button
+Para solicitar cita pulse en el botón continuar
+Continue / Continuar"
+  🌐 Fetch direct avec cookies CF…
+  Fetch → HTTP 200 | 2322B | titre: "Consulado general de España en São Paulo - S "
+  CF bloqué: ✅ NON | Bookitit: ❌ NON
+
+── Flux Bookitit complet ───────────────────────────────────────────
+  🖱️ Clic bouton Continue/Continuar…
+  ✅ Clic effectué → URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  ⏳ Attente widget Bookitit (bkt_init_widget)…
+  ✅ Widget Bookitit présent!
+  publickey: 2d01502f12dc08400e22aea87fb00ae34
+  srvsrc: https://www.citaconsular.es
+
+  🔍 Appel getservices (AllowAppointment?)…
+  📸 Screenshot: debug_dumps/cf-diag-1786196228609.png
+
+  🔋 Browser fermé.

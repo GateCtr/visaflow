@@ -1,0 +1,99 @@
+﻿ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  DIAGNOSTIC CF CHALLENGE SOLVER ΓÇö Decodo ISP
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  Portail  : Kinshasa (RDC)
+  URL      : https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/
+  Proxy    : isp.decodo.com:10010 (user: spqsfc74ΓÇª)
+  Mode     : headless
+  CapSolver: Γ£à disponible
+
+  Γ£à CDP Client Hints align├⌐s (Chrome/136 Windows)
+
+ΓöÇΓöÇ Navigation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  ≡ƒîÉ https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fbΓÇª
+  Γ£à Charg├⌐ en 2s ΓÇö URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  ≡ƒôä Titre: "Just a moment..."
+
+ΓöÇΓöÇ D├⌐tection du challenge ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  ≡ƒÅ╖∩╕Å  Type: turnstile
+  ≡ƒì¬ cf_clearance pr├⌐-solve: absent
+  ≡ƒì¬ 0 cookies: 
+
+ΓöÇΓöÇ R├⌐solution challenge CF ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+[cf-solver] ≡ƒÜÇ D├⌐but r├⌐solution challenge CF ΓÇö timeout: 90s
+[cf-solver] ≡ƒöì Type de challenge d├⌐tect├⌐: turnstile
+[cf-solver] ≡ƒöÿ R├⌐solution Turnstile par clic CDP (max 5 tentatives)ΓÇª
+[cf-solver] ΓÅ│ D├⌐lai post-navigation: 2994msΓÇª
+[cf-solver] ≡ƒöä Tentative clic 1/5ΓÇª
+[cf-solver] ≡ƒöä Tentative clic 1/5ΓÇª
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ΓÅ│ Widget CF en cours de rendu (h=0px, attente...)
+[cf-solver] ≡ƒÄ» Widget CF pret: id=0anck rect=[192,304 896x68]
+[cf-solver] ≡ƒû▒∩╕Å Clic CF widget [223, 338] (conteneur: 896x68)
+[cf-solver] ≡ƒû▒∩╕Å Clic CDP B├⌐zier ex├⌐cut├⌐ [223, 338] (29 points)
+[cf-solver] ΓÅ│ Attente r├⌐solution post-clic (max 8s)ΓÇª
+[cf-solver] ≡ƒöì ├ëtat iframe post-clic: absent
+[cf-solver] ΓÅ│ D├⌐lai inter-tentative: 2899ms
+[cf-solver] ≡ƒöä Tentative clic 2/5ΓÇª
+[cf-solver] ≡ƒöä Tentative clic 2/5ΓÇª
+[cf-solver] ≡ƒÄ» Widget CF pret: id=0anck rect=[192,304 896x68]
+[cf-solver] ≡ƒû▒∩╕Å Clic CF widget [226, 337] (conteneur: 896x68)
+[cf-solver] ≡ƒû▒∩╕Å Clic CDP B├⌐zier ex├⌐cut├⌐ [226, 337] (35 points)
+[cf-solver] ΓÅ│ Attente r├⌐solution post-clic (max 8s)ΓÇª
+[cf-solver] Γ£à Turnstile r├⌐solu par clic CDP (tentative 2) ΓÇö cf_clearance: V0IC8ZjJPYthRjeDoW5tTpnOql2W.rΓÇª
+[cf-solver] ≡ƒÆ╛ Session mise en cache ΓÇö domaine: www.citaconsular.es ΓÇö expiresAt: 2027-08-08T13:35:53.220Z
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  RAPPORT FINAL
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  R├⌐sultat       : Γ£à SUCC├êS
+  Type challenge : turnstile
+  R├⌐solu par     : turnstile_cdp
+  Dur├⌐e          : 20s
+  cf_clearance   : V0IC8ZjJPYthRjeDoW5tTpnOql2W.ruab6biNRG1aQA-178619ΓÇª
+  Cookies (3):
+    cf_chl_rc_ni: 1
+    PHPSESSID: 8Bc205z4yBGFucyn7GDq1G4u
+    cf_clearance: V0IC8ZjJPYthRjeDoW5tTpnOql2W.ruab6biNRG1aQA-178619
+
+ΓöÇΓöÇ V├⌐rification post-solve ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  ΓÅ│ Attente redirection CF automatique (3s)ΓÇª
+  ≡ƒôä Titre: "Consulado general de Espa├▒a en S├úo Paulo - S"
+  ≡ƒöù URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  Body: 2231B | CF actif: Γ£à NON
+  jQuery: Γ¥î | bkt_init_widget: Γ¥î
+  Bookitit DOM: Γ¥î
+  Body: "To request an appointment, click on the continue button
+Para solicitar cita pulse en el bot├│n continuar
+Continue / Continuar"
+  ≡ƒîÉ Fetch direct avec cookies CFΓÇª
+  Fetch ΓåÆ HTTP 200 | 2322B | titre: "Consulado general de Espa├▒a en S├úo Paulo - S "
+  CF bloqu├⌐: Γ£à NON | Bookitit: Γ¥î NON
+
+ΓöÇΓöÇ Flux Bookitit complet ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  ≡ƒû▒∩╕Å Clic bouton Continue/ContinuarΓÇª
+  Γ£à Clic effectu├⌐ ΓåÆ URL: https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb
+  ΓÅ│ Attente widget Bookitit (bkt_init_widget)ΓÇª
+  Γ£à Widget Bookitit pr├⌐sent!
+  publickey: 2d01502f12dc08400e22aea87fb00ae34
+  srvsrc: https://www.citaconsular.es
+
+  ≡ƒöì Appel getservices (AllowAppointment?)ΓÇª
+tsx.CMD :   ΓÜá∩╕Å Flux Bookitit: window is not defined
+Au caractère Ligne:1 : 1
++ & $tsx scripts/run-diag-decodo.ts --portal kinshasa 2>&1 | Out-String ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  ΓÜá∩╕Å Flux B... is not defi 
+   ned:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  ≡ƒô╕ Screenshot: debug_dumps/cf-diag-1786196162427.png
+
+  ≡ƒöï Browser ferm├⌐.
+

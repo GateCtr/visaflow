@@ -223,6 +223,123 @@ async function main(): Promise<void> {
   }
 
   try {
+
+  // ── Flux Bookitit complet ──────────────────────────────────────────────
+  if (solveResult.success) {
+    console.log("\n── Flux Bookitit complet ───────────────────────────────────────────");
+    try {
+      // Étape 1 : cliquer sur Continue/Continuar (POST le token)
+      console.log("  🖱️ Clic bouton Continue/Continuar…");
+      const continueBtn = await page.$('#idCaptchaButton').catch(() => null);
+      if (continueBtn) {
+        await continueBtn.click();
+        await new Promise(r => setTimeout(r, 2_500));
+        console.log(`  ✅ Clic effectué → URL: ${page.url().slice(0, 80)}`);
+      } else {
+        // Peut-être que la page a déjà chargé le widget Bookitit
+        console.log("  ⚠️ Bouton Continue absent — widget peut-être déjà chargé");
+      }
+
+      // Étape 2 : attendre le widget Bookitit
+      console.log("  ⏳ Attente widget Bookitit (bkt_init_widget)…");
+      await new Promise(r => setTimeout(r, 3_000));
+
+      const widgetState = await page.evaluate(() => ({
+        hasBkt: typeof (window as any).bkt_init_widget !== "undefined",
+        publickey: (window as any).bkt_init_widget?.publickey ?? null,
+        srvsrc: (window as any).bkt_init_widget?.srvsrc ?? null,
+        bodyLen: document.body?.innerHTML?.length ?? 0,
+        title: document.title,
+        url: window.location.href,
+      })).catch(() => null);
+
+      if (widgetState?.hasBkt) {
+        console.log(`  ✅ Widget Bookitit présent!`);
+        console.log(`  publickey: ${widgetState.publickey}`);
+        console.log(`  srvsrc: ${widgetState.srvsrc}`);
+
+        // Étape 3 : appeler getservices pour vérifier AllowAppointment
+        console.log("\n  🔍 Appel getservices (AllowAppointment?)…");
+        const servicesResult = await page.evaluate(async (bktWidget: any) => {
+          try {
+            const cb = "bktDiagCallback_" + Date.now();
+            const params = new URLSearchParams({
+              callback: cb,
+              type: bktWidget.type ?? "default",
+              publickey: bktWidget.publickey,
+              lang: bktWidget.lang ?? "es",
+              version: "4",
+              srvsrc: bktWidget.srvsrc,
+              src: bktWidget.src ?? window.location.href,
+              _: Date.now().toString(),
+            });
+            const url = `${bktWidget.srvsrc}/onlinebookings/getservices/?${params}`;
+            const resp = await fetch(url, { credentials: "include" });
+            const text = await resp.text();
+            // Parser JSONP
+            const jsonStr = text.replace(/^[^(]+\(/, "").replace(/\);?\s*$/, "");
+            const data = JSON.parse(jsonStr);
+            return {
+              status: resp.status,
+              allowAppointment: data?.AllowAppointment ?? "?",
+              servicesCount: data?.Services?.length ?? 0,
+              services: (data?.Services ?? []).map((s: any) => s.name).join(", "),
+            };
+          } catch (err: any) {
+            return { status: 0, allowAppointment: "error", error: err.message };
+          }
+        }, (window as any).bkt_init_widget).catch(() => null);
+
+        await page.evaluate(() => (window as any).bkt_init_widget).catch(() => null);
+
+        const bktWidget = await page.evaluate(() => (window as any).bkt_init_widget).catch(() => null);
+        const servicesResult2 = bktWidget ? await (async () => {
+          try {
+            const params = new URLSearchParams({
+              callback: "cb_" + Date.now(),
+              type: bktWidget.type ?? "default",
+              publickey: bktWidget.publickey,
+              lang: bktWidget.lang ?? "es",
+              version: "4",
+              srvsrc: bktWidget.srvsrc,
+              src: bktWidget.src ?? portalConfig.url,
+              _: Date.now().toString(),
+            });
+            const url = `${bktWidget.srvsrc}/onlinebookings/getservices/?${params}`;
+            const cookies = await page.cookies();
+            const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+            // Fetch via puppeteer (hors navigateur)
+            const resp = await page.evaluate(async (fetchUrl: string) => {
+              const r = await fetch(fetchUrl, { credentials: "include" });
+              return { status: r.status, text: await r.text() };
+            }, url);
+            const jsonStr = resp.text.replace(/^[^(]+\(/, "").replace(/\);?\s*$/, "");
+            const data = JSON.parse(jsonStr);
+            return {
+              status: resp.status,
+              allowAppointment: data?.AllowAppointment ?? "?",
+              servicesCount: data?.Services?.length ?? 0,
+              services: (data?.Services ?? []).map((s: any) => s.name).filter(Boolean).join(" | "),
+            };
+          } catch (err: any) { return { error: String(err) }; }
+        })() : null;
+
+        if (servicesResult2) {
+          console.log(`  HTTP ${servicesResult2.status} | AllowAppointment: ${servicesResult2.allowAppointment}`);
+          if (servicesResult2.allowAppointment === false) console.log("  ❌ Aucun créneau disponible actuellement");
+          if (servicesResult2.allowAppointment === true) console.log("  🎉 CRÉNEAUX DISPONIBLES !");
+          if (servicesResult2.servicesCount) console.log(`  Services: ${servicesResult2.services}`);
+          if ((servicesResult2 as any).error) console.log(`  Erreur: ${(servicesResult2 as any).error}`);
+        }
+      } else {
+        console.log(`  ❌ Widget Bookitit absent | titre: "${widgetState?.title}" | body: ${widgetState?.bodyLen}B`);
+        console.log(`  URL: ${widgetState?.url?.slice(0, 80)}`);
+      }
+    } catch (e: any) {
+      console.warn(`  ⚠️ Flux Bookitit: ${e.message?.slice(0, 120)}`);
+    }
+  }
+
     const ts = Date.now();
     await page.screenshot({ path: `debug_dumps/cf-diag-${ts}.png`, fullPage: false });
     console.log(`  📸 Screenshot: debug_dumps/cf-diag-${ts}.png`);
