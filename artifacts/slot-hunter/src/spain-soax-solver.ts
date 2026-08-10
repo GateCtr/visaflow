@@ -576,8 +576,18 @@ export async function ensureSpainCfSession(
   // directement. cf_clearance + PHPSESSID obtenus avec le MÊME fingerprint TLS
   // que les appels JSONP suivants → cohérence garantie.
   if (process.env.SPAIN_SESSION_MODE === "impit") {
-    const { ensureSpainImpitSession } = await import("./spain-impit-session.js");
-    return ensureSpainImpitSession(targetUrl);
+    const { ensureSpainImpitSession, getSpainImpitInstance } = await import("./spain-impit-session.js");
+    const session = await ensureSpainImpitSession(targetUrl);
+    // ⚠️  Synchroniser l'instance impit solvante dans getSpainImpit() pour que
+    // spainCfFetch réutilise la même TLS session (sinon → 0B Bookitit).
+    if (session) {
+      const imp = getSpainImpitInstance();
+      if (imp) {
+        _spainImpit = imp;
+        _spainImpitProxyUrl = session.soaxProxyUrl;
+      }
+    }
+    return session;
   }
 
   // ── Mode persistent-browser : déléguer entièrement au PB manager ────────────
@@ -896,10 +906,16 @@ export async function ensureSpainCfSession(
         source: "direct",
       };
 
+      // ⚠️  CRITIQUE : conserver la même instance impit pour les requêtes JSONP suivantes.
+      // CF lie le cf_clearance (vide ici) ET le PHPSESSID à la session TLS du probe.
+      // getSpainImpit() créerait une nouvelle instance → nouvelle TLS → 0B Bookitit.
+      _spainImpit = probeImpit;
+      _spainImpitProxyUrl = soaxProxyUrl;
+
       _activeCfSession = directSession;
       syncSpainCfSessionToRedis(directSession as SerializableSpainCfSession);
       console.log(
-        `[spain-soax] 🎉 Session directe établie — PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 90min`,
+        `[spain-soax] 🎉 Session directe établie — PHPSESSID=${phpSessionId ? "✅" : "❌ absent"} | Valide 90min | impit probe réutilisé ✅`,
       );
       return directSession;
     }
@@ -918,49 +934,58 @@ export async function ensureSpainCfSession(
     cfChallengeDetected = true;
   }
 
-  // ── Étape 2 : CapSolver — seulement si CF challenge détecté ─────────────────
+  // ── Étape 2 : CF challenge détecté → solve 100% HTTP via impit ──────────────
+  // POURQUOI pas AntiCloudflareTask ici ?
+  //   AntiCloudflareTask envoie notre proxy à CapSolver qui résout le challenge
+  //   avec son propre Chrome. CF lie le cf_clearance au fingerprint TLS de ce Chrome.
+  //   Quand impit appelle /main/ ensuite (TLS différente), CF retourne 0B silencieux.
+  //
+  // SOLUTION : solveViaImpit() extrait le sitekey CF du HTML déjà fetchée, appelle
+  //   CapSolver uniquement pour le TOKEN Turnstile (ProxyLess — CapSolver n'ouvre
+  //   pas de connexion vers citaconsular.es), puis POSTE la solution via le MÊME
+  //   probeImpit. CF lie cf_clearance à NOTRE TLS impit → cohérence garantie.
   if (!cfChallengeDetected) {
     console.error(`[spain-soax] ❌ Probe direct échoué sans challenge CF détecté`);
     return null;
   }
 
-  const capsolverKey = process.env.CAPSOLVER_API_KEY;
-  if (!capsolverKey) {
-    console.error(`[spain-soax] ❌ CF challenge détecté mais CAPSOLVER_API_KEY non configurée`);
-    return null;
-  }
+  console.log(`[spain-soax] 🔐 CF challenge → solveViaImpit (JSD/Turnstile avec même TLS impit)…`);
+  const { solveViaImpit: solveViaImpitFn, getSpainImpitInstance } =
+    await import("./spain-impit-session.js");
 
-  const proxyLabel = process.env.DECODO_PROXY_URL ? "Decodo ISP" : "SOAX sticky";
   const MAX_ATTEMPTS = 2;
+  const proxyLabel = process.env.DECODO_PROXY_URL ? "Decodo ISP" : "SOAX sticky";
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    console.log(`[spain-soax] 🎯 CapSolver tentative ${attempt}/${MAX_ATTEMPTS}…`);
+    console.log(`[spain-soax] 🎯 solveViaImpit tentative ${attempt}/${MAX_ATTEMPTS}…`);
 
-    // Passer le HTML pré-fetchée au 1er essai (évite re-fetch proxy ~240KB).
-    // Au 2ème essai on laisse CapSolver fetcher lui-même (IP a peut-être changé).
-    const htmlForAttempt = attempt === 1 ? challengeHtmlFromProbe : undefined;
-    const result = await solveSpainCloudflare(targetUrl, capsolverKey, soaxProxyUrl, htmlForAttempt);
+    const impitSession = await solveViaImpitFn(targetUrl, soaxProxyUrl);
 
-    if (result.success && result.session) {
-      result.session.allCookies = await applyStableGaProfile(
-        result.session.allCookies,
-        result.session.createdAt,
+    if (impitSession) {
+      // ⚠️  Synchroniser l'instance impit solvante dans getSpainImpit() pour que
+      // spainCfFetch réutilise la même TLS session (sinon → 0B Bookitit).
+      const solvingImpit = getSpainImpitInstance();
+      if (solvingImpit) {
+        _spainImpit = solvingImpit;
+        _spainImpitProxyUrl = soaxProxyUrl;
+        console.log(`[spain-soax] ✅ impit solvant synchronisé dans spainCfFetch (même TLS garantie)`);
+      }
+
+      impitSession.allCookies = await applyStableGaProfile(
+        impitSession.allCookies,
+        impitSession.createdAt,
       );
-      result.session.source = "capsolver";
-      _activeCfSession = result.session;
-      console.log(`[spain-soax] 🎉 Session CF établie via ${proxyLabel}! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
-      console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
-      syncSpainCfSessionToRedis(result.session as SerializableSpainCfSession);
-      return result.session;
+      _activeCfSession = impitSession;
+      console.log(
+        `[spain-soax] 🎉 Session CF 100% HTTP établie via ${proxyLabel}! ` +
+        `cf_clearance: ${impitSession.cfClearance ? "✅" : "⚠️ absent (accès direct)"} | ` +
+        `Valide jusqu'à: ${new Date(impitSession.expiresAt).toISOString()}`,
+      );
+      syncSpainCfSessionToRedis(impitSession as SerializableSpainCfSession);
+      return impitSession;
     }
 
-    const capErr = result.error ?? "";
-    console.warn(`[spain-soax] ⚠️ CapSolver tentative ${attempt} échouée: ${capErr}`);
-
-    // "challenge not found" après détection locale = CF a disparu entre probe et solve
-    if (/challenge not found/i.test(capErr)) {
-      console.log(`[spain-soax] ℹ️ Challenge disparu entre probe et solve — accès direct maintenant`);
-      break;
-    }
+    console.warn(`[spain-soax] ⚠️ solveViaImpit tentative ${attempt} échouée`);
 
     if (attempt < MAX_ATTEMPTS) {
       rotateSpainSoaxSession("spain-cf");
@@ -968,7 +993,7 @@ export async function ensureSpainCfSession(
     }
   }
 
-  console.error(`[spain-soax] ❌ Impossible d'obtenir une session CF après probe + CapSolver`);
+  console.error(`[spain-soax] ❌ Impossible d'obtenir une session CF après probe + solveViaImpit`);
   return null;
 }
 
