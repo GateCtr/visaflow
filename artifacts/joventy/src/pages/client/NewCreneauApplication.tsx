@@ -351,7 +351,7 @@ export default function NewCreneauApplication() {
           <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
           <div>
             <p className="font-bold text-amber-900 text-sm">Délai minimum : {processingWeeksMin} semaines</p>
-            <p className="text-xs text-amber-700 mt-0.5">Nos bots surveillent 24h/24 et capturent votre créneau dès qu'une place apparaît.</p>
+            <p className="text-xs text-amber-700 mt-0.5">Joventy surveille les portails 24h/24 et capture votre créneau dès qu'une place apparaît.</p>
           </div>
         </div>
         <div className="sm:ml-auto text-right flex-shrink-0">
