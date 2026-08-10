@@ -62,11 +62,18 @@ export default function ClientDashboard() {
             </div>
           )}
         </div>
-        <Link href="/dashboard/applications/new" className="relative z-10">
-          <Button className="gap-2 bg-secondary text-primary hover:bg-secondary/90 font-bold h-11 px-6 shadow-lg">
-            <Plus className="w-4 h-4" /> Nouveau Dossier
-          </Button>
-        </Link>
+        <div className="relative z-10 flex flex-col sm:flex-row gap-2">
+          <Link href="/dashboard/applications/new/creneau">
+            <Button className="gap-2 bg-secondary text-primary hover:bg-secondary/90 font-bold h-11 px-5 shadow-lg w-full sm:w-auto">
+              <Plus className="w-4 h-4" /> Demande de créneau
+            </Button>
+          </Link>
+          <Link href="/dashboard/applications/new">
+            <Button variant="outline" className="gap-2 bg-white/10 text-white border-white/30 hover:bg-white/20 font-semibold h-11 px-5 w-full sm:w-auto">
+              <Plus className="w-4 h-4" /> Demande de visa
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -150,9 +157,14 @@ export default function ClientDashboard() {
                 <p className="text-muted-foreground text-sm max-w-xs mb-5">
                   Vous n'avez pas encore de dossier de demande de visa.
                 </p>
-                <Link href="/dashboard/applications/new">
-                  <Button size="sm">Créer mon premier dossier</Button>
-                </Link>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <Link href="/dashboard/applications/new/creneau">
+                    <Button size="sm">Demande de créneau</Button>
+                  </Link>
+                  <Link href="/dashboard/applications/new">
+                    <Button size="sm" variant="outline">Demande de visa</Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-border">

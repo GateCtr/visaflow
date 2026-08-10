@@ -208,8 +208,9 @@ export const create = mutation({
     let totalPrice: number;
 
     if (isSlotOnly) {
-      const tier: SlotUrgencyTier = (args.slotUrgencyTier ?? "standard") as SlotUrgencyTier;
-      const tierData = SLOT_URGENCY_TIERS[tier];
+      // Tous les nouveaux dossiers créneaux utilisent le tier "standard" ($60/$90/$150 promo).
+      // La valeur envoyée par le client est ignorée pour éviter tout contournement de prix.
+      const tierData = SLOT_URGENCY_TIERS["standard"];
       engagementFee = tierData.depositAmount;
       successFee = tierData.successAmount;
       totalPrice = tierData.total;
@@ -238,7 +239,7 @@ export const create = mutation({
     } = args;
 
     const tierLabel = isSlotOnly
-      ? ` — Urgence : ${SLOT_URGENCY_TIERS[(args.slotUrgencyTier ?? "standard") as SlotUrgencyTier].label}. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
+      ? ` — Créneau standard. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
       : isDossierOnly ? " (tarif fixe, pas de prime de succès)" : "";
 
     const trackingToken = Array.from({ length: 12 }, () =>
@@ -274,7 +275,7 @@ export const create = mutation({
       priceDetails,
       successModel: pricing.successModel,
       servicePackage: pkg,
-      slotUrgencyTier: isSlotOnly ? ((args.slotUrgencyTier ?? "standard") as SlotUrgencyTier) : undefined,
+      slotUrgencyTier: isSlotOnly ? "standard" : undefined,
       slotBookingRefs: args.slotBookingRefs ?? undefined,
       cevVisaClass: cevVisaClass ?? undefined,
       cevApplicantAgeCategory: cevApplicantAgeCategory ?? undefined,

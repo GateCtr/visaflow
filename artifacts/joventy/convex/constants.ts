@@ -526,15 +526,24 @@ export type Destination = keyof typeof VISA_PRICING;
 export type SuccessModel = "appointment" | "evisa";
 export type ServicePackage = "full_service" | "slot_only" | "dossier_only";
 
+// ─── Tarification créneaux (système simplifié) ────────────────────────────
+export const CRENEAU_PROMO_PRICING = {
+  normalPrice: 350,       // Prix normal affiché (barré)
+  promoPrice: 150,        // Prix promotionnel actuel
+  depositAmount: 60,      // Acompte obligatoire à l'ouverture
+  successAmount: 90,      // Solde dû à l'obtention du créneau
+  processingWeeksMin: 3,  // Délai minimum en semaines
+} as const;
+
 export const SLOT_URGENCY_TIERS = {
   standard: {
     key: "standard" as const,
-    label: "Standard",
-    tagline: "> 3 mois",
-    desc: "Date souhaitée dans plus de 3 mois",
-    depositAmount: 80,
-    successAmount: 170,
-    total: 250,
+    label: "Créneau",
+    tagline: "3 semaines min",
+    desc: "Délai minimum de traitement : 3 semaines",
+    depositAmount: CRENEAU_PROMO_PRICING.depositAmount,
+    successAmount: CRENEAU_PROMO_PRICING.successAmount,
+    total: CRENEAU_PROMO_PRICING.promoPrice,
     variableNote: null,
   },
   prioritaire: {

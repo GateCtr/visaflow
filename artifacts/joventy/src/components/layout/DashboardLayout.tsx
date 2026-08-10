@@ -25,6 +25,8 @@ import {
   ScrollText,
   Flag,
   Globe,
+  CalendarSearch,
+  Stamp,
 } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
@@ -60,7 +62,8 @@ export function DashboardLayout({ children, isAdmin = false }: DashboardLayoutPr
   const clientLinks = [
     { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
     { href: "/dashboard/applications", label: "Mes Dossiers", icon: FileText },
-    { href: "/dashboard/applications/new", label: "Nouveau Dossier", icon: PlusCircle },
+    { href: "/dashboard/applications/new/creneau", label: "Demande de créneau", icon: CalendarSearch },
+    { href: "/dashboard/applications/new", label: "Demande de visa", icon: Stamp },
     { href: "/dashboard/messages", label: "Messagerie", icon: MessageCircle, badge: unreadTotal },
     { href: "/dashboard/contrat", label: "Mon Contrat", icon: ScrollText },
   ];

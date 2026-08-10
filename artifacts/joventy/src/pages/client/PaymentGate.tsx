@@ -142,7 +142,7 @@ export default function PaymentGate() {
           <p className="text-4xl font-bold text-secondary">{formatCurrency(amount)}</p>
           <p className="text-slate-300 text-xs mt-1">
             Dossier : {app.destination.toUpperCase()} — {app.visaType}
-            {isSlotOnly && urgencyTier && ` — Urgence : ${urgencyTier.label}`}
+            {isSlotOnly && " — Créneau consulaire"}
           </p>
         </div>
         <div className="text-right">
@@ -159,7 +159,7 @@ export default function PaymentGate() {
             <p>Ce versement initial de <strong>{formatCurrency(amount)}</strong> confirme votre demande.
             {" "}Le solde de <strong>{formatCurrency(app.priceDetails?.successFee ?? 0)}</strong> sera dû
             uniquement si Joventy obtient votre créneau de rendez-vous.</p>
-            {urgencyTier && <p className="mt-1.5 text-xs text-purple-600 font-medium">Niveau d'urgence : {urgencyTier.label} — {urgencyTier.desc}</p>}
+            <p className="mt-1.5 text-xs text-purple-600 font-medium">Délai minimum : 3 semaines · Solde dû uniquement à l'obtention du créneau.</p>
           </div>
         </div>
       )}

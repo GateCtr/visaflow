@@ -12,13 +12,20 @@ export default function ClientApplications() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-3xl font-serif font-bold text-primary">Mes Dossiers</h1>
-        <Link href="/dashboard/applications/new">
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" /> Nouveau
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/applications/new/creneau">
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" /> Créneau
+            </Button>
+          </Link>
+          <Link href="/dashboard/applications/new">
+            <Button variant="outline" className="gap-2">
+              <Plus className="w-4 h-4" /> Visa
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (
@@ -26,9 +33,14 @@ export default function ClientApplications() {
       ) : applications.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl p-12 text-center shadow-premium">
           <p className="text-lg text-muted-foreground mb-4">Aucun dossier trouvé.</p>
-          <Link href="/dashboard/applications/new">
-            <Button>Démarrer un dossier</Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <Link href="/dashboard/applications/new/creneau">
+              <Button>Demande de créneau</Button>
+            </Link>
+            <Link href="/dashboard/applications/new">
+              <Button variant="outline">Demande de visa</Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">

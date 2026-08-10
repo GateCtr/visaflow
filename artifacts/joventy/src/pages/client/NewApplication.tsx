@@ -6,7 +6,7 @@ import * as z from "zod";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/lib/auth";
-import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, getAvailablePackages, type ServicePackage, type SlotUrgencyTier } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, getAvailablePackages, type ServicePackage } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -270,7 +270,6 @@ function getPackageInfo(
 export default function NewApplication() {
   const [step, setStep] = useState(1);
   const [selectedPackage, setSelectedPackage] = useState<ServicePackage>("full_service");
-  const [selectedUrgencyTier, setSelectedUrgencyTier] = useState<SlotUrgencyTier>("standard");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -298,48 +297,26 @@ export default function NewApplication() {
   const isTurkeyEvisa = selectedDest === "turkey" && selectedVisaType.toLowerCase().includes("e-visa");
   const isEvisaFlow = (pricing?.successModel === "evisa") || isTurkeyEvisa;
   const basePackages = selectedDest ? getAvailablePackages(selectedDest) : (["full_service", "dossier_only"] as ServicePackage[]);
-  const availablePackages = basePackages.filter((p) => !(p === "slot_only" && isTurkeyEvisa));
+  // slot_only est maintenant accessible via le flux "Demande de créneau" dédié
+  const availablePackages = basePackages.filter((p) => p !== "slot_only");
   const isDossierOnly = selectedPackage === "dossier_only";
-  const isSlotOnly = selectedPackage === "slot_only";
-  const activeTier = SLOT_URGENCY_TIERS[selectedUrgencyTier];
   const [isPending, setIsPending] = useState(false);
 
   const [userWhatsapp, setUserWhatsapp] = useState("");
 
-  const [slotRefs, setSlotRefs] = useState({
-    ds160Confirmation: "",
-    mrvReceiptNumber: "",
-    sevisId: "",
-    petitionReceiptNumber: "",
-    petitionerName: "",
-    vfsRefNumber: "",
-    vowintAppId: "",
-  });
   const [cevApplicantAgeCategory, setCevApplicantAgeCategory] = useState<"adult" | "child_6_12" | "child_under_6">("adult");
   const [cevTargetCountry, setCevTargetCountry] = useState("BE");
 
   const isPetitionBased = /k-?1|k-?3|h-?1b?|h-?2|h-?3|l-?1a?|l-?1b?|o-?1|o-?2|p-?[123]|r-?1/i.test(selectedVisaType);
   const isStudentExchange = /f-?1|m-?1|j-?1/i.test(selectedVisaType);
-  const showSlotRefsUSA = isSlotOnly && selectedDest === "usa";
-  const showSlotRefsTurkey = isSlotOnly && selectedDest === "turkey";
-  const showSlotRefsSchengen = isSlotOnly && selectedDest === "schengen";
   const isSchengen = selectedDest === "schengen";
   const cevVisaClass = selectedVisaType.includes("Long Séjour") || selectedVisaType.includes("Visa D") ? "D" : "C" as "C" | "D";
   const isSchengenVisaD = isSchengen && cevVisaClass === "D";
   const cevConsulaireFee = isSchengen && !isSchengenVisaD ? getCevConsulaireFee(selectedVisaType, cevApplicantAgeCategory) : null;
 
-  const updateRef = (key: keyof typeof slotRefs, val: string) =>
-    setSlotRefs((prev) => ({ ...prev, [key]: val }));
-
-  useEffect(() => {
-    if (isTurkeyEvisa && selectedPackage === "slot_only") {
-      setSelectedPackage("full_service");
-    }
-  }, [isTurkeyEvisa, selectedPackage]);
-
-  const effectiveEngagementFee = isSlotOnly ? activeTier.depositAmount : (pricing?.engagementFee ?? 0);
-  const effectiveSuccessFee = isSlotOnly ? activeTier.successAmount : isDossierOnly ? 0 : (pricing?.successFee ?? 0);
-  const effectiveTotal = isSlotOnly ? activeTier.total : isDossierOnly ? (pricing?.engagementFee ?? 0) : (pricing?.total ?? 0);
+  const effectiveEngagementFee = pricing?.engagementFee ?? 0;
+  const effectiveSuccessFee = isDossierOnly ? 0 : (pricing?.successFee ?? 0);
+  const effectiveTotal = isDossierOnly ? (pricing?.engagementFee ?? 0) : (pricing?.total ?? 0);
 
   const onSubmit = async (data: FormValues) => {
     setIsPending(true);
@@ -354,16 +331,6 @@ export default function NewApplication() {
         purpose: data.purpose,
         notes: data.notes || undefined,
         servicePackage: selectedPackage,
-        slotUrgencyTier: isSlotOnly ? selectedUrgencyTier : undefined,
-        slotBookingRefs: isSlotOnly ? {
-          ds160Confirmation: slotRefs.ds160Confirmation.trim() || undefined,
-          mrvReceiptNumber: slotRefs.mrvReceiptNumber.trim() || undefined,
-          sevisId: slotRefs.sevisId.trim() || undefined,
-          petitionReceiptNumber: slotRefs.petitionReceiptNumber.trim() || undefined,
-          petitionerName: slotRefs.petitionerName.trim() || undefined,
-          vfsRefNumber: slotRefs.vfsRefNumber.trim() || undefined,
-          vowintAppId: slotRefs.vowintAppId.trim() || undefined,
-        } : undefined,
         cevVisaClass: isSchengen ? cevVisaClass : undefined,
         cevApplicantAgeCategory: isSchengen ? cevApplicantAgeCategory : undefined,
         cevTargetCountry: isSchengen ? cevTargetCountry : undefined,
@@ -644,11 +611,6 @@ export default function NewApplication() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-bold text-primary text-base">{pkgInfo.label}</p>
-                            {pkgKey === "slot_only" && (
-                              <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full uppercase">
-                                {pkgInfo.tagline}
-                              </span>
-                            )}
                             {pkgKey === "dossier_only" && (
                               <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full uppercase">
                                 {pkgInfo.tagline}
@@ -668,17 +630,7 @@ export default function NewApplication() {
                           )}
                           {pricing && (
                             <div className="mt-3 flex flex-wrap gap-3">
-                              {pkgKey === "slot_only" ? (
-                                <>
-                                  <div className="text-xs bg-purple-100 text-purple-700 rounded-lg px-3 py-1.5 font-semibold">
-                                    Dépôt de {formatCurrency(SLOT_URGENCY_TIERS.standard.depositAmount)} à {formatCurrency(SLOT_URGENCY_TIERS.tres_urgent.depositAmount)}
-                                  </div>
-                                  <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Total : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(SLOT_URGENCY_TIERS.standard.total)} – {formatCurrency(SLOT_URGENCY_TIERS.tres_urgent.total)}+</span>
-                                  </div>
-                                </>
-                              ) : pkgKey === "dossier_only" ? (
+                              {pkgKey === "dossier_only" ? (
                                 <>
                                   <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
                                     <span className="text-slate-500">Tarif fixe : </span>
@@ -720,73 +672,6 @@ export default function NewApplication() {
                 })}
               </div>
 
-              {/* Urgency tier selector — slot_only only */}
-              {isSlotOnly && (
-                <div className="mt-6 animate-in fade-in slide-in-from-top-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="w-4 h-4 text-secondary" />
-                    <h3 className="text-sm font-bold text-primary">Urgence du rendez-vous souhaité</h3>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    La prime varie selon la rapidité requise : plus la date est proche, plus elle est élevée.
-                    Elle est divisée en deux versements — un dépôt maintenant, le solde lorsque le créneau est obtenu.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(Object.keys(SLOT_URGENCY_TIERS) as SlotUrgencyTier[]).map((tierKey) => {
-                      const tier = SLOT_URGENCY_TIERS[tierKey];
-                      const isSelected = selectedUrgencyTier === tierKey;
-                      return (
-                        <div
-                          key={tierKey}
-                          onClick={() => setSelectedUrgencyTier(tierKey)}
-                          className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                            isSelected
-                              ? "border-secondary bg-orange-50/60 shadow-sm"
-                              : "border-border hover:border-primary/20 bg-white"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-primary text-sm">{tier.label}</span>
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
-                                  tierKey === "tres_urgent" ? "bg-red-100 text-red-700" :
-                                  tierKey === "urgent" ? "bg-orange-100 text-orange-700" :
-                                  tierKey === "prioritaire" ? "bg-amber-100 text-amber-700" :
-                                  "bg-slate-100 text-slate-600"
-                                }`}>{tier.tagline}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground mb-2">{tier.desc}</p>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="text-xs bg-slate-100 rounded-lg px-2.5 py-1">
-                                  <span className="text-slate-500">Dépôt : </span>
-                                  <span className="font-bold text-primary">{formatCurrency(tier.depositAmount)}</span>
-                                </span>
-                                <span className="text-xs bg-slate-100 rounded-lg px-2.5 py-1">
-                                  <span className="text-slate-500">Solde : </span>
-                                  <span className="font-bold text-primary">{formatCurrency(tier.successAmount)}</span>
-                                </span>
-                                <span className="text-xs bg-primary/10 text-primary rounded-lg px-2.5 py-1 font-semibold">
-                                  Total : {formatCurrency(tier.total)}
-                                  {tierKey === "tres_urgent" && "+"}
-                                </span>
-                              </div>
-                            </div>
-                            <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-1 transition-all ${
-                              isSelected ? "border-secondary bg-secondary" : "border-slate-300"
-                            }`}>
-                              {isSelected && <div className="w-full h-full flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>}
-                            </div>
-                          </div>
-                          {tier.variableNote && (
-                            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1 mt-2">{tier.variableNote}</p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* STEP 3 — Traveller info */}
@@ -851,146 +736,6 @@ export default function NewApplication() {
                 </p>
               </div>
 
-              {/* Booking refs — USA slot_only */}
-              {showSlotRefsUSA && (
-                <div className="mt-2 space-y-4 border border-blue-200 bg-blue-50/60 rounded-xl p-5 animate-in fade-in">
-                  <div>
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-0.5">
-                      <FileText className="w-4 h-4 text-secondary" /> Références USTravelDocs (USA)
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Vous devez avoir complété le DS-160 avant de soumettre.
-                      Ces références permettent à Joventy de réserver le créneau en votre nom.
-                      Le reçu MRV peut être renseigné plus tard par vous ou par notre équipe.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-primary">
-                        N° de confirmation DS-160 <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        placeholder="Ex : AA00XXXXX"
-                        className="h-10 text-sm"
-                        value={slotRefs.ds160Confirmation}
-                        onChange={(e) => updateRef("ds160Confirmation", e.target.value)}
-                      />
-                      <p className="text-[10px] text-muted-foreground">Le code barcode imprimé sur la page de confirmation DS-160 (ceac.state.gov)</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-primary">
-                        N° de reçu MRV (frais visa)
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">(optionnel)</span>
-                      </label>
-                      <Input
-                        placeholder="Ex : CGCD25XXXXXXXXXX"
-                        className="h-10 text-sm"
-                        value={slotRefs.mrvReceiptNumber}
-                        onChange={(e) => updateRef("mrvReceiptNumber", e.target.value)}
-                      />
-                      <p className="text-[10px] text-muted-foreground">Reçu généré après paiement des frais MRV (265 $). Si non disponible, notre équipe peut le compléter ultérieurement.</p>
-                    </div>
-                    {isStudentExchange && (
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label className="text-xs font-semibold text-primary">
-                          SEVIS ID <span className="text-red-500">*</span>
-                          <span className="ml-1 text-xs font-normal text-muted-foreground">(Visa F-1 / J-1 / M-1)</span>
-                        </label>
-                        <Input
-                          placeholder="Ex : N0000000000"
-                          className="h-10 text-sm"
-                          value={slotRefs.sevisId}
-                          onChange={(e) => updateRef("sevisId", e.target.value)}
-                        />
-                        <p className="text-[10px] text-muted-foreground">Numéro imprimé sur votre I-20 (F/M) ou DS-2019 (J), format N + 10 chiffres</p>
-                      </div>
-                    )}
-                    {isPetitionBased && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-primary">
-                            N° de reçu USCIS (I-797) <span className="text-red-500">*</span>
-                            <span className="ml-1 text-xs font-normal text-muted-foreground">(K-1 / H-1B / L-1 / O / P / R)</span>
-                          </label>
-                          <Input
-                            placeholder="Ex : IOE0000000000 ou WAC2500000000"
-                            className="h-10 text-sm"
-                            value={slotRefs.petitionReceiptNumber}
-                            onChange={(e) => updateRef("petitionReceiptNumber", e.target.value)}
-                          />
-                          <p className="text-[10px] text-muted-foreground">13 caractères — sur l'avis d'approbation I-797 du pétitionnaire</p>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-primary">
-                            Nom du pétitionnaire <span className="text-red-500">*</span>
-                          </label>
-                          <Input
-                            placeholder="Nom de l'employeur ou du partenaire US"
-                            className="h-10 text-sm"
-                            value={slotRefs.petitionerName}
-                            onChange={(e) => updateRef("petitionerName", e.target.value)}
-                          />
-                          <p className="text-[10px] text-muted-foreground">Exactement comme sur l'avis I-797</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Booking refs — Turkey slot_only */}
-              {showSlotRefsTurkey && (
-                <div className="mt-2 space-y-3 border border-red-200 bg-red-50/40 rounded-xl p-5 animate-in fade-in">
-                  <div>
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-0.5">
-                      <FileText className="w-4 h-4 text-secondary" /> Références VFS Global Turquie
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Le centre VFS Global Kinshasa utilise vos informations de passeport (déjà renseignées ci-dessus).
-                      Si vous avez déjà un numéro de référence VFS, indiquez-le ci-dessous.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-primary">
-                      N° de référence VFS (optionnel)
-                    </label>
-                    <Input
-                      placeholder="Ex : VFS-CD-XXXXXXX"
-                      className="h-10 text-sm"
-                      value={slotRefs.vfsRefNumber}
-                      onChange={(e) => updateRef("vfsRefNumber", e.target.value)}
-                    />
-                    <p className="text-[10px] text-muted-foreground">Si vous avez déjà créé un compte VFS Global, indiquez votre référence</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Booking refs — Schengen slot_only */}
-              {showSlotRefsSchengen && (
-                <div className="mt-2 space-y-4 border border-blue-200 bg-blue-50/60 rounded-xl p-5 animate-in fade-in">
-                  <div>
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-0.5">
-                      <FileText className="w-4 h-4 text-secondary" /> Référence VOWINT (CEV Schengen)
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Si vous avez déjà un dossier ouvert sur le portail VOWINT (vowint.eu), indiquez votre numéro de dossier.
-                      Notre équipe utilisera ces informations pour surveiller et capturer votre créneau CEV.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-primary">
-                      N° de dossier VOWINT <span className="ml-1 text-xs font-normal text-muted-foreground">(optionnel)</span>
-                    </label>
-                    <Input
-                      placeholder="Ex : APP-2024-001234"
-                      className="h-10 text-sm"
-                      value={slotRefs.vowintAppId}
-                      onChange={(e) => updateRef("vowintAppId", e.target.value)}
-                    />
-                    <p className="text-[10px] text-muted-foreground">Numéro visible sur votre confirmation VOWINT. Si vous n'avez pas encore de dossier, Joventy vous guidera pour le créer.</p>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* STEP 4 — Pricing + Confirmation */}
@@ -1017,19 +762,13 @@ export default function NewApplication() {
               {pricing && (
                 <div className="bg-primary rounded-xl p-6 text-white mb-2">
                   <p className="text-secondary text-xs uppercase font-semibold tracking-wide mb-3">
-                    {isSlotOnly ? `Structure tarifaire — ${activeTier.label}` : "Structure tarifaire Joventy"}
+                    Structure tarifaire Joventy
                   </p>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pb-3 border-b border-white/10">
                       <div>
-                        <p className="font-semibold">
-                          {isSlotOnly ? "Versement de réservation (dépôt)" : "Frais d'engagement"}
-                        </p>
-                        <p className="text-xs text-slate-300">
-                          {isSlotOnly
-                            ? "À payer maintenant pour confirmer votre demande"
-                            : "À payer maintenant pour activer le dossier"}
-                        </p>
+                        <p className="font-semibold">Frais d'engagement</p>
+                        <p className="text-xs text-slate-300">À payer maintenant pour activer le dossier</p>
                       </div>
                       <span className="text-xl font-bold text-secondary">{formatCurrency(effectiveEngagementFee)}</span>
                     </div>
@@ -1044,15 +783,11 @@ export default function NewApplication() {
                     ) : (
                       <div className="flex justify-between items-center">
                         <div>
-                          <p className="font-semibold">
-                            {isSlotOnly ? "Solde de la prime (créneau obtenu)" : "Prime de succès"}
-                          </p>
+                          <p className="font-semibold">Prime de succès</p>
                           <p className="text-xs text-slate-300">
-                            {isSlotOnly
-                              ? "À régler uniquement si Joventy obtient votre créneau"
-                              : pricing.successModel === "evisa"
-                                ? "Due uniquement si votre visa est obtenu"
-                                : "Due uniquement si votre créneau de RDV est obtenu"}
+                            {pricing.successModel === "evisa"
+                              ? "Due uniquement si votre visa est obtenu"
+                              : "Due uniquement si votre créneau de RDV est obtenu"}
                           </p>
                         </div>
                         <span className="text-xl font-bold text-white">{formatCurrency(effectiveSuccessFee)}</span>
@@ -1060,15 +795,12 @@ export default function NewApplication() {
                     )}
                     <div className="flex justify-between items-center pt-3 border-t border-white/10">
                       <p className="font-bold text-lg">
-                        {isDossierOnly ? "Total (tarif fixe)" : isSlotOnly ? "Prime totale" : "Total programme"}
+                        {isDossierOnly ? "Total (tarif fixe)" : "Total programme"}
                       </p>
                       <span className="text-2xl font-bold text-secondary">
-                        {formatCurrency(effectiveTotal)}{activeTier.variableNote && isSlotOnly ? "+" : ""}
+                        {formatCurrency(effectiveTotal)}
                       </span>
                     </div>
-                    {isSlotOnly && activeTier.variableNote && (
-                      <p className="text-xs text-amber-300 bg-white/5 rounded-lg px-3 py-2">{activeTier.variableNote}</p>
-                    )}
                   </div>
                 </div>
               )}
@@ -1115,9 +847,6 @@ export default function NewApplication() {
                 <p><strong>Destination :</strong> {selectedDest?.toUpperCase()}</p>
                 <p><strong>Visa :</strong> {form.watch("visaType")}</p>
                 <p><strong>Package :</strong> {SERVICE_PACKAGES[selectedPackage].label}</p>
-                {isSlotOnly && (
-                  <p><strong>Urgence :</strong> {activeTier.label} — {activeTier.tagline}</p>
-                )}
                 <p><strong>Demandeur :</strong> {form.watch("applicantName")}</p>
                 <p><strong>Passeport :</strong> {form.watch("passportNumber")}</p>
               </div>

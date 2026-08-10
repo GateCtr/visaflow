@@ -62,3 +62,6 @@ attached_assets/Pasted-*.txt
 .env.production
 .env.test
 *.env
+
+# Redis dump
+dump.rdb
