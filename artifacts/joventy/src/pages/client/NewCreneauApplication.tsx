@@ -551,7 +551,7 @@ export default function NewCreneauApplication() {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
-              Tous les uploads sont <strong>optionnels ici</strong> — vous pouvez les ajouter depuis votre fiche dossier après paiement. Notre équipe vérifie et valide chaque document avant l'activation du bot.
+              Tous les uploads sont <strong>optionnels ici</strong> — vous pouvez les ajouter depuis votre fiche dossier après paiement. Notre équipe vérifie et valide chaque document avant le démarrage de la recherche de créneau.
             </div>
 
             <div className="space-y-3">
