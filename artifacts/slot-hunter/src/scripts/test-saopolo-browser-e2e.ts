@@ -36,6 +36,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page, CDPSession } from "puppeteer";
 import {
   solveCfChallengeWithRetry,
+  setupProxyAuth,
 } from "../cf-challenge-solver.js";
 
 puppeteer.use(StealthPlugin());
@@ -81,41 +82,6 @@ function parseProxy(proxyUrl: string): { server: string; username: string; passw
     const server = `${u.hostname}:${u.port || (u.protocol === "https:" ? "443" : "80")}`;
     return { server, username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) };
   } catch {
-    return null;
-  }
-}
-
-// ── CDP proxy auth persistent (survit au detach de solveCfChallengeWithRetry) ─
-async function attachProxyAuth(
-  page: Page,
-  username: string,
-  password: string,
-): Promise<CDPSession | null> {
-  try {
-    const client = await page.createCDPSession();
-    await client.send("Fetch.enable", {
-      handleAuthRequests: true,
-      patterns: [],
-    });
-    client.on("Fetch.authRequired", async (ev: any) => {
-      if (ev.authChallenge?.source === "Proxy") {
-        await client.send("Fetch.continueWithAuth", {
-          requestId: ev.requestId,
-          authChallengeResponse: { response: "ProvideCredentials", username, password },
-        }).catch(() => {});
-      } else {
-        await client.send("Fetch.continueWithAuth", {
-          requestId: ev.requestId,
-          authChallengeResponse: { response: "Default" },
-        }).catch(() => {});
-      }
-    });
-    client.on("Fetch.requestPaused", async (ev: any) => {
-      await client.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-    });
-    return client;
-  } catch (err) {
-    console.warn(`[proxy-auth] ⚠️ Attach échoué (non-fatal) : ${err}`);
     return null;
   }
 }
@@ -270,17 +236,11 @@ async function main(): Promise<void> {
   const page: Page = pages.length > 0 ? pages[0] : await browser.newPage();
   await page.setViewport({ width: 1366, height: 768 });
   log("OK", "Chromium lancé");
+  // Note : PAS de handler proxy auth ici. solveCfChallengeWithRetry crée sa propre
+  // session interne (avec JSD interceptor). On crée une nouvelle session APRÈS le solve.
 
-  // ── Attacher le handler proxy auth persistent ────────────────────────────
-  // solveCfChallengeWithRetry attache et détache son propre handler temporaire.
-  // Ce handler-ci reste actif tout le long du test pour les XHR Bookitit.
-  let proxyAuthClient: CDPSession | null = null;
-  if (proxyParsed.username) {
-    proxyAuthClient = await attachProxyAuth(page, proxyParsed.username, proxyParsed.password);
-    log("OK", `Proxy auth CDP attaché (${proxyParsed.username.slice(0, 8)}… @ ${proxyParsed.server})`);
-  } else {
-    log("INFO", "Proxy sans credentials — pas de handler auth CDP");
-  }
+  // Déclaré ici pour être visible dans le finally.
+  let postSolveAuthClient: import("puppeteer").CDPSession | null = null;
 
   try {
     // ─── ÉTAPE 2 : solveCfChallengeWithRetry ────────────────────────────────
@@ -309,16 +269,27 @@ async function main(): Promise<void> {
     log("INFO", `cf_clearance : ${(cfResult.cfClearance ?? "").slice(0, 35)}…`);
     log("INFO", `cookies      : ${(cfResult.allCookies ?? []).map((c: any) => c.name).join(", ")}`);
 
-    // Re-attacher proxy auth si nécessaire (solveCfChallengeWithRetry détache son propre handler)
-    // Notre proxyAuthClient créé à l'étape 1 est toujours actif — pas besoin de recréer.
-
     await domSnap(page, "après-CF-solve");
 
-    // ─── ÉTAPE 3 : RUM gate + clic Continuar ────────────────────────────────
-    section("ÉTAPE 3 — RUM gate + clic Continuar");
+    // ─── ÉTAPE 2b : Reload widget depuis l'interstitial CF ───────────────────
+    // Après JSD solve, CF laisse la page sur l'interstitial "actualisez cette page".
+    // Le PHPSESSID créé pendant le JSD est déjà lié à la nonce fraîche — NE PAS le supprimer.
+    // Il faut simplement simuler le "Refresh" que l'utilisateur ferait sur l'interstitial,
+    // pour que le widget Bookitit charge avec le PHPSESSID valide déjà en place.
+    section("ÉTAPE 2b — Reload widget (interstitial CF → widget actif, PHPSESSID conservé)");
 
-    // Écouter le POST /cdn-cgi/rum? (signal LCP) via CDP Network
-    // Le widget n'accepte les XHR /main/ qu'après que le navigateur ait émis ce beacon.
+    // Re-attacher proxy auth + JSD interceptor APRÈS le solve.
+    // solveCfChallengeWithRetry détache sa session interne après chaque tentative.
+    // Ce client reste actif pour le reload + toutes les requêtes Bookitit suivantes.
+    if (proxyParsed.username) {
+      postSolveAuthClient = await setupProxyAuth(page, ispProxy);
+      log("OK", `Proxy auth + JSD interceptor post-solve attachés (${proxyParsed.username.slice(0, 8)}… @ ${proxyParsed.server})`);
+    }
+
+    const cookiesAfterSolve = await page.cookies().catch(() => [] as any[]);
+    log("INFO", `Cookies post-solve : ${cookiesAfterSolve.map((c: any) => c.name).join(", ")}`);
+
+    // RUM listener démarré AVANT le reload
     const rumSignal = new Promise<void>((resolve) => {
       let resolved = false;
       const cdpNet = page.createCDPSession().then((client) => {
@@ -328,28 +299,132 @@ async function main(): Promise<void> {
           const method: string = ev.request?.method ?? "";
           if (!resolved && method === "POST" && url.includes("/cdn-cgi/rum")) {
             resolved = true;
-            log("OK", `📊 RUM POST détecté (${url.slice(0, 60)}) — Continuar autorisé`);
+            log("OK", "📊 RUM POST détecté → Continuar autorisé");
             resolve();
             client.detach().catch(() => {});
           }
         });
         return client;
       }).catch(() => null);
-      // Timeout 8s — si pas de RUM, on continue quand même
       setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          log("WARN", "RUM timeout 8s — continue sans attendre le beacon");
+          log("WARN", "RUM timeout 12s — continue sans attendre le beacon");
           resolve();
           cdpNet.then((c) => c?.detach().catch(() => {}));
         }
-      }, 8_000);
+      }, 12_000);
     });
 
+    // Naviguer vers l'URL propre (sans _cb) pour obtenir un token PHP frais.
+    // - page.reload() recharge SAOPOLO_URL?_cb=... → CF re-challenge → PHP renvoie
+    //   le MÊME PHPSESSID avec un token potentiellement consommé → /main/ = 0B.
+    // - goto(SAOPOLO_URL) → CF fast-track (cf_clearance présent) → PHP crée un
+    //   nouveau token pour la même session (ou renouvelle le token) → POST valide → /main/ ✅
+    log("STEP", "page.goto(SAOPOLO_URL) — URL propre, token PHP frais…");
+    const t2b = Date.now();
+    try {
+      await page.goto(SAOPOLO_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    } catch (navErr: unknown) {
+      log("WARN", `goto non-fatal : ${String(navErr).slice(0, 80)}`);
+    }
+    log("INFO", `Navigation : ${((Date.now() - t2b) / 1000).toFixed(1)}s`);
+
+    // Vérifier le titre post-reload
+    const titleAfterReload = await page.title().catch(() => "?");
+    log("INFO", `Titre post-reload : ${titleAfterReload}`);
+
+    // Si CF re-challenge, attendre la résolution (fast-track avec cf_clearance ≤ 10s)
+    if (/un instant|checking|just a moment/i.test(titleAfterReload)) {
+      log("WARN", "CF check rapide post-reload — attente jusqu'à 20s…");
+      for (let i = 0; i < 20; i++) {
+        await new Promise<void>((r) => setTimeout(r, 1_000));
+        const t = await page.title().catch(() => "?");
+        if (!/un instant|checking|just a moment/i.test(t)) {
+          log("OK", `CF résolu en ${i + 1}s (titre: ${t})`);
+          break;
+        }
+        if (i === 19) log("WARN", "CF non résolu après 20s — on continue quand même");
+      }
+    }
+
+    // Vérifier que le widget est là (pas encore l'interstitial "actualisez")
+    const pageBodyText = await page.evaluate(() => (document.body?.innerText ?? "").slice(0, 200)).catch(() => "");
+    if (/actualisez|refresh|please wait/i.test(pageBodyText)) {
+      // Toujours sur l'interstitial — goto vers l'URL propre
+      log("WARN", "Toujours sur l'interstitial CF — goto vers URL propre…");
+      try {
+        await page.goto(SAOPOLO_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      } catch { /* non-fatal */ }
+    }
+
+    // Attendre widget Bookitit
+    log("STEP", "Attente widget Bookitit (#idCaptchaButton)…");
+    try {
+      await page.waitForSelector(
+        "#idCaptchaButton, #idBktDefaultCustomContainer, form[action*='widgetdefault']",
+        { visible: true, timeout: 20_000 },
+      );
+      log("OK", "Widget Bookitit chargé ✓");
+    } catch {
+      log("WARN", "Widget non détecté après 20s — on continue quand même");
+    }
+
+    const cookiesAfterReload = await page.cookies().catch(() => [] as any[]);
+    log("INFO", `Cookies post-reload : ${cookiesAfterReload.map((c: any) => c.name).join(", ")}`);
+
+    await domSnap(page, "widget-chargé");
+
+    // ─── ÉTAPE 3 : RUM gate + clic Continuar ────────────────────────────────
+    section("ÉTAPE 3 — RUM gate + clic Continuar");
+    log("STEP", "Attente RUM beacon (déjà en écoute depuis ÉTAPE 2b)…");
     await rumSignal;
 
-    // Préparer la capture de /main/ AVANT le clic pour ne pas rater la réponse
-    const mainCapture = captureResponse(page, "/main/", 20_000);
+    // ── Diagnostic DOM détaillé avant Continuar ──────────────────────────────
+    const widgetDiag = await page.evaluate(`(function() {
+      var iframes = Array.from(document.querySelectorAll('iframe')).map(function(f) {
+        return { src: (f.src||'').slice(0, 80), id: f.id||'', name: f.name||'' };
+      });
+      var forms = Array.from(document.forms).map(function(f) {
+        var inputs = Array.from(f.elements).map(function(el) {
+          var e = el; return e.type + ':' + (e.name||e.id||'?') + '=' + (e.value||'').slice(0,30);
+        });
+        return { action: (f.action||'').slice(0,60), inputs: inputs };
+      });
+      return JSON.stringify({ iframes: iframes, forms: forms });
+    })()`).catch(() => "{}") as string;
+    const wd = JSON.parse(widgetDiag);
+    log("INFO", `Iframes : ${wd.iframes?.length ?? 0} — ${JSON.stringify(wd.iframes ?? [])}`);
+    log("INFO", `Forms : ${JSON.stringify(wd.forms ?? []).slice(0, 300)}`);
+
+    // ── Écouter le JSD oneshot AVANT le clic Continuar ──────────────────────
+    // ROOT CAUSE : le widget appelle /main/ AVANT que le JSD oneshot soit envoyé.
+    // CF retourne 0B car la preuve JSD n'est pas encore validée côté serveur.
+    // Fix : attendre le JSD oneshot (h/b/jsd/oneshot/...) puis appeler /main/ manuellement.
+    let jsdOneshotSeen = false;
+    let jsdOneshotUrl = "";
+    const jsdOneshotPromise = new Promise<void>((resolve) => {
+      const handler = async (resp: any) => {
+        const url: string = resp.url() ?? "";
+        if (!jsdOneshotSeen && url.includes("/jsd/oneshot/")) {
+          jsdOneshotSeen = true;
+          jsdOneshotUrl = url.slice(0, 80);
+          log("OK", `🔑 JSD oneshot détecté : ${jsdOneshotUrl}`);
+          page.off("response", handler);
+          resolve();
+        }
+      };
+      page.on("response", handler);
+      setTimeout(() => {
+        page.off("response", handler);
+        if (!jsdOneshotSeen) log("WARN", "JSD oneshot timeout 25s — on continue quand même");
+        resolve();
+      }, 25_000);
+    });
+
+    let mainResponseStatus = 0;
+    let mainResponseHeaders: Record<string, string> = {};
+    let mainRawFromCapture = "";
 
     // Clic Continuar : #idCaptchaButton en priorité, puis token-form, puis texte
     const continuarResult = await page.evaluate(`(function() {
@@ -394,16 +469,134 @@ async function main(): Promise<void> {
     log(continuarResult.startsWith("no_") || continuarResult === "evaluate_error" ? "WARN" : "OK",
       `Clic Continuar → ${continuarResult}`);
 
-    // ── Attendre /main/ ──────────────────────────────────────────────────────
-    section("ÉTAPE 3b — Attente /main/ JSONP");
-    const mainRaw = await mainCapture;
-    log("INFO", `/main/ reçu : ${mainRaw.length}B`);
+    // ── Capturer réponse form POST + cookies CDP post-clic ────────────────────
+    const postResp = await page.waitForResponse(
+      (r: any) => { const u: string = r.url() ?? ""; return u.includes("/hosteds/widgetdefault/") && !u.includes("_cb="); },
+      { timeout: 8_000 },
+    ).then(async (r: any) => {
+      const hdrs = r.headers() as Record<string, string>;
+      const body = await r.text().catch(() => "");
+      // Chercher si c'est captcha gate ou booking widget
+      const hasCaptchaBtn = body.includes("idCaptchaButton");
+      const hasBookitit = body.includes("bkt_init_widget") || body.includes("onlinebookings");
+      const hasToken = body.match(/name="token"\s+value="([^"]+)"/);
+      const bodySnip = body.slice(0, 500);
+      return { status: r.status(), setCookie: hdrs["set-cookie"] ?? "(none)", bodyLen: body.length, bodySnip, hasCaptchaBtn, hasBookitit, tokenInResponse: hasToken ? hasToken[1] : "none" };
+    }).catch(() => ({ status: 0, setCookie: "timeout", bodyLen: 0, bodySnip: "", hasCaptchaBtn: false, hasBookitit: false, tokenInResponse: "none" }));
+    log("INFO", `POST widgetdefault → HTTP ${postResp.status} ${postResp.bodyLen}B | Set-Cookie: ${postResp.setCookie}`);
+    log("INFO", `POST content: captchaBtn=${postResp.hasCaptchaBtn} bookitit=${postResp.hasBookitit} token-in-response=${postResp.tokenInResponse}`);
+    if (postResp.bodySnip) log("INFO", `POST body[0:200] : ${postResp.bodySnip.slice(0, 200)}`);
+
+    // Tous les cookies CDP (voit les HttpOnly)
+    const postClickCdp = await page.createCDPSession().then(async (s: any) => {
+      const r = await s.send("Network.getAllCookies");
+      await s.detach().catch(() => {});
+      return (r.cookies as any[]).map((x: any) => `${x.name}(${x.httpOnly ? "HO" : "JS"})=${x.value.slice(0,6)}…`).join(", ");
+    }).catch(() => "N/A");
+    log("INFO", `CDP cookies post-clic : ${postClickCdp}`);
+
+    // ── Attendre JSD oneshot + appel /main/ manuel ───────────────────────────
+    section("ÉTAPE 3b — Attente JSD oneshot + /main/ JSONP");
+
+    // Attendre que le JSD oneshot soit envoyé (preuve CF validée côté serveur)
+    log("STEP", "Attente JSD oneshot post-Continuar (CF doit valider la preuve)…");
+    await jsdOneshotPromise;
+
+    if (jsdOneshotSeen) {
+      // Délai 4s pour que CF traite l'oneshot et que Bookitit initialise la session
+      log("INFO", "Délai 4s post-oneshot → CF + Bookitit initialisent la session…");
+      await new Promise<void>((r) => setTimeout(r, 4_000));
+    } else {
+      log("WARN", "JSD oneshot non détecté — on appelle /main/ quand même");
+    }
+
+    // Inspecter bkt_init_widget + cookies avant d'appeler /main/
+    const bktDiag = await page.evaluate(`(function() {
+      var bkt = window.bkt_init_widget;
+      var cookies = document.cookie;
+      return JSON.stringify({
+        bkt: bkt ? JSON.stringify(bkt).slice(0, 300) : 'undefined',
+        cookies: cookies.slice(0, 200),
+        hash: location.hash,
+        href: location.href.slice(0, 80)
+      });
+    })()`).catch(() => "{}") as string;
+    const bd = JSON.parse(bktDiag);
+    log("INFO", `bkt_init_widget : ${bd.bkt}`);
+    log("INFO", `cookies page : ${bd.cookies}`);
+    log("INFO", `hash : ${bd.hash} | href : ${bd.href}`);
+
+    // Appeler /main/ manuellement depuis le contexte browser (PHPSESSID en cookies).
+    // CRITIQUE : jQuery envoie bkt_init_widget comme data (wid, src, type, lang, version…).
+    // Sans ces paramètres, Bookitit retourne "Contact with your technical support."
+    // Retry 3x avec délai croissant si la réponse est une exception Bookitit.
+    log("STEP", "Appel /main/ manuel (fetch depuis contexte browser, retry 3x)…");
+    let mainCallResult = '{"status":0,"body":"","len":0}';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      mainCallResult = await page.evaluate(`
+        (async function() {
+          // Reproduire exactement : jQueryBkt.getJSON(sMainUrl + '/?callback=?', bkt_init_widget, …)
+          var widgetData = {};
+          if (window.bkt_init_widget) {
+            Object.assign(widgetData, window.bkt_init_widget);
+            delete widgetData.srvsrc; // loadermaec.js supprime srvsrc avant l'appel
+          }
+          widgetData.callback = 'bkt_main_cb';
+
+          var params = Object.keys(widgetData).map(function(k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(widgetData[k] !== null && widgetData[k] !== undefined ? widgetData[k] : '');
+          }).join('&');
+
+          var t = Date.now();
+          var url = '/onlinebookings/main/?' + params + '&t=' + t;
+          console.log('[test] /main/ URL:', url.slice(0, 200));
+
+          try {
+            var resp = await fetch(url, {
+              credentials: 'include',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01'
+              }
+            });
+            var body = await resp.text();
+            return JSON.stringify({ status: resp.status, body: body.slice(0, 4000), len: body.length });
+          } catch(e) {
+            return JSON.stringify({ status: 0, body: '', len: 0, err: String(e) });
+          }
+        })()
+      `).catch(() => '{"status":0,"body":"","len":0}') as string;
+
+      const r = JSON.parse(mainCallResult);
+      log("INFO", `/main/ tentative ${attempt} : HTTP ${r.status}, ${r.len}B${r.err ? ` [err: ${r.err}]` : ""}`);
+      if (r.body) log("INFO", `/main/ aperçu : ${r.body.slice(0, 200)}`);
+
+      // Si on a une réponse sans Exception → OK
+      if (r.len > 0 && !r.body.includes('"Exception"')) break;
+
+      // Si c'est une exception Bookitit → attendre 3s et réessayer
+      if (r.body.includes('"Exception"') && attempt < 3) {
+        log("WARN", `Exception Bookitit (tentative ${attempt}) → attente 3s + retry`);
+        await new Promise<void>((res) => setTimeout(res, 3_000));
+      }
+    }
+
+    const callResult = JSON.parse(mainCallResult);
+    mainRawFromCapture = callResult.body ?? "";
+    mainResponseStatus = callResult.status;
+
+    const mainRaw = mainRawFromCapture;
 
     if (mainRaw.length === 0) {
-      log("ERR", "/main/ → 0B — le proxy ISP ne route pas via le bon PoP CF");
-      log("WARN", "→ La nonce JSD est probablement stale (SJC PoP). Vérifier SPAIN_ISP_PROXY_URL.");
-      log("WARN", "→ La session CF cf_clearance est bien obtenue mais /main/ refuse quand même.");
+      log("ERR", `/main/ → 0B (HTTP ${mainResponseStatus}) — CF ou serveur refuse toujours`);
+      log("INFO", `→ JSD oneshot détecté : ${jsdOneshotSeen} (${jsdOneshotUrl})`);
       await domSnap(page, "main-0B");
+      process.exit(1);
+    }
+
+    if (mainRaw.includes('"Exception"')) {
+      log("ERR", `/main/ → Exception Bookitit : ${mainRaw.slice(0, 200)}`);
+      await domSnap(page, "main-exception");
       process.exit(1);
     }
 
@@ -712,7 +905,7 @@ async function main(): Promise<void> {
     }
 
   } finally {
-    if (proxyAuthClient) await proxyAuthClient.detach().catch(() => {});
+    if (postSolveAuthClient) await postSolveAuthClient.detach().catch(() => {});
     await browser.close().catch(() => {});
     log("INFO", "Chromium fermé.");
   }

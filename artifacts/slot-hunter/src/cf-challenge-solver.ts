@@ -1,4 +1,4 @@
-﻿/**
+/**
  * cf-challenge-solver.ts — Résolution robuste de TOUS les challenges Cloudflare 2026
  *
  * TYPES DE CHALLENGES CF GÉRÉS :
@@ -44,6 +44,8 @@
  */
 
 import type { Page, Browser, CDPSession, ElementHandle, Dialog } from "puppeteer";
+import https from "node:https";
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
 import { TURNSTILE_INTERCEPT_SCRIPT } from "./capsolver-turnstile.js";
 
@@ -1674,11 +1676,102 @@ function buildRotatedProxyUrl(baseUrl?: string): string | undefined {
   }
 }
 
+// ─── JSD script direct-fetch (bypass CDN SJC stale nonce) ──────────────────
+
+const JSD_SCRIPT_PATTERN = /challenge-platform\/h\/g\/scripts\/jsd.*main\.js/;
+
+/**
+ * Fetche le script JSD CF versionné via proxy Decodo (non-SJC PoP) pour obtenir
+ * une nonce fraîche, indépendamment du PoP CDN qui sert la page HTML.
+ *
+ * ROOT-CAUSE : CF CDN SJC cache le script h/g/scripts/jsd/{hash}/main.js avec une
+ * nonce baked-in périmée (souvent 1h+). Ni Cache-Control: no-cache ni ?_cb sur l'URL
+ * HTML ne forcent un refresh de ce script — CF CDN le traite comme immuable.
+ * → JSD oneshot envoyé avec nonce périmée → serveur Bookitit rejette → /main/ = 0B.
+ *
+ * Fix : intercepter via CDP et servir le corps fetchté directement depuis Node.js
+ * via Decodo (PoP EU/US-East non-SJC) → nonce fraîche garantie.
+ */
+async function fetchJsdDirect(
+  url: string,
+  ua: string,
+): Promise<{ status: number; headers: Array<{ name: string; value: string }>; body: string }> {
+  const freshUrl = `${url}?_t=${Date.now()}`;
+  const reqHeaders = {
+    "User-Agent":      ua,
+    "Accept":          "*/*",
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+    "Cache-Control":   "no-cache",
+    "Pragma":          "no-cache",
+    "Referer":         `https://${new URL(url).hostname}/`,
+  };
+
+  // Tentative via proxy Decodo (PoP non-SJC → nonce fraîche)
+  const decodoUrl = getCurrentDecodoUrl() ?? process.env.DECODO_PROXY_URL?.trim();
+  if (decodoUrl) {
+    try {
+      const dispatcher = new ProxyAgent(decodoUrl);
+      const resp = await (undiciFetch as any)(freshUrl, {
+        method:     "GET",
+        headers:    reqHeaders,
+        dispatcher,
+        signal:     AbortSignal.timeout(9_000),
+      });
+      const body = await resp.text() as string;
+      const headers: Array<{ name: string; value: string }> = [];
+      (resp.headers as any).forEach((value: string, name: string) => {
+        if (/^(content-encoding|transfer-encoding|content-length)$/i.test(name)) return;
+        headers.push({ name, value });
+      });
+      console.log(`${LOG_PREFIX} 🌐 JSD via Decodo → HTTP ${resp.status} | ${body.length}B`);
+      return { status: resp.status, headers, body };
+    } catch (e) {
+      console.warn(`${LOG_PREFIX} ⚠️ JSD via Decodo échoué (${e}) — fallback HTTPS direct`);
+    }
+  }
+
+  // Fallback : HTTPS direct Node (SJC PoP probable — best-effort)
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(freshUrl);
+    const req = https.request(
+      { hostname: parsed.hostname, path: parsed.pathname + parsed.search, method: "GET", headers: reqHeaders },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          const hdrs: Array<{ name: string; value: string }> = [];
+          for (const [name, val] of Object.entries(res.headers)) {
+            if (val == null) continue;
+            if (/^(content-encoding|transfer-encoding|content-length)$/i.test(name)) continue;
+            hdrs.push({ name, value: Array.isArray(val) ? val.join(", ") : val });
+          }
+          console.log(`${LOG_PREFIX} 🌐 JSD direct → HTTP ${res.statusCode} | ${body.length}B (SJC fallback)`);
+          resolve({ status: res.statusCode ?? 200, headers: hdrs, body });
+        });
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(8_000, () => req.destroy(new Error("fetchJsdDirect timeout")));
+    req.end();
+  });
+}
+
 /**
  * Configure l'authentification proxy via CDP Fetch.enable (handleAuthRequests).
  * Nécessaire car Chrome ne supporte pas les credentials dans --proxy-server.
+ *
+ * FIX NONCE JSD STALE (2026-08-10) :
+ *   CF CDN SJC cache le script JSD versionné avec une nonce périmée (1h+).
+ *   Cette session CDP intercepte également les requêtes vers ces scripts et
+ *   les remplace par une version fraîche fetchée via Decodo (PoP non-SJC).
+ *   Une seule session gère auth + JSD pour éviter le double-fire Fetch.authRequired.
+ *
+ * Exportée pour permettre aux callers externes de re-attacher après une solve
+ * (solveCfChallengeWithRetry detache sa propre session à la fin de chaque tentative).
  */
-async function setupProxyAuth(
+export async function setupProxyAuth(
   page: Page,
   proxyUrl: string,
 ): Promise<CDPSession | null> {
@@ -1689,7 +1782,16 @@ async function setupProxyAuth(
     const username = decodeURIComponent(u.username);
     const password = decodeURIComponent(u.password);
 
+    // Cache par hash JSD — une seule fetch Node par solve pour la cohérence de nonce
+    const jsdFreshByHash = new Map<string, { status: number; headers: Array<{ name: string; value: string }>; body: string }>();
+
+    const pageUa: string = await (page as any).evaluate(() => navigator.userAgent).catch(
+      () => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    );
+
     const client = await page.createCDPSession();
+    // Pas de patterns : on intercepte TOUT pour gérer auth sur n'importe quelle requête.
+    // handleAuthRequests: true + sans patterns = seule config valide pour proxy 407.
     await client.send("Fetch.enable", { handleAuthRequests: true });
 
     client.on("Fetch.authRequired", async (event: any) => {
@@ -1697,11 +1799,7 @@ async function setupProxyAuth(
       if (authChallenge?.source === "Proxy") {
         await client.send("Fetch.continueWithAuth", {
           requestId,
-          authChallengeResponse: {
-            response: "ProvideCredentials",
-            username,
-            password,
-          },
+          authChallengeResponse: { response: "ProvideCredentials", username, password },
         }).catch(() => {});
       } else {
         await client.send("Fetch.continueWithAuth", {
@@ -1712,10 +1810,39 @@ async function setupProxyAuth(
     });
 
     client.on("Fetch.requestPaused", async (event: any) => {
+      const origUrl: string = event.request?.url ?? "";
+
+      // ── Interception script JSD CF (nonce fraîche via Decodo) ──────────────
+      if (JSD_SCRIPT_PATTERN.test(origUrl)) {
+        const hashMatch = origUrl.match(/\/jsd\/([a-f0-9]{8,})\//);
+        const hashKey   = hashMatch?.[1] ?? origUrl;
+        try {
+          if (!jsdFreshByHash.has(hashKey)) {
+            console.log(`${LOG_PREFIX} 🌐 JSD intercept → hash=${hashKey} (bypass CDN SJC stale nonce)`);
+            const fresh = await fetchJsdDirect(origUrl, pageUa);
+            jsdFreshByHash.set(hashKey, fresh);
+          } else {
+            console.log(`${LOG_PREFIX} 📦 JSD cache-hit hash=${hashKey}`);
+          }
+          const { status, headers, body } = jsdFreshByHash.get(hashKey)!;
+          await client.send("Fetch.fulfillRequest", {
+            requestId:       event.requestId,
+            responseCode:    status,
+            responseHeaders: headers,
+            body:            Buffer.from(body, "utf8").toString("base64"),
+          }).catch(() => {
+            client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
+          });
+          return;
+        } catch (e) {
+          console.warn(`${LOG_PREFIX} ⚠️ JSD intercept échoué (${e}) — fallback continue`);
+        }
+      }
+
       await client.send("Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
     });
 
-    console.log(`${LOG_PREFIX} 🔧 Proxy auth CDP configuré (${username.slice(0, 8)}…@${u.hostname}:${u.port})`);
+    console.log(`${LOG_PREFIX} 🔧 Proxy auth + JSD interceptor CDP configurés (${username.slice(0, 8)}…@${u.hostname}:${u.port})`);
     return client;
   } catch (err) {
     console.warn(`${LOG_PREFIX} ⚠️ Setup proxy auth échoué: ${err}`);
