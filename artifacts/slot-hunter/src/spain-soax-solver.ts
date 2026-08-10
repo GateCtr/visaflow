@@ -325,13 +325,9 @@ export async function solveSpainCloudflare(
   targetUrl: string,
   capsolverApiKey: string,
   soaxProxyUrl: string,
-  /** HTML de la page CF challenge déjà fetchée via le probe direct.
-   *  Passé à CapSolver pour éviter qu'il re-fetche la page via notre proxy
-   *  (économise ~240KB de traffic Decodo par solve). */
-  prefetchedHtml?: string,
 ): Promise<SolveResult> {
   const t0 = Date.now();
-  console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}${prefetchedHtml ? " (html pré-fetchée ✅)" : ""}`);
+  console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}`);
 
   // Vérifier le solde CapSolver — retry 2× sur erreurs transientes (rate-limit, hiccup API)
   const apiKey = capsolverApiKey.trim();
@@ -370,11 +366,7 @@ export async function solveSpainCloudflare(
   // Créer la tâche AntiCloudflareTask
   let taskId: string;
   try {
-    const htmlSizeKB = prefetchedHtml ? Math.round(prefetchedHtml.length / 1024) : 0;
-    console.log(
-      `[spain-soax] 📤 createTask AntiCloudflareTask…` +
-      (prefetchedHtml ? ` (html: ${htmlSizeKB}KB — évite re-fetch proxy)` : " (sans html — CapSolver fetche via proxy)"),
-    );
+    console.log(`[spain-soax] 📤 createTask AntiCloudflareTask… (CapSolver fetche via proxy)`);
     const createRes = await fetch(`${CAPSOLVER_BASE}/createTask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -384,13 +376,9 @@ export async function solveSpainCloudflare(
           type: "AntiCloudflareTask",
           websiteURL: targetUrl,
           proxy: proxyForCapsolver,
-          // Si on passe le html déjà fetchée, CapSolver n'a pas besoin de
-          // re-fetcher challenges.cloudflare.com via notre proxy (~240KB économisés).
-          // userAgent est obligatoire quand html est fourni (requis par CapSolver).
-          ...(prefetchedHtml ? {
-            html: prefetchedHtml,
-            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-          } : {}),
+          // ⚠️  Ne pas envoyer `html` : AntiCloudflareTask retourne ERROR_INVALID_TASK_DATA
+          // quand html est présent. CapSolver fetche la page lui-même via notre proxy et
+          // exécute le JS du challenge interactif (cType: 'interactive') dans son Chrome.
         },
       }),
       signal: AbortSignal.timeout(30_000),
@@ -934,58 +922,59 @@ export async function ensureSpainCfSession(
     cfChallengeDetected = true;
   }
 
-  // ── Étape 2 : CF challenge détecté → solve 100% HTTP via impit ──────────────
-  // POURQUOI pas AntiCloudflareTask ici ?
-  //   AntiCloudflareTask envoie notre proxy à CapSolver qui résout le challenge
-  //   avec son propre Chrome. CF lie le cf_clearance au fingerprint TLS de ce Chrome.
-  //   Quand impit appelle /main/ ensuite (TLS différente), CF retourne 0B silencieux.
+  // ── Étape 2 : CF challenge détecté → CapSolver AntiCloudflareTask ───────────
+  // AntiCloudflareTask : CapSolver ouvre un vrai Chrome sur notre proxy, clique le
+  // challenge interactif (cType: 'interactive'), et retourne cf_clearance.
   //
-  // SOLUTION : solveViaImpit() extrait le sitekey CF du HTML déjà fetchée, appelle
-  //   CapSolver uniquement pour le TOKEN Turnstile (ProxyLess — CapSolver n'ouvre
-  //   pas de connexion vers citaconsular.es), puis POSTE la solution via le MÊME
-  //   probeImpit. CF lie cf_clearance à NOTRE TLS impit → cohérence garantie.
+  // Architecture hybride : CF lie cf_clearance à l'IP proxy (pas au fingerprint TLS).
+  // Confirmé 2026-07-27 (seededClearanceAccepted) : cf_clearance CapSolver + même IP
+  // Decodo ISP → impit accepte la session → scan JSONP + booking (alert + continuar).
+  //
+  // ⚠️  NE PAS envoyer le champ `html` à AntiCloudflareTask : CapSolver retourne
+  // ERROR_INVALID_TASK_DATA quand html est présent pour ce type de tâche.
+  // CapSolver fetche la page lui-même via notre proxy — c'est requis pour qu'il
+  // puisse exécuter le JS du challenge interactif dans son Chrome.
   if (!cfChallengeDetected) {
     console.error(`[spain-soax] ❌ Probe direct échoué sans challenge CF détecté`);
     return null;
   }
 
-  console.log(`[spain-soax] 🔐 CF challenge → solveViaImpit (JSD/Turnstile avec même TLS impit)…`);
-  const { solveViaImpit: solveViaImpitFn, getSpainImpitInstance } =
-    await import("./spain-impit-session.js");
+  const capsolverKey = process.env.CAPSOLVER_API_KEY;
+  if (!capsolverKey) {
+    console.error(`[spain-soax] ❌ CF challenge détecté mais CAPSOLVER_API_KEY non configurée`);
+    return null;
+  }
 
-  const MAX_ATTEMPTS = 2;
   const proxyLabel = process.env.DECODO_PROXY_URL ? "Decodo ISP" : "SOAX sticky";
+  const MAX_ATTEMPTS = 2;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    console.log(`[spain-soax] 🎯 solveViaImpit tentative ${attempt}/${MAX_ATTEMPTS}…`);
+    console.log(`[spain-soax] 🎯 CapSolver AntiCloudflareTask tentative ${attempt}/${MAX_ATTEMPTS}…`);
 
-    const impitSession = await solveViaImpitFn(targetUrl, soaxProxyUrl);
+    // Ne jamais passer `html` : ERROR_INVALID_TASK_DATA pour AntiCloudflareTask.
+    // CapSolver charge la page via notre proxy et exécute le JS du challenge lui-même.
+    const result = await solveSpainCloudflare(targetUrl, capsolverKey, soaxProxyUrl);
 
-    if (impitSession) {
-      // ⚠️  Synchroniser l'instance impit solvante dans getSpainImpit() pour que
-      // spainCfFetch réutilise la même TLS session (sinon → 0B Bookitit).
-      const solvingImpit = getSpainImpitInstance();
-      if (solvingImpit) {
-        _spainImpit = solvingImpit;
-        _spainImpitProxyUrl = soaxProxyUrl;
-        console.log(`[spain-soax] ✅ impit solvant synchronisé dans spainCfFetch (même TLS garantie)`);
-      }
-
-      impitSession.allCookies = await applyStableGaProfile(
-        impitSession.allCookies,
-        impitSession.createdAt,
+    if (result.success && result.session) {
+      result.session.allCookies = await applyStableGaProfile(
+        result.session.allCookies,
+        result.session.createdAt,
       );
-      _activeCfSession = impitSession;
-      console.log(
-        `[spain-soax] 🎉 Session CF 100% HTTP établie via ${proxyLabel}! ` +
-        `cf_clearance: ${impitSession.cfClearance ? "✅" : "⚠️ absent (accès direct)"} | ` +
-        `Valide jusqu'à: ${new Date(impitSession.expiresAt).toISOString()}`,
-      );
-      syncSpainCfSessionToRedis(impitSession as SerializableSpainCfSession);
-      return impitSession;
+      result.session.source = "capsolver";
+      _activeCfSession = result.session;
+      console.log(`[spain-soax] 🎉 Session CF établie via ${proxyLabel}! Durée solve: ${Math.round(result.durationMs / 1000)}s`);
+      console.log(`[spain-soax]    Valide jusqu'à: ${new Date(result.session.expiresAt).toISOString()}`);
+      syncSpainCfSessionToRedis(result.session as SerializableSpainCfSession);
+      return result.session;
     }
 
-    console.warn(`[spain-soax] ⚠️ solveViaImpit tentative ${attempt} échouée`);
+    const capErr = result.error ?? "";
+    console.warn(`[spain-soax] ⚠️ CapSolver tentative ${attempt} échouée: ${capErr}`);
+
+    if (/challenge not found/i.test(capErr)) {
+      console.log(`[spain-soax] ℹ️ Challenge disparu entre probe et solve — accès direct maintenant`);
+      break;
+    }
 
     if (attempt < MAX_ATTEMPTS) {
       rotateSpainSoaxSession("spain-cf");
@@ -993,7 +982,7 @@ export async function ensureSpainCfSession(
     }
   }
 
-  console.error(`[spain-soax] ❌ Impossible d'obtenir une session CF après probe + solveViaImpit`);
+  console.error(`[spain-soax] ❌ Impossible d'obtenir une session CF après probe + CapSolver`);
   return null;
 }
 

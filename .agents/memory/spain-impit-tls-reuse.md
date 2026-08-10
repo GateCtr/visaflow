@@ -1,33 +1,42 @@
 ---
 name: Spain impit TLS session reuse
-description: Pourquoi impit retourne 0B sur citaconsular.es/Bookitit, et comment le fixer.
+description: Diagnostic et fix du 0B citaconsular.es — architecture CapSolver+impit validée.
 ---
 
-## La règle
+## Conclusion (confirmée par test live 2026-08-10)
 
-**La même instance impit qui a résolu le CF challenge DOIT être utilisée pour tous les appels JSONP/main suivants.** Une nouvelle instance ouvre une nouvelle session TLS → CF/Bookitit retourne 0B silencieux.
+**CF lie `cf_clearance` à l'IP proxy, PAS au fingerprint TLS.** Une nouvelle instance impit
+avec le même proxy IP + cf_clearance CapSolver → 200 JSONP (817 chars, pas 0B).
+La "TLS mismatch" était une fausse piste.
 
-## Pourquoi AntiCloudflareTask = 0B garanti
+## Vraie cause du 0B
 
-`AntiCloudflareTask` fait ouvrir une connexion Chrome par CapSolver. CF lie `cf_clearance` au fingerprint TLS **de CapSolver**, pas au nôtre. Quand impit appelle ensuite `/main/` avec ce cookie, CF voit une TLS différente → rejette → 0B.
+Le champ `html` envoyé à `AntiCloudflareTask` causait `ERROR_INVALID_TASK_DATA`
+→ CapSolver ne retournait jamais de cookie → cf_clearance absent → 0B.
 
-## Le bon flow 100% HTTP
+**Fix appliqué :** supprimer `html` + `userAgent` du payload `createTask`.
+CapSolver fetche la page lui-même via notre proxy et exécute le JS du challenge
+interactif (`cType: 'interactive'`) dans son propre Chrome. Résolution en ~17s.
 
-1. Probe GET via `probeImpit` (notre instance)
-2. Si pas de CF : stocker `probeImpit` dans `_spainImpit` → même TLS pour JSONP ✅
-3. Si CF challenge : `solveViaImpit(url, proxy)` → extrait sitekey → CapSolver `AntiTurnstileTaskProxyLess` (token seulement, CapSolver n'ouvre pas de connexion) → POST solution via le même `probeImpit` → CF lie `cf_clearance` à notre TLS ✅
-4. Stocker l'instance solvante : `_spainImpit = getSpainImpitInstance()`
+## Architecture validée (hybride CapSolver + impit)
 
-**Why:** CF vérifie la cohérence entre la TLS session qui a POSTé la solution et les TLS sessions suivantes. Chaque `new Impit()` crée une nouvelle session TLS → mismatch → 0B.
+1. Probe impit direct → si IP de confiance CF → session directe, probeImpit stocké dans `_spainImpit`
+2. Si CF challenge `cType: 'interactive'` → `AntiCloudflareTask` SANS champ `html` → cf_clearance ~17s
+3. impit (n'importe quelle instance) + même proxy IP + cf_clearance → JSONP OK
 
-**How to apply:**
-- Ne jamais appeler `AntiCloudflareTask` pour citaconsular.es (TLS mismatch)
-- Toujours synchroniser `_spainImpit` avec `getSpainImpitInstance()` après `solveViaImpit()`
-- Le chemin `SPAIN_SESSION_MODE=impit` nécessite la même synchronisation (déjà corrigé)
-- Script de diagnostic : `scripts/test-spain-impit-tls.ts` — confirme l'hypothèse avec same-impit vs new-impit
+**Why:** CF valide sur l'IP (+ cookie), pas sur le fingerprint TLS de la connexion.
+N'importe quelle instance impit avec le même proxy passe.
+
+## Ce que `solveViaImpit` couvre (et ne couvre PAS)
+
+- JSD challenge (`__CF$cv$params`) → JSDSolver ✅
+- Turnstile Managed (sitekey extractable) → AntiTurnstileTaskProxyLess + POST via impit ✅
+- `cType: 'interactive'` sans sitekey Turnstile → **ne peut pas** (aucun widget à résoudre)
+  → utiliser `AntiCloudflareTask` à la place
 
 ## Fichiers concernés
 
-- `spain-soax-solver.ts` : `getSpainImpit()`, `ensureSpainCfSession()` (probe direct + CF path)
-- `spain-impit-session.ts` : `solveViaImpit()`, `getSpainImpitInstance()`, `_sessionImpit`
-- `spain-http-scanner.ts` : utilise `spainCfFetch` → `getSpainImpit()` → doit retourner l'instance solvante
+- `spain-soax-solver.ts` : `solveSpainCloudflare()` (pas de champ `html`),
+  `ensureSpainCfSession()` (probeImpit stocké après accès direct)
+- `spain-impit-session.ts` : `solveViaImpit()` pour JSD/Turnstile uniquement
+- `scripts/test-spain-impit-tls.ts` : script de diagnostic complet (probe → CapSolver → JSONP)
