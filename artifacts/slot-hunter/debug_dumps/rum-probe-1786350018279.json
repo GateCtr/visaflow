@@ -1,0 +1,37 @@
+{
+  "results": {
+    "A": {
+      "size": 0,
+      "ok": false,
+      "ms": 841
+    },
+    "B": {
+      "size": 0,
+      "ok": false,
+      "ms": 407
+    },
+    "C": {
+      "size": 0,
+      "ok": false,
+      "ms": 329
+    },
+    "D": {
+      "size": 0,
+      "ok": false,
+      "ms": 331
+    },
+    "E": {
+      "size": 0,
+      "ok": false,
+      "ms": 404
+    },
+    "F": {
+      "size": 0,
+      "ok": false,
+      "ms": 0
+    }
+  },
+  "cfClearance": "ZHtDEaweWb4f8FqX_RA.N5XtoSmj8.",
+  "phpSessId": "6Mwid3mMYs",
+  "mainBodyFromChrome": 0
+}

@@ -79,6 +79,10 @@ interface NetworkCapture {
 // ─── Proxy loader ──────────────────────────────────────────────────────────────
 
 function loadProxyCsvFirst(): string {
+  // IP ISP dédiée Espagne — priorité absolue (fixe, non-rotative)
+  if (process.env.SPAIN_ISP_PROXY_URL?.trim()) {
+    return process.env.SPAIN_ISP_PROXY_URL.trim();
+  }
   const csv = resolve(process.cwd(), "decodo-proxies.csv");
   if (!existsSync(csv)) return process.env.DECODO_PROXY_URL?.trim() ?? "";
   const lines = readFileSync(csv, "utf-8")
