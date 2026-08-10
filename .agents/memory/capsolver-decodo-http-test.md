@@ -1,10 +1,41 @@
 ---
-name: CapSolver Decodo HTTP test
-description: Résultat du test réel du watcher Espagne HTTP-only avec Decodo et CapSolver
+name: CapSolver Decodo CF solve
+description: CapSolver AntiCloudflareTask fonctionne pour citaconsular.es AVEC le champ html — résultat vérifié empiriquement.
 ---
 
-Le mode Spain HTTP-only démarre correctement avec `DECODO_PROXY_URL` et `CAPSOLVER_API_KEY`. Decodo a obtenu directement une session Cloudflare valide, avec PHPSESSID, sans appeler CapSolver. Le test explicite CapSolver a créé une tâche mais chaque polling a renvoyé `ERROR_INVALID_TASK_DATA`; le détail réel est dans `errorDescription`, qui doit être journalisé.
+## Résultat confirmé
 
-**Pourquoi:** Le bypass direct Decodo masque le chemin CapSolver en fonctionnement normal; le fallback doit donc être testé séparément. La documentation CapSolver indique que `AntiCloudflareTask` exige `type`, `websiteURL` et `proxy`; `userAgent` et `html` sont optionnels mais peuvent être nécessaires selon le challenge. `ERROR_INVALID_TASK_DATA` reste générique sans `errorDescription`.
+`AntiCloudflareTask` + champ `html` (HTML du challenge CF, tronqué à 32KB) → `cf_clearance` accepté par impit sur la même IP Decodo proxy.
 
-**Comment appliquer:** Pour les futurs tests, distinguer le succès Decodo direct du succès CapSolver fallback et ne pas annoncer le scan Bookitit complet tant qu’un dossier Espagne actif n’a pas déclenché `runSpainHttpProbe`.
+**Pourquoi le champ `html` est obligatoire :** Le challenge est `cType: interactive` (pas JSD/Turnstile). CapSolver a besoin du HTML complet du challenge pour simuler la résolution. Sans `html`, CapSolver ne peut pas résoudre le challenge interactif.
+
+## Ancienne note incorrecte corrigée
+
+L'ancienne note "⚠️ NE PAS envoyer html → ERROR_INVALID_TASK_DATA" était FAUSSE. C'était un test antérieur avec des params incorrects. Avec les bons params + `html`, ça fonctionne.
+
+## Paramètres corrects
+
+```typescript
+{
+  type: "AntiCloudflareTask",
+  websiteURL: portalUrl,
+  proxy: "http://user:pass@host:port",   // même proxy Decodo que l'impit probe
+  userAgent: UA,                          // même UA que l'impit probe
+  html: challengeHtml.slice(0, 32_000),  // HTML de la page 403
+}
+```
+
+## Temps de solve
+
+~30-40s (1-2 polls à 5s chacun) pour citaconsular.es en pratique.
+
+## Utilisation optimale avec Puppeteer
+
+1. Probe impit → CF HTML
+2. CapSolver solve → cf_clearance (~30s)
+3. Puppeteer.launch() avec --proxy-server=decodo (en parallèle du solve)
+4. Après solve : page.setCookie(cf_clearance pour .citaconsular.es)
+5. page.reload() → CF bypassé immédiatement
+6. → Réduit le temps total CF de ~130s (JSD naturel) à ~40s
+
+**Why:** Le cf_clearance CapSolver est lié à l'IP du proxy. Puppeteer DOIT utiliser le même proxy Decodo pour que le cookie soit accepté.
