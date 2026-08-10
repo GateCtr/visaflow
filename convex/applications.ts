@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, SERVICE_PACKAGES, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
 import { getVisaCategory, getVisaClassForBroadcast } from "./visaClassifications";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -540,6 +540,76 @@ export const migrateToNewSlotSystem = mutation({
       priceDetails: newPriceDetails,
       updatedAt: Date.now(),
       logs: [...logs, makeLog(logMsg, identity.name ?? "client")],
+    });
+
+    return args.applicationId;
+  },
+});
+
+// ─── Migration : dossier_only → slot_only (créneau standard $60/$90/$150) ────
+// Éligible : package dossier_only, statut non final, acompte non versé,
+// destination supportée par slot_only.
+const SLOT_ONLY_DESTINATIONS = new Set(
+  SERVICE_PACKAGES.slot_only.availableFor as readonly string[]
+);
+
+export const migrateToCreneau = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    // Ownership avec Clerk-ID legacy
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
+
+    // Éligibilité : dossier_only uniquement
+    if (app.servicePackage !== "dossier_only") {
+      throw new Error("Ce dossier n'est pas sur le package Formulaires & Vérification");
+    }
+
+    // Statut non final
+    if ((FINAL_STATUSES as readonly string[]).includes(app.status)) {
+      throw new Error("Ce dossier est dans un état final et ne peut pas être modifié");
+    }
+
+    // L'acompte ne doit pas encore être versé (pas de comptabilité complexe)
+    if (app.priceDetails?.isEngagementPaid) {
+      throw new Error("L'acompte est déjà versé — contactez le support pour toute modification");
+    }
+
+    // Destination supportée par slot_only
+    if (!SLOT_ONLY_DESTINATIONS.has(app.destination)) {
+      throw new Error(
+        `La destination "${app.destination}" n'est pas disponible pour le service Créneau Uniquement`
+      );
+    }
+
+    const tierData = SLOT_URGENCY_TIERS["standard"]; // $60/$90/$150
+
+    const logs = app.logs ?? [];
+    await ctx.db.patch(args.applicationId, {
+      servicePackage: "slot_only",
+      slotUrgencyTier: "standard",
+      price: tierData.total,
+      priceDetails: {
+        engagementFee: tierData.depositAmount,
+        successFee: tierData.successAmount,
+        paidAmount: 0,
+        isEngagementPaid: false,
+        isSuccessFeePaid: false,
+      },
+      updatedAt: Date.now(),
+      logs: [
+        ...logs,
+        makeLog(
+          "Passage au service Créneau Uniquement (standard). Nouveau tarif promo : $60 acompte / $90 solde (total $150). La recherche de créneau démarrera après règlement de l'acompte.",
+          identity.name ?? "client"
+        ),
+      ],
     });
 
     return args.applicationId;
