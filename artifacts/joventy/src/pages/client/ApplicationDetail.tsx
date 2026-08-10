@@ -18,7 +18,8 @@ import {
   CheckCircle2, Clock, Star, Download, ArrowRight,
   FileText, Search, Lock, XCircle, Upload, Loader2, Eye,
   Sparkles, ClipboardCheck, Stamp, MessageSquareHeart, ChevronDown,
-  KeyRound, Mail, Phone, Trash2, AlertTriangle, ShieldOff, Info
+  KeyRound, Mail, Phone, Trash2, AlertTriangle, ShieldOff, Info,
+  ArrowUpCircle,
 } from "lucide-react";
 
 type Application = Doc<"applications">;
@@ -687,6 +688,9 @@ export default function ClientApplicationDetail() {
   const docs = useQuery(api.documents.listByApplication, appId ? { applicationId: appId } : "skip") ?? [];
   const sendMessage = useMutation(api.messages.send);
   const markAsRead = useMutation(api.messages.markAsRead);
+  const migrateSlot = useMutation(api.applications.migrateToNewSlotSystem);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationDone, setMigrationDone] = useState(false);
   const visaDocUrl = useQuery(
     api.admin.getVisaDocumentUrl,
     appId ? { applicationId: appId } : "skip"
@@ -722,6 +726,28 @@ export default function ClientApplicationDetail() {
     }
   };
 
+  const handleMigrate = async () => {
+    if (!appId) return;
+    setIsMigrating(true);
+    try {
+      await migrateSlot({ applicationId: appId });
+      setMigrationDone(true);
+      // Toast conditionnel : messaging différent selon si l'acompte était déjà versé
+      const engagementAlreadyPaid = app?.priceDetails?.isEngagementPaid ?? false;
+      const paidFee = app?.priceDetails?.engagementFee ?? 0;
+      toast({
+        title: "Dossier mis à jour !",
+        description: engagementAlreadyPaid
+          ? `Acompte versé ($${paidFee}) conservé · Solde normalisé à $90.`
+          : "Nouveau tarif promo appliqué : $60 acompte / $90 solde (total $150).",
+      });
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "La migration a échoué. Contactez le support." });
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   if (app === undefined) return <div className="p-12 text-center text-muted-foreground">Chargement des détails...</div>;
   if (!app) return <div className="p-12 text-center text-red-500">Dossier introuvable</div>;
 
@@ -753,8 +779,54 @@ export default function ClientApplicationDetail() {
   // Appointment details are only shown AFTER success fee is paid (completed state), for appointment model
   const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isEvisaModel;
 
+  // Migration eligibility: slot_only, non-final status, prime non payée, ancien tier ou ancien prix
+  const FINAL_STATUSES_DETAIL = new Set(["slot_found_awaiting_success_fee", "completed", "rejected"]);
+  const needsMigration = !migrationDone
+    && isSlotOnly
+    && !FINAL_STATUSES_DETAIL.has(app.status)
+    && !(app.priceDetails?.isSuccessFeePaid ?? false)   // prime déjà réglée = état financier final
+    && (
+      (app as { slotUrgencyTier?: string }).slotUrgencyTier !== "standard"
+      || (app.priceDetails?.engagementFee ?? 0) !== 60
+    );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Bannière migration ancien système créneaux */}
+      {needsMigration && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <ArrowUpCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-900 text-sm">Mise à jour disponible pour ce dossier</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {isEngagementPaid
+                  ? <>Ce dossier utilise l'ancienne tarification créneaux. Votre acompte déjà versé est <strong>conservé</strong>. La migration ajuste uniquement le <strong>solde à $90</strong>.</>
+                  : <>Ce dossier utilise l'ancienne tarification créneaux. Migrez-le pour bénéficier du nouveau tarif promo : <strong>$60 acompte / $90 solde (total $150)</strong>.</>
+                }
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white gap-2"
+            disabled={isMigrating}
+            onClick={handleMigrate}
+          >
+            {isMigrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUpCircle className="w-4 h-4" />}
+            Migrer vers le nouveau système
+          </Button>
+        </div>
+      )}
+
+      {/* Confirmation migration */}
+      {migrationDone && (
+        <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <span className="text-emerald-800 font-medium">Dossier migré avec succès — tarification mise à jour ($60/$90/$150).</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

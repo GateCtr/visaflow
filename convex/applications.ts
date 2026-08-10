@@ -18,6 +18,21 @@ function makeLog(msg: string, author?: string) {
   return { msg, time: Date.now(), author: author ?? "système" };
 }
 
+/**
+ * Vérifie si l'identité Clerk est propriétaire d'un dossier.
+ * Gère les 3 variantes historiques de Clerk ID stockées dans userId.
+ */
+function isOwner(appUserId: string, identitySubject: string): boolean {
+  const getClerkId = (subject: string) =>
+    subject.includes("|") ? subject.split("|").pop()! : subject;
+  const clerkId = getClerkId(identitySubject);
+  return (
+    appUserId === clerkId ||
+    appUserId === `https://clerk.joventy.cd|${clerkId}` ||
+    appUserId === `https://active-midge-3.clerk.accounts.dev|${clerkId}`
+  );
+}
+
 export const list = query({
   args: { status: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -111,7 +126,8 @@ export const get = query({
     if (!app) return null;
 
     const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
-    if (!isAdmin && app.userId !== identity.subject) return null;
+
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) return null;
 
     // Admins always receive full data.
     if (isAdmin) return app;
@@ -341,7 +357,7 @@ export const uploadPaymentProof = mutation({
 
     const app = await ctx.db.get(args.id);
     if (!app) throw new Error("Dossier introuvable");
-    if (app.userId !== identity.subject) throw new Error("Accès non autorisé");
+    if (!isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
 
     const logs = app.logs ?? [];
     const label = args.paymentType === "engagement" ? "frais d'engagement" : "prime de succès";
@@ -446,6 +462,90 @@ export const update = mutation({
  *   - broadcastVisaClass = "B1/B2" → éclaireurs B1/B2 → confinés B1/B2
  *   - broadcastVisaClass = "H"    → éclaireurs H1B/H2A/H2B → confinés H
  */
+// ─── Migration : anciens dossiers créneaux → nouveau système ($60/$90/$150) ───
+// Éligible : package slot_only, statut non final, tier ≠ standard ou prix ≠ $60
+const FINAL_STATUSES = ["slot_found_awaiting_success_fee", "completed", "rejected"] as const;
+
+export const migrateToNewSlotSystem = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    // ── Ownership check avec Clerk-ID legacy variations ──
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
+
+    // ── Vérifier éligibilité (package + statut) ──
+    if (app.servicePackage !== "slot_only") throw new Error("Ce dossier n'est pas un dossier créneau");
+    if ((FINAL_STATUSES as readonly string[]).includes(app.status)) {
+      throw new Error("Ce dossier est dans un état final et ne peut pas être migré");
+    }
+
+    const isEngagementPaid = app.priceDetails?.isEngagementPaid ?? false;
+    const isSuccessFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
+    const paidAmount = app.priceDetails?.paidAmount ?? 0;
+
+    // La prime de succès déjà réglée est un état financier final — ne pas modifier
+    if (isSuccessFeePaid) {
+      throw new Error("La prime de succès de ce dossier est déjà réglée — aucune migration nécessaire");
+    }
+
+    // ── Vérifier éligibilité pricing (server-side) — évite les migrations inutiles ──
+    const currentTierIsStandard = app.slotUrgencyTier === "standard";
+    const currentFeeIsPromo = (app.priceDetails?.engagementFee ?? 0) === 60;
+    if (currentTierIsStandard && currentFeeIsPromo) {
+      throw new Error("Ce dossier est déjà sur le nouveau système de tarification");
+    }
+
+    const NEW_DEPOSIT = SLOT_URGENCY_TIERS["standard"].depositAmount; // $60
+    const NEW_SUCCESS = SLOT_URGENCY_TIERS["standard"].successAmount;  // $90
+
+    let newPriceDetails: typeof app.priceDetails;
+    let newPrice: number;
+    let logMsg: string;
+
+    if (!isEngagementPaid) {
+      // Acompte non encore payé : normaliser à la nouvelle tarification promo complète
+      newPriceDetails = {
+        engagementFee: NEW_DEPOSIT,
+        successFee: NEW_SUCCESS,
+        paidAmount: 0,
+        isEngagementPaid: false,
+        isSuccessFeePaid: false,
+      };
+      newPrice = NEW_DEPOSIT + NEW_SUCCESS; // $150
+      logMsg = "Migration nouveau système créneaux — nouveau tarif promo : $60 acompte / $90 solde (total $150).";
+    } else {
+      // Acompte déjà payé : conserver le montant versé, ajuster uniquement le solde à $90
+      const actualPaidEngagement = app.priceDetails?.engagementFee ?? paidAmount;
+      newPriceDetails = {
+        engagementFee: actualPaidEngagement,  // ce qui a été réellement facturé et versé
+        successFee: NEW_SUCCESS,               // solde normalisé à $90
+        paidAmount,
+        isEngagementPaid: true,
+        isSuccessFeePaid: false,
+      };
+      newPrice = actualPaidEngagement + NEW_SUCCESS; // acompte versé + $90 solde
+      logMsg = `Migration nouveau système créneaux — acompte de $${actualPaidEngagement} conservé (déjà versé). Solde normalisé : $90 (total : $${newPrice}).`;
+    }
+
+    const logs = app.logs ?? [];
+    await ctx.db.patch(args.applicationId, {
+      slotUrgencyTier: "standard",
+      price: newPrice,
+      priceDetails: newPriceDetails,
+      updatedAt: Date.now(),
+      logs: [...logs, makeLog(logMsg, identity.name ?? "client")],
+    });
+
+    return args.applicationId;
+  },
+});
+
 export const assignVisaClass = mutation({
   args: {
     applicationId: v.id("applications"),
