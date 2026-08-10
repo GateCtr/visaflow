@@ -465,33 +465,99 @@ async function stepGetServices(
   }
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Étape 0 : probe impit avant CapSolver (pattern identique à la prod) ──────
 
-async function main() {
-  console.log("=".repeat(60));
-  console.log("  TEST FLOW COMPLET — citaconsular.es → /main/");
-  console.log("=".repeat(60));
-  console.log(`  Proxy  : ${maskProxy(PROXY_URL)}`);
-  console.log(`  Portal : ${PORTAL_URL}`);
-  console.log("=".repeat(60));
+async function stepProbeImpit(): Promise<{
+  impit: InstanceType<typeof Impit>;
+  isCfChallenge: boolean;
+  html: string;
+}> {
+  sep("Étape 0 : Probe impit → établit session TLS AVANT CapSolver");
 
-  // ── 1. CapSolver ──────────────────────────────────────────────────────────
-  const capResult = await stepCapSolver();
-  if (!capResult) {
-    console.error("\n💥 Arrêt : CapSolver échoué");
-    process.exit(1);
-  }
-
-  // Cookie jar cumulatif — commence avec les cookies CapSolver
-  const jar: CookieJar = { ...capResult.allCookies };
-
-  // Instance impit partagée pour toutes les étapes suivantes (même proxy)
   const impit = new Impit({
     browser: "chrome",
     ...(PROXY_URL ? { proxyUrl: PROXY_URL } : {}),
   } as any);
 
-  // ── 2. GET portal ─────────────────────────────────────────────────────────
+  console.log(`   GET ${PORTAL_URL}`);
+  try {
+    const res = await (impit.fetch(PORTAL_URL, {
+      headers: {
+        "User-Agent": CHROME_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Upgrade-Insecure-Requests": "1",
+        "Priority": "u=0, i",
+      },
+    } as any) as unknown as Response);
+
+    const html = await res.text();
+    const status = (res as any).status;
+    const isCf = /just a moment|jetzt einen moment|verifying|_cf_chl_opt|challenge-platform/i.test(html.slice(0, 4000));
+
+    console.log(`   HTTP ${status} | ${html.length} chars | CF challenge: ${isCf ? "✅ OUI (solve nécessaire)" : "❌ NON (direct!)"}`);
+
+    if (!isCf && status === 200) {
+      const setCookie = (res as any).headers?.get?.("set-cookie") ?? "";
+      const phpSessId = setCookie.match(/PHPSESSID=([^;]+)/)?.[1] ?? "";
+      console.log(`   ✅ Accès DIRECT (pas de challenge) — PHPSESSID: ${phpSessId ? phpSessId.slice(0, 12) + "…" : "❌ absent"}`);
+    }
+    if (isCf) {
+      // Log le type de challenge
+      const cTypeM = html.match(/"cType"\s*:\s*"([^"]+)"/);
+      const sitekeyM = html.match(/challenges\.cloudflare\.com\/turnstile\/v[\d]+\/[a-z]\/([a-f0-9]{8,32})\/api\.js/);
+      console.log(`   Challenge cType: ${cTypeM?.[1] ?? "inconnu"} | Turnstile sitekey: ${sitekeyM?.[1] ?? "absent"}`);
+    }
+
+    return { impit, isCfChallenge: isCf, html };
+  } catch (e) {
+    console.error(`   ❌ Probe échoué: ${e}`);
+    // Retourner quand même l'instance impit — on tente CapSolver
+    return { impit, isCfChallenge: true, html: "" };
+  }
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  console.log("=".repeat(60));
+  console.log("  TEST FLOW COMPLET — citaconsular.es → /main/");
+  console.log("  Pattern identique à spain-soax-solver.ts (probe → solve → scan)");
+  console.log("=".repeat(60));
+  console.log(`  Proxy  : ${maskProxy(PROXY_URL)}`);
+  console.log(`  Portal : ${PORTAL_URL}`);
+  console.log("=".repeat(60));
+
+  // ── 0. Probe impit AVANT CapSolver (établit session TLS) ──────────────────
+  const { impit, isCfChallenge } = await stepProbeImpit();
+  // impit est réutilisé pour toutes les étapes suivantes (même instance = même session TLS)
+
+  // Cookie jar cumulatif
+  const jar: CookieJar = {};
+
+  if (!isCfChallenge) {
+    console.log("\n✅ Pas de CF challenge → accès direct. Test du flow GET portal avec cette instance.");
+  }
+
+  // ── 1. CapSolver (seulement si CF challenge détecté) ──────────────────────
+  if (isCfChallenge) {
+    const capResult = await stepCapSolver();
+    if (!capResult) {
+      console.error("\n💥 Arrêt : CapSolver échoué");
+      process.exit(1);
+    }
+    Object.assign(jar, capResult.allCookies);
+    console.log(`\n   ✅ jar après CapSolver: ${Object.keys(jar).join(", ")}`);
+  }
+
+  // ── 2. GET portal (MÊME instance impit que le probe) ──────────────────────
+  // C'est ici que ça différait dans le test précédent : on utilisait une
+  // NOUVELLE instance impit créée après CapSolver → nouvelle session TLS.
+  // Maintenant : MÊME instance que le probe → session TLS déjà établie.
   const portalResult = await stepGetPortal(impit, jar);
   if (!portalResult) {
     console.error("\n💥 Arrêt : GET portal échoué");
@@ -528,7 +594,8 @@ async function main() {
   console.log(`  cf_clearance  : ${jar["cf_clearance"] ? "✅" : "❌"}`);
   console.log(`  PHPSESSID     : ${jar["PHPSESSID"] ? "✅ " + jar["PHPSESSID"].slice(0, 12) + "…" : "❌ absent"}`);
   console.log(`  Base Bookitit : ${bookititBase}`);
-  console.log("\n  Si /main/ = 0B mais getservices/ ≥100 chars → PHPSESSID manquant pour /main/");
+  console.log("\n  Différence clé vs test précédent: MÊME instance impit pour probe + portal GET");
+  console.log("  Si /main/ = 0B mais getservices/ ≥100 chars → PHPSESSID manquant pour /main/");
   console.log("  Si les deux OK → flow complet validé ✅");
 }
 
