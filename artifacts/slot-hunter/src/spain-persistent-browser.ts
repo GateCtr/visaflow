@@ -2466,6 +2466,12 @@ class SpainPersistentBrowserManager {
     // Promise résolue quand getagendas/ est capturé (suite au clic sur service simulé).
     let widgetSlotResolve: (() => void) | null = null;
     const widgetSlotSignal = new Promise<void>((resolve) => { widgetSlotResolve = resolve; });
+    // Promise résolue quand le premier POST /cdn-cgi/rum? fire (signal LCP = widget rendu).
+    // Dans Chrome réel, ce RUM (eventType:3) fire APRÈS le LCP du widget (~4-5s) et AVANT
+    // que l'utilisateur interagisse → /main/ répond JSONP. Cliquer Continuar avant ce signal
+    // = /main/ appelé avant que CF ait reçu la preuve de chargement naturel → 0B systématique.
+    let rumFiredResolve: (() => void) | null = null;
+    const rumFiredSignal = new Promise<void>((resolve) => { rumFiredResolve = resolve; });
     try {
       cdpNet = await page.createCDPSession();
       await cdpNet.send("Network.enable", {});
@@ -2474,6 +2480,14 @@ class SpainPersistentBrowserManager {
         const url: string = ev.request?.url ?? "";
         if (url.includes("citaconsular.es")) {
           console.log(`[spain-pb] 🌐 req: ${ev.request.method} ${url.slice(0, 120)}`);
+        }
+        // Détecter le POST /cdn-cgi/rum? — signal LCP (widget entièrement rendu).
+        // Dans Chrome réel, ce RUM fire ~4-5s après page load, AVANT toute interaction
+        // utilisateur. On l'utilise comme gate avant le clic Continuar.
+        if (url.includes("cdn-cgi/rum") && ev.request?.method === "POST" && rumFiredResolve) {
+          console.log(`[spain-pb] 📊 RUM POST détecté — LCP widget atteint, Continuar autorisé`);
+          rumFiredResolve();
+          rumFiredResolve = null;
         }
         if (url.includes("onlinebookings/main")) {
           pendingMainRequests.set(ev.requestId, url);
@@ -2765,6 +2779,24 @@ class SpainPersistentBrowserManager {
           // "cookie fantôme" (CF valide sans réémettre cf_clearance), puis le widget appelle /main/
           // sans cf_clearance dans les cookies → CF retourne 0B systématiquement (comportement CF ≥ 2026-07).
           // Le cf_clearance obtenu pendant la navigation JSD est déjà valide pour /main/.
+
+          // ── Attente RUM POST (signal LCP = widget entièrement rendu) ────────────
+          // Dans Chrome réel (Burp 2026-08-10), POST /cdn-cgi/rum? (eventType:3, LCP ~4884ms
+          // sur #idDivBktServicesContainer>div) fire APRÈS chargement complet du widget et
+          // AVANT toute interaction utilisateur. Cliquer Continuar avant ce signal = /main/
+          // appelé avant que CF ait la preuve de chargement naturel → 0B systématique.
+          // On attend max 7s (LCP réel ~4-5s) — si timeout, on clique quand même.
+          if (rumFiredResolve !== null) {
+            // RUM pas encore reçu — attendre (max 7s)
+            console.log(`[spain-pb] ⏳ Attente RUM POST (LCP widget) avant Continuar (max 7s)…`);
+            await Promise.race([
+              rumFiredSignal,
+              new Promise<void>((r) => setTimeout(r, 7_000)),
+            ]);
+            console.log(`[spain-pb] ✅ RUM gate levé — clic Continuar autorisé`);
+          } else {
+            console.log(`[spain-pb] ✅ RUM déjà reçu — clic Continuar immédiat`);
+          }
 
           // Tenter le clic Continuar
           const acceptFlowResult = await clickInteractiveSpainAcceptFlow(page);
@@ -3191,6 +3223,9 @@ class SpainPersistentBrowserManager {
         let retryCdpNet: any = null;
         const retryMainPending = new Map<string, string>(); // requestId → url
         let retryJsdAccepted = false;
+        // Signal RUM Round 2 — même gate que Round 1
+        let r2RumFiredResolve: (() => void) | null = null;
+        const r2RumFiredSignal = new Promise<void>((resolve) => { r2RumFiredResolve = resolve; });
 
         try {
           retryCdpNet = await page.createCDPSession();
@@ -3201,6 +3236,12 @@ class SpainPersistentBrowserManager {
             if (url.includes("onlinebookings/main")) retryMainPending.set(ev.requestId, url);
             if (url.includes("citaconsular.es")) {
               console.log(`[spain-pb] 🌐 r2 req: ${ev.request.method} ${url.slice(0, 100)}`);
+            }
+            // RUM POST = signal LCP widget rendu → gate Round 2 Continuar
+            if (url.includes("cdn-cgi/rum") && ev.request?.method === "POST" && r2RumFiredResolve) {
+              console.log(`[spain-pb] 📊 r2 RUM POST détecté — LCP widget atteint, Continuar r2 autorisé`);
+              r2RumFiredResolve();
+              r2RumFiredResolve = null;
             }
           });
 
@@ -3247,6 +3288,20 @@ class SpainPersistentBrowserManager {
           if (!cfDone) {
             await new Promise((r) => setTimeout(r, 800));
             continue;
+          }
+
+          // ── Attente RUM POST Round 2 (signal LCP widget rendu) ─────────────────
+          // Même raisonnement que Round 1 : attendre que le RUM fire avant de cliquer.
+          // Max 7s — timeout non-fatal si le RUM ne fire pas (re-navigation différente).
+          if (r2RumFiredResolve !== null) {
+            console.log(`[spain-pb] ⏳ r2 Attente RUM POST (max 7s) avant Continuar…`);
+            await Promise.race([
+              r2RumFiredSignal,
+              new Promise<void>((r) => setTimeout(r, 7_000)),
+            ]);
+            console.log(`[spain-pb] ✅ r2 RUM gate levé — clic Continuar r2 autorisé`);
+          } else {
+            console.log(`[spain-pb] ✅ r2 RUM déjà reçu — clic Continuar r2 immédiat`);
           }
 
           retryContinuarClicked = await page.evaluate(() => {
