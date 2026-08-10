@@ -91,9 +91,9 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
             <KeyRound className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <h3 className="font-bold text-red-900">OTP automatique — Portail Espagne</h3>
+            <h3 className="font-bold text-red-900">Transfert OTP — Portail Espagne</h3>
             <p className="text-xs text-red-700 mt-0.5">
-              Configurez un transfert automatique pour que le bot reçoive les codes sans intervention humaine
+              Configurez le transfert des codes de vérification pour que Joventy puisse traiter votre dossier sans interruption
             </p>
           </div>
         </div>
