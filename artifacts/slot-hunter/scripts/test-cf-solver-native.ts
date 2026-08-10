@@ -22,13 +22,15 @@
  */
 
 import "dotenv/config";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { Impit } from "impit";
 
 import {
   detectChallengeType,
-  solveCfChallengeWithRetry,
+  solveCfChallenge,
   preparePageStealth,
   type CfSolveResult,
 } from "../src/cf-challenge-solver.js";
@@ -43,10 +45,24 @@ const TARGET_URL =
 
 const WIDGET_KEY   = TARGET_URL.match(/widgetdefault\/([a-f0-9]+)/)?.[1] ?? "";
 const BASE_BOOK    = "https://www.citaconsular.es/onlinebookings/";
-
-const DECODO_PROXY_URL = process.env.DECODO_PROXY_URL ?? "";
-const MAX_RETRIES = parseInt(process.env.MAX_RETRIES ?? "3", 10);
 const HEADLESS    = process.env.HEADLESS !== "false";
+
+// ─── Proxy depuis CSV (même approche que diag-cf-challenge-solver.ts) ────────
+
+function loadProxyFromCsv(): string {
+  const csv = resolve(process.cwd(), "decodo-proxies.csv");
+  if (!existsSync(csv)) {
+    if (process.env.DECODO_PROXY_URL) return process.env.DECODO_PROXY_URL;
+    return "";
+  }
+  const lines = readFileSync(csv, "utf-8").split("\n")
+    .map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+  if (!lines.length) return process.env.DECODO_PROXY_URL ?? "";
+
+  const [host, port, user, ...passParts] = lines[0].split(":");
+  const pass = passParts.join(":");
+  return `http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}`;
+}
 
 // ─── Couleurs ────────────────────────────────────────────────────────────────
 
@@ -73,7 +89,7 @@ function parseProxy(url: string): { server: string; username: string; password: 
   try {
     const u = new URL(url);
     return {
-      server:   `${u.protocol}//${u.hostname}:${u.port || "10001"}`,
+      server:   `http://${u.hostname}:${u.port || "10001"}`,
       username: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
     };
@@ -146,27 +162,35 @@ async function runTest() {
   // ── Checks préalables ─────────────────────────────────────────────────────
   log("🔍", "Vérifications…", C.CYAN);
 
-  const proxy = parseProxy(DECODO_PROXY_URL);
+  const proxyUrl = loadProxyFromCsv();
+  const proxy    = parseProxy(proxyUrl);
   if (!proxy) {
-    log("⚠️", "DECODO_PROXY_URL absent — test sans proxy (risque de blocage CF)", C.YELLOW);
+    log("⚠️", "Aucun proxy trouvé (CSV vide + DECODO_PROXY_URL absent) — risque de blocage CF", C.YELLOW);
   } else {
-    log("✅", `Proxy ISP : ${proxy.server} (${proxy.username.slice(0, 8)}…)`, C.GREEN);
+    log("✅", `Proxy CSV : ${proxy.server} (${proxy.username.slice(0, 8)}…)`, C.GREEN);
   }
   log("🚫", "CapSolver désactivé — mode NATIF uniquement", C.YELLOW);
   log("🎯", `Cible : ${TARGET_URL}`, C.CYAN);
   log("🔑", `Widget key : ${WIDGET_KEY}`, C.CYAN);
-  log("🔁", `Max retries : ${MAX_RETRIES} | Headless : ${HEADLESS}`, C.DIM);
+  log("🖥️ ", `Headless : ${HEADLESS}`, C.DIM);
 
-  // ── Lancer Puppeteer ──────────────────────────────────────────────────────
+  // ── Lancer Puppeteer (même args que diag-cf-challenge-solver.ts) ────────────
   header("PHASE 1 — Résolution CF native");
+
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.55 Safari/537.36";
 
   const launchArgs = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
-    "--window-size=1920,1080",
-    "--lang=fr-FR",
+    "--window-size=1280,720",
+    "--use-gl=angle",
+    "--use-angle=swiftshader-webgl",
+    "--enable-webgl",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-v8-code-cache",
+    "--disable-crash-reporter",
   ];
   if (proxy) launchArgs.push(`--proxy-server=${proxy.server}`);
 
@@ -174,7 +198,7 @@ async function runTest() {
   const browser = await puppeteer.launch({
     headless: HEADLESS,
     args: launchArgs,
-    defaultViewport: { width: 1920, height: 1080 },
+    defaultViewport: { width: 1280, height: 720 },
   });
 
   log("✅", `Puppeteer lancé en ${elapsed(Date.now() - t0)}`, C.GREEN);
@@ -183,18 +207,27 @@ async function runTest() {
   let allCookies: Array<{ name: string; value: string }> = [];
   let cfClearance = "";
   let phpSessId   = "";
-  let solverUa    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  let solverUa    = UA;
 
   try {
-    const page = await browser.newPage();
+    const pages = await browser.pages();
+    const page  = pages.length > 0 ? pages[0] : await browser.newPage();
 
     // Auth proxy
     if (proxy) {
       await page.authenticate({ username: proxy.username, password: proxy.password });
+      log("✅", `Proxy auth configurée (${proxy.username.slice(0, 8)}…)`, C.GREEN);
     }
 
-    // ── Détection avant solve ──
-    log("🌐", "Navigation initiale…", C.CYAN);
+    // UA + viewport (avant stealth)
+    await page.setUserAgent(UA);
+    await page.setViewport({ width: 1280, height: 720 });
+
+    // ── Stealth enrichi via solver ──
+    await preparePageStealth(page, UA);
+
+    // ── Navigation initiale ──
+    log("🌐", "Navigation vers le portail…", C.CYAN);
     const navT0 = Date.now();
     try {
       await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -206,16 +239,14 @@ async function runTest() {
     const challengeBefore = await detectChallengeType(page);
     log("🏷️",  `Type CF détecté : ${C.BOLD}${challengeBefore}${C.RESET}`, C.CYAN);
 
-    // ── Résolution native ──
+    // ── Résolution native (solveCfChallenge, pas WithRetry — comme le diag) ──
     const solveT0 = Date.now();
-    result = await solveCfChallengeWithRetry(page, browser, {
-      targetUrl:              TARGET_URL,
-      maxRetries:             MAX_RETRIES,
-      timeout:                120_000,
-      enableCapsolverFallback: false,   // ← NATIF uniquement
-      proxyUrl:               DECODO_PROXY_URL || undefined,
-      purgeStaleData:         true,
-      cacheBustCdn:           true,
+    result = await solveCfChallenge(page, {
+      targetUrl:               TARGET_URL,
+      timeout:                 120_000,
+      enableCapsolverFallback: false,   // ← NATIF uniquement, pas de CapSolver
+      maxTurnstileClicks:      5,
+      clickRetryDelay:         3_000,
     });
     const solveMs = Date.now() - solveT0;
 
@@ -280,7 +311,7 @@ async function runTest() {
     log("🍪", `Jar impit : ${[...jar.keys()].join(", ")}`, C.CYAN);
 
     // Même proxy que Puppeteer (même IP → CF accepte le clearance)
-    const impit = new Impit({ browser: "chrome", proxyUrl: DECODO_PROXY_URL || undefined } as any);
+    const impit = new Impit({ browser: "chrome", proxyUrl: proxyUrl || undefined } as any);
     const ua    = solverUa;
     const ts    = `${Date.now()}`;
 
