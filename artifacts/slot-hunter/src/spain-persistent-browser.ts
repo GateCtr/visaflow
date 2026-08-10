@@ -637,6 +637,13 @@ class SpainPersistentBrowserManager {
   }
 
   private getProxyUrl(): string | undefined {
+    // SPAIN_ISP_PROXY_URL : proxy ISP espagnol (priorité absolue).
+    // Route via un PoP CF Madrid/Barcelona → CF ne reconnaît pas l'IP comme datacenter
+    // → vrai JSD challenge (pas fast-track) → nonce fraîche depuis l'origine → /main/ ✅.
+    // Sans ce proxy, Replit sort sur SJC (CF datacenter US-West) → fast-track phantom → 0B.
+    if (process.env.SPAIN_ISP_PROXY_URL?.trim()) {
+      return process.env.SPAIN_ISP_PROXY_URL.trim();
+    }
     // Oxylabs résidentiel prioritaire si SPAIN_USE_OXYLABS=1
     // (bypasse le pool Decodo datacenter qui génère des fast-track phantoms sur tous les PoPs SJC)
     if (process.env.SPAIN_USE_OXYLABS === "1") {
