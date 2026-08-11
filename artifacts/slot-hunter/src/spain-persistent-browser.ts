@@ -37,6 +37,7 @@ import * as https from "node:https";
 import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
 import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
+import { solveCfChallenge, humanLikeCdpClick } from "./cf-challenge-solver.js";
 
 // ─── UA Chrome/Edge exclusivement pour le persistent browser ─────────────────
 // Safari/Firefox UAs servis par un moteur Chromium sont détectables via JS engine
@@ -2361,39 +2362,24 @@ class SpainPersistentBrowserManager {
       }
     }
 
-    // Attendre que le JSD s'exécute et que CF émette cf_clearance (max 65s)
-    // Le JSD dure 15min selon la doc CF, mais l'émission initiale prend ~10-40s.
-    // Page "Un instant..." / "Just a moment" = JSD en cours → ATTENDRE, ne pas interrompre.
-    console.log(`[spain-pb] ⏳ Attente cf_clearance via JSD natif (max 65s)…`);
+    // Résoudre le challenge CF via cf-challenge-solver (JSD passif → Turnstile Bézier → CapSolver).
+    // Cette fonction remplace la boucle de polling cf_clearance précédente :
+    //   - attend que CF émette cf_clearance via JSD natif (jusqu'à 65s)
+    //   - si un widget Turnstile apparaît, effectue un vrai clic Bézier CDP (isTrusted=true)
+    //   - si configuré, tente CapSolver en dernier recours
+    console.log(`[spain-pb] ⏳ Résolution CF via cf-challenge-solver (JSD passif → Turnstile Bézier → CapSolver)…`);
     const jsdStartMs = Date.now();
     let cfObtained = false;
     let jsdSolveMs = 0; // durée pour obtenir cf_clearance — < 3s = IP de confiance CF (fast-track)
     const JSD_TIMEOUT_MS = 65_000;
-    const jsdDeadline = Date.now() + JSD_TIMEOUT_MS;
 
-    while (Date.now() < jsdDeadline) {
-      const cookies = await page.cookies("https://www.citaconsular.es").catch(() => []);
-      const cf = cookies.find((c) => c.name === "cf_clearance");
-      if (cf?.value) {
-        cfObtained = true;
-        jsdSolveMs = Date.now() - jsdStartMs;
-        console.log(
-          `[spain-pb] ✅ cf_clearance obtenu via JSD natif (${Math.round(jsdSolveMs / 1000)}s)` +
-          ` — js_detection.passed=true pour NOTRE TLS` +
-          (jsdSolveMs < 3_000 ? " ⚡ IP de confiance CF (fast-track détecté)" : "")
-        );
-        console.log(`[spain-pb]    cf_clearance: ${cf.value.slice(0, 40)}…`);
-        break;
-      }
-      // Log intermédiaire toutes les 10s
-      const elapsed = Math.round((Date.now() - jsdStartMs) / 1000);
-      if (elapsed > 0 && elapsed % 10 === 0) {
-        const title = await page.title().catch(() => "?");
-        const url = page.url();
-        console.log(`[spain-pb]    JSD polling ${elapsed}s — titre: "${title}" url: ${url.slice(0, 60)}`);
-      }
-      await new Promise((r) => setTimeout(r, 1_000));
-    }
+    const solveResult = await solveCfChallenge(page, {
+      timeout: JSD_TIMEOUT_MS,
+      targetUrl,
+      enableCapsolverFallback: !!process.env.CAPSOLVER_API_KEY,
+    });
+    cfObtained = solveResult.success;
+    jsdSolveMs = solveResult.durationMs;
 
     if (!cfObtained) {
       // Diagnostic final
@@ -2403,11 +2389,18 @@ class SpainPersistentBrowserManager {
       console.error(
         `[spain-pb] ❌ cf_clearance absent après ${JSD_TIMEOUT_MS / 1000}s` +
         ` | titre: "${title}" | url: ${url.slice(0, 60)}` +
-        ` | cookies: ${cookies.map((c) => c.name).join(", ")}`,
+        ` | cookies: ${cookies.map((c) => c.name).join(", ")}` +
+        ` | erreur: ${solveResult.error ?? "aucune"}`,
       );
-      console.error(`[spain-pb] ❌ JSD échoué — Chromium headless détecté par CF (stealth insuffisant) ou proxy rejeté`);
+      console.error(`[spain-pb] ❌ Challenge CF échoué (${solveResult.solvedBy ?? "JSD"}) — stealth insuffisant ou proxy rejeté`);
       return null;
     }
+
+    console.log(
+      `[spain-pb] ✅ cf_clearance obtenu via cf-challenge-solver (${Math.round(jsdSolveMs / 1000)}s)` +
+      ` — méthode: ${solveResult.solvedBy ?? "jsd"}` +
+      (jsdSolveMs < 3_000 ? " ⚡ IP de confiance CF (fast-track détecté)" : ""),
+    );
 
     // ── Bloquer JSD spontané si fast-track détecté ────────────────────────────
     //
@@ -2740,12 +2733,8 @@ class SpainPersistentBrowserManager {
               ` (${Math.round(tfBox.w)}×${Math.round(tfBox.h)} @ ${Math.round(tfBox.x)},${Math.round(tfBox.y)})` +
               ` — clic physique CDP case à cocher…`,
             );
-            // Mouvement naturel avant le clic (évite un clic téléporté détectable par CF)
-            await page.mouse.move(cbX - 80, cbY - 40, { steps: 12 });
-            await new Promise((r) => setTimeout(r, 200 + Math.floor(Math.random() * 150)));
-            await page.mouse.move(cbX, cbY, { steps: 6 });
-            await new Promise((r) => setTimeout(r, 80 + Math.floor(Math.random() * 80)));
-            await page.mouse.click(cbX, cbY);
+            // Clic Bézier CDP humanisé (trajectoire cubique + isTrusted=true) via cf-challenge-solver
+            await humanLikeCdpClick(page, cbX, cbY);
             turnstileClicked = true;
             console.log(`[spain-pb] ⏳ Clic physique effectué — attente validation CF Turnstile (4s)…`);
             await new Promise((r) => setTimeout(r, 4_000));
@@ -2805,11 +2794,50 @@ class SpainPersistentBrowserManager {
             console.log(`[spain-pb] ✅ RUM déjà reçu — clic Continuar immédiat`);
           }
 
-          // Tenter le clic Continuar
-          const acceptFlowResult = await clickInteractiveSpainAcceptFlow(page);
-          continueClicked = acceptFlowResult.clicked;
-          if (!continueClicked) {
-            console.log(`[spain-pb] 🖱️ clickInteractiveSpainAcceptFlow → ${acceptFlowResult.reason}`);
+          // ── Clic Continuar : Bézier CDP en priorité, fallback el.click() ────────
+          // Chercher les coordonnées du bouton Continuar/Aceptar visible dans le DOM.
+          // Si trouvé → humanLikeCdpClick (trajectoire Bézier, isTrusted=true).
+          // Sinon → clickInteractiveSpainAcceptFlow (gère token-form hidden + fetch()).
+          const continuarCoords = await page.evaluate(`(function() {
+            var candidateIds = [
+              'idDivBktCustomContinueButton',
+              'idDivBktButtonContinueContainer',
+              'idDivBktServicesContinueButton',
+              'idBktDefaultCustomContainer'
+            ];
+            for (var i = 0; i < candidateIds.length; i++) {
+              var el = document.getElementById(candidateIds[i]);
+              if (el) {
+                var style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') continue;
+                var r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+              }
+            }
+            var buttons = Array.from(document.querySelectorAll("button, a, input[type='button'], input[type='submit'], div[role='button']"));
+            for (var bi = 0; bi < buttons.length; bi++) {
+              var el = buttons[bi];
+              var txt = ((el.textContent || '').replace(/\s+/g, ' ')).trim().toLowerCase();
+              if (!/aceptar|accept|continuar|continue|siguiente|ok/i.test(txt)) continue;
+              var style = window.getComputedStyle(el);
+              if (style.display === 'none' || style.visibility === 'hidden') continue;
+              var r = el.getBoundingClientRect();
+              if (r.width > 0 && r.height > 0) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+            }
+            return null;
+          })()`).catch(() => null) as { x: number; y: number } | null;
+
+          if (continuarCoords) {
+            console.log(`[spain-pb] 🖱️ Clic Continuar Bézier CDP [${Math.round(continuarCoords.x)}, ${Math.round(continuarCoords.y)}]`);
+            await humanLikeCdpClick(page, continuarCoords.x, continuarCoords.y);
+            continueClicked = true;
+          } else {
+            // Fallback : clickInteractiveSpainAcceptFlow (token-form hidden, fetch submit)
+            const acceptFlowResult = await clickInteractiveSpainAcceptFlow(page);
+            continueClicked = acceptFlowResult.clicked;
+            if (!continueClicked) {
+              console.log(`[spain-pb] 🖱️ clickInteractiveSpainAcceptFlow → ${acceptFlowResult.reason}`);
+            }
           }
 
           // ── Désarmer le bloqueur JSD APRÈS le clic Continuar réussi ──────────
