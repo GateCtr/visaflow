@@ -62,7 +62,7 @@ export interface JSDSolveResult {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
 /** cf_clearance is typically valid for ~2 hours */
 const CF_CLEARANCE_TTL_MS = 2 * 60 * 60 * 1000;

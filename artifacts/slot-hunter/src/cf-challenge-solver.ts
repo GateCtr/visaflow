@@ -1306,7 +1306,7 @@ export async function preparePageStealth(
   ua?: string,
   geoTimezone?: string,
 ): Promise<void> {
-  const userAgent = ua ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  const userAgent = ua ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
   const navPlatform = /Macintosh/i.test(userAgent) ? "MacIntel" : /Windows NT/i.test(userAgent) ? "Win32" : "Linux x86_64";
   const navLanguages = ["fr-FR", "fr", "en-US", "en"];
 
@@ -1319,7 +1319,7 @@ export async function preparePageStealth(
   // Client Hints CDP — aligner sec-ch-ua avec l'UA
   try {
     const cdpUA = await page.createCDPSession();
-    const chromeVer = userAgent.match(/Chrome\/([\d]+)/)?.[1] ?? "136";
+    const chromeVer = userAgent.match(/Chrome\/([\d]+)/)?.[1] ?? "151";
     const cdpPlatform = navPlatform === "MacIntel" ? "macOS" : navPlatform === "Win32" ? "Windows" : "Linux";
     const cdpPlatformVer = navPlatform === "MacIntel" ? "10_15_7" : navPlatform === "Win32" ? "10.0.0" : "5.15.0";
     const cdpArch = navPlatform === "Linux x86_64" ? "x86_64" : "x86";
@@ -1786,7 +1786,7 @@ export async function setupProxyAuth(
     const jsdFreshByHash = new Map<string, { status: number; headers: Array<{ name: string; value: string }>; body: string }>();
 
     const pageUa: string = await (page as any).evaluate(() => navigator.userAgent).catch(
-      () => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      () => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
     );
 
     const client = await page.createCDPSession();

@@ -37,51 +37,51 @@ export interface BrowserFingerprint {
 // ─── Profils (7 jours, Kinshasa) ────────────────────────────────────────────
 
 const PROFILES: BrowserFingerprint[] = [
-  { // Jour 1 : Chrome 136 Windows — français générique
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"',
+  { // Jour 1 : Chrome 151 Windows — français générique
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="151", "Google Chrome";v="151", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr,fr-FR;q=0.9,en;q=0.8",
     acceptEncoding: "gzip, deflate, br, zstd",
   },
-  { // Jour 2 : Chrome 136 Windows — français Congo
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"',
+  { // Jour 2 : Chrome 151 Windows — français Congo
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="151", "Google Chrome";v="151", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr-CD,fr;q=0.9,en;q=0.8,ln;q=0.7",
     acceptEncoding: "gzip, deflate, br, zstd",
   },
-  { // Jour 3 : Edge 136 Windows — Kinshasa
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-    secChUa: '"Chromium";v="136", "Microsoft Edge";v="136", "Not-A.Brand";v="8"',
+  { // Jour 3 : Edge 151 Windows — Kinshasa
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+    secChUa: '"Chromium";v="151", "Microsoft Edge";v="151", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr,fr-CD;q=0.9,en;q=0.8",
     acceptEncoding: "gzip, deflate, br",
   },
-  { // Jour 4 : Chrome 135 Windows
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
+  { // Jour 4 : Chrome 150 Windows
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="150", "Google Chrome";v="150", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr,en;q=0.9,fr-FR;q=0.8",
     acceptEncoding: "gzip, deflate, br, zstd",
   },
-  { // Jour 5 : Chrome 135 macOS
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
+  { // Jour 5 : Chrome 150 macOS
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="150", "Google Chrome";v="150", "Not-A.Brand";v="8"',
     platform: '"macOS"',
     acceptLanguage: "fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7",
     acceptEncoding: "gzip, deflate, br",
   },
-  { // Jour 6 : Chrome 134 Windows — avec lingala
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="134", "Google Chrome";v="134", "Not-A.Brand";v="8"',
+  { // Jour 6 : Chrome 149 Windows — avec lingala
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="149", "Google Chrome";v="149", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr,fr-CD;q=0.9,ln;q=0.8,en;q=0.7",
     acceptEncoding: "gzip, deflate, br, zstd",
   },
-  { // Jour 7 : Chrome 134 Windows — simple
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-    secChUa: '"Chromium";v="134", "Google Chrome";v="134", "Not-A.Brand";v="8"',
+  { // Jour 7 : Chrome 149 Windows — simple
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="149", "Google Chrome";v="149", "Not-A.Brand";v="8"',
     platform: '"Windows"',
     acceptLanguage: "fr-FR,fr;q=0.9,en;q=0.8",
     acceptEncoding: "gzip, deflate, br",

@@ -44,7 +44,7 @@ async function jsonpWithCookies(
   const agent = proxy ? new ProxyAgent(proxy) : undefined;
   const res = await fetch(full, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
       "Accept": "*/*",
       "Accept-Language": "es-ES,es;q=0.9",
       "Referer": referer,

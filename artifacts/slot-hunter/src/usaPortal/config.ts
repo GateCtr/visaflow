@@ -152,43 +152,43 @@ export const HUMAN_ACTION_MODEL = {
 // 6. Fingerprint Cycling - Profils cohérents pour utilisateur basé à Kinshasa (RDC)
 export const FINGERPRINT_CYCLES = [
   { // Jour 1 : Chrome Windows - Kinshasa (français générique)
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
     acceptLanguage: "fr,fr-FR;q=0.9,en;q=0.8",
     timezone: "Africa/Kinshasa",
     platform: "Windows"
   },
   { // Jour 2 : Chrome Windows - Kinshasa (français Congo)
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
     acceptLanguage: "fr-CD,fr;q=0.9,en;q=0.8,ln;q=0.7",
     timezone: "Africa/Kinshasa",
     platform: "Windows"
   },
   { // Jour 3 : Edge Windows - Kinshasa
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
     acceptLanguage: "fr,fr-CD;q=0.9,en;q=0.8",
     timezone: "Africa/Kinshasa",
     platform: "Windows"
   },
   { // Jour 4 : Chrome Windows - Kinshasa (version légèrement plus ancienne)
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
     acceptLanguage: "fr,en;q=0.9,fr-FR;q=0.8",
     timezone: "Africa/Kinshasa",
     platform: "Windows"
   },
   { // Jour 5 : Chrome macOS - Kinshasa (utilisateur Mac)
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
     acceptLanguage: "fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7",
     timezone: "Africa/Kinshasa",
     platform: "macOS"
   },
   { // Jour 6 : Chrome Windows - Kinshasa (avec lingala)
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
     acceptLanguage: "fr,fr-CD;q=0.9,ln;q=0.8,en;q=0.7",
     timezone: "Africa/Kinshasa",
     platform: "Windows"
   },
   { // Jour 7 : Chrome Windows - Kinshasa (simple)
-    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
     acceptLanguage: "fr-FR,fr;q=0.9,en;q=0.8",
     timezone: "Africa/Kinshasa",
     platform: "Windows"

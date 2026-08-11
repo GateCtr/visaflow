@@ -281,7 +281,7 @@ async function main() {
 
   // Sinon, faire une vraie requête /main/ via impit avec les cookies de la session
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-  const ua = session.userAgent ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  const ua = session.userAgent ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
   // Utiliser le même proxy que la session (cf_clearance est lié à l'IP proxy)
   const proxyUrl = session.soaxProxyUrl ?? process.env.DECODO_PROXY_URL;

@@ -46,7 +46,7 @@ function cookieHeader(): string {
 
 function baseHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36',
     'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
     Cookie: cookieHeader(),
     ...extra,

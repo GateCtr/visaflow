@@ -50,18 +50,18 @@ const SPAIN_BOOKITIT_CANDIDATES = [
 
 // ─── Versions Chrome max tolérées (>10 versions d'écart = UA potentiellement stale) ──
 const UA_POOL = [
-  { version: 136, ua: "Chrome/136.0.0.0" },
-  { version: 135, ua: "Chrome/135.0.0.0" },
-  { version: 134, ua: "Chrome/134.0.0.0" },
+  { version: 151, ua: "Chrome/151.0.0.0" },
+  { version: 150, ua: "Chrome/150.0.0.0" },
+  { version: 149, ua: "Chrome/149.0.0.0" },
 ];
-const CURRENT_CHROME_STABLE = 136;
+const CURRENT_CHROME_STABLE = 151;
 const MAX_VERSION_GAP = 10;
 
 // Sec-CH-UA doit correspondre exactement à la version dans le UA string
 const CH_UA_MAP: Record<number, string> = {
-  136: '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"',
-  135: '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
-  134: '"Chromium";v="134", "Google Chrome";v="134", "Not-A.Brand";v="8"',
+  151: '"Chromium";v="151", "Google Chrome";v="151", "Not-A.Brand";v="8"',
+  150: '"Chromium";v="150", "Google Chrome";v="150", "Not-A.Brand";v="8"',
+  149: '"Chromium";v="149", "Google Chrome";v="149", "Not-A.Brand";v="8"',
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ function record(
 }
 
 // ─── Utilitaires ────────────────────────────────────────────────────────────────
-const BASE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+const BASE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
 
 async function safeFetch(url: string, opts: RequestInit = {}, timeoutMs = 15_000): Promise<Response | null> {
   try {

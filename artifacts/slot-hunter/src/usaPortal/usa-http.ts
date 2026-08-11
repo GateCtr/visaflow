@@ -322,39 +322,39 @@ export function authHeadersNoBearer(
 // ce sont des headers de RÉPONSE que seul le serveur envoie, jamais le navigateur.
 export const USA_UA_POOL: ReadonlyArray<{ ua: string; chUa: string; platform: string }> = [
   {
-    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    chUa:     '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    chUa:     '"Chromium";v="151", "Google Chrome";v="151", "Not-A.Brand";v="8"',
     platform: '"Windows"',
   },
   {
-    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    chUa:     '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    chUa:     '"Chromium";v="150", "Google Chrome";v="150", "Not-A.Brand";v="8"',
     platform: '"Windows"',
   },
   {
-    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-    chUa:     '"Chromium";v="134", "Google Chrome";v="134", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    chUa:     '"Chromium";v="149", "Google Chrome";v="149", "Not-A.Brand";v="8"',
     platform: '"Windows"',
   },
   {
-    ua:       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    chUa:     '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    chUa:     '"Chromium";v="151", "Google Chrome";v="151", "Not-A.Brand";v="8"',
     platform: '"macOS"',
   },
   {
-    ua:       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    chUa:     '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    chUa:     '"Chromium";v="150", "Google Chrome";v="150", "Not-A.Brand";v="8"',
     platform: '"macOS"',
   },
   {
-    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-    chUa:     '"Chromium";v="136", "Microsoft Edge";v="136", "Not-A.Brand";v="8"',
+    ua:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+    chUa:     '"Chromium";v="151", "Microsoft Edge";v="151", "Not-A.Brand";v="8"',
     platform: '"Windows"',
   },
 ];
 
 // UA actif pour la session courante — STICKY par compte pour éviter la détection Cognito
-let _sessionUa = USA_UA_POOL[1]; // Chrome/135 Windows par défaut
+let _sessionUa = USA_UA_POOL[1]; // Chrome/150 Windows par défaut
 
 // Map compte → index UA pour maintenir le même fingerprint
 const accountUaMap = new Map<string, number>();

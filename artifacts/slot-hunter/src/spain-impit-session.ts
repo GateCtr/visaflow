@@ -40,7 +40,7 @@ import { getCurrentDecodoUrl } from "./spain-decodo-pool.js";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CHROME_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
 /** cf_clearance valid ~2h → solve once per 115min (5min marge) */
 const CF_CLEARANCE_TTL_MS = 115 * 60_000;

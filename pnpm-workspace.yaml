@@ -8,6 +8,7 @@ allowBuilds:
   core-js: false
   esbuild: true
   impit: false
+  koffi: true
   puppeteer: false
 
 autoInstallPeers: false

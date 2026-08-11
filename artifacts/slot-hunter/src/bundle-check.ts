@@ -80,7 +80,7 @@ export async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<voi
 
   log("INFO", "🔍 Vérification bundle portail USA (quotidienne)...");
 
-  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
   const BUNDLE_CHECK_RETRY_MS = 30 * 60 * 1000;
 
   try {

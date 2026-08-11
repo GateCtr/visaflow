@@ -21,14 +21,16 @@
 
 import "dotenv/config";
 import { Impit } from "impit";
-import puppeteer from "puppeteer-extra";
+import { addExtra } from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import type { Browser, Page } from "puppeteer";
+import rebrowserPuppeteer from "rebrowser-puppeteer-core";
+import type { Browser, Page } from "rebrowser-puppeteer-core";
 import {
   solveCfChallengeWithRetry,
-  setupProxyAuth,
 } from "../cf-challenge-solver.js";
+import { getCurrentDecodoUrl } from "../spain-decodo-pool.js";
 
+const puppeteer = addExtra(rebrowserPuppeteer as any);
 puppeteer.use(StealthPlugin());
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -48,6 +50,8 @@ function section(title: string): void {
 
 // ── Proxy resolution ──────────────────────────────────────────────────────────
 function resolveProxy(): string | undefined {
+  // CLI --no-proxy force le mode direct
+  if (process.argv.includes("--no-proxy")) return undefined;
   if (process.env.SPAIN_ISP_PROXY_URL?.trim()) return process.env.SPAIN_ISP_PROXY_URL.trim();
   if (process.env.DECODO_PROXY_URL?.trim()) return process.env.DECODO_PROXY_URL.trim();
   try {
@@ -92,8 +96,7 @@ async function main(): Promise<void> {
   log("INFO", `Cible : ${SAOPOLO_URL.slice(0, 60)}…`);
 
   if (!proxyUrl) {
-    log("ERR", "Proxy requis (SPAIN_ISP_PROXY_URL / DECODO_PROXY_URL / CSV)");
-    process.exit(1);
+    log("WARN", "Aucun proxy détecté — lancement en direct (IP locale)");
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -101,25 +104,27 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════════════════════════════════════
   section("PHASE A — Résolution CF via browser (cf-challenge-solver)");
 
-  const proxyParsed = (() => {
+  const proxyParsed = proxyUrl ? (() => {
     try {
       const u = new URL(proxyUrl);
       return { server: `${u.hostname}:${u.port}`, username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) };
     } catch { return null; }
-  })();
-  if (!proxyParsed) { log("ERR", "Proxy URL invalide"); process.exit(1); }
+  })() : null;
+  if (proxyUrl && !proxyParsed) { log("ERR", "Proxy URL invalide"); process.exit(1); }
 
   const isHeaded = process.env.SPAIN_HEADED === "1";
   const launchArgs = [
     "--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled",
     "--disable-infobars", "--disable-dev-shm-usage", "--use-gl=angle", "--use-angle=swiftshader-webgl",
     "--enable-webgl", "--window-size=1366,768", "--disable-v8-code-cache", "--disable-crash-reporter",
-    "--no-first-run", "--no-default-browser-check", `--proxy-server=${proxyParsed.server}`,
+    "--no-first-run", "--no-default-browser-check",
+    ...(proxyParsed ? [`--proxy-server=${proxyParsed.server}`] : []),
   ];
 
   log("STEP", "Lancement Chromium…");
   const browser: Browser = await (puppeteer as any).launch({
     headless: !isHeaded,
+    channel: "chrome",
     args: launchArgs,
     slowMo: isHeaded ? 60 : 0,
     protocolTimeout: 180_000,
@@ -130,12 +135,14 @@ async function main(): Promise<void> {
 
   let cfClearance = "";
   let allCookies: Array<{ name: string; value: string }> = [];
+  let widgetToken = "";
+  let widgetHtml = "";
 
   try {
     log("STEP", "solveCfChallengeWithRetry…");
     const cfResult = await solveCfChallengeWithRetry(page, browser, {
       targetUrl: SAOPOLO_URL,
-      proxyUrl,
+      proxyUrl: proxyUrl || undefined,
       maxRetries: 3,
       timeout: 90_000,
       cacheBustCdn: true,
@@ -151,103 +158,93 @@ async function main(): Promise<void> {
     allCookies = cfResult.allCookies ?? [];
     log("OK", `CF résolu — cf_clearance: ${cfClearance.slice(0, 30)}…`);
     log("INFO", `Cookies : ${allCookies.map((c) => c.name).join(", ")}`);
+
+    // ── Le widget est déjà chargé après le CF solve — extraire directement ──
+    section("PHASE A.2 — Extraction token depuis la page post-solve (pas de reload)");
+
+    // Attendre le bouton Continuar (= widget déjà chargé par le solve)
+    try {
+      await page.waitForSelector("#idCaptchaButton, input[name='token']", { visible: true, timeout: 10_000 });
+      log("OK", "Widget déjà présent après CF solve");
+    } catch {
+      log("WARN", "Widget non détecté — tentative reload…");
+      try {
+        await page.goto(SAOPOLO_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
+      } catch { /* non-fatal */ }
+      await page.waitForSelector("#idCaptchaButton, input[name='token']", { visible: true, timeout: 15_000 }).catch(() => {});
+    }
+
+    // Extraire le HTML + token + cookies CDP (HttpOnly inclus)
+    widgetHtml = await page.content().catch(() => "");
+    const tokenMatch = widgetHtml.match(/name="token"\s+value="([^"]+)"/i);
+    widgetToken = tokenMatch?.[1] ?? "";
+
+    // Extraire TOUS les cookies via CDP (y compris HttpOnly)
+    const cdpSession = await page.createCDPSession();
+    const { cookies: cdpCookies } = await cdpSession.send("Network.getAllCookies");
+    await cdpSession.detach().catch(() => {});
+    allCookies = cdpCookies.map((c: any) => ({ name: c.name, value: c.value }));
+    cfClearance = allCookies.find((c) => c.name === "cf_clearance")?.value ?? cfClearance;
+
+    log("INFO", `Token extrait : ${widgetToken ? widgetToken.slice(0, 30) + "…" : "❌ ABSENT"}`);
+    log("INFO", `Cookies CDP : ${allCookies.map((c) => c.name).join(", ")}`);
+    log("INFO", `cf_clearance : ${cfClearance.slice(0, 25)}…`);
+    log("INFO", `PHPSESSID : ${allCookies.find((c) => c.name === "PHPSESSID")?.value.slice(0, 12) ?? "absent"}…`);
+
   } finally {
     await browser.close().catch(() => {});
-    log("INFO", "Browser fermé (plus nécessaire)");
+    log("INFO", "Browser fermé (Phase A terminée)");
   }
 
   if (!cfClearance) {
     log("ERR", "cf_clearance vide — impossible de continuer");
     process.exit(1);
   }
+  if (!widgetToken) {
+    log("ERR", "Token widget non extrait — le browser n'a pas chargé le widget correctement");
+    log("INFO", `HTML[0:500] : ${widgetHtml.slice(0, 500)}`);
+    process.exit(1);
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PHASE B — Impit pur avec cf_clearance injecté
+  // PHASE B — Impit pur : POST token + GET /main/
+  // Le browser a extrait le token. Impit fait le POST (pas de GET = pas de TLS check CF initial).
   // ═══════════════════════════════════════════════════════════════════════════
-  section("PHASE B — Impit HTTP pur (avec cf_clearance du browser)");
+  section("PHASE B — Impit HTTP : POST token → GET /main/");
+
+  // Le cf_clearance est lié à l'IP de sortie. On doit utiliser le même proxy
+  // que celui que le solver a utilisé (proxyUrl passé, ou Decodo pool par défaut).
+  const effectiveProxy = proxyUrl || getCurrentDecodoUrl();
+  log("INFO", `Proxy Impit (même IP que le solve) : ${effectiveProxy ? effectiveProxy.replace(/:([^@:]+)@/, ":***@").slice(0, 60) : "direct"}`);
 
   const impit = new Impit({
     browser: "chrome",
-    proxyUrl: proxyUrl || undefined,
+    proxyUrl: effectiveProxy || undefined,
   } as any);
 
-  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
-  const baseHeaders: Record<string, string> = {
-    "User-Agent": UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-  };
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
-  // Injecter cf_clearance dans le jar
-  const jar: Record<string, string> = { cf_clearance: cfClearance };
-  // Ajouter les autres cookies CF
+  // Construire le jar avec TOUS les cookies du browser (PHPSESSID, cf_clearance, cf_chl_rc_ni…)
+  const jar: Record<string, string> = {};
   for (const c of allCookies) {
-    if (c.name !== "cf_clearance" && c.name !== "PHPSESSID") {
-      jar[c.name] = c.value;
-    }
+    jar[c.name] = c.value;
   }
 
-  // ─── ÉTAPE 1 : GET portail → PHPSESSID + token ──────────────────────────────
-  section("ÉTAPE 1 — GET portail avec cf_clearance (PHPSESSID + token)");
-  log("STEP", `GET ${SAOPOLO_URL.slice(0, 60)}…`);
-  log("INFO", `Cookie injecté : cf_clearance=${cfClearance.slice(0, 20)}…`);
+  const token = widgetToken;
+  log("INFO", `Token : ${token.slice(0, 30)}…`);
+  log("INFO", `Cookie jar : ${Object.keys(jar).join(", ")}`);
 
-  const r1 = await impit.fetch(SAOPOLO_URL, {
-    method: "GET",
-    headers: {
-      ...baseHeaders,
-      "Cookie": buildCookieString(jar),
-    },
-  } as any) as unknown as Response;
-
-  const body1 = await r1.text();
-  const cookies1 = extractSetCookies(r1.headers);
-
-  log("INFO", `HTTP ${r1.status} | ${body1.length}B`);
-  log("INFO", `Set-Cookie : ${Object.keys(cookies1).join(", ") || "(aucun)"}`);
-
-  // Stocker cookies
-  Object.assign(jar, cookies1);
-
-  // Si CF challenge page (pas le portail)
-  if (body1.length < 2000 && /just a moment|checking|challenge/i.test(body1.slice(0, 500))) {
-    log("ERR", "CF challenge bloque — cf_clearance nécessaire. Utiliser un proxy résidentiel ou ISP.");
-    log("INFO", `Body[0:300] : ${body1.slice(0, 300)}`);
-    process.exit(1);
-  }
-
-  // Extraire token hidden
-  const tokenMatch = body1.match(/name="token"\s+value="([^"]+)"/i)
-    ?? body1.match(/name='token'\s+value='([^']+)'/i)
-    ?? body1.match(/id="token"[^>]*value="([^"]+)"/i);
-
-  if (!tokenMatch) {
-    log("ERR", "Token hidden non trouvé dans le HTML du portail");
-    log("INFO", `Body[0:500] : ${body1.slice(0, 500)}`);
-    // Chercher les formulaires
-    const forms = body1.match(/<form[^>]*>/gi) ?? [];
-    log("INFO", `Forms trouvés : ${forms.length}`);
-    for (const f of forms.slice(0, 3)) log("INFO", `  ${f.slice(0, 100)}`);
-    const inputs = body1.match(/<input[^>]*>/gi) ?? [];
-    log("INFO", `Inputs trouvés : ${inputs.length}`);
-    for (const i of inputs.slice(0, 5)) log("INFO", `  ${i.slice(0, 100)}`);
-    process.exit(1);
-  }
-
-  const token = tokenMatch[1];
-  log("OK", `Token extrait : ${token.slice(0, 30)}…`);
-  log("INFO", `PHPSESSID : ${jar["PHPSESSID"]?.slice(0, 12) ?? "absent"}…`);
-  log("INFO", `cf_clearance : ${jar["cf_clearance"]?.slice(0, 20) ?? "absent"}…`);
-
-  // ─── ÉTAPE 2 : POST token → session PHP initialisée ────────────────────────
-  section("ÉTAPE 2 — POST token (initialise session widget)");
+  // ─── ÉTAPE 1 : POST token directement (pas de GET !) ────────────────────────
+  section("ÉTAPE 1 — POST token (session widget) — skip GET, TLS fingerprint bypass");
   log("STEP", `POST ${SAOPOLO_URL.slice(0, 60)}… (token=${token.slice(0, 20)}…)`);
 
   const r2 = await impit.fetch(SAOPOLO_URL, {
     method: "POST",
     headers: {
-      ...baseHeaders,
+      "User-Agent": UA,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br",
       "Content-Type": "application/x-www-form-urlencoded",
       "Cookie": buildCookieString(jar),
       "Referer": SAOPOLO_URL,
@@ -264,16 +261,37 @@ async function main(): Promise<void> {
   log("INFO", `HTTP ${r2.status} | ${body2.length}B`);
   log("INFO", `Set-Cookie : ${Object.keys(cookies2).join(", ") || "(aucun)"}`);
 
-  // Extraire bkt_init_widget
-  const bktMatch = body2.match(/var\s+bkt_init_widget\s*=\s*(\{[^}]+\})/);
+  // Extraire bkt_init_widget — le JS utilise des guillemets simples et peut être multiline
+  // Stratégie : chercher le bloc, normaliser les quotes, parser
   let bktWidget: Record<string, string> | null = null;
 
+  // Regex permissive qui capture tout entre { et }; (ou };\n)
+  const bktMatch = body2.match(/var\s+bkt_init_widget\s*=\s*(\{[\s\S]*?\});/);
   if (bktMatch) {
     try {
-      bktWidget = JSON.parse(bktMatch[1].replace(/'/g, '"'));
+      // Normaliser : single quotes → double quotes, trailing commas, etc.
+      let raw = bktMatch[1]
+        .replace(/'/g, '"')              // ' → "
+        .replace(/(\w+)\s*:/g, '"$1":')  // unquoted keys → "key":
+        .replace(/,\s*}/g, "}")          // trailing comma
+        .replace(/""(\w+)""/g, '"$1"');  // fix double-quoting from above if key was already quoted
+      bktWidget = JSON.parse(raw);
       log("OK", `bkt_init_widget extrait : ${Object.keys(bktWidget!).join(", ")}`);
+      log("INFO", `bkt_init_widget values : ${JSON.stringify(bktWidget).slice(0, 200)}`);
     } catch (e) {
       log("WARN", `bkt_init_widget parse error : ${e}`);
+      log("INFO", `Raw match : ${bktMatch[1].slice(0, 300)}`);
+      // Fallback : extraction par regex des paires clé/valeur
+      bktWidget = {};
+      const pairs = bktMatch[1].matchAll(/['"]?(\w+)['"]?\s*:\s*['"]([^'"]*)['"]/g);
+      for (const [, k, v] of pairs) {
+        bktWidget[k] = v;
+      }
+      if (Object.keys(bktWidget).length > 0) {
+        log("OK", `bkt_init_widget (fallback regex) : ${Object.keys(bktWidget).join(", ")}`);
+      } else {
+        bktWidget = null;
+      }
     }
   } else {
     log("WARN", "bkt_init_widget non trouvé dans la réponse POST");
@@ -284,16 +302,30 @@ async function main(): Promise<void> {
     log("INFO", `Body2[0:500] : ${body2.slice(0, 500)}`);
   }
 
-  // ─── ÉTAPE 3 : GET /main/ JSONP ───────────────────────────────────────────
-  section("ÉTAPE 3 — GET /main/ JSONP");
+  // ─── ÉTAPE 2 : GET /main/ JSONP ───────────────────────────────────────────
+  section("ÉTAPE 2 — GET /main/ JSONP");
 
-  // Construire l'URL comme jQuery le fait
+  // Construire l'URL comme loadermaec.js le fait :
+  // - prend bkt_init_widget
+  // - supprime srvsrc
+  // - ajoute version (depuis ?v=N du script tag) et src (URL du widget)
+  // - ajoute callback + timestamp
   const params: Record<string, string> = bktWidget
     ? { ...bktWidget }
-    : { type: "default", publickey: "2d01502f12dc08400e22aea87fb00ae34", lang: "es", version: "4" };
+    : { type: "default", publickey: "2d01502f12dc08400e22aea87fb00ae34", lang: "es" };
   delete params.srvsrc;
+  // loadermaec.js ajoute ces champs avant l'appel /main/
+  if (!params.version) params.version = "4";
+  if (!params.src) params.src = SAOPOLO_URL;
+  // Supprimer les arrays vides (services=[], agendas=[], dates=[]) — 
+  // loadermaec.js ne les envoie pas si vides
+  for (const k of Object.keys(params)) {
+    if (params[k] === "" || params[k] === "[]") delete params[k];
+  }
   params.callback = "bkt_main_cb";
   params._ = String(Date.now());
+
+  log("INFO", `/main/ params : ${JSON.stringify(params).slice(0, 200)}`);
 
   const qs = Object.entries(params)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v ?? "")}`)
@@ -351,15 +383,15 @@ async function main(): Promise<void> {
 
   // ─── RÉSUMÉ ────────────────────────────────────────────────────────────────
   section("RÉSUMÉ");
-  log("INFO", `Étape 1 (GET portail)  : ${body1.length}B | token=${token ? "✅" : "❌"}`);
-  log("INFO", `Étape 2 (POST token)   : ${body2.length}B | bkt_init_widget=${bktWidget ? "✅" : "❌"}`);
-  log("INFO", `Étape 3 (GET /main/)   : ${body3.length}B | ${body3.length > 1000 ? "✅ DONNÉES RÉELLES" : body3.includes("Exception") ? "❌ Exception" : "❌ Échec"}`);
+  log("INFO", `Phase A (browser)      : CF résolu + token extrait (${widgetToken.slice(0, 20)}…)`);
+  log("INFO", `Étape 1 (POST token)   : ${body2.length}B | bkt_init_widget=${bktWidget ? "✅" : "❌"}`);
+  log("INFO", `Étape 2 (GET /main/)   : ${body3.length}B | ${body3.length > 1000 ? "✅ DONNÉES RÉELLES" : body3.includes("Exception") ? "❌ Exception" : "❌ Échec"}`);
 
   if (body3.length > 1000) {
-    console.log("\n  ┌─────────────────────────────────────────────────────┐");
-    console.log("  │ SUCCÈS : Impit pur reproduit le flow widget complet │");
-    console.log("  │ → Pas besoin de browser pour le scan Bookitit       │");
-    console.log("  └─────────────────────────────────────────────────────┘");
+    console.log("\n  ┌──────────────────────────────────────────────────────────────┐");
+    console.log("  │ SUCCÈS : browser CF solve → Impit POST+/main/ fonctionne !  │");
+    console.log("  │ → Le TLS binding est bypass via POST direct (pas de GET)    │");
+    console.log("  └──────────────────────────────────────────────────────────────┘");
   }
 
   process.exit(0);

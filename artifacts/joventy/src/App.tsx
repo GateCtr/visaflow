@@ -12,7 +12,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { OnboardingContractGate } from "@/components/OnboardingContractGate";
 import { useTrafficTracker } from "@/hooks/useTrafficTracker";
 
 import Landing from "@/pages/Landing";
@@ -195,7 +194,7 @@ function Router() {
         {() => <ProtectedRoute component={NewCreneauApplication} />}
       </Route>
       <Route path="/dashboard/applications/new">
-        {() => <ProtectedRoute component={() => <OnboardingContractGate><NewApplication /></OnboardingContractGate>} />}
+        {() => <ProtectedRoute component={NewApplication} />}
       </Route>
       <Route path="/dashboard/applications/:id/payment">
         {() => <ProtectedRoute component={PaymentGate} />}

@@ -1008,7 +1008,7 @@ async function solveHcaptchaViaCapsolver(
   pageUrl: string,
   clientId: string,
 ): Promise<string | null> {
-  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
   const MAX_RETRIES = 3; // tentatives par variant avant de passer au suivant
 
   const taskVariants: Array<{ label: string; task: Record<string, unknown> }> = [

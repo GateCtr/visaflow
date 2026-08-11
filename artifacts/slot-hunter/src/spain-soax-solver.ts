@@ -496,7 +496,7 @@ export async function solveSpainCloudflare(
           cfClearance: cfClearanceValue,
           cfDomain: ".citaconsular.es",
           soaxProxyUrl,
-          userAgent: solution.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          userAgent: solution.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
           createdAt: Date.now(),
           expiresAt: Date.now() + CF_CLEARANCE_TTL_MS,
           allCookies,
@@ -865,13 +865,13 @@ export async function ensureSpainCfSession(
   // la grande majorité des cas. On tente l'accès direct avant d'appeler CapSolver
   // pour éviter ERROR_INVALID_TASK_DATA ("html field required") et économiser
   // les crédits + les ~18s de round-trip CapSolver.
-  const DIRECT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+  const DIRECT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
   const DIRECT_HEADERS = {
     "User-Agent": DIRECT_UA,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
-    "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
+    "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="151", "Google Chrome";v="151"',
     "Sec-Ch-Ua-Mobile": "?0",
     "Sec-Ch-Ua-Platform": '"Windows"',
     "Sec-Fetch-Dest": "document",

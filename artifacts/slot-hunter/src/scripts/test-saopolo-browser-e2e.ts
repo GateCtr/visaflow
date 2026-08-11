@@ -170,7 +170,6 @@ async function main(): Promise<void> {
   const prefSvcId = process.env.TEST_SERVICE_ID ?? "bkt853215";
 
   const missing: string[] = [];
-  if (!ispProxy)  missing.push("SPAIN_ISP_PROXY_URL");
   if (!login)     missing.push("TEST_SPAIN_LOGIN");
   if (!password)  missing.push("TEST_SPAIN_PASSWORD (ou CEV_TEST_PASSWORD)");
   if (missing.length > 0) {
@@ -182,10 +181,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const proxyParsed = parseProxy(ispProxy);
-  if (!proxyParsed) {
+  const proxyParsed = ispProxy ? parseProxy(ispProxy) : null;
+  if (ispProxy && !proxyParsed) {
     log("ERR", `SPAIN_ISP_PROXY_URL invalide : ${ispProxy.replace(/:([^@:]+)@/, ":***@")}`);
     process.exit(1);
+  }
+  if (!proxyParsed) {
+    log("WARN", "SPAIN_ISP_PROXY_URL non défini — lancement SANS proxy (IP locale)");
   }
 
   if (isHeaded) {
@@ -196,14 +198,14 @@ async function main(): Promise<void> {
   }
 
   log("INFO", `Portail    : ${SAOPOLO_URL}`);
-  log("INFO", `ISP proxy  : ${ispProxy.replace(/:([^@:]+)@/, ":***@")}`);
+  log("INFO", `ISP proxy  : ${proxyParsed ? ispProxy.replace(/:([^@:]+)@/, ":***@") : "(aucun — IP locale)"}`);
   log("INFO", `Login      : ${login.slice(0, 4)}${"*".repeat(Math.max(0, login.length - 4))}`);
   log("INFO", `Service ID : ${prefSvcId}`);
   log("INFO", `Mode       : ${isHeaded ? "👁️  headed" : "headless"}`);
   if (execPath) log("INFO", `execPath   : ${execPath}`);
 
-  // ─── ÉTAPE 1 : Lancement Chromium avec ISP proxy ───────────────────────────
-  section("ÉTAPE 1 — Lancement Chromium + proxy ISP");
+  // ─── ÉTAPE 1 : Lancement Chromium ───────────────────────────────────────────
+  section(`ÉTAPE 1 — Lancement Chromium${proxyParsed ? " + proxy ISP" : " (sans proxy)"}`);
 
   const launchArgs = [
     "--no-sandbox",
@@ -219,10 +221,10 @@ async function main(): Promise<void> {
     "--disable-crash-reporter",
     "--no-first-run",
     "--no-default-browser-check",
-    `--proxy-server=${proxyParsed.server}`,
+    ...(proxyParsed ? [`--proxy-server=${proxyParsed.server}`] : []),
   ];
 
-  log("STEP", `puppeteer.launch() — proxy: ${proxyParsed.server}`);
+  log("STEP", `puppeteer.launch()${proxyParsed ? ` — proxy: ${proxyParsed.server}` : " — direct (pas de proxy)"}`);
   const browser: Browser = await (puppeteer as any).launch({
     headless: !isHeaded,
     args: launchArgs,
@@ -250,7 +252,7 @@ async function main(): Promise<void> {
     const t2 = Date.now();
     const cfResult = await solveCfChallengeWithRetry(page, browser, {
       targetUrl:       SAOPOLO_URL,
-      proxyUrl:        ispProxy,
+      proxyUrl:        ispProxy || undefined,
       maxRetries:      4,
       timeout:         90_000,
       cacheBustCdn:    true,
@@ -281,7 +283,7 @@ async function main(): Promise<void> {
     // Re-attacher proxy auth + JSD interceptor APRÈS le solve.
     // solveCfChallengeWithRetry détache sa session interne après chaque tentative.
     // Ce client reste actif pour le reload + toutes les requêtes Bookitit suivantes.
-    if (proxyParsed.username) {
+    if (proxyParsed?.username) {
       postSolveAuthClient = await setupProxyAuth(page, ispProxy);
       log("OK", `Proxy auth + JSD interceptor post-solve attachés (${proxyParsed.username.slice(0, 8)}… @ ${proxyParsed.server})`);
     }
@@ -397,34 +399,27 @@ async function main(): Promise<void> {
     log("INFO", `Iframes : ${wd.iframes?.length ?? 0} — ${JSON.stringify(wd.iframes ?? [])}`);
     log("INFO", `Forms : ${JSON.stringify(wd.forms ?? []).slice(0, 300)}`);
 
-    // ── Écouter le JSD oneshot AVANT le clic Continuar ──────────────────────
-    // ROOT CAUSE : le widget appelle /main/ AVANT que le JSD oneshot soit envoyé.
-    // CF retourne 0B car la preuve JSD n'est pas encore validée côté serveur.
-    // Fix : attendre le JSD oneshot (h/b/jsd/oneshot/...) puis appeler /main/ manuellement.
-    let jsdOneshotSeen = false;
-    let jsdOneshotUrl = "";
-    const jsdOneshotPromise = new Promise<void>((resolve) => {
-      const handler = async (resp: any) => {
-        const url: string = resp.url() ?? "";
-        if (!jsdOneshotSeen && url.includes("/jsd/oneshot/")) {
-          jsdOneshotSeen = true;
-          jsdOneshotUrl = url.slice(0, 80);
-          log("OK", `🔑 JSD oneshot détecté : ${jsdOneshotUrl}`);
-          page.off("response", handler);
-          resolve();
-        }
-      };
-      page.on("response", handler);
-      setTimeout(() => {
-        page.off("response", handler);
-        if (!jsdOneshotSeen) log("WARN", "JSD oneshot timeout 25s — on continue quand même");
-        resolve();
-      }, 25_000);
-    });
-
+    // ── Préparer l'interception de /main/ AVANT le clic Continuar ────────────
+    // STRATÉGIE : laisser le widget Bookitit appeler /main/ naturellement via son
+    // loader (loadermaec.js → jQuery.getJSON). Cela garantit le bon PHPSESSID HttpOnly
+    // + les bons paramètres + le bon contexte de session.
     let mainResponseStatus = 0;
-    let mainResponseHeaders: Record<string, string> = {};
     let mainRawFromCapture = "";
+    const mainResponsePromise = page.waitForResponse(
+      (r: any) => {
+        const u: string = r.url() ?? "";
+        return u.includes("/onlinebookings/main/") || u.includes("/main/?");
+      },
+      { timeout: 45_000 },
+    ).then(async (r: any) => {
+      mainResponseStatus = r.status();
+      mainRawFromCapture = await r.text().catch(() => "");
+      log("OK", `/main/ intercepté naturellement → HTTP ${mainResponseStatus}, ${mainRawFromCapture.length}B`);
+      return mainRawFromCapture;
+    }).catch((err: unknown) => {
+      log("WARN", `/main/ non intercepté dans les 45s : ${String(err).slice(0, 80)}`);
+      return "";
+    });
 
     // Clic Continuar : #idCaptchaButton en priorité, puis token-form, puis texte
     const continuarResult = await page.evaluate(`(function() {
@@ -495,101 +490,15 @@ async function main(): Promise<void> {
     }).catch(() => "N/A");
     log("INFO", `CDP cookies post-clic : ${postClickCdp}`);
 
-    // ── Attendre JSD oneshot + appel /main/ manuel ───────────────────────────
-    section("ÉTAPE 3b — Attente JSD oneshot + /main/ JSONP");
+    // ── Attendre que le widget charge /main/ naturellement ──────────────────
+    section("ÉTAPE 3b — Attente /main/ naturel (widget Bookitit)");
 
-    // Attendre que le JSD oneshot soit envoyé (preuve CF validée côté serveur)
-    log("STEP", "Attente JSD oneshot post-Continuar (CF doit valider la preuve)…");
-    await jsdOneshotPromise;
-
-    if (jsdOneshotSeen) {
-      // Délai 4s pour que CF traite l'oneshot et que Bookitit initialise la session
-      log("INFO", "Délai 4s post-oneshot → CF + Bookitit initialisent la session…");
-      await new Promise<void>((r) => setTimeout(r, 4_000));
-    } else {
-      log("WARN", "JSD oneshot non détecté — on appelle /main/ quand même");
-    }
-
-    // Inspecter bkt_init_widget + cookies avant d'appeler /main/
-    const bktDiag = await page.evaluate(`(function() {
-      var bkt = window.bkt_init_widget;
-      var cookies = document.cookie;
-      return JSON.stringify({
-        bkt: bkt ? JSON.stringify(bkt).slice(0, 300) : 'undefined',
-        cookies: cookies.slice(0, 200),
-        hash: location.hash,
-        href: location.href.slice(0, 80)
-      });
-    })()`).catch(() => "{}") as string;
-    const bd = JSON.parse(bktDiag);
-    log("INFO", `bkt_init_widget : ${bd.bkt}`);
-    log("INFO", `cookies page : ${bd.cookies}`);
-    log("INFO", `hash : ${bd.hash} | href : ${bd.href}`);
-
-    // Appeler /main/ manuellement depuis le contexte browser (PHPSESSID en cookies).
-    // CRITIQUE : jQuery envoie bkt_init_widget comme data (wid, src, type, lang, version…).
-    // Sans ces paramètres, Bookitit retourne "Contact with your technical support."
-    // Retry 3x avec délai croissant si la réponse est une exception Bookitit.
-    log("STEP", "Appel /main/ manuel (fetch depuis contexte browser, retry 3x)…");
-    let mainCallResult = '{"status":0,"body":"","len":0}';
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      mainCallResult = await page.evaluate(`
-        (async function() {
-          // Reproduire exactement : jQueryBkt.getJSON(sMainUrl + '/?callback=?', bkt_init_widget, …)
-          var widgetData = {};
-          if (window.bkt_init_widget) {
-            Object.assign(widgetData, window.bkt_init_widget);
-            delete widgetData.srvsrc; // loadermaec.js supprime srvsrc avant l'appel
-          }
-          widgetData.callback = 'bkt_main_cb';
-
-          var params = Object.keys(widgetData).map(function(k) {
-            return encodeURIComponent(k) + '=' + encodeURIComponent(widgetData[k] !== null && widgetData[k] !== undefined ? widgetData[k] : '');
-          }).join('&');
-
-          var t = Date.now();
-          var url = '/onlinebookings/main/?' + params + '&t=' + t;
-          console.log('[test] /main/ URL:', url.slice(0, 200));
-
-          try {
-            var resp = await fetch(url, {
-              credentials: 'include',
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01'
-              }
-            });
-            var body = await resp.text();
-            return JSON.stringify({ status: resp.status, body: body.slice(0, 4000), len: body.length });
-          } catch(e) {
-            return JSON.stringify({ status: 0, body: '', len: 0, err: String(e) });
-          }
-        })()
-      `).catch(() => '{"status":0,"body":"","len":0}') as string;
-
-      const r = JSON.parse(mainCallResult);
-      log("INFO", `/main/ tentative ${attempt} : HTTP ${r.status}, ${r.len}B${r.err ? ` [err: ${r.err}]` : ""}`);
-      if (r.body) log("INFO", `/main/ aperçu : ${r.body.slice(0, 200)}`);
-
-      // Si on a une réponse sans Exception → OK
-      if (r.len > 0 && !r.body.includes('"Exception"')) break;
-
-      // Si c'est une exception Bookitit → attendre 3s et réessayer
-      if (r.body.includes('"Exception"') && attempt < 3) {
-        log("WARN", `Exception Bookitit (tentative ${attempt}) → attente 3s + retry`);
-        await new Promise<void>((res) => setTimeout(res, 3_000));
-      }
-    }
-
-    const callResult = JSON.parse(mainCallResult);
-    mainRawFromCapture = callResult.body ?? "";
-    mainResponseStatus = callResult.status;
-
-    const mainRaw = mainRawFromCapture;
+    log("STEP", "Attente réponse /main/ naturelle (max 45s)…");
+    const mainRaw = await mainResponsePromise;
 
     if (mainRaw.length === 0) {
-      log("ERR", `/main/ → 0B (HTTP ${mainResponseStatus}) — CF ou serveur refuse toujours`);
-      log("INFO", `→ JSD oneshot détecté : ${jsdOneshotSeen} (${jsdOneshotUrl})`);
+      log("ERR", `/main/ → 0B (HTTP ${mainResponseStatus}) — CF ou serveur refuse`);
+      log("INFO", "→ Le widget n'a pas réussi à charger /main/ — vérifier le PHPSESSID et le challenge CF");
       await domSnap(page, "main-0B");
       process.exit(1);
     }
