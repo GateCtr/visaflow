@@ -362,69 +362,83 @@ export async function discoverSlotBookingFlow(
 
 // ─── Email notification admin ───────────────────────────────────────────────
 
+export interface SlotBookingEmailData {
+  vowintRef: string;
+  detectedAt: number;
+  slots: Array<{ date: string; time: string; free: number }>;
+  totalFree: number;
+  bookingResult: "success" | "failed" | "pending";
+  confirmationCode?: string;
+  bookedDate?: string;
+  bookedTime?: string;
+  error?: string;
+  eligibleDossiers?: string[];
+  strategy?: string;
+}
+
 /**
- * Envoie un email d'alerte à l'admin quand un slot CEV est détecté.
+ * Envoie un email d'alerte à l'admin quand un slot CEV est détecté / booké.
+ * Accepte l'ancien format SlotDiscoveryResult (legacy) ou le nouveau SlotBookingEmailData.
  */
 export async function sendSlotDetectedEmail(
   vowintRef: string,
-  discoveryResult: SlotDiscoveryResult,
+  data: SlotDiscoveryResult | SlotBookingEmailData,
 ): Promise<boolean> {
   if (!RESEND_API_KEY) {
     console.log("[cev-discovery] RESEND_API_KEY non configuré — email slot ignoré");
     return false;
   }
 
-  const slotsJson = discoveryResult.availableTimeSlotsResponse?.responseBody ?? "N/A";
-  const slotsStatus = discoveryResult.availableTimeSlotsResponse?.responseStatus ?? 0;
+  // Nouveau format : infos utiles (slots, résultat booking)
+  if ("bookingResult" in data) {
+    return sendBookingResultEmail(data);
+  }
 
-  const subject = `🚨 [CEV] SLOT DÉTECTÉ — ${vowintRef} — Action requise`;
+  // Legacy : discovery brute (fallback, ne devrait plus être le cas principal)
+  return sendLegacyDiscoveryEmail(vowintRef, data);
+}
+
+/**
+ * Email avec le résultat du booking : slots détectés, confirmation, erreur.
+ */
+async function sendBookingResultEmail(data: SlotBookingEmailData): Promise<boolean> {
+  const isSuccess = data.bookingResult === "success";
+  const emoji = isSuccess ? "✅" : "🚨";
+  const statusLabel = isSuccess ? "BOOKING RÉUSSI" : data.bookingResult === "failed" ? "BOOKING ÉCHOUÉ" : "SLOT DÉTECTÉ";
+  const borderColor = isSuccess ? "#16a34a" : "#dc2626";
+
+  const subject = `${emoji} [CEV] ${statusLabel} — ${data.vowintRef}${isSuccess && data.bookedDate ? ` — ${data.bookedDate} ${data.bookedTime ?? ""}` : ""}`;
+
+  const slotsRows = data.slots.map(s =>
+    `<tr><td style="padding:6px 12px;font-family:monospace;">${s.date}</td><td style="padding:6px 12px;">${s.time}</td><td style="padding:6px 12px;text-align:center;font-weight:bold;color:${s.free <= 1 ? "#dc2626" : "#16a34a"}">${s.free}</td></tr>`
+  ).join("\n");
 
   const htmlBody = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:20px;background:#f1f5f9;font-family:monospace;">
-<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:2px solid #dc2626;">
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:2px solid ${borderColor};">
 
-<h1 style="color:#dc2626;margin:0 0 16px;">🚨 SLOT CEV DÉTECTÉ</h1>
+<h1 style="color:${borderColor};margin:0 0 16px;font-size:20px;">${emoji} ${statusLabel}</h1>
 
-<table style="width:100%;border-collapse:collapse;margin:16px 0;">
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Dossier</td><td style="padding:8px;">${vowintRef}</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Détecté à</td><td style="padding:8px;">${new Date(discoveryResult.discoveredAt).toLocaleString("fr-FR")}</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">URL calendrier</td><td style="padding:8px;word-break:break-all;font-size:11px;">${discoveryResult.calendarPageUrl}</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Token antiforgery</td><td style="padding:8px;">${discoveryResult.antiForgeryToken ? "✅ Trouvé" : "❌ Non trouvé"}</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Form action</td><td style="padding:8px;">${discoveryResult.formAction ?? "Non détecté"}</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Endpoints AJAX</td><td style="padding:8px;">${discoveryResult.ajaxEndpoints.length} découverts</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Hidden inputs</td><td style="padding:8px;">${Object.keys(discoveryResult.hiddenInputs).length} champs</td></tr>
-<tr><td style="padding:8px;font-weight:bold;color:#374151;">Convex storage</td><td style="padding:8px;">${discoveryResult.convexStorageId ?? "Upload échoué"}</td></tr>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+<tr><td style="padding:8px;font-weight:bold;color:#374151;width:140px;">Dossier</td><td style="padding:8px;font-weight:bold;">${data.vowintRef}</td></tr>
+<tr><td style="padding:8px;font-weight:bold;color:#374151;">Detecte a</td><td style="padding:8px;">${new Date(data.detectedAt).toLocaleString("fr-FR", { timeZone: "Europe/Brussels" })}</td></tr>
+<tr><td style="padding:8px;font-weight:bold;color:#374151;">Places libres</td><td style="padding:8px;font-weight:bold;color:${data.totalFree <= 1 ? "#dc2626" : "#16a34a"}">${data.totalFree} place${data.totalFree > 1 ? "s" : ""}</td></tr>
+${isSuccess ? `<tr><td style="padding:8px;font-weight:bold;color:#374151;">Confirmation</td><td style="padding:8px;font-weight:bold;color:#16a34a;font-size:16px;">${data.confirmationCode ?? "—"}</td></tr>
+<tr><td style="padding:8px;font-weight:bold;color:#374151;">Date reservee</td><td style="padding:8px;font-weight:bold;">${data.bookedDate ?? "—"} ${data.bookedTime ?? ""}</td></tr>` : ""}
+${data.error ? `<tr><td style="padding:8px;font-weight:bold;color:#dc2626;">Erreur</td><td style="padding:8px;color:#dc2626;">${data.error}</td></tr>` : ""}
+${data.strategy ? `<tr><td style="padding:8px;font-weight:bold;color:#374151;">Strategie</td><td style="padding:8px;">${data.strategy}</td></tr>` : ""}
 </table>
 
-<h2 style="margin:24px 0 8px;color:#374151;">📋 /Home/AvailableTimeSlots (HTTP ${slotsStatus})</h2>
-<pre style="background:#f8fafc;padding:12px;border-radius:8px;overflow-x:auto;font-size:11px;max-height:300px;">${slotsJson.slice(0, 2000)}</pre>
+${data.slots.length > 0 ? `<h2 style="margin:24px 0 8px;color:#374151;font-size:15px;">Creneaux detectes</h2>
+<table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+<tr style="background:#f8fafc;"><th style="padding:8px 12px;text-align:left;">Date</th><th style="padding:8px 12px;text-align:left;">Heure</th><th style="padding:8px 12px;text-align:center;">Places</th></tr>
+${slotsRows}
+</table>` : ""}
 
-<h2 style="margin:24px 0 8px;color:#374151;">🔗 Endpoints découverts</h2>
-<ul style="font-size:12px;">
-${discoveryResult.ajaxEndpoints.slice(0, 15).map((e) => `<li><code>${e}</code></li>`).join("\n")}
-</ul>
+${data.eligibleDossiers && data.eligibleDossiers.length > 1 ? `<p style="margin:16px 0 0;font-size:12px;color:#6b7280;">Dossiers eligibles: ${data.eligibleDossiers.join(", ")}</p>` : ""}
 
-<h2 style="margin:24px 0 8px;color:#374151;">📝 Hidden Inputs</h2>
-<pre style="background:#f8fafc;padding:12px;border-radius:8px;overflow-x:auto;font-size:11px;">${JSON.stringify(
-    Object.fromEntries(
-      Object.entries(discoveryResult.hiddenInputs).map(([k, v]) =>
-        [k, k.includes("Token") ? v.slice(0, 12) + "..." : v]
-      )
-    ), null, 2
-  )}</pre>
-
-${discoveryResult.errors.length > 0 ? `
-<h2 style="margin:24px 0 8px;color:#dc2626;">⚠️ Erreurs</h2>
-<ul style="color:#dc2626;font-size:12px;">
-${discoveryResult.errors.map((e) => `<li>${e}</li>`).join("\n")}
-</ul>` : ""}
-
-<p style="margin:24px 0 0;color:#6b7280;font-size:11px;">
-  Le dossier ${vowintRef} est maintenant en PAUSE.<br/>
-  La capture complète est disponible dans Convex storage (ID ci-dessus).<br/>
-  Hunter Bot — ${new Date().toISOString()}
-</p>
+<p style="margin:24px 0 0;color:#6b7280;font-size:11px;">Hunter Bot — ${new Date().toISOString()}</p>
 
 </div>
 </body></html>`;
@@ -432,30 +446,56 @@ ${discoveryResult.errors.map((e) => `<li>${e}</li>`).join("\n")}
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: RESEND_FROM_EMAIL,
-        to: ADMIN_EMAILS,
-        subject,
-        html: htmlBody,
-      }),
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: ADMIN_EMAILS, subject, html: htmlBody }),
       signal: AbortSignal.timeout(15_000),
     });
-
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.warn(`[cev-discovery] Resend erreur HTTP ${res.status}: ${errText.slice(0, 200)}`);
       return false;
     }
-
-    const data = (await res.json()) as { id?: string };
-    console.log(`[cev-discovery] ✅ Email slot envoyé à ${ADMIN_EMAILS.join(", ")} (id: ${data.id ?? "?"})`);
+    const resData = (await res.json()) as { id?: string };
+    console.log(`[cev-discovery] ✅ Email booking envoyé (id: ${resData.id ?? "?"})`);
     return true;
   } catch (err) {
     console.warn(`[cev-discovery] Erreur envoi email: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Legacy : email discovery brut (fallback).
+ */
+async function sendLegacyDiscoveryEmail(vowintRef: string, discoveryResult: SlotDiscoveryResult): Promise<boolean> {
+  const subject = `🚨 [CEV] SLOT DÉTECTÉ — ${vowintRef}`;
+  const htmlBody = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:monospace;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:2px solid #dc2626;">
+<h1 style="color:#dc2626;margin:0 0 16px;">🚨 SLOT CEV DÉTECTÉ</h1>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;">
+<tr><td style="padding:8px;font-weight:bold;">Dossier</td><td style="padding:8px;">${vowintRef}</td></tr>
+<tr><td style="padding:8px;font-weight:bold;">Detecte a</td><td style="padding:8px;">${new Date(discoveryResult.discoveredAt).toLocaleString("fr-FR")}</td></tr>
+<tr><td style="padding:8px;font-weight:bold;">Convex storage</td><td style="padding:8px;">${discoveryResult.convexStorageId ?? "—"}</td></tr>
+</table>
+<p style="color:#6b7280;font-size:11px;">Hunter Bot — ${new Date().toISOString()}</p>
+</div>
+</body></html>`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: ADMIN_EMAILS, subject, html: htmlBody }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return false;
+    const resData = (await res.json()) as { id?: string };
+    console.log(`[cev-discovery] ✅ Email legacy envoyé (id: ${resData.id ?? "?"})`);
+    return true;
+  } catch (err) {
+    console.warn(`[cev-discovery] Erreur envoi email legacy: ${err}`);
     return false;
   }
 }

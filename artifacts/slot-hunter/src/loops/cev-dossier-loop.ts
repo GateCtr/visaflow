@@ -29,8 +29,7 @@
 
 import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache, resolveFirstAppIdFromMyList } from "../cevHttpSetup.js";
 import { cancelCevAppointment } from "../cevHttpCancel.js";
-import { bookCevViaHttp } from "../cevHttpBooking.js";
-import { bookWithExistingSession } from "../cevBooking.js";
+import { bookCevViaHttp, extractInlineSlotsFromHtml } from "../cevHttpBooking.js";
 import { pollCevSlot } from "../cevPolling.js";
 import {
   initCevProxyGuard,
@@ -1110,7 +1109,7 @@ async function performScan(
 
 // ─── Booking ────────────────────────────────────────────────────────────────
 
-import { discoverSlotBookingFlow, sendSlotDetectedEmail } from "../cev-slot-discovery.js";
+import { sendSlotDetectedEmail, type SlotBookingEmailData } from "../cev-slot-discovery.js";
 
 /** Dossiers en pause (après slot_found) — ne pas re-scanner */
 const pausedDossiers = new Set<string>();
@@ -1165,28 +1164,15 @@ async function handleSlotFound(
     },
   });
 
-  // ── DISCOVERY : capturer TOUT le flow avec la session EXISTANTE ──
-  // Pas de re-login ! On utilise la session qui vient de détecter le slot.
-  // Le slot ne peut pas disparaître entre la détection et la capture.
+  // ── BOOKING IMMÉDIAT avec la session existante ──
+  // CRITIQUE : ne pas faire de discovery ni d'email AVANT le booking.
+  // CEV invalide la session dès qu'on navigue ailleurs que SelectSlot.
   const sessionCookie = existingSessionCookie;
   const integrationUrl = existingIntegrationUrl;
 
   if (sessionCookie && integrationUrl) {
-    logFn.info(`  🔬 Discovery avec session existante (pas de re-login)...`);
-
-    const discovery = await discoverSlotBookingFlow(
-      sessionCookie,
-      integrationUrl,
-      dossier.vowintRef,
-      applicationId,
-    );
-
-    // Envoyer email admin
-    logFn.info(`  📧 Envoi email admin...`);
-    await sendSlotDetectedEmail(dossier.vowintRef, discovery);
-
-    // Tenter le booking HTTP avec la session existante
-    logFn.info(`  🎯 Tentative booking HTTP avec session existante${existingSelectSlotHtml ? " (HTML pré-capturé)" : ""}...`);
+    // Tenter le booking HTTP immédiatement
+    logFn.info(`  🎯 BOOKING IMMÉDIAT avec session existante${existingSelectSlotHtml ? " (HTML pré-capturé)" : ""}...`);
     try {
       const httpResult = await bookCevViaHttp(
         integrationUrl, sessionCookie!, applicationId, siphoned, undefined,
@@ -1203,32 +1189,40 @@ async function handleSlotFound(
         });
         return;
       }
-      logFn.info(`  ⚠️ Booking HTTP échoué: ${httpResult.error} — tentative avec re-login...`);
+      // Si NO_AVAILABILITY → le slot est pris, on s'arrête
+      if (httpResult.error === "NO_AVAILABILITY" || httpResult.error === "NO_SLOTS_IN_RESPONSE") {
+        logFn.info(`  ❌ Slot disparu (${httpResult.error}) — pas de retry`);
+        return;
+      }
+      // SessionExpired ou autre erreur → le slot existe peut-être encore → retry avec re-login
+      logFn.info(`  ⚠️ Booking HTTP échoué: ${httpResult.error} — retry avec re-login...`);
     } catch (err) {
-      logFn.warn(`  ⚠️ Booking HTTP crash: ${err} — tentative avec re-login...`);
+      logFn.warn(`  ⚠️ Booking HTTP crash: ${err} — retry avec re-login...`);
     }
   }
 
-  // ── FALLBACK : re-login + nouveau setup (si session existante a échoué) ──
-    logFn.info(`  🔄 Re-login pour tentative fallback...`);
-    const session = await setupCevSessionHttp(
-      vowintEmail,
-      vowintPassword,
-      applicationId,
-      applicationId,
-      dossier.vowintRef,
-      siphoned,
-    );
+  // ── RETRY : re-login + nouveau setup (session morte mais slot peut-être encore là) ──
+  logFn.info(`  🔄 Re-login pour retry...`);
+  const session = await setupCevSessionHttp(
+    vowintEmail,
+    vowintPassword,
+    applicationId,
+    applicationId,
+    dossier.vowintRef,
+    siphoned,
+  );
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
-    logFn.error(`  Session re-setup échoué pour booking fallback`);
+    logFn.error(`  ❌ Re-setup échoué: ${session.error ?? "unknown"}`);
     return;
   }
 
-  // Tentative booking HTTP avec session fraîche
+  // Tenter le booking avec la session fraîche
   try {
-    const httpResult = await bookCevViaHttp(session.integrationUrl!, session.sessionCookie!, applicationId, siphoned, undefined,
-      session.selectSlotHtml, session.selectSlotUrl, session.selectSlotCookies, groupSize);
+    const httpResult = await bookCevViaHttp(
+      session.integrationUrl!, session.sessionCookie!, applicationId, siphoned, undefined,
+      session.selectSlotHtml, session.selectSlotUrl, session.selectSlotCookies, groupSize,
+    );
     if (httpResult.success) {
       logFn.info(`  ✅ BOOKING RÉUSSI (re-login)! code=${httpResult.confirmationCode} date=${httpResult.bookedDate}`);
       await reportSlotFound({
@@ -1238,28 +1232,8 @@ async function handleSlotFound(
         location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
         confirmationCode: httpResult.confirmationCode,
       });
-      return;
-    }
-
-    // Fallback Playwright
-    logFn.info(`  HTTP insuffisant — fallback Playwright...`);
-    const pwResult = await bookWithExistingSession(
-      session.integrationUrl,
-      session.sessionCookie,
-      applicationId,
-    );
-    if (pwResult.success) {
-      logFn.info(`  ✅ BOOKING PLAYWRIGHT RÉUSSI! code=${pwResult.confirmationCode}`);
-      await reportSlotFound({
-        applicationId,
-        date: pwResult.bookedDate ?? "",
-        time: pwResult.bookedTime ?? "",
-        location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
-        confirmationCode: pwResult.confirmationCode,
-        screenshotStorageId: pwResult.screenshotStorageId,
-      });
     } else {
-      logFn.error(`  ❌ Booking échoué: ${pwResult.error}`);
+      logFn.error(`  ❌ Booking HTTP (re-login) échoué: ${httpResult.error}`);
     }
   } catch (err) {
     logFn.error(`  💥 Crash booking: ${err}`);
@@ -1366,21 +1340,11 @@ async function bookDossierIsolated(
       logFn.info(`  [${vowintRef}] ✅ BOOKING RÉUSSI (re-login)! code=${res.confirmationCode}`);
       return { success: true, confirmationCode: res.confirmationCode, bookedDate: res.bookedDate, bookedTime: res.bookedTime };
     }
-    logFn.warn(`  [${vowintRef}] ⚠️ HTTP échoué: ${res.error} → fallback Playwright`);
+    logFn.warn(`  [${vowintRef}] ⚠️ HTTP échoué: ${res.error}`);
+    return { success: false, error: res.error ?? "HTTP booking failed" };
   } catch (err) {
-    logFn.warn(`  [${vowintRef}] ⚠️ HTTP crash: ${err} → fallback Playwright`);
-  }
-
-  // ── Fallback Playwright ─────────────────────────────────────────────────
-  try {
-    const pw = await bookWithExistingSession(session.integrationUrl, session.sessionCookie, applicationId);
-    if (pw.success) {
-      logFn.info(`  [${vowintRef}] ✅ BOOKING PLAYWRIGHT RÉUSSI! code=${pw.confirmationCode}`);
-      return { success: true, confirmationCode: pw.confirmationCode, bookedDate: pw.bookedDate, bookedTime: pw.bookedTime, screenshotStorageId: pw.screenshotStorageId };
-    }
-    return { success: false, error: `playwright: ${pw.error}` };
-  } catch (err) {
-    return { success: false, error: `playwright crash: ${err}` };
+    logFn.warn(`  [${vowintRef}] ⚠️ HTTP crash: ${err}`);
+    return { success: false, error: `http crash: ${err}` };
   }
 }
 
@@ -1448,77 +1412,162 @@ async function handleSlotFoundMulti(
     },
   });
 
-  // ── Discovery + email admin (session existante du dossier détecteur) ─────
-  if (existingSessionCookie && existingIntegrationUrl) {
-    try {
-      logFn.info(`  🔬 Discovery avec session existante...`);
-      const discovery = await discoverSlotBookingFlow(
-        existingSessionCookie,
-        existingIntegrationUrl,
-        detectingDossier.vowintRef,
-        applicationId,
-      );
-      logFn.info(`  📧 Envoi email admin...`);
-      await sendSlotDetectedEmail(detectingDossier.vowintRef, discovery);
-    } catch (err) {
-      logFn.warn(`  ⚠️ Discovery/email non bloquant: ${err}`);
-    }
+  // ── Analyser les slots IMMÉDIATEMENT depuis le HTML pré-capturé ─────────
+  // CRITIQUE : ne pas perdre la session sur des opérations inutiles.
+  // CEV invalide la session dès qu'on fait autre chose que soumettre le form SelectSlot.
+  let totalFree = 0;
+  if (existingSelectSlotHtml && existingSelectSlotHtml.length > 500) {
+    const inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml);
+    totalFree = inlineSlots.reduce((sum, s) => sum + (s.free ?? 1), 0);
+    logFn.info(`  📊 Slots inline détectés: ${inlineSlots.length} créneau(x), totalFree=${totalFree}`);
+    botLog({
+      applicationId,
+      step: "cev_multi_slot_analysis",
+      status: "ok",
+      data: {
+        inlineSlotCount: inlineSlots.length,
+        totalFree,
+        eligibleDossiers: eligibleRefs.length,
+        slots: inlineSlots.slice(0, 5).map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+        decision: totalFree <= 1 ? "BOOK_IMMEDIATELY_SINGLE" : totalFree < eligibleRefs.length ? "BOOK_FIRST_THEN_OTHERS" : "BOOK_PARALLEL_ALL",
+      },
+    });
+  } else {
+    // Pas de HTML pré-capturé — on suppose free limité, booker immédiatement
+    totalFree = 1;
+    logFn.info(`  ⚠️ Pas de HTML pré-capturé — booking immédiat (hypothèse free=1)`);
   }
 
-  // ── Booking parallèle — une session isolée par dossier éligible ──────────
-  logFn.info(`  🚀 Lancement booking parallèle (${eligibleRefs.length} session(s) isolée(s))...`);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — TOUJOURS
+  // La session CEV expire dès qu'on fait autre chose que soumettre le SelectSlot.
+  // Pas de discovery, pas d'email, pas de wake multi-dossier AVANT le booking.
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  const bookingTasks = eligibleRefs.map(vowintRef => {
-    const isDetecting = vowintRef === detectingDossier.vowintRef;
-    const existingSession = isDetecting && existingSessionCookie && existingIntegrationUrl
-      ? {
+  let detectingBookingResult: Awaited<ReturnType<typeof bookDossierIsolated>> | null = null;
+
+  if (existingSessionCookie && existingIntegrationUrl) {
+    logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
+    try {
+      detectingBookingResult = await bookDossierIsolated(
+        vowintEmail, vowintPassword,
+        detectingDossier.vowintRef, applicationId,
+        groupSize,
+        {
           sessionCookie: existingSessionCookie,
           integrationUrl: existingIntegrationUrl,
           selectSlotHtml: existingSelectSlotHtml,
           selectSlotUrl: existingSelectSlotUrl,
           selectSlotCookies: existingSelectSlotCookies,
-        }
-      : undefined;
+        },
+        logger,
+      );
 
-    return bookDossierIsolated(
-      vowintEmail, vowintPassword,
-      vowintRef, applicationId,
-      groupSize, existingSession, logger,
-    ).then(result => ({ vowintRef, ...result }));
-  });
-
-  const results = await Promise.allSettled(bookingTasks);
-
-  // ── Traitement des résultats ─────────────────────────────────────────────
-  let anySuccess = false;
-  for (const settled of results) {
-    if (settled.status === "rejected") {
-      logFn.error(`  💥 Booking task crash: ${settled.reason}`);
-      continue;
+      if (detectingBookingResult.success) {
+        logFn.info(`  ✅ ${detectingDossier.vowintRef} → BOOKING RÉUSSI! code=${detectingBookingResult.confirmationCode} date=${detectingBookingResult.bookedDate}`);
+        await reportSlotFound({
+          applicationId,
+          date: detectingBookingResult.bookedDate ?? "",
+          time: detectingBookingResult.bookedTime ?? "",
+          location: `CEV Belgique (${detectingDossier.vowintRef})`,
+          confirmationCode: detectingBookingResult.confirmationCode,
+        });
+        botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: detectingDossier.vowintRef, confirmationCode: detectingBookingResult.confirmationCode, strategy: "immediate" } });
+      } else {
+        logFn.warn(`  ⚠️ ${detectingDossier.vowintRef} → Booking session existante échoué: ${detectingBookingResult.error}`);
+      }
+    } catch (err) {
+      logFn.error(`  💥 ${detectingDossier.vowintRef} → Booking crash: ${err}`);
     }
-    const r = settled.value;
-    if (r.success) {
-      logFn.info(`  ✅ ${r.vowintRef} → BOOKING RÉUSSI! code=${r.confirmationCode} date=${r.bookedDate}`);
-      anySuccess = true;
-      // Notifier le slot pour CHAQUE succès (plusieurs dossiers peuvent réserver)
-      await reportSlotFound({
-        applicationId,
-        date: r.bookedDate ?? "",
-        time: r.bookedTime ?? "",
-        location: `CEV Belgique (${r.vowintRef})`,
-        confirmationCode: r.confirmationCode,
-        screenshotStorageId: r.screenshotStorageId,
-      });
-      botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: r.vowintRef, confirmationCode: r.confirmationCode } });
+  }
+
+  // ── Décision multi-dossier basée sur le free RESTANT après le détecteur ────
+  // Si free=3 et le détecteur a réussi → il reste 2 places → réveiller max 2 autres.
+  // Si free=1 → pas de multi. Si détecteur a échoué (session expired) → le slot est peut-être pris par un humain → pas de multi non plus.
+  const freeConsumedByDetector = detectingBookingResult?.success ? 1 : 0;
+  const remainingFree = totalFree - freeConsumedByDetector;
+  const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
+  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles
+  const dossiersToWake = Math.min(remainingFree, otherRefs.length);
+  const skipMulti = dossiersToWake <= 0;
+
+  if (skipMulti) {
+    if (detectingBookingResult?.success && remainingFree <= 0) {
+      logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);
+    } else if (totalFree <= 1) {
+      logFn.info(`  🏁 totalFree=${totalFree} — pas de multi-dossier`);
     } else {
-      logFn.warn(`  ❌ ${r.vowintRef} → Booking échoué: ${r.error}`);
-      botLog({ applicationId, step: "cev_multi_booking_fail", status: "fail", data: { vowintRef: r.vowintRef, error: r.error } });
+      logFn.info(`  🏁 Pas de multi-dossier (remainingFree=${remainingFree}, autres=${otherRefs.length})`);
+    }
+  } else {
+    // ── Multi-dossier : booker les AUTRES dossiers en parallèle ─────────────
+    // Le détecteur a déjà tenté. On réveille seulement le nombre de dossiers = places restantes.
+    // Chaque dossier re-login isolé → le serveur leur montre le availability[] mis à jour.
+    const selectedRefs = otherRefs.slice(0, dossiersToWake);
+    logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) [${selectedRefs.join(", ")}]...`);
+
+    const bookingTasks = selectedRefs.map(vowintRef =>
+      bookDossierIsolated(
+        vowintEmail, vowintPassword,
+        vowintRef, applicationId,
+        groupSize, undefined, logger,
+      ).then(result => ({ vowintRef, ...result }))
+    );
+
+    const results = await Promise.allSettled(bookingTasks);
+
+    for (const settled of results) {
+      if (settled.status === "rejected") {
+        logFn.error(`  💥 Booking task crash: ${settled.reason}`);
+        continue;
+      }
+      const r = settled.value;
+      if (r.success) {
+        logFn.info(`  ✅ ${r.vowintRef} → BOOKING RÉUSSI! code=${r.confirmationCode} date=${r.bookedDate}`);
+        await reportSlotFound({
+          applicationId,
+          date: r.bookedDate ?? "",
+          time: r.bookedTime ?? "",
+          location: `CEV Belgique (${r.vowintRef})`,
+          confirmationCode: r.confirmationCode,
+          screenshotStorageId: r.screenshotStorageId,
+        });
+        botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: r.vowintRef, confirmationCode: r.confirmationCode, strategy: "parallel" } });
+      } else {
+        logFn.warn(`  ❌ ${r.vowintRef} → Booking échoué: ${r.error}`);
+        botLog({ applicationId, step: "cev_multi_booking_fail", status: "fail", data: { vowintRef: r.vowintRef, error: r.error } });
+      }
     }
   }
 
-  if (!anySuccess) {
-    logFn.error(`  ❌ Aucun booking réussi sur ${eligibleRefs.length} dossier(s) éligibles`);
-  }
+  // ── Email admin avec le RÉSULTAT du booking (pas de discovery inutile) ────
+  // Envoie les infos utiles : slots détectés, résultat, code confirmation.
+  void (async () => {
+    try {
+      let inlineSlots: Array<{ date: string; time: string; free: number }> = [];
+      if (existingSelectSlotHtml && existingSelectSlotHtml.length > 500) {
+        inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml).map(s => ({
+          date: s.date, time: s.time, free: s.free ?? 1,
+        }));
+      }
+      const emailData: SlotBookingEmailData = {
+        vowintRef: detectingDossier.vowintRef,
+        detectedAt: Date.now(),
+        slots: inlineSlots,
+        totalFree,
+        bookingResult: detectingBookingResult?.success ? "success" : "failed",
+        confirmationCode: detectingBookingResult?.confirmationCode,
+        bookedDate: detectingBookingResult?.bookedDate,
+        bookedTime: detectingBookingResult?.bookedTime,
+        error: detectingBookingResult?.success ? undefined : detectingBookingResult?.error,
+        eligibleDossiers: eligibleRefs,
+        strategy: skipMulti ? "immediate_single" : "parallel_multi",
+      };
+      await sendSlotDetectedEmail(detectingDossier.vowintRef, emailData);
+    } catch (err) {
+      logFn.warn(`  ⚠️ Email post-booking (non bloquant): ${err}`);
+    }
+  })();
 }
 
 // ─── Loop Principal v3 ──────────────────────────────────────────────────────

@@ -396,7 +396,7 @@ interface ParsedSlot {
  * Quand présents, ces slots sont préférés à un appel /Home/AvailableTimeSlots
  * (qui requiert officeId + visaCategories → HTTP 500 sans ces paramètres).
  */
-function extractInlineSlotsFromHtml(html: string): ParsedSlot[] {
+export function extractInlineSlotsFromHtml(html: string): ParsedSlot[] {
   // Chercher la variable availability (avec ou sans var/let/const)
   const patterns = [
     /\bvar\s+availability\s*=\s*(\[[\s\S]*?\]);/,
