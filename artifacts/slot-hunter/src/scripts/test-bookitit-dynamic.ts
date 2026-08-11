@@ -15,7 +15,7 @@ import { Impit } from "impit";
 // ── Config ────────────────────────────────────────────────────────────────────
 const WIDGET_URL = process.argv[2] || "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
 const CAPSOLVER_API_KEY = process.env.CAPSOLVER_API_KEY ?? "";
-const PROXY_URL = process.env.SPAIN_ISP_PROXY_URL ?? "";
+const PROXY_URL = process.argv[3] || (process.env.SPAIN_ISP_PROXY_URL ?? "");
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -207,56 +207,135 @@ async function main(): Promise<void> {
   }
   log("OK", `${allAgendas.length} agenda(s) total`);
 
-  // ═══ 4. Scan créneaux ═════════════════════════════════════════════════════
-  section("4 — Scan créneaux (datetime/)");
+  // ═══ 4. Scan créneaux (datetime/) — TOUS les mois jusqu'à maxDays ════════
+  section("4 — Scan créneaux (datetime/) — navigation dynamique jusqu'à maxDays");
 
   const now = new Date();
   let totalSlots = 0;
+  // Tableau détaillé des créneaux trouvés
+  const allFoundSlots: Array<{ date: string; time: string; freeSlots: number; totalSlots: number; agenda: string }> = [];
 
   for (const ag of allAgendas) {
-    // Mois courant
-    const startCur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const endCur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`;
-    const rDt = await impit.fetch(makeUrl("datetime/", { "services[]": ag.serviceId, "agendas[]": ag.agendaId, start: startCur, end: endCur, selectedPeople: "1" }), { headers: cookieHeader() } as any) as unknown as Response;
-    const bodyDt = await rDt.text();
-    const dtData = parseJsonp(bodyDt) as any;
-    const maxDays = dtData?.maxDays ?? "";
+    let globalMaxDays: Date | null = null;
+    let monthOffset = 0;
+    let agendaSlots = 0;
+    const MAX_MONTHS = 12; // sécurité : max 12 mois de scan
+    let consecutiveEmpty = 0; // compteur de mois vides consécutifs
 
-    // Compter créneaux mois courant
-    let slotsThisMonth = 0;
-    for (const day of (dtData?.Slots ?? [])) {
-      const times = day.times ?? {};
-      if (typeof times === "object" && !Array.isArray(times)) {
-        for (const [, info] of Object.entries(times) as [string, any][]) {
-          slotsThisMonth += Number(info.freeSlots ?? 0);
+    log("INFO", `  Agenda: ${ag.agendaName} (${ag.agendaId}) — service: ${ag.serviceId}`);
+
+    while (monthOffset < MAX_MONTHS) {
+      const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+      const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const endStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+      const rDt = await impit.fetch(makeUrl("datetime/", {
+        "services[]": ag.serviceId,
+        "agendas[]": ag.agendaId,
+        start: startStr,
+        end: endStr,
+        selectedPeople: "1",
+      }), { headers: cookieHeader() } as any) as unknown as Response;
+      const bodyDt = await rDt.text();
+      const dtData = parseJsonp(bodyDt) as any;
+
+      // Parser maxDays de CETTE réponse (chaque mois peut avoir un maxDays différent)
+      const maxDaysRaw: string = dtData?.maxDays ?? "";
+      if (maxDaysRaw && maxDaysRaw.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const parsed = new Date(maxDaysRaw + "T23:59:59");
+        if (!globalMaxDays || parsed > globalMaxDays) {
+          globalMaxDays = parsed;
         }
       }
-    }
 
-    // Mois suivant
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const startNext = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
-    const endNext = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-${new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()}`;
-    const rDt2 = await impit.fetch(makeUrl("datetime/", { "services[]": ag.serviceId, "agendas[]": ag.agendaId, start: startNext, end: endNext, selectedPeople: "1" }), { headers: cookieHeader() } as any) as unknown as Response;
-    const bodyDt2 = await rDt2.text();
-    const dtData2 = parseJsonp(bodyDt2) as any;
-
-    let slotsNextMonth = 0;
-    for (const day of (dtData2?.Slots ?? [])) {
-      const times = day.times ?? {};
-      if (typeof times === "object" && !Array.isArray(times)) {
-        for (const [time, info] of Object.entries(times) as [string, any][]) {
-          const free = Number(info.freeSlots ?? 0);
-          slotsNextMonth += free;
-          if (free > 0 && totalSlots + slotsNextMonth <= 10) {
-            log("INFO", `  📅 ${day.date} ${(info as any).time} — ${free} libre(s) [${ag.agendaName}]`);
+      // Compter créneaux ce mois
+      let slotsThisMonth = 0;
+      for (const day of (dtData?.Slots ?? [])) {
+        const times = day.times ?? {};
+        if (typeof times === "object" && !Array.isArray(times)) {
+          for (const [timeKey, info] of Object.entries(times) as [string, any][]) {
+            const free = Number(info.freeSlots ?? 0);
+            const total = Number(info.totalSlots ?? 0);
+            const timeStr: string = info.time ?? timeKey;
+            if (free > 0) {
+              slotsThisMonth += free;
+              allFoundSlots.push({
+                date: day.date,
+                time: timeStr,
+                freeSlots: free,
+                totalSlots: total,
+                agenda: ag.agendaName,
+              });
+            }
           }
         }
       }
+
+      agendaSlots += slotsThisMonth;
+      const slotsLabel = slotsThisMonth > 0 ? `${slotsThisMonth} créneau(x)` : "0";
+      log("INFO", `    ${monthLabel} : ${slotsLabel} | maxDays=${maxDaysRaw || "(absent)"}`);
+
+      monthOffset++;
+
+      // Logique d'arrêt : on s'arrête si maxDays du serveur interdit le mois SUIVANT
+      // MAIS on scanne TOUJOURS au minimum 2 mois (M + M+1) car maxDays du mois courant
+      // peut être "aujourd'hui" alors que le serveur a des créneaux en M+1/M+2.
+      // Le vrai maxDays "horizon" ne se révèle qu'en demandant les mois futurs.
+      if (monthOffset >= 2 && globalMaxDays) {
+        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+        if (firstOfNextMonth > globalMaxDays) {
+          log("INFO", `    ⏹ Fin : mois suivant ${firstOfNextMonth.toISOString().slice(0, 10)} > maxDays ${globalMaxDays.toISOString().slice(0, 10)}`);
+          break;
+        }
+      }
+
+      // Sécurité : si 3 mois vides consécutifs sans maxDays → arrêter
+      if (slotsThisMonth === 0) {
+        consecutiveEmpty++;
+      } else {
+        consecutiveEmpty = 0;
+      }
+      if (!globalMaxDays && consecutiveEmpty >= 3) {
+        log("WARN", `    ⏹ 3 mois vides consécutifs sans maxDays — arrêt par sécurité`);
+        break;
+      }
     }
 
-    totalSlots += slotsThisMonth + slotsNextMonth;
-    log("INFO", `  ${ag.agendaName} (${ag.serviceId}) : ${slotsThisMonth} ce mois + ${slotsNextMonth} mois suivant | maxDays=${maxDays}`);
+    totalSlots += agendaSlots;
+    log("INFO", `  → Total agenda: ${agendaSlots} créneau(x) sur ${monthOffset} mois scannés (maxDays=${globalMaxDays?.toISOString().slice(0, 10) ?? "?"})`);
+  }
+
+  // ═══ TABLEAU DÉTAILLÉ ═════════════════════════════════════════════════════
+  if (allFoundSlots.length > 0) {
+    section("TABLEAU DES CRÉNEAUX");
+    // Grouper par date
+    const byDate = new Map<string, typeof allFoundSlots>();
+    for (const s of allFoundSlots) {
+      if (!byDate.has(s.date)) byDate.set(s.date, []);
+      byDate.get(s.date)!.push(s);
+    }
+    // Afficher le tableau
+    console.log("");
+    console.log(`  ${"Date".padEnd(12)} | ${"Heure".padEnd(7)} | ${"Libres".padEnd(7)} | ${"Total".padEnd(7)} | Agenda`);
+    console.log(`  ${"-".repeat(12)}-+-${"-".repeat(7)}-+-${"-".repeat(7)}-+-${"-".repeat(7)}-+-${"-".repeat(30)}`);
+    for (const [date, slots] of [...byDate.entries()].sort()) {
+      // Trier par heure
+      slots.sort((a, b) => a.time.localeCompare(b.time));
+      for (const s of slots) {
+        console.log(`  ${s.date.padEnd(12)} | ${s.time.padEnd(7)} | ${String(s.freeSlots).padEnd(7)} | ${String(s.totalSlots).padEnd(7)} | ${s.agenda.slice(0, 30)}`);
+      }
+    }
+    console.log("");
+    // Résumé par date
+    console.log(`  RÉSUMÉ PAR DATE :`);
+    for (const [date, slots] of [...byDate.entries()].sort()) {
+      const totalFree = slots.reduce((sum, s) => sum + s.freeSlots, 0);
+      const nSlots = slots.length;
+      console.log(`    ${date} : ${totalFree} place(s) sur ${nSlots} créneau(x) horaire(s)`);
+    }
+    console.log("");
   }
 
   // ═══ RÉSULTAT ═════════════════════════════════════════════════════════════

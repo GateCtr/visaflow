@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { Link } from "wouter";
 import { api } from "@convex/_generated/api";
 import { Doc } from "@convex/_generated/dataModel";
@@ -336,14 +336,20 @@ function BotLogsTab() {
     }
   };
 
-  const logs = useQuery(api.botLogs.listRecent, {
-    limit: 500,
-    statusFilter: statusFilter || undefined,
-    stepFilter:   stepFilter   || undefined,
-  }) ?? undefined;
+  const { results: paginatedLogs, status: paginationStatus, loadMore } = usePaginatedQuery(
+    api.botLogs.listPaginated,
+    {
+      statusFilter: statusFilter || undefined,
+      stepFilter:   stepFilter   || undefined,
+    },
+    { initialNumItems: 100 }
+  );
+
+  const canLoadMore = paginationStatus === "CanLoadMore";
+  const isLoadingMore = paginationStatus === "LoadingMore";
 
   // Filter by flow tab
-  const flowFiltered = (logs ?? []).filter(log => {
+  const flowFiltered = (paginatedLogs ?? []).filter(log => {
     if (flowTab === "all") return true;
     const flow = getLogFlow(log);
     if (flowTab === "usa") return flow === "usa";
@@ -358,12 +364,12 @@ function BotLogsTab() {
   const slice      = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // Counts per flow
-  const usaCount     = (logs ?? []).filter(l => getLogFlow(l) === "usa").length;
-  const cevCount     = (logs ?? []).filter(l => getLogFlow(l) === "cev").length;
-  const germanyCount = (logs ?? []).filter(l => getLogFlow(l) === "germany").length;
+  const usaCount     = paginatedLogs.filter(l => getLogFlow(l) === "usa").length;
+  const cevCount     = paginatedLogs.filter(l => getLogFlow(l) === "cev").length;
+  const germanyCount = paginatedLogs.filter(l => getLogFlow(l) === "germany").length;
 
-  const allSteps: string[] = logs
-    ? ([...new Set(logs.map((l: Doc<"botLogs">) => l.step))] as string[]).sort()
+  const allSteps: string[] = paginatedLogs.length > 0
+    ? ([...new Set(paginatedLogs.map((l) => l.step))] as string[]).sort()
     : [];
 
   const toggleExpand = (id: string) => {
@@ -416,7 +422,7 @@ function BotLogsTab() {
               { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
               { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
               { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
-              { id: "all" as FlowTab, label: "Tous", count: (logs ?? []).length },
+              { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
             ]).map(tab => (
               <button
                 key={tab.id}
@@ -454,7 +460,7 @@ function BotLogsTab() {
             <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
               <AlertDialogTrigger asChild>
                 <button
-                  disabled={clearing || !logs || logs.length === 0}
+                  disabled={clearing || paginatedLogs.length === 0}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-40"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -530,21 +536,21 @@ function BotLogsTab() {
           )}
 
           <span className="text-[10px] text-muted-foreground ml-auto">
-            {logs === undefined ? "..." : `${filtered.length} log${filtered.length !== 1 ? "s" : ""}`}
+            {paginationStatus === "LoadingFirstPage" ? "..." : `${filtered.length} log${filtered.length !== 1 ? "s" : ""}${canLoadMore ? "+" : ""}`}
           </span>
         </div>
       </div>
 
       {/* Logs list */}
       <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-        {logs === undefined ? (
+        {paginationStatus === "LoadingFirstPage" ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span className="text-sm">Chargement des logs...</span>
           </div>
         ) : slice.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-12">
-            {logs.length === 0 ? "Aucun log." : "Aucun log correspondant."}
+            {paginatedLogs.length === 0 ? "Aucun log." : "Aucun log correspondant."}
           </p>
         ) : (
           <>
@@ -679,6 +685,23 @@ function BotLogsTab() {
                 <span className="text-[9px] text-slate-400 ml-2">
                   {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}
                 </span>
+              </div>
+            )}
+
+            {/* Load more from server */}
+            {(canLoadMore || isLoadingMore) && (
+              <div className="flex items-center justify-center px-4 py-3 border-t border-slate-100 bg-slate-50/30">
+                <button
+                  onClick={() => loadMore(100)}
+                  disabled={isLoadingMore}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                >
+                  {isLoadingMore ? (
+                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Chargement...</>
+                  ) : (
+                    <>Charger plus de logs</>
+                  )}
+                </button>
               </div>
             )}
           </>

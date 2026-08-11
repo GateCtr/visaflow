@@ -353,3 +353,79 @@ export const clearScans = mutation({
     return { deleted: scans.length };
   },
 });
+
+
+// ─── Mutation: admin lance une commande rush-prep ─────────────────────────────
+
+export const requestRushPrep = mutation({
+  args: {
+    command: v.union(v.literal("cf_resolve"), v.literal("session_prep")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const existing = await ctx.db
+      .query("spainWatcher")
+      .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
+      .first();
+
+    const now = Date.now();
+    const patch = {
+      rushPrepCommand: args.command,
+      rushPrepAt: now,
+      rushPrepResult: undefined as string | undefined,
+      rushPrepAckedAt: undefined as number | undefined,
+      updatedAt: now,
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+    } else {
+      await ctx.db.insert("spainWatcher", {
+        key: WATCHER_KEY,
+        isActive: false,
+        portalUrl: "",
+        adminEmail: "",
+        updatedAt: now,
+        rushPrepCommand: args.command,
+        rushPrepAt: now,
+      });
+    }
+  },
+});
+
+// ─── Internal: bot acknowledges a rush-prep command ──────────────────────────
+
+export const internalAckRushPrep = internalMutation({
+  args: {
+    result: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("spainWatcher")
+      .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
+      .first();
+    if (!existing) return;
+
+    await ctx.db.patch(existing._id, {
+      rushPrepCommand: undefined,
+      rushPrepResult: args.result,
+      rushPrepAckedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// ─── Internal: bot polls for pending rush-prep command ────────────────────────
+
+export const internalGetRushPrepCommand = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const watcher = await ctx.db
+      .query("spainWatcher")
+      .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
+      .first();
+    return watcher?.rushPrepCommand ?? null;
+  },
+});

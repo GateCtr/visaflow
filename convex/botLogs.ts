@@ -1,4 +1,5 @@
 import { mutation, query, internalMutation } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { Doc } from "./_generated/dataModel";
 
@@ -66,6 +67,54 @@ export const listRecent = query({
         appDestination: app?.destination,
       };
     });
+  },
+});
+
+/**
+ * Version paginée de listRecent — utilise les curseurs Convex natifs.
+ * Le frontend appelle usePaginatedQuery avec loadMore() pour charger plus de logs
+ * sans plafond artificiel.
+ */
+export const listPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    statusFilter: v.optional(v.string()),
+    stepFilter: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const dbQuery = ctx.db
+      .query("botLogs")
+      .withIndex("by_ts")
+      .order("desc");
+
+    const result = await dbQuery.paginate(args.paginationOpts);
+
+    // Filtrage post-pagination (Convex ne supporte pas les filtres complexes dans paginate)
+    const filtered = result.page.filter(l => {
+      if (args.statusFilter && l.status !== args.statusFilter) return false;
+      if (args.stepFilter && !l.step.toLowerCase().includes(args.stepFilter.toLowerCase())) return false;
+      return true;
+    });
+
+    // Enrichir avec les infos application
+    const appIds = [...new Set(filtered.map(l => l.applicationId))];
+    const apps = await Promise.all(appIds.map(id => ctx.db.get(id)));
+    const appMap = new Map(apps.filter(Boolean).map(a => [a!._id, a!]));
+
+    const enriched = filtered.map(l => {
+      const app = appMap.get(l.applicationId);
+      return {
+        ...l,
+        appFirstName: app?.applicantName?.split(" ")[0] ?? app?.userFirstName,
+        appLastName: app?.applicantName?.split(" ").slice(1).join(" ") ?? app?.userLastName,
+        appDestination: app?.destination,
+      };
+    });
+
+    return {
+      ...result,
+      page: enriched,
+    };
   },
 });
 
