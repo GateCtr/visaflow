@@ -87,7 +87,7 @@ export function getResidentialProxyUrl(portOffset = 0): string | undefined {
   try {
     const u = new URL(base);
     const basePort = parseInt(u.port || "10001", 10);
-    u.port = String(((basePort - 10001 + portOffset) % 10) + 10001);
+    u.port = String(((basePort - 10001 + portOffset) % 20) + 10001);
     return u.toString();
   } catch {
     return base;

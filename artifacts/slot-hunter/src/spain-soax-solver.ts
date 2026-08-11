@@ -546,6 +546,13 @@ export async function solveSpainCloudflare(
 
 let _activeCfSession: SpainCfSession | undefined;
 
+/**
+ * Index courant dans le pool résidentiel (gate.decodo.com:10001-10020, 20 ports).
+ * Avancé d'un cran UNIQUEMENT quand /main/ retourne 0B — jamais proactivement.
+ * Persistant pour la durée de vie du process (Railway/Replit).
+ */
+let _residentialPortIndex = 0;
+
 /** Retourne la session CF active (ou undefined si expirée/inexistante). */
 export function getActiveSpainCfSession(): SpainCfSession | undefined {
   if (!_activeCfSession) return undefined;
@@ -624,10 +631,11 @@ export async function ensureSpainCfSession(
 
   // ── Mode capsolver-residential : HTTP-pur + proxy résidentiel Decodo ─────────
   // SPAIN_SESSION_MODE=capsolver-residential → Impit (Chrome TLS) + CapSolver
-  // AntiCloudflareTask + gate.decodo.com (rotatif 10001-10010).
+  // AntiCloudflareTask + gate.decodo.com (pool de 20 ports : 10001-10020).
   // Reproduit exactement test-bookitit-dynamic.ts :
   //   GET widget → CF solve → GET widget → POST token → srvsrc/version → GET /main/
   // Session PHPSESSID + jqCallback + reqCounter stockés dans session.bookititState.
+  // Rotation : le port ne change QUE quand /main/ retourne 0B (_residentialPortIndex++).
   if (process.env.SPAIN_SESSION_MODE === "capsolver-residential") {
     const residentialProxyBase = process.env.SPAIN_RESIDENTIAL_PROXY_URL;
     if (!residentialProxyBase) {
@@ -647,12 +655,14 @@ export async function ensureSpainCfSession(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
-    /** Rotation de port résidentiel 10001-10010 selon l'index de tentative. */
-    const rotateResidentialPort = (base: string, attempt: number): string => {
+    /**
+     * Calcule l'URL proxy pour l'index absolu donné dans le pool de 20 ports (10001-10020).
+     * L'index est toujours pris modulo 20 pour rester dans la plage.
+     */
+    const getResidentialProxyForIndex = (base: string, portIndex: number): string => {
       try {
         const u = new URL(base);
-        const basePort = parseInt(u.port || "10001", 10);
-        u.port = String(((basePort - 10001 + attempt) % 10) + 10001);
+        u.port = String((portIndex % 20) + 10001);
         return u.toString();
       } catch { return base; }
     };
@@ -674,9 +684,14 @@ export async function ensureSpainCfSession(
     const MAX_RETRIES_RESIDENTIAL = 3;
 
     for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
-      const proxyUrl = rotateResidentialPort(residentialProxyBase, attempt);
+      // Le port ne change QUE sur 0B (/main/ vide) → _residentialPortIndex++
+      const proxyUrl = getResidentialProxyForIndex(residentialProxyBase, _residentialPortIndex);
+      const portNum = parseInt(new URL(proxyUrl).port || "10001", 10);
       const masked = proxyUrl.replace(/:([^:@/]+)@/, ":***@");
-      console.log(`[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} — proxy: ${masked}`);
+      console.log(
+        `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
+        `— port=${portNum} (index=${_residentialPortIndex % 20}/20) | proxy: ${masked.slice(0, 60)}…`,
+      );
 
       const impit = new Impit({ browser: "chrome", proxyUrl } as any);
       const jar: Record<string, string> = {};
@@ -815,13 +830,15 @@ export async function ensureSpainCfSession(
         } as any) as unknown as Promise<Response>);
         prefetchedMainHtml = await rMain.text();
         if (prefetchedMainHtml.length < 1000) {
+          _residentialPortIndex++;
+          const nextPort = (_residentialPortIndex % 20) + 10001;
           console.warn(
-            `[spain-soax]    ⚠️ /main/ = ${prefetchedMainHtml.length}B ` +
-            `(proxy grillé ou session invalide) → retry avec nouvelle IP…`,
+            `[spain-soax] 🔄 /main/ = ${prefetchedMainHtml.length}B — ` +
+            `rotation port ${portNum} → ${nextPort} (index=${_residentialPortIndex % 20}/20)`,
           );
           continue;
         }
-        console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête!`);
+        console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête! port=${portNum}`);
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → retry`);
         continue;
@@ -865,6 +882,7 @@ export async function ensureSpainCfSession(
 
       console.log(
         `[spain-soax] 🎉 Session capsolver-residential établie! ` +
+        `port=${portNum} (index=${_residentialPortIndex % 20}/20) | ` +
         `jqCallback=${jqCallback.slice(0, 30)}… | ` +
         `PHPSESSID=${jar.PHPSESSID ? "✅" : "❌"} | ` +
         `srvsrc=${srvsrc} | v=${version} | ` +
