@@ -2402,38 +2402,6 @@ class SpainPersistentBrowserManager {
       (jsdSolveMs < 3_000 ? " ⚡ IP de confiance CF (fast-track détecté)" : ""),
     );
 
-    // ── Bloquer JSD spontané si fast-track détecté ────────────────────────────
-    //
-    // En fast-track (cf_clearance < 3s), CF reconnaît l'IP et émet cf_clearance
-    // sans attendre de JSD. Mais le widget JS déclenche ENSUITE un JSD oneshot
-    // spontané qui consomme la nonce pour ce PHPSESSID → réponse phantom (CF dit
-    // "déjà valide") → nonce épuisée → post-Continuar JSD = phantom → /main/ = 0B.
-    //
-    // FIX Round 1 : intercepter et BLOQUER ce JSD spontané (avant Continuar) pour
-    // préserver la nonce. Le bloqueur reste armé durant toutes les tentatives de clic
-    // et n'est désarmé QUE lorsque continueClicked=true (après le clic réussi) pour éviter
-    // que le JSD se glisse entre le désarmage et le vrai clic Continuar.
-    // Le post-Continuar JSD fire ensuite avec une nonce fraîche → cf_clearance réel.
-    let cdpJsdBlocker: any = null;
-    let jsdSpontaneousBlocked = false;
-
-    if (jsdSolveMs < 3_000) {
-      try {
-        cdpJsdBlocker = await page.createCDPSession();
-        await cdpJsdBlocker.send("Fetch.enable", {
-          patterns: [{ urlPattern: "*jsd/oneshot*", requestStage: "Request" }],
-        });
-        cdpJsdBlocker.on("Fetch.requestPaused", async (ev: any) => {
-          console.log(`[spain-pb] 🚫 JSD spontané bloqué — nonce préservée pour post-Continuar`);
-          jsdSpontaneousBlocked = true;
-          await cdpJsdBlocker?.send("Fetch.failRequest", { requestId: ev.requestId, errorReason: "Aborted" }).catch(() => {});
-        });
-        console.log(`[spain-pb] 🚫 Bloqueur JSD spontané armé (fast-track ${jsdSolveMs}ms) — nonce préservée`);
-      } catch (err) {
-        console.warn(`[spain-pb] ⚠️ Bloqueur JSD spontané (non-fatal): ${err}`);
-      }
-    }
-
     // ── Étape 5 : Armer le listener XHR /main/ ────────────────────────────────
     // CF bloque les navigations top-level (page.goto) vers /main/ même avec un
     // cf_clearance valide → retourne 0B. Mais quand le JS du portail appelle
@@ -2441,13 +2409,8 @@ class SpainPersistentBrowserManager {
     // (sous-requête dans un contexte browser réel, pas une navigation top-level).
     // On écoute page.on('response') + CDP Network pour capturer le body.
     let capturedMainBody = "";
-    // Timestamp quand le JSD oneshot a répondu — utilisé pour temporiser le fetch fallback.
+    // Timestamp quand le JSD oneshot a répondu — pour le log et la condition Round 2.
     let jsdOneShotAt = 0;
-
-    // Promise résolue quand le JSD oneshot est détecté — utilisée par l'intercepteur /main/.
-    // Permet de retarder /main/ jusqu'à ce que CF ait vu notre fingerprint JSD.
-    let jsdOneShotResolve: (() => void) | null = null;
-    const jsdOneShotSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
 
     // CDP Network listener — plus fiable que page.on('response') pour les ressources
     // script (JSONP) car il fournit requestId → Network.getResponseBody peut être
@@ -2456,9 +2419,6 @@ class SpainPersistentBrowserManager {
     const pendingMainRequests = new Map<string, string>(); // requestId → url
     const pendingJsdRequests  = new Map<string, string>(); // requestId → url (JSD oneshot)
     const pendingApiRequests  = new Map<string, string>(); // requestId → endpoint name (getwidgetconfigurations/, getservices/, getagendas/, datetime/)
-    // true si JSD oneshot a répondu AVEC un nouveau cf_clearance (challenge accepté).
-    // Si false : le cookie cf_clearance est "fantôme" — la session est invalide pour /main/.
-    let jsdOneShotAccepted = false;
     // Promise résolue quand cfg + svc sont capturées naturellement par le widget JS.
     let widgetApisResolve: (() => void) | null = null;
     const widgetApisSignal = new Promise<void>((resolve) => { widgetApisResolve = resolve; });
@@ -2521,21 +2481,17 @@ class SpainPersistentBrowserManager {
             ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}`,
           );
         }
-        // Log JSD oneshot response — set-cookie cf_clearance = CF accepted the challenge
+        // Log JSD oneshot response — CF valide le fingerprint TLS du browser
         if (url.includes("jsd/oneshot")) {
           const setCookie: string = ev.response.headers?.["set-cookie"] ?? "";
           const hasCfClearance = setCookie.includes("cf_clearance");
-          jsdOneShotAccepted = hasCfClearance; // true = challenge accepté, cf_clearance réémis
           console.log(
             `[spain-pb] 🔑 JSD oneshot resp: status=${ev.response.status}` +
             ` cf-ray=${ev.response.headers?.["cf-ray"] ?? "none"}` +
-            ` new-cf_clearance=${hasCfClearance ? "✅ oui (challenge accepté)" : "❌ non — nonce consommée (CDN cache stale) → Round 2 no-cache requis"}`,
+            ` new-cf_clearance=${hasCfClearance ? "✅ oui" : "non (normal — CF valide sans réémettre)"}`,
           );
-          jsdOneShotAt = Date.now(); // marquer le moment pour le délai post-JSD
+          jsdOneShotAt = Date.now();
           pendingJsdRequests.delete(ev.requestId);
-          // Signaler à l'intercepteur /main/ que le JSD oneshot est terminé.
-          // CF a maintenant vu notre fingerprint — /main/ peut être libéré ou annulé.
-          if (jsdOneShotResolve) jsdOneShotResolve();
         }
       });
 
@@ -2652,9 +2608,6 @@ class SpainPersistentBrowserManager {
       } catch { /* non-fatal */ }
     };
     page.on("response", mainResponseHandler);
-
-    // cdpFetch sera armé APRÈS le clic Continuar pour intercepter /main/ si CF exige un JSD POST.
-    let cdpFetch: any = null;
 
     // ── Étape 6 : Naviguer vers le portail puis cliquer Continuar ────────────
     // Avec le cf_clearance frais injecté + UA synchronisé, CF accepte la page
@@ -2840,22 +2793,6 @@ class SpainPersistentBrowserManager {
             }
           }
 
-          // ── Désarmer le bloqueur JSD APRÈS le clic Continuar réussi ──────────
-          // Le bloqueur doit rester armé pendant toutes les itérations du while
-          // (tant que Continuar n'est pas cliqué) pour bloquer le JSD spontané qui
-          // peut se glisser entre deux tentatives de clic.
-          // Désarmer seulement quand continueClicked=true : le post-Continuar JSD
-          // (s'il y en a un) passera librement et CF ne verra pas de phantom.
-          if (continueClicked && cdpJsdBlocker) {
-            await cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
-            await cdpJsdBlocker.detach().catch(() => {});
-            cdpJsdBlocker = null;
-            console.log(
-              `[spain-pb] ✅ Bloqueur JSD désarmé (Continuar cliqué) — ` +
-              (jsdSpontaneousBlocked ? `JSD spontané bloqué ✅ cf_clearance intact` : `aucun JSD spontané intercepté`),
-            );
-          }
-
           if (!continueClicked) {
             const domState = await page.evaluate(() => ({
               hash: window.location.hash,
@@ -2874,85 +2811,7 @@ class SpainPersistentBrowserManager {
       }
 
       if (continueClicked) {
-        console.log(`[spain-pb] ✅ Continuar cliqué — armer intercepteur /main/ pour JSD POST…`);
-
-        // ── Intercepteur CDP Fetch POST : bloquer /main/ jusqu'au JSD de la SESSION POST ──
-        //
-        // COMPORTEMENT CF SELON LA VERSION :
-        //
-        // Ancien CF (≤ 2026-07): JSD oneshot déclenché PAR le POST Continuar.
-        //   → L'intercepteur attend le signal JSD POST → /main/ libéré avec contenu.
-        //
-        // Nouveau CF (≥ 2026-07): JSD oneshot déclenché SPONTANÉMENT avant Continuar,
-        //   juste après la suppression de cf_clearance (pendant le wait "bouton invisible").
-        //   → Si on arme l'intercepteur et attend un JSD POST, celui-ci ne vient jamais
-        //     → timeout 8s → /main/ libéré mais retourne 0B (CF n'a pas validé le POST).
-        //
-        // FIX 1 — JSD pré-Continuar : Si un JSD a déjà eu lieu avant le clic Continuar
-        //   (jsdOneShotAt > 0), CF a DÉJÀ validé le fingerprint TLS → ne pas bloquer /main/.
-        //   On laisse le widget appeler /main/ naturellement et le capture via
-        //   Network.loadingFinished (cdpNet, déjà armé en début de function).
-        //
-        // FIX 2 — Fast-track IP (jsdSolveMs < 3s) : CF reconnaît l'IP Decodo comme fiable
-        //   et émet cf_clearance IMMÉDIATEMENT sans challenge réel. Dans ce cas :
-        //   - Aucun JSD ne fire avant ni après Continuar (CF juge la session déjà valide)
-        //   - Si on arme l'intercepteur, il attend 8s un JSD POST qui ne vient jamais
-        //     → /main/ libéré mais cookie fantôme → 0B garanti.
-        //   Fix : ne pas armer l'intercepteur — laisser /main/ se déclencher naturellement.
-        //   CF enverra le cf_clearance fast-track avec /main/ ; si 0B, le Round 2 ou
-        //   closeAndInvalidate prendront le relais (détection fast-track déjà en place).
-
-        const preContinuarJsdFired = jsdOneShotAt > 0;
-        const isFastTrack = jsdSolveMs > 0 && jsdSolveMs < 3_000;
-
-        // Si le bloqueur JSD a préservé la nonce (jsdSpontaneousBlocked=true), le post-Continuar
-        // JSD va obtenir un cf_clearance frais → traiter comme non-fast-track : armer l'intercepteur.
-        if (!preContinuarJsdFired && (!isFastTrack || jsdSpontaneousBlocked)) {
-          // Comportement standard : JSD attendu après le POST Continuar.
-          jsdOneShotAccepted = false; // Reset — on attend le JSD POST
-          const jsdPostSignal = new Promise<void>((resolve) => { jsdOneShotResolve = resolve; });
-
-          try {
-            cdpFetch = await page.createCDPSession();
-            await cdpFetch.send("Fetch.enable", {
-              patterns: [{ urlPattern: "*onlinebookings/main*", requestStage: "Request" }],
-            });
-            cdpFetch.on("Fetch.requestPaused", async (ev: any) => {
-              const url: string = ev.request?.url ?? "";
-              console.log(`[spain-pb] 🔒 /main/ intercepté POST — attente JSD POST (max 8s)… ${url.slice(0, 80)}`);
-              const reason = await Promise.race([
-                jsdPostSignal.then(() => "jsd" as const),
-                new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 8_000)),
-              ]);
-              if (reason === "jsd" && jsdOneShotAccepted) {
-                // cf_clearance réémis → /main/ reçoit le JSONP avec délai de sécurité
-                console.log(`[spain-pb] 🔓 /main/ libéré — JSD POST accepté ✅ délai 300ms…`);
-                await new Promise((r) => setTimeout(r, 300));
-              } else {
-                // Timeout ou cookie fantôme — cf_clearance est toujours présent dans le browser
-                // (on ne le supprime plus), CF l'enverra avec /main/ → contenu attendu.
-                const why = reason === "timeout" ? "timeout 8s" : "cookie fantôme (CF session valide)";
-                console.warn(`[spain-pb] ⚠️ /main/ libéré après ${why} — cf_clearance en place`);
-                await new Promise((r) => setTimeout(r, 300));
-              }
-              await cdpFetch.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-            });
-            console.log(`[spain-pb] 🔒 Intercepteur /main/ POST armé (CDP Fetch)`);
-          } catch (fetchInterceptErr) {
-            console.warn(`[spain-pb] ⚠️ Fetch interceptor /main/ POST (non-fatal): ${fetchInterceptErr}`);
-          }
-        } else if (isFastTrack) {
-          // IP de confiance CF (fast-track) — aucun JSD ne fire avant ni après Continuar.
-          // Armer l'intercepteur bloquerait /main/ pendant 8s pour rien → cookie fantôme → 0B.
-          // On laisse Network.loadingFinished (déjà armé) capturer le body naturellement.
-          console.log(
-            `[spain-pb] ⚡ Fast-track IP (cf_clearance en ${jsdSolveMs}ms) — intercepteur Fetch désactivé, /main/ libre naturellement`,
-          );
-        } else {
-          // JSD spontané avant Continuar — CF a validé le fingerprint → /main/ peut s'exécuter librement.
-          // On laisse Network.loadingFinished (déjà armé) capturer le body.
-          console.log(`[spain-pb] ℹ️ JSD pré-Continuar détecté (${Date.now() - jsdOneShotAt}ms ago) — intercepteur Fetch désactivé, /main/ libre`);
-        }
+        console.log(`[spain-pb] ✅ Continuar cliqué — /main/ libre, capture via Network.loadingFinished`);
 
         // Attendre jusqu'à 20s que le listener XHR capture la réponse /main/
         console.log(`[spain-pb] ⏳ Attente XHR /main/ POST (max 20s)…`);
@@ -3141,20 +3000,6 @@ class SpainPersistentBrowserManager {
         cdpNet.detach().catch(() => {});
         cdpNet = null;
       }
-      if (cdpFetch) {
-        // Désactiver l'intercepteur Fetch — libère toutes les requêtes /main/ bloquées
-        cdpFetch.send("Fetch.disable", {}).catch(() => {});
-        cdpFetch.detach().catch(() => {});
-        cdpFetch = null;
-      }
-      if (cdpJsdBlocker) {
-        // Sécurité : désarmer le bloqueur JSD si pas encore fait (ex: Continuar jamais cliqué)
-        cdpJsdBlocker.send("Fetch.disable", {}).catch(() => {});
-        cdpJsdBlocker.detach().catch(() => {});
-        cdpJsdBlocker = null;
-      }
-      // Résoudre jsdOneShotSignal si pas encore résolu — évite les attentes bloquées
-      if (jsdOneShotResolve) jsdOneShotResolve();
     }
 
     // ── Retry cookie fantôme : reset PHPSESSID uniquement + re-navigation ────
@@ -3179,13 +3024,13 @@ class SpainPersistentBrowserManager {
     // POURQUOI pas de JSD natif au round 2 :
     //   cf_clearance est toujours valide → CF ne lance pas de Managed Challenge →
     //   JSD natif ne fire pas → nonce préservée pour le widget JSD post-Continuar.
-    if (prefetchedMainHtml.length < 100 && jsdOneShotAt > 0 && !jsdOneShotAccepted) {
-      // ── Round 2 : reset PHPSESSID uniquement + re-navigation pour nonce fraîche ──
-      // Exécuté toujours quand /main/ = 0B après JSD phantom, INDÉPENDAMMENT de la
-      // vitesse du solve (jsdSolveMs). Le raisonnement "< 3s = trusted IP = Round 2
-      // inutile" était faux : même les IPs DC obtiennent parfois un vrai JSD challenge
-      // (non fast-track), et même avec fast-track, Round 2 génère un nouveau PHPSESSID
-      // → nouvelle nonce CF → le widget JSD la consomme en premier → cf_clearance frais.
+    if (prefetchedMainHtml.length < 100) {
+      // ── Round 2 : /main/ = 0B → reset PHPSESSID + re-navigation ─────────────
+      // Le JSD natif de la navigation initiale valide le fingerprint CF mais consomme
+      // la nonce Bookitit. Le widget appelle ensuite /main/ → CF autorise (cf_clearance
+      // valide) mais Bookitit retourne 0B car la session PHP n'est pas initialisée.
+      // Fix : reset PHPSESSID (nouvelle session Bookitit) sans invalider cf_clearance
+      // → re-navigation sans nouveau challenge CF → widget charge avec session fraîche.
 
       // ── Guard : fenêtre CF expirée (nonce > 50min) → Round 2 voué à l'échec ─────
       // Quand la nonce JSD encode un timestamp > 50min, la fenêtre temporelle CF entière
