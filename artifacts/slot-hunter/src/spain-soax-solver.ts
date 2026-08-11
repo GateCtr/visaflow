@@ -355,6 +355,8 @@ export async function solveSpainCloudflare(
   capsolverApiKey: string,
   soaxProxyUrl: string,
   challengeHtml?: string,
+  /** User-Agent à inclure dans la tâche CapSolver quand html est fourni (obligatoire). */
+  userAgent?: string,
 ): Promise<SolveResult> {
   const t0 = Date.now();
   console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}`);
@@ -412,8 +414,12 @@ export async function solveSpainCloudflare(
       proxy: proxyForCapsolver,
     };
     if (challengeHtml) {
+      // CapSolver exige userAgent quand html est fourni (sinon → ERROR_INVALID_TASK_DATA)
+      const ua = userAgent ??
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
       capsolverTask["html"] = challengeHtml.slice(0, 32_000);
-      console.log(`[spain-soax] 📤 createTask AntiCloudflareTask WITH html (${capsolverTask["html"].length} chars) — cf_clearance lié à la TLS impit`);
+      capsolverTask["userAgent"] = ua;
+      console.log(`[spain-soax] 📤 createTask AntiCloudflareTask WITH html (${capsolverTask["html"].length} chars) + userAgent — cf_clearance lié à la TLS impit`);
     } else {
       console.log(`[spain-soax] 📤 createTask AntiCloudflareTask sans html — cf_clearance lié au Chrome CapSolver`);
     }
@@ -718,7 +724,7 @@ export async function ensureSpainCfSession(
 
       // Étape 1b : CapSolver AntiCloudflareTask si challenge détecté
       if (challengeHtml !== undefined) {
-        const capResult = await solveSpainCloudflare(targetUrl, capKey, proxyUrl, challengeHtml);
+        const capResult = await solveSpainCloudflare(targetUrl, capKey, proxyUrl, challengeHtml, UA_RESIDENTIAL);
         if (!capResult.success || !capResult.session?.cfClearance) {
           console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → retry`);
           continue;

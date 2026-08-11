@@ -28,3 +28,4 @@
 - [CEV Overview page flow](cev-overview-flow.md) — /VOW/Overview Cas 1: "Nouveau rendez-vous" href=/Integration/VOW/SelectSlot → suivi direct; Cas 2: limit_reached; implémenté + testé VOWINT6323902.
 - [Spain portal constants](spain-portal-constants.md) — spain-portals.ts centralise Kinshasa/Saopolo keys; isBookititServiceRedirect rendu générique; test live Saopolo dans scripts/test-saopola-live.ts.
 - [Monorepo package installation](package-install.md) — restaurer tous les workspaces avec pnpm frozen-lockfile, jamais npm dans le package racine.
+- [CapSolver userAgent obligatoire avec html](capsolver-ua-with-html.md) — AntiCloudflareTask avec champ html exige userAgent sinon ERROR_INVALID_TASK_DATA.
