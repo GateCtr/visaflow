@@ -1237,6 +1237,7 @@ async function confirmSlotsViaDatetime(
         nativeDtRaws.push(...nativeCapture.datetimeRaws);
       } else {
         // ── Approche 2 : AJAX direct (fallback si page Chromium indisponible) ─
+        // Ordre des paramètres conforme à test-bookitit-dynamic.ts (Cuba exige cet ordre).
         const agQ = new URLSearchParams();
         const agCb = jqCbGen();
         agQ.append("callback",   agCb);
@@ -1244,10 +1245,11 @@ async function confirmSlotsViaDatetime(
         agQ.append("type",       "default");
         agQ.append("publickey",  publickey);
         agQ.append("lang",       "es");
+        agQ.append("services[]", svc.serviceId);   // ← avant version (ordre strict Bookitit)
         agQ.append("version",    "4");
         agQ.append("src",        referer);
         agQ.append("srvsrc",     srvsrc);
-        agQ.append("services[]", svc.serviceId);
+        agQ.append("selectedPeople", "1");
         agQ.append("_",          String(Date.now()));
         if (useBrowserFetch) {
           agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
@@ -1338,7 +1340,15 @@ async function confirmSlotsViaDatetime(
     }
 
     const widgetSrc = referer.replace(/\/?$/, "/");
-    for (let mo = startMonthOffset; mo < startMonthOffset + 3; mo++) {
+    // ── Dynamic multi-month scan basé sur maxDays (reproduit test-bookitit-dynamic.ts) ────
+    // Minimum 2 mois (M + M+1) ; continue selon maxDays extrait de chaque réponse datetime/.
+    // Garantit que Cuba (créneaux en M+2 à M+5) et São Paulo sont couverts sans limite fixe.
+    let globalMaxDays: Date | null = null;
+    let consecutiveEmpty = 0;
+    const MAX_DT_MONTHS = 12;
+    let mo = startMonthOffset;
+    while (mo < startMonthOffset + MAX_DT_MONTHS) {
+      let slotsThisMonth = 0;
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -1350,11 +1360,11 @@ async function confirmSlotsViaDatetime(
         dtQ.append("type",           "default");
         dtQ.append("publickey",      publickey);
         dtQ.append("lang",           "es");
+        dtQ.append("services[]",     svc.serviceId);   // ← avant version (ordre strict Bookitit)
+        if (agendaId) dtQ.append("agendas[]", agendaId); // ← avant version
         dtQ.append("version",        "4");
         dtQ.append("src",            widgetSrc);
         dtQ.append("srvsrc",         srvsrc);
-        dtQ.append("services[]",     svc.serviceId);
-        if (agendaId) dtQ.append("agendas[]", agendaId);
         dtQ.append("start",          start);
         dtQ.append("end",            end);
         dtQ.append("selectedPeople", "1");
@@ -1411,9 +1421,19 @@ async function confirmSlotsViaDatetime(
               console.log(`[spain-http] 🔎 datetime/ ${start} — structure: keys=${Object.keys(parsed as object).join(",")}`);
             }
           }
-          // Accumuler TOUS les créneaux sur les 3 mois (pas de retour précoce — on finit le scan)
+          // ── Extraire maxDays pour navigation multi-mois ──────────────────────────
+          const maxDaysRaw: string = (parsed as any)?.maxDays ?? "";
+          if (maxDaysRaw && /^\d{4}-\d{2}-\d{2}$/.test(maxDaysRaw)) {
+            const maxDate = new Date(maxDaysRaw + "T23:59:59");
+            if (!globalMaxDays || maxDate > globalMaxDays) {
+              globalMaxDays = maxDate;
+              console.log(`[spain-http] 📅 maxDays mis à jour: ${maxDaysRaw} (mois ${start.slice(0, 7)})`);
+            }
+          }
+          // Accumuler TOUS les créneaux (scan complet du mois — pas de retour précoce)
           const newSlots = extractAllSlotsFromDatetime(parsed);
           for (const s of newSlots) allSlots.push(s);
+          slotsThisMonth = newSlots.length;
           if (newSlots.length > 0) {
             const preview = newSlots.slice(0, 5).map(s => `${s.date} ${s.time} (${s.freeslots < 0 ? "?" : s.freeslots} places)`).join(", ");
             const more = newSlots.length > 5 ? ` … +${newSlots.length - 5} de plus` : "";
@@ -1426,15 +1446,45 @@ async function confirmSlotsViaDatetime(
       } catch (dtErr) {
         console.warn(`[spain-http] ⚠️ datetime/ exception: ${dtErr}`);
       }
+
+      mo++;
+
+      // ── Condition d'arrêt dynamique (minimum 2 mois : M + M+1) ───────────────
+      if (mo >= startMonthOffset + 2 && globalMaxDays) {
+        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+        if (firstOfNextMonth > globalMaxDays) {
+          console.log(
+            `[spain-http] ⏹ Fin datetime/ : ${firstOfNextMonth.toISOString().slice(0, 10)} ` +
+            `> maxDays ${globalMaxDays.toISOString().slice(0, 10)} — arrêt`,
+          );
+          break;
+        }
+      }
+      // Sécurité : 3 mois consécutifs vides sans maxDays → portail fermé ou erreur réseau
+      if (slotsThisMonth === 0) consecutiveEmpty++;
+      else consecutiveEmpty = 0;
+      if (!globalMaxDays && consecutiveEmpty >= 3) {
+        console.log(`[spain-http] ⏹ 3 mois vides consécutifs sans maxDays — arrêt sécurité`);
+        break;
+      }
     }
-    // Après les 3 mois : si de nouveaux créneaux ont été trouvés pour ce service → retour
+
+    // Après le scan dynamique : si de nouveaux créneaux ont été trouvés → retour
+    const monthsScanned = mo - startMonthOffset;
     if (allSlots.length > svcSlotsStart) {
       const firstSlot = allSlots[svcSlotsStart];
       const count = allSlots.length - svcSlotsStart;
-      console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${firstSlot.date} ${firstSlot.time} — "${svc.serviceName}" (${count} créneaux sur 3 mois)`);
+      console.log(
+        `[spain-http] ✅ datetime/ CONFIRMÉ: ${firstSlot.date} ${firstSlot.time} — ` +
+        `"${svc.serviceName}" (${count} créneaux sur ${monthsScanned} mois scannés)`,
+      );
       return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: firstSlot.date, time: firstSlot.time, allSlots, widgetConfig };
     }
-    console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
+    const endScan = new Date(now.getFullYear(), now.getMonth() + mo - 1, 0);
+    console.log(
+      `[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" ` +
+      `(${dateFrom(now)} → ${dateFrom(endScan)}, ${monthsScanned} mois scannés)`,
+    );
   }
   return null;
 }

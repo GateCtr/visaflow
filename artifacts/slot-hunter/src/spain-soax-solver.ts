@@ -152,6 +152,29 @@ export interface SpainCfSession {
    * pour Kinshasa) et d'invalider prefetchedMainHtml + apiPrefetchCache stale.
    */
   portalKey?: string;
+  /**
+   * État Bookitit pour le mode HTTP-pur (capsolver-residential).
+   * Établi lors de l'init de session (GET widget → POST token → GET /main/).
+   * Partagé par le scanner et le booking pour garantir le même jqCallback
+   * et reqCounter incrémental tout au long de la session.
+   * ⚠️ reqCounter est mutable — ne pas sérialiser vers Redis.
+   */
+  bookititState?: {
+    /** jQuery callback fixe pour toute la session : jQuery21109{ts}_{rand9} */
+    jqCallback: string;
+    /** Compteur de requêtes mutable — incrémenté par makeBookititUrl() */
+    reqCounter: number;
+    /** srvsrc extrait du corps POST token (origin citaconsular.es ou app.bookitit.com) */
+    srvsrc: string;
+    /** Version JS Bookitit extraite du corps POST token (ex: "4") */
+    version: string;
+    /** URL du widget (citaconsular.es) — utilisée comme src= et Referer */
+    widgetUrl: string;
+    /** Clé Bookitit publique (publickey=) */
+    publickey: string;
+    /** Base des appels JSONP Bookitit (ex: https://app.bookitit.com/onlinebookings/) */
+    bookititBase: string;
+  };
 }
 
 /**
@@ -597,6 +620,263 @@ export async function ensureSpainCfSession(
       }
     }
     return session;
+  }
+
+  // ── Mode capsolver-residential : HTTP-pur + proxy résidentiel Decodo ─────────
+  // SPAIN_SESSION_MODE=capsolver-residential → Impit (Chrome TLS) + CapSolver
+  // AntiCloudflareTask + gate.decodo.com (rotatif 10001-10010).
+  // Reproduit exactement test-bookitit-dynamic.ts :
+  //   GET widget → CF solve → GET widget → POST token → srvsrc/version → GET /main/
+  // Session PHPSESSID + jqCallback + reqCounter stockés dans session.bookititState.
+  if (process.env.SPAIN_SESSION_MODE === "capsolver-residential") {
+    const residentialProxyBase = process.env.SPAIN_RESIDENTIAL_PROXY_URL;
+    if (!residentialProxyBase) {
+      console.error(
+        "[spain-soax] ❌ SPAIN_SESSION_MODE=capsolver-residential exige " +
+        "SPAIN_RESIDENTIAL_PROXY_URL (ex: http://user:pass@gate.decodo.com:10001)",
+      );
+      return null;
+    }
+    const capKey = process.env.CAPSOLVER_API_KEY;
+    if (!capKey) {
+      console.error("[spain-soax] ❌ capsolver-residential exige CAPSOLVER_API_KEY");
+      return null;
+    }
+
+    const UA_RESIDENTIAL =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+    /** Rotation de port résidentiel 10001-10010 selon l'index de tentative. */
+    const rotateResidentialPort = (base: string, attempt: number): string => {
+      try {
+        const u = new URL(base);
+        const basePort = parseInt(u.port || "10001", 10);
+        u.port = String(((basePort - 10001 + attempt) % 10) + 10001);
+        return u.toString();
+      } catch { return base; }
+    };
+
+    /** Extrait tous les Set-Cookie en un dictionnaire name→value. */
+    const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
+      const jar: Record<string, string> = {};
+      const raw = headers.get("set-cookie") ?? "";
+      for (const part of raw.split(/,(?=[^ ])/)) {
+        const m = part.trim().match(/^([^=]+)=([^;]*)/);
+        if (m) jar[m[1].trim()] = m[2];
+      }
+      return jar;
+    };
+
+    const buildCookieStr = (j: Record<string, string>) =>
+      Object.entries(j).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+    const MAX_RETRIES_RESIDENTIAL = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
+      const proxyUrl = rotateResidentialPort(residentialProxyBase, attempt);
+      const masked = proxyUrl.replace(/:([^:@/]+)@/, ":***@");
+      console.log(`[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} — proxy: ${masked}`);
+
+      const impit = new Impit({ browser: "chrome", proxyUrl } as any);
+      const jar: Record<string, string> = {};
+
+      // Étape 1a : GET widget → détecter challenge CF
+      let challengeHtml: string | undefined;
+      try {
+        const r1 = await (impit.fetch(targetUrl, {
+          headers: { "User-Agent": UA_RESIDENTIAL, "Accept": "text/html,*/*;q=0.8" },
+        } as any) as unknown as Promise<Response>);
+        const body1 = await r1.text();
+        Object.assign(jar, extractCookies(r1.headers as any));
+        const isCf = r1.status === 403 || /just a moment|_cf_chl_opt/i.test(body1.slice(0, 3000));
+        if (isCf) {
+          challengeHtml = body1;
+          console.log(`[spain-soax]    ⚠️ CF challenge (${body1.length}B) → Capsolver...`);
+        } else {
+          console.log(`[spain-soax]    ✅ Pas de CF challenge (HTTP ${r1.status}, ${body1.length}B)`);
+        }
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → retry`);
+        continue;
+      }
+
+      // Étape 1b : CapSolver AntiCloudflareTask si challenge détecté
+      if (challengeHtml !== undefined) {
+        const capResult = await solveSpainCloudflare(targetUrl, capKey, proxyUrl, challengeHtml);
+        if (!capResult.success || !capResult.session?.cfClearance) {
+          console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → retry`);
+          continue;
+        }
+        jar.cf_clearance = capResult.session.cfClearance;
+        console.log(`[spain-soax]    ✅ cf_clearance: ${jar.cf_clearance.slice(0, 30)}…`);
+      }
+
+      // Étape 2a : GET widget avec cf_clearance → token + PHPSESSID
+      // (jqCallback généré une seule fois pour toute la session)
+      const jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1_000_000_000)}`;
+      let reqCounter = Date.now();
+      let token: string | undefined;
+
+      try {
+        const rGet = await (impit.fetch(targetUrl, {
+          headers: { "User-Agent": UA_RESIDENTIAL, "Cookie": buildCookieStr(jar) },
+        } as any) as unknown as Promise<Response>);
+        const bodyGet = await rGet.text();
+        Object.assign(jar, extractCookies(rGet.headers as any));
+        token = bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1];
+        if (!token) {
+          console.warn(`[spain-soax]    ⚠️ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B) → retry`);
+          continue;
+        }
+        console.log(
+          `[spain-soax]    ✅ Token: ${token.slice(0, 15)}… | ` +
+          `PHPSESSID: ${jar.PHPSESSID ? jar.PHPSESSID.slice(0, 12) + "…" : "❌"}`,
+        );
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET widget (token) échoué: ${e} → retry`);
+        continue;
+      }
+
+      // Étape 2b : POST token → srvsrc + version Bookitit
+      const baseHost = new URL(targetUrl).origin;
+      let srvsrc = baseHost;
+      let version = "4";
+
+      try {
+        const rPost = await (impit.fetch(targetUrl, {
+          method: "POST",
+          headers: {
+            "User-Agent": UA_RESIDENTIAL,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": buildCookieStr(jar),
+            "Referer": targetUrl,
+            "Origin": baseHost,
+          },
+          body: `token=${encodeURIComponent(token)}`,
+        } as any) as unknown as Promise<Response>);
+        const bodyPost = await rPost.text();
+        Object.assign(jar, extractCookies(rPost.headers as any));
+        srvsrc = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
+        version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
+        console.log(
+          `[spain-soax]    ✅ POST token → HTTP ${rPost.status} | ${bodyPost.length}B | ` +
+          `srvsrc=${srvsrc} | v=${version}`,
+        );
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ POST token échoué: ${e} → retry`);
+        continue;
+      }
+
+      // Construire makeUrl inline (même logique que test-bookitit-dynamic.ts)
+      const publickey = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+      const bookititBase = `${baseHost}/onlinebookings`;
+
+      const makeResidentialUrl = (endpoint: string, extra?: Record<string, string>): string => {
+        reqCounter++;
+        const params: Array<[string, string]> = [
+          ["callback",  jqCallback],
+          ["type",      "default"],
+          ["publickey", publickey],
+          ["lang",      "es"],
+        ];
+        if (extra?.["services[]"]) params.push(["services[]", extra["services[]"]]);
+        if (extra?.["agendas[]"])  params.push(["agendas[]",  extra["agendas[]"]]);
+        params.push(
+          ["version", version],
+          ["src",     targetUrl],
+          ["srvsrc",  srvsrc],
+        );
+        if (extra) {
+          for (const [k, v] of Object.entries(extra)) {
+            if (k !== "services[]" && k !== "agendas[]") params.push([k, v]);
+          }
+        }
+        params.push(["_", String(reqCounter)]);
+        return `${bookititBase}/${endpoint}?` +
+          params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+      };
+
+      const bktHeaders = {
+        "User-Agent": UA_RESIDENTIAL,
+        "Accept": "text/javascript, application/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Referer": targetUrl,
+      };
+
+      // Étape 2c : GET /main/ → valider session (>1000B)
+      let prefetchedMainHtml: string;
+      try {
+        const rMain = await (impit.fetch(makeResidentialUrl("main/"), {
+          headers: { ...bktHeaders, "Cookie": buildCookieStr(jar) },
+        } as any) as unknown as Promise<Response>);
+        prefetchedMainHtml = await rMain.text();
+        if (prefetchedMainHtml.length < 1000) {
+          console.warn(
+            `[spain-soax]    ⚠️ /main/ = ${prefetchedMainHtml.length}B ` +
+            `(proxy grillé ou session invalide) → retry avec nouvelle IP…`,
+          );
+          continue;
+        }
+        console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête!`);
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → retry`);
+        continue;
+      }
+
+      // Session établie — construire SpainCfSession avec bookititState
+      const nowMs = Date.now();
+      const allCookies: Array<{ name: string; value: string }> = Object.entries(jar)
+        .filter(([, v]) => v)
+        .map(([name, value]) => ({ name, value }));
+
+      const session: SpainCfSession = {
+        cfClearance:         jar.cf_clearance ?? "",
+        cfDomain:            ".citaconsular.es",
+        soaxProxyUrl:        proxyUrl,
+        userAgent:           UA_RESIDENTIAL,
+        createdAt:           nowMs,
+        expiresAt:           nowMs + CF_CLEARANCE_TTL_MS,
+        allCookies,
+        extraHeaders:        {},
+        source:              "capsolver",
+        prefetchedMainHtml,
+        phpSessionCreatedAt: nowMs,
+        bookititState: {
+          jqCallback,
+          reqCounter,
+          srvsrc,
+          version,
+          widgetUrl:    targetUrl,
+          publickey,
+          bookititBase,
+        },
+      };
+
+      // Réutiliser le même impit pour spainCfFetch (même TLS session = même IP résidentielle)
+      _spainImpit        = impit;
+      _spainImpitProxyUrl = proxyUrl;
+
+      _activeCfSession = session;
+      syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
+
+      console.log(
+        `[spain-soax] 🎉 Session capsolver-residential établie! ` +
+        `jqCallback=${jqCallback.slice(0, 30)}… | ` +
+        `PHPSESSID=${jar.PHPSESSID ? "✅" : "❌"} | ` +
+        `srvsrc=${srvsrc} | v=${version} | ` +
+        `Valide ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`,
+      );
+      return session;
+    }
+
+    console.error(
+      `[spain-soax] ❌ Impossible d'obtenir session capsolver-residential après ${MAX_RETRIES_RESIDENTIAL} tentatives`,
+    );
+    return null;
   }
 
   // ── Mode persistent-browser : déléguer entièrement au PB manager ────────────
@@ -1287,4 +1567,55 @@ export async function verifySpainCfSession(session: SpainCfSession): Promise<boo
     console.error(`[spain-soax] ❌ Verify error: ${err}`);
     return false;
   }
+}
+
+// ─── Utilitaire URL Bookitit partagé ────────────────────────────────────────
+
+/**
+ * Construit une URL JSONP Bookitit avec l'ordre de paramètres strict
+ * requis par certains portails (ex: Cuba bkt897578 retourne 0B si ordre incorrect).
+ *
+ * Ordre canonique (reproduit test-bookitit-dynamic.ts) :
+ *   callback → type → publickey → lang → [services[]] → [agendas[]] →
+ *   version → src → srvsrc → [autres params] → _
+ *
+ * @param session  Session active avec bookititState (mode capsolver-residential)
+ * @param endpoint Endpoint Bookitit ex: "datetime/", "getservices/"
+ * @param extra    Params supplémentaires : services[], agendas[], start, end, etc.
+ * @returns URL complète prête à passer à spainCfFetch / impit.fetch
+ */
+export function makeBookititUrl(
+  session: SpainCfSession,
+  endpoint: string,
+  extra?: Record<string, string>,
+): string {
+  const state = session.bookititState;
+  if (!state) {
+    throw new Error(
+      "[spain-soax] makeBookititUrl() exige session.bookititState " +
+      "(mode capsolver-residential uniquement)",
+    );
+  }
+  state.reqCounter++;
+  const params: Array<[string, string]> = [
+    ["callback",  state.jqCallback],
+    ["type",      "default"],
+    ["publickey", state.publickey],
+    ["lang",      "es"],
+  ];
+  if (extra?.["services[]"]) params.push(["services[]", extra["services[]"]]);
+  if (extra?.["agendas[]"])  params.push(["agendas[]",  extra["agendas[]"]]);
+  params.push(
+    ["version", state.version],
+    ["src",     state.widgetUrl],
+    ["srvsrc",  state.srvsrc],
+  );
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (k !== "services[]" && k !== "agendas[]") params.push([k, v]);
+    }
+  }
+  params.push(["_", String(state.reqCounter)]);
+  return `${state.bookititBase}/${endpoint}?` +
+    params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 }
