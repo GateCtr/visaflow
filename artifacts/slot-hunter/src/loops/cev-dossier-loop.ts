@@ -935,7 +935,7 @@ function sleep(ms: number): Promise<void> {
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
 
 interface ScanResult {
-  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached";
+  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached" | "probe_error";
   sessionCookie?: string;
   integrationUrl?: string;
   /** URL finale SelectSlot capturée lors du setup (à usage unique — utiliser pour booking) */
@@ -1098,6 +1098,11 @@ async function performScan(
         integrationUrl: result.integrationUrl,
       };
     }
+  }
+
+  // Probe échouée (timeout/503/504/réseau) → signaler pour retry immédiat
+  if (result.probeError) {
+    return { status: "probe_error" };
   }
 
   return { status: "no_slot" };
@@ -1862,6 +1867,19 @@ async function runAccountLoop(job: any): Promise<void> {
           logger.info(`  — Pas de créneau (poll direct)`);
           recordScan(uniqueJobId, dossier.vowintRef);
           break;
+
+        case "probe_error":
+          // Probe échouée (timeout/503/504/réseau) — retry immédiat avec le dossier suivant
+          logger.warn(`  ⚡ Probe timeout/erreur sur #${dossier.index} ${dossier.vowintRef} — retry immédiat avec prochain dossier`);
+          botLog({
+            applicationId: logApplicationId,
+            step: "cev_dossier_probe_error_retry",
+            status: "warn",
+            data: { dossier: dossier.vowintRef, dossierIndex: dossier.index, scanCount: state.scanCount },
+          });
+          // Petite pause anti-spam (3s) avant de retenter — pas le cycle complet 120s
+          nextScanAllowedAt = Date.now() + 3_000;
+          continue; // Skip le sleep normal, passer directement au dossier suivant
 
         case "limit_reached": {
           logger.warn(`  ⚠️ CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier ${dossier.vowintRef}`);
