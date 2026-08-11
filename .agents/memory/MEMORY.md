@@ -20,6 +20,7 @@
 - [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
 - [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.
 - [Spain challenge traffic budget](spain-challenge-traffic-budget.md) — never pre-warm or probe Cloudflare when no active Spain dossier can book; reuse Redis CF sessions until expiry.
+- [Spain impit TLS session reuse](spain-impit-tls-reuse.md) — AntiCloudflareTask=TLS mismatch→0B; fix: solveViaImpit() + synchroniser _spainImpit avec getSpainImpitInstance() dans ensureSpainCfSession.
 - [Spain persistent-browser mode](spain-persistent-browser.md) — CF/impit asymmetry, session rules, cf_clearance deletion before Continuar, Chromium path, full install + Saopola e2e test confirmed 2026-07-30.
 - [Spain dual-instance collision fix](spain-dual-instance.md) — SPAIN_SCAN_DISABLED=1 on Replit prevents /main/ body-empty when Railway+Replit run simultaneously; distributed lock requires shared Redis to work.
 - [Spain multi-dossier parallel booking](spain-multidossier-parallel.md) — 2 bugs fixed: acquireBrowserBookingLock (full flow, not just DOM submit) + closeAndInvalidate on /main/ 0B (not invalidateSession); test confirmed 2026-07-30.
