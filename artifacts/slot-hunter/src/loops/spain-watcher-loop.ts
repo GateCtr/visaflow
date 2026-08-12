@@ -230,6 +230,70 @@ function buildDiscoveryEventsFromExploration(
 }
 
 /**
+ * Assigne équitablement les créneaux disponibles aux dossiers actifs (round-robin).
+ *
+ * Algorithme :
+ *  1. Trier allSlots par date ASC puis heure ASC.
+ *  2. Pour chaque dossier (dans l'ordre), avancer dans la liste triée jusqu'au
+ *     prochain créneau éligible (fenêtre date + freeSlots >= groupSize).
+ *  3. Si plus de dossiers que de slots disponibles, les dossiers restants reçoivent
+ *     le premier créneau éligible depuis le début de la liste (partage).
+ *
+ * Résultat : Map dossierId → slot assigné.
+ * Un dossier absent de la Map n'a pas de créneau éligible dans `allSlots` ;
+ * executeHttpBooking fera alors son propre re-scan datetime/ (comportement de repli).
+ */
+function assignSlotsRoundRobin(
+  dossiers: SpainDossier[],
+  allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>,
+): Map<string, { date: string; time: string; agendaId?: string }> {
+  const assignments = new Map<string, { date: string; time: string; agendaId?: string }>();
+  if (allSlots.length === 0 || dossiers.length === 0) return assignments;
+
+  // 1. Trier par date ASC puis heure ASC
+  const sorted = [...allSlots].sort((a, b) => {
+    const d = a.date.localeCompare(b.date);
+    return d !== 0 ? d : a.time.localeCompare(b.time);
+  });
+
+  let slotCursor = 0; // indice courant dans sorted
+
+  for (const dossier of dossiers) {
+    const minFree = dossier.groupSize && dossier.groupSize > 1 ? dossier.groupSize : 1;
+
+    // 2a. Chercher le premier créneau éligible depuis slotCursor
+    let assigned = false;
+    for (let i = slotCursor; i < sorted.length; i++) {
+      const slot = sorted[i];
+      if (slot.freeslots !== -1 && slot.freeslots < minFree) continue;
+      if (!isSlotInDateWindow(slot.date, dossier)) continue;
+      assignments.set(dossier.id, { date: slot.date, time: slot.time, agendaId: slot.agendaId });
+      slotCursor = i + 1; // le prochain dossier commence après ce créneau
+      assigned = true;
+      break;
+    }
+
+    // 2b. Plus de créneaux inédits — repartir du début (partage de créneau)
+    if (!assigned) {
+      for (let i = 0; i < sorted.length; i++) {
+        const slot = sorted[i];
+        if (slot.freeslots !== -1 && slot.freeslots < minFree) continue;
+        if (!isSlotInDateWindow(slot.date, dossier)) continue;
+        assignments.set(dossier.id, { date: slot.date, time: slot.time, agendaId: slot.agendaId });
+        // Pas de mise à jour de slotCursor : les dossiers suivants peuvent choisir un créneau différent
+        assigned = true;
+        break;
+      }
+    }
+
+    // Si toujours pas de créneau : aucun slot éligible pour ce dossier dans _allSlots.
+    // executeHttpBooking fera son propre re-scan datetime/ comme repli.
+  }
+
+  return assignments;
+}
+
+/**
  * Détermine la raison d'ignorement pour un slot hors fenêtre.
  */
 function getDateWindowReason(slotDate: string, dossier: SpainDossier): string {
@@ -536,6 +600,28 @@ export async function startSpainWatcherLoop(): Promise<void> {
             //    est partagée en lecture seule : pas de conflit. Le gain est ~N×latence
             //    booking au lieu de N×latence séquentielle (crítico si N>=2 au pic).
             const slotDateForLog = result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10);
+
+            // ─── Assignation round-robin des créneaux ────────────────────────────
+            // Distribue équitablement les créneaux disponibles entre les dossiers :
+            // dossierA → slot[0], dossierB → slot[1], dossierC → slot[2]…
+            // Evite que tous les dossiers tentent le même premier créneau (race condition).
+            const scanAllSlots = (result as any)._allSlots as Array<{
+              date: string; time: string; agendaId?: string; freeslots: number;
+            }> | undefined;
+
+            const slotAssignments = scanAllSlots && scanAllSlots.length > 0
+              ? assignSlotsRoundRobin(dossiers, scanAllSlots)
+              : new Map<string, { date: string; time: string; agendaId?: string }>();
+
+            if (scanAllSlots && scanAllSlots.length > 0) {
+              log("INFO", `[SPAIN-WATCHER] 📊 Round-robin: ${scanAllSlots.length} créneau(x) disponible(s) pour ${dossiers.length} dossier(s)`);
+              for (const dossier of dossiers) {
+                const a = slotAssignments.get(dossier.id);
+                log("INFO", `[SPAIN-WATCHER]    ${dossier.applicantName} → ${a ? `${a.date} ${a.time}` : "repli datetime/"}`);
+              }
+            }
+            // ─────────────────────────────────────────────────────────────────────
+
             await Promise.all(dossiers.map(async (dossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
@@ -549,7 +635,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 return;
               }
 
-              log("INFO", `[SPAIN-WATCHER] 📋 ${dossier.applicantName}: booking "${matched.serviceName}" (${matched.serviceId}) pour "${dossier.visaType}"`);
+              // Récupérer le créneau assigné par le round-robin (peut être absent
+              // si _allSlots était vide ou aucun slot éligible pour ce dossier).
+              const assignedSlot = slotAssignments.get(dossier.id);
+
+              log("INFO", `[SPAIN-WATCHER] 📋 ${dossier.applicantName}: booking "${matched.serviceName}" (${matched.serviceId}) pour "${dossier.visaType}"${assignedSlot ? ` → créneau pré-assigné ${assignedSlot.date} ${assignedSlot.time}` : " → re-scan datetime/"}`);
 
               const bookingConfig: SpainBookingConfig = {
                 login: dossier.login,
@@ -560,6 +650,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 targetServiceId: matched.serviceId,
                 visaType: dossier.visaType,
                 groupSize: dossier.groupSize,
+                targetDate: assignedSlot?.date,
+                targetTime: assignedSlot?.time,
               };
 
               try {
