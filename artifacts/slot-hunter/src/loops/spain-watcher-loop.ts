@@ -619,10 +619,15 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             }
 
-            // ─── Booking toujours séquentiel ─────────────────────────────────────
-            // Le parallèle a été testé et abandonné : sessions PHP / impit partagées
-            // entrent en conflit (getsigninfields/ + signin/ sur la même connexion TLS).
-            // Chaque dossier attend que le précédent soit terminé avant de commencer.
+            // ─── Booking PARALLÈLE — 1 PHPSESSID distinct par dossier ────────────
+            // createIsolatedBookingSession() supprime le PHPSESSID existant de la copie
+            // et appelle /main/ sans PHPSESSID → le serveur émet un nouveau PHPSESSID
+            // via Set-Cookie. Chaque dossier obtient ainsi sa propre session PHP isolée,
+            // ce qui permet à getsigninfields/ + signin/ de partir simultanément sans
+            // conflit d'état côté serveur Bookitit.
+            //
+            // Les appels /main/ de tous les dossiers se déroulent en parallèle grâce
+            // à Promise.all ci-dessous (~2-3s pour N dossiers vs N×2-3s séquentiel).
             // ─────────────────────────────────────────────────────────────────────
 
             // Capacité restante par créneau (clé = "date_time").
@@ -773,11 +778,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             };
 
-            // Booking séquentiel : en mode capsolver, tous les dossiers partagent le même
-            // PHPSESSID (établi lors du solve). getsigninfields/ est une opération stateful
-            // côté serveur — appels simultanés sur le même PHPSESSID → 0B pour N-1 dossiers.
-            // Le vrai parallèle nécessiterait un /main/ dédié par dossier (PHPSESSID distinct).
-            for (const dossier of dossiers) await bookDossier(dossier);
+            // Booking PARALLÈLE — 1 PHPSESSID distinct par dossier.
+            // createIsolatedBookingSession() (appelé dans executeHttpBooking) retire le PHPSESSID
+            // de la copie de session avant /main/ → le serveur émet un nouveau PHPSESSID unique.
+            // Comme bookDossier tourne dans Promise.all, tous les appels /main/ partent en
+            // parallèle (~2-3s pour N dossiers) puis getsigninfields/+signin/ simultanément.
+            await Promise.all(dossiers.map(bookDossier));
           }
         }
       }

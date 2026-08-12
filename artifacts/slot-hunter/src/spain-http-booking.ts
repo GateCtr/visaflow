@@ -409,27 +409,14 @@ export async function createIsolatedBookingSession(
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
   // ── Mode HTTP-pur (capsolver/impit) ──────────────────────────────────────────
-  // En mode capsolver-residential, le PHPSESSID est lié à la session TLS impit
-  // obtenue lors du solve CapSolver. Un appel /main/ via impit ne retourne pas
-  // de nouveau Set-Cookie: PHPSESSID (le serveur réutilise la session existante).
-  // → On retourne une copie complète de la session avec son PHPSESSID intact.
-  // → Pas de fetch /main/ dédié : inutile et trompeur.
-  if (cfSession.source === "capsolver") {
-    const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
-    if (phpSessId) {
-      console.log("[spain-booking] ℹ️ Mode HTTP-pur (capsolver) — PHPSESSID existant réutilisé, pas de fetch /main/ dédié");
-      return {
-        session: {
-          ...cfSession,
-          allCookies: cfSession.allCookies.map(c => ({ ...c })),
-          extraHeaders: { ...cfSession.extraHeaders },
-          // Instance impit dédiée → bookings parallèles sans conflit TLS singleton
-          _ownImpit: createFreshSpainImpit(cfSession),
-        },
-      };
-    }
-    console.warn("[spain-booking] ⚠️ Mode capsolver mais PHPSESSID absent de la session — le booking peut échouer");
-  }
+  // En mode capsolver, on NE réutilise PAS le PHPSESSID existant.
+  // Raison : le booking parallèle (Promise.all N dossiers) exige N PHPSESSIDs
+  // distincts. Bookitit maintient un état getsigninfields/ par PHPSESSID —
+  // 2 dossiers qui partagent le même PHPSESSID se bloquent mutuellement.
+  //
+  // Fix : cloneSpainCfSessionForDossier() supprime le PHPSESSID de la copie,
+  // puis /main/ est appelé SANS PHPSESSID → le serveur émet un nouveau PHPSESSID
+  // via Set-Cookie. Chaque dossier obtient ainsi sa propre session PHP isolée.
 
   const session = cloneSpainCfSessionForDossier(cfSession);
   // Instance impit dédiée → bookings parallèles sans conflit TLS singleton

@@ -270,18 +270,44 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     warn(`Partage de créneaux : ${unique.size} créneaux uniques pour ${assignedSlots.length} dossiers (normal si peu de disponibilités)`);
   }
 
-  // 7. Booking PARALLÈLE — chaque dossier a sa propre instance impit (_ownImpit)
-  // via createIsolatedBookingSession → pas de conflit TLS malgré l'exécution simultanée.
-  dash(`Booking × ${dossiers.length} (fake credentials, PARALLÈLE)`);
+  // 7. Booking PARALLÈLE — Phase 1 : pre-warm 1 PHPSESSID distinct par dossier
+  //
+  // createIsolatedBookingSession() supprime le PHPSESSID de la copie et appelle
+  // /main/ SANS PHPSESSID → serveur émet un nouveau PHPSESSID via Set-Cookie.
+  // Tous les appels /main/ partent en Promise.all (~2-3s pour 3 dossiers simultanés).
+  dash(`Phase 1 — pre-warm sessions isolées × ${dossiers.length} (PARALLÈLE /main/)`);
+  const t0Prewarm = Date.now();
+
+  const prewarmResults = await Promise.all(dossiers.map(async (dossier) => {
+    const iso = await createIsolatedBookingSession(mainSession, portalUrl);
+    const sess: SpainCfSession = iso?.session ?? mainSession;
+    const php = sess.allCookies.find(c => c.name === "PHPSESSID")?.value ?? "";
+    return { dossier, sess, php };
+  }));
+
+  log(`  ⏱ pre-warm terminé en ${((Date.now() - t0Prewarm) / 1000).toFixed(2)}s`);
+
+  // Vérifier que les 3 PHPSESSIDs sont distincts
+  const phpIds = prewarmResults.map(r => r.php);
+  for (const { dossier, php } of prewarmResults) {
+    log(`  ${dossier.name} → PHPSESSID=${php ? php.slice(0, 16) + "…" : "⚠️ ABSENT"}`);
+  }
+  const uniquePhp = new Set(phpIds.filter(Boolean));
+  if (uniquePhp.size === dossiers.length && !phpIds.includes("")) {
+    ok(`✅ ${uniquePhp.size} PHPSESSIDs distincts — isolation confirmée`);
+  } else if (uniquePhp.size < dossiers.length) {
+    warn(`⚠️ ${uniquePhp.size} PHPSESSIDs uniques pour ${dossiers.length} dossiers — conflit possible`);
+  } else {
+    warn(`⚠️ PHPSESSID manquant sur au moins un dossier — le booking peut retourner 0B`);
+  }
+
+  // 7. Booking PARALLÈLE — Phase 2 : getsigninfields/ + signin/ pour chaque dossier
+  dash(`Phase 2 — booking × ${dossiers.length} (fake credentials, PARALLÈLE)`);
   const t0Book = Date.now();
 
-  await Promise.all(dossiers.map(async (dossier) => {
+  await Promise.all(prewarmResults.map(async ({ dossier, sess: bookSess }) => {
     const assigned = assignments.get(dossier.id);
     if (!assigned) { log(`  ${dossier.name} → pas de créneau — skip`); return; }
-
-    // Session isolée avec _ownImpit dédié → TLS isolé par dossier
-    const isoBook = await createIsolatedBookingSession(mainSession, portalUrl);
-    const bookSess: SpainCfSession = isoBook?.session ?? mainSession;
 
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,
@@ -321,16 +347,16 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     log(`    réponse : ${errMsg || JSON.stringify(signinParsed)?.slice(0, 200) || "(vide)"}`);
 
     if (errMsg.includes("contraseña") || errMsg.includes("password") || errMsg.includes("Usuario")) {
-      ok(`    ✅ ${dossier.name} — serveur atteint en parallèle`);
+      ok(`    ✅ ${dossier.name} — serveur atteint en parallèle (${signinRaw.length}B)`);
     } else if (signinRaw.length === 0) {
-      warn(`    ${dossier.name} — 0B (conflit TLS ou session froide)`);
+      warn(`    ${dossier.name} — 0B (PHPSESSID partagé ou session froide — PHPSESSID isolation failed?)`);
     } else {
       warn(`    ${dossier.name} — réponse inattendue : ${signinRaw.slice(0, 200)}`);
     }
   }));
 
   const totalBook = ((Date.now() - t0Book) / 1000).toFixed(2);
-  log(`\n⏱  Booking parallèle total : ${totalBook}s (séquentiel aurait pris ~${(dossiers.length * 1.5).toFixed(1)}s)`);
+  log(`\n⏱  Phase 2 (signin/) parallèle : ${totalBook}s (séquentiel aurait pris ~${(dossiers.length * 1.5).toFixed(1)}s)`);
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
