@@ -68,6 +68,7 @@ import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPaus
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
 import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
+import { getCevDecodoUrlForAccount, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
 
 // ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
 
@@ -182,8 +183,8 @@ function resolvePuppeteerProxy(accountId: string, hunterConfig?: { cevUseProxy?:
     rawUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
   } else if (process.env.IPROYAL_PROXY_URL) {
     rawUrl = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
-  } else if (process.env.DECODO_PROXY_URL) {
-    rawUrl = makeCevProxyStickyUrl("decodo", undefined, `cev-dossier-${accountId}`);
+  } else if (hasCevDecodoProxy()) {
+    rawUrl = getCevDecodoUrlForAccount(accountId) ?? "";
   } else if (process.env.PROXY_URL) {
     rawUrl = process.env.PROXY_URL;
   }
@@ -1748,16 +1749,17 @@ async function runAccountLoop(job: any): Promise<void> {
     } else if (process.env.IPROYAL_PROXY_URL) {
       logger.info(`  • Proxy: iProyal (sticky session)`);
       proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
-    } else if (decodoBaseUrl) {
-      logger.info(`  • Proxy: Decodo résidentiel (sticky session par dossier)`);
-      const decodoStickyUrl = makeCevProxyStickyUrl("decodo", undefined, `cev-dossier-${accountId}`);
-      if (decodoStickyUrl) {
-        process.env.IPROYAL_PROXY_URL = decodoStickyUrl; // impit réutilise ce chemin
+    } else if (hasCevDecodoProxy()) {
+      const poolSize = getCevDecodoPoolSize();
+      logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP fixe par compte`);
+      const decodoUrl = getCevDecodoUrlForAccount(accountId);
+      if (decodoUrl) {
+        process.env.IPROYAL_PROXY_URL = decodoUrl; // impit réutilise ce chemin
         resetCevImpitInstances();
-        logger.info(`  • Decodo proxy configuré: ${decodoStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-        proxyExitIp = await initCevProxyGuardWithExitIp(decodoStickyUrl, `cev-dossier-${accountId}`);
+        logger.info(`  • Decodo proxy configuré: ${decodoUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+        proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-dossier-${accountId}`);
       } else {
-        logger.warn(`  ⚠️ DECODO_PROXY_URL présent mais URL sticky invalide — connexion directe`);
+        logger.warn(`  ⚠️ Pool Decodo vide — connexion directe`);
       }
     } else {
       logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL, IPROYAL_PROXY_URL et DECODO_PROXY_URL absents) — connexion directe`);
