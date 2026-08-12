@@ -2490,7 +2490,7 @@ async function scanViaMainEndpoint(
     mainBody = session.prefetchedMainHtml;
     mainFromCache = true;
     console.log(
-      `[spain-http] 📦 /main/ pré-fetchée (${session.source ?? "capsolver"} solve — ${mainBody.length}B) — appel impit ignoré`,
+      `[spain-http] 📦 /main/ déjà fetchée par impit pendant le solve (${mainBody.length}B) — réutilisée, pas de 2ème appel`,
     );
     // ── Effacer le cache après lecture ──────────────────────────────────────
     // Le probe suivant appellera /main/ live via page.evaluate :
