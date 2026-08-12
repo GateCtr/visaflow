@@ -29,3 +29,4 @@
 - [Spain portal constants](spain-portal-constants.md) — spain-portals.ts centralise Kinshasa/Saopolo keys; isBookititServiceRedirect rendu générique; test live Saopolo dans scripts/test-saopola-live.ts.
 - [Monorepo package installation](package-install.md) — restaurer tous les workspaces avec pnpm frozen-lockfile, jamais npm dans le package racine.
 - [CapSolver userAgent obligatoire avec html](capsolver-ua-with-html.md) — AntiCloudflareTask avec champ html exige userAgent sinon ERROR_INVALID_TASK_DATA.
+- [getsigninfields/ obligatoire avant signin/](spain-getsigninfields-required.md) — sans cet appel HTTP, signin/ retourne 0B ; appelé en amont, signin/ répond normalement (confirmé 2026-08-12 Saopolo HTTP pur).
