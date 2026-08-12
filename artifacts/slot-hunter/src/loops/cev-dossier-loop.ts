@@ -746,7 +746,7 @@ async function captureFullSessionForAccount(
 // ── One-Shot (Predator) — la limite 5 clics/h n'existe plus ────────────────
 // Stratégie : 1 réveil toutes les 2 min → 1 clic par dossier → fermeture → sleep
 // Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
-const DEFAULT_INTERVAL_SEC = 120; // 2 min par défaut (configurable via cevScanIntervalSec)
+const DEFAULT_INTERVAL_SEC = 60; // 2 min par défaut (configurable via cevScanIntervalSec)
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // fenêtre stats uniquement (plus de limite quota)
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
