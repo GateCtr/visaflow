@@ -407,6 +407,27 @@ export async function createIsolatedBookingSession(
   cfSession: SpainCfSession,
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
+  // ── Mode HTTP-pur (capsolver/impit) ──────────────────────────────────────────
+  // En mode capsolver-residential, le PHPSESSID est lié à la session TLS impit
+  // obtenue lors du solve CapSolver. Un appel /main/ via impit ne retourne pas
+  // de nouveau Set-Cookie: PHPSESSID (le serveur réutilise la session existante).
+  // → On retourne une copie complète de la session avec son PHPSESSID intact.
+  // → Pas de fetch /main/ dédié : inutile et trompeur.
+  if (cfSession.source === "capsolver") {
+    const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
+    if (phpSessId) {
+      console.log("[spain-booking] ℹ️ Mode HTTP-pur (capsolver) — PHPSESSID existant réutilisé, pas de fetch /main/ dédié");
+      return {
+        session: {
+          ...cfSession,
+          allCookies: cfSession.allCookies.map(c => ({ ...c })),
+          extraHeaders: { ...cfSession.extraHeaders },
+        },
+      };
+    }
+    console.warn("[spain-booking] ⚠️ Mode capsolver mais PHPSESSID absent de la session — le booking peut échouer");
+  }
+
   const session = cloneSpainCfSessionForDossier(cfSession);
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
   const referer = portalUrl.replace(/\/?$/, "/");
