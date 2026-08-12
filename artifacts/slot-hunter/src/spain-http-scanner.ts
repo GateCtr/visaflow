@@ -1328,30 +1328,12 @@ async function confirmSlotsViaDatetime(
     }
     void agRawForParsing; // utilisé implicitement via agendaId
 
-    // 2. datetime/ sur 3 mois — en démarrant au bon mois selon la fenêtre de publication.
+    // 2. datetime/ scan dynamique — démarre TOUJOURS au mois courant (mo=0).
     //
-    // Certains portails publient les créneaux N jours à l'avance.
-    // Exemple Kinshasa : 36 jours → le 3 août, premier créneau publiable = 8 septembre.
-    // Démarrer depuis août est inutile (créneaux déjà épuisés ou pas encore publiés).
-    //
-    // Calcul : startMonthOffset = delta de mois entre aujourd'hui et (aujourd'hui + publishDays).
-    // Si publishDays = 0 (portail inconnu) → on démarre au mois courant comme avant.
-    const { KINSHASA_WIDGET_KEY, KINSHASA_CALENDAR_PUBLISH_DAYS } = await import("./spain-portals.js");
-    const CALENDAR_PUBLISH_DAYS_BY_KEY: Record<string, number> = {
-      [KINSHASA_WIDGET_KEY]: KINSHASA_CALENDAR_PUBLISH_DAYS,
-    };
-    const publishDays = CALENDAR_PUBLISH_DAYS_BY_KEY[publickey] ?? 0;
-    let startMonthOffset = 0;
-    if (publishDays > 0) {
-      const firstPublish = new Date(now.getFullYear(), now.getMonth(), now.getDate() + publishDays);
-      startMonthOffset = (firstPublish.getFullYear() - now.getFullYear()) * 12
-                       + (firstPublish.getMonth()    - now.getMonth());
-      if (startMonthOffset > 0) {
-        console.log(
-          `[spain-http] 📅 Fenêtre publication ${publishDays}j → premier mois pertinent : +${startMonthOffset} (${firstPublish.toISOString().slice(0, 7)})`,
-        );
-      }
-    }
+    // On ne saute plus de mois en avance basé sur une hypothèse arbitraire (ex. "36j").
+    // Le serveur est la source de vérité : si le mois courant est vide, il retourne 0B.
+    // La fenêtre s'arrête dès que le mois suivant dépasse maxDays de la réponse serveur,
+    // ou après 3 mois vides consécutifs sans maxDays. Même logique que test-bookitit-dynamic.ts.
 
     // Alignement sur la requête observée du vrai portail :
     //   - services[] obligatoire
@@ -1381,8 +1363,8 @@ async function confirmSlotsViaDatetime(
     let globalMaxDays: Date | null = null;
     let consecutiveEmpty = 0;
     const MAX_DT_MONTHS = 12;
-    let mo = startMonthOffset;
-    while (mo < startMonthOffset + MAX_DT_MONTHS) {
+    let mo = 0;
+    while (mo < MAX_DT_MONTHS) {
       let slotsThisMonth = 0;
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
@@ -1490,7 +1472,7 @@ async function confirmSlotsViaDatetime(
       mo++;
 
       // ── Condition d'arrêt dynamique (minimum 2 mois : M + M+1) ───────────────
-      if (mo >= startMonthOffset + 2 && globalMaxDays) {
+      if (mo >= 2 && globalMaxDays) {
         const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo, 1);
         if (firstOfNextMonth > globalMaxDays) {
           console.log(
@@ -1510,7 +1492,7 @@ async function confirmSlotsViaDatetime(
     }
 
     // Après le scan dynamique : si de nouveaux créneaux ont été trouvés → retour
-    const monthsScanned = mo - startMonthOffset;
+    const monthsScanned = mo;
     if (allSlots.length > svcSlotsStart) {
       const firstSlot = allSlots[svcSlotsStart];
       const count = allSlots.length - svcSlotsStart;
