@@ -900,10 +900,10 @@ export async function executeHttpBooking(
   // (confirmé par CDP 2026-07-30). Ce call retourne un nonce côté PHP qui est stocké
   // dans la session PHP — signin/ ne répond que si ce nonce est présent.
   //
-  // On ne réplique PAS getsigninfields/ nous-mêmes : il retourne 0B à nos fetch/jQuery
-  // car il nécessite une variable de session PHP initialisée par le widget lui-même.
-  // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
-  // fonctionnera.
+  // En mode browser : getsigninfields/ est déclenché automatiquement par le widget
+  // Backbone lors de navigateToSelecttime() → nonce PHP stocké → signin/ accepté.
+  // En mode HTTP-only : on appelle getsigninfields/ manuellement (confirmé 2026-08-12 :
+  // sans ce call, signin/ retourne 0B ; avec ce call, signin/ répond normalement).
   if (useBrowserCalls) {
     // ── Navigation native vers le créneau ─────────────────────────────────────
     //
@@ -1011,6 +1011,26 @@ export async function executeHttpBooking(
 
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
+  } else {
+    // ─── 5a. getsigninfields/ (mode HTTP-only) ────────────────────────────────
+    // Le serveur Bookitit stocke un nonce dans la session PHP après cet appel.
+    // Sans ce nonce, signin/ retourne 0B (confirmé 2026-08-12 Saopolo HTTP pur).
+    // Params identiques à ceux de signin/ (services[], agendas[], date, time, selectedPeople).
+    const gsfParams: Record<string, string | string[]> = {
+      ...baseParams,
+      "services[]": [targetService.serviceId],
+      ...(agendaId ? { "agendas[]": [agendaId] } : {}),
+      date: slotDate,
+      time: slotTime,
+      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    };
+    console.log(`${logPrefix} 🔑 getsigninfields/ — activation nonce PHP pour signin/…`);
+    const gsfPayload = await callEndpoint("getsigninfields/", gsfParams);
+    if (gsfPayload) {
+      console.log(`${logPrefix} ✅ getsigninfields/ OK — nonce PHP activé`);
+    } else {
+      console.warn(`${logPrefix} ⚠️ getsigninfields/ → 0B — signin/ pourrait retourner 0B (portail non compatible HTTP pur ?)`);
+    }
   }
 
   // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
