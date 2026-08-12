@@ -100,7 +100,15 @@ export function pickBestServiceCandidate(services: ExtractedSlotInfo[]): Extract
     return stripped.length > 0;
   });
 
-  return visible[0] ?? services[0] ?? null;
+  // Déprioritiser les noms synthétiques générés quand le vrai nom était display:none
+  // (ex: "Service bkt853105" — fallback de extractServiceDetails quand extractName→null).
+  // On les garde en dernier recours, mais les services avec vrais noms passent devant.
+  const realNamed = visible.filter(
+    (s) => !/^Service [a-zA-Z0-9]+$/i.test(s.serviceName ?? "")
+  );
+  const preferred = realNamed.length > 0 ? realNamed : visible;
+
+  return preferred[0] ?? services[0] ?? null;
 }
 
 export interface ServiceLinkCandidate {

@@ -1784,8 +1784,9 @@ async function scanViaMainEndpoint(
   let phpSessId =
     session.allCookies.find((c) => c.name === "PHPSESSID")?.value ?? "";
   if (phpSessId) {
+    const src = session.source ?? "capsolver";
     console.log(
-      `[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): ${phpSessId.slice(0, 12)}…`
+      `[spain-http] 🍪 PHPSESSID pré-initialisé (session ${src}): ${phpSessId.slice(0, 12)}…`
     );
   }
 
@@ -2489,7 +2490,7 @@ async function scanViaMainEndpoint(
     mainBody = session.prefetchedMainHtml;
     mainFromCache = true;
     console.log(
-      `[spain-http] 📦 /main/ pré-fetchée via Chromium (${mainBody.length}B) — appel impit ignoré`,
+      `[spain-http] 📦 /main/ pré-fetchée (${session.source ?? "capsolver"} solve — ${mainBody.length}B) — appel impit ignoré`,
     );
     // ── Effacer le cache après lecture ──────────────────────────────────────
     // Le probe suivant appellera /main/ live via page.evaluate :

@@ -140,7 +140,7 @@ async function main(): Promise<void> {
 
   try {
     log("STEP", "solveCfChallengeWithRetry…");
-    const cfResult = await solveCfChallengeWithRetry(page, browser, {
+    const cfResult = await solveCfChallengeWithRetry(page as any, browser as any, {
       targetUrl: SAOPOLO_URL,
       proxyUrl: proxyUrl || undefined,
       maxRetries: 3,

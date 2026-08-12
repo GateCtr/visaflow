@@ -401,7 +401,7 @@ export async function solve2CaptchaBrowserSession(
       console.warn(`${LOG} ❌ Échec résolution CAPTCHA 2Captcha — params: ${JSON.stringify(params)}`);
     });
     // Catch-all pour tout événement CDP Captcha non listé
-    session.on("*" as any, (eventName: string, params: any) => {
+    session.on("*" as any, (...args: any[]) => { const [eventName, params] = args;
       if (typeof eventName === "string" && eventName.startsWith("Captcha.") && !["Captcha.detected","Captcha.waitForSolve","Captcha.solveFinished","Captcha.solveFailed"].includes(eventName)) {
         console.log(`${LOG} 📡 CDP event: ${eventName} — ${JSON.stringify(params)}`);
       }

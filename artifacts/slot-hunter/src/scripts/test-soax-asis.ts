@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   console.log("  source:", s.source);
   console.log("  cfClearance:", s.cfClearance?.slice(0, 30) + "…");
   console.log("  UA:", s.userAgent?.slice(0, 60));
-  console.log("  proxy:", s.proxyUrl?.replace(/:([^@:]+)@/, ":***@").slice(0, 60));
+  console.log("  proxy:", s.soaxProxyUrl?.replace(/:([^@:]+)@/, ":***@").slice(0, 60));
 
   // Test spainCfFetch on /main/
   const ts = Date.now();
@@ -33,8 +33,8 @@ async function main(): Promise<void> {
         "Accept": "text/javascript, application/javascript, */*; q=0.01",
       },
     });
-    const body = await r.text();
-    console.log(`/main/ → ${r.status} | ${body.length}B`);
+    const body = await r!.text();
+    console.log(`/main/ → ${r!.status} | ${body.length}B`);
     if (body.length > 100) {
       console.log("BODY[0:200]:", body.slice(0, 200));
     }

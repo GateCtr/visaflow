@@ -192,11 +192,11 @@ async function main(): Promise<void> {
   page.on("framenavigated", async () => {
     try {
       const cookies = await page.cookies();
-      const cookieStr = cookies.map(c => `${c.name}=${c.value.slice(0, 20)}`).join("; ");
+      const cookieStr = cookies.map((c: any) => `${c.name}=${c.value.slice(0, 20)}`).join("; ");
       console.log(`  🍪 Cookies: ${cookieStr.slice(0, 200)}`);
       // Attach to the last captured request
       if (captured.length > 0) {
-        captured[captured.length - 1].cookies = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+        captured[captured.length - 1].cookies = cookies.map((c: any) => `${c.name}=${c.value}`).join("; ");
       }
     } catch { /* ignore */ }
   });
