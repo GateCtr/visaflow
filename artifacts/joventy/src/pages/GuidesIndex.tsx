@@ -2,9 +2,8 @@ import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { Clock, ChevronRight, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoventyLogo } from "@/components/JoventyLogo";
 import { getAllGuides } from "@/data/guides-seo";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
@@ -37,7 +36,7 @@ export default function GuidesIndex() {
   };
 
   return (
-    <>
+    <PublicLayout solidNav>
       <Helmet>
         <title>Guides Visa depuis Kinshasa 2026 — Conseils & Démarches | Joventy</title>
         <meta name="description" content="Guides pratiques et conseils d'experts pour vos demandes de visa USA, Canada, Schengen depuis Kinshasa. Délais, documents, entretiens — tout ce qu'il faut savoir." />
@@ -57,29 +56,7 @@ export default function GuidesIndex() {
         <script type="application/ld+json">{JSON.stringify(schemaArticleList)}</script>
       </Helmet>
 
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-primary font-bold text-lg">
-            <JoventyLogo className="w-8 h-8" showText={false} />
-            Joventy
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
-            <Link href="/#destinations" className="hover:text-primary transition-colors">Destinations</Link>
-            <Link href="/guides" className="text-primary font-medium">Guides</Link>
-            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
-            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
-            <Link href="/#contact" className="hover:text-primary transition-colors">Contact</Link>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
-              Commencer <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      <main>
+      <div>
         {/* Hero */}
         <section className="bg-gradient-to-b from-primary/5 to-white py-16 px-4">
           <div className="max-w-3xl mx-auto text-center">
@@ -134,28 +111,13 @@ export default function GuidesIndex() {
               Joventy prend en charge l'intégralité de vos démarches — de la préparation du dossier à la capture du créneau consulaire.
             </p>
             <Link href="/register">
-              <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">
+              <Button size="lg" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
                 Créer mon dossier <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
           </div>
         </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 text-white/50 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
-          <div className="flex gap-4">
-            <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
-            <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
-          </div>
-        </div>
-        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
-          <LegalFooterNote />
-        </div>
-      </footer>
-    </>
+      </div>
+    </PublicLayout>
   );
 }

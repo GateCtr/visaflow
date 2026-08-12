@@ -5,9 +5,8 @@ import {
   ShieldCheck, FileSearch, Mic, Landmark, ClipboardList, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoventyLogo } from "@/components/JoventyLogo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const RISKS = [
   {
@@ -75,7 +74,7 @@ export default function AuditDiagnostic() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <PublicLayout solidNav>
       <Helmet>
         <title>Audit & Diagnostic de Dossier Visa — Sécurisez votre demande | Joventy</title>
         <meta
@@ -96,28 +95,6 @@ export default function AuditDiagnostic() {
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">{JSON.stringify(serviceSchema)}</script>
       </Helmet>
-
-      {/* NAV */}
-      <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Link href="/"><JoventyLogo variant="light" size="sm" /></Link>
-          <nav className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-            <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-primary font-semibold">Audit & Diagnostic</span>
-          </nav>
-          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
-            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
-            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
-            <Link href="/guides/motifs-refus-visa-schengen-kinshasa" className="hover:text-primary transition-colors">Pourquoi les dossiers sont refusés</Link>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
-              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
 
       {/* HERO */}
       <section className="bg-gradient-to-b from-red-50 to-white py-16 px-4">
@@ -292,20 +269,6 @@ export default function AuditDiagnostic() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="bg-slate-900 text-white/50 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
-          <div className="flex gap-4">
-            <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
-            <Link href="/prix" className="hover:text-white transition-colors">Tarifs</Link>
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
-          </div>
-        </div>
-        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
-          <LegalFooterNote />
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }

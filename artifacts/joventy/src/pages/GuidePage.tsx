@@ -6,7 +6,7 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
 import { ShieldCheck } from "lucide-react";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AdSenseInArticle } from "@/components/AdSenseInArticle";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -97,7 +97,7 @@ export default function GuidePage() {
   };
 
   return (
-    <>
+    <PublicLayout solidNav>
       <Helmet>
         <title>{guide.metaTitle}</title>
         <meta name="description" content={guide.metaDescription} />
@@ -116,28 +116,7 @@ export default function GuidePage() {
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
       </Helmet>
 
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-primary font-bold text-lg">
-            <JoventyLogo className="w-8 h-8" showText={false} />
-            Joventy
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm text-slate-500">
-            <Link href="/#destinations" className="hover:text-primary transition-colors">Destinations</Link>
-            <Link href="/guides" className="text-primary font-medium">Guides</Link>
-            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
-            <Link href="/#contact" className="hover:text-primary transition-colors">Contact</Link>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
-              Commencer <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-10">
+      <div className="max-w-3xl mx-auto px-4 py-10">
 
         {/* Breadcrumb */}
         <nav aria-label="Fil d'Ariane" className="flex items-center gap-1.5 text-sm text-slate-400 mb-6">
@@ -251,7 +230,7 @@ export default function GuidePage() {
               </div>
               <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
                 <Link href={guide.conversion.primaryHref}>
-                  <Button className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold">
+                  <Button className="w-full sm:w-auto bg-secondary hover:bg-secondary/90 text-white font-semibold">
                     {guide.conversion.primaryLabel} <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
@@ -379,7 +358,7 @@ export default function GuidePage() {
             </div>
           </section>
         )}
-      </main>
+      </div>
 
       {/* WhatsApp floating */}
       <a
@@ -392,73 +371,6 @@ export default function GuidePage() {
         WhatsApp
       </a>
 
-      <footer className="bg-slate-900 text-white/50 py-8 px-4 mt-10">
-        <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-6 mb-8 text-xs">
-            <div>
-              <p className="font-semibold text-white/70 mb-2">Destinations</p>
-              <ul className="space-y-1">
-                <li><Link href="/visa-usa-kinshasa" className="hover:text-white transition-colors">Visa USA</Link></li>
-                <li><Link href="/visa-canada-kinshasa" className="hover:text-white transition-colors">Visa Canada</Link></li>
-                <li><Link href="/visa-schengen-kinshasa" className="hover:text-white transition-colors">Visa Schengen</Link></li>
-                <li><Link href="/visa-espagne-kinshasa" className="hover:text-white transition-colors">Visa Espagne</Link></li>
-                <li><Link href="/e-visa-dubai-kinshasa" className="hover:text-white transition-colors">E-Visa Dubaï</Link></li>
-                <li><Link href="/visa-maroc-kinshasa" className="hover:text-white transition-colors">Visa Maroc</Link></li>
-                <li><Link href="/e-visa-egypte-kinshasa" className="hover:text-white transition-colors">Visa Égypte</Link></li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold text-white/70 mb-2">Guides urgents</p>
-              <ul className="space-y-1">
-                <li><Link href="/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026" className="hover:text-white transition-colors">Purger 21 jours</Link></li>
-                <li><Link href="/guides/suspension-visa-canada-rdc-ebola-2026" className="hover:text-white transition-colors">Suspension Canada</Link></li>
-                <li><Link href="/guides/coupe-du-monde-2026-visa-usa-kinshasa" className="hover:text-white transition-colors">World Cup 2026</Link></li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold text-white/70 mb-2">Éviter le refus</p>
-              <ul className="space-y-1">
-                <li><Link href="/guides/motifs-refus-visa-schengen-kinshasa" className="hover:text-white transition-colors">Motifs de refus Schengen</Link></li>
-                <li><Link href="/guides/erreurs-releves-bancaires-depot-suspect-visa" className="hover:text-white transition-colors">Dépôt suspect bancaire</Link></li>
-                <li><Link href="/guides/que-faire-apres-refus-visa-kinshasa-recours" className="hover:text-white transition-colors">Après un refus</Link></li>
-                <li><Link href="/audit-diagnostic" className="hover:text-white transition-colors">Audit & Diagnostic</Link></li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold text-white/70 mb-2">Guides visa</p>
-              <ul className="space-y-1">
-                <li><Link href="/guides/comment-obtenir-creneau-visa-usa-kinshasa" className="hover:text-white transition-colors">Créneau USA</Link></li>
-                <li><Link href="/guides/documents-visa-schengen-kinshasa" className="hover:text-white transition-colors">Documents Schengen</Link></li>
-                <li><Link href="/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026" className="hover:text-white transition-colors">RDV Espagne 2026</Link></li>
-                <li><Link href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026" className="hover:text-white transition-colors">Délai créneaux Espagne</Link></li>
-                <li><Link href="/guides" className="hover:text-white transition-colors">Tous les guides →</Link></li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold text-white/70 mb-2">Joventy</p>
-              <ul className="space-y-1">
-                <li><Link href="/" className="hover:text-white transition-colors">Accueil</Link></li>
-                <li><Link href="/guides" className="hover:text-white transition-colors">Guides</Link></li>
-                <li><Link href="/alerte-espagne" className="hover:text-white transition-colors">🇪🇸 Alerte Espagne</Link></li>
-                <li><Link href="/alerte-schengen" className="hover:text-white transition-colors">🇪🇺 Alerte Schengen</Link></li>
-                <li><Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link></li>
-                <li><a href="https://wa.me/243840808122" className="hover:text-white transition-colors">WhatsApp</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-xs border-t border-white/10 pt-6">
-            <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
-            <div className="flex gap-4">
-              <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
-              <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
-              <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
-            </div>
-          </div>
-          <div className="mt-5 pt-5 border-t border-white/10">
-            <LegalFooterNote />
-          </div>
-        </div>
-      </footer>
-    </>
+    </PublicLayout>
   );
 }

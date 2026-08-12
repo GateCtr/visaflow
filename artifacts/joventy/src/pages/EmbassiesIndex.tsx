@@ -2,9 +2,8 @@ import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { ArrowRight, ChevronRight, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoventyLogo } from "@/components/JoventyLogo";
 import { EMBASSIES_SEO } from "@/data/embassies-seo";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -49,7 +48,7 @@ export default function EmbassiesIndex() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <PublicLayout>
       <Helmet>
         <title>Ambassades à Kinshasa 2026 — Adresses, Horaires & Contacts | Joventy</title>
         <meta name="description" content="Liste complète des ambassades à Kinshasa (USA, Canada, UK, France, Belgique, Espagne, Suisse, Turquie, Inde, Maroc, Égypte, Chine) : adresses, téléphones, horaires et infos visa." />
@@ -69,27 +68,8 @@ export default function EmbassiesIndex() {
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
       </Helmet>
 
-      {/* ── NAV ── */}
-      <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Link href="/">
-            <JoventyLogo variant="light" size="sm" />
-          </Link>
-          <nav className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-            <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-primary font-semibold">Ambassades</span>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
-              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
-
       {/* ── HERO ── */}
-      <section className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white py-16 sm:py-20">
+      <section className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white pt-36 pb-20 sm:pt-40 sm:pb-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <div className="inline-flex items-center gap-2 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
             <MapPin className="w-3.5 h-3.5" /> Kinshasa, RDC
@@ -141,24 +121,6 @@ export default function EmbassiesIndex() {
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
-      <footer className="bg-primary text-white py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
-          <Link href="/">
-            <JoventyLogo variant="dark" size="sm" />
-          </Link>
-          <p className="text-white/40 text-xs text-center">
-            © {new Date().getFullYear()} Joventy · Assistance visa premium · Kinshasa, RDC
-          </p>
-          <div className="flex gap-4 text-white/40 text-xs">
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
-            <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
-          </div>
-        </div>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 mt-5 border-t border-white/10 text-white/40">
-          <LegalFooterNote />
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }

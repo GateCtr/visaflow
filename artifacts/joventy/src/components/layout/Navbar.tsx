@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { LogOut, User as UserIcon, Menu, X, ChevronDown } from "lucide-react";
 import { JoventyLogo } from "@/components/JoventyLogo";
 
-export function Navbar() {
+export function Navbar({ forceSolid = false }: { forceSolid?: boolean }) {
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -31,8 +31,11 @@ export function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const [location] = useLocation();
+  const isLanding = location === "/";
+
   const close = () => { setIsOpen(false); setAlertesMobileOpen(false); };
-  const solid = scrolled || isOpen;
+  const solid = forceSolid || scrolled || isOpen;
 
   return (
     <>
@@ -54,10 +57,12 @@ export function Navbar() {
             ].map((link) => (
               <a
                 key={link.label}
-                href={`#${link.anchor}`}
+                href={isLanding ? `#${link.anchor}` : `/#${link.anchor}`}
                 onClick={(e) => {
-                  e.preventDefault();
-                  document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+                  if (isLanding) {
+                    e.preventDefault();
+                    document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+                  }
                 }}
                 className={`text-sm font-medium transition-colors cursor-pointer ${
                   solid
@@ -224,11 +229,13 @@ export function Navbar() {
           ].map((link) => (
             <a
               key={link.label}
-              href={`#${link.anchor}`}
+              href={isLanding ? `#${link.anchor}` : `/#${link.anchor}`}
               onClick={(e) => {
-                e.preventDefault();
                 close();
-                document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+                if (isLanding) {
+                  e.preventDefault();
+                  document.getElementById(link.anchor)?.scrollIntoView({ behavior: "smooth" });
+                }
               }}
             >
               <span className="block px-6 py-4 text-sm font-medium text-foreground hover:bg-muted transition-colors">
