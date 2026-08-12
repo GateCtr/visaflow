@@ -1821,9 +1821,12 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
       // HCaptchaEnterpriseTaskProxyless supprimé — Anti-Captcha retourne
       // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
       //
-      // Si rqdata est présent (hCaptcha enterprise) : l'inclure dans enterprisePayload.
-      // Sans rqdata, CEV rejette systématiquement le token (siteverify compare le nonce de session).
-      const enterprisePayload = rqdata ? { enterprisePayload: { rqdata }, isEnterprise: true } : {};
+      // CEV utilise hCaptcha Enterprise au niveau API, même si le widget HTML n'a pas de data-rqdata visible.
+      // Anti-Captcha doc : "If the website uses hCaptcha Enterprise, set isEnterprise:true to get the
+      // correct token type" — sans ce flag, le token généré est standard et siteverify le rejette
+      // systématiquement pour une sitekey Enterprise (captchaSolved:false).
+      // Si rqdata est en plus présent dans le HTML, on l'inclut dans enterprisePayload.
+      const enterprisePayload = rqdata ? { isEnterprise: true, enterprisePayload: { rqdata } } : { isEnterprise: true };
       const baseTask = proxyConfig
         ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent, ...enterprisePayload }
         : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, userAgent, ...enterprisePayload };
