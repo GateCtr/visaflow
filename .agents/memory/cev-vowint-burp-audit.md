@@ -76,3 +76,14 @@ Appears after Accept-Encoding in Chrome's header list.
 ## Remaining minor gaps (not fixed — low impact)
 - Double GET /en in redirect chain — bot follows once
 - Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146
+
+## Fix 2026-08-12 — isEnterprise:true supprimé (captchaSolved:false systématique)
+Burp Chrome 150 (2026-08-12) confirme : le widget `/Captcha` est hCaptcha **standard** :
+```html
+<div class="h-captcha" data-sitekey="5f64399c-…" data-callback="successfullCaptcha">
+```
+Zéro `data-rqdata`, zéro attribut enterprise. `isEnterprise:true` dans la tâche Anti-Captcha généraient un token enterprise rejeté par siteverify (sitekey configurée en standard).
+
+**Fix** : `isEnterprise:true` supprimé de la tâche. `enterprisePayload.rqdata` conservé uniquement si rqdata présent dans le HTML (cas futur).
+
+**Why** : token enterprise ≠ token standard — siteverify les distingue et rejette le mauvais type.
