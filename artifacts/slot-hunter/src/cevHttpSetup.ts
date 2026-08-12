@@ -1857,16 +1857,67 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
 
       // ── Construire la tâche ──────────────────────────────────────────────────
       // Priorité : si proxy disponible → HCaptchaTask ; sinon HCaptchaTaskProxyless.
+      // ── Fetch rqdata enterprise depuis hCaptcha checksiteconfig ─────────────
+      // La sitekey CEV est configurée en mode hCaptcha Enterprise côté serveur
+      // (confirmé par "remote.captcha.com" dans le CSP de la page /Captcha).
+      // Le rqdata n'est PAS dans le HTML statique : hcaptcha api.js le charge
+      // dynamiquement via un call à checksiteconfig. On reproduit ce call depuis
+      // notre process pour obtenir le rqdata, puis on le passe à Anti-Captcha.
+      // Sans rqdata + isEnterprise:true → token standard rejeté par siteverify enterprise.
+      let resolvedRqdata: string | undefined = rqdata; // rqdata depuis HTML (généralement undefined)
+      if (!resolvedRqdata) {
+        try {
+          const checksiteUrl =
+            `https://hcaptcha.com/checksiteconfig?v=1` +
+            `&host=appointment.cloud.diplomatie.be` +
+            `&sitekey=${HCAPTCHA_SITEKEY}` +
+            `&sc=1&swa=1` +
+            `&spst=${Math.floor(Date.now() / 1000)}`;
+          const checksiteRes = await fetch(checksiteUrl, {
+            headers: {
+              "User-Agent": userAgent,
+              "Referer": `${CEV_BASE}/Captcha`,
+              "Origin": "https://js.hcaptcha.com",
+              "Accept": "application/json, text/plain, */*",
+            },
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (checksiteRes.ok) {
+            const checksiteData = await checksiteRes.json() as {
+              pass?: boolean;
+              c?: { type?: string; req?: string };
+            };
+            if (checksiteData?.c?.req) {
+              resolvedRqdata = checksiteData.c.req;
+              console.log(`[CEV-SETUP] ✅ hCaptcha enterprise rqdata: ${resolvedRqdata.slice(0, 30)}… (type=${checksiteData.c.type})`);
+            } else {
+              console.log(`[CEV-SETUP] ℹ️ checksiteconfig: pass=${checksiteData?.pass}, c=${JSON.stringify(checksiteData?.c)} — pas de rqdata (mode standard)`);
+            }
+          } else {
+            console.warn(`[CEV-SETUP] ⚠️ checksiteconfig HTTP ${checksiteRes.status}`);
+          }
+        } catch (cse) {
+          console.warn(`[CEV-SETUP] ⚠️ checksiteconfig fetch failed: ${cse}`);
+        }
+      }
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_hcaptcha_rqdata",
+        status: "ok",
+        data: {
+          rqdataFound: !!resolvedRqdata,
+          rqdataPreview: resolvedRqdata ? resolvedRqdata.slice(0, 40) : null,
+        },
+      });
+
       // HCaptchaEnterpriseTaskProxyless supprimé — Anti-Captcha retourne
       // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
       //
-      // AUDIT Burp 2026-08-12 : le HTML /Captcha contient uniquement
-      //   <div class="h-captcha" data-sitekey="5f64399c-…" data-callback="successfullCaptcha">
-      // Zéro attribut enterprise, zéro data-rqdata → sitekey STANDARD hCaptcha.
-      // isEnterprise:true génère un token enterprise que siteverify rejette pour une sitekey standard
-      // → captchaSolved:false systématique. Supprimé.
-      // Si rqdata est présent dans le HTML (cas futur), l'inclure via enterprisePayload.
-      const enterprisePayload = rqdata ? { enterprisePayload: { rqdata } } : {};
+      // Si rqdata enterprise disponible → isEnterprise:true + enterprisePayload requis.
+      // Si pas de rqdata → mode standard (pas de flag enterprise).
+      const enterprisePayload = resolvedRqdata
+        ? { isEnterprise: true, enterprisePayload: { rqdata: resolvedRqdata } }
+        : {};
       const baseTask = proxyConfig
         ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent, ...enterprisePayload }
         : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, userAgent, ...enterprisePayload };

@@ -77,13 +77,14 @@ Appears after Accept-Encoding in Chrome's header list.
 - Double GET /en in redirect chain — bot follows once
 - Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146
 
-## Fix 2026-08-12 — isEnterprise:true supprimé (captchaSolved:false systématique)
-Burp Chrome 150 (2026-08-12) confirme : le widget `/Captcha` est hCaptcha **standard** :
-```html
-<div class="h-captcha" data-sitekey="5f64399c-…" data-callback="successfullCaptcha">
+## Fix 2026-08-12 — rqdata enterprise dynamique via checksiteconfig (captchaSolved:false systématique)
+
+**Root cause** : le CSP de `/Captcha` contient `https://remote.captcha.com` → sitekey CEV est hCaptcha **Enterprise** côté serveur. Le `rqdata` n'est PAS dans le HTML statique — `api.js` le charge dynamiquement via `checksiteconfig`. Sans rqdata, Anti-Captcha génère un token standard rejeté par siteverify enterprise.
+
+**Fix** : avant d'appeler Anti-Captcha, fetch :
 ```
-Zéro `data-rqdata`, zéro attribut enterprise. `isEnterprise:true` dans la tâche Anti-Captcha généraient un token enterprise rejeté par siteverify (sitekey configurée en standard).
+GET https://hcaptcha.com/checksiteconfig?v=1&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-…&sc=1&swa=1&spst=<ts>
+```
+Extrait `c.req` = rqdata. Passe `isEnterprise:true + enterprisePayload:{rqdata}` à Anti-Captcha si rqdata trouvé, sinon mode standard sans flags enterprise.
 
-**Fix** : `isEnterprise:true` supprimé de la tâche. `enterprisePayload.rqdata` conservé uniquement si rqdata présent dans le HTML (cas futur).
-
-**Why** : token enterprise ≠ token standard — siteverify les distingue et rejette le mauvais type.
+**Why** : isEnterprise:true sans rqdata ne suffit pas pour enterprise siteverify — le challenge enterprise doit être résolu avec le bon rqdata de session.
