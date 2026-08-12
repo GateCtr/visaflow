@@ -736,7 +736,22 @@ export async function executeHttpBooking(
   let slotTime = config.targetTime ?? "";
 
   if (slotDate && slotTime) {
-    console.log(`[spain-booking] ✅ Créneau pré-confirmé par scanner: ${slotDate} à ${slotTime}`);
+    // Créneau pré-confirmé par le scanner — on ne re-cherche pas de slot, mais on appelle
+    // datetime/ pour le mois du créneau afin d'activer le nonce PHP requis par getsigninfields/.
+    // Confirmé 2026-08-12 : sans datetime/, getsigninfields/ → 0B (nonce non amorcé).
+    // Même si datetime/ retourne 0B (post-signin/ état consommé), le serveur met à jour
+    // sa session côté PHP → getsigninfields/ répond avec 13816B.
+    const slotMonth = slotDate.slice(0, 7);
+    const dtNonceParams: Record<string, string | string[]> = {
+      ...baseParams,
+      "services[]": [targetService.serviceId],
+      ...(agendaId ? { "agendas[]": [agendaId] } : {}),
+      start: `${slotMonth}-01`,
+      end: `${slotMonth}-${String(new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
+      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    };
+    const dtNonce = await callEndpoint("datetime/", dtNonceParams);
+    console.log(`[spain-booking] ✅ Créneau pré-confirmé: ${slotDate} à ${slotTime} — datetime/ nonce: ${dtNonce ? "OK" : "0B (nonce activé côté PHP)"}`);
   } else {
     console.log(`[spain-booking] 📅 Récupération datetime…`);
     const now = new Date();
@@ -1046,31 +1061,9 @@ export async function executeHttpBooking(
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
   } else {
-    // ─── 5a. datetime/ reset — ré-amorçage nonce PHP ─────────────────────────
-    // Confirmé 2026-08-12 : après signin/ d'un dossier précédent (même PHPSESSID), l'état
-    // "slot sélectionné" est consommé → getsigninfields/ retourne 0B pour le dossier suivant.
-    // Rappeler datetime/ pour le mois du créneau ré-initialise cet état côté PHP,
-    // même si la réponse HTTP est 0B (le serveur met à jour sa session indépendamment du corps).
-    if (slotDate) {
-      const slotMonth = slotDate.slice(0, 7); // "YYYY-MM"
-      const lastDayOfMonth = new Date(
-        Number(slotMonth.slice(0, 4)),
-        Number(slotMonth.slice(5, 7)),
-        0,
-      ).getDate();
-      const dtResetParams: Record<string, string | string[]> = {
-        ...baseParams,
-        "services[]": [targetService.serviceId],
-        ...(agendaId ? { "agendas[]": [agendaId] } : {}),
-        start: `${slotMonth}-01`,
-        end: `${slotMonth}-${String(lastDayOfMonth).padStart(2, "0")}`,
-        selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
-      };
-      const dtResetPayload = await callEndpoint("datetime/", dtResetParams);
-      console.log(`${logPrefix} 🔄 datetime/ reset (${slotMonth}) — ré-amorçage nonce PHP: ${dtResetPayload ? "OK" : "0B (normal)"}`);
-    }
-
-    // ─── 5b. getsigninfields/ (mode HTTP-only) ────────────────────────────────
+    // ─── 5a. getsigninfields/ (mode HTTP-only) ────────────────────────────────
+    // Le nonce PHP est activé par datetime/ appelé plus haut dans le flow pré-confirmé
+    // (step 3). Sans ce call, getsigninfields/ retourne 0B (confirmé 2026-08-12).
     // Le serveur Bookitit stocke un nonce dans la session PHP après cet appel.
     // Sans ce nonce, signin/ retourne 0B (confirmé 2026-08-12 Saopolo HTTP pur).
     // Params identiques à ceux de signin/ (services[], agendas[], date, time, selectedPeople).

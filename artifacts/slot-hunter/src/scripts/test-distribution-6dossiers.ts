@@ -283,22 +283,19 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     const iso = await createIsolatedBookingSession(mainSession, portalUrl);
     const bookSess: SpainCfSession = iso?.session ?? mainSession;
 
-    // datetime/ pour le mois du créneau remet le contexte PHP à zéro entre dossiers.
-    // Après signin/ (même raté), l'état "slot sélectionné" est consommé.
-    // Rappeler datetime/ pour le bon mois ré-établit ce contexte → getsigninfields/ retourne le formulaire.
-    const slotMonth = assigned.date.slice(0, 7); // "2026-09"
-    const startOfMonth = `${slotMonth}-01`;
-    const lastDay = new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate();
-    const endOfMonth = `${slotMonth}-${String(lastDay).padStart(2, "0")}`;
-    const dtResetExtra: Record<string, string> = {
+    // datetime/ est appelé automatiquement dans executeHttpBooking (chemin pré-confirmé)
+    // pour activer le nonce PHP de getsigninfields/. Ici on le réplique manuellement
+    // pour le test afin de reproduire le même comportement.
+    const slotMonth = assigned.date.slice(0, 7);
+    const dtExtra: Record<string, string> = {
       "services[]": serviceId,
-      start: startOfMonth,
-      end: endOfMonth,
+      start: `${slotMonth}-01`,
+      end: `${slotMonth}-${String(new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
       selectedPeople: "1",
     };
-    if (agendaId) dtResetExtra["agendas[]"] = agendaId;
-    const { raw: dtResetRaw } = await callJsonp(bookSess, portalUrl, "datetime/", dtResetExtra);
-    log(`  ${dossier.name} | datetime/ reset (${slotMonth}) → ${dtResetRaw.length}B`);
+    if (agendaId) dtExtra["agendas[]"] = agendaId;
+    const { raw: dtRaw, status: dtSt } = await callJsonp(bookSess, portalUrl, "datetime/", dtExtra);
+    log(`  ${dossier.name} | datetime/ (${slotMonth}) → HTTP ${dtSt} | ${dtRaw.length}B`);
 
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,
