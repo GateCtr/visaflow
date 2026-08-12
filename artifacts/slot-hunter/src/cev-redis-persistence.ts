@@ -309,6 +309,48 @@ export function isCevRedisReady(): boolean {
   return redisReady;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DISTRIBUTED SCAN LOCK (anti-double-instance Replit + Railway)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_CEV_SCAN_LOCK_PREFIX = "visaflow:cev-scan-lock:";
+/** Durée max d'un scan CEV complet (login → captcha → selectSlot). */
+const REDIS_CEV_SCAN_LOCK_TTL_SEC = 90;
+
+/**
+ * Tente d'acquérir un lock exclusif pour scanner ce dossier.
+ *
+ * Utilise SET NX EX (Redis atomic) : si la clé n'existe pas → "OK" (lock acquis).
+ * Si elle existe déjà → null (une autre instance est en cours sur ce dossier).
+ *
+ * Sans Redis : retourne toujours true (pas de protection, comportement d'origine).
+ *
+ * @param dossierId - Référence VOWINT du dossier (ex: "VOWINT6278574")
+ * @returns true si le lock est acquis, false si une autre instance l'a déjà.
+ */
+export async function acquireCevScanLock(dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // pas de Redis → pas de lock
+  try {
+    const key = `${REDIS_CEV_SCAN_LOCK_PREFIX}${dossierId}`;
+    const result = await redisClient.set(key, "1", { NX: true, EX: REDIS_CEV_SCAN_LOCK_TTL_SEC });
+    return result === "OK";
+  } catch {
+    return true; // erreur Redis → pas de blocage
+  }
+}
+
+/**
+ * Libère le lock de scan pour ce dossier.
+ * Toujours appeler dans un finally pour garantir la libération.
+ */
+export async function releaseCevScanLock(dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  try {
+    const key = `${REDIS_CEV_SCAN_LOCK_PREFIX}${dossierId}`;
+    await redisClient.del(key);
+  } catch { /* ignore */ }
+}
+
 /**
  * Déconnecte Redis proprement (shutdown).
  */

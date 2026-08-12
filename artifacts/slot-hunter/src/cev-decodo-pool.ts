@@ -16,6 +16,7 @@ import { resolve } from "node:path";
 
 // ─── Parsing CSV ─────────────────────────────────────────────────────────────
 
+/** Parse le CSV → URLs. Accepte URL complète (http://…) ou host:port:user:pass. */
 function parseProxyCsv(filePath: string): string[] {
   try {
     const content = readFileSync(filePath, "utf-8");
@@ -23,6 +24,13 @@ function parseProxyCsv(filePath: string): string[] {
     for (const raw of content.split("\n")) {
       const line = raw.trim();
       if (!line || line.startsWith("#")) continue;
+
+      // Format A : URL complète
+      if (line.startsWith("http://") || line.startsWith("https://")) {
+        try { new URL(line); urls.push(line); continue; } catch { /* invalide */ }
+      }
+
+      // Format B : host:port:username:password
       const parts = line.split(":");
       if (parts.length < 4) {
         console.warn(`[cev-decodo] ⚠️ Ligne CSV ignorée (format invalide): "${line}"`);
@@ -40,7 +48,19 @@ function parseProxyCsv(filePath: string): string[] {
 }
 
 function parsePool(): string[] {
-  // 1. Fichier CSV
+  // 1a. Fichier CSV dédié CEV (cev-decodo-proxies.csv) — priorité maximale
+  const cevCsvPath = process.env.CEV_DECODO_PROXY_FILE
+    ? resolve(process.env.CEV_DECODO_PROXY_FILE)
+    : resolve(process.cwd(), "cev-decodo-proxies.csv");
+  if (existsSync(cevCsvPath)) {
+    const urls = parseProxyCsv(cevCsvPath);
+    if (urls.length > 0) {
+      console.log(`[cev-decodo] 📄 Pool chargé depuis CSV CEV: ${urls.length} IP(s) (${cevCsvPath})`);
+      return urls;
+    }
+  }
+
+  // 1b. Fichier CSV partagé (decodo-proxies.csv)
   const defaultCsvPath = resolve(process.cwd(), "decodo-proxies.csv");
   const csvPath = process.env.DECODO_PROXY_FILE
     ? resolve(process.env.DECODO_PROXY_FILE)

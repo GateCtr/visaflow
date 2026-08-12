@@ -62,6 +62,8 @@ import {
   initCevRedis,
   syncPoolStateToRedis,
   restorePoolStateFromRedis,
+  acquireCevScanLock,
+  releaseCevScanLock,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
@@ -1889,6 +1891,18 @@ async function runAccountLoop(job: any): Promise<void> {
         continue;
       }
 
+      // ─── Lock distribué anti-double-instance (Replit + Railway) ─────────────
+      // Deux instances partagent le même VOWINT Redis. Sans lock, elles appellent
+      // SetCaptchaToken sur la même session CEV en même temps → l'une réussit,
+      // l'autre reçoit captchaSolved:false (session déjà consommée).
+      // SET NX EX 90s → atomique Redis → une seule instance scanne ce dossier à la fois.
+      const scanLockAcquired = await acquireCevScanLock(dossier.vowintRef);
+      if (!scanLockAcquired) {
+        logger.warn(`  🔒 ${dossier.vowintRef} — lock scan distribué pris (autre instance en cours) → skip`);
+        await sleep(2_000); // courte pause avant le prochain dossier
+        continue;
+      }
+
       // Scan
       state.scanCount++;
       localPool.checkDailyReset();
@@ -1898,15 +1912,21 @@ async function runAccountLoop(job: any): Promise<void> {
 
       // One-Shot: setupCevSessionHttp réutilise la session VOWINT si encore valide (cache 4h).
       // Si expirée → re-login + captcha automatique.
-      const result = await performScan(
-        vowintEmail,
-        vowintPassword,
-        dossier,
-        logApplicationId,
-        undefined, // pas de siphonedCreds en One-Shot
-        0,
-        logger,
-      );
+      let result: Awaited<ReturnType<typeof performScan>>;
+      try {
+        result = await performScan(
+          vowintEmail,
+          vowintPassword,
+          dossier,
+          logApplicationId,
+          undefined, // pas de siphonedCreds en One-Shot
+          0,
+          logger,
+        );
+      } finally {
+        // Libérer le lock après le scan (succès OU erreur)
+        await releaseCevScanLock(dossier.vowintRef);
+      }
 
       // Log chaque scan dans Convex
       botLog({
