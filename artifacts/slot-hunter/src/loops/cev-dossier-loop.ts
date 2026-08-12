@@ -1052,10 +1052,16 @@ async function performScan(
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
-    if (isCaptchaError && _hcaptchaRetry < 2) {
-      logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
+    // HCAPTCHA_REJECTED_BY_SERVER = timeout backend CEV (15s) lors de la vérification hCaptcha.
+    // Cause : congestion transitoire côté serveur CEV, pas un token invalide.
+    // → 1 seul retry (pas 2) avec 30s de pause pour laisser CEV se désencombrer.
+    // Les autres erreurs captcha (HCAPTCHA_FAILED, etc.) gardent 2 retries avec 30s.
+    const isServerRejection = result.error === "HCAPTCHA_REJECTED_BY_SERVER";
+    const maxRetries = isServerRejection ? 1 : 2;
+    if (isCaptchaError && _hcaptchaRetry < maxRetries) {
+      logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/${maxRetries} avec clé fraîche dans 30s…`);
       invalidateAnticaptchaCache();
-      await sleep(5_000);
+      await sleep(30_000);
       return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
     }
     logFn.warn(`  Erreur setup: ${result.error}`);

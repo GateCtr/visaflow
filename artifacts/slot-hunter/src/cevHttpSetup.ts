@@ -1006,8 +1006,9 @@ export async function setupCevSessionHttp(
       // Invalider le cache Anti-Captcha pour forcer une nouvelle résolution
       invalidateAnticaptchaCache();
       
-      // Attendre 2s avant de résoudre le nouveau captcha
-      await new Promise(r => setTimeout(r, 2000));
+      // Attendre 20s avant de résoudre le nouveau captcha — laisser CEV se désencombrer
+      // (validUntil absent = timeout backend, même cause que captchaSolved:false)
+      await new Promise(r => setTimeout(r, 20_000));
       
       // Résoudre un NOUVEAU captcha
       botLog({
