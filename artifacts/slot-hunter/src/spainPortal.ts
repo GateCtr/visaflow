@@ -1626,6 +1626,8 @@ export interface SpainWatcherProbeResult {
   slotInfo?: string;
   screenshotBase64?: string;
   errorMessage?: string;
+  _mainHtml?: string;
+  _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
 }
 
 export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatcherProbeResult> {

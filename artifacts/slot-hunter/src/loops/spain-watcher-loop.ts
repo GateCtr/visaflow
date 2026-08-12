@@ -605,9 +605,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
             // Distribue équitablement les créneaux disponibles entre les dossiers :
             // dossierA → slot[0], dossierB → slot[1], dossierC → slot[2]…
             // Evite que tous les dossiers tentent le même premier créneau (race condition).
-            const scanAllSlots = (result as any)._allSlots as Array<{
-              date: string; time: string; agendaId?: string; freeslots: number;
-            }> | undefined;
+            const scanAllSlots = result._allSlots;
 
             const slotAssignments = scanAllSlots && scanAllSlots.length > 0
               ? assignSlotsRoundRobin(dossiers, scanAllSlots)
@@ -620,9 +618,25 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 log("INFO", `[SPAIN-WATCHER]    ${dossier.applicantName} → ${a ? `${a.date} ${a.time}` : "repli datetime/"}`);
               }
             }
+
+            // ─── Sérialiser si plusieurs dossiers partagent le même créneau ───────
+            // Cas : 1 créneau (freeslots=1) + 3 dossiers → tous assignés au même slot.
+            // En parallèle, les 3 foncent ensemble → race condition → 2 bookings ratés.
+            // En série, le 1er réussit, les suivants trouvent 0 slot et s'arrêtent proprement.
+            const uniqueSlotKeys = new Set(
+              dossiers
+                .map((d) => slotAssignments.get(d.id))
+                .filter((a): a is { date: string; time: string; agendaId?: string } => !!a)
+                .map((a) => `${a.date}_${a.time}`),
+            );
+            const dossiersWithSlot = dossiers.filter((d) => slotAssignments.has(d.id)).length;
+            const shouldSerialize = dossiersWithSlot > 0 && uniqueSlotKeys.size < dossiersWithSlot;
+            if (shouldSerialize) {
+              log("INFO", `[SPAIN-WATCHER] ⚡ Booking SÉRIALISÉ — ${dossiersWithSlot} dossier(s) pour ${uniqueSlotKeys.size} créneau(x) unique(s) (race freeslots évitée)`);
+            }
             // ─────────────────────────────────────────────────────────────────────
 
-            await Promise.all(dossiers.map(async (dossier) => {
+            const bookDossier = async (dossier: SpainDossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
               if (!matched) {
@@ -737,7 +751,13 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   errorMessage: `Exception booking: ${bookErr}`,
                 }).catch(() => {});
               }
-            }));
+            };
+
+            if (shouldSerialize) {
+              for (const dossier of dossiers) await bookDossier(dossier);
+            } else {
+              await Promise.all(dossiers.map(bookDossier));
+            }
           }
         }
       }

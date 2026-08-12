@@ -3179,12 +3179,19 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
   errorMessage?: string;
   /** Raw HTML from /main/ when status=found (used for auto-booking extraction) */
   _mainHtml?: string;
+  /** Tous les créneaux disponibles — pour la stratégie multi-dossiers round-robin */
+  _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
 }> {
   const result = await scanSpainHttp(portalUrl);
 
   switch (result.status) {
     case "found":
-      return { status: "found", slotInfo: result.slotInfo, _mainHtml: result._mainHtml };
+      return {
+        status: "found",
+        slotInfo: result.slotInfo,
+        _mainHtml: result._mainHtml,
+        _allSlots: result._allSlots,
+      };
     case "not_found":
       return { status: "not_found" };
     case "ip_pool_blocked":
