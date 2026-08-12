@@ -1188,7 +1188,10 @@ async function confirmSlotsViaDatetime(
     console.log(`[spain-http] 🎯 Service priorisé pour datetime/ : "${prioritizedService.serviceName}" (${prioritizedService.serviceId})`);
   }
 
-  for (const svc of orderedServices.slice(0, 3)) {
+  // Règle SPAIN-HTTP-PURE-FLOW.md §9 : 1 seul getagendas/ par PHPSESSID.
+  // Les appels suivants retournent 0B → inutile d'itérer sur plusieurs services.
+  // Le service priorisé (visible + AllowAppointment) est déjà en tête d'orderedServices.
+  for (const svc of orderedServices.slice(0, 1)) {
     const svcSlotsStart = allSlots.length; // repère pour détecter les créneaux de CE service
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
@@ -1425,9 +1428,14 @@ async function confirmSlotsViaDatetime(
           const maxDaysRaw: string = (parsed as any)?.maxDays ?? "";
           if (maxDaysRaw && /^\d{4}-\d{2}-\d{2}$/.test(maxDaysRaw)) {
             const maxDate = new Date(maxDaysRaw + "T23:59:59");
-            if (!globalMaxDays || maxDate > globalMaxDays) {
+            const todayMidnight = new Date(now.toISOString().slice(0, 10) + "T23:59:59");
+            // Ignorer maxDays ≤ aujourd'hui — signal "mois courant vide", pas une limite globale
+            // (règle SPAIN-HTTP-PURE-FLOW.md §2 : toujours scanner M + M+1 minimum)
+            if (maxDate > todayMidnight && (!globalMaxDays || maxDate > globalMaxDays)) {
               globalMaxDays = maxDate;
               console.log(`[spain-http] 📅 maxDays mis à jour: ${maxDaysRaw} (mois ${start.slice(0, 7)})`);
+            } else if (maxDate <= todayMidnight) {
+              console.log(`[spain-http] 📅 maxDays=${maxDaysRaw} ≤ aujourd'hui — ignoré (signal mois vide, pas limite globale)`);
             }
           }
           // Accumuler TOUS les créneaux (scan complet du mois — pas de retour précoce)

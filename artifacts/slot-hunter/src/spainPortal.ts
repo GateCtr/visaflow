@@ -819,7 +819,9 @@ async function tryApiFirstSlot(
     const mRaw: string = (payload as any)?.maxDays ?? "";
     if (mRaw && /^\d{4}-\d{2}-\d{2}$/.test(mRaw)) {
       const mDate = new Date(mRaw + "T23:59:59");
-      if (!dtGlobalMaxDays || mDate > dtGlobalMaxDays) dtGlobalMaxDays = mDate;
+      const todayEnd = new Date(new Date().toISOString().slice(0, 10) + "T23:59:59");
+      // Ignorer maxDays ≤ aujourd'hui — signal mois courant vide, pas une limite globale
+      if (mDate > todayEnd && (!dtGlobalMaxDays || mDate > dtGlobalMaxDays)) dtGlobalMaxDays = mDate;
     }
     dtConsecutiveEmpty++;
     if (i >= 1 && dtGlobalMaxDays) {
@@ -911,7 +913,9 @@ async function tryApiFirstWithCachedSession(
     const mRaw2: string = (payload as any)?.maxDays ?? "";
     if (mRaw2 && /^\d{4}-\d{2}-\d{2}$/.test(mRaw2)) {
       const mDate2 = new Date(mRaw2 + "T23:59:59");
-      if (!cachedDtMaxDays || mDate2 > cachedDtMaxDays) cachedDtMaxDays = mDate2;
+      const todayEnd2 = new Date(new Date().toISOString().slice(0, 10) + "T23:59:59");
+      // Ignorer maxDays ≤ aujourd'hui — signal mois courant vide, pas une limite globale
+      if (mDate2 > todayEnd2 && (!cachedDtMaxDays || mDate2 > cachedDtMaxDays)) cachedDtMaxDays = mDate2;
     }
     cachedDtConsEmpty++;
     if (i >= 1 && cachedDtMaxDays) {
