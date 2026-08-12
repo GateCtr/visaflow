@@ -827,7 +827,9 @@ export async function setupCevSessionHttp(
     // ÉTAPE 4 : GET integrationUrl → cookie ASP.NET_SessionId CEV (ou utiliser siphonné)
     // ══════════════════════════════════════════════════════════════════════════
     let cevSessionCookie: string | null = null;
-    
+    // rqdata hCaptcha enterprise extrait de la page /Captcha (scope ici pour être accessible après le if/else)
+    let captchaPageRqdata: string | undefined;
+
     // Utiliser le cookie ASP.NET siphonné si disponible
     if (siphoned?.aspNetSessionId) {
       cevSessionCookie = siphoned.aspNetSessionId;
@@ -880,17 +882,51 @@ export async function setupCevSessionHttp(
       // cette page avant de soumettre SetCaptchaToken. Son absence serait détectable
       // par le serveur (pas de requête /Captcha → SetCaptchaToken direct = pattern bot).
       // On simule ce GET avec les deux cookies déjà acquis.
+      // IMPORTANT : on LIT le HTML pour extraire l'eventuel rqdata hCaptcha enterprise.
+      // Sans rqdata, Anti-Captcha resout un challenge generique que CEV rejette (captchaSolved:false).
       const captchaPageCookie = `PreferredCulture=${capturedCulture}; ASP.NET_SessionId=${cevSessionCookie}`;
-      await cevSetupFetch(`${CEV_BASE}/Captcha`, {
-        method: "GET",
-        headers: getCevBrowserHeaders({
-          fetchSite: "same-site",
-          cookie: captchaPageCookie,
-          userAgent: siphoned?.userAgent,
-        }),
-        redirect: "manual",
-        signal: AbortSignal.timeout(15_000),
-      }).catch(() => {}); // non-critique — continuer même si timeout
+      try {
+        const captchaPageRes = await cevSetupFetch(`${CEV_BASE}/Captcha`, {
+          method: "GET",
+          headers: getCevBrowserHeaders({
+            fetchSite: "same-site",
+            cookie: captchaPageCookie,
+            userAgent: siphoned?.userAgent,
+          }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(15_000),
+        });
+        const captchaPageHtml = await captchaPageRes.text().catch(() => "");
+        // Extraire rqdata depuis le HTML de la page captcha.
+        // Patterns couverts :
+        //   <div ... data-rqdata="VALUE" ...>   (attribut HTML sur la div hcaptcha)
+        //   rqdata: "VALUE"   ou   "rqdata":"VALUE"   (objet JS inline)
+        //   var rqdata = "VALUE"                (variable JS)
+        const rqdataPatterns = [
+          /data-rqdata=["']([^"']+)["']/i,
+          /rqdata["']?\s*:\s*["']([^"']+)["']/i,
+          /var\s+rqdata\s*=\s*["']([^"']+)["']/i,
+        ];
+        let extractedRqdata: string | undefined;
+        for (const pat of rqdataPatterns) {
+          const m = captchaPageHtml.match(pat);
+          if (m?.[1]) { extractedRqdata = m[1]; break; }
+        }
+        captchaPageRqdata = extractedRqdata;
+        botLog({
+          applicationId: clientId,
+          step: "cev_http_captcha_page_fetch",
+          status: "ok",
+          data: {
+            htmlLen: captchaPageHtml.length,
+            rqdataFound: !!extractedRqdata,
+            rqdataPreview: extractedRqdata ? extractedRqdata.slice(0, 40) : null,
+          },
+        });
+      } catch (captchaPageErr) {
+        // Non-bloquant : on continue sans rqdata (pire cas : CEV rejette le token)
+        botLog({ applicationId: clientId, step: "cev_http_captcha_page_fetch", status: "fail", data: { error: String(captchaPageErr) } });
+      }
     }
 
     // Construire le cookie header complet, avec F5 si disponible.
@@ -918,7 +954,7 @@ export async function setupCevSessionHttp(
       botLog({ applicationId: clientId, step: "cev_http_hcaptcha_presolved", status: "ok", data: { tokenLen: hcaptchaToken.length } });
     } else {
       try {
-        hcaptchaToken = await solveHcaptcha(clientId);
+        hcaptchaToken = await solveHcaptcha(clientId, captchaPageRqdata);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // 🔥 DÉTECTION SPÉCIALE : ERREUR PROXY CONNECT REFUSED → ROTATION REQUISE
@@ -1646,7 +1682,7 @@ function mergeCookies(existing: string, res: Response): string {
   return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
-async function solveHcaptcha(clientId: string): Promise<string | null> {
+async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string | null> {
   // Anti-Captcha met en cache les tokens par (sitekey + websiteURL).
   // Si deux scans appellent solveHcaptcha avec la même URL statique, Anti-Captcha peut renvoyer
   // le même token déjà utilisé → CEV le rejette (captchaSolved:false).
@@ -1784,9 +1820,13 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       // Priorité : si proxy disponible → HCaptchaTask ; sinon HCaptchaTaskProxyless.
       // HCaptchaEnterpriseTaskProxyless supprimé — Anti-Captcha retourne
       // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
+      //
+      // Si rqdata est présent (hCaptcha enterprise) : l'inclure dans enterprisePayload.
+      // Sans rqdata, CEV rejette systématiquement le token (siteverify compare le nonce de session).
+      const enterprisePayload = rqdata ? { enterprisePayload: { rqdata }, isEnterprise: true } : {};
       const baseTask = proxyConfig
-        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent }
-        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, userAgent };
+        ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent, ...enterprisePayload }
+        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, userAgent, ...enterprisePayload };
 
       const taskLabel = proxyConfig ? "HCaptchaTask" : "HCaptchaTaskProxyless";
       botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { type: taskLabel } });
