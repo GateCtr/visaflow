@@ -1155,10 +1155,13 @@ async function handleSlotFound(
   logFn.info(`🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
   state.slotsFound++;
 
-  // ── PAUSE immédiate du dossier (ne plus le re-scanner) ──
+  // ── PAUSE immédiate (empêche les re-scans concurrents pendant le booking) ──
+  // La pause est LEVÉE en cas d'échec booking — seul le succès la rend définitive.
   pausedDossiers.add(dossier.vowintRef);
-  logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE`);
+  logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE temporaire (booking en cours)`);
+  let _bookingSucceeded = false;
 
+  try {
   botLog({
     applicationId,
     step: "cev_dossier_slot_found",
@@ -1196,14 +1199,15 @@ async function handleSlotFound(
           location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
           confirmationCode: httpResult.confirmationCode,
         });
+        _bookingSucceeded = true;
         return;
       }
-      // Si NO_AVAILABILITY → le slot est pris, on s'arrête
+      // Si NO_AVAILABILITY → le slot est pris par quelqu'un d'autre — dépause pour futurs créneaux
       if (httpResult.error === "NO_AVAILABILITY" || httpResult.error === "NO_SLOTS_IN_RESPONSE") {
         logFn.info(`  ❌ Slot disparu (${httpResult.error}) — pas de retry`);
-        return;
+        return; // finally dépause
       }
-      // SessionExpired ou autre erreur → le slot existe peut-être encore → retry avec re-login
+      // SessionExpired ou autre erreur → retry avec re-login
       logFn.info(`  ⚠️ Booking HTTP échoué: ${httpResult.error} — retry avec re-login...`);
     } catch (err) {
       logFn.warn(`  ⚠️ Booking HTTP crash: ${err} — retry avec re-login...`);
@@ -1223,7 +1227,7 @@ async function handleSlotFound(
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
     logFn.error(`  ❌ Re-setup échoué: ${session.error ?? "unknown"}`);
-    return;
+    return; // finally dépause
   }
 
   // Tenter le booking avec la session fraîche
@@ -1241,13 +1245,24 @@ async function handleSlotFound(
         location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
         confirmationCode: httpResult.confirmationCode,
       });
+      _bookingSucceeded = true;
     } else {
       logFn.error(`  ❌ Booking HTTP (re-login) échoué: ${httpResult.error}`);
     }
   } catch (err) {
     logFn.error(`  💥 Crash booking: ${err}`);
   }
-}
+} finally {
+  // ── Dépause si le booking n'a pas abouti ──────────────────────────────────
+  // La pause était temporaire (anti-concurrent). Seul un booking confirmé la rend définitive.
+  if (!_bookingSucceeded) {
+    pausedDossiers.delete(dossier.vowintRef);
+    logFn.info(`  ▶️ Dossier #${dossier.index} ${dossier.vowintRef} dépausé (booking non confirmé)`);
+  } else {
+    logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} reste en PAUSE (booking confirmé)`);
+  }
+  } // fin try/finally
+} // fin handleSlotFound
 
 // ─── Booking isolé par dossier ───────────────────────────────────────────────
 //
@@ -1403,10 +1418,12 @@ async function handleSlotFoundMulti(
     logFn.info(`  🎯 Aucun pool cible → tous les ${eligibleRefs.length} dossier(s) du pool participent`);
   }
 
-  // Garantir que le dossier détecteur est toujours mis en pause (qu'il soit éligible ou non)
+  // ── PAUSE temporaire (anti-concurrent) — dépausée en fin de fonction si échec ──
+  const _allPausedRefs = [detectingDossier.vowintRef, ...eligibleRefs];
+  const _succeededRefs = new Set<string>();
   pausedDossiers.add(detectingDossier.vowintRef);
   eligibleRefs.forEach(ref => pausedDossiers.add(ref));
-  logFn.info(`  ⏸️ ${eligibleRefs.length} dossier(s) mis en PAUSE immédiatement`);
+  logFn.info(`  ⏸️ ${_allPausedRefs.length} dossier(s) mis en PAUSE temporaire (booking en cours)`);
 
   botLog({
     applicationId,
@@ -1474,6 +1491,7 @@ async function handleSlotFoundMulti(
 
       if (detectingBookingResult.success) {
         logFn.info(`  ✅ ${detectingDossier.vowintRef} → BOOKING RÉUSSI! code=${detectingBookingResult.confirmationCode} date=${detectingBookingResult.bookedDate}`);
+        _succeededRefs.add(detectingDossier.vowintRef);
         await reportSlotFound({
           applicationId,
           date: detectingBookingResult.bookedDate ?? "",
@@ -1533,6 +1551,7 @@ async function handleSlotFoundMulti(
       const r = settled.value;
       if (r.success) {
         logFn.info(`  ✅ ${r.vowintRef} → BOOKING RÉUSSI! code=${r.confirmationCode} date=${r.bookedDate}`);
+        _succeededRefs.add(r.vowintRef);
         await reportSlotFound({
           applicationId,
           date: r.bookedDate ?? "",
@@ -1547,6 +1566,17 @@ async function handleSlotFoundMulti(
         botLog({ applicationId, step: "cev_multi_booking_fail", status: "fail", data: { vowintRef: r.vowintRef, error: r.error } });
       }
     }
+  }
+
+  // ── Dépause des dossiers dont le booking n'a pas abouti ──────────────────
+  // Seul le succès rend la pause définitive — les autres reprennent le scan.
+  const toUnpause = _allPausedRefs.filter(ref => !_succeededRefs.has(ref));
+  if (toUnpause.length > 0) {
+    toUnpause.forEach(ref => pausedDossiers.delete(ref));
+    logFn.info(`  ▶️ ${toUnpause.length} dossier(s) dépausé(s) (booking non confirmé): [${toUnpause.join(", ")}]`);
+  }
+  if (_succeededRefs.size > 0) {
+    logFn.info(`  ⏸️ ${_succeededRefs.size} dossier(s) en PAUSE définitive (booking confirmé): [${[..._succeededRefs].join(", ")}]`);
   }
 
   // ── Email admin avec le RÉSULTAT du booking (pas de discovery inutile) ────
