@@ -220,7 +220,7 @@ async function main() {
   let globalMaxDays = "";
   let monthsWithNoSlots = 0;
 
-  for (let mo = 0; mo < 12 && (!slotDate || !slotTime); mo++) {
+  for (let mo = 0; mo < 12; mo++) {
     const d = new Date(now.getFullYear(), now.getMonth() + mo, 1);
     const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
