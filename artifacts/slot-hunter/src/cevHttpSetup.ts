@@ -932,6 +932,10 @@ export async function setupCevSessionHttp(
           }
         }
 
+        // Extraire le sitekey depuis le HTML (pour vérifier qu'il correspond à HCAPTCHA_SITEKEY)
+        const pageSitekeyMatch = captchaPageHtml.match(/data-sitekey=["']([^"']+)["']/i);
+        const pageSitekey = pageSitekeyMatch?.[1] ?? null;
+
         botLog({
           applicationId: clientId,
           step: "cev_http_captcha_page_fetch",
@@ -940,10 +944,15 @@ export async function setupCevSessionHttp(
             htmlLen: captchaPageHtml.length,
             rqdataFound: !!extractedRqdata,
             rqdataPreview: extractedRqdata ? extractedRqdata.slice(0, 40) : null,
-            // Snippet du contexte autour de "rqdata" dans le HTML (si non trouvé par regex)
+            // Snippet autour de "rqdata" dans le HTML si non trouvé par regex
             rqdataContext: rqdataContext,
-            // Premiers 600 chars du HTML pour voir la structure de la page
-            htmlHead: captchaPageHtml.slice(0, 600),
+            // Sitekey extrait de la page (cross-check avec HCAPTCHA_SITEKEY du code)
+            pageSitekey,
+            codeHcaptchaSitekey: HCAPTCHA_SITEKEY,
+            sitekeyMatch: pageSitekey === HCAPTCHA_SITEKEY,
+            // Corps de la page (début + fin) pour voir la structure du widget hCaptcha
+            htmlHead: captchaPageHtml.slice(0, 400),
+            htmlBody: captchaPageHtml.slice(400, 1200),
           },
         });
       } catch (captchaPageErr) {
