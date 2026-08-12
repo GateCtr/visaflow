@@ -1054,12 +1054,12 @@ async function performScan(
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
-    // HCAPTCHA_REJECTED_BY_SERVER = timeout backend CEV (15s) lors de la vérification hCaptcha.
-    // Cause : congestion transitoire côté serveur CEV, pas un token invalide.
-    // → 1 seul retry (pas 2) avec 30s de pause pour laisser CEV se désencombrer.
-    // Les autres erreurs captcha (HCAPTCHA_FAILED, etc.) gardent 2 retries avec 30s.
+    // HCAPTCHA_REJECTED_BY_SERVER = captchaSolved:false retourné par CEV.
+    // Cause probable : mismatch IP (HCaptchaTaskProxyless résolu depuis Anti-Captcha, soumis depuis Railway)
+    // ou congestion transitoire CEV. userAgent ajouté au task Proxyless pour réduire les rejections.
+    // → 2 retries (identique aux autres erreurs captcha) avec 30s de pause entre chaque.
     const isServerRejection = result.error === "HCAPTCHA_REJECTED_BY_SERVER";
-    const maxRetries = isServerRejection ? 1 : 2;
+    const maxRetries = isServerRejection ? 2 : 2;
     if (isCaptchaError && _hcaptchaRetry < maxRetries) {
       logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/${maxRetries} avec clé fraîche dans 30s…`);
       invalidateAnticaptchaCache();

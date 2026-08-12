@@ -1776,7 +1776,7 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
       // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
       const baseTask = proxyConfig
         ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent }
-        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY };
+        : { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, userAgent };
 
       const taskLabel = proxyConfig ? "HCaptchaTask" : "HCaptchaTaskProxyless";
       botLog({ applicationId: clientId, step: "cev_http_hcaptcha_task", status: "ok", data: { type: taskLabel } });
