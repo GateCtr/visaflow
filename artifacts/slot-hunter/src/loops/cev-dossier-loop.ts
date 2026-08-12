@@ -893,12 +893,11 @@ class CevDossierPool {
       this.currentIndex = saved.currentIndex;
     }
 
-    // Restaurer les dossiers en pause (backward compatibility: champ peut être undefined)
-    if (saved.pausedDossiers) {
-      saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
-    }
+    // Les pausedDossiers ne sont PAS restaurés depuis Redis — c'est de l'état runtime transitoire.
+    // Si un booking a échoué avant le redémarrage, le dossier doit scanner de nouveau.
+    // Si un booking a réussi, le dossier est terminé de toute façon.
 
-    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers?.length || 0})`);
+    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=0 — pauses non restaurées)`);
   }
 }
 
@@ -1749,11 +1748,8 @@ async function runAccountLoop(job: any): Promise<void> {
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    // Restaurer les dossiers en pause depuis Redis (backward compatibility: champ peut être undefined)
-    if (savedPoolState.pausedDossiers) {
-      savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
-    }
-    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers?.length || 0}`);
+    // Les pausedDossiers ne sont PAS restaurés depuis Redis — état runtime transitoire uniquement.
+    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=0 (pauses non restaurées)`);
   } else {
     logger.info( "Pas de pool state en Redis — démarrage frais");
   }
