@@ -1670,7 +1670,30 @@ export async function spainCfFetch(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isTimeout = /timeout|timed out|request timeout/i.test(msg);
+      const isProxyConnectError = /CONNECT tunnel|proxy.*502|502.*proxy|ProxyTunnel/i.test(msg);
       console.error(`[spain-soax] ❌ Fetch error: ${msg} (attempt ${attempt + 1}/${maxRetries + 1})`);
+
+      if (isProxyConnectError) {
+        // Le port résidentiel du proxy refuse le tunnel CONNECT → port inutilisable.
+        // On flagge le port ET on invalide la session CF pour forcer un nouveau solve
+        // avec un port différent au prochain appel à ensureSpainCfSession().
+        // Sans cette invalidation, la boucle de rotation ISP réutilise la même session
+        // cachée avec le même port mort → 10 rotations inutiles.
+        if (session.soaxProxyUrl) {
+          try {
+            const deadPort = parseInt(new URL(session.soaxProxyUrl).port || "10001", 10);
+            if (deadPort >= 10001 && deadPort <= 10100) {
+              flagResidentialPort(deadPort);
+              _residentialPortIndex++;
+              syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+            }
+          } catch { /* ignore URL parse errors */ }
+        }
+        console.warn(`[spain-soax] ⚠️ Proxy CONNECT error → session CF invalidée (prochain solve avec port différent)`);
+        invalidateSpainCfSession();
+        return null;
+      }
+
       if (attempt < maxRetries && isTimeout) {
         const backoff = 500 * (attempt + 1);
         await new Promise((r) => setTimeout(r, backoff));
