@@ -1782,18 +1782,8 @@ async function runAccountLoop(job: any): Promise<void> {
   logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (±jitter log-normal)`);
 
   if (useProxy) {
-    // ─── Configure proxy (priorité: SOAX > iProyal > Decodo) ─────────────────
-    if (soaxBaseUrl) {
-      logger.info(`  • Proxy: SOAX (sticky Kinshasa)`);
-      const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
-      process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
-      resetCevImpitInstances();
-      logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-      proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
-    } else if (process.env.IPROYAL_PROXY_URL) {
-      logger.info(`  • Proxy: iProyal (sticky session)`);
-      proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
-    } else if (hasCevDecodoProxy()) {
+    // ─── Configure proxy (priorité: Decodo CSV > SOAX > iProyal) ─────────────
+    if (hasCevDecodoProxy()) {
       const poolSize = getCevDecodoPoolSize();
       logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP fixe par compte`);
       const decodoUrl = getCevDecodoUrlForAccount(accountId);
@@ -1805,8 +1795,18 @@ async function runAccountLoop(job: any): Promise<void> {
       } else {
         logger.warn(`  ⚠️ Pool Decodo vide — connexion directe`);
       }
+    } else if (soaxBaseUrl) {
+      logger.info(`  • Proxy: SOAX (sticky Kinshasa)`);
+      const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
+      process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
+      resetCevImpitInstances();
+      logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+      proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
+    } else if (process.env.IPROYAL_PROXY_URL) {
+      logger.info(`  • Proxy: iProyal (sticky session)`);
+      proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
     } else {
-      logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL, IPROYAL_PROXY_URL et DECODO_PROXY_URL absents) — connexion directe`);
+      logger.warn(`  ⚠️ AUCUN PROXY (Decodo CSV, SOAX_PROXY_URL, IPROYAL_PROXY_URL absents) — connexion directe`);
     }
   } else {
     logger.info(`  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
@@ -1886,18 +1886,8 @@ async function runAccountLoop(job: any): Promise<void> {
           logger.info(`🔄 Proxy config changée: ${useProxy ? 'activé' : 'désactivé'} → ${freshUseProxy ? 'activé' : 'désactivé'}`);
           useProxy = freshUseProxy;
           if (useProxy) {
-            // Activer le proxy (même logique qu'au démarrage)
-            const soaxBaseUrl = process.env.SOAX_PROXY_URL;
-            if (soaxBaseUrl) {
-              const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
-              process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
-              resetCevImpitInstances();
-              proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
-              logger.info(`  • Proxy activé: SOAX (exit IP: ${proxyExitIp ?? "inconnue"})`);
-            } else if (process.env.IPROYAL_PROXY_URL) {
-              proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
-              logger.info(`  • Proxy activé: iProyal (exit IP: ${proxyExitIp ?? "inconnue"})`);
-            } else if (hasCevDecodoProxy()) {
+            // Activer le proxy (priorité: Decodo CSV > SOAX > iProyal)
+            if (hasCevDecodoProxy()) {
               const decodoUrl = getCevDecodoUrlForAccount(accountId);
               if (decodoUrl) {
                 process.env.IPROYAL_PROXY_URL = decodoUrl;
@@ -1908,8 +1898,17 @@ async function runAccountLoop(job: any): Promise<void> {
                 logger.warn(`  ⚠️ Pool Decodo vide — proxy non activé malgré cevUseProxy=true`);
                 useProxy = false;
               }
+            } else if (process.env.SOAX_PROXY_URL) {
+              const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
+              process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
+              resetCevImpitInstances();
+              proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
+              logger.info(`  • Proxy activé: SOAX (exit IP: ${proxyExitIp ?? "inconnue"})`);
+            } else if (process.env.IPROYAL_PROXY_URL) {
+              proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
+              logger.info(`  • Proxy activé: iProyal (exit IP: ${proxyExitIp ?? "inconnue"})`);
             } else {
-              logger.warn(`  ⚠️ cevUseProxy=true mais aucun proxy disponible (SOAX/iProyal/Decodo absent) — mode direct maintenu`);
+              logger.warn(`  ⚠️ cevUseProxy=true mais aucun proxy disponible (Decodo CSV, SOAX, iProyal absents) — mode direct maintenu`);
               useProxy = false;
             }
           } else {
