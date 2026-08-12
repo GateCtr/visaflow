@@ -1731,9 +1731,12 @@ async function solveHcaptcha(clientId: string): Promise<string | null> {
 
         if (createData.errorId !== 0 || !createData.taskId) return null;
 
-        // Polling max 180s (36 × 5s)
+        // Polling max 180s (36 × 5s) — premier poll à 15s (pas 5s).
+        // Anti-Captcha peut retourner un token mis en cache en <5s pour la même sitekey/URL.
+        // Ces tokens mis en cache sont souvent invalides (utilisés, expirés, IP-bindés différemment).
+        // 15s > TTL du cache Anti-Captcha (~10s) → garantit un token fraîchement résolu.
         for (let i = 0; i < 36; i++) {
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise(r => setTimeout(r, i === 0 ? 15_000 : 5_000));
           let pollData: any;
           try {
             const pollRes = await fetch("https://api.anti-captcha.com/getTaskResult", {

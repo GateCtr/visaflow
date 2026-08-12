@@ -580,8 +580,10 @@ const _badResidentialPorts = new Map<number, number>();
 /** TTL de la mémoire des ports mauvais. Après ce délai le port est réhabilité. */
 const BAD_PORT_TTL_MS = 30 * 60_000; // 30 min
 
-/** Marque un port comme mauvais (main/ 0B ou tunnel error) et persiste dans Redis. */
-function flagResidentialPort(port: number): void {
+/** Marque un port comme mauvais et persiste dans Redis.
+ * @param reason motif lisible (ex: "main/ 0B", "token absent HTTP 403", "POST token échoué", …)
+ */
+function flagResidentialPort(port: number, reason = "main/ 0B"): void {
   _badResidentialPorts.set(port, Date.now());
   // Compter combien de ports sont actuellement exclus (TTL non expiré)
   let activeFlags = 0;
@@ -589,7 +591,7 @@ function flagResidentialPort(port: number): void {
     if (Date.now() - t <= BAD_PORT_TTL_MS) activeFlags++;
     else _badResidentialPorts.delete(p);
   }
-  console.log(`[spain-soax] 🚩 Port ${port} flaggé (main/ 0B) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
+  console.log(`[spain-soax] 🚩 Port ${port} flaggé (${reason}) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
   // Persistance Redis — survit aux redémarrages
   syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
 }
@@ -767,6 +769,29 @@ export async function ensureSpainCfSession(
     const buildCookieStr = (j: Record<string, string>) =>
       Object.entries(j).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 
+    /**
+     * Injecte un identifiant de session sticky Decodo dans l'URL proxy.
+     * Decodo résidentiel : username format = "user-{id}-session-{sid}-sessionduration-60"
+     * Le même {sid} → même exit IP pour impit ET CapSolver → cf_clearance valide.
+     *
+     * Sans session sticky, impit et CapSolver obtiennent des exit IP différents (TCP
+     * connections différentes → sessions Decodo différentes → IPs différentes) → CF
+     * rejette le cf_clearance de CapSolver lors du GET impit suivant (HTTP 403).
+     */
+    const addStickySession = (url: string, sid: string): string => {
+      try {
+        const u = new URL(url);
+        // Insérer -session-{sid} avant le dernier segment du username
+        // ex: user-sp4e4cx19x-sessionduration-60  →  user-sp4e4cx19x-session-{sid}-sessionduration-60
+        const user = decodeURIComponent(u.username);
+        const stickyUser = user.includes("-session-")
+          ? user.replace(/-session-[^-]+/, `-session-${sid}`)  // remplacer session existante
+          : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
+        u.username = encodeURIComponent(stickyUser);
+        return u.toString();
+      } catch { return url; }
+    };
+
     const MAX_RETRIES_RESIDENTIAL = 3;
 
     for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
@@ -774,16 +799,23 @@ export async function ensureSpainCfSession(
       advanceToCleanPort();
       const proxyUrl = getResidentialProxyForIndex(residentialProxyBase, _residentialPortIndex);
       const portNum = parseInt(new URL(proxyUrl).port || "10001", 10);
-      const masked = proxyUrl.replace(/:([^:@/]+)@/, ":***@");
+
+      // Générer un session ID unique par tentative → impit + CapSolver partagent le même exit IP.
+      const stickyId = Math.random().toString(36).slice(2, 10);
+      const stickyProxyUrl = addStickySession(proxyUrl, stickyId);
+
+      const masked = stickyProxyUrl.replace(/:([^:@/]+)@/, ":***@");
       const badCount = [..._badResidentialPorts.values()].filter(t => Date.now() - t <= BAD_PORT_TTL_MS).length;
       console.log(
         `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
-        `— port=${portNum} (index=${_residentialPortIndex % 100}/100)${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
+        `— port=${portNum} (index=${_residentialPortIndex % 100}/100) sid=${stickyId}` +
+        `${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
       );
 
       // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
       // ce qui déclenche la rotation vers le port suivant sans attendre 30s.
-      const impit = new Impit({ browser: "chrome", proxyUrl, timeout: 12_000 } as any);
+      // ⚠️ Utiliser stickyProxyUrl (avec session ID) pour que impit et CapSolver partagent le même exit IP.
+      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 12_000 } as any);
       const jar: Record<string, string> = {};
 
       // Étape 1a : GET widget → détecter challenge CF
@@ -804,7 +836,7 @@ export async function ensureSpainCfSession(
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → rotation port + retry`);
         // Flag + rotate : tunnel error = port inutilisable, on l'évite pendant 30 min.
-        flagResidentialPort(portNum);
+        flagResidentialPort(portNum, "GET widget erreur tunnel");
         _residentialPortIndex++;
         syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
@@ -812,12 +844,14 @@ export async function ensureSpainCfSession(
 
       // Étape 1b : CapSolver AntiCloudflareTask si challenge détecté
       if (challengeHtml !== undefined) {
-        const capResult = await solveSpainCloudflare(targetUrl, capKey, proxyUrl, challengeHtml, UA_RESIDENTIAL);
+        // ⚠️ Passer stickyProxyUrl (avec session ID) → CapSolver résout depuis le MÊME exit IP
+        // que notre impit. Le cf_clearance sera lié à cet exit IP → GET suivant accepté (pas 403).
+        const capResult = await solveSpainCloudflare(targetUrl, capKey, stickyProxyUrl, challengeHtml, UA_RESIDENTIAL);
         if (!capResult.success || !capResult.session?.cfClearance) {
           console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → rotation port + retry`);
           // Avancer le port : cette IP résidentielle n'a pas pu déverrouiller CF ;
           // flaggée pour 30 min pour éviter de la réessayer inutilement.
-          flagResidentialPort(portNum);
+          flagResidentialPort(portNum, `CapSolver échoué: ${capResult.error ?? "unknown"}`);
           _residentialPortIndex++;
           syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
           continue;
@@ -842,7 +876,7 @@ export async function ensureSpainCfSession(
         if (!token) {
           console.warn(`[spain-soax]    ⚠️ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B) → rotation port + retry`);
           // CF bloque encore malgré le solve ou la page est anormale — changer d'IP.
-          flagResidentialPort(portNum);
+          flagResidentialPort(portNum, `token absent HTTP ${rGet.status}`);
           _residentialPortIndex++;
           syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
           continue;
@@ -853,7 +887,7 @@ export async function ensureSpainCfSession(
         );
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ GET widget (token) échoué: ${e} → rotation port + retry`);
-        flagResidentialPort(portNum);
+        flagResidentialPort(portNum, "GET widget (token) erreur");
         _residentialPortIndex++;
         syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
@@ -886,7 +920,7 @@ export async function ensureSpainCfSession(
         );
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ POST token échoué: ${e} → rotation port + retry`);
-        flagResidentialPort(portNum);
+        flagResidentialPort(portNum, "POST token erreur");
         _residentialPortIndex++;
         syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
@@ -939,7 +973,7 @@ export async function ensureSpainCfSession(
         } as any) as unknown as Promise<Response>);
         prefetchedMainHtml = await rMain.text();
         if (prefetchedMainHtml.length < 1000) {
-          flagResidentialPort(portNum); // mémoriser ce port comme mauvais
+          flagResidentialPort(portNum, `main/ ${prefetchedMainHtml.length}B trop court`);
           _residentialPortIndex++;
           const nextPort = (_residentialPortIndex % 100) + 10001;
           syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
@@ -952,7 +986,7 @@ export async function ensureSpainCfSession(
         console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête! port=${portNum}`);
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → rotation port + retry`);
-        flagResidentialPort(portNum);
+        flagResidentialPort(portNum, "GET /main/ erreur");
         _residentialPortIndex++;
         syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
@@ -967,7 +1001,7 @@ export async function ensureSpainCfSession(
       const session: SpainCfSession = {
         cfClearance:         jar.cf_clearance ?? "",
         cfDomain:            ".citaconsular.es",
-        soaxProxyUrl:        proxyUrl,
+        soaxProxyUrl:        stickyProxyUrl, // conserver l'URL sticky pour les requêtes JSONP suivantes
         userAgent:           UA_RESIDENTIAL,
         createdAt:           nowMs,
         expiresAt:           nowMs + CF_CLEARANCE_TTL_MS,
