@@ -30,7 +30,7 @@ import {
 import { cookieManager } from "./cookie-manager.js";
 import { solveSpainWidgetSession } from "./local-playwright-solver.js";
 import { applyStableGaProfile } from "./spain-redis-persistence.js";
-import { getCurrentDecodoUrl } from "./spain-decodo-pool.js";
+import { getCurrentDecodoUrl, getDecodoProxyForIndex, getDecodoPoolSize } from "./spain-decodo-pool.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -609,20 +609,28 @@ function isPortBad(port: number): boolean {
 
 /**
  * Avance _residentialPortIndex jusqu'au premier port non-flaggé.
- * Si tous les 100 ports sont flaggés (cas extrême), purge les flags et retourne au courant.
+ * Si tous les ports sont flaggés (cas extrême), purge les flags et retourne au courant.
+ * Utilise la taille réelle du pool Decodo (decodo-proxies.csv).
  */
 function advanceToCleanPort(): void {
+  const poolSize = getDecodoPoolSize() || 100;
   const before = _residentialPortIndex;
-  for (let i = 0; i < 100; i++) {
-    const port = (_residentialPortIndex % 100) + 10001;
+  for (let i = 0; i < poolSize; i++) {
+    const url = getDecodoProxyForIndex(_residentialPortIndex);
+    const port = url
+      ? parseInt(new URL(url).port || "10001", 10)
+      : (_residentialPortIndex % poolSize) + 10001;
     if (!isPortBad(port)) break; // port propre trouvé
     _residentialPortIndex++;
   }
   if (_residentialPortIndex !== before) {
     // Cas extrême : tous les ports sont flaggés — purge totale
-    const port = (_residentialPortIndex % 100) + 10001;
+    const url = getDecodoProxyForIndex(_residentialPortIndex);
+    const port = url
+      ? parseInt(new URL(url).port || "10001", 10)
+      : (_residentialPortIndex % poolSize) + 10001;
     if (isPortBad(port)) {
-      console.warn(`[spain-soax] ⚠️ Tous les 100 ports résidentiels flaggés — purge des flags et reprise`);
+      console.warn(`[spain-soax] ⚠️ Tous les ${poolSize} ports résidentiels flaggés — purge des flags et reprise`);
       _badResidentialPorts.clear();
     }
     syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
@@ -725,35 +733,44 @@ export async function ensureSpainCfSession(
       return cached;
     }
 
-    const residentialProxyBase = process.env.SPAIN_RESIDENTIAL_PROXY_URL;
-    if (!residentialProxyBase) {
-      console.error(
-        "[spain-soax] ❌ SPAIN_SESSION_MODE=capsolver-residential exige " +
-        "SPAIN_RESIDENTIAL_PROXY_URL (ex: http://user:pass@gate.decodo.com:10001)",
-      );
-      return null;
-    }
     const capKey = process.env.CAPSOLVER_API_KEY;
     if (!capKey) {
       console.error("[spain-soax] ❌ capsolver-residential exige CAPSOLVER_API_KEY");
       return null;
     }
 
+    // Priorité : pool Decodo (decodo-proxies.csv) → SPAIN_RESIDENTIAL_PROXY_URL (fallback)
+    const _decodoPoolSize = getDecodoPoolSize();
+    const _residentialFallbackBase = _decodoPoolSize === 0
+      ? process.env.SPAIN_RESIDENTIAL_PROXY_URL
+      : undefined;
+    if (_decodoPoolSize === 0 && !_residentialFallbackBase) {
+      console.error(
+        "[spain-soax] ❌ capsolver-residential: configurer decodo-proxies.csv " +
+        "ou SPAIN_RESIDENTIAL_PROXY_URL (ex: http://user:pass@es.decodo.com:10001)",
+      );
+      return null;
+    }
+    if (_decodoPoolSize > 0) {
+      console.log(`[spain-soax] 📋 Pool Decodo chargé — ${_decodoPoolSize} IP(s) dédiée(s) (decodo-proxies.csv)`);
+    }
+
+    /** Retourne l'URL proxy à l'index donné depuis le pool Decodo (ou fallback SPAIN_RESIDENTIAL_PROXY_URL). */
+    const getResidentialProxyForIndex = (portIndex: number): string => {
+      if (_decodoPoolSize > 0) {
+        return getDecodoProxyForIndex(portIndex) ?? "";
+      }
+      // Fallback legacy : construire depuis URL de base + rotation de port
+      try {
+        const u = new URL(_residentialFallbackBase!);
+        u.port = String((portIndex % 100) + 10001);
+        return u.toString();
+      } catch { return _residentialFallbackBase!; }
+    };
+
     const UA_RESIDENTIAL =
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
-
-    /**
-     * Calcule l'URL proxy pour l'index absolu donné dans le pool de 100 ports (10001-10100).
-     * L'index est toujours pris modulo 100 pour rester dans la plage.
-     */
-    const getResidentialProxyForIndex = (base: string, portIndex: number): string => {
-      try {
-        const u = new URL(base);
-        u.port = String((portIndex % 100) + 10001);
-        return u.toString();
-      } catch { return base; }
-    };
 
     /** Extrait tous les Set-Cookie en un dictionnaire name→value. */
     const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
@@ -797,10 +814,12 @@ export async function ensureSpainCfSession(
     for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
       // Sauter les ports flaggés (main/ 0B ou tunnel error) avant de sélectionner
       advanceToCleanPort();
-      const proxyUrl = getResidentialProxyForIndex(residentialProxyBase, _residentialPortIndex);
+      const proxyUrl = getResidentialProxyForIndex(_residentialPortIndex);
       const portNum = parseInt(new URL(proxyUrl).port || "10001", 10);
+      const poolSize = _decodoPoolSize || 100;
 
-      // Générer un session ID unique par tentative → impit + CapSolver partagent le même exit IP.
+      // Sticky session : même exit IP pour impit ET CapSolver (IPs dédiées = toujours même IP par port,
+      // mais le session ID reste utile pour le proxy résidentiel fallback gate.decodo.com).
       const stickyId = Math.random().toString(36).slice(2, 10);
       const stickyProxyUrl = addStickySession(proxyUrl, stickyId);
 
@@ -808,7 +827,7 @@ export async function ensureSpainCfSession(
       const badCount = [..._badResidentialPorts.values()].filter(t => Date.now() - t <= BAD_PORT_TTL_MS).length;
       console.log(
         `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
-        `— port=${portNum} (index=${_residentialPortIndex % 100}/100) sid=${stickyId}` +
+        `— port=${portNum} (index=${_residentialPortIndex % poolSize}/${poolSize}) sid=${stickyId}` +
         `${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
       );
 
