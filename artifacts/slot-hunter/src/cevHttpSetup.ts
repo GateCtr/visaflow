@@ -19,7 +19,7 @@
  */
 
 import { botLog, getBotConfigValue } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, shouldUseProxy } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, getCevProxyUrl, shouldUseProxy } from "./cev-shared-impit.js";
 import { lookup } from "node:dns/promises";
 import {
   syncVowintSessionToRedis,
@@ -1699,9 +1699,12 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
   const userAgent = getCevSessionUa();
 
   const useProxy = await shouldUseProxy();
-  // DECODO_PROXY_URL ajouté comme fallback — utilisé quand SOAX/iProyal ne sont pas configurés.
-  // L'IP du solveur doit correspondre à l'IP de la session pour éviter le rejet hCaptcha.
-  const rawProxyUrl = useProxy ? (process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || process.env.DECODO_PROXY_URL || null) : null;
+  // Priorité : getCevProxyUrl() = proxy réel de la session CEV (chargé depuis CSV, SOAX, DECODO…).
+  // C'est la SEULE source fiable — il correspond exactement à l'IP utilisée par cevImpitFetch.
+  // Fallback env vars seulement si le proxy guard n'est pas encore initialisé.
+  const rawProxyUrl = useProxy
+    ? (getCevProxyUrl() || process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || process.env.DECODO_PROXY_URL || null)
+    : null;
   const proxyUrl = rawProxyUrl ? (rawProxyUrl.startsWith("http") ? rawProxyUrl : `http://${rawProxyUrl}`) : null;
   let proxyConfig: any = null;
   let proxyDnsResolved: string | null = null;
