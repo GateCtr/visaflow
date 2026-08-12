@@ -898,14 +898,23 @@ export async function setupCevSessionHttp(
         });
         const captchaPageHtml = await captchaPageRes.text().catch(() => "");
         // Extraire rqdata depuis le HTML de la page captcha.
-        // Patterns couverts :
-        //   <div ... data-rqdata="VALUE" ...>   (attribut HTML sur la div hcaptcha)
-        //   rqdata: "VALUE"   ou   "rqdata":"VALUE"   (objet JS inline)
-        //   var rqdata = "VALUE"                (variable JS)
+        // Patterns couverts (du plus spécifique au plus large) :
+        //   <div ... data-rqdata="VALUE" ...>         attribut HTML standard hCaptcha
+        //   data-rq-data="VALUE"                      variante avec tiret
+        //   rqdata: "VALUE"  /  "rqdata":"VALUE"      objet JS inline
+        //   var rqdata = "VALUE"                      variable JS
+        //   "rqdata","VALUE"  /  rqdata=VALUE          formats OutSystems minifiés
+        //   enterpriseRqdata / enterprise_rqdata       alias entreprise alternatifs
         const rqdataPatterns = [
           /data-rqdata=["']([^"']+)["']/i,
-          /rqdata["']?\s*:\s*["']([^"']+)["']/i,
+          /data-rq-data=["']([^"']+)["']/i,
+          /["']rqdata["']\s*:\s*["']([^"']+)["']/i,
+          /rqdata\s*:\s*["']([^"']+)["']/i,
           /var\s+rqdata\s*=\s*["']([^"']+)["']/i,
+          /rqdata=["']([^"'&]+)["']/i,
+          /["']rqdata["'],["']([^"']+)["']/i,
+          /enterpriseRqdata["']?\s*:\s*["']([^"']+)["']/i,
+          /enterprise_rqdata["']?\s*:\s*["']([^"']+)["']/i,
         ];
         let extractedRqdata: string | undefined;
         for (const pat of rqdataPatterns) {
@@ -913,6 +922,16 @@ export async function setupCevSessionHttp(
           if (m?.[1]) { extractedRqdata = m[1]; break; }
         }
         captchaPageRqdata = extractedRqdata;
+
+        // Diagnostic : extraire un snippet autour de "rqdata" pour débogage si non trouvé
+        let rqdataContext: string | null = null;
+        if (!extractedRqdata) {
+          const rqdataIdx = captchaPageHtml.toLowerCase().indexOf("rqdata");
+          if (rqdataIdx !== -1) {
+            rqdataContext = captchaPageHtml.slice(Math.max(0, rqdataIdx - 30), rqdataIdx + 120);
+          }
+        }
+
         botLog({
           applicationId: clientId,
           step: "cev_http_captcha_page_fetch",
@@ -921,6 +940,10 @@ export async function setupCevSessionHttp(
             htmlLen: captchaPageHtml.length,
             rqdataFound: !!extractedRqdata,
             rqdataPreview: extractedRqdata ? extractedRqdata.slice(0, 40) : null,
+            // Snippet du contexte autour de "rqdata" dans le HTML (si non trouvé par regex)
+            rqdataContext: rqdataContext,
+            // Premiers 600 chars du HTML pour voir la structure de la page
+            htmlHead: captchaPageHtml.slice(0, 600),
           },
         });
       } catch (captchaPageErr) {
@@ -1056,7 +1079,7 @@ export async function setupCevSessionHttp(
         data: { message: "Résolution nouveau captcha pour retry" },
       });
       
-      const retryHcaptchaToken = await solveHcaptcha(clientId, captchaRqdata);
+      const retryHcaptchaToken = await solveHcaptcha(clientId, captchaPageRqdata);
       
       if (!retryHcaptchaToken) {
         return { success: false, error: "HCAPTCHA_RETRY_FAILED" };
