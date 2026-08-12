@@ -330,14 +330,14 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
 
     log(`  ${dossier.name} | créneau=${assigned.date} ${assigned.time}`);
     log(`    signin/ → HTTP ${signinSt} | ${signinRaw.length}B`);
-    log(`    réponse : ${errMsg || JSON.stringify(signinParsed)?.slice(0, 200) || "(vide)"}`);
+    log(`    raw     : ${signinRaw.slice(0, 500) || "(vide)"}`);
 
     if (errMsg.includes("contraseña") || errMsg.includes("password") || errMsg.includes("Usuario")) {
-      ok(`    ✅ ${dossier.name} — "Usuario o contraseña incorrectos" reçu`);
+      ok(`    ✅ ${dossier.name} — serveur atteint (mauvais credentials = normal)`);
     } else if (signinRaw.length === 0) {
       warn(`    ${dossier.name} — 0B (session froide)`);
     } else {
-      warn(`    ${dossier.name} — réponse inattendue : ${signinRaw.slice(0, 200)}`);
+      warn(`    ${dossier.name} — réponse inattendue`);
     }
   }
 }
