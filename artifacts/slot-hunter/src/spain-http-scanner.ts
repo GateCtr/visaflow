@@ -1006,6 +1006,23 @@ async function confirmSlotsViaDatetime(
     Priority: "u=1, i",
   };
 
+  // ── Callback JSONP partagé ────────────────────────────────────────────────────
+  // CRITIQUE : tous les endpoints JSONP d'une même session widget doivent utiliser
+  // le MÊME callback jQuery. Si getwidgetconfigurations/ utilise callback A et
+  // getagendas/ utilise callback B, le serveur retourne 0B sur les appels suivants.
+  //
+  // En mode capsolver, session.bookititState.jqCallback est le callback exact du solve
+  // (utilisé par le widget natif Bookitit) → priorité absolue.
+  // En mode playwright / fallback : callback fresh au format jQuery 2.1.1 natif.
+  const sharedCb = session.bookititState?.jqCallback
+    ?? `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  // nextReqCounter : incrémente session.bookititState.reqCounter si disponible
+  // (cohérence séquentielle avec le widget natif), sinon Date.now() comme cache-buster.
+  const nextReqCounter = () => {
+    if (session.bookititState) return ++session.bookititState.reqCounter;
+    return Date.now();
+  };
+
   // Extraire les services rendus (liens #selectservice hors templates)
   // ID peut être numérique (ex: 897578) ou préfixé bkt (ex: bkt897578) selon la version Bookitit.
   const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
@@ -1029,7 +1046,15 @@ async function confirmSlotsViaDatetime(
       // Non-fatal : on continue même si ça échoue.
       // CRITIQUE : le callback JSONP doit être au format jQuery 2.1.1 natif : jQuery21109{timestamp}_{counter}
       // Un callback au mauvais format (ex: "jQueryCfg...") est rejeté silencieusement par Bookitit → 0B.
-      const cfgCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      //
+      // CRITIQUE #2 : getwidgetconfigurations/ ET getservices/ doivent utiliser le MÊME callback.
+      // Le widget Bookitit utilise un seul jqCallback pour toute la session widget (comme jQuery JSONP natif).
+      // Si getservices/ utilise un callback différent de getwidgetconfigurations/, le serveur retourne 0B.
+      // En mode capsolver, session.bookititState.jqCallback est le callback exact du solve → priorité absolue.
+      const sharedCb = session.bookititState?.jqCallback
+        ?? `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      // reqCounter : utiliser et incrémenter session.bookititState si disponible (cohérence séquentielle).
+      const cfgCb = sharedCb;
       const cfgQ = new URLSearchParams();
       cfgQ.append("callback",       cfgCb);
       console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${cfgCb}`);
@@ -1039,7 +1064,7 @@ async function confirmSlotsViaDatetime(
       cfgQ.append("version",        "4");
       cfgQ.append("src",            referer);
       cfgQ.append("srvsrc",         srvsrc);
-      cfgQ.append("_",              String(Date.now()));
+      cfgQ.append("_",              String(nextReqCounter()));
       // ── Routage getwidgetconfigurations/ + getservices/ ───────────────────────
       // Mode persistent-browser (session.source === "playwright") :
       //   Le PHPSESSID est lié à l'IP Decodo du browser (ex: port 10002).
@@ -1076,7 +1101,7 @@ async function confirmSlotsViaDatetime(
         } catch { /* non-fatal */ }
       }
 
-      const svcCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      const svcCb = sharedCb; // même callback que getwidgetconfigurations/ — obligatoire
       const svcQ = new URLSearchParams();
       svcQ.append("callback",       svcCb);
       console.log(`[spain-http] 🔧 init callback getservices/ = ${svcCb}`);
@@ -1086,7 +1111,7 @@ async function confirmSlotsViaDatetime(
       svcQ.append("version",        "4");
       svcQ.append("src",            referer);
       svcQ.append("srvsrc",         srvsrc);
-      svcQ.append("_",              String(Date.now()));
+      svcQ.append("_",              String(nextReqCounter()));
 
       let svcRaw: string;
       if (useBrowserFetch) {
@@ -1162,8 +1187,8 @@ async function confirmSlotsViaDatetime(
     });
   }
 
-  // Générateur de callback jQuery 2.1.1 natif — format exact attendu par Bookitit.
-  const jqCbGen = () => `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  // jqCbGen conservé pour compatibilité avec du code non migré (alias de sharedCb).
+  const jqCbGen = () => sharedCb;
   const cbBase = `jQuery${Date.now()}_`; // conservé pour compatibilité log uniquement
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
@@ -1242,7 +1267,7 @@ async function confirmSlotsViaDatetime(
         // ── Approche 2 : AJAX direct (fallback si page Chromium indisponible) ─
         // Ordre des paramètres conforme à test-bookitit-dynamic.ts (Cuba exige cet ordre).
         const agQ = new URLSearchParams();
-        const agCb = jqCbGen();
+        const agCb = sharedCb;
         agQ.append("callback",   agCb);
         console.log(`[spain-http] 🔧 getagendas/ fallback AJAX = ${agCb}`);
         agQ.append("type",       "default");
@@ -1253,7 +1278,7 @@ async function confirmSlotsViaDatetime(
         agQ.append("src",        referer);
         agQ.append("srvsrc",     srvsrc);
         agQ.append("selectedPeople", "1");
-        agQ.append("_",          String(Date.now()));
+        agQ.append("_",          String(nextReqCounter()));
         if (useBrowserFetch) {
           agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
           const pageUrl = spainPersistentBrowser.getActivePage()?.url();
@@ -1357,7 +1382,7 @@ async function confirmSlotsViaDatetime(
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
-        const dtCb = jqCbGen();
+        const dtCb = sharedCb;
         dtQ.append("callback",       dtCb);
         console.log(`[spain-http] 🔧 callback datetime/ = ${dtCb}`);
         dtQ.append("type",           "default");
@@ -1371,7 +1396,7 @@ async function confirmSlotsViaDatetime(
         dtQ.append("start",          start);
         dtQ.append("end",            end);
         dtQ.append("selectedPeople", "1");
-        dtQ.append("_",              String(Date.now()));
+        dtQ.append("_",              String(nextReqCounter()));
 
         const datetimeUrl = `${base}datetime/?${dtQ}`;
         console.log(`[spain-http] 📡 datetime request → ${datetimeUrl}`);
@@ -1855,6 +1880,18 @@ async function scanViaMainEndpoint(
     console.log(
       `[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → ` +
       `skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)`,
+    );
+  } else if (session.source === "capsolver" && phpSessId) {
+    // En mode capsolver-residential, la danse GET portail → POST widget → JSD
+    // modifie le cf_clearance dans la session. Le PHPSESSID lié à l'ancien
+    // cf_clearance (obtenu lors du solve) devient invalide pour les appels JSONP
+    // suivants (getservices/ → 0B HTTP 200). On bypasse la danse entièrement :
+    // le cf_clearance + PHPSESSID du solve sont cohérents entre eux et valides
+    // pour les appels impit tant que la session est active (~115 min).
+    skipPortalFlow = true;
+    console.log(
+      `[spain-http] ⏩ Session capsolver + PHPSESSID → skipPortalFlow=true ` +
+      `(bypass portail + JSD — cf_clearance du solve conservé intact)`,
     );
   }
   const entryRes = skipPortalFlow ? null : await spainCfFetch(portalUrl, session, {

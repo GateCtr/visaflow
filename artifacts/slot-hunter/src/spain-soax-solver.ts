@@ -643,6 +643,18 @@ export async function ensureSpainCfSession(
   // Session PHPSESSID + jqCallback + reqCounter stockés dans session.bookititState.
   // Rotation : le port ne change QUE quand /main/ retourne 0B (_residentialPortIndex++).
   if (process.env.SPAIN_SESSION_MODE === "capsolver-residential") {
+    // ── Cache check : réutiliser la session active si elle est encore valide ────
+    // Sans ce check, le retry loop de scanSpainHttp (ligne ~3091) déclenche un
+    // deuxième solve CapSolver même quand la session est toujours valide en mémoire.
+    const cached = getActiveSpainCfSession();
+    if (cached) {
+      console.log(
+        `[spain-soax] ♻️ capsolver-residential — session en cache réutilisée ` +
+        `(expire dans ${Math.round((cached.expiresAt - Date.now()) / 60_000)}min)`,
+      );
+      return cached;
+    }
+
     const residentialProxyBase = process.env.SPAIN_RESIDENTIAL_PROXY_URL;
     if (!residentialProxyBase) {
       console.error(
@@ -718,7 +730,9 @@ export async function ensureSpainCfSession(
           console.log(`[spain-soax]    ✅ Pas de CF challenge (HTTP ${r1.status}, ${body1.length}B)`);
         }
       } catch (e) {
-        console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → retry`);
+        console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → rotation port + retry`);
+        // Rotate port on proxy tunnel errors (502) so the next attempt hits a different exit IP.
+        _residentialPortIndex++;
         continue;
       }
 
