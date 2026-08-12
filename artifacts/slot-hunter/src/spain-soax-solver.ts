@@ -561,10 +561,58 @@ let _activeCfSession: SpainCfSession | undefined;
 
 /**
  * Index courant dans le pool résidentiel (gate.decodo.com:10001-10100, 100 ports).
- * Avancé d'un cran UNIQUEMENT quand /main/ retourne 0B — jamais proactivement.
+ * Avancé d'un cran UNIQUEMENT quand /main/ retourne 0B ou erreur tunnel — jamais proactivement.
  * Persistant pour la durée de vie du process (Railway/Replit).
  */
 let _residentialPortIndex = 0;
+
+/**
+ * Ports résidentiels ayant retourné /main/ = 0B ou une erreur tunnel,
+ * mémorisés pour éviter de les réutiliser immédiatement.
+ * Format : port → timestamp du flagging (ms). TTL = 30 min.
+ */
+const _badResidentialPorts = new Map<number, number>();
+
+/** TTL de la mémoire des ports mauvais. Après ce délai le port est réhabilité. */
+const BAD_PORT_TTL_MS = 30 * 60_000; // 30 min
+
+/** Marque un port comme mauvais (main/ 0B ou tunnel error). */
+function flagResidentialPort(port: number): void {
+  _badResidentialPorts.set(port, Date.now());
+  // Compter combien de ports sont actuellement exclus (TTL non expiré)
+  let activeFlags = 0;
+  for (const [p, t] of _badResidentialPorts) {
+    if (Date.now() - t <= BAD_PORT_TTL_MS) activeFlags++;
+    else _badResidentialPorts.delete(p);
+  }
+  console.log(`[spain-soax] 🚩 Port ${port} flaggé (main/ 0B) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
+}
+
+/** Retourne true si le port est actuellement flaggé (TTL non expiré). */
+function isPortBad(port: number): boolean {
+  const t = _badResidentialPorts.get(port);
+  if (!t) return false;
+  if (Date.now() - t > BAD_PORT_TTL_MS) {
+    _badResidentialPorts.delete(port); // réhabilitation automatique
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Avance _residentialPortIndex jusqu'au premier port non-flaggé.
+ * Si tous les 100 ports sont flaggés (cas extrême), purge les flags et retourne au courant.
+ */
+function advanceToCleanPort(): void {
+  for (let i = 0; i < 100; i++) {
+    const port = (_residentialPortIndex % 100) + 10001;
+    if (!isPortBad(port)) return; // port propre trouvé
+    _residentialPortIndex++;
+  }
+  // Cas extrême : tous les ports sont flaggés — purge totale
+  console.warn(`[spain-soax] ⚠️ Tous les 100 ports résidentiels flaggés — purge des flags et reprise`);
+  _badResidentialPorts.clear();
+}
 
 /** Retourne la session CF active (ou undefined si expirée/inexistante). */
 export function getActiveSpainCfSession(): SpainCfSession | undefined {
@@ -709,13 +757,15 @@ export async function ensureSpainCfSession(
     const MAX_RETRIES_RESIDENTIAL = 3;
 
     for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
-      // Le port ne change QUE sur 0B (/main/ vide) → _residentialPortIndex++
+      // Sauter les ports flaggés (main/ 0B ou tunnel error) avant de sélectionner
+      advanceToCleanPort();
       const proxyUrl = getResidentialProxyForIndex(residentialProxyBase, _residentialPortIndex);
       const portNum = parseInt(new URL(proxyUrl).port || "10001", 10);
       const masked = proxyUrl.replace(/:([^:@/]+)@/, ":***@");
+      const badCount = [..._badResidentialPorts.values()].filter(t => Date.now() - t <= BAD_PORT_TTL_MS).length;
       console.log(
         `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
-        `— port=${portNum} (index=${_residentialPortIndex % 100}/100) | proxy: ${masked.slice(0, 60)}…`,
+        `— port=${portNum} (index=${_residentialPortIndex % 100}/100)${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
       );
 
       // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
@@ -740,7 +790,8 @@ export async function ensureSpainCfSession(
         }
       } catch (e) {
         console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → rotation port + retry`);
-        // Rotate port on proxy tunnel errors (502) so the next attempt hits a different exit IP.
+        // Flag + rotate : tunnel error = port inutilisable, on l'évite pendant 30 min.
+        flagResidentialPort(portNum);
         _residentialPortIndex++;
         continue;
       }
@@ -859,6 +910,7 @@ export async function ensureSpainCfSession(
         } as any) as unknown as Promise<Response>);
         prefetchedMainHtml = await rMain.text();
         if (prefetchedMainHtml.length < 1000) {
+          flagResidentialPort(portNum); // mémoriser ce port comme mauvais
           _residentialPortIndex++;
           const nextPort = (_residentialPortIndex % 100) + 10001;
           console.warn(
