@@ -409,14 +409,27 @@ export async function createIsolatedBookingSession(
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
   // ── Mode HTTP-pur (capsolver/impit) ──────────────────────────────────────────
-  // En mode capsolver, on NE réutilise PAS le PHPSESSID existant.
-  // Raison : le booking parallèle (Promise.all N dossiers) exige N PHPSESSIDs
-  // distincts. Bookitit maintient un état getsigninfields/ par PHPSESSID —
-  // 2 dossiers qui partagent le même PHPSESSID se bloquent mutuellement.
-  //
-  // Fix : cloneSpainCfSessionForDossier() supprime le PHPSESSID de la copie,
-  // puis /main/ est appelé SANS PHPSESSID → le serveur émet un nouveau PHPSESSID
-  // via Set-Cookie. Chaque dossier obtient ainsi sa propre session PHP isolée.
+  // En mode capsolver-residential, le PHPSESSID est lié au challenge CF complet
+  // (GET widget → POST token → /main/). Un appel /main/ nu sans ce flow ne crée
+  // pas de nouveau PHPSESSID — le serveur exige que le challenge ait été résolu.
+  // → On réutilise le PHPSESSID de la session principale (seul disponible).
+  // → Le booking parallèle n'est donc pas possible en capsolver sans re-solve CF.
+  // → Booking séquentiel conservé dans le watcher.
+  if (cfSession.source === "capsolver") {
+    const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
+    if (phpSessId) {
+      console.log("[spain-booking] ℹ️ Mode capsolver — PHPSESSID existant réutilisé (lié au solve CF)");
+      return {
+        session: {
+          ...cfSession,
+          allCookies: cfSession.allCookies.map(c => ({ ...c })),
+          extraHeaders: { ...cfSession.extraHeaders },
+          _ownImpit: createFreshSpainImpit(cfSession),
+        },
+      };
+    }
+    console.warn("[spain-booking] ⚠️ Mode capsolver mais PHPSESSID absent — le booking peut échouer");
+  }
 
   const session = cloneSpainCfSessionForDossier(cfSession);
   // Instance impit dédiée → bookings parallèles sans conflit TLS singleton
