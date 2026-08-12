@@ -1482,22 +1482,36 @@ async function handleSlotFoundMulti(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — SEULEMENT S'IL EST ÉLIGIBLE
+  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — TOUJOURS SI ÉLIGIBLE,
+  //             ET EN FALLBACK D'URGENCE SI HORS POOL + TOTALFREE ≤ 1
   //
-  // Si cev_booking_target_pool est configuré et que le détecteur n'en fait PAS partie,
-  // on ne lui laisse PAS consommer le créneau. Sa session chaude est passée
-  // au premier dossier éligible dans la phase multi-dossier ci-dessous.
+  // Contrainte CEV fondamentale : la session est liée au dossier détecteur.
+  // Un dossier éligible ne peut PAS réutiliser cette session — il devrait refaire
+  // le flux complet (login → getAppointment → captcha → selectDossier → SelectSlot),
+  // ce qui prend 1-2 min minimum. Avec un seul créneau disponible, le slot est parti.
   //
-  // La session CEV expire dès qu'on fait autre chose que soumettre le SelectSlot.
-  // Pas de discovery, pas d'email, pas de wake multi-dossier AVANT le booking.
+  // Règles :
+  //   • Détecteur dans le pool → booke immédiatement (cas nominal).
+  //   • Détecteur hors pool + totalFree ≥ 2 → ne booke PAS. Les eligibles font un
+  //     re-login isolé — les créneaux restants les attendent.
+  //   • Détecteur hors pool + totalFree ≤ 1 → FALLBACK D'URGENCE : le détecteur booke
+  //     quand même. Perdre le slot est pire que le "mauvais" dossier qui le prend.
+  //     Le double-session est aussi évité : on n'ouvre PAS de seconde session eligible.
   // ═══════════════════════════════════════════════════════════════════════════
 
   const detectorIsEligible = eligibleRefs.includes(detectingDossier.vowintRef);
-  if (!detectorIsEligible) {
-    logFn.info(`  ℹ️ ${detectingDossier.vowintRef} n'est PAS dans le pool de booking → sa session sera passée au premier éligible (aucun booking pour ce dossier)`);
+  // Fallback d'urgence : seul créneau disponible et détecteur hors pool.
+  const detectorMustBookAsFallback = !detectorIsEligible && totalFree <= 1;
+
+  if (!detectorIsEligible && !detectorMustBookAsFallback) {
+    logFn.info(`  ℹ️ ${detectingDossier.vowintRef} hors pool de booking, totalFree=${totalFree} ≥ 2 → skip booking détecteur, wake eligibles`);
+  }
+  if (detectorMustBookAsFallback) {
+    logFn.warn(`  ⚠️ FALLBACK URGENCE: ${detectingDossier.vowintRef} hors pool MAIS totalFree=${totalFree} (seul créneau) → booke pour éviter perte du slot`);
+    botLog({ applicationId, step: "cev_detector_fallback_booking", status: "warn", data: { detectingDossier: detectingDossier.vowintRef, eligibleRefs, totalFree, reason: "single_slot_outside_pool" } });
   }
 
-  if (detectorIsEligible && existingSessionCookie && existingIntegrationUrl) {
+  if ((detectorIsEligible || detectorMustBookAsFallback) && existingSessionCookie && existingIntegrationUrl) {
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
     try {
       detectingBookingResult = await bookDossierIsolated(
@@ -1541,12 +1555,17 @@ async function handleSlotFoundMulti(
   // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
   // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
-  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles
-  const dossiersToWake = Math.min(remainingFree, otherRefs.length);
+  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles.
+  // Si le détecteur a booké en fallback d'urgence (hors pool + totalFree≤1), on ne tente PAS
+  // de réveiller des eligibles : le seul créneau est pris, et ouvrir une 2e session VOWINT
+  // pendant que la session détecteur est encore ouverte risque un "multiple session" CEV.
+  const dossiersToWake = detectorMustBookAsFallback ? 0 : Math.min(remainingFree, otherRefs.length);
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
-    if (detectingBookingResult?.success && remainingFree <= 0) {
+    if (detectorMustBookAsFallback) {
+      logFn.info(`  🏁 Fallback urgence (détecteur hors pool, seul créneau) — pas de multi-dossier (risque double session)`);
+    } else if (detectingBookingResult?.success && remainingFree <= 0) {
       logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);
     } else if (totalFree <= 1) {
       logFn.info(`  🏁 totalFree=${totalFree} — pas de multi-dossier`);
@@ -1555,39 +1574,20 @@ async function handleSlotFoundMulti(
     }
   } else {
     // ── Multi-dossier : booker les AUTRES dossiers en parallèle ─────────────
-    // Le détecteur a déjà tenté (ou est hors pool). On réveille seulement le nombre
-    // de dossiers = places restantes. Chaque dossier re-login isolé.
+    // Le détecteur a déjà tenté (ou est hors pool avec totalFree≥2 — les créneaux
+    // restants attendent). Chaque dossier éligible fait son propre re-login isolé.
     //
-    // CAS SPÉCIAL — détecteur hors pool (detectorIsEligible=false) :
-    // Sa session chaude n'a pas été consommée. On la passe au PREMIER éligible
-    // pour maximiser la vitesse : ce dossier tente en priorité avec la session existante
-    // avant de faire un re-login coûteux. Les suivants font un re-login isolé normal.
+    // NOTE : on ne transfère PAS la session du détecteur aux eligibles. La session CEV
+    // est liée au dossier qui a appelé selectDossier — un autre dossier ne peut pas la
+    // réutiliser ; il doit refaire le flux complet (login → captcha → selectDossier).
     const selectedRefs = otherRefs.slice(0, dossiersToWake);
     logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) [${selectedRefs.join(", ")}]...`);
 
-    const hotSession = !detectorIsEligible && existingSessionCookie && existingIntegrationUrl
-      ? {
-          sessionCookie: existingSessionCookie,
-          integrationUrl: existingIntegrationUrl,
-          selectSlotHtml: existingSelectSlotHtml,
-          selectSlotUrl: existingSelectSlotUrl,
-          selectSlotCookies: existingSelectSlotCookies,
-        }
-      : undefined;
-
-    if (hotSession) {
-      logFn.info(`  🔗 Session chaude du détecteur (${detectingDossier.vowintRef}) transférée à ${selectedRefs[0]} (premier éligible)`);
-    }
-
-    const bookingTasks = selectedRefs.map((vowintRef, idx) =>
+    const bookingTasks = selectedRefs.map((vowintRef) =>
       bookDossierIsolated(
         vowintEmail, vowintPassword,
         vowintRef, applicationId,
-        groupSize,
-        // Le premier éligible reçoit la session chaude du détecteur (si hors pool).
-        // Les suivants font un re-login isolé indépendant.
-        idx === 0 ? hotSession : undefined,
-        logger,
+        groupSize, undefined, logger,
       ).then(result => ({ vowintRef, ...result }))
     );
 
