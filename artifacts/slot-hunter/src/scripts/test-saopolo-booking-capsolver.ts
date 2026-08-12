@@ -30,7 +30,23 @@ import {
   type SpainCfSession,
 } from "../spain-soax-solver.js";
 import { createIsolatedBookingSession } from "../spain-http-booking.js";
-import { SAOPOLO_PORTAL_URL, SAOPOLO_DEFAULT_SERVICE_ID } from "../spain-portals.js";
+import {
+  SAOPOLO_PORTAL_URL,
+  SAOPOLO_DEFAULT_SERVICE_ID,
+  CUBA_LMD_PORTAL_URL,
+  CAMEROON_WIDGET_KEY,
+  extractWidgetKey,
+} from "../spain-portals.js";
+
+// ── Portail cible (override via PORTAL_URL env var) ───────────────────────────
+function buildPortalUrl(raw: string): string {
+  // Accepte soit une URL complète, soit juste la widget key
+  if (raw.startsWith("http")) return raw;
+  return `https://www.citaconsular.es/es/hosteds/widgetdefault/${raw}/`;
+}
+const PORTAL_URL: string = process.env.PORTAL_URL
+  ? buildPortalUrl(process.env.PORTAL_URL)
+  : SAOPOLO_PORTAL_URL;
 
 // ── Faux identifiants (aucun compte réel) ────────────────────────────────────
 const FAKE_LOGIN    = "AB123456X";          // Format passeport espagnol fictif
@@ -64,7 +80,7 @@ const JSONP_HEADERS = {
   "Sec-Fetch-Dest": "empty",
   "Sec-Fetch-Mode": "cors",
   "Sec-Fetch-Site": "same-origin",
-  Referer: SAOPOLO_PORTAL_URL,
+  Referer: PORTAL_URL,
 };
 
 // ── JSONP caller via spainCfFetch ────────────────────────────────────────────
@@ -136,14 +152,15 @@ function countSlots(payload: unknown): number {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  sep(`TEST BOOKING CAPSOLVER-RESIDENTIAL — SAOPOLO — ${new Date().toISOString()}`);
-  log(`Portail : ${SAOPOLO_PORTAL_URL}`);
+  const portalLabel = extractWidgetKey(PORTAL_URL).slice(0, 12) + "…";
+  sep(`TEST BOOKING CAPSOLVER-RESIDENTIAL — ${portalLabel} — ${new Date().toISOString()}`);
+  log(`Portail : ${PORTAL_URL}`);
   log(`Mode    : ${process.env.SPAIN_SESSION_MODE ?? "(non défini)"}`);
   log(`Fake ID : ${FAKE_LOGIN} / ${FAKE_PASSWORD}`);
 
   // ── 1. Session CF ─────────────────────────────────────────────────────────
   sep("1 — Session CF (capsolver-residential)");
-  const mainSession = await ensureSpainCfSession(SAOPOLO_PORTAL_URL);
+  const mainSession = await ensureSpainCfSession(PORTAL_URL);
   if (!mainSession?.bookititState) {
     err("Session nulle ou bookititState absent — arrêt");
     process.exit(1);
@@ -156,7 +173,7 @@ async function main() {
 
   // ── 2. Session Bookitit isolée (PHPSESSID frais) ──────────────────────────
   sep("2 — Session Bookitit isolée (PHPSESSID frais)");
-  const isolated = await createIsolatedBookingSession(mainSession, SAOPOLO_PORTAL_URL);
+  const isolated = await createIsolatedBookingSession(mainSession, PORTAL_URL);
   if (!isolated) {
     warn("Impossible d'obtenir session isolée — on continue avec la session principale");
   }
@@ -191,9 +208,7 @@ async function main() {
 
   // Chercher le serviceId Pasaportes ou prendre le premier disponible
   const serviceIds = extractFirstId(svcParsed, /^id$|service.*id/i);
-  const serviceId = serviceIds.find(id => id === SAOPOLO_DEFAULT_SERVICE_ID)
-    ?? serviceIds[0]
-    ?? SAOPOLO_DEFAULT_SERVICE_ID;
+  const serviceId = serviceIds[0] ?? "";
   ok(`Service cible : ${serviceId} (${serviceIds.length} services trouvés)`);
 
   if (serviceIds.length === 0) {
@@ -347,7 +362,7 @@ async function main() {
     sep("7b — signin/ retourné 0B → retry avec session re-isolée");
     warn("signin/ → 0B sur session isolée → création d'une 2ème session isolée fraîche…");
 
-    const isolated2 = await createIsolatedBookingSession(mainSession, SAOPOLO_PORTAL_URL);
+    const isolated2 = await createIsolatedBookingSession(mainSession, PORTAL_URL);
     const bookSession2: SpainCfSession = isolated2?.session ?? bookSession;
     const php2 = bookSession2.allCookies.find(c => c.name === "PHPSESSID")?.value;
     log(`  Nouvelle PHPSESSID : ${php2 ? php2.slice(0, 12) + "…" : "ABSENT"}`);
