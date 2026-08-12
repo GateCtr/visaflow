@@ -182,6 +182,8 @@ function resolvePuppeteerProxy(accountId: string, hunterConfig?: { cevUseProxy?:
     rawUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
   } else if (process.env.IPROYAL_PROXY_URL) {
     rawUrl = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
+  } else if (process.env.DECODO_PROXY_URL) {
+    rawUrl = makeCevProxyStickyUrl("decodo", undefined, `cev-dossier-${accountId}`);
   } else if (process.env.PROXY_URL) {
     rawUrl = process.env.PROXY_URL;
   }
@@ -1726,6 +1728,7 @@ async function runAccountLoop(job: any): Promise<void> {
   }
 
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+  const decodoBaseUrl = process.env.DECODO_PROXY_URL;
   let proxyExitIp: string | null = null;
 
   logger.info(`Config:`);
@@ -1734,21 +1737,30 @@ async function runAccountLoop(job: any): Promise<void> {
   logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (±jitter log-normal)`);
 
   if (useProxy) {
-    logger.info(`  • Proxy: SOAX (1 IP fixe Kinshasa)`);
-
-    // ─── Configure SOAX proxy ─────────────────────────────────────────────────
+    // ─── Configure proxy (priorité: SOAX > iProyal > Decodo) ─────────────────
     if (soaxBaseUrl) {
+      logger.info(`  • Proxy: SOAX (sticky Kinshasa)`);
       const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
       process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
-      resetCevImpitInstances(); // Force impit to recreate with new proxy URL
+      resetCevImpitInstances();
       logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-      // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
       proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
     } else if (process.env.IPROYAL_PROXY_URL) {
-      // Si on utilise iProyal, aussi initialiser le guard
+      logger.info(`  • Proxy: iProyal (sticky session)`);
       proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
+    } else if (decodoBaseUrl) {
+      logger.info(`  • Proxy: Decodo résidentiel (sticky session par dossier)`);
+      const decodoStickyUrl = makeCevProxyStickyUrl("decodo", undefined, `cev-dossier-${accountId}`);
+      if (decodoStickyUrl) {
+        process.env.IPROYAL_PROXY_URL = decodoStickyUrl; // impit réutilise ce chemin
+        resetCevImpitInstances();
+        logger.info(`  • Decodo proxy configuré: ${decodoStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+        proxyExitIp = await initCevProxyGuardWithExitIp(decodoStickyUrl, `cev-dossier-${accountId}`);
+      } else {
+        logger.warn(`  ⚠️ DECODO_PROXY_URL présent mais URL sticky invalide — connexion directe`);
+      }
     } else {
-      logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+      logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL, IPROYAL_PROXY_URL et DECODO_PROXY_URL absents) — connexion directe`);
     }
   } else {
     logger.info(`  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
