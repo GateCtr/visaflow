@@ -270,44 +270,18 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     warn(`Partage de créneaux : ${unique.size} créneaux uniques pour ${assignedSlots.length} dossiers (normal si peu de disponibilités)`);
   }
 
-  // 7. Booking PARALLÈLE — Phase 1 : pre-warm 1 PHPSESSID distinct par dossier
-  //
-  // createIsolatedBookingSession() supprime le PHPSESSID de la copie et appelle
-  // /main/ SANS PHPSESSID → serveur émet un nouveau PHPSESSID via Set-Cookie.
-  // Tous les appels /main/ partent en Promise.all (~2-3s pour 3 dossiers simultanés).
-  dash(`Phase 1 — pre-warm sessions isolées × ${dossiers.length} (PARALLÈLE /main/)`);
-  const t0Prewarm = Date.now();
+  // 7. Booking séquentiel — PHPSESSID partagé en mode capsolver (lié au solve CF).
+  // getsigninfields/ est stateful par PHPSESSID côté serveur : appels simultanés
+  // sur le même PHPSESSID → N-1 dossiers reçoivent 0B (testé et confirmé).
+  // Vrai parallèle = 1 solve CF par dossier → coût prohibitif (~20s + $0.01/dossier).
+  dash(`Booking × ${dossiers.length} (fake credentials, séquentiel)`);
 
-  const prewarmResults = await Promise.all(dossiers.map(async (dossier) => {
-    const iso = await createIsolatedBookingSession(mainSession, portalUrl);
-    const sess: SpainCfSession = iso?.session ?? mainSession;
-    const php = sess.allCookies.find(c => c.name === "PHPSESSID")?.value ?? "";
-    return { dossier, sess, php };
-  }));
-
-  log(`  ⏱ pre-warm terminé en ${((Date.now() - t0Prewarm) / 1000).toFixed(2)}s`);
-
-  // Vérifier que les 3 PHPSESSIDs sont distincts
-  const phpIds = prewarmResults.map(r => r.php);
-  for (const { dossier, php } of prewarmResults) {
-    log(`  ${dossier.name} → PHPSESSID=${php ? php.slice(0, 16) + "…" : "⚠️ ABSENT"}`);
-  }
-  const uniquePhp = new Set(phpIds.filter(Boolean));
-  if (uniquePhp.size === dossiers.length && !phpIds.includes("")) {
-    ok(`✅ ${uniquePhp.size} PHPSESSIDs distincts — isolation confirmée`);
-  } else if (uniquePhp.size < dossiers.length) {
-    warn(`⚠️ ${uniquePhp.size} PHPSESSIDs uniques pour ${dossiers.length} dossiers — conflit possible`);
-  } else {
-    warn(`⚠️ PHPSESSID manquant sur au moins un dossier — le booking peut retourner 0B`);
-  }
-
-  // 7. Booking PARALLÈLE — Phase 2 : getsigninfields/ + signin/ pour chaque dossier
-  dash(`Phase 2 — booking × ${dossiers.length} (fake credentials, PARALLÈLE)`);
-  const t0Book = Date.now();
-
-  await Promise.all(prewarmResults.map(async ({ dossier, sess: bookSess }) => {
+  for (const dossier of dossiers) {
     const assigned = assignments.get(dossier.id);
-    if (!assigned) { log(`  ${dossier.name} → pas de créneau — skip`); return; }
+    if (!assigned) { log(`  ${dossier.name} → pas de créneau — skip`); continue; }
+
+    const iso = await createIsolatedBookingSession(mainSession, portalUrl);
+    const bookSess: SpainCfSession = iso?.session ?? mainSession;
 
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,
@@ -316,9 +290,8 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
       selectedPeople: "1",
     };
     if (agendaId) sfExtra["agendas[]"] = agendaId;
-    const tSf = Date.now();
     const { raw: sfRaw } = await callJsonp(bookSess, portalUrl, "getsigninfields/", sfExtra);
-    log(`  ${dossier.name} | getsigninfields/ → ${sfRaw.length}B (démarré à +${((tSf - t0Book) / 1000).toFixed(2)}s)`);
+    log(`  ${dossier.name} | getsigninfields/ → ${sfRaw.length}B`);
 
     const signinExtra: Record<string, string> = {
       "services[]": serviceId,
@@ -333,7 +306,6 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     };
     if (agendaId) signinExtra["agendas[]"] = agendaId;
 
-    const tSi = Date.now();
     const { raw: signinRaw, parsed: signinParsed, status: signinSt } =
       await callJsonp(bookSess, portalUrl, "signin/", signinExtra);
 
@@ -342,21 +314,18 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
       ?? (signinParsed as any)?.error;
     const errMsg = Array.isArray(errors) ? errors.map((e: any) => e.message).join(", ") : String(errors ?? "");
 
-    log(`  ${dossier.name} | créneau=${assigned.date} ${assigned.time} | signin/ démarré à +${((tSi - t0Book) / 1000).toFixed(2)}s`);
-    log(`    signin/ → HTTP ${signinSt} | ${signinRaw.length}B | terminé à +${((Date.now() - t0Book) / 1000).toFixed(2)}s`);
+    log(`  ${dossier.name} | créneau=${assigned.date} ${assigned.time}`);
+    log(`    signin/ → HTTP ${signinSt} | ${signinRaw.length}B`);
     log(`    réponse : ${errMsg || JSON.stringify(signinParsed)?.slice(0, 200) || "(vide)"}`);
 
     if (errMsg.includes("contraseña") || errMsg.includes("password") || errMsg.includes("Usuario")) {
-      ok(`    ✅ ${dossier.name} — serveur atteint en parallèle (${signinRaw.length}B)`);
+      ok(`    ✅ ${dossier.name} — "Usuario o contraseña incorrectos" reçu`);
     } else if (signinRaw.length === 0) {
-      warn(`    ${dossier.name} — 0B (PHPSESSID partagé ou session froide — PHPSESSID isolation failed?)`);
+      warn(`    ${dossier.name} — 0B (session froide)`);
     } else {
       warn(`    ${dossier.name} — réponse inattendue : ${signinRaw.slice(0, 200)}`);
     }
-  }));
-
-  const totalBook = ((Date.now() - t0Book) / 1000).toFixed(2);
-  log(`\n⏱  Phase 2 (signin/) parallèle : ${totalBook}s (séquentiel aurait pris ~${(dossiers.length * 1.5).toFixed(1)}s)`);
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
