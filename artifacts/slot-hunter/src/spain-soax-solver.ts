@@ -23,6 +23,8 @@ import {
   removeSpainCfSessionFromRedis,
   syncSoaxRotationToRedis,
   restoreSoaxRotationFromRedis,
+  syncResidentialPortStateToRedis,
+  restoreResidentialPortStateFromRedis,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
@@ -576,7 +578,7 @@ const _badResidentialPorts = new Map<number, number>();
 /** TTL de la mémoire des ports mauvais. Après ce délai le port est réhabilité. */
 const BAD_PORT_TTL_MS = 30 * 60_000; // 30 min
 
-/** Marque un port comme mauvais (main/ 0B ou tunnel error). */
+/** Marque un port comme mauvais (main/ 0B ou tunnel error) et persiste dans Redis. */
 function flagResidentialPort(port: number): void {
   _badResidentialPorts.set(port, Date.now());
   // Compter combien de ports sont actuellement exclus (TTL non expiré)
@@ -586,6 +588,8 @@ function flagResidentialPort(port: number): void {
     else _badResidentialPorts.delete(p);
   }
   console.log(`[spain-soax] 🚩 Port ${port} flaggé (main/ 0B) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
+  // Persistance Redis — survit aux redémarrages
+  syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
 }
 
 /** Retourne true si le port est actuellement flaggé (TTL non expiré). */
@@ -604,14 +608,21 @@ function isPortBad(port: number): boolean {
  * Si tous les 100 ports sont flaggés (cas extrême), purge les flags et retourne au courant.
  */
 function advanceToCleanPort(): void {
+  const before = _residentialPortIndex;
   for (let i = 0; i < 100; i++) {
     const port = (_residentialPortIndex % 100) + 10001;
-    if (!isPortBad(port)) return; // port propre trouvé
+    if (!isPortBad(port)) break; // port propre trouvé
     _residentialPortIndex++;
   }
-  // Cas extrême : tous les ports sont flaggés — purge totale
-  console.warn(`[spain-soax] ⚠️ Tous les 100 ports résidentiels flaggés — purge des flags et reprise`);
-  _badResidentialPorts.clear();
+  if (_residentialPortIndex !== before) {
+    // Cas extrême : tous les ports sont flaggés — purge totale
+    const port = (_residentialPortIndex % 100) + 10001;
+    if (isPortBad(port)) {
+      console.warn(`[spain-soax] ⚠️ Tous les 100 ports résidentiels flaggés — purge des flags et reprise`);
+      _badResidentialPorts.clear();
+    }
+    syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+  }
 }
 
 /** Retourne la session CF active (ou undefined si expirée/inexistante). */
@@ -793,6 +804,7 @@ export async function ensureSpainCfSession(
         // Flag + rotate : tunnel error = port inutilisable, on l'évite pendant 30 min.
         flagResidentialPort(portNum);
         _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
       }
 
@@ -913,6 +925,7 @@ export async function ensureSpainCfSession(
           flagResidentialPort(portNum); // mémoriser ce port comme mauvais
           _residentialPortIndex++;
           const nextPort = (_residentialPortIndex % 100) + 10001;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
           console.warn(
             `[spain-soax] 🔄 /main/ = ${prefetchedMainHtml.length}B — ` +
             `rotation port ${portNum} → ${nextPort} (index=${_residentialPortIndex % 100}/100)`,
@@ -1446,6 +1459,7 @@ export async function ensureSpainCfSession(
  * Permet de reprendre avec le bon rotation count après un redéploiement.
  */
 export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
+  // Rotation SOAX
   try {
     const rotationMap = await restoreSoaxRotationFromRedis();
     if (rotationMap && rotationMap.size > 0) {
@@ -1456,6 +1470,22 @@ export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
     }
   } catch (err) {
     console.warn(`[spain-soax] ⚠️ Restauration rotation échouée (non-fatal): ${err}`);
+  }
+
+  // Port résidentiel — index + ports flaggés
+  try {
+    const portState = await restoreResidentialPortStateFromRedis();
+    if (portState) {
+      _residentialPortIndex = portState.portIndex;
+      _badResidentialPorts.clear();
+      for (const [port, ts] of Object.entries(portState.badPorts)) {
+        _badResidentialPorts.set(Number(port), Number(ts));
+      }
+      const badCount = _badResidentialPorts.size;
+      console.log(`[spain-soax] ✅ Port state restauré — index=${_residentialPortIndex} (port ${(_residentialPortIndex % 100) + 10001}), ${badCount} port(s) flaggé(s)`);
+    }
+  } catch (err) {
+    console.warn(`[spain-soax] ⚠️ Restauration port state échouée (non-fatal): ${err}`);
   }
 }
 

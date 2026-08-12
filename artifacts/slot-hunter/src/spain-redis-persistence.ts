@@ -345,6 +345,77 @@ export async function restoreSoaxRotationFromRedis(): Promise<Map<string, number
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// RESIDENTIAL PORT STATE (index courant + ports flaggés — survit aux redémarrages)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SPAIN_PORT_KEY = "visaflow:spain-soax:port-state";
+const REDIS_SPAIN_PORT_TTL_SEC = 60 * 60; // 1h (TTL flag = 30min, on garde 2× la marge)
+
+export interface SerializableResidentialPortState {
+  /** Index courant dans le pool 0-99 (port = index % 100 + 10001) */
+  portIndex: number;
+  /** Ports flaggés → timestamp du flagging (ms) */
+  badPorts: Record<number, number>;
+  savedAt: number;
+}
+
+/**
+ * Sauvegarde l'état du port résidentiel dans Redis.
+ * Fire-and-forget — appelé après chaque flag ou avancement d'index.
+ */
+export function syncResidentialPortStateToRedis(
+  portIndex: number,
+  badPorts: Map<number, number>,
+): void {
+  if (!redisReady || !redisClient) return;
+
+  const state: SerializableResidentialPortState = {
+    portIndex,
+    badPorts: Object.fromEntries(badPorts) as Record<number, number>,
+    savedAt: Date.now(),
+  };
+  redisClient.set(REDIS_SPAIN_PORT_KEY, JSON.stringify(state), { EX: REDIS_SPAIN_PORT_TTL_SEC }).catch((err: Error) => {
+    console.warn(`[spain-redis] Port state sync échouée: ${err.message}`);
+  });
+}
+
+/**
+ * Restaure l'état du port résidentiel depuis Redis.
+ * Retourne null si pas de données, expirées, ou Redis indisponible.
+ * Les ports dont le flag TTL est expiré sont automatiquement filtrés.
+ */
+export async function restoreResidentialPortStateFromRedis(): Promise<SerializableResidentialPortState | null> {
+  if (!redisReady || !redisClient) return null;
+
+  try {
+    const data = await redisClient.get(REDIS_SPAIN_PORT_KEY);
+    if (!data) return null;
+
+    const parsed = JSON.parse(data) as SerializableResidentialPortState;
+    const BAD_PORT_TTL_MS = 30 * 60_000;
+    const now = Date.now();
+
+    // Filtrer les ports dont le TTL est expiré
+    const activeBadPorts: Record<number, number> = {};
+    for (const [port, ts] of Object.entries(parsed.badPorts)) {
+      if (now - Number(ts) <= BAD_PORT_TTL_MS) {
+        activeBadPorts[Number(port)] = Number(ts);
+      }
+    }
+
+    const ageMin = Math.round((now - parsed.savedAt) / 60_000);
+    const badCount = Object.keys(activeBadPorts).length;
+    console.log(`[spain-redis] ✅ Port state restauré (portIndex=${parsed.portIndex}, badPorts=${badCount} actifs, âge=${ageMin}min)`);
+
+    return { portIndex: parsed.portIndex, badPorts: activeBadPorts, savedAt: parsed.savedAt };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[spain-redis] ⚠️ Restauration port state échouée: ${msg}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // BOOKITIT CONFIG CACHE (paramètres widget extractibles)
 // ═══════════════════════════════════════════════════════════════════════════════
 
