@@ -619,21 +619,10 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             }
 
-            // ─── Sérialiser si plusieurs dossiers partagent le même créneau ───────
-            // Cas : 1 créneau (freeslots=1) + 3 dossiers → tous assignés au même slot.
-            // En parallèle, les 3 foncent ensemble → race condition → 2 bookings ratés.
-            // En série, le 1er réussit, les suivants trouvent 0 slot et s'arrêtent proprement.
-            const uniqueSlotKeys = new Set(
-              dossiers
-                .map((d) => slotAssignments.get(d.id))
-                .filter((a): a is { date: string; time: string; agendaId?: string } => !!a)
-                .map((a) => `${a.date}_${a.time}`),
-            );
-            const dossiersWithSlot = dossiers.filter((d) => slotAssignments.has(d.id)).length;
-            const shouldSerialize = dossiersWithSlot > 0 && uniqueSlotKeys.size < dossiersWithSlot;
-            if (shouldSerialize) {
-              log("INFO", `[SPAIN-WATCHER] ⚡ Booking SÉRIALISÉ — ${dossiersWithSlot} dossier(s) pour ${uniqueSlotKeys.size} créneau(x) unique(s) (race freeslots évitée)`);
-            }
+            // ─── Booking toujours séquentiel ─────────────────────────────────────
+            // Le parallèle a été testé et abandonné : sessions PHP / impit partagées
+            // entrent en conflit (getsigninfields/ + signin/ sur la même connexion TLS).
+            // Chaque dossier attend que le précédent soit terminé avant de commencer.
             // ─────────────────────────────────────────────────────────────────────
 
             const bookDossier = async (dossier: SpainDossier) => {
@@ -753,11 +742,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             };
 
-            if (shouldSerialize) {
-              for (const dossier of dossiers) await bookDossier(dossier);
-            } else {
-              await Promise.all(dossiers.map(bookDossier));
-            }
+            for (const dossier of dossiers) await bookDossier(dossier);
           }
         }
       }
