@@ -1482,12 +1482,22 @@ async function handleSlotFoundMulti(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — TOUJOURS
+  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — SEULEMENT S'IL EST ÉLIGIBLE
+  //
+  // Si cev_booking_target_pool est configuré et que le détecteur n'en fait PAS partie,
+  // on ne lui laisse PAS consommer le créneau. Sa session chaude est passée
+  // au premier dossier éligible dans la phase multi-dossier ci-dessous.
+  //
   // La session CEV expire dès qu'on fait autre chose que soumettre le SelectSlot.
   // Pas de discovery, pas d'email, pas de wake multi-dossier AVANT le booking.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  if (existingSessionCookie && existingIntegrationUrl) {
+  const detectorIsEligible = eligibleRefs.includes(detectingDossier.vowintRef);
+  if (!detectorIsEligible) {
+    logFn.info(`  ℹ️ ${detectingDossier.vowintRef} n'est PAS dans le pool de booking → sa session sera passée au premier éligible (aucun booking pour ce dossier)`);
+  }
+
+  if (detectorIsEligible && existingSessionCookie && existingIntegrationUrl) {
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
     try {
       detectingBookingResult = await bookDossierIsolated(
@@ -1528,6 +1538,8 @@ async function handleSlotFoundMulti(
   // Si free=1 → pas de multi. Si détecteur a échoué (session expired) → le slot est peut-être pris par un humain → pas de multi non plus.
   const freeConsumedByDetector = detectingBookingResult?.success ? 1 : 0;
   const remainingFree = totalFree - freeConsumedByDetector;
+  // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
+  // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
   // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles
   const dossiersToWake = Math.min(remainingFree, otherRefs.length);
@@ -1543,16 +1555,39 @@ async function handleSlotFoundMulti(
     }
   } else {
     // ── Multi-dossier : booker les AUTRES dossiers en parallèle ─────────────
-    // Le détecteur a déjà tenté. On réveille seulement le nombre de dossiers = places restantes.
-    // Chaque dossier re-login isolé → le serveur leur montre le availability[] mis à jour.
+    // Le détecteur a déjà tenté (ou est hors pool). On réveille seulement le nombre
+    // de dossiers = places restantes. Chaque dossier re-login isolé.
+    //
+    // CAS SPÉCIAL — détecteur hors pool (detectorIsEligible=false) :
+    // Sa session chaude n'a pas été consommée. On la passe au PREMIER éligible
+    // pour maximiser la vitesse : ce dossier tente en priorité avec la session existante
+    // avant de faire un re-login coûteux. Les suivants font un re-login isolé normal.
     const selectedRefs = otherRefs.slice(0, dossiersToWake);
     logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) [${selectedRefs.join(", ")}]...`);
 
-    const bookingTasks = selectedRefs.map(vowintRef =>
+    const hotSession = !detectorIsEligible && existingSessionCookie && existingIntegrationUrl
+      ? {
+          sessionCookie: existingSessionCookie,
+          integrationUrl: existingIntegrationUrl,
+          selectSlotHtml: existingSelectSlotHtml,
+          selectSlotUrl: existingSelectSlotUrl,
+          selectSlotCookies: existingSelectSlotCookies,
+        }
+      : undefined;
+
+    if (hotSession) {
+      logFn.info(`  🔗 Session chaude du détecteur (${detectingDossier.vowintRef}) transférée à ${selectedRefs[0]} (premier éligible)`);
+    }
+
+    const bookingTasks = selectedRefs.map((vowintRef, idx) =>
       bookDossierIsolated(
         vowintEmail, vowintPassword,
         vowintRef, applicationId,
-        groupSize, undefined, logger,
+        groupSize,
+        // Le premier éligible reçoit la session chaude du détecteur (si hors pool).
+        // Les suivants font un re-login isolé indépendant.
+        idx === 0 ? hotSession : undefined,
+        logger,
       ).then(result => ({ vowintRef, ...result }))
     );
 
