@@ -977,77 +977,85 @@ export async function setupCevSessionHttp(
     botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie!.length, usingSiphoned: !!siphoned } });
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 5 : Résoudre hCaptcha (ou utiliser token pré-résolu)
+    // ÉTAPE 5+6 : Résoudre hCaptcha + POST SetCaptchaToken (avec retry ≤3)
     // ══════════════════════════════════════════════════════════════════════════
-    let hcaptchaToken: string | null = null;
-    if (presolvedHcaptchaToken) {
-      hcaptchaToken = presolvedHcaptchaToken;
-      console.log(`[CEV-SETUP] ⚡ Token hCaptcha pré-résolu injecté (bypass solveHcaptcha) — len=${hcaptchaToken.length}`);
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_presolved", status: "ok", data: { tokenLen: hcaptchaToken.length } });
-    } else {
-      try {
-        hcaptchaToken = await solveHcaptcha(clientId, captchaPageRqdata);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // 🔥 DÉTECTION SPÉCIALE : ERREUR PROXY CONNECT REFUSED → ROTATION REQUISE
-        if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
-          botLog({ 
-            applicationId: clientId, 
-            step: "cev_http_proxy_connect_refused", 
-            status: "fail", 
-            data: { 
-              error: msg,
-              recommendation: "ROTATE_PROXY_IMMEDIATELY"
-            } 
-          });
-          return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
+    // Anti-Captcha réussit le challenge visuel (glisser un animal) ~60-80% du temps.
+    // En cas de captchaSolved:false, on ré-essaie immédiatement avec un nouveau token
+    // sur la MÊME session OutSystems (hcaptcha siteverify est stateless — n'importe
+    // quel token valide pour la sitekey est accepté, pas besoin d'une nouvelle session).
+    // On n'invalide VOWINT qu'après MAX_CAPTCHA_ATTEMPTS échecs consécutifs.
+    const MAX_CAPTCHA_ATTEMPTS = 3;
+    let captchaData: { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean } = {};
+
+    for (let captchaAttempt = 1; captchaAttempt <= MAX_CAPTCHA_ATTEMPTS; captchaAttempt++) {
+      // ── Solve ──────────────────────────────────────────────────────────────
+      let hcaptchaToken: string | null = null;
+      if (presolvedHcaptchaToken && captchaAttempt === 1) {
+        hcaptchaToken = presolvedHcaptchaToken;
+        console.log(`[CEV-SETUP] ⚡ Token hCaptcha pré-résolu injecté (bypass solveHcaptcha) — len=${hcaptchaToken.length}`);
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_presolved", status: "ok", data: { tokenLen: hcaptchaToken.length } });
+      } else {
+        try {
+          hcaptchaToken = await solveHcaptcha(clientId, captchaPageRqdata);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
+            botLog({ applicationId: clientId, step: "cev_http_proxy_connect_refused", status: "fail", data: { error: msg, recommendation: "ROTATE_PROXY_IMMEDIATELY" } });
+            return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
+          }
+          botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg, attempt: captchaAttempt } });
+          return { success: false, error: "HCAPTCHA_FAILED" };
         }
-        // Autre erreur
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg } });
-        return { success: false, error: "HCAPTCHA_FAILED" };
+        if (!hcaptchaToken) {
+          return { success: false, error: "HCAPTCHA_FAILED" };
+        }
       }
-      
-      if (!hcaptchaToken) {
-        return { success: false, error: "HCAPTCHA_FAILED" };
+
+      // ── POST SetCaptchaToken ───────────────────────────────────────────────
+      // HAR réel (2026-06-08) : Accept=* /* (pas la valeur jQuery dataType:"json") — pas de Referer
+      const captchaRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
+        method: "POST",
+        headers: getCevBrowserHeaders({
+          origin: CEV_BASE,
+          cookie: fullCevCookie,
+          contentType: "application/x-www-form-urlencoded",
+          xRequestedWith: true,
+        }),
+        body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
+        redirect: "manual",
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (!captchaRes.ok) {
+        botLog({ applicationId: clientId, step: "cev_http_captcha_submit_failed", status: "fail", data: { status: captchaRes.status, attempt: captchaAttempt } });
+        return { success: false, error: `CAPTCHA_SUBMIT_${captchaRes.status}` };
       }
-    }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // ÉTAPE 6 : POST /Captcha/SetCaptchaToken → validUntil
-    // ══════════════════════════════════════════════════════════════════════════
-    // HAR réel (2026-06-08) : Accept=* /* (pas la valeur jQuery dataType:"json") — pas de Referer
-    const captchaRes = await cevSetupFetch(`${CEV_BASE}/Captcha/SetCaptchaToken`, {
-      method: "POST",
-      headers: getCevBrowserHeaders({
-        origin: CEV_BASE,
-        cookie: fullCevCookie,
-        contentType: "application/x-www-form-urlencoded",
-        xRequestedWith: true,
-      }),
-      body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
-      redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
-    });
+      // FIX OSOnline : capturer tout Set-Cookie posé par OutSystems lors de la validation
+      fullCevCookie = mergeCookies(fullCevCookie, captchaRes);
 
-    if (!captchaRes.ok) {
-      botLog({ applicationId: clientId, step: "cev_http_captcha_submit_failed", status: "fail", data: { status: captchaRes.status } });
-      return { success: false, error: `CAPTCHA_SUBMIT_${captchaRes.status}` };
-    }
+      captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean };
 
-    // FIX OSOnline : capturer tout Set-Cookie posé par le serveur OutSystems lors de la
-    // validation du captcha (le cookie OSOnline arrive ici, avant la chaîne de redirects).
-    fullCevCookie = mergeCookies(fullCevCookie, captchaRes);
+      // FIX #4: Le serveur peut renvoyer HTTP 200 avec captchaSolved:false
+      if (captchaData.captchaSolved === false) {
+        botLog({
+          applicationId: clientId,
+          step: "cev_http_captcha_rejected",
+          status: captchaAttempt < MAX_CAPTCHA_ATTEMPTS ? "warn" : "fail",
+          data: { fullResponse: JSON.stringify(captchaData), attempt: captchaAttempt, maxAttempts: MAX_CAPTCHA_ATTEMPTS },
+        });
+        if (captchaAttempt < MAX_CAPTCHA_ATTEMPTS) {
+          // Attendre 4s avant le retry — laisser le temps au serveur et éviter le spam
+          await new Promise(r => setTimeout(r, 4_000));
+          continue; // → prochain captchaAttempt
+        }
+        // Toutes les tentatives épuisées → invalider VOWINT (session compromise)
+        invalidateVowintCache(vowintEmail, ipSlotId);
+        return { success: false, error: "HCAPTCHA_REJECTED_BY_SERVER" };
+      }
 
-    const captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean };
-
-    // FIX #4: Le serveur peut renvoyer HTTP 200 avec captchaSolved:false — vérifier explicitement.
-    if (captchaData.captchaSolved === false) {
-      botLog({ applicationId: clientId, step: "cev_http_captcha_rejected", status: "fail", data: { fullResponse: JSON.stringify(captchaData) } });
-      // Invalider le cache VOWINT pour forcer une nouvelle session ASP.NET complète au prochain essai.
-      // Raison : le token hCaptcha est lié à la session serveur — réessayer sur la même
-      // session produit le même rejet. Une session fraîche = nouveau captcha challenge = nouveau token.
-      invalidateVowintCache(vowintEmail, ipSlotId);
-      return { success: false, error: "HCAPTCHA_REJECTED_BY_SERVER" };
+      // captchaSolved !== false → succès (ou réponse sans le champ)
+      break;
     }
     
     // DEBUG: Loguer la réponse brute pour comprendre le format du validUntil
@@ -1857,66 +1865,18 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
 
       // ── Construire la tâche ──────────────────────────────────────────────────
       // Priorité : si proxy disponible → HCaptchaTask ; sinon HCaptchaTaskProxyless.
-      // ── Fetch rqdata enterprise depuis hCaptcha checksiteconfig ─────────────
-      // La sitekey CEV est configurée en mode hCaptcha Enterprise côté serveur
-      // (confirmé par "remote.captcha.com" dans le CSP de la page /Captcha).
-      // Le rqdata n'est PAS dans le HTML statique : hcaptcha api.js le charge
-      // dynamiquement via un call à checksiteconfig. On reproduit ce call depuis
-      // notre process pour obtenir le rqdata, puis on le passe à Anti-Captcha.
-      // Sans rqdata + isEnterprise:true → token standard rejeté par siteverify enterprise.
-      let resolvedRqdata: string | undefined = rqdata; // rqdata depuis HTML (généralement undefined)
-      if (!resolvedRqdata) {
-        try {
-          const checksiteUrl =
-            `https://hcaptcha.com/checksiteconfig?v=1` +
-            `&host=appointment.cloud.diplomatie.be` +
-            `&sitekey=${HCAPTCHA_SITEKEY}` +
-            `&sc=1&swa=1` +
-            `&spst=${Math.floor(Date.now() / 1000)}`;
-          const checksiteRes = await fetch(checksiteUrl, {
-            headers: {
-              "User-Agent": userAgent,
-              "Referer": `${CEV_BASE}/Captcha`,
-              "Origin": "https://js.hcaptcha.com",
-              "Accept": "application/json, text/plain, */*",
-            },
-            signal: AbortSignal.timeout(10_000),
-          });
-          if (checksiteRes.ok) {
-            const checksiteData = await checksiteRes.json() as {
-              pass?: boolean;
-              c?: { type?: string; req?: string };
-            };
-            if (checksiteData?.c?.req) {
-              resolvedRqdata = checksiteData.c.req;
-              console.log(`[CEV-SETUP] ✅ hCaptcha enterprise rqdata: ${resolvedRqdata.slice(0, 30)}… (type=${checksiteData.c.type})`);
-            } else {
-              console.log(`[CEV-SETUP] ℹ️ checksiteconfig: pass=${checksiteData?.pass}, c=${JSON.stringify(checksiteData?.c)} — pas de rqdata (mode standard)`);
-            }
-          } else {
-            console.warn(`[CEV-SETUP] ⚠️ checksiteconfig HTTP ${checksiteRes.status}`);
-          }
-        } catch (cse) {
-          console.warn(`[CEV-SETUP] ⚠️ checksiteconfig fetch failed: ${cse}`);
-        }
-      }
-      botLog({
-        applicationId: clientId,
-        step: "cev_http_hcaptcha_rqdata",
-        status: "ok",
-        data: {
-          rqdataFound: !!resolvedRqdata,
-          rqdataPreview: resolvedRqdata ? resolvedRqdata.slice(0, 40) : null,
-        },
-      });
-
-      // HCaptchaEnterpriseTaskProxyless supprimé — Anti-Captcha retourne
-      // ERROR_TASK_NOT_SUPPORTED (errorId=23) pour ce type sur la sitekey CEV.
       //
-      // Si rqdata enterprise disponible → isEnterprise:true + enterprisePayload requis.
-      // Si pas de rqdata → mode standard (pas de flag enterprise).
-      const enterprisePayload = resolvedRqdata
-        ? { isEnterprise: true, enterprisePayload: { rqdata: resolvedRqdata } }
+      // NOTE: checksiteconfig retourne pass:true + c.req JWT (type=hsw) depuis notre IP.
+      // c.req est le challenge PoW INTERNE de hcaptcha — ce n'est PAS un enterprisePayload.rqdata
+      // d'opérateur. Passer ce JWT comme isEnterprise+enterprisePayload confuse Anti-Captcha
+      // et réduit son taux de succès. On utilise le mode standard sans flags enterprise.
+      //
+      // Le challenge visuel (glisser un animal) est résolu correctement ~60-80% du temps
+      // par Anti-Captcha → une boucle retry (≤3) maximise le taux de succès par cycle.
+      //
+      // Si rqdata est présent dans le HTML (cas future), le passer directement.
+      const enterprisePayload = rqdata
+        ? { isEnterprise: true, enterprisePayload: { rqdata } }
         : {};
       const baseTask = proxyConfig
         ? { type: "HCaptchaTask", websiteURL: pageUrl, websiteKey: HCAPTCHA_SITEKEY, ...proxyConfig, userAgent, ...enterprisePayload }
