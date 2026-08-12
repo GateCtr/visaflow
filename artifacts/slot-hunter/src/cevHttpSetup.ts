@@ -1647,7 +1647,14 @@ function mergeCookies(existing: string, res: Response): string {
 }
 
 async function solveHcaptcha(clientId: string): Promise<string | null> {
-  const pageUrl = `${CEV_BASE}/Captcha`;
+  // Anti-Captcha met en cache les tokens par (sitekey + websiteURL).
+  // Si deux scans appellent solveHcaptcha avec la même URL statique, Anti-Captcha peut renvoyer
+  // le même token déjà utilisé → CEV le rejette (captchaSolved:false).
+  // Fix : ajouter un nonce unique par appel → Anti-Captcha traite chaque requête comme
+  // une URL distincte → toujours un token frais, jamais de hit de cache inter-scans.
+  // hCaptcha siteverify ne valide PAS l'URL de la page, uniquement (sitekey + token + IP)
+  // → le nonce n'affecte pas la validité du token côté CEV.
+  const pageUrl = `${CEV_BASE}/Captcha?_=${Date.now()}`;
   const errors: string[] = [];
   // UA aligné sur la session HTTP courante (Chrome 147/148) — pas Chrome 125 codé en dur.
   // Si hCaptcha lie le token au UA du solveur, un mismatch → token rejeté à la soumission.
