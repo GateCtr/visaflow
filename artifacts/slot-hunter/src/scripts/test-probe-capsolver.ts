@@ -18,15 +18,19 @@
 import "dotenv/config";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { getActiveSpainCfSession } from "../spain-soax-solver.js";
-import { SAOPOLO_PORTAL_URL, CUBA_LMD_PORTAL_URL } from "../spain-portals.js";
+import { SAOPOLO_PORTAL_URL, CUBA_LMD_PORTAL_URL, KINSHASA_PORTAL_URL } from "../spain-portals.js";
 
 const T0 = Date.now();
 const ts  = () => `+${((Date.now() - T0) / 1000).toFixed(1)}s`;
 const log  = (msg: string) => console.log(`[${ts()}] ${msg}`);
 const sep  = (t: string)   => console.log(`\n${"═".repeat(70)}\n  ${t}\n${"═".repeat(70)}`);
 
-const PORTAL = process.env.PORTAL_ONLY === "cuba" ? CUBA_LMD_PORTAL_URL : SAOPOLO_PORTAL_URL;
-const LABEL  = process.env.PORTAL_ONLY === "cuba" ? "Cuba (LMD)" : "Saopolo (RDC)";
+const PORTAL = process.env.PORTAL_ONLY === "cuba"     ? CUBA_LMD_PORTAL_URL
+             : process.env.PORTAL_ONLY === "kinshasa" ? KINSHASA_PORTAL_URL
+             : SAOPOLO_PORTAL_URL;
+const LABEL  = process.env.PORTAL_ONLY === "cuba"     ? "Cuba (LMD)"
+             : process.env.PORTAL_ONLY === "kinshasa" ? "Kinshasa (RDC)"
+             : "Saopolo (RDC)";
 
 async function runProbe(n: number) {
   const label = `Probe #${n}`;
