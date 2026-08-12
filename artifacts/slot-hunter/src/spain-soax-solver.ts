@@ -153,6 +153,13 @@ export interface SpainCfSession {
    */
   portalKey?: string;
   /**
+   * Instance impit dédiée à cette session isolée (booking multi-dossiers).
+   * Quand présent, spainCfFetch utilise cette instance au lieu du singleton
+   * global _spainImpit — permet plusieurs bookings parallèles sans conflit TLS.
+   * Créé par createIsolatedBookingSession() pour chaque session de booking.
+   */
+  _ownImpit?: InstanceType<typeof import("impit").Impit>;
+  /**
    * État Bookitit pour le mode HTTP-pur (capsolver-residential).
    * Établi lors de l'init de session (GET widget → POST token → GET /main/).
    * Partagé par le scanner et le booking pour garantir le même jqCallback
@@ -1419,6 +1426,19 @@ let _spainImpit: InstanceType<typeof Impit> | undefined;
 let _spainImpitProxyUrl: string | undefined;
 
 /**
+ * Crée une instance impit fraîche pour une session isolée (booking multi-dossiers).
+ * Chaque appel retourne un objet distinct — pas de singleton partagé.
+ * Utilisé par createIsolatedBookingSession() pour isoler les bookings parallèles.
+ */
+export function createFreshSpainImpit(session: SpainCfSession): InstanceType<typeof Impit> {
+  const impit = new Impit({
+    browser: "chrome",
+    proxyUrl: session.soaxProxyUrl || undefined,
+  } as any);
+  return impit;
+}
+
+/**
  * Retourne une instance impit configurée avec le proxy de la session CF active.
  * Le fingerprint TLS Chrome garantit la cohérence avec le solve CapSolver.
  */
@@ -1499,7 +1519,7 @@ export async function spainCfFetch(
     }
   }
 
-  const impit = getSpainImpit(session);
+  const impit = session._ownImpit ?? getSpainImpit(session);
 
   // Keep the cookie order observed in the browser flow and place the
   // Cloudflare cookie last. Callers that update PHPSESSID after a response

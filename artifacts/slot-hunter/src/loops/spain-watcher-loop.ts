@@ -773,7 +773,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             };
 
-            for (const dossier of dossiers) await bookDossier(dossier);
+            // Chaque bookDossier utilise une session isolée avec son propre _ownImpit
+            // → pas de conflit TLS malgré l'exécution parallèle.
+            await Promise.all(dossiers.map(bookDossier));
           }
         }
       }

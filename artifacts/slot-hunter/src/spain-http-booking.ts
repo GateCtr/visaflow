@@ -27,6 +27,7 @@
 import {
   spainCfFetch,
   cloneSpainCfSessionForDossier,
+  createFreshSpainImpit,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
@@ -422,6 +423,8 @@ export async function createIsolatedBookingSession(
           ...cfSession,
           allCookies: cfSession.allCookies.map(c => ({ ...c })),
           extraHeaders: { ...cfSession.extraHeaders },
+          // Instance impit dédiée → bookings parallèles sans conflit TLS singleton
+          _ownImpit: createFreshSpainImpit(cfSession),
         },
       };
     }
@@ -429,6 +432,8 @@ export async function createIsolatedBookingSession(
   }
 
   const session = cloneSpainCfSessionForDossier(cfSession);
+  // Instance impit dédiée → bookings parallèles sans conflit TLS singleton
+  session._ownImpit = createFreshSpainImpit(cfSession);
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
   const referer = portalUrl.replace(/\/?$/, "/");
   const callback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
