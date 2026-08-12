@@ -560,7 +560,7 @@ export async function solveSpainCloudflare(
 let _activeCfSession: SpainCfSession | undefined;
 
 /**
- * Index courant dans le pool résidentiel (gate.decodo.com:10001-10020, 20 ports).
+ * Index courant dans le pool résidentiel (gate.decodo.com:10001-10100, 100 ports).
  * Avancé d'un cran UNIQUEMENT quand /main/ retourne 0B — jamais proactivement.
  * Persistant pour la durée de vie du process (Railway/Replit).
  */
@@ -644,7 +644,7 @@ export async function ensureSpainCfSession(
 
   // ── Mode capsolver-residential : HTTP-pur + proxy résidentiel Decodo ─────────
   // SPAIN_SESSION_MODE=capsolver-residential → Impit (Chrome TLS) + CapSolver
-  // AntiCloudflareTask + gate.decodo.com (pool de 20 ports : 10001-10020).
+  // AntiCloudflareTask + gate.decodo.com (pool de 100 ports : 10001-10100).
   // Reproduit exactement test-bookitit-dynamic.ts :
   //   GET widget → CF solve → GET widget → POST token → srvsrc/version → GET /main/
   // Session PHPSESSID + jqCallback + reqCounter stockés dans session.bookititState.
@@ -681,13 +681,13 @@ export async function ensureSpainCfSession(
       "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 
     /**
-     * Calcule l'URL proxy pour l'index absolu donné dans le pool de 20 ports (10001-10020).
-     * L'index est toujours pris modulo 20 pour rester dans la plage.
+     * Calcule l'URL proxy pour l'index absolu donné dans le pool de 100 ports (10001-10100).
+     * L'index est toujours pris modulo 100 pour rester dans la plage.
      */
     const getResidentialProxyForIndex = (base: string, portIndex: number): string => {
       try {
         const u = new URL(base);
-        u.port = String((portIndex % 20) + 10001);
+        u.port = String((portIndex % 100) + 10001);
         return u.toString();
       } catch { return base; }
     };
@@ -715,7 +715,7 @@ export async function ensureSpainCfSession(
       const masked = proxyUrl.replace(/:([^:@/]+)@/, ":***@");
       console.log(
         `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
-        `— port=${portNum} (index=${_residentialPortIndex % 20}/20) | proxy: ${masked.slice(0, 60)}…`,
+        `— port=${portNum} (index=${_residentialPortIndex % 100}/100) | proxy: ${masked.slice(0, 60)}…`,
       );
 
       // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
@@ -860,10 +860,10 @@ export async function ensureSpainCfSession(
         prefetchedMainHtml = await rMain.text();
         if (prefetchedMainHtml.length < 1000) {
           _residentialPortIndex++;
-          const nextPort = (_residentialPortIndex % 20) + 10001;
+          const nextPort = (_residentialPortIndex % 100) + 10001;
           console.warn(
             `[spain-soax] 🔄 /main/ = ${prefetchedMainHtml.length}B — ` +
-            `rotation port ${portNum} → ${nextPort} (index=${_residentialPortIndex % 20}/20)`,
+            `rotation port ${portNum} → ${nextPort} (index=${_residentialPortIndex % 100}/100)`,
           );
           continue;
         }
@@ -911,7 +911,7 @@ export async function ensureSpainCfSession(
 
       console.log(
         `[spain-soax] 🎉 Session capsolver-residential établie! ` +
-        `port=${portNum} (index=${_residentialPortIndex % 20}/20) | ` +
+        `port=${portNum} (index=${_residentialPortIndex % 100}/100) | ` +
         `jqCallback=${jqCallback.slice(0, 30)}… | ` +
         `PHPSESSID=${jar.PHPSESSID ? "✅" : "❌"} | ` +
         `srvsrc=${srvsrc} | v=${version} | ` +
