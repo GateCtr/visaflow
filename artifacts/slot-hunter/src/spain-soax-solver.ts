@@ -718,7 +718,9 @@ export async function ensureSpainCfSession(
         `— port=${portNum} (index=${_residentialPortIndex % 20}/20) | proxy: ${masked.slice(0, 60)}…`,
       );
 
-      const impit = new Impit({ browser: "chrome", proxyUrl } as any);
+      // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
+      // ce qui déclenche la rotation vers le port suivant sans attendre 30s.
+      const impit = new Impit({ browser: "chrome", proxyUrl, timeout: 12_000 } as any);
       const jar: Record<string, string> = {};
 
       // Étape 1a : GET widget → détecter challenge CF
