@@ -1424,6 +1424,14 @@ async function handleSlotFoundMulti(
   eligibleRefs.forEach(ref => pausedDossiers.add(ref));
   logFn.info(`  ⏸️ ${_allPausedRefs.length} dossier(s) mis en PAUSE temporaire (booking en cours)`);
 
+  // Variables hissées avant le try pour rester accessibles dans l'email post-finally.
+  let totalFree = 0;
+  let detectingBookingResult: Awaited<ReturnType<typeof bookDossierIsolated>> | null = null;
+  let skipMulti = true;
+
+  // try/finally garantit la dépause même si une exception survient pendant le booking.
+  try {
+
   botLog({
     applicationId,
     step: "cev_dossier_slot_found",
@@ -1440,7 +1448,6 @@ async function handleSlotFoundMulti(
   // ── Analyser les slots IMMÉDIATEMENT depuis le HTML pré-capturé ─────────
   // CRITIQUE : ne pas perdre la session sur des opérations inutiles.
   // CEV invalide la session dès qu'on fait autre chose que soumettre le form SelectSlot.
-  let totalFree = 0;
   if (existingSelectSlotHtml && existingSelectSlotHtml.length > 500) {
     const inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml);
     totalFree = inlineSlots.reduce((sum, s) => sum + (s.free ?? 1), 0);
@@ -1468,8 +1475,6 @@ async function handleSlotFoundMulti(
   // La session CEV expire dès qu'on fait autre chose que soumettre le SelectSlot.
   // Pas de discovery, pas d'email, pas de wake multi-dossier AVANT le booking.
   // ═══════════════════════════════════════════════════════════════════════════
-
-  let detectingBookingResult: Awaited<ReturnType<typeof bookDossierIsolated>> | null = null;
 
   if (existingSessionCookie && existingIntegrationUrl) {
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
@@ -1515,7 +1520,7 @@ async function handleSlotFoundMulti(
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
   // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles
   const dossiersToWake = Math.min(remainingFree, otherRefs.length);
-  const skipMulti = dossiersToWake <= 0;
+  skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
     if (detectingBookingResult?.success && remainingFree <= 0) {
@@ -1569,13 +1574,15 @@ async function handleSlotFoundMulti(
 
   // ── Dépause des dossiers dont le booking n'a pas abouti ──────────────────
   // Seul le succès rend la pause définitive — les autres reprennent le scan.
-  const toUnpause = _allPausedRefs.filter(ref => !_succeededRefs.has(ref));
-  if (toUnpause.length > 0) {
-    toUnpause.forEach(ref => pausedDossiers.delete(ref));
-    logFn.info(`  ▶️ ${toUnpause.length} dossier(s) dépausé(s) (booking non confirmé): [${toUnpause.join(", ")}]`);
-  }
-  if (_succeededRefs.size > 0) {
-    logFn.info(`  ⏸️ ${_succeededRefs.size} dossier(s) en PAUSE définitive (booking confirmé): [${[..._succeededRefs].join(", ")}]`);
+  } finally {
+    const toUnpause = _allPausedRefs.filter(ref => !_succeededRefs.has(ref));
+    if (toUnpause.length > 0) {
+      toUnpause.forEach(ref => pausedDossiers.delete(ref));
+      logFn.info(`  ▶️ ${toUnpause.length} dossier(s) dépausé(s) (booking non confirmé): [${toUnpause.join(", ")}]`);
+    }
+    if (_succeededRefs.size > 0) {
+      logFn.info(`  ⏸️ ${_succeededRefs.size} dossier(s) en PAUSE définitive (booking confirmé): [${[..._succeededRefs].join(", ")}]`);
+    }
   }
 
   // ── Email admin avec le RÉSULTAT du booking (pas de discovery inutile) ────

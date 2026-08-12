@@ -814,7 +814,12 @@ export async function ensureSpainCfSession(
       if (challengeHtml !== undefined) {
         const capResult = await solveSpainCloudflare(targetUrl, capKey, proxyUrl, challengeHtml, UA_RESIDENTIAL);
         if (!capResult.success || !capResult.session?.cfClearance) {
-          console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → retry`);
+          console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → rotation port + retry`);
+          // Avancer le port : cette IP résidentielle n'a pas pu déverrouiller CF ;
+          // flaggée pour 30 min pour éviter de la réessayer inutilement.
+          flagResidentialPort(portNum);
+          _residentialPortIndex++;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
           continue;
         }
         jar.cf_clearance = capResult.session.cfClearance;
@@ -835,7 +840,11 @@ export async function ensureSpainCfSession(
         Object.assign(jar, extractCookies(rGet.headers as any));
         token = bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1];
         if (!token) {
-          console.warn(`[spain-soax]    ⚠️ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B) → retry`);
+          console.warn(`[spain-soax]    ⚠️ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B) → rotation port + retry`);
+          // CF bloque encore malgré le solve ou la page est anormale — changer d'IP.
+          flagResidentialPort(portNum);
+          _residentialPortIndex++;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
           continue;
         }
         console.log(
@@ -843,7 +852,10 @@ export async function ensureSpainCfSession(
           `PHPSESSID: ${jar.PHPSESSID ? jar.PHPSESSID.slice(0, 12) + "…" : "❌"}`,
         );
       } catch (e) {
-        console.warn(`[spain-soax]    ⚠️ GET widget (token) échoué: ${e} → retry`);
+        console.warn(`[spain-soax]    ⚠️ GET widget (token) échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum);
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
       }
 
@@ -873,7 +885,10 @@ export async function ensureSpainCfSession(
           `srvsrc=${srvsrc} | v=${version}`,
         );
       } catch (e) {
-        console.warn(`[spain-soax]    ⚠️ POST token échoué: ${e} → retry`);
+        console.warn(`[spain-soax]    ⚠️ POST token échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum);
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
       }
 
@@ -936,7 +951,10 @@ export async function ensureSpainCfSession(
         }
         console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête! port=${portNum}`);
       } catch (e) {
-        console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → retry`);
+        console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum);
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
         continue;
       }
 

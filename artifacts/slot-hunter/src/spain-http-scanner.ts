@@ -3109,6 +3109,9 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   // Nombre de rotations supplémentaires à tenter (0 si pool ≤ 1 ou test provider).
   const maxIpRotations = _testSessionProvider ? 0 : Math.max(0, poolSize - 1);
   let ipRotations = 0;
+  // true si au moins une rotation a avorté parce que ensureSpainCfSession a retourné null
+  // (= panne CF ou proxy, pas un Bookitit block). On évite de masquer ça en "ip_pool_blocked".
+  let sessionAcquisitionFailed = false;
 
   while (!mainResult && ipRotations < maxIpRotations) {
     ipRotations++;
@@ -3118,6 +3121,7 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     session = await ensureSpainCfSession(portalUrl);
     if (!session) {
       console.warn("[spain-http] ⚠️ ensureSpainCfSession → null lors de la rotation pool — CF ou proxy indisponible");
+      sessionAcquisitionFailed = true;
       break;
     }
     mainResult = await scanViaMainEndpoint(session, portalUrl);
@@ -3128,11 +3132,11 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   }
 
   // 3. Toutes les tentatives ont échoué.
-  // Si c'était un vrai blocage CF (403 / challenge), la rotation a déjà été
-  // déclenchée dans scanViaMainEndpoint au moment de la détection.
-  // Si toutes les IPs Decodo sont bloquées par Bookitit → ip_pool_blocked :
-  // le watcher applique un backoff long (5 min) avant de retenter.
-  const allIpsBlocked = ipRotations >= maxIpRotations && poolSize > 1;
+  // ip_pool_blocked uniquement si TOUTES les rotations ont eu une session valide mais
+  // /main/ retournait quand même 0B → blocage Bookitit sur toutes les IPs.
+  // Si la session CF elle-même a échoué (sessionAcquisitionFailed), c'est une panne
+  // CF/proxy, pas un block Bookitit → retourner "error" pour éviter un backoff 5 min injustifié.
+  const allIpsBlocked = !sessionAcquisitionFailed && ipRotations >= maxIpRotations && poolSize > 1;
   return {
     status: allIpsBlocked ? "ip_pool_blocked" : "error",
     errorMessage: allIpsBlocked
