@@ -107,7 +107,7 @@ REDIS_URL = "redis://localhost:6379"
 CAPTCHA_SERVICE_API_KEY = "csk_8c217a17fe57fe6e4f9fece75469b04d23755e29"
 PROXY_SERVICE_API_KEY = "psk_4aeefbcf681987e80db40548bd3fc1c07b26ab8b"
 SPAIN_HTTP_MODE = "1"
-SPAIN_SESSION_MODE = "persistent-browser"
+SPAIN_SESSION_MODE = "capsolver-residential"
 
 [[ports]]
 localPort = 3001
