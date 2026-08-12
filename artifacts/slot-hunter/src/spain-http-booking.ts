@@ -1364,24 +1364,32 @@ function extractFirstSlot(payload: unknown, minFree?: number): { date: string; t
       const times = dayObj.times;
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
 
-      // La réponse datetime est : times = { "HH:MM": { freeslots, agenda, timestamp, … } }
-      // La CLE est l'heure (ex: "09:00"), l'agenda est dans CHAQUE entrée temporelle.
-      // Confirmé par datetimelist.js showAvailableHours :
-      //   var agenda = someResults.somePreparedSlots[time]['agenda'];
-      //   parameters = { agenda, time, date }
-      // → on itère avec Object.entries pour obtenir la clé (=heure) ET la valeur (=données slot).
-      // Trier par clé (= heure "HH:MM") pour prendre le créneau le plus tôt disponible
+      // Structure réelle Bookitit (confirmée 2026-08-12) :
+      //   times = { "<clé_opaque>": { time: "HH:MM", freeSlots: N, totalSlots: N, agenda: "bkt…" } }
+      // La clé peut être un format HH:MM ou une valeur opaque ; le champ `time` dans la valeur
+      // contient toujours l'heure lisible. On utilise `t.time` en priorité, avec fallback sur la
+      // clé si elle ressemble à HH:MM (portails legacy).
+      // → on itère avec Object.entries pour accéder à la clé ET à la valeur.
+      // Trier par clé pour prendre le créneau le plus tôt dans l'objet.
       const sortedSlotEntries = Object.entries(times as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
       for (const [timeKey, v] of sortedSlotEntries) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
 
-        // freeslots est le nom de champ confirmé par le bundle ("freeslots", pas "freeSlots")
-        const freeRaw = t.freeslots ?? t.freeSlots ?? t.free_slots;
+        // freeSlots est le champ camelCase retourné par le serveur (freeSlots: 2).
+        // freeslots (lowercase) est le nom legacy mentionné dans le bundle client.
+        const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
         const free = typeof freeRaw === "number" ? freeRaw : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
         if (free === 0) continue; // explicitement aucun créneau
         // Group booking : ignorer les créneaux avec moins de places que le minimum requis
         if (minFree && minFree > 1 && free !== -1 && free < minFree) continue;
+
+        // Extraire l'heure : `t.time` en priorité (champ dans la valeur — structure réelle),
+        // fallback sur la clé si elle ressemble déjà à "HH:MM" (portails legacy).
+        const timeVal = typeof t.time === "string" && /^\d{1,2}:\d{2}$/.test(t.time) ? t.time
+          : /^\d{1,2}:\d{2}$/.test(timeKey) ? timeKey
+          : typeof t.time === "string" ? t.time
+          : timeKey;
 
         // agenda est dans l'entrée temporelle, pas dans l'objet jour parent
         const agendaId = typeof t.agenda === "string" ? t.agenda
@@ -1389,7 +1397,7 @@ function extractFirstSlot(payload: unknown, minFree?: number): { date: string; t
           : typeof dayObj.agenda === "string" ? dayObj.agenda // fallback parent
           : undefined;
 
-        return { date, time: timeKey, agendaId };
+        return { date, time: timeVal, agendaId };
       }
     }
   }
