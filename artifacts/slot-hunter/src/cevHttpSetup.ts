@@ -829,6 +829,7 @@ export async function setupCevSessionHttp(
     let cevSessionCookie: string | null = null;
     // rqdata hCaptcha enterprise extrait de la page /Captcha (scope ici pour être accessible après le if/else)
     let captchaPageRqdata: string | undefined;
+    let captchaPageRes_captured: Response | undefined; // stocké pour merger ses Set-Cookie dans fullCevCookie
 
     // Utiliser le cookie ASP.NET siphonné si disponible
     if (siphoned?.aspNetSessionId) {
@@ -896,6 +897,8 @@ export async function setupCevSessionHttp(
           redirect: "manual",
           signal: AbortSignal.timeout(15_000),
         });
+        // CRITIQUE : stocker la réponse pour capturer ses Set-Cookie (cookie de challenge OutSystems)
+        captchaPageRes_captured = captchaPageRes;
         const captchaPageHtml = await captchaPageRes.text().catch(() => "");
         // Extraire rqdata depuis le HTML de la page captcha.
         // Patterns couverts (du plus spécifique au plus large) :
@@ -974,6 +977,34 @@ export async function setupCevSessionHttp(
     if (siphoned?.f5CookieValue && siphoned?.f5CookieName) {
       fullCevCookie = `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; ${fullCevCookie}`;
     }
+
+    // CRITIQUE FIX : fusionner les Set-Cookie du GET /Captcha dans fullCevCookie.
+    // OutSystems pose un cookie de challenge lors du GET /Captcha (ex: nr2Site, nonce…).
+    // Sans ce cookie dans le POST SetCaptchaToken, le serveur ne retrouve pas la session
+    // challenge → captchaSolved:false systématiquement.
+    if (captchaPageRes_captured) {
+      const cookiesBefore = fullCevCookie;
+      fullCevCookie = mergeCookies(fullCevCookie, captchaPageRes_captured);
+      const captchaPageCookieNames = (() => {
+        const setCookie = captchaPageRes_captured.headers.get("set-cookie");
+        if (!setCookie) return [];
+        // Multi-cookie: node-fetch sépare par "\n", vrai HTTP sépare par ", "
+        return setCookie.split(/\n|,\s*(?=[A-Za-z])/g)
+          .map(c => c.split("=")[0]?.trim())
+          .filter(Boolean);
+      })();
+      botLog({
+        applicationId: clientId,
+        step: "cev_http_captcha_page_cookies_merged",
+        status: "ok",
+        data: {
+          captchaPageCookieNames,
+          cookiesChanged: fullCevCookie !== cookiesBefore,
+          fullCookieLen: fullCevCookie.length,
+        },
+      });
+    }
+
     botLog({ applicationId: clientId, step: "cev_http_cev_cookie_ok", status: "ok", data: { cookieLen: cevSessionCookie!.length, usingSiphoned: !!siphoned } });
 
     // ══════════════════════════════════════════════════════════════════════════
