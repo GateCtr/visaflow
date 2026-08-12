@@ -625,6 +625,15 @@ export async function startSpainWatcherLoop(): Promise<void> {
             // Chaque dossier attend que le précédent soit terminé avant de commencer.
             // ─────────────────────────────────────────────────────────────────────
 
+            // Capacité restante par créneau (clé = "date_time").
+            // freeslots=-1 → capacité inconnue → on tente quand même.
+            // Décrémenté après chaque booking réussi pour éviter qu'un dossier tente
+            // un créneau dont on sait déjà que toutes les places sont prises.
+            const slotFreeslots = new Map<string, number>(
+              (scanAllSlots ?? []).map((s) => [`${s.date}_${s.time}`, s.freeslots]),
+            );
+            const bookedCountBySlot = new Map<string, number>();
+
             const bookDossier = async (dossier: SpainDossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
@@ -643,6 +652,22 @@ export async function startSpainWatcherLoop(): Promise<void> {
               const assignedSlot = slotAssignments.get(dossier.id);
 
               log("INFO", `[SPAIN-WATCHER] 📋 ${dossier.applicantName}: booking "${matched.serviceName}" (${matched.serviceId}) pour "${dossier.visaType}"${assignedSlot ? ` → créneau pré-assigné ${assignedSlot.date} ${assignedSlot.time}` : " → re-scan datetime/"}`);
+
+              // ── Skip si toutes les places du créneau sont déjà prises ce cycle ──
+              if (assignedSlot) {
+                const slotKey = `${assignedSlot.date}_${assignedSlot.time}`;
+                const freeslots = slotFreeslots.get(slotKey) ?? -1;
+                const alreadyBooked = bookedCountBySlot.get(slotKey) ?? 0;
+                if (freeslots !== -1 && alreadyBooked >= freeslots) {
+                  log("INFO", `[SPAIN-WATCHER] ⏭ ${dossier.applicantName}: créneau ${assignedSlot.date} ${assignedSlot.time} complet (${alreadyBooked}/${freeslots} places prises) — skip`);
+                  await sendHeartbeat({
+                    applicationId: dossier.applicationId,
+                    result: "not_found",
+                    errorMessage: `Créneau ${assignedSlot.date} ${assignedSlot.time} complet (${freeslots} place(s), déjà prise(s) ce cycle)`,
+                  }).catch(() => {});
+                  return;
+                }
+              }
 
               const bookingConfig: SpainBookingConfig = {
                 login: dossier.login,
@@ -671,6 +696,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 );
 
                 if (bookingResult.status === "booked") {
+                  // ── Décrémenter la capacité locale du créneau ──
+                  if (assignedSlot) {
+                    const slotKey = `${assignedSlot.date}_${assignedSlot.time}`;
+                    bookedCountBySlot.set(slotKey, (bookedCountBySlot.get(slotKey) ?? 0) + 1);
+                  }
+
                   // ── 0. Report slot discovery outcome: BOOKED ──
                   reportSlotDiscoveryBatch([{
                     applicationId: dossier.applicationId,
