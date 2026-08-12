@@ -478,8 +478,10 @@ export async function solveSpainCloudflare(
         if (
           errCode.includes("ERROR_INVALID_TASK_DATA") ||
           errCode.includes("ERROR_CAPTCHA_UNSOLVABLE") ||
-          errCode.includes("ERROR_PROXY")
+          errCode.includes("ERROR_PROXY") ||
+          errCode.includes("ERROR_TASK_NOT_FOUND")
         ) {
+          // ERROR_TASK_NOT_FOUND = tâche expirée côté CapSolver (~2 min TTL) — inutile de continuer
           console.error(`[spain-soax] ❌ Erreur fatale: ${errCode}`);
           const details = resultData.errorDescription
             ? `${errCode}: ${resultData.errorDescription}`
