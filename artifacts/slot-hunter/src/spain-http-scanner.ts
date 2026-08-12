@@ -1152,6 +1152,13 @@ async function confirmSlotsViaDatetime(
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
+      if (svcPayload && typeof svcPayload === "object") {
+        const p = svcPayload as Record<string, unknown>;
+        const allow = p["AllowAppointment"] ?? p["allowAppointment"];
+        if (allow !== undefined) {
+          console.log(`[spain-http] 🔬 getservices/ AllowAppointment = ${JSON.stringify(allow)}`);
+        }
+      }
       const svcDetails = extractServiceDetails(svcPayload);
 
       if (svcDetails.length === 0) {
