@@ -1333,24 +1333,30 @@ async function bookDossierIsolated(
     }
   }
 
-  // ── Re-login isolé (cache keyed par vowintRef = session indépendante) ───
-  logFn.info(`  [${vowintRef}] 🔑 Ouverture session isolée (re-login)...`);
-  // Invalider le cache pour ce dossier spécifique afin de forcer un login frais
-  invalidateVowintCache(vowintEmail);
+  // ── Session isolée par dossier (ipSlotId = vowintRef) ──────────────────
+  // Chaque dossier a son propre slot de cache VOWINT (clé = "email:vowintRef").
+  // → Si ce dossier a déjà une session valide en cache (scan précédent ou scan
+  //   en cours sur le même compte), setupCevSessionHttp saute le login VOWINT
+  //   et commence directement à getAppointment — pas de captcha, ~5-10x plus rapide.
+  // → On NE vide PAS le cache global : les autres dossiers gardent leurs propres sessions.
+  // → Pas de risque "multiple session" CEV : chaque dossier a ses propres cookies VOWINT
+  //   (isolés par ipSlotId) et obtient un ASP.NET_SessionId CEV distinct.
+  logFn.info(`  [${vowintRef}] 🔑 Ouverture session (cache isolé par dossier — login sauté si session valide)...`);
 
   let session: Awaited<ReturnType<typeof setupCevSessionHttp>>;
   try {
     session = await setupCevSessionHttp(
       vowintEmail,
       vowintPassword,
-      vowintRef,   // accountId isolé par dossier
-      applicationId,
-      vowintRef,
-      undefined,
+      vowintRef,        // _applicationId (accountId par dossier)
+      applicationId,    // clientId (pour les logs)
+      vowintRef,        // vowintAppUrl
+      undefined,        // siphoned
+      vowintRef,        // ipSlotId → cache isolé par dossier, pas d'invalidation globale
     );
   } catch (err) {
-    logFn.error(`  [${vowintRef}] ❌ Re-login crash: ${err}`);
-    return { success: false, error: `re-login crash: ${err}` };
+    logFn.error(`  [${vowintRef}] ❌ Setup session crash: ${err}`);
+    return { success: false, error: `session setup crash: ${err}` };
   }
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
