@@ -204,15 +204,32 @@ async function main() {
   const { raw: svcRaw, parsed: svcParsed, httpStatus: svcStatus } =
     await callJsonp(bookSession, "getservices/", { selectedPeople: "1" });
   log(`HTTP ${svcStatus} | ${svcRaw.length}B`);
-  log(`  snippet: ${svcRaw.slice(0, 200)}`);
 
-  // Chercher le serviceId Pasaportes ou prendre le premier disponible
-  const serviceIds = extractFirstId(svcParsed, /^id$|service.*id/i);
-  const serviceId = serviceIds[0] ?? "";
-  ok(`Service cible : ${serviceId} (${serviceIds.length} services trouvés)`);
+  // Extraire tous les services avec leur nom + AllowAppointment
+  const svcPayload = svcParsed as any;
+  const rawServices: Array<{ id: string; name: string; allow: boolean }> = [];
+  const svcList = svcPayload?.Services ?? svcPayload?.services ?? [];
+  for (const s of (Array.isArray(svcList) ? svcList : [])) {
+    const id   = String(s.id ?? "").trim();
+    const name = String(s.name ?? s.nombre ?? s.titulo ?? "").replace(/<[^>]+>/g, "").trim();
+    const allow = s.AllowAppointment !== false && s.allowappointment !== false;
+    if (id) rawServices.push({ id, name, allow });
+  }
+  for (const s of rawServices) {
+    log(`  service: ${s.id} | "${s.name}" | AllowAppointment=${s.allow}`);
+  }
 
-  if (serviceIds.length === 0) {
-    warn("Aucun service détecté → utilisation de l'ID hardcodé Saopolo");
+  // Service cible = premier avec AllowAppointment != false ET nom visible non vide
+  // Les services avec nom vide sont des placeholders masqués (span display:none) — ignorer
+  // (règle SPAIN-HTTP-PURE-FLOW.md §8 : ne pas itérer sur les services — 1 seul getagendas/ par session)
+  const targetSvc = rawServices.find(s => s.allow && s.name.length > 0)
+    ?? rawServices.find(s => s.allow)
+    ?? rawServices[0];
+  const serviceId = targetSvc?.id ?? "";
+  ok(`Service cible : ${serviceId} "${targetSvc?.name ?? ""}" (${rawServices.length} services)`);
+
+  if (!serviceId) {
+    warn("Aucun service détecté");
   }
 
   // ── 5. getagendas/ ────────────────────────────────────────────────────────
@@ -220,7 +237,7 @@ async function main() {
   const { raw: agRaw, parsed: agParsed, httpStatus: agStatus } =
     await callJsonp(bookSession, "getagendas/", { "services[]": serviceId, selectedPeople: "1" });
   log(`HTTP ${agStatus} | ${agRaw.length}B`);
-  log(`  snippet: ${agRaw.slice(0, 200)}`);
+  log(`  raw COMPLET: ${agRaw}`);
 
   const agendaIds = extractFirstId(agParsed, /^id$|agenda.*id/i);
   const agendaId = agendaIds[0] ?? "";
@@ -232,7 +249,8 @@ async function main() {
   let slotTime = "";
 
   const now = new Date();
-  let globalMaxDays = "";
+  const today = now.toISOString().slice(0, 10);
+  let globalMaxDays = "";   // mis à jour uniquement si maxDays > today
   let monthsWithNoSlots = 0;
 
   for (let mo = 0; mo < 12; mo++) {
@@ -240,11 +258,14 @@ async function main() {
     const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-    // Stop si on dépasse maxDays (après au moins 2 mois)
-    if (globalMaxDays && mo >= 2) {
-      const nextFirst = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+    // Stop si le 1er du mois SUIVANT dépasse maxDays global (règle SPAIN-HTTP-PURE-FLOW.md §2)
+    // – toujours scanner au minimum M + M+1 (mo >= 1)
+    // – maxDays du mois courant (= aujourd'hui) n'est PAS une limite globale
+    if (globalMaxDays && mo >= 1) {
+      const nextFirst = new Date(now.getFullYear(), now.getMonth() + mo + 1, 1)
+        .toISOString().slice(0, 10);
       if (nextFirst > globalMaxDays) {
-        log(`  ⏹ Fin : ${nextFirst} > maxDays ${globalMaxDays}`);
+        log(`  ⏹ Fin : next=${nextFirst} > maxDays ${globalMaxDays}`);
         break;
       }
     }
@@ -260,9 +281,9 @@ async function main() {
     const { raw: dtRaw, parsed: dtParsed, httpStatus: dtStatus } =
       await callJsonp(bookSession, "datetime/", extra);
 
-    // Extraire maxDays
+    // Extraire maxDays — ignorer si <= aujourd'hui (signal "mois courant vide", pas limite globale)
     const md = (dtParsed as any)?.maxDays ?? (dtRaw.match(/"maxDays"\s*:\s*"([^"]+)"/)?.[1] ?? "");
-    if (md && (!globalMaxDays || md > globalMaxDays)) globalMaxDays = md;
+    if (md && md > today && (!globalMaxDays || md > globalMaxDays)) globalMaxDays = md;
 
     // Compter les créneaux — structure réelle: {Slots: [{date, times: {key: {freeSlots, time}}}]}
     const monthSlots = countSlots(dtParsed);
