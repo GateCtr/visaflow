@@ -283,9 +283,22 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     const iso = await createIsolatedBookingSession(mainSession, portalUrl);
     const bookSess: SpainCfSession = iso?.session ?? mainSession;
 
-    // getwidgetconfigurations/ remet le nonce PHP à zéro entre dossiers
-    // (executeHttpBooking l'appelle en premier pour chaque dossier)
-    await callJsonp(bookSess, portalUrl, "getwidgetconfigurations/", {});
+    // datetime/ pour le mois du créneau remet le contexte PHP à zéro entre dossiers.
+    // Après signin/ (même raté), l'état "slot sélectionné" est consommé.
+    // Rappeler datetime/ pour le bon mois ré-établit ce contexte → getsigninfields/ retourne le formulaire.
+    const slotMonth = assigned.date.slice(0, 7); // "2026-09"
+    const startOfMonth = `${slotMonth}-01`;
+    const lastDay = new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate();
+    const endOfMonth = `${slotMonth}-${String(lastDay).padStart(2, "0")}`;
+    const dtResetExtra: Record<string, string> = {
+      "services[]": serviceId,
+      start: startOfMonth,
+      end: endOfMonth,
+      selectedPeople: "1",
+    };
+    if (agendaId) dtResetExtra["agendas[]"] = agendaId;
+    const { raw: dtResetRaw } = await callJsonp(bookSess, portalUrl, "datetime/", dtResetExtra);
+    log(`  ${dossier.name} | datetime/ reset (${slotMonth}) → ${dtResetRaw.length}B`);
 
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,

@@ -1,33 +1,48 @@
 ---
 name: Spain Bookitit dossier session isolation
-description: Rules for multi-dossier session isolation in Spain capsolver mode — PHPSESSID constraint, sequential booking, _ownImpit pool.
+description: Rules for multi-dossier session isolation in Spain capsolver mode — PHPSESSID constraint, sequential booking, datetime/ reset, agendaId propagation.
 ---
 
 # Spain Bookitit dossier session isolation
 
 ## Rule
-In capsolver mode, all dossiers share the **same PHPSESSID** (bound to the CF challenge solve). Each booking session gets a fresh `_ownImpit` instance (TLS isolation) but cannot get a distinct PHPSESSID without re-running the full CF challenge.
+In capsolver mode, all dossiers share the **same PHPSESSID** (bound to the CF challenge solve). Sequential booking is mandatory.
 
-## Confirmed behavior (tested 2026-08-12)
-- `createIsolatedBookingSession` in capsolver mode: returns the existing PHPSESSID (lié au solve CF), attaches a fresh `_ownImpit` instance per session.
-- Calling `/main/` without PHPSESSID does NOT generate a new PHP session — the server requires the full widget initialization flow (GET widget → POST token → /main/).
-- Parallel bookings (Promise.all) with shared PHPSESSID: N-1 dossiers receive 0B from `getsigninfields/` → only 1 booking succeeds.
-- Sequential bookings (for...of): works correctly. Occasional 0B on `getsigninfields/` for the 2nd dossier is intermittent (server resets state briefly) — resolved by retries in `executeHttpBooking`.
+## PHP session state machine (confirmed 2026-08-12)
+
+After each dossier's `signin/` call (even with wrong credentials), the "slot selected" PHP state is consumed. The next dossier's `getsigninfields/` returns 0B unless the state is re-primed.
+
+**Fix: call `datetime/` for the slot's month before each dossier's `getsigninfields/`.** This re-initialises the PHP session state even if the response is 0B (the server updates the session independently of the response body).
+
+Confirmed flow per dossier (HTTP-only mode):
+```
+datetime/ (slot month reset)  →  getsigninfields/ → 13816B  →  signin/ → 236B
+```
+
+## Rule #9: getagendas/ only responds ONCE per PHPSESSID
+The first call returns data; all subsequent calls return 0B.  
+Fix: pass `agendaId` in `SpainBookingConfig` from the watcher, and use it as the initial value in `executeHttpBooking` before the `getagendas/` call. Added `agendaId?: string` to `SpainBookingConfig` (2026-08-12).
 
 ## Architecture
 ```
 1 CF solve  →  1 PHPSESSID  →  sequential booking mandatory
-                                (getsigninfields/ is stateful per PHPSESSID)
+                                (getsigninfields/ stateful per PHPSESSID)
+
+Per dossier in executeHttpBooking (HTTP-only path):
+  1. getwidgetconfigurations/ + getagendas/ (parallel) — agendaId from config if getagendas/ returns 0B
+  2. datetime/ reset (slot month) — re-primes PHP nonce even if 0B
+  3. getsigninfields/ → 13816B ✅
+  4. signin/ → 236B ✅
 
 _ownImpit: fresh Impit instance per createIsolatedBookingSession()
-           → TLS isolation without conflict (even if PHPSESSID is shared)
-           → useful for non-capsolver modes where PHPSESSID can differ
+           → TLS isolation (even with shared PHPSESSID)
 ```
 
 ## Why parallel is not viable in capsolver mode
-True parallel = 1 CF solve per dossier (~20s + ~$0.01/dossier). Counterproductive vs sequential (~5s/dossier, no extra cost).
+True parallel = 1 CF solve per dossier (~20s + ~$0.01/dossier). Counterproductive vs sequential (~10s/dossier with datetime/ reset, no extra cost).
 
 ## How to apply
-- `spain-watcher-loop.ts`: always use `for (const dossier of dossiers) await bookDossier(dossier)` — never `Promise.all` in capsolver mode.
-- `createIsolatedBookingSession`: capsolver path returns `{ ...cfSession, _ownImpit: createFreshSpainImpit(cfSession) }` — do NOT delete PHPSESSID or call /main/ to get a new one.
-- `freeslots` skip: if `bookedCountBySlot[slot] >= freeslots`, skip subsequent dossiers on that slot — avoids wasted requests when capacity is known.
+- `spain-watcher-loop.ts`: `for (const dossier of dossiers) await bookDossier(dossier)` — never `Promise.all`.
+- `bookingConfig`: include `agendaId: assignedSlot?.agendaId` so dossier #2+ have the correct agendaId.
+- `executeHttpBooking` HTTP-only path: call `datetime/` (slot month) BEFORE `getsigninfields/`.
+- `createIsolatedBookingSession` capsolver path: return `{ ...cfSession, _ownImpit: createFreshSpainImpit(cfSession) }` — do NOT delete PHPSESSID.

@@ -681,6 +681,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 groupSize: dossier.groupSize,
                 targetDate: assignedSlot?.date,
                 targetTime: assignedSlot?.time,
+                // agendaId transmis depuis le scan — getagendas/ ne retourne que 1 réponse par
+                // PHPSESSID (règle #9). Sans ça, dossier #2+ aurait agendaId="" → getsigninfields/ sans agendas[].
+                agendaId: assignedSlot?.agendaId,
               };
 
               try {

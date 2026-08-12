@@ -76,6 +76,12 @@ export interface SpainBookingConfig {
   /** Heure pré-confirmée par le scanner (HH:MM) — saute le re-fetch datetime/. */
   targetTime?: string;
   /**
+   * Agenda pré-confirmé par le scanner (ex: bkt301070).
+   * Règle #9 : getagendas/ ne retourne qu'une réponse par PHPSESSID — transmis
+   * depuis le scan pour éviter agendaId="" sur dossier #2+ en mode capsolver.
+   */
+  agendaId?: string;
+  /**
    * Nombre minimum de places libres requises (group booking).
    * Si > 1, les créneaux avec freeslots < groupSize sont ignorés.
    * Absent ou 1 = solo booking (défaut).
@@ -713,7 +719,9 @@ export async function executeHttpBooking(
   console.log(`[spain-booking] 🔍 DEBUG getagendas raw: ${JSON.stringify(agendasPayload)?.slice(0, 400)}`);
   console.log(`[spain-booking] 🔍 DEBUG widgetcfg raw: ${JSON.stringify(rawCfgPayload)?.slice(0, 400)}`);
 
-  let agendaId = "";
+  // config.agendaId = valeur transmise depuis le scan (règle #9 : getagendas/ ne répond qu'une
+  // fois par PHPSESSID — pour dossier #2+ en mode capsolver, la réponse est 0B).
+  let agendaId = config.agendaId ?? "";
   if (agendasPayload && typeof agendasPayload === "object") {
     const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
     console.log(`[spain-booking] 🔍 DEBUG extractIds agendas: ${JSON.stringify(agendaIds)}`);
@@ -1038,7 +1046,31 @@ export async function executeHttpBooking(
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
   } else {
-    // ─── 5a. getsigninfields/ (mode HTTP-only) ────────────────────────────────
+    // ─── 5a. datetime/ reset — ré-amorçage nonce PHP ─────────────────────────
+    // Confirmé 2026-08-12 : après signin/ d'un dossier précédent (même PHPSESSID), l'état
+    // "slot sélectionné" est consommé → getsigninfields/ retourne 0B pour le dossier suivant.
+    // Rappeler datetime/ pour le mois du créneau ré-initialise cet état côté PHP,
+    // même si la réponse HTTP est 0B (le serveur met à jour sa session indépendamment du corps).
+    if (slotDate) {
+      const slotMonth = slotDate.slice(0, 7); // "YYYY-MM"
+      const lastDayOfMonth = new Date(
+        Number(slotMonth.slice(0, 4)),
+        Number(slotMonth.slice(5, 7)),
+        0,
+      ).getDate();
+      const dtResetParams: Record<string, string | string[]> = {
+        ...baseParams,
+        "services[]": [targetService.serviceId],
+        ...(agendaId ? { "agendas[]": [agendaId] } : {}),
+        start: `${slotMonth}-01`,
+        end: `${slotMonth}-${String(lastDayOfMonth).padStart(2, "0")}`,
+        selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+      };
+      const dtResetPayload = await callEndpoint("datetime/", dtResetParams);
+      console.log(`${logPrefix} 🔄 datetime/ reset (${slotMonth}) — ré-amorçage nonce PHP: ${dtResetPayload ? "OK" : "0B (normal)"}`);
+    }
+
+    // ─── 5b. getsigninfields/ (mode HTTP-only) ────────────────────────────────
     // Le serveur Bookitit stocke un nonce dans la session PHP après cet appel.
     // Sans ce nonce, signin/ retourne 0B (confirmé 2026-08-12 Saopolo HTTP pur).
     // Params identiques à ceux de signin/ (services[], agendas[], date, time, selectedPeople).
