@@ -1057,14 +1057,23 @@ async function performScan(
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
     // HCAPTCHA_REJECTED_BY_SERVER = captchaSolved:false retourné par CEV.
-    // Cause probable : mismatch IP (HCaptchaTaskProxyless résolu depuis Anti-Captcha, soumis depuis Railway)
-    // ou congestion transitoire CEV. userAgent ajouté au task Proxyless pour réduire les rejections.
-    // → 2 retries (identique aux autres erreurs captcha) avec 30s de pause entre chaque.
+    // Root cause confirmé : le retry réutilisait la MÊME session VOWINT (ASP.NET_SessionId identique,
+    // cache 4h). CEV marque la session comme "captcha tenté/expiré" après le 1er reject → tout nouveau
+    // token soumis sur cette session reçoit aussi captchaSolved:false, même s'il est frais.
+    // FIX : invalider AUSSI la session VOWINT sur HCAPTCHA_REJECTED_BY_SERVER pour forcer un re-login
+    // complet (nouveau ASP.NET_SessionId) → CEV accepte le token frais sur la nouvelle session.
     const isServerRejection = result.error === "HCAPTCHA_REJECTED_BY_SERVER";
-    const maxRetries = isServerRejection ? 2 : 2;
+    const maxRetries = 2;
     if (isCaptchaError && _hcaptchaRetry < maxRetries) {
       logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/${maxRetries} avec clé fraîche dans 30s…`);
       invalidateAnticaptchaCache();
+      if (isServerRejection) {
+        // Session CEV consommée/invalidée côté serveur après le 1er reject.
+        // Invalider le cache VOWINT → prochain setupCevSessionHttp() fera un re-login complet
+        // (nouveau ASP.NET_SessionId) plutôt que de réutiliser la session rejetée.
+        invalidateVowintCache(vowintEmail);
+        logFn.warn(`  🔄 Session VOWINT invalidée → re-login complet au prochain retry`);
+      }
       await sleep(30_000);
       return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
     }
