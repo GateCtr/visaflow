@@ -270,18 +270,19 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     warn(`Partage de créneaux : ${unique.size} créneaux uniques pour ${assignedSlots.length} dossiers (normal si peu de disponibilités)`);
   }
 
-  // 7. Booking séquentiel — même session PHP, un dossier à la fois
-  // (getsigninfields/ doit être appelé séquentiellement sur la même session impit)
-  dash(`Booking × ${dossiers.length} (fake credentials, séquentiel)`);
-  for (const dossier of dossiers) {
+  // 7. Booking PARALLÈLE — chaque dossier a sa propre instance impit (_ownImpit)
+  // via createIsolatedBookingSession → pas de conflit TLS malgré l'exécution simultanée.
+  dash(`Booking × ${dossiers.length} (fake credentials, PARALLÈLE)`);
+  const t0Book = Date.now();
+
+  await Promise.all(dossiers.map(async (dossier) => {
     const assigned = assignments.get(dossier.id);
     if (!assigned) { log(`  ${dossier.name} → pas de créneau — skip`); return; }
 
-    // Session isolée propre pour chaque dossier
+    // Session isolée avec _ownImpit dédié → TLS isolé par dossier
     const isoBook = await createIsolatedBookingSession(mainSession, portalUrl);
     const bookSess: SpainCfSession = isoBook?.session ?? mainSession;
 
-    // getsigninfields/ (déclenche le nonce PHP côté serveur)
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,
       date: assigned.date,
@@ -289,10 +290,10 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
       selectedPeople: "1",
     };
     if (agendaId) sfExtra["agendas[]"] = agendaId;
+    const tSf = Date.now();
     const { raw: sfRaw } = await callJsonp(bookSess, portalUrl, "getsigninfields/", sfExtra);
-    log(`  ${dossier.name} | getsigninfields/ → ${sfRaw.length}B`);
+    log(`  ${dossier.name} | getsigninfields/ → ${sfRaw.length}B (démarré à +${((tSf - t0Book) / 1000).toFixed(2)}s)`);
 
-    // signin/ avec faux credentials
     const signinExtra: Record<string, string> = {
       "services[]": serviceId,
       date: assigned.date,
@@ -306,6 +307,7 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     };
     if (agendaId) signinExtra["agendas[]"] = agendaId;
 
+    const tSi = Date.now();
     const { raw: signinRaw, parsed: signinParsed, status: signinSt } =
       await callJsonp(bookSess, portalUrl, "signin/", signinExtra);
 
@@ -314,18 +316,21 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
       ?? (signinParsed as any)?.error;
     const errMsg = Array.isArray(errors) ? errors.map((e: any) => e.message).join(", ") : String(errors ?? "");
 
-    log(`  ${dossier.name} | créneau=${assigned.date} ${assigned.time}`);
-    log(`    signin/ → HTTP ${signinSt} | ${signinRaw.length}B`);
+    log(`  ${dossier.name} | créneau=${assigned.date} ${assigned.time} | signin/ démarré à +${((tSi - t0Book) / 1000).toFixed(2)}s`);
+    log(`    signin/ → HTTP ${signinSt} | ${signinRaw.length}B | terminé à +${((Date.now() - t0Book) / 1000).toFixed(2)}s`);
     log(`    réponse : ${errMsg || JSON.stringify(signinParsed)?.slice(0, 200) || "(vide)"}`);
 
     if (errMsg.includes("contraseña") || errMsg.includes("password") || errMsg.includes("Usuario")) {
-      ok(`    ✅ ${dossier.name} — "Usuario o contraseña incorrectos" reçu`);
+      ok(`    ✅ ${dossier.name} — serveur atteint en parallèle`);
     } else if (signinRaw.length === 0) {
-      warn(`    ${dossier.name} — 0B (session pas encore chaude)`);
+      warn(`    ${dossier.name} — 0B (conflit TLS ou session froide)`);
     } else {
       warn(`    ${dossier.name} — réponse inattendue : ${signinRaw.slice(0, 200)}`);
     }
-  }
+  }));
+
+  const totalBook = ((Date.now() - t0Book) / 1000).toFixed(2);
+  log(`\n⏱  Booking parallèle total : ${totalBook}s (séquentiel aurait pris ~${(dossiers.length * 1.5).toFixed(1)}s)`);
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

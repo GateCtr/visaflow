@@ -773,9 +773,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             };
 
-            // Chaque bookDossier utilise une session isolée avec son propre _ownImpit
-            // → pas de conflit TLS malgré l'exécution parallèle.
-            await Promise.all(dossiers.map(bookDossier));
+            // Booking séquentiel : en mode capsolver, tous les dossiers partagent le même
+            // PHPSESSID (établi lors du solve). getsigninfields/ est une opération stateful
+            // côté serveur — appels simultanés sur le même PHPSESSID → 0B pour N-1 dossiers.
+            // Le vrai parallèle nécessiterait un /main/ dédié par dossier (PHPSESSID distinct).
+            for (const dossier of dossiers) await bookDossier(dossier);
           }
         }
       }
