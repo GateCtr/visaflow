@@ -1011,8 +1011,10 @@ export async function setupCevSessionHttp(
     // FIX #4: Le serveur peut renvoyer HTTP 200 avec captchaSolved:false — vérifier explicitement.
     if (captchaData.captchaSolved === false) {
       botLog({ applicationId: clientId, step: "cev_http_captcha_rejected", status: "fail", data: { fullResponse: JSON.stringify(captchaData) } });
-      // Retourner une erreur CAPTCHA pour déclencher le retry automatique dans performScan
-      // (jusqu'à 2 retries avec invalidation du cache Anti-Captcha).
+      // Invalider le cache VOWINT pour forcer une nouvelle session ASP.NET complète au prochain essai.
+      // Raison : le token hCaptcha est lié à la session serveur — réessayer sur la même
+      // session produit le même rejet. Une session fraîche = nouveau captcha challenge = nouveau token.
+      invalidateVowintCache(vowintEmail, ipSlotId);
       return { success: false, error: "HCAPTCHA_REJECTED_BY_SERVER" };
     }
     
@@ -1054,7 +1056,7 @@ export async function setupCevSessionHttp(
         data: { message: "Résolution nouveau captcha pour retry" },
       });
       
-      const retryHcaptchaToken = await solveHcaptcha(clientId);
+      const retryHcaptchaToken = await solveHcaptcha(clientId, captchaRqdata);
       
       if (!retryHcaptchaToken) {
         return { success: false, error: "HCAPTCHA_RETRY_FAILED" };
@@ -1697,7 +1699,9 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
   const userAgent = getCevSessionUa();
 
   const useProxy = await shouldUseProxy();
-  const rawProxyUrl = useProxy ? (process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || null) : null;
+  // DECODO_PROXY_URL ajouté comme fallback — utilisé quand SOAX/iProyal ne sont pas configurés.
+  // L'IP du solveur doit correspondre à l'IP de la session pour éviter le rejet hCaptcha.
+  const rawProxyUrl = useProxy ? (process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || process.env.DECODO_PROXY_URL || null) : null;
   const proxyUrl = rawProxyUrl ? (rawProxyUrl.startsWith("http") ? rawProxyUrl : `http://${rawProxyUrl}`) : null;
   let proxyConfig: any = null;
   let proxyDnsResolved: string | null = null;
