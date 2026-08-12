@@ -1493,16 +1493,31 @@ class SpainPersistentBrowserManager {
    * Decodo → nouvelle IP sticky → CF émet un nonce frais → /main/ répond.
    */
   async closeAndInvalidate(): Promise<void> {
+    // Capturer AVANT de null-er — TypeScript rétrécit le type après l'affectation.
+    const sessionToPreserve = this._cachedSession;
+    const cookiesStillValid = sessionToPreserve != null && Date.now() < sessionToPreserve.expiresAt;
+
     this._cachedSession = null;
     this._prefetchRetried = false; // reset pour le prochain cycle
     this._page = null;
     this._apiPrefetchCache.clear();
 
-    // Supprimer la clé Redis AVANT de relancer le browser, sinon ensureSession()
-    // appelé depuis le retry unique va restaurer la même session cassée (boucle infinie).
+    // Si les cookies CF sont encore valides (expiresAt dans le futur) → les préserver
+    // en Redis SANS prefetch. Quand le proxy récupère, le prochain cycle restaure ces
+    // cookies et réattache le browser sans re-solve CF (pas de dépense CapSolver inutile).
+    // Si les cookies sont expirés → supprimer la clé pour forcer un solve frais.
     try {
-      const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
-      removeSpainCfSessionFromRedis();
+      if (cookiesStillValid && sessionToPreserve != null) {
+        const { syncSpainCfSessionToRedis } = await import("./spain-redis-persistence.js");
+        const sessionWithoutPrefetch = { ...sessionToPreserve, prefetchedMainHtml: undefined };
+        syncSpainCfSessionToRedis(sessionWithoutPrefetch as SerializableSpainCfSession);
+        const remainMin = Math.round((sessionToPreserve.expiresAt - Date.now()) / 60_000);
+        console.log(`[spain-pb] 🔄 Cookies CF valides (reste ${remainMin}min) conservés en Redis sans prefetch — solve évité si proxy récupère`);
+      } else {
+        const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
+        removeSpainCfSessionFromRedis();
+        console.log("[spain-pb] 🗑️ Cookies CF expirés — clé Redis supprimée (solve frais requis)");
+      }
     } catch {
       // non-fatal
     }
@@ -1888,17 +1903,31 @@ class SpainPersistentBrowserManager {
       const { restoreSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
       const redisData = await restoreSpainCfSessionFromRedis();
       if (redisData && Date.now() < redisData.expiresAt) {
-        // N'utiliser la session Redis QUE si elle a un prefetchedMainHtml valide.
-        // Sans prefetch (0B), source="playwright" mais _page=null → /main/ browser
-        // retourne 0B → closeAndInvalidate → Redis restore → même session → boucle infinie.
+        // Si la session a un prefetchedMainHtml → usage immédiat sans browser.
+        // Sinon → les cookies CF sont encore valides : on restaure quand même la session
+        // et on réattache le browser sans re-solve CF (évite un solve inutile quand le
+        // proxy est temporairement indisponible). Le scanner tentera /main/ live via
+        // browser ; si ça échoue, closeAndInvalidate() préserve les cookies en Redis
+        // (sans prefetch) pour le cycle suivant.
+        // Note : on ne supprime plus la clé Redis ici — closeAndInvalidate() gère ça
+        // en fonction du statut réel des cookies CF.
         const hasPrefetch = (redisData.prefetchedMainHtml?.length ?? 0) > 0;
         if (!hasPrefetch) {
+          const remainMin = Math.round((redisData.expiresAt - Date.now()) / 60_000);
           console.warn(
-            `[spain-pb] ⚠️ Session Redis sans prefetch (0B) — solve complet requis (IP peut être bloquée)`,
+            `[spain-pb] ♻️ Session Redis sans prefetch (reste ${remainMin}min) — réattachement browser sans re-solve CF`,
           );
-          // Supprimer la clé cassée pour éviter qu'un autre cycle la restaure
-          const { removeSpainCfSessionFromRedis } = await import("./spain-redis-persistence.js");
-          removeSpainCfSessionFromRedis();
+          const restored: SpainCfSession = { ...redisData, source: "playwright", prefetchedMainHtml: undefined };
+          this._cachedSession = restored;
+          this._lastEnsureFromCache = true; // évite guard destructeur dans ensureSpainCfSession
+          setActiveSpainCfSession(restored);
+          // Réattacher le browser avec les cookies existants (sans navigation = sans proxy requis)
+          try {
+            await this._reattachBrowserWithSession();
+          } catch (reattachErr) {
+            console.warn(`[spain-pb] ⚠️ Réattachement browser (non-fatal): ${reattachErr}`);
+          }
+          return restored;
         } else {
           const restored: SpainCfSession = { ...redisData, source: "playwright" };
           this._cachedSession = restored;
