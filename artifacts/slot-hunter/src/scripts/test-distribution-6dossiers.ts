@@ -283,6 +283,10 @@ async function testPortal(label: string, portalUrl: string, dossiers: FakeDossie
     const iso = await createIsolatedBookingSession(mainSession, portalUrl);
     const bookSess: SpainCfSession = iso?.session ?? mainSession;
 
+    // getwidgetconfigurations/ remet le nonce PHP à zéro entre dossiers
+    // (executeHttpBooking l'appelle en premier pour chaque dossier)
+    await callJsonp(bookSess, portalUrl, "getwidgetconfigurations/", {});
+
     const sfExtra: Record<string, string> = {
       "services[]": serviceId,
       date: assigned.date,
