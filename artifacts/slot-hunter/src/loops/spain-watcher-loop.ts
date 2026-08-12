@@ -619,15 +619,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             }
 
-            // ─── Booking PARALLÈLE — 1 PHPSESSID distinct par dossier ────────────
-            // createIsolatedBookingSession() supprime le PHPSESSID existant de la copie
-            // et appelle /main/ sans PHPSESSID → le serveur émet un nouveau PHPSESSID
-            // via Set-Cookie. Chaque dossier obtient ainsi sa propre session PHP isolée,
-            // ce qui permet à getsigninfields/ + signin/ de partir simultanément sans
-            // conflit d'état côté serveur Bookitit.
-            //
-            // Les appels /main/ de tous les dossiers se déroulent en parallèle grâce
-            // à Promise.all ci-dessous (~2-3s pour N dossiers vs N×2-3s séquentiel).
+            // ─── Booking séquentiel ───────────────────────────────────────────────
+            // En mode capsolver, tous les dossiers partagent le même PHPSESSID (lié
+            // au solve CF). getsigninfields/ est stateful par PHPSESSID côté serveur :
+            // appels simultanés → N-1 dossiers reçoivent 0B. Testé et confirmé.
+            // Vrai parallèle = 1 solve CF par dossier → trop coûteux (~20s + $0.01/dossier).
             // ─────────────────────────────────────────────────────────────────────
 
             // Capacité restante par créneau (clé = "date_time").
@@ -778,12 +774,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
               }
             };
 
-            // Booking PARALLÈLE — 1 PHPSESSID distinct par dossier.
-            // createIsolatedBookingSession() (appelé dans executeHttpBooking) retire le PHPSESSID
-            // de la copie de session avant /main/ → le serveur émet un nouveau PHPSESSID unique.
-            // Comme bookDossier tourne dans Promise.all, tous les appels /main/ partent en
-            // parallèle (~2-3s pour N dossiers) puis getsigninfields/+signin/ simultanément.
-            await Promise.all(dossiers.map(bookDossier));
+            for (const dossier of dossiers) await bookDossier(dossier);
           }
         }
       }
