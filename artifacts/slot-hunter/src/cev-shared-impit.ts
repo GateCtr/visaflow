@@ -16,6 +16,7 @@
  */
 
 import { Impit } from "impit";
+import { setCevDecodoRotationCountFn } from "./cev-decodo-pool.js";
 
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
 const DECODO_PROXY_URL_CEV = process.env.DECODO_PROXY_URL;
@@ -728,6 +729,15 @@ const _cevDecodoRotationCount = new Map<string, number>();
 /** Lifetime des sessions sticky Decodo (minutes) — cohérent avec iProyal. */
 const DECODO_STICKY_LIFETIME_MIN = 60;
 
+// ─── Injection callback dans cev-decodo-pool au chargement du module ───────
+/** Retourne le compteur de rotation pour un compte (injecté dans cev-decodo-pool). */
+function getCevDecodoRotationCount(accountKey: string): number {
+  return _cevDecodoRotationCount.get(accountKey) ?? 0;
+}
+
+// Injection callback dans cev-decodo-pool au chargement du module
+setCevDecodoRotationCountFn(getCevDecodoRotationCount);
+
 /**
  * Génère une URL Decodo résidentiel avec session sticky déterministe par dossier.
  *
@@ -876,6 +886,26 @@ interface CevProxyGuardState {
 
 let _cevProxyGuardState: CevProxyGuardState | undefined;
 
+/** Flag pour bloquer la rotation proxy pendant une opération critique (ex: captcha). */
+let _cevProxyLocked = false;
+
+/**
+ * Verrouille le proxy pour empêcher la rotation pendant une opération critique.
+ * À utiliser autour de la résolution captcha pour garantir même IP solve + submit.
+ */
+export function lockCevProxy(): void {
+  _cevProxyLocked = true;
+  console.log(`[CEV-PROXY-GUARD] 🔒 Proxy verrouillé (captcha en cours)`);
+}
+
+/**
+ * Déverrouille le proxy après l'opération critique.
+ */
+export function unlockCevProxy(): void {
+  _cevProxyLocked = false;
+  console.log(`[CEV-PROXY-GUARD] 🔓 Proxy déverrouillé`);
+}
+
 /**
  * Initialise le proxy guard CEV pour la session active.
  * Appelé après le premier fetch proxy réussi.
@@ -926,6 +956,12 @@ export async function checkCevProxyLiveness(): Promise<boolean> {
   _cevProxyGuardState.lastCheckAt = Date.now();
 
   if (_cevProxyGuardState.consecutiveFailures >= CEV_PROXY_MAX_FAILURES) {
+    // Vérifier si le proxy est verrouillé (captcha en cours)
+    if (_cevProxyLocked) {
+      console.warn(`[CEV-PROXY-GUARD] ⚠️ Rotation différée — proxy verrouillé (captcha en cours)`);
+      return false; // Maintenir le proxy actuel même s'il semble mort
+    }
+    
     _cevProxyGuardState.frozen = true;
     const masked = _cevProxyGuardState.proxyUrl.replace(/:([^:@]+)@/, ":***@");
     console.error(`[CEV-PROXY-GUARD] 🚨 PROXY MORT mid-session — SESSION GELÉE`);

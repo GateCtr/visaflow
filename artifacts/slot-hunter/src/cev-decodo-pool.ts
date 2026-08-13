@@ -102,6 +102,16 @@ export function reloadCevDecodoPool(): void {
   _cachedPool = undefined;
 }
 
+// ─── Rotation count — injecté depuis cev-shared-impit pour éviter import circulaire ──
+
+/** Callback pour lire le compteur de rotation par compte (injecté par cev-shared-impit). */
+let _getCevDecodoRotationCount: (accountKey: string) => number = () => 0;
+
+/** Injecte la fonction de lecture du compteur de rotation. Appelé au démarrage par cev-shared-impit. */
+export function setCevDecodoRotationCountFn(fn: (accountKey: string) => number): void {
+  _getCevDecodoRotationCount = fn;
+}
+
 /** Retourne true si au moins une IP Decodo est configurée. */
 export function hasCevDecodoProxy(): boolean {
   return getPool().length > 0;
@@ -116,7 +126,8 @@ export function getCevDecodoPoolSize(): number {
  * Retourne l'URL Decodo assignée à ce compte (sticky par hash d'accountId).
  *
  * Tous les dossiers du même compte partagent la même IP.
- * Avec N IPs et M comptes : chaque compte a 1 IP fixe = hash(accountId) % N.
+ * En cas d'erreur de connexion, rotateCevDecodoSession(accountId) incrémente
+ * le compteur de rotation → l'index est décalé → nouvelle IP assignée.
  *
  * @param accountId - Identifiant du compte CEV (même pour tous ses dossiers)
  * @returns URL proxy ou undefined si pool vide
@@ -129,10 +140,21 @@ export function getCevDecodoUrlForAccount(accountId: string): string | undefined
   const key = accountId.toLowerCase();
   let hash = 0;
   for (const ch of key) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
-  const idx = Math.abs(hash) % pool.length;
+  const baseIdx = Math.abs(hash) % pool.length;
+
+  // Décaler l'index selon le compteur de rotation (incrémenté par rotateCevDecodoSession)
+  // Permet de changer d'IP sans changer d'accountId quand l'IP assignée est morte.
+  // Import dynamique évité — le Map est accessible directement depuis cev-shared-impit
+  // via la fonction exportée getCevDecodoRotationCount.
+  const rotationCount = _getCevDecodoRotationCount(key);
+  const idx = (baseIdx + rotationCount) % pool.length;
 
   const url = pool[idx];
   const masked = url.replace(/:([^:@]+)@/, ":***@");
-  console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}] ${masked.slice(0, 70)}`);
+  if (rotationCount > 0) {
+    console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}] (rotation #${rotationCount}) ${masked.slice(0, 70)}`);
+  } else {
+    console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}] ${masked.slice(0, 70)}`);
+  }
   return url;
 }

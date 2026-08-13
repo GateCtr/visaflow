@@ -1166,7 +1166,7 @@ async function performScan(
     applicationId,
     dossier.vowintRef,
     siphoned,
-    undefined,  // ipSlotId
+    dossier.vowintRef,  // ipSlotId → isolation par dossier, évite la contamination croisée captcha
     undefined,  // presolvedHcaptchaToken
     accountProxyUrl,
   );
@@ -1193,8 +1193,10 @@ async function performScan(
         // Session CEV consommée/invalidée côté serveur après le 1er reject.
         // Invalider le cache VOWINT → prochain setupCevSessionHttp() fera un re-login complet
         // (nouveau ASP.NET_SessionId) plutôt que de réutiliser la session rejetée.
-        invalidateVowintCache(vowintEmail);
-        logFn.warn(`  🔄 Session VOWINT invalidée → re-login complet au prochain retry`);
+        // IMPORTANT: utiliser vowintRef comme ipSlotId pour invalider SEULEMENT cette session,
+        // pas toutes les sessions du compte (évite la contamination croisée).
+        invalidateVowintCache(vowintEmail, dossier.vowintRef);
+        logFn.warn(`  🔄 Session VOWINT invalidée pour dossier ${dossier.vowintRef.slice(0, 20)}… → re-login isolé au prochain retry`);
       }
       await sleep(30_000);
       return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger, accountProxyUrl);
@@ -2535,7 +2537,8 @@ async function runAccountLoop(job: any): Promise<void> {
               if (cancelResult.emailSent) {
                 logger.info(`  ✅ Annulation réussie (${cancelResult.message?.slice(0, 80) ?? "OK"}) — invalidation session pour re-scan propre`);
                 // Invalider la session VOWINT pour forcer un re-login propre au prochain scan
-                invalidateVowintCache(vowintEmail);
+                // Isoler par dossier pour ne pas affecter les autres dossiers du même compte
+                invalidateVowintCache(vowintEmail, dossier.vowintRef);
                 botLog({
                   applicationId: logApplicationId,
                   step: "cev_dossier_cancel_success",

@@ -19,7 +19,7 @@
  */
 
 import { botLog, getBotConfigValue } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, getCevProxyUrl, shouldUseProxy } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, getCevProxyUrl, shouldUseProxy, lockCevProxy, unlockCevProxy } from "./cev-shared-impit.js";
 import { lookup } from "node:dns/promises";
 import {
   syncVowintSessionToRedis,
@@ -1029,6 +1029,12 @@ export async function setupCevSessionHttp(
     // En cas de captchaSolved:false, on ré-essaie immédiatement avec un nouveau token
     // sur la MÊME session OutSystems (hcaptcha siteverify est stateless — n'importe
     // quel token valide pour la sitekey est accepté, pas besoin d'une nouvelle session).
+    
+    // LOCK PROXY pour empêcher rotation automatique pendant solve+submit captcha
+    lockCevProxy();
+    let captchaSuccess = false;
+    
+    try {
     // On n'invalide VOWINT qu'après MAX_CAPTCHA_ATTEMPTS échecs consécutifs.
     const MAX_CAPTCHA_ATTEMPTS = 3;
     let captchaData: { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean } = {};
@@ -1097,11 +1103,19 @@ export async function setupCevSessionHttp(
         }
         // Toutes les tentatives épuisées → invalider VOWINT (session compromise)
         invalidateVowintCache(vowintEmail, ipSlotId);
+        unlockCevProxy(); // UNLOCK avant return
         return { success: false, error: "HCAPTCHA_REJECTED_BY_SERVER" };
       }
 
       // captchaSolved !== false → succès (ou réponse sans le champ)
+      captchaSuccess = true;
       break;
+    }
+    } finally {
+      // UNLOCK PROXY après captcha (succès ou échec)
+      if (!captchaSuccess) {
+        unlockCevProxy();
+      }
     }
     
     // DEBUG: Loguer la réponse brute pour comprendre le format du validUntil
@@ -1512,6 +1526,7 @@ export async function setupCevSessionHttp(
 
       if (newRdvChainStr.includes("NoAvailability")) {
         console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → NoAvailability (aucun créneau)`);
+        unlockCevProxy(); // UNLOCK avant return success
         return {
           success: true,
           sessionCookie: cevSessionCookie,
