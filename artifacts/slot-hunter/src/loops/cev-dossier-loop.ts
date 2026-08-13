@@ -747,11 +747,25 @@ async function captureFullSessionForAccount(
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-// ── One-Shot (Predator) — la limite 5 clics/h n'existe plus ────────────────
+// ── One-Shot (Predator) ────────────────────────────────────────────────────
 // Stratégie : 1 réveil toutes les 2 min → 1 clic par dossier → fermeture → sleep
 // Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
 const DEFAULT_INTERVAL_SEC = 60; // 2 min par défaut (configurable via cevScanIntervalSec)
-const CLICK_WINDOW_MS = 60 * 60 * 1000; // fenêtre stats uniquement (plus de limite quota)
+const CLICK_WINDOW_MS = 60 * 60 * 1000;
+
+// ── Quota de clics « Prendre rendez-vous » — contrainte serveur CEV ─────────
+//
+// L'architecture CEV interdit tout polling : une session est réputée CONSOMMÉE
+// dès l'appel GetEAppointmentUrl. Si la réponse est « no availability », elle
+// expire immédiatement — les 15 min de validUntil ne servent qu'au booking, et
+// quitter la page tue la session. Chaque vérification coûte donc obligatoirement
+// un cycle complet : login VOWINT → clic → captcha → Integration/VOW.
+//
+// Le serveur limite ces clics à 5/heure/dossier ; on s'arrête à 4 pour garder
+// une marge (un rate-limit VOWINT bloque le dossier bien plus longtemps qu'un
+// simple skip). Le compteur est consulté AVANT chaque tentative : un dossier
+// déjà à 4 est conservé tel quel, aucun clic n'est émis, on passe au suivant.
+const MAX_CLICKS_PER_HOUR = 4;
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
@@ -795,7 +809,37 @@ class CevDossierPool {
     this.slots.forEach((s, i) => this.logger.info(`  #${i}: ${s.vowintRef}`));
   }
 
-  /** Retourne le prochain dossier (One-Shot: round-robin pur, pas de quota) */
+  /** Purge les clics sortis de la fenêtre glissante et retourne ceux restants. */
+  private recentClicks(slot: DossierSlot): number {
+    const now = Date.now();
+    slot.clickTimestamps = slot.clickTimestamps.filter(t => now - t < CLICK_WINDOW_MS);
+    return slot.clickTimestamps.length;
+  }
+
+  /** true si ce dossier peut encore émettre un clic « Prendre rendez-vous ». */
+  hasClickBudget(slot: DossierSlot): boolean {
+    return this.recentClicks(slot) < MAX_CLICKS_PER_HOUR;
+  }
+
+  /** Clics restants dans l'heure glissante pour ce dossier. */
+  remainingClicks(slot: DossierSlot): number {
+    return Math.max(0, MAX_CLICKS_PER_HOUR - this.recentClicks(slot));
+  }
+
+  /** Délai (ms) avant que ce dossier retrouve un clic ; 0 s'il en a déjà un. */
+  clickAvailableIn(slot: DossierSlot): number {
+    if (this.hasClickBudget(slot)) return 0;
+    const oldest = Math.min(...slot.clickTimestamps);
+    return Math.max(0, CLICK_WINDOW_MS - (Date.now() - oldest) + 1_000);
+  }
+
+  /**
+   * Retourne le prochain dossier réellement cliquable (round-robin + quota).
+   *
+   * Le quota est vérifié ICI, avant toute consommation de session : un dossier
+   * saturé n'est pas mis en attente, il est simplement sauté au profit du
+   * suivant — le pool continue donc de scanner sans perdre de cycle.
+   */
   getNextAvailable(): DossierSlot | null {
     if (this.slots.length === 0) return null;
     const startIndex = this.currentIndex;
@@ -808,28 +852,58 @@ class CevDossierPool {
         this.logger.info(`  ⏸️ #${slot.index} ${slot.vowintRef} en PAUSE (slot trouvé) — skip`);
         continue;
       }
+      if (!this.hasClickBudget(slot)) {
+        const waitMin = Math.ceil(this.clickAvailableIn(slot) / 60_000);
+        this.logger.info(
+          `  🚦 #${slot.index} ${slot.vowintRef} — quota ${MAX_CLICKS_PER_HOUR}/h atteint ` +
+          `(clic dispo dans ~${waitMin}min) — skip, dossier suivant`,
+        );
+        this.currentIndex = (idx + 1) % this.slots.length;
+        continue;
+      }
       this.currentIndex = (idx + 1) % this.slots.length;
       return slot;
     }
 
-    return null; // Tous les dossiers sont en pause
+    return null; // Tous en pause ou tous à court de quota
   }
 
-  /** Enregistre un clic sur un dossier (pour les stats uniquement) */
+  /**
+   * Dossiers mobilisables immédiatement (mode surcharge) : ni en pause, ni à
+   * court de quota. Le dossier passé en `exclude` (déjà tenté) est retiré.
+   */
+  getEligibleForBurst(exclude?: DossierSlot): DossierSlot[] {
+    return this.slots.filter(
+      s => s !== exclude && !pausedDossiers.has(s.vowintRef) && this.hasClickBudget(s),
+    );
+  }
+
+  /** Enregistre un clic « Prendre rendez-vous » réellement consommé côté CEV. */
   recordClick(slot: DossierSlot): void {
     slot.clickTimestamps.push(Date.now());
     slot.totalScans++;
   }
 
-  /** Toujours 0 (One-Shot: pas de quota) */
-  getNextAvailableIn(): number { return 0; }
+  /** Délai (ms) avant qu'un dossier quelconque du pool redevienne cliquable. */
+  getNextAvailableIn(): number {
+    const candidates = this.slots.filter(s => !pausedDossiers.has(s.vowintRef));
+    if (candidates.length === 0) return 30_000;
+    return Math.min(...candidates.map(s => this.clickAvailableIn(s)));
+  }
 
   /** Stats du pool */
   getStats(): { total: number; available: number; exhausted: number; totalScans: number } {
     let totalScans = 0;
     for (const slot of this.slots) totalScans += slot.totalScans;
-    const active = this.slots.length - pausedDossiers.size;
-    return { total: this.slots.length, available: active, exhausted: pausedDossiers.size, totalScans };
+    const active = this.slots.filter(
+      s => !pausedDossiers.has(s.vowintRef) && this.hasClickBudget(s),
+    ).length;
+    return {
+      total: this.slots.length,
+      available: active,
+      exhausted: this.slots.length - active,
+      totalScans,
+    };
   }
 
   /** Reset quotidien de tous les compteurs */
@@ -937,10 +1011,51 @@ function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// ─── Erreurs réseau transitoires (surcharge serveur CEV) ────────────────────
+//
+// Contexte réel (publication de créneaux, 2026-08-13) : quand le portail belge
+// est saturé, il ne renvoie pas une erreur applicative mais coupe la connexion —
+// « tls handshake eof », « Connection reset by peer », 502/503/504. Un opérateur
+// humain, lui, ferme l'onglet et reclique immédiatement sur « Prendre rendez-vous »
+// jusqu'à passer. Le bot faisait l'inverse : il traitait ça comme une erreur de
+// setup, invalidait ses caches et dormait 60-78 s — c'est-à-dire précisément
+// pendant la fenêtre où les créneaux sont publiés puis raflés.
+//
+// Ces erreurs sont donc classées à part : retry rapide, aucun clic VOWINT
+// consommé (recordClick n'est pas appelé), aucune invalidation de session
+// (le login n'a jamais échoué — la couche TCP/TLS n'a même pas abouti).
+const TRANSIENT_NETWORK_PATTERNS: RegExp[] = [
+  /tls handshake eof/i,
+  /unexpectedeof/i,
+  /connectionreset/i,
+  /connection reset by peer/i,
+  /econnreset|econnaborted|econnrefused|epipe|etimedout|enetunreach|ehostunreach/i,
+  /broken pipe/i,
+  /failed to connect to the server/i,
+  /hyper_util::client::legacy::Error/i,
+  /operation was aborted due to timeout/i,
+  /\btimed? ?out\b/i,
+  /\baborted\b/i,
+  /socket hang up/i,
+  /dns error/i,
+  /\bERROR_(?:502|503|504)\b/i,
+  /\bHTTP (?:502|503|504)\b/i,
+  /\b(?:502|503|504)\b.*\b(?:bad gateway|unavailable|gateway time)/i,
+  /bad gateway|service unavailable|gateway time-?out/i,
+];
+
+/** true si l'erreur traduit une saturation/coupure réseau côté CEV, pas un échec logique. */
+function isTransientNetworkError(err: string | undefined): boolean {
+  if (!err) return false;
+  return TRANSIENT_NETWORK_PATTERNS.some((re) => re.test(err));
+}
+
 // ─── Core: un scan avec un dossier spécifique ───────────────────────────────
 
 interface ScanResult {
-  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached" | "probe_error";
+  status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached" | "probe_error" | "transient_error";
+  /** Message d'erreur brut — renseigné pour 'error' et 'transient_error'. */
+  error?: string;
   sessionCookie?: string;
   integrationUrl?: string;
   /** URL finale SelectSlot capturée lors du setup (à usage unique — utiliser pour booking) */
@@ -1079,8 +1194,14 @@ async function performScan(
       await sleep(30_000);
       return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
     }
+    // Coupure réseau / surcharge serveur → retry rapide, pas de pause longue ni
+    // d'invalidation de session (voir isTransientNetworkError).
+    if (isTransientNetworkError(result.error)) {
+      logFn.warn(`  ⚡ Setup interrompu par le réseau (serveur CEV saturé): ${result.error?.slice(0, 160)}`);
+      return { status: "transient_error", error: result.error };
+    }
     logFn.warn(`  Erreur setup: ${result.error}`);
-    return { status: "error" };
+    return { status: "error", error: result.error };
   }
 
   if (result.slotsAvailable) {
@@ -1948,6 +2069,121 @@ async function runAccountLoop(job: any): Promise<void> {
   };
 
   let nextScanAllowedAt = 0;
+  /** Coupures réseau consécutives — pilote le backoff des retries rapides. */
+  let consecutiveTransient = 0;
+  /** Dernière rafale de surcharge — évite d'en enchaîner plusieurs d'affilée. */
+  let lastSurgeAt = 0;
+
+  // ─── Mode SURCHARGE (surge burst) ────────────────────────────────────────
+  //
+  // Observation terrain : quand le portail belge éjecte (504 / TLS eof) à
+  // répétition, ce n'est pas une panne — c'est la signature d'une publication de
+  // créneaux en cours, avec des centaines d'utilisateurs qui cliquent en même
+  // temps. Le scan séquentiel dossier par dossier est alors le pire réflexe :
+  // il consomme le temps utile à raison d'un dossier toutes les 2 minutes.
+  //
+  // Stratégie : au bout de SURGE_TRANSIENT_THRESHOLD coupures consécutives, on
+  // réveille TOUS les dossiers encore éligibles (non pausés, quota disponible)
+  // et on les fait tenter la porte en parallèle. Ceux qui passent bookent ;
+  // ceux qui se font éjecter n'ont rien consommé et repasseront selon leur
+  // propre budget de clics. C'est exactement le comportement humain : rouvrir
+  // plusieurs onglets pendant la bousculade.
+  const SURGE_TRANSIENT_THRESHOLD = 3;
+  const SURGE_MAX_PARALLEL = 6;
+  const SURGE_COOLDOWN_MS = 90_000;
+
+  /**
+   * Tente en parallèle tous les dossiers éligibles. Retourne le nombre de
+   * dossiers ayant effectivement passé la porte (créneau trouvé).
+   */
+  const runSurgeBurst = async (
+    excluded: DossierSlot,
+    logger: ReturnType<typeof createLogger>,
+  ): Promise<number> => {
+    const candidates = localPool.getEligibleForBurst(excluded).slice(0, SURGE_MAX_PARALLEL);
+    if (candidates.length === 0) {
+      logger.warn(`  🌊 Surcharge détectée mais aucun dossier éligible (pause ou quota) — rafale annulée`);
+      return 0;
+    }
+    lastSurgeAt = Date.now();
+    logger.warn(
+      `  🌊 SURCHARGE CEV (${consecutiveTransient} coupures) — réveil de ${candidates.length} dossier(s) ` +
+      `en parallèle: ${candidates.map(d => `#${d.index}`).join(", ")}`,
+    );
+    botLog({
+      applicationId: logApplicationId,
+      step: "cev_dossier_surge_burst",
+      status: "warn",
+      data: {
+        consecutiveTransient,
+        candidates: candidates.map(d => d.vowintRef).join(","),
+        candidateCount: candidates.length,
+        scanCount: state.scanCount,
+      },
+    });
+
+    // Chaque dossier a sa propre session VOWINT/CEV : le parallélisme est sûr
+    // ici (contrairement au booking Espagne), le lock distribué protégeant
+    // seulement contre une seconde instance du bot.
+    const attempts = await Promise.all(
+      candidates.map(async (cand) => {
+        const locked = await acquireCevScanLock(cand.vowintRef);
+        if (!locked) return { cand, result: null as Awaited<ReturnType<typeof performScan>> | null };
+        try {
+          state.scanCount++;
+          const res = await performScan(
+            vowintEmail, vowintPassword, cand, logApplicationId, undefined, 0, logger,
+          );
+          // Seules les tentatives réellement arrivées jusqu'à CEV consomment un clic.
+          if (res.status !== "transient_error" && res.status !== "probe_error") {
+            localPool.recordClick(cand);
+          }
+          return { cand, result: res };
+        } catch (err) {
+          logger.warn(`  🌊 Rafale — erreur sur #${cand.index} ${cand.vowintRef}: ${String(err).slice(0, 120)}`);
+          return { cand, result: null };
+        } finally {
+          await releaseCevScanLock(cand.vowintRef);
+        }
+      }),
+    );
+
+    const winners = attempts.filter(a => a.result?.status === "slot_found");
+    const rejected = attempts.filter(a => a.result?.status === "transient_error" || a.result === null);
+    logger.warn(
+      `  🌊 Rafale terminée — ${winners.length} passage(s), ${rejected.length} éjection(s) ` +
+      `sur ${attempts.length} tentative(s)`,
+    );
+
+    // Les bookings restent séquentiels : deux dossiers qui visent le même
+    // créneau doivent être départagés proprement par le claim, pas par la course.
+    for (const w of winners) {
+      const r = w.result!;
+      state.slotsFound++;
+      const jobId = `cev-dossier-${w.cand.vowintRef}`;
+      recordScan(jobId, w.cand.vowintRef);
+      recordSlotFound(jobId, w.cand.vowintRef);
+      try {
+        await handleSlotFoundMulti(
+          vowintEmail, vowintPassword,
+          w.cand,
+          localPool.getAllDossiers(),
+          logApplicationId,
+          r.sessionCookie, r.integrationUrl,
+          logger,
+          r.selectSlotHtml,
+          r.selectSlotUrl,
+          hunterConfig.groupSize,
+          r.selectSlotCookies,
+          hunterConfig.cevBookingTargetPool,
+        );
+      } catch (err) {
+        logger.error(`  🌊 Booking rafale échoué sur ${w.cand.vowintRef}: ${err}`);
+      }
+    }
+
+    return winners.length;
+  };
   // One-Shot: pas de siphonedCreds ni de gestion F5/full-session.
   // setupCevSessionHttp() réutilise automatiquement la session VOWINT si elle est encore valide (cache 4h).
 
@@ -2049,9 +2285,15 @@ async function runAccountLoop(job: any): Promise<void> {
       // ─── One-Shot: récupérer le prochain dossier (round-robin) ─────────────
       const dossier = localPool.getNextAvailable();
       if (!dossier) {
-        // Tous les dossiers sont en PAUSE (slot déjà trouvé) → attente 30s
-        logger.info(`⏸️ Tous les dossiers en pause — attente 30s`);
-        await sleep(30_000);
+        // Aucun dossier cliquable : soit tous en pause (slot déjà trouvé), soit
+        // tous à court de quota horaire. On attend la première libération plutôt
+        // qu'un délai fixe — borné à 30s pour rester réactif aux pauses levées.
+        const waitMs = Math.min(30_000, Math.max(5_000, localPool.getNextAvailableIn()));
+        logger.info(
+          `⏸️ Aucun dossier cliquable (pause ou quota ${MAX_CLICKS_PER_HOUR}/h) — ` +
+          `nouvelle tentative dans ${Math.round(waitMs / 1000)}s`,
+        );
+        await sleep(waitMs);
         continue;
       }
 
@@ -2096,7 +2338,10 @@ async function runAccountLoop(job: any): Promise<void> {
       botLog({
         applicationId: logApplicationId,
         step: "cev_dossier_scan",
-        status: result.status === "error" || result.status === "rate_limited" ? "warn" : "ok",
+        status:
+          result.status === "error" || result.status === "rate_limited" || result.status === "transient_error"
+            ? "warn"
+            : "ok",
         data: {
           dossierIndex: dossier.index,
           dossier: `#${dossier.index} ${dossier.vowintRef}`,
@@ -2112,6 +2357,8 @@ async function runAccountLoop(job: any): Promise<void> {
         case "slot_found":
           logger.info(`  🚨 SLOT TROUVÉ!`);
           recordScan(uniqueJobId, dossier.vowintRef);
+          // Le clic « Prendre rendez-vous » a bien été consommé côté CEV.
+          localPool.recordClick(dossier);
           recordSlotFound(uniqueJobId, dossier.vowintRef);
           await handleSlotFoundMulti(
             vowintEmail, vowintPassword,
@@ -2131,6 +2378,8 @@ async function runAccountLoop(job: any): Promise<void> {
           // Rare en One-Shot, mais possible si serveur répond avec rate-limit
           state.rateLimits++;
           recordScan(uniqueJobId, dossier.vowintRef);
+          // Le serveur a compté la tentative : on la compte aussi localement.
+          localPool.recordClick(dossier);
           recordRateLimit(uniqueJobId, dossier.vowintRef, "CEV rate-limit");
           invalidateVowintCache(vowintEmail);
           logger.warn(`  ⚡ Rate-limit inattendu sur #${dossier.index} — invalidation session + pause 5min`);
@@ -2139,14 +2388,21 @@ async function runAccountLoop(job: any): Promise<void> {
         case "error":
           state.errors++;
           recordScan(uniqueJobId, dossier.vowintRef);
+          // Échec applicatif (pas réseau) : GetEAppointmentUrl a pu être atteint,
+          // donc on compte le clic par prudence — mieux vaut sur-compter que
+          // déclencher un rate-limit VOWINT.
+          localPool.recordClick(dossier);
           invalidateAnticaptchaCache();
           invalidateVowintCache(vowintEmail);
           logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain cycle utilisera des credentials frais`);
           break;
         case "no_slot":
-          logger.info(`  — Pas de créneau disponible`);
           recordScan(uniqueJobId, dossier.vowintRef);
           localPool.recordClick(dossier);
+          logger.info(
+            `  — Pas de créneau disponible (clics restants ce dossier: ` +
+            `${localPool.remainingClicks(dossier)}/${MAX_CLICKS_PER_HOUR})`,
+          );
           break;
         case "no_slot_poll":
           // Chemin legacy (full session) — ne devrait pas arriver en One-Shot
@@ -2154,8 +2410,66 @@ async function runAccountLoop(job: any): Promise<void> {
           recordScan(uniqueJobId, dossier.vowintRef);
           break;
 
+        case "transient_error": {
+          // ── Saturation serveur CEV (TLS eof / connection reset / 50x) ──────────
+          // Reproduit le réflexe humain : on ne fait PAS de pause d'une minute, on
+          // retente tout de suite avec le dossier suivant du pool (nouvelle session,
+          // donc pas d'erreur "multi-session"). Aucun clic VOWINT n'est consommé
+          // (recordClick non appelé) et les caches ne sont pas invalidés : l'échec
+          // est au niveau TCP/TLS, la session applicative reste valide.
+          consecutiveTransient++;
+          state.errors++;
+          // Backoff doux et borné : 2s, 4s, 8s, 16s, 30s max — reste très en deçà
+          // du cycle nominal (~120s) pour ne pas rater la fenêtre de publication,
+          // tout en évitant de marteler un serveur déjà à genoux.
+          const transientDelayMs = Math.min(30_000, 2_000 * 2 ** Math.min(consecutiveTransient - 1, 4));
+          logger.warn(
+            `  ⚡ Serveur CEV saturé sur #${dossier.index} ${dossier.vowintRef} ` +
+            `(coupure ${consecutiveTransient}) — retry dans ${Math.round(transientDelayMs / 1000)}s ` +
+            `avec le dossier suivant, aucun clic consommé`,
+          );
+          botLog({
+            applicationId: logApplicationId,
+            step: "cev_dossier_transient_retry",
+            status: "warn",
+            data: {
+              dossier: dossier.vowintRef,
+              dossierIndex: dossier.index,
+              scanCount: state.scanCount,
+              consecutiveTransient,
+              retryInSec: Math.round(transientDelayMs / 1000),
+              error: (result.error ?? "").slice(0, 200),
+            },
+          });
+          // ── Bascule en mode SURCHARGE ────────────────────────────────────────
+          // Trois éjections d'affilée = le portail est bousculé, donc des créneaux
+          // sont très probablement en train d'être publiés. On arrête de sonder un
+          // dossier à la fois et on envoie tous les éligibles à la porte.
+          if (
+            consecutiveTransient >= SURGE_TRANSIENT_THRESHOLD &&
+            Date.now() - lastSurgeAt > SURGE_COOLDOWN_MS
+          ) {
+            const won = await runSurgeBurst(dossier, logger);
+            if (won > 0) {
+              // Au moins un dossier est passé → le portail répond de nouveau.
+              consecutiveTransient = 0;
+              nextScanAllowedAt = Date.now() + 5_000;
+              continue;
+            }
+            // Tout le monde a été éjecté : on laisse respirer un peu plus, mais on
+            // reste largement sous le cycle nominal pour ne pas rater la fenêtre.
+            nextScanAllowedAt = Date.now() + Math.min(20_000, transientDelayMs);
+            continue;
+          }
+
+          nextScanAllowedAt = Date.now() + transientDelayMs;
+          continue; // Skip la pause One-Shot : on reste en mode "insistance"
+        }
+
         case "probe_error":
-          // Probe échouée (timeout/503/504/réseau) — retry immédiat avec le dossier suivant
+          // Probe échouée (timeout/503/504/réseau) — retry immédiat avec le dossier suivant.
+          // Même signature qu'une éjection : ça alimente le détecteur de surcharge.
+          consecutiveTransient++;
           logger.warn(`  ⚡ Probe timeout/erreur sur #${dossier.index} ${dossier.vowintRef} — retry immédiat avec prochain dossier`);
           botLog({
             applicationId: logApplicationId,
@@ -2170,6 +2484,7 @@ async function runAccountLoop(job: any): Promise<void> {
         case "limit_reached": {
           logger.warn(`  ⚠️ CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier ${dossier.vowintRef}`);
           recordScan(uniqueJobId, dossier.vowintRef);
+          localPool.recordClick(dossier);
           botLog({
             applicationId: logApplicationId,
             step: "cev_dossier_limit_reached",
@@ -2232,6 +2547,10 @@ async function runAccountLoop(job: any): Promise<void> {
           break;
         }
       }
+
+      // Un scan est allé au bout (pas de coupure réseau) → le serveur répond de
+      // nouveau normalement, on réarme le backoff des retries rapides.
+      consecutiveTransient = 0;
 
       // Stats périodiques
       if (state.scanCount % 25 === 0) {

@@ -1094,12 +1094,73 @@ export async function initCevProxyGuardWithExitIp(proxyUrl: string, identifier?:
   }
 }
 
+/**
+ * Fetch direct (sans proxy) AVEC retry sur coupure réseau / surcharge serveur.
+ *
+ * Pourquoi : le chemin proxy retentait déjà les 502/503/504, mais les trois
+ * chemins « mode direct » partaient en fetch nu. Or c'est le mode utilisé en
+ * production (cev_use_proxy=0). Lors de la publication de créneaux du 2026-08-13,
+ * le portail belge saturé coupait la connexion (« tls handshake eof »,
+ * « Connection reset by peer ») et l'exception remontait telle quelle : tout le
+ * cycle de scan était perdu, alors qu'un simple re-clic passait côté humain.
+ *
+ * Stratégie : 3 tentatives, backoff court (0 / 400 / 1000 ms + jitter) pour
+ * rester dans la fenêtre utile d'un créneau, et timeout dur pour ne pas
+ * s'accrocher à une socket morte.
+ */
+const DIRECT_MAX_RETRIES = 2;
+const DIRECT_RETRY_DELAYS_MS = [400, 1000];
+const DIRECT_FETCH_TIMEOUT_MS = 25_000;
+
+const DIRECT_TRANSIENT_RE =
+  /tls handshake eof|unexpectedeof|connectionreset|connection reset|econnreset|econnaborted|econnrefused|epipe|etimedout|broken pipe|socket hang up|failed to connect|hyper_util|abort|timeout|dns error/i;
+
+async function directFetchWithRetry(url: string, options: RequestInit, logPrefix: string): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= DIRECT_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DIRECT_FETCH_TIMEOUT_MS);
+    try {
+      const res = await getDirectImpit().fetch(url, {
+        ...options,
+        signal: (options as any).signal ?? controller.signal,
+      } as any) as unknown as Response;
+      clearTimeout(timer);
+
+      // 502/503/504 = serveur CEV saturé (pas un blocage) → retry rapide.
+      if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < DIRECT_MAX_RETRIES) {
+        console.warn(
+          `${logPrefix} ⚡ HTTP ${res.status} (direct) = serveur saturé — retry ` +
+          `${attempt + 1}/${DIRECT_MAX_RETRIES} dans ${DIRECT_RETRY_DELAYS_MS[attempt]}ms`,
+        );
+        await new Promise(r => setTimeout(r, DIRECT_RETRY_DELAYS_MS[attempt] + Math.random() * 200));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < DIRECT_MAX_RETRIES && DIRECT_TRANSIENT_RE.test(msg)) {
+        console.warn(
+          `${logPrefix} ⚡ Coupure réseau (direct): ${msg.replace(/\s+/g, " ").slice(0, 120)} — retry ` +
+          `${attempt + 1}/${DIRECT_MAX_RETRIES} dans ${DIRECT_RETRY_DELAYS_MS[attempt]}ms`,
+        );
+        await new Promise(r => setTimeout(r, DIRECT_RETRY_DELAYS_MS[attempt] + Math.random() * 200));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 export async function cevImpitFetch(url: string, options: RequestInit, logPrefix = "[CEV]"): Promise<Response> {
   // ── Mode direct forcé (après 422 proxy) ─────────────────────────────────────
   if (Date.now() < _cevDirectModeUntil) {
     // Jitter réseau réaliste même en mode direct
     await new Promise(r => setTimeout(r, 30 + Math.random() * 170));
-    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+    return directFetchWithRetry(url, options, logPrefix);
   }
 
   // ── Vérifier si le proxy est désactivé via botConfig ─────────────────────────
@@ -1108,7 +1169,7 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
     // Proxy désactivé par configuration — connexion directe
     console.log(`${logPrefix} 🔄 Proxy désactivé via botConfig → mode direct`);
     await new Promise(r => setTimeout(r, 30 + Math.random() * 170));
-    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+    return directFetchWithRetry(url, options, logPrefix);
   }
 
   // ── Proxy liveness guard (comme usa-http.ts Pillar 2) ───────────────────────
@@ -1135,8 +1196,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   let currentProxy = process.env.IPROYAL_PROXY_URL;
   
   if (!currentProxy) {
-    // Pas de proxy configuré — connexion directe
-    return getDirectImpit().fetch(url, options as any) as unknown as Response;
+    // Pas de proxy configuré — connexion directe (avec retry sur coupure réseau)
+    return directFetchWithRetry(url, options, logPrefix);
   }
 
   // ── Fetch avec retry (aligné sur usa-http.ts) ─────────────────────────────
