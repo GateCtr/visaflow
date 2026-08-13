@@ -654,7 +654,41 @@ export async function startSpainWatcherLoop(): Promise<void> {
             const confirmedSlotDate = (result as any).slot?.date || result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] || undefined;
             const confirmedSlotTime = (result as any).slot?.time || undefined;
             const slotDateForLog = confirmedSlotDate ?? new Date().toISOString().slice(0, 10);
-            await Promise.all(dossiers.map(async (dossier) => {
+
+            // ─── Assignation round-robin des créneaux ────────────────────────────
+            // Distribue équitablement les créneaux disponibles entre les dossiers :
+            // dossierA → slot[0], dossierB → slot[1], dossierC → slot[2]…
+            // Evite que tous les dossiers tentent le même premier créneau (race condition).
+            const scanAllSlots = (result as any)._allSlots as
+              | Array<{ date: string; time: string; agendaId?: string; freeslots: number }>
+              | undefined;
+
+            const slotAssignments = scanAllSlots && scanAllSlots.length > 0
+              ? assignSlotsRoundRobin(dossiers, scanAllSlots)
+              : new Map<string, { date: string; time: string; agendaId?: string }>();
+
+            if (scanAllSlots && scanAllSlots.length > 0) {
+              log("INFO", `[SPAIN-WATCHER] 📊 Round-robin: ${scanAllSlots.length} créneau(x) disponible(s) pour ${dossiers.length} dossier(s)`);
+              for (const dossier of dossiers) {
+                const a = slotAssignments.get(dossier.id);
+                log("INFO", `[SPAIN-WATCHER]    ${dossier.applicantName} → ${a ? `${a.date} ${a.time}` : "repli datetime/"}`);
+              }
+            }
+
+            // ─── Booking séquentiel ───────────────────────────────────────────────
+            // En mode capsolver, tous les dossiers partagent le même PHPSESSID (lié
+            // au solve CF). getsigninfields/ est stateful par PHPSESSID côté serveur :
+            // appels simultanés → N-1 dossiers reçoivent 0B. Testé et confirmé.
+            // ─────────────────────────────────────────────────────────────────────
+
+            // Capacité restante par créneau (clé = "date_time").
+            // freeslots=-1 → capacité inconnue → on tente quand même.
+            const slotFreeslots = new Map<string, number>(
+              (scanAllSlots ?? []).map((s) => [`${s.date}_${s.time}`, s.freeslots]),
+            );
+            const bookedCountBySlot = new Map<string, number>();
+
+            const bookDossier = async (dossier: SpainDossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
               if (!matched) {
@@ -702,8 +736,8 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 // Les transmettre évite de refaire ces appels pendant le booking :
                 // au pic, un créneau vit quelques secondes, chaque aller-retour compte.
                 availableServices: services,
-                targetDate: confirmedSlotDate,
-                targetTime: confirmedSlotTime,
+                targetDate: assignedSlot?.date ?? confirmedSlotDate,
+                targetTime: assignedSlot?.time ?? confirmedSlotTime,
               };
 
               try {
