@@ -900,12 +900,20 @@ export async function setupCevSessionHttp(
       // On simule ce GET avec les deux cookies déjà acquis.
       // IMPORTANT : on LIT le HTML pour extraire l'eventuel rqdata hCaptcha enterprise.
       // Sans rqdata, Anti-Captcha resout un challenge generique que CEV rejette (captchaSolved:false).
-      const captchaPageCookie = `PreferredCulture=${capturedCulture}; ASP.NET_SessionId=${cevSessionCookie}`;
+      // Le cookie pour GET /Captcha = tous les cookies disponibles à ce stade :
+      // ASP.NET_SessionId + PreferredCulture + F5 si siphoned
+      // (fullCevCookie n'est pas encore déclaré ici — construit après ce bloc)
+      const captchaPageCookie = siphoned?.f5CookieValue && siphoned?.f5CookieName
+        ? `${siphoned.f5CookieName}=${siphoned.f5CookieValue}; PreferredCulture=${capturedCulture}; ASP.NET_SessionId=${cevSessionCookie}`
+        : `PreferredCulture=${capturedCulture}; ASP.NET_SessionId=${cevSessionCookie}`;
       try {
         const captchaPageRes = await cevSetupFetch(`${CEV_BASE}/Captcha`, {
           method: "GET",
           headers: getCevBrowserHeaders({
             fetchSite: "same-site",
+            // CRITICAL: utiliser tous les cookies disponibles pour le GET /Captcha.
+            // OutSystems associe le challenge captcha aux cookies de session.
+            // Un cookie manquant → nouveau contexte challenge côté serveur → captchaSolved:false
             cookie: captchaPageCookie,
             userAgent: siphoned?.userAgent,
           }),
@@ -1030,11 +1038,10 @@ export async function setupCevSessionHttp(
     // sur la MÊME session OutSystems (hcaptcha siteverify est stateless — n'importe
     // quel token valide pour la sitekey est accepté, pas besoin d'une nouvelle session).
     
-    // LOCK PROXY pour empêcher rotation automatique pendant solve+submit captcha
+    // LOCK PROXY pour empêcher rotation automatique pendant solve+submit captcha.
+    // Garantit que l'IP utilisée par Anti-Captcha === l'IP qui soumet SetCaptchaToken.
+    // hCaptcha vérifie (sitekey + token + IP) → mismatch = captchaSolved:false.
     lockCevProxy();
-    let captchaSuccess = false;
-    
-    try {
     // On n'invalide VOWINT qu'après MAX_CAPTCHA_ATTEMPTS échecs consécutifs.
     const MAX_CAPTCHA_ATTEMPTS = 3;
     let captchaData: { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean } = {};
@@ -1053,12 +1060,15 @@ export async function setupCevSessionHttp(
           const msg = err instanceof Error ? err.message : String(err);
           if (msg.includes("PROXY_CONNECT_REFUSED_NEEDS_ROTATION")) {
             botLog({ applicationId: clientId, step: "cev_http_proxy_connect_refused", status: "fail", data: { error: msg, recommendation: "ROTATE_PROXY_IMMEDIATELY" } });
+            unlockCevProxy();
             return { success: false, error: "PROXY_CONNECT_REFUSED_NEEDS_ROTATION" };
           }
           botLog({ applicationId: clientId, step: "cev_http_hcaptcha_exception", status: "fail", data: { error: msg, attempt: captchaAttempt } });
+          unlockCevProxy();
           return { success: false, error: "HCAPTCHA_FAILED" };
         }
         if (!hcaptchaToken) {
+          unlockCevProxy();
           return { success: false, error: "HCAPTCHA_FAILED" };
         }
       }
@@ -1080,6 +1090,7 @@ export async function setupCevSessionHttp(
 
       if (!captchaRes.ok) {
         botLog({ applicationId: clientId, step: "cev_http_captcha_submit_failed", status: "fail", data: { status: captchaRes.status, attempt: captchaAttempt } });
+        unlockCevProxy();
         return { success: false, error: `CAPTCHA_SUBMIT_${captchaRes.status}` };
       }
 
@@ -1103,20 +1114,15 @@ export async function setupCevSessionHttp(
         }
         // Toutes les tentatives épuisées → invalider VOWINT (session compromise)
         invalidateVowintCache(vowintEmail, ipSlotId);
-        unlockCevProxy(); // UNLOCK avant return
+        unlockCevProxy();
         return { success: false, error: "HCAPTCHA_REJECTED_BY_SERVER" };
       }
 
       // captchaSolved !== false → succès (ou réponse sans le champ)
-      captchaSuccess = true;
       break;
     }
-    } finally {
-      // UNLOCK PROXY après captcha (succès ou échec)
-      if (!captchaSuccess) {
-        unlockCevProxy();
-      }
-    }
+    // UNLOCK après la boucle captcha (succès)
+    unlockCevProxy();
     
     // DEBUG: Loguer la réponse brute pour comprendre le format du validUntil
     botLog({

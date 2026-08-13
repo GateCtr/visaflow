@@ -1052,13 +1052,20 @@ async function confirmSlotsViaDatetime(
   referer: string,
 ): Promise<ConfirmSlotsResult> {
   // ── Helper : rotation callback après chaque invocation ───────────────────────
-  // session.bookititState.jqCallback est fixé par le solve capsolver. Bookitit
-  // reconnaît un callback déjà utilisé et retourne 0B au cycle suivant.
-  // On régénère systématiquement après chaque scan (succès ou échec).
+  // IMPORTANT: on ne génère PAS un callback aléatoire ici.
+  // Le callback Bookitit est lié à l'état de la session widget côté serveur.
+  // Un callback inconnu (généré arbitrairement) retourne 0B — pas un callback "déjà utilisé".
+  // La bonne pratique : chaque cycle re-initialise via getwidgetconfigurations/ (cold path)
+  // qui retourne le callback attendu pour CE cycle. En probe à chaud, on réutilise le
+  // même callback que getwidgetconfigurations/ a assigné lors du cold path précédent,
+  // puis on le remet à zéro pour que le cold path suivant le ré-initialise proprement.
   const rotateCallback = () => {
     if (session.bookititState?.jqCallback) {
-      session.bookititState.jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      // Remettre reqCounter à 0 uniquement — ne pas changer jqCallback arbitrairement.
+      // Le prochain cold path appellera getwidgetconfigurations/ qui assignera un nouveau callback.
       session.bookititState.reqCounter = 0;
+      // Effacer le callback pour forcer getwidgetconfigurations/ au prochain cycle (cold path).
+      session.bookititState.jqCallback = "";
     }
   };
 
@@ -1109,7 +1116,6 @@ async function confirmSlotsViaDatetimeOnce(
   const base = "https://www.citaconsular.es/onlinebookings/";
   // Accumulateurs — peuplés au fil des appels datetime/ puis retournés avec le résultat.
   const allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }> = [];
-  let widgetConfig: Record<string, unknown> | undefined;
   const headers = {
     Cookie: cookieStr,
     "X-Requested-With": "XMLHttpRequest",
@@ -1144,14 +1150,57 @@ async function confirmSlotsViaDatetimeOnce(
   // ID peut être numérique (ex: 897578) ou préfixé bkt (ex: bkt897578) selon la version Bookitit.
   const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
 
-  let services: Array<{ serviceId: string; serviceName: string }>;
+  let services: Array<{ serviceId: string; serviceName: string }> | undefined;
+  // Accumulateur widgetConfig — peut être peuplé par warm path ou cold path
+  let widgetConfig: Record<string, unknown> | undefined;
+  // AllowAppointment du serveur — information diagnostique uniquement
+  // (plus de retry getagendas, donc plus besoin de tracker ce flag)
 
   if (warm) {
-    // Probe à chaud : la liste des services vient du cache config (immuable côté
-    // portail). getwidgetconfigurations/ et getservices/ sont sautés — ils ne
-    // servaient qu'à (re)découvrir des IDs déjà connus.
+    // Probe à chaud : la liste des services vient du cache config (immuable côté portail).
+    // getservices/ et getagendas/ sont sautés — IDs déjà connus.
+    // MAIS getwidgetconfigurations/ DOIT être appelé : il initialise l'état de la session
+    // widget côté serveur Bookitit. Sans lui, datetime/ retourne 0B même avec une session
+    // PHPSESSID valide (Bookitit ne reconnaît pas la session widget = corps vide systématique).
     services = warm.services;
-  } else if (svcMatches.length === 0) {
+    // Appel getwidgetconfigurations/ pour initialiser la session widget côté serveur
+    try {
+      const srvsrc = "https://www.citaconsular.es";
+      const warmCb = session.bookititState?.jqCallback
+        || `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      const cfgQ = new URLSearchParams();
+      cfgQ.append("callback", warmCb);
+      cfgQ.append("type", "default");
+      cfgQ.append("publickey", publickey);
+      cfgQ.append("lang", "es");
+      cfgQ.append("version", "4");
+      cfgQ.append("src", referer);
+      cfgQ.append("srvsrc", srvsrc);
+      cfgQ.append("_", String(nextReqCounter()));
+      console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${warmCb}`);
+      const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
+      const cfgBody = cfgRes?.ok ? await cfgRes.text() : "";
+      console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgBody.length}B`);
+      if (cfgBody.length === 0) {
+        console.warn(`[spain-http] ⚠️ getwidgetconfigurations/ 0B en probe à chaud — session PHPSESSID expirée → invalidation warm cache`);
+        invalidateWarmProbe(publickey, "getwidgetconfigurations/ 0B (PHPSESSID expiré)");
+        services = []; // force cold path
+      } else {
+        // Mettre à jour le callback partagé si la session a un bookititState
+        if (session.bookititState) session.bookititState.jqCallback = warmCb;
+        widgetConfig = (() => {
+          try { const d = parseJsonpPayload(cfgBody); return d && typeof d === "object" ? d as Record<string, unknown> : undefined; } catch { return undefined; }
+        })();
+        if (widgetConfig) {
+          console.log(`[spain-http] 🔧 widgetConfig capturé — captcha=${widgetConfig["captcha"]} reg_type=${widgetConfig["registration_type"]} waiting=${widgetConfig["waiting_list"]} confirm=${widgetConfig["confirm"]}`);
+        }
+      }
+    } catch (cfgErr) {
+      console.warn(`[spain-http] ⚠️ getwidgetconfigurations/ warm exception: ${cfgErr}`);
+    }
+  }
+  
+  if (services === undefined && svcMatches.length === 0) {
     // FALLBACK : Kinshasa (et certains portails Bookitit récents) utilisent un rendu
     // client-side via Backbone.js / Underscore templates — les liens #selectservice
     // contiennent <%= attributes.id %> côté serveur et ne sont jamais présents
@@ -1274,6 +1323,7 @@ async function confirmSlotsViaDatetimeOnce(
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
+      
       if (svcPayload && typeof svcPayload === "object") {
         const p = svcPayload as Record<string, unknown>;
         const allow = p["AllowAppointment"] ?? p["allowAppointment"];
@@ -1450,40 +1500,9 @@ async function confirmSlotsViaDatetimeOnce(
         agendaId = ids[0] ?? "";
         if (agendaId) console.log(`[spain-http]    agenda: ${agendaId}`);
         else console.warn(`[spain-http]    getagendas/ sans agenda ID (raw 200c: "${agRaw.slice(0, 200)}")`);
-      } else if (!useBrowserFetch) {
-        // ── Retry getagendas/ si 0B (serveur saturé sous la charge) ─────────────────
-        // Observé lors de la publication 2026-08-13 : getagendas/ retourne HTTP 200 | 0B
-        // si le serveur est sous pression. Sans agendaId, datetime/ est appelé sans
-        // agendas[] et retourne toujours 0B — cycle perdu. 2 retries rapides récupèrent
-        // l'agendaId sans délai significatif.
-        for (let retry = 0; retry < 2; retry++) {
-          await new Promise<void>((r) => setTimeout(r, 350 * (retry + 1)));
-          const agRetryQ = new URLSearchParams();
-          agRetryQ.append("callback", sharedCb);
-          agRetryQ.append("type", "default");
-          agRetryQ.append("publickey", publickey);
-          agRetryQ.append("lang", "es");
-          agRetryQ.append("services[]", svc.serviceId);
-          agRetryQ.append("version", "4");
-          agRetryQ.append("src", referer);
-          agRetryQ.append("srvsrc", srvsrc);
-          agRetryQ.append("selectedPeople", "1");
-          agRetryQ.append("_", String(nextReqCounter()));
-          const agRetryRes = await spainCfFetch(`${base}getagendas/?${agRetryQ}`, session, { headers });
-          const agRetryRaw = agRetryRes?.ok ? await agRetryRes.text() : "";
-          console.log(`[spain-http] 🔄 getagendas/ retry ${retry + 1}/2 (impit) → HTTP ${agRetryRes?.status ?? "null"} | ${agRetryRaw.length}B`);
-          if (agRetryRaw.length > 0) {
-            agRaw = agRetryRaw;
-            agRawForParsing = agRetryRaw;
-            const agData = parseJsonpPayload(agRetryRaw);
-            const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
-            agendaId = ids[0] ?? "";
-            if (agendaId) { console.log(`[spain-http]    agenda (retry): ${agendaId}`); break; }
-          }
-        }
-        if (!agendaId) {
-          console.warn(`[spain-http]    getagendas/ 0B après retries — datetime/ appelé sans agendas[] (réponse serveur attendue vide)`);
-        }
+      } else {
+        // getagendas/ 0B — normal si pas de créneaux disponibles
+        console.log(`[spain-http]    getagendas/ 0B — datetime/ appelé sans agendas[] (pas de RDV disponibles)`);
       }
     } catch (agErr) {
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
